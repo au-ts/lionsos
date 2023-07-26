@@ -94,8 +94,11 @@ For now, all experimentation is to be done in the respective repository.
 * If you are working on a driver for KISS, create an example system in sDDF and experiment
   there before integrating with KISS. See the
   [sDDF README for details](https://github.com/au-ts/sddf/tree/restructure#adding-a-new-driver).
+    * Make sure that you are working on top of the `restructure` branch [here](https://github.com/au-ts/sddf/tree/restructure),
+      as this is the branch all the drivers will have PRs against.
 * If you are working on the VMM, create an example system in the VMM and experiment there
   before integrating with KISS.
+    * After you have something working, make a PR [here](https://github.com/Ivan-Velickovic/sel4cp_vmm).
 
 ### Integrating with Kitty example
 
