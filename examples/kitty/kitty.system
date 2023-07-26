@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <protection_domain name="kitty" priority="254">
+        <program_image path="main.elf" />
+    </protection_domain>
+</system>
