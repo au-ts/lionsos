@@ -33,10 +33,10 @@ sudo pacman -Sy make clang lld dtc
 
 On macOS:
 ```
-# Homebrew does not provide ARM cross compilers by default, so we use
-# this repository (https://github.com/messense/homebrew-macos-cross-toolchains).
-brew tap messense/macos-cross-toolchains
-brew install make aarch64-unknown-linux-gnu dtc
+brew install make llvm dtc
+# Add LLD to PATH
+echo export PATH="/opt/homebrew/Cellar/llvm/16.0.6/bin:$PATH" >> ~/.zshrc
+source ~/.zshrc
 ```
 
 On Nix/NixOS:
@@ -52,11 +52,10 @@ we cannot use the mainline one just yet.
 When developing KISS, there should be no reason to modify the SDK itself, hence you can
 download the pre-built one that the CI builds for every commit.
 
-1. Go to https://github.com/Ivan-Velickovic/sel4cp/actions/runs/5511099343;
+1. Go to https://github.com/Ivan-Velickovic/sel4cp/actions/runs/5511099343.
 2. Scroll to the bottom and you will see "Artifcats" and below that you can
 choose what SDK you need depending on what computer you are working on.
-3. Click
-on the SDK you want to download and it should start downloading
+3. Click on the SDK you want to download and it should start downloading.
 
 Now you can unpack the SDK (this is on Linux but if you're on macOS just replace the name of the ZIP):
 ```sh
@@ -69,13 +68,14 @@ tell Ivan or open an issue on the GitHub.
 
 ### Building and running the Kitty example
 
+To build Kitty run:
 ```sh
 git clone git@github.com:au-ts/kiss.git --recursive
-cd kiss/examples/pos
-make SEL4CP_SDK=/path/to/sdk
+cd kiss/examples/kitty
+make SEL4CP_SDK=/path/to/sel4cp-sdk-1.2.6
 ```
 
-If you need to build a release version of Kitty then run
+If you need to build a release version of Kitty instead run:
 ```sh
 make SEL4CP_SDK=/path/to/sdk SEL4CP_CONFIG=release
 ```
@@ -86,7 +86,7 @@ should see the message:
 KITTY|INFO: Welcome to Kitty!
 ```
 
-## Working on KISS componenets
+## Working on Kitty components
 
 For now, all experimentation is to be done in the respective repository.
 
@@ -96,7 +96,7 @@ For now, all experimentation is to be done in the respective repository.
 * If you are working on the VMM, create an example system in the VMM and experiment there
   before integrating with KISS.
 
-### Integrating with KISS
+### Integrating with Kitty example
 
 TODO
 
