@@ -17,6 +17,7 @@ In order to get Kitty working we will need the following working on the Odroid-C
 * [ ] UART serial driver
 * [ ] I2C driver
 * [ ] Ethernet driver
+* [ ] Timer driver
 * [ ] VMM with graphics either passed-through or via driver VM
 * [ ] MicroPython interpreter
 
