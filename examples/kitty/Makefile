@@ -11,7 +11,7 @@ endif
 SEL4CP_CONFIG ?= debug
 BUILD_DIR ?= build
 SEL4CP_BOARD := odroidc4_hyp
-CPU := cortex-a53
+CPU := cortex-a55
 
 TOOLCHAIN := clang
 CC := clang
