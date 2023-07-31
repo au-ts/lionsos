@@ -1,5 +1,5 @@
 [submodule "sel4cp_vmm"]
-	path = sel4cp_vmm
+	path = vmm
 	url = git@github.com:au-ts/sel4cp_vmm.git
 [submodule "sddf"]
 	path = sddf
