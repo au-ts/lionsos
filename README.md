@@ -72,8 +72,13 @@ tell Ivan or open an issue on the GitHub.
 
 To build Kitty run:
 ```sh
-git clone git@github.com:au-ts/kiss.git --recursive
-cd kiss/examples/kitty
+# Clone the KISS repository along with the submodules (e.g sDDF and the VMM)
+git clone git@github.com:au-ts/kiss.git
+cd kiss
+git submodule update --init
+# Enter the Kitty demo directory
+cd examples/kitty
+# Now compile the demo
 make SEL4CP_SDK=/path/to/sel4cp-sdk-1.2.6
 ```
 
