@@ -6,6 +6,8 @@ let
 in
   pkgs.mkShell {
     buildInputs = with pkgs.buildPackages; [
+        jq
+        curl
         python39
         unzip
         gnumake
