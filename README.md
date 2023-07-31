@@ -82,7 +82,7 @@ If you need to build a release version of Kitty instead run:
 make SEL4CP_SDK=/path/to/sdk SEL4CP_CONFIG=release
 ```
 
-After building, then you can use machine queue to run `build/loader.img`. Right now you
+After building, then you can use machine queue to run `build/kitty.img`. Right now you
 should see the message:
 ```
 KITTY|INFO: Welcome to Kitty!
