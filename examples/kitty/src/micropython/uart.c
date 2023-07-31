@@ -16,7 +16,7 @@ int uart_get_char()
 {
     while ((*REG_PTR(UART_STATUS) & UART_RX_EMPTY));
 
-    return *REG_PTR(UART_RFIFO);
+    return (char)(*REG_PTR(UART_RFIFO));
 }
 
 int uart_put_char(int c)
