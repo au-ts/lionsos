@@ -4,7 +4,6 @@
 void
 init(void)
 {
-    sel4cp_dbg_puts("KITTY|INFO: Welcome to Kitty!\n");
 }
 
 void

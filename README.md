@@ -85,7 +85,16 @@ make SEL4CP_SDK=/path/to/sdk SEL4CP_CONFIG=release
 After building, then you can use machine queue to run `build/kitty.img`. Right now you
 should see the message:
 ```
-KITTY|INFO: Welcome to Kitty!
+MICROPYTHON|INFO: initialising!
+MicroPython ac783c460-dirty on 2023-07-31; Odroid-C4 with Cortex A55
+>>>
+```
+
+This shows the basic MicroPython REPL, if you want to input into the REPL you can do so
+by connecting to the console via TFTP with `console odroidc4-<NUM> -f`. You can also run
+MQ with the `-a` flag to automatically get a connection where you can also input, like so:
+```sh
+mq run -c "MicroPython" -a -l mqlog -s odroidc4_pool -f build/kitty.img
 ```
 
 ## Working on Kitty components
