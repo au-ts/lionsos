@@ -1,9 +1,12 @@
 [submodule "sel4cp_vmm"]
 	path = vmm
-	url = git@github.com:au-ts/sel4cp_vmm.git
+	url = git@github.com:Ivan-Velickovic/sel4cp_vmm.git
+    branch = restructure
 [submodule "sddf"]
 	path = sddf
 	url = git@github.com:au-ts/sddf.git
+    branch = restructure
 [submodule "micropython"]
 	path = micropython
 	url = git@github.com:Ivan-Velickovic/micropython.git
+    branch = kiss
