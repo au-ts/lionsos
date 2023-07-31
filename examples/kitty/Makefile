@@ -9,7 +9,7 @@ $(error SEL4CP_SDK must be specified)
 endif
 
 SEL4CP_CONFIG ?= debug
-BUILD_DIR ?= build
+BUILD_DIR ?= $(abspath build)
 SEL4CP_BOARD := odroidc4_hyp
 CPU := cortex-a55
 
@@ -21,7 +21,7 @@ SEL4CP_TOOL ?= $(SEL4CP_SDK)/bin/sel4cp
 
 BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
 
-IMAGES := main.elf
+IMAGES := main.elf micropython.elf
 CFLAGS := -mcpu=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall -Wno-unused-function -I$(BOARD_DIR)/include -target $(TARGET)
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lsel4cp -Tsel4cp.ld
@@ -36,11 +36,17 @@ all: $(BUILD_DIR) $(IMAGE_FILE)
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(BUILD_DIR)/%.o: src/%.c Makefile
+$(BUILD_DIR)/%.o: src/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
+
+# $(BUILD_DIR)/%.o: src/micropython/%.c
+# 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/main.elf: $(addprefix $(BUILD_DIR)/, $(MAIN_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+$(BUILD_DIR)/micropython.elf:
+	make -C src/micropython SEL4CP_SDK=$(SEL4CP_SDK) SEL4CP_BOARD=$(SEL4CP_BOARD) SEL4CP_CONFIG=$(SEL4CP_CONFIG) BUILD=$(BUILD_DIR)
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
 	$(SEL4CP_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(SEL4CP_BOARD) --config $(SEL4CP_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
