@@ -1,12 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <system>
+    <memory_region name="uart" size="0x1_000" phys_addr="0xff803000" />
+    <memory_region name="timer" size="0x10_000" phys_addr="0xffd0f000" />
+
     <protection_domain name="kitty" priority="254">
         <program_image path="main.elf" />
     </protection_domain>
 
-    <memory_region name="uart" size="0x1_000" phys_addr="0xff803000" />
-    <protection_domain name="micropython" priority="254">
+    <protection_domain name="micropython" priority="1">
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
         <program_image path="micropython.elf" />
     </protection_domain>
+
+    <protection_domain name="timer_driver" priority="254" pp="true" passive="true">
+        <program_image path="timer.elf" />
+        <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" />
+        <irq irq="42" id="0" trigger="edge" />
+    </protection_domain>
+
+    <channel>
+        <end pd="timer_driver" id="1" />
+        <end pd="micropython" id="1" />
+    </channel>
 </system>

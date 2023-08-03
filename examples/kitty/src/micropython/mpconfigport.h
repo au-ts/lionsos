@@ -19,6 +19,11 @@
 #define MICROPY_PY_IO                           (0)
 #define MICROPY_PY_STRUCT                       (0)
 
+// Configuration for the `time` module
+#define MICROPY_PY_TIME                         (1)
+#define MICROPY_PY_TIME_TIME_TIME_NS            (1)
+// #define MICROPY_PY_TIME_INCLUDEFILE             "modtime.c"
+
 // @ivanv: odd that 2KB did not work
 // Allocate 1MB for the heap
 #define MICROPY_HEAP_SIZE      (0x100000)

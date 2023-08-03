@@ -20,9 +20,10 @@ TARGET := aarch64-none-elf
 SEL4CP_TOOL ?= $(SEL4CP_SDK)/bin/sel4cp
 
 BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
+SDDF := ../../sddf
 
-IMAGES := main.elf micropython.elf
-CFLAGS := -mcpu=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall -Wno-unused-function -I$(BOARD_DIR)/include -target $(TARGET)
+IMAGES := main.elf micropython.elf timer.elf
+CFLAGS := -mtune=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall -Wno-unused-function -I$(BOARD_DIR)/include -target $(TARGET)
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lsel4cp -Tsel4cp.ld
 
@@ -30,6 +31,9 @@ IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
 MAIN_OBJS := main.o
+TIMER_OBJS := timer.o
+
+TIMER_DRIVER := $(SDDF)/drivers/clock/meson
 
 all: $(BUILD_DIR) $(IMAGE_FILE)
 
@@ -39,10 +43,13 @@ $(BUILD_DIR):
 $(BUILD_DIR)/%.o: src/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-# $(BUILD_DIR)/%.o: src/micropython/%.c
-# 	$(CC) -c $(CFLAGS) $< -o $@
+$(BUILD_DIR)/%.o: $(TIMER_DRIVER)/timer.c
+	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/main.elf: $(addprefix $(BUILD_DIR)/, $(MAIN_OBJS))
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+$(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/micropython.elf:
