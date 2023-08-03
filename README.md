@@ -99,7 +99,7 @@ This shows the basic MicroPython REPL, if you want to input into the REPL you ca
 by connecting to the console via TFTP with `console odroidc4-<NUM> -f`. You can also run
 MQ with the `-a` flag to automatically get a connection where you can also input, like so:
 ```sh
-mq run -c "MicroPython" -a -l mqlog -s odroidc4_pool -f build/kitty.img
+mq.sh run -c "MicroPython" -a -l mqlog -s odroidc4_pool -f build/kitty.img
 ```
 
 ## Working on Kitty components
