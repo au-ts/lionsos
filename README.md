@@ -13,13 +13,10 @@ infrastructure that we will need. It also contains the sDDF and seL4CP VMM
 repositories. In the future, we might change the structure but for now we will use
 Git submodules to version control KISS.
 
-In order to get Kitty working we will need the following working on the Odroid-C4:
-* [ ] UART serial driver
-* [ ] I2C driver
-* [ ] Ethernet driver
-* [ ] Timer driver
-* [ ] VMM with graphics either passed-through or via driver VM
-* [ ] MicroPython interpreter
+Here is the current status (done in green) and the components that we still need
+to build and integrate (in gray).
+
+![Kitty status](docs/kitty.png)
 
 ### Installing dependencies
 
