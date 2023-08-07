@@ -34,6 +34,7 @@ void init(void) {
 }
 
 void notified(sel4cp_channel ch) {
+    sel4cp_dbg_puts("got notification!\n");
 }
 
 // Handle uncaught exceptions (should never be reached in a correct C implementation).
