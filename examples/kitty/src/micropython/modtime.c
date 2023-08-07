@@ -24,18 +24,15 @@ uint64_t mp_hal_time_ns(void) {
 
 void mp_hal_delay_us(mp_uint_t delay) {
     sel4cp_dbg_puts("MICROPYTHON|DEBUG: calling mp_hal_delay_us\n");
-    // @ivanv: will overflow potentially
-    set_timeout(delay * 1000);
+    // @ivanv: will overflow potentially ?
+    timer_set_timeout(delay * NS_IN_MS * 1000);
 }
 
 void mp_hal_delay_ms(mp_uint_t delay) {
     sel4cp_dbg_puts("MICROPYTHON|DEBUG: calling mp_hal_delay_ms\n");
-    // @ivanv: sigh
-    for (int i = 0; i < 1000; i++) {
-        set_timeout(delay * 1000);
-    }
+    timer_set_timeout(NS_IN_S);
 }
 
 mp_obj_t mp_time_time_get(void) {
-    return mp_obj_new_int(time_now() / 1000 / 1000);
+    return mp_obj_new_int(timer_time_now() / 1000 / 1000);
 }
