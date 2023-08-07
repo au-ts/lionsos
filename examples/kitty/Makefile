@@ -53,7 +53,7 @@ $(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/micropython.elf:
-	make -C src/micropython SEL4CP_SDK=$(SEL4CP_SDK) SEL4CP_BOARD=$(SEL4CP_BOARD) SEL4CP_CONFIG=$(SEL4CP_CONFIG) BUILD=$(BUILD_DIR)
+	make -C src/micropython -j$(nproc) SEL4CP_SDK=$(SEL4CP_SDK) SEL4CP_BOARD=$(SEL4CP_BOARD) SEL4CP_CONFIG=$(SEL4CP_CONFIG) BUILD=$(BUILD_DIR)
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
 	$(SEL4CP_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(SEL4CP_BOARD) --config $(SEL4CP_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
