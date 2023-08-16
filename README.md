@@ -14,7 +14,8 @@ repositories. In the future, we might change the structure but for now we will u
 Git submodules to version control KISS.
 
 Here is the current status (done in green) and the components that we still need
-to build and integrate (in gray).
+to build and integrate (in gray). In-progress or almost done components are in
+yellow.
 
 ![Kitty status](docs/kitty.png)
 
