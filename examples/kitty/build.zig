@@ -46,7 +46,7 @@ pub fn build(b: *std.Build) !void {
     const sel4cp_config = @tagName(sel4cp_config_option);
     // By default we target the Odroid-C4, but it's possible to override the target if we need to
     // test on QEMU or something
-    const sel4cp_board = b.option([]const u8, "board", "seL4CP board to target") orelse "odroidc4_hyp";
+    const sel4cp_board = b.option([]const u8, "board", "seL4CP board to target") orelse "odroidc4";
     // Since we are relying on Zig to produce the final ELF, it needs to do the
     // linking step as well.
     const sdk_board_dir = concatStr(gpa, &[_][]const u8{ sel4cp_sdk.?, "/board/", sel4cp_board, "/", sel4cp_config });
