@@ -10,7 +10,7 @@ endif
 
 SEL4CP_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
-SEL4CP_BOARD := odroidc4_hyp
+SEL4CP_BOARD := odroidc4
 CPU := cortex-a55
 
 TOOLCHAIN := clang
