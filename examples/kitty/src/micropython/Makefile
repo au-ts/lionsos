@@ -9,6 +9,7 @@ include $(TOP)/py/py.mk
 include $(TOP)/extmod/extmod.mk
 
 SDDF := ../../../../sddf
+LIBCO := ../../../../libco
 
 CROSS_COMPILE ?= aarch64-none-elf-
 
@@ -16,7 +17,7 @@ CPU ?= cortex-a55
 BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
 
 # Set CFLAGS and libraries.
-CFLAGS += -I. -I$(BUILD) -I$(TOP) -I$(SDDF) -I$(BOARD_DIR)/include -nostdlib -ffreestanding -mtune=$(CPU)
+CFLAGS += -I. -I$(BUILD) -I$(TOP) -I$(SDDF) -I$(BOARD_DIR)/include -I$(LIBCO) -nostdlib -ffreestanding -mtune=$(CPU)
 LDFLAGS += -L$(BOARD_DIR)/lib -nostdlib
 LIBS += -lm -lsel4cp -Tsel4cp.ld
 
@@ -35,6 +36,7 @@ SRC_C = \
 	shared/libc/string0.c \
 	shared/libc/printf.c \
 	shared/libc/__errno.c \
+	$(LIBCO)/libco.c
 
 # Define source files containung qstrs.
 SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c

@@ -1,4 +1,5 @@
 #include <sel4cp.h>
+#include <libco.h>
 #include "py/builtin.h"
 #include "py/compile.h"
 #include "py/gc.h"
@@ -10,6 +11,9 @@
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
 
+static char mp_stack[MICROPY_HEAP_SIZE];
+cothread_t t_event, t_mp;
+
 #ifndef NDEBUG
 void MP_WEAK __assert_func(const char *file, int line, const char *func, const char *expr) {
     // @ivanv: improve/fix, use printf?
@@ -18,8 +22,9 @@ void MP_WEAK __assert_func(const char *file, int line, const char *func, const c
 }
 #endif
 
-void init(void) {
+void t_mp_entrypoint(void) {
     sel4cp_dbg_puts("MICROPYTHON|INFO: initialising!\n");
+
     // Initialise the MicroPython runtime.
     mp_stack_ctrl_init();
     gc_init(heap, heap + sizeof(heap));
@@ -33,8 +38,16 @@ void init(void) {
     mp_deinit();
 }
 
+void init(void) {
+    t_event = co_active();
+    t_mp = co_derive((void *)mp_stack, MICROPY_HEAP_SIZE, t_mp_entrypoint);
+    co_switch(t_mp);
+}
+
 void notified(sel4cp_channel ch) {
+    // micropython should co_switch(t_event) to jump here...
     sel4cp_dbg_puts("got notification!\n");
+    co_switch(t_mp);
 }
 
 // Handle uncaught exceptions (should never be reached in a correct C implementation).
