@@ -1,5 +1,5 @@
 #include <sel4cp.h>
-#include <libco.h>
+#include "micropython.h"
 #include "py/builtin.h"
 #include "py/compile.h"
 #include "py/gc.h"
@@ -13,6 +13,9 @@ static char heap[MICROPY_HEAP_SIZE];
 
 static char mp_stack[MICROPY_HEAP_SIZE];
 cothread_t t_event, t_mp;
+
+int active_events = mp_event_source_none;
+int mp_blocking_events = mp_event_source_none;
 
 #ifndef NDEBUG
 void MP_WEAK __assert_func(const char *file, int line, const char *func, const char *expr) {
@@ -36,6 +39,9 @@ void t_mp_entrypoint(void) {
     // Deinitialise the runtime.
     gc_sweep_all();
     mp_deinit();
+
+    sel4cp_dbg_puts("MICROPYTHON|INFO: exited!\n");
+    co_switch(t_event);
 }
 
 void init(void) {
@@ -45,9 +51,14 @@ void init(void) {
 }
 
 void notified(sel4cp_channel ch) {
-    // micropython should co_switch(t_event) to jump here...
-    sel4cp_dbg_puts("got notification!\n");
-    co_switch(t_mp);
+    switch (ch) {
+    case TIMER_CH:
+        active_events |= mp_event_source_timer;
+        break;
+    }
+    if (active_events & mp_blocking_events) {
+        co_switch(t_mp);
+    }
 }
 
 // Handle uncaught exceptions (should never be reached in a correct C implementation).
