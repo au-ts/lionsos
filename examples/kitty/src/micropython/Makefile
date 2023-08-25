@@ -28,6 +28,7 @@ SRC_C = \
 	mphalport.c \
 	modmyport.c \
 	modtime.c \
+	modfb.c \
 	extmod/modtime.c \
 	shared/readline/readline.c \
 	shared/runtime/gchelper_generic.c \
@@ -39,14 +40,14 @@ SRC_C = \
 	$(LIBCO)/libco.c
 
 # Define source files containung qstrs.
-SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c
+SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c modfb.c
 
 # Define the required object files.
 OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
 all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython.elf: $(OBJ)
+$(BUILD)/micropython.elf: $(OBJ) $(BUILD)/$(PACKAGE_PYTHON_SCRIPTS)
 	$(ECHO) "LINK $@"
 	$(Q)$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 	$(Q)$(SIZE) $@
