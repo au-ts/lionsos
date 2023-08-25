@@ -118,7 +118,18 @@ For now, all experimentation is to be done in the respective repository.
 
 TODO
 
-##
+## Documentation
+
+The documentation of the project lives in `kiss/docs`.
+
+To view the web-version of the documentation run the following:
+```
+# Install dependencies
+cargo install --locked mdbook mdbook-variables
+cd docs
+# Build and open the documentation
+mdbook serve --open
+```
 
 ## Useful links
 * [seL4CP Tutorial](https://dsn.ivanvelickovic.com/)
