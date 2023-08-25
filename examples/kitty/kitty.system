@@ -1,25 +1,94 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <system>
     <memory_region name="uart" size="0x1_000" phys_addr="0xff803000" />
-    <memory_region name="timer" size="0x10_000" phys_addr="0xffd0f000" />
+    <memory_region name="timer" size="0x1000" phys_addr="0xffd0f000" />
 
-    <protection_domain name="kitty" priority="254">
-        <program_image path="main.elf" />
-    </protection_domain>
-
-    <protection_domain name="micropython" priority="254">
-        <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+    <protection_domain name="micropython" priority="1" budget="100">
+        <map mr="uart" vaddr="0x5000000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+        <map mr="uio_map0" vaddr="0x30000000" perms="rw" cached="false" setvar_vaddr="uio_framebuffer_region" />
         <program_image path="micropython.elf" />
     </protection_domain>
 
-    <protection_domain name="timer_driver" priority="254" pp="true" passive="true">
+    <protection_domain name="timer_driver" priority="2" pp="true" passive="true">
         <program_image path="timer.elf" />
-        <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" />
+        <map mr="timer" vaddr="0x2000000" perms="rw" cached="false" setvar_vaddr="gpt_regs" />
         <irq irq="42" id="0" trigger="edge" />
     </protection_domain>
 
     <channel>
         <end pd="timer_driver" id="1" />
         <end pd="micropython" id="1" />
+    </channel>
+
+    <!-- We allocate 256MiB of RAM for the guest. -->
+    <memory_region name="guest_ram" size="0x10_000_000" page_size="0x200_000" phys_addr="0x20_000_000" />
+
+    <memory_region name="bus1" size="0x200000" phys_addr="0xff600000" />
+    <memory_region name="bus2" size="0x3000" phys_addr="0xff800000" />
+    <memory_region name="bus3" size="0xf000" phys_addr="0xffd00000" />
+    <memory_region name="bus4" size="0x25000" phys_addr="0xffd13000" />
+    <memory_region name="usb" size="0x1000" phys_addr="0xffe09000" />
+    <memory_region name="usb1" size="0x40000" phys_addr="0xff400000" />
+    <memory_region name="usb2" size="0x100000" phys_addr="0xff500000" />
+    <memory_region name="gpu" size="0x40000" phys_addr="0xffe40000" />
+    <memory_region name="vpu" size="0x100000" phys_addr="0xff900000" />
+    <memory_region name="eth" size="0x10000" phys_addr="0xff3f0000" />
+    <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0xffc06000" />
+    <!-- UIO framebuffer -->
+    <memory_region name="uio_map0" size="0x1800000" />
+
+    <protection_domain name="VMM" priority="254">
+        <program_image path="vmm.elf" />
+        <map mr="guest_ram" vaddr="0x20000000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
+        <map mr="uio_map0" vaddr="0x30000000" perms="rw" cached="false" />
+        <virtual_machine name="linux" id="0" priority="1">
+            <map mr="guest_ram" vaddr="0x20000000" perms="rwx" />
+            <map mr="uio_map0" vaddr="0x30000000" perms="rw" cached="false" />
+            <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
+            <map mr="bus2" vaddr="0xff800000" perms="rw" cached="false" />
+            <map mr="bus3" vaddr="0xffd00000" perms="rw" cached="false" />
+            <map mr="bus4" vaddr="0xffd13000" perms="rw" cached="false" />
+            <map mr="usb" vaddr="0xffe09000" perms="rw" cached="false" />
+            <map mr="usb1" vaddr="0xff400000" perms="rw" cached="false" />
+            <map mr="usb2" vaddr="0xff500000" perms="rw" cached="false" />
+            <map mr="gpu" vaddr="0xffe40000" perms="rw" cached="false" />
+            <map mr="vpu" vaddr="0xff900000" perms="rw" cached="false" />
+            <map mr="eth" vaddr="0xff3f0000" perms="rw" cached="false" />
+            <map mr="gic_vcpu" vaddr="0xffc02000" perms="rw" cached="false" />
+        </virtual_machine>
+        <!-- @ivanv: clean up these IDs once we finishing stripping down the Linux image -->
+        <!-- Ethernet -->
+        <irq irq="40" id="5" />
+        <!-- vpu -->
+        <irq irq="35" id="15" trigger="edge" />
+        <!-- Ethernet PHY -->
+        <irq irq="96" id="6" />
+        <!-- panfrost-gpu -->
+        <irq irq="192" id="7" />
+        <!-- panfrost-mmu -->
+        <irq irq="193" id="8" />
+        <!-- panfrost-job -->
+        <irq irq="194" id="9" />
+        <!-- i2c -->
+        <irq irq="53" id="10" />
+        <!-- usb -->
+        <irq irq="63" id="12" />
+        <!-- usb -->
+        <irq irq="62" id="13" />
+        <!-- usb -->
+        <irq irq="48" id="16" />
+        <!-- hdmi -->
+        <irq irq="89" id="14" trigger="edge" />
+        <!-- IRQ work interrupts -->
+        <irq irq="5" id="17" />
+    </protection_domain>
+
+    <channel>
+        <!--
+            This channel is so MicroPython can transfer the data it has
+            put in the framebuffer to be given to the Linux driver guest.
+         -->
+        <end pd="micropython" id="0" />
+        <end pd="VMM" id="1" />
     </channel>
 </system>

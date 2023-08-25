@@ -5,6 +5,7 @@
 extern cothread_t t_event;
 extern cothread_t t_mp;
 
+#define VMM_CH 0
 #define TIMER_CH 1
 
 enum {
@@ -13,6 +14,7 @@ enum {
 	mp_event_source_uart = 2,
 	mp_event_source_network = 4,
 	mp_event_source_nfc = 8,
+    mp_event_source_framebuffer = 16,
 };
 
 // bitwise-OR of currently active event sources
