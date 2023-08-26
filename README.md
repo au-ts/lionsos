@@ -52,14 +52,14 @@ we cannot use the mainline one just yet.
 When developing KISS, there should be no reason to modify the SDK itself, hence you can
 download the pre-built one that the CI builds for every commit.
 
-1. Go to https://github.com/Ivan-Velickovic/sel4cp/actions/runs/5511099343.
+1. Go to https://github.com/Ivan-Velickovic/sel4cp/actions/runs/5963808480.
 2. Scroll to the bottom and you will see "Artifcats" and below that you can
 choose what SDK you need depending on what computer you are working on.
 3. Click on the SDK you want to download and it should start downloading.
 
 Now you can unpack the SDK (this is on Linux but if you're on macOS just replace the name of the ZIP):
 ```sh
-unzip sel4cp-sdk-dev-bf06734-linux-x86-64.zip
+unzip sel4cp-sdk-dev-3902541-linux-x86-64.zip
 tar xf sel4cp-sdk-1.2.6.tar.gz
 ```
 
