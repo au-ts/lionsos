@@ -10,14 +10,16 @@ uint8_t *uio_framebuffer_region;
  * needs to wait until the framebuffer is ready.
  */
 
-// STATIC mp_obj_t fb_set_pixel(mp_obj_t xo, mp_obj_t yo, mp_obj_t ro, mp_obj_t go, mp_obj_t bo, mp_obj_t ao) {
-STATIC mp_obj_t fb_set_pixel(mp_obj_t xo, mp_obj_t yo) {
-    int x = mp_obj_get_int(xo);
-    int y = mp_obj_get_int(yo);
-    int r = 200-(y-100)/5;
-    int g = 15+(x-100)/2;
-    int b = 100;
-    int a = 0;
+STATIC mp_obj_t fb_set_pixel(mp_obj_t x_o, mp_obj_t y_o, mp_obj_t rgba_o) {
+    int x = mp_obj_get_int(x_o);
+    int y = mp_obj_get_int(y_o);
+    int rgba = mp_obj_get_int(rgba_o);
+
+    int r = rgba & 0xff000000;
+    int g = rgba & 0x00ff0000;
+    int b = rgba & 0x0000ff00;
+    int a = rgba & 0x000000ff;
+
     size_t offset = (x * (BPP/8)) + (y * LINE_LEN);
 
     *(uio_framebuffer_region + offset) = b;
@@ -27,7 +29,7 @@ STATIC mp_obj_t fb_set_pixel(mp_obj_t xo, mp_obj_t yo) {
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(fb_set_pixel_obj, fb_set_pixel);
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(fb_set_pixel_obj, fb_set_pixel);
 
 STATIC mp_obj_t fb_wait(void) {
     sel4cp_dbg_puts("waiting!");
