@@ -3,7 +3,6 @@ import fb
 print("KITTY GRAPHICS starting")
 
 while True:
-    print("hello")
     fb.wait()
     print("KITTY GRAPHICS about to write")
     for x in range(100, 300):
