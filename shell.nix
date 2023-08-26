@@ -16,5 +16,6 @@ in
         llvmPackages_16.lld
         cross.buildPackages.gcc10
     ];
+    hardeningDisable = [ "all" ];
 }
 
