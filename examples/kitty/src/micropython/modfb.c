@@ -32,12 +32,10 @@ STATIC mp_obj_t fb_set_pixel(mp_obj_t x_o, mp_obj_t y_o, mp_obj_t rgba_o) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(fb_set_pixel_obj, fb_set_pixel);
 
 STATIC mp_obj_t fb_wait(void) {
-    sel4cp_dbg_puts("waiting!");
     mp_blocking_events = mp_event_source_framebuffer;
     co_switch(t_event);
     /* Now we have received a notification from the VMM that the framebuffer is ready. */
     mp_blocking_events = mp_event_source_none;
-    sel4cp_dbg_puts("finished!");
 
     return mp_const_none;
 }
