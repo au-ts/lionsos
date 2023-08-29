@@ -11,14 +11,14 @@ uint8_t *uio_framebuffer_region;
  */
 
 STATIC mp_obj_t fb_set_pixel(mp_obj_t x_o, mp_obj_t y_o, mp_obj_t rgba_o) {
-    int x = mp_obj_get_int(x_o);
-    int y = mp_obj_get_int(y_o);
-    int rgba = mp_obj_get_int(rgba_o);
+    uint64_t x = mp_obj_get_int(x_o);
+    uint64_t y = mp_obj_get_int(y_o);
+    uint64_t rgba = mp_obj_get_int(rgba_o);
 
-    int r = rgba & 0xff000000;
-    int g = rgba & 0x00ff0000;
-    int b = rgba & 0x0000ff00;
-    int a = rgba & 0x000000ff;
+    uint32_t r = (rgba & 0xff000000) >> 24;
+    uint32_t g = (rgba & 0x00ff0000) >> 16;
+    uint32_t b = (rgba & 0x0000ff00) >> 8;
+    uint32_t a = (rgba & 0x000000ff);
 
     size_t offset = (x * (BPP/8)) + (y * LINE_LEN);
 
