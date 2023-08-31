@@ -5,7 +5,7 @@
 [submodule "sddf"]
 	path = sddf
 	url = git@github.com:au-ts/sddf.git
-    branch = restructure
+    branch = kiss
 [submodule "micropython"]
 	path = micropython
 	url = git@github.com:Ivan-Velickovic/micropython.git
