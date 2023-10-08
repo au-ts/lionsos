@@ -1,23 +1,15 @@
-# The KISS Operating System
+# The Lions Operating System
 
-The repository for the KISS Operating System.
+## Getting started with LionsOS
 
-## Getting started with KISS
-
-Right now we are working towards making the new Kitty based on seL4CP using the seL4 Device
-Driver Framework and VMM. Kitty is a Point-Of-Sale (POS) system for the snacks and drinks in the
+Right now we are working towards making the new Kitty based on Microkit using the seL4 Device
+Driver Framework and libvmm. Kitty is a Point-Of-Sale (POS) system for the snacks and drinks in the
 lab.
 
 This repository contains the build-system for the Kitty example system and other
-infrastructure that we will need. It also contains the sDDF and seL4CP VMM
+infrastructure that we will need. It also contains the sDDF and libvmm
 repositories. In the future, we might change the structure but for now we will use
-Git submodules to version control KISS.
-
-Here is the current status (done in green) and the components that we still need
-to build and integrate (in gray). In-progress or almost done components are in
-yellow.
-
-![Kitty status](docs/kitty.png)
+Git submodules to version control LionsOS.
 
 ### Installing dependencies
 
@@ -44,45 +36,45 @@ On Nix/NixOS:
 nix-shell --pure
 ```
 
-### Getting the seL4CP SDK
+### Getting the Microkit SDK
 
-There are a lot of changes to seL4CP that have been made over the past year which means
+There are a lot of changes to Microkit that have been made over the past year which means
 we cannot use the mainline one just yet.
 
-When developing KISS, there should be no reason to modify the SDK itself, hence you can
+When developing LionsOS, there should be no reason to modify the SDK itself, hence you can
 download the pre-built one that the CI builds for every commit.
 
-1. Go to https://github.com/Ivan-Velickovic/sel4cp/actions/runs/5963808480.
+1. Go to https://github.com/Ivan-Velickovic/microkit/actions/runs/5963808480.
 2. Scroll to the bottom and you will see "Artifcats" and below that you can
 choose what SDK you need depending on what computer you are working on.
 3. Click on the SDK you want to download and it should start downloading.
 
 Now you can unpack the SDK (this is on Linux but if you're on macOS just replace the name of the ZIP):
 ```sh
-unzip sel4cp-sdk-dev-3902541-linux-x86-64.zip
-tar xf sel4cp-sdk-1.2.6.tar.gz
+unzip microkit-sdk-dev-3902541-linux-x86-64.zip
+tar xf microkit-sdk-1.2.6.tar.gz
 ```
 
-If you have *any* issues with seL4CP or think something about it can be improved,
+If you have *any* issues with Microkit or think something about it can be improved,
 tell Ivan or open an issue on the GitHub.
 
 ### Building and running the Kitty example
 
 To build Kitty run:
 ```sh
-# Clone the KISS repository along with the submodules (e.g sDDF and the VMM)
-git clone git@github.com:au-ts/kiss.git
-cd kiss
+# Clone the LionsOS repository along with the submodules (e.g sDDF and the VMM)
+git clone git@github.com:au-ts/LionsOS.git
+cd LionsOS
 git submodule update --init
 # Enter the Kitty demo directory
 cd examples/kitty
 # Now compile the demo
-make SEL4CP_SDK=/path/to/sel4cp-sdk-1.2.6
+make MICROKTI_SDK=/path/to/microkit-sdk-1.2.6
 ```
 
 If you need to build a release version of Kitty instead run:
 ```sh
-make SEL4CP_SDK=/path/to/sdk SEL4CP_CONFIG=release
+make MICROKIT_SDK=/path/to/sdk MICROKIT_CONFIG=release
 ```
 
 After building, then you can use machine queue to run `build/kitty.img`. Right now you
@@ -104,15 +96,15 @@ mq.sh run -c "MicroPython" -a -l mqlog -s odroidc4_pool -f build/kitty.img
 
 For now, all experimentation is to be done in the respective repository.
 
-* If you are working on a driver for KISS, create an example system in sDDF and experiment
-  there before integrating with KISS. See the
+* If you are working on a driver for LionsOS, create an example system in sDDF and experiment
+  there before integrating with LionsOS. See the
   [sDDF README for details](https://github.com/au-ts/sddf/tree/restructure#adding-a-new-driver).
     * Make sure that you are working on top of the `restructure` branch [here](https://github.com/au-ts/sddf/tree/restructure).
       Before making a PR, puush your code to `<name>/<branch-name>` on the `au-ts`
       repository. Then, make a PR from `<name>/<branch-name>` to merge into `restructure`.
 * If you are working on the VMM, create an example system in the VMM and experiment there
-  before integrating with KISS.
-    * After you have something working, make a PR [here](https://github.com/Ivan-Velickovic/sel4cp_vmm).
+  before integrating with LionsOS.
+    * After you have something working, make a PR [here](https://github.com/au-ts/libvmm).
 
 ### Integrating with Kitty example
 
@@ -120,7 +112,7 @@ TODO
 
 ## Documentation
 
-The documentation of the project lives in `kiss/docs`.
+The documentation of the project lives in `docs/`.
 
 To view the web-version of the documentation run the following:
 ```
@@ -132,9 +124,9 @@ mdbook serve --open
 ```
 
 ## Useful links
-* [seL4CP Tutorial](https://dsn.ivanvelickovic.com/)
-* [seL4CP manual](https://github.com/Ivan-Velickovic/sel4cp/blob/dev/docs/manual.md)
-* [seL4CP development source code](https://github.com/Ivan-Velickovic/sel4cp)
+* [Microkit Tutorial](https://trustworthy.systems/projects/microkit/tutorial/)
+* [Microkit manual](https://github.com/Ivan-Velickovic/microkit/blob/dev/docs/manual.md)
+* [Microkit development source code](https://github.com/Ivan-Velickovic/microkit)
 * [Odroid-C4 wiki](https://wiki.odroid.com/odroid-c4/odroid-c4)
 * [Odroid-C4 SoC Techincal Reference Manual](https://dn.odroid.com/S905X3/ODROID-C4/Docs/S905X3_Public_Datasheet_Hardkernel.pdf)
 
