@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <sel4cp.h>
+#include <microkit.h>
 
 void
 init(void)
@@ -7,6 +7,6 @@ init(void)
 }
 
 void
-notified(sel4cp_channel ch)
+notified(microkit_channel ch)
 {
 }

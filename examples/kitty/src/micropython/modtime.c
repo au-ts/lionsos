@@ -1,25 +1,25 @@
-#include <sel4cp.h>
+#include <microkit.h>
 #include "micropython.h"
 #include "py/obj.h"
 #include "drivers/clock/meson/timer.h"
 
 mp_uint_t mp_hal_ticks_us(void) {
-    sel4cp_dbg_puts("MICROPYTHON|ERROR: mp_hal_ticks_us is unimplemented\n");
+    microkit_dbg_puts("MICROPYTHON|ERROR: mp_hal_ticks_us is unimplemented\n");
     return 0;
 }
 
 mp_uint_t mp_hal_ticks_ms(void) {
-    sel4cp_dbg_puts("MICROPYTHON|ERROR: ml_hal_ticks_ms is unimplemented\n");
+    microkit_dbg_puts("MICROPYTHON|ERROR: ml_hal_ticks_ms is unimplemented\n");
     return 0;
 }
 
 mp_uint_t mp_hal_ticks_cpu(void) {
-    sel4cp_dbg_puts("MICROPYTHON|ERROR: mp_hal_ticks_cpu is unimplemented\n");
+    microkit_dbg_puts("MICROPYTHON|ERROR: mp_hal_ticks_cpu is unimplemented\n");
     return 0;
 }
 
 uint64_t mp_hal_time_ns(void) {
-    sel4cp_dbg_puts("MICROPYTHON|ERROR: mp_hal_time_ns is unimplemented\n");
+    microkit_dbg_puts("MICROPYTHON|ERROR: mp_hal_time_ns is unimplemented\n");
     return 0;
 }
 

@@ -4,23 +4,23 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-ifeq ($(strip $(SEL4CP_SDK)),)
-$(error SEL4CP_SDK must be specified)
+ifeq ($(strip $(MICROKIT_SDK)),)
+$(error MICROKIT_SDK must be specified)
 endif
 
-SEL4CP_CONFIG ?= debug
+MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
-SEL4CP_BOARD := odroidc4
+MICROKIT_BOARD := odroidc4
 CPU := cortex-a55
 
 TOOLCHAIN := clang
 CC := clang
 LD := ld.lld
 TARGET := aarch64-none-elf
-SEL4CP_TOOL ?= $(SEL4CP_SDK)/bin/sel4cp
+MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
 
-BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
+BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := ../../sddf
 LIBVMM := ../../vmm
 
@@ -32,9 +32,9 @@ DTB := $(BUILD_DIR)/linux.dtb
 
 IMAGES := main.elf micropython.elf timer.elf vmm.elf
 CFLAGS := -mtune=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall -Wno-unused-function -I$(BOARD_DIR)/include -target $(TARGET) \
-		  -I$(LIBVMM)/src/arch/aarch64 -I$(LIBVMM)/src -I$(LIBVMM)/src/util -DBOARD_$(SEL4CP_BOARD)
+		  -I$(LIBVMM)/src/arch/aarch64 -I$(LIBVMM)/src -I$(LIBVMM)/src/util -DBOARD_$(MICROKIT_BOARD)
 LDFLAGS := -L$(BOARD_DIR)/lib
-LIBS := -lsel4cp -Tsel4cp.ld
+LIBS := -lmicrokit -Tmicrokit.ld
 
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
@@ -104,11 +104,11 @@ $(BUILD_DIR)/package_python_scripts.o: $(PACKAGE_PYTHON_SCRIPTS) src/kitty.py
 
 $(BUILD_DIR)/micropython.elf:$(BUILD_DIR)/package_python_scripts.o
 	make -C src/micropython -j$(nproc) \
-			SEL4CP_SDK=$(SEL4CP_SDK) \
-			SEL4CP_BOARD=$(SEL4CP_BOARD) \
-			SEL4CP_CONFIG=$(SEL4CP_CONFIG) \
+			MICROKIT_SDK=$(MICROKIT_SDK) \
+			MICROKIT_BOARD=$(MICROKIT_BOARD) \
+			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
 			BUILD=$(BUILD_DIR) \
 			PACKAGE_PYTHON_SCRIPTS=package_python_scripts.o
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
-	$(SEL4CP_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(SEL4CP_BOARD) --config $(SEL4CP_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+	$(MICROKIT_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
