@@ -36,48 +36,48 @@ pub fn build(b: *std.Build) !void {
         "-mstrict-align",
     });
 
-    const sel4cp_sdk = b.option([]const u8, "sdk", "Path to seL4CP SDK") orelse null;
-    if (sel4cp_sdk == null) {
+    const microkit_sdk = b.option([]const u8, "sdk", "Path to Microkit SDK") orelse null;
+    if (microkit_sdk == null) {
         std.log.err("Missing -Dsdk=/path/to/sdk argument being passed\n", .{});
         std.os.exit(1);
     }
 
-    const sel4cp_config_option = b.option(configOptions, "config", "seL4CP config to build for") orelse configOptions.debug;
-    const sel4cp_config = @tagName(sel4cp_config_option);
+    const microkit_config_option = b.option(configOptions, "config", "Microkit config to build for") orelse configOptions.debug;
+    const microkit_config = @tagName(microkit_config_option);
     // By default we target the Odroid-C4, but it's possible to override the target if we need to
     // test on QEMU or something
-    const sel4cp_board = b.option([]const u8, "board", "seL4CP board to target") orelse "odroidc4";
+    const microkit_board = b.option([]const u8, "board", "Microkit board to target") orelse "odroidc4";
     // Since we are relying on Zig to produce the final ELF, it needs to do the
     // linking step as well.
-    const sdk_board_dir = concatStr(gpa, &[_][]const u8{ sel4cp_sdk.?, "/board/", sel4cp_board, "/", sel4cp_config });
-    const libsel4cp = concatStr(gpa, &[_][]const u8{ sdk_board_dir, "/lib/libsel4cp.a" });
-    const libsel4cp_linker_script = concatStr(gpa, &[_][]const u8{ sdk_board_dir, "/lib/sel4cp.ld" });
+    const sdk_board_dir = concatStr(gpa, &[_][]const u8{ microkit_sdk.?, "/board/", microkit_board, "/", microkit_config });
+    const libmicrokit = concatStr(gpa, &[_][]const u8{ sdk_board_dir, "/lib/libmicrokit.a" });
+    const libmicrokit_linker_script = concatStr(gpa, &[_][]const u8{ sdk_board_dir, "/lib/microkit.ld" });
 
-    exe.addObjectFile(libsel4cp);
-    exe.setLinkerScriptPath(.{ .path = libsel4cp_linker_script });
+    exe.addObjectFile(libmicrokit);
+    exe.setLinkerScriptPath(.{ .path = libmicrokit_linker_script });
     exe.addIncludePath("src/");
     exe.addIncludePath(concatStr(gpa, &[_][]const u8{ sdk_board_dir, "/include" }));
 
     b.installArtifact(exe);
 
     const system_description = "kitty.system";
-    const sel4cp_tool_cmd = b.addSystemCommand(&[_][]const u8{
-       concatStr(gpa, &[_][]const u8{ sel4cp_sdk.?, "/bin/sel4cp" }),
+    const microkit_tool_cmd = b.addSystemCommand(&[_][]const u8{
+       concatStr(gpa, &[_][]const u8{ microkit_sdk.?, "/bin/microkit" }),
        system_description,
        "--search-path",
        "zig-out/bin",
        "--board",
-       sel4cp_board,
+       microkit_board,
        "--config",
-       sel4cp_config,
+       microkit_config,
        "-o",
        "zig-out/bin/loader.img",
        "-r",
        "zig-out/report.txt",
     });
-    sel4cp_tool_cmd.step.dependOn(b.getInstallStep());
-    // Add the "sel4cp" step, and make it the default step when we execute `zig build`>
-    const sel4cp_step = b.step("sel4cp", "Compile and build the final bootable image");
-    sel4cp_step.dependOn(&sel4cp_tool_cmd.step);
-    b.default_step = sel4cp_step;
+    microkit_tool_cmd.step.dependOn(b.getInstallStep());
+    // Add the "microkit" step, and make it the default step when we execute `zig build`>
+    const microkit_step = b.step("microkit", "Compile and build the final bootable image");
+    microkit_step.dependOn(&microkit_tool_cmd.step);
+    b.default_step = microkit_step;
 }

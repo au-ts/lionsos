@@ -1,4 +1,4 @@
-#include <sel4cp.h>
+#include <microkit.h>
 #include "py/runtime.h"
 #include "micropython.h"
 #include "../vmm/uio.h"
@@ -42,7 +42,7 @@ STATIC mp_obj_t fb_wait(void) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(fb_wait_obj, fb_wait);
 
 STATIC mp_obj_t fb_flush(void) {
-    sel4cp_notify(VMM_CH);
+    microkit_notify(VMM_CH);
 
     return mp_const_none;
 }

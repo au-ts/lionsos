@@ -1,4 +1,4 @@
-#include <sel4cp.h>
+#include <microkit.h>
 #include <string.h>
 #include <stdio.h>
 #include "micropython.h"
@@ -25,7 +25,7 @@ int mp_blocking_events = mp_event_source_none;
 #ifndef NDEBUG
 void MP_WEAK __assert_func(const char *file, int line, const char *func, const char *expr) {
     // @ivanv: improve/fix, use printf?
-    sel4cp_dbg_puts("MICROPYTHON|ERROR: Assertion failed!\n");
+    microkit_dbg_puts("MICROPYTHON|ERROR: Assertion failed!\n");
     while (true) {}
 }
 #endif
@@ -74,7 +74,7 @@ void init(void) {
     co_switch(t_mp);
 }
 
-void notified(sel4cp_channel ch) {
+void notified(microkit_channel ch) {
     switch (ch) {
     case TIMER_CH:
         active_events |= mp_event_source_timer;
