@@ -15,7 +15,7 @@ Git submodules to version control LionsOS.
 
 On Ubuntu/Debian:
 ```sh
-sudo apt update && sudo apt install make clang lld device-tree-compiler
+sudo apt update && sudo apt install make clang lld device-tree-compiler unzip git
 ```
 
 On Arch Linux:
@@ -69,7 +69,7 @@ git submodule update --init
 # Enter the Kitty demo directory
 cd examples/kitty
 # Now compile the demo
-make MICROKTI_SDK=/path/to/microkit-sdk-1.2.6
+make MICROKIT_SDK=/path/to/microkit-sdk-1.2.6
 ```
 
 If you need to build a release version of Kitty instead run:
