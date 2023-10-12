@@ -45,7 +45,7 @@ When developing LionsOS, there should be no reason to modify the SDK itself, hen
 download the pre-built one that the CI builds for every commit.
 
 1. Go to https://github.com/Ivan-Velickovic/microkit/actions/runs/5963808480.
-2. Scroll to the bottom and you will see "Artifcats" and below that you can
+2. Scroll to the bottom and you will see "Artifacts" and below that you can
 choose what SDK you need depending on what computer you are working on.
 3. Click on the SDK you want to download and it should start downloading.
 
