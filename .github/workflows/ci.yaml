@@ -15,10 +15,11 @@ jobs:
         with:
           submodules: 'true'
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
-      - name: Download seL4CP SDK
-        run: ./ci/acquire_sdk.sh sel4cp-sdk.zip ${{ secrets.GITHUB_TOKEN }} linux-x86-64
+      - name: Download Microkit SDK
+        run: ./ci/acquire_sdk.sh microkit-sdk.zip ${{ secrets.GITHUB_TOKEN }} linux-x86-64
         shell: bash
-      - name: Extract seL4CP SDK
-        run: unzip sel4cp-sdk.zip && tar -xf sel4cp-sdk-1.2.6.tar.gz
+      - name: Extract Microkit SDK
+        run: unzip microkit-sdk.zip && tar -xf microkit-sdk-1.2.6.tar.gz
       - name: Build Kitty example
-        run: nix-shell --pure --run "make -C examples/kitty SEL4CP_SDK=$(pwd)/sel4cp-sdk-1.2.6"
+        run: nix-shell --pure --run "make -C examples/kitty MICROKIT_SDK=$(pwd)/microkit-sdk-1.2.6"
+
