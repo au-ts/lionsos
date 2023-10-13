@@ -1,12 +1,12 @@
 [submodule "libvmm"]
 	path = libvmm
-	url = git@github.com:au-ts/libvmm.git
+	url = https://github.com/au-ts/libvmm.git
     branch = main
 [submodule "sddf"]
 	path = sddf
-	url = git@github.com:au-ts/sddf.git
+	url = https://github.com/au-ts/sddf.git
     branch = kiss
 [submodule "micropython"]
 	path = micropython
-	url = git@github.com:Ivan-Velickovic/micropython.git
+	url = https://github.com/Ivan-Velickovic/micropython.git
     branch = kiss
