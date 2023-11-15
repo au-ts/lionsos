@@ -162,7 +162,7 @@
 			clock-names = "stmmaceth\0clkin0\0clkin1\0timing-adjustment";
 			rx-fifo-depth = <0x1000>;
 			tx-fifo-depth = <0x800>;
-			status = "okay";
+			status = "disabled";
 			power-domains = <0x03 0x06>;
 			pinctrl-0 = <0x07 0x08>;
 			pinctrl-names = "default";

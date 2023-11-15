@@ -57,12 +57,8 @@
             <map mr="gic_vcpu" vaddr="0xffc02000" perms="rw" cached="false" />
         </virtual_machine>
         <!-- @ivanv: clean up these IDs once we finishing stripping down the Linux image -->
-        <!-- Ethernet -->
-        <irq irq="40" id="5" />
         <!-- vpu -->
         <irq irq="35" id="15" trigger="edge" />
-        <!-- Ethernet PHY -->
-        <irq irq="96" id="6" />
         <!-- panfrost-gpu -->
         <irq irq="192" id="7" />
         <!-- panfrost-mmu -->
