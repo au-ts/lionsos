@@ -3,21 +3,32 @@
 #define MICROPY_CONFIG_ROM_LEVEL (MICROPY_CONFIG_ROM_LEVEL_MINIMUM)
 
 #define MICROPY_ENABLE_COMPILER (1)
+#define MICROPY_PY_BUILTINS_EVAL_EXEC (1)
 
-// Python internal features.
-#define MICROPY_ENABLE_GC                       (1)
-#define MICROPY_HELPER_REPL                     (1)
-#define MICROPY_ERROR_REPORTING                 (MICROPY_ERROR_REPORTING_TERSE)
-#define MICROPY_FLOAT_IMPL                      (MICROPY_FLOAT_IMPL_FLOAT)
+// #define MICROPY_QSTR_EXTRA_POOL           mp_qstr_frozen_const_pool
+#define MICROPY_MODULE_WEAK_LINKS (1)
+#define MICROPY_ENABLE_GC (1)
+#define MICROPY_HELPER_REPL (1)
+#define MICROPY_PY_CMATH (1)
+#define MICROPY_PY_SYS (1)
+#define MICROPY_PY_FSTRINGS (1)
+#define MICROPY_PY_BUILTINS_BYTEARRAY (1)
+#define MICROPY_PY_BUILTINS_SLICE (1)
+#define MICROPY_CPYTHON_COMPAT (1)
+#define MICROPY_PY_CPRINGBUF (1)
+#define MICROPY_PY_CPFS (1)
+#define MICROPY_PY_UJSON (1)
+#define MICROPY_PY_BUILTINS_SET (1)
+#define MICROPY_PY_OS (1)
+#define MICROPY_PY_IO (1)
+#define MICROPY_VFS (1)
+#define MICROPY_READER_VFS (1)
 
-// Fine control over Python builtins, classes, modules, etc.
-#define MICROPY_PY_ASYNC_AWAIT                  (0)
-#define MICROPY_PY_BUILTINS_SET                 (0)
-#define MICROPY_PY_ATTRTUPLE                    (0)
-#define MICROPY_PY_COLLECTIONS                  (0)
-#define MICROPY_PY_MATH                         (0)
-#define MICROPY_PY_IO                           (0)
-#define MICROPY_PY_STRUCT                       (0)
+#define MICROPY_ENABLE_EXTERNAL_IMPORT (1)
+
+#define MICROPY_ALLOC_PATH_MAX (256)
+#define MICROPY_ALLOC_PARSE_CHUNK_INIT (16)
+#define MICROPY_MODULE_OVERRIDE_MAIN_IMPORT (1)
 
 // Configuration for the `time` module
 #define MICROPY_PY_TIME                         (1)
