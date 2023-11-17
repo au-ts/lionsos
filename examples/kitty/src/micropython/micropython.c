@@ -9,6 +9,8 @@
 #include "py/stackctrl.h"
 #include "shared/runtime/gchelper.h"
 #include "shared/runtime/pyexec.h"
+#include "vfs_sddf_fs.h"
+#include <extmod/vfs.h>
 
 /* Data for the Kitty Python script. */
 extern char _kitty_python_script[];
@@ -19,8 +21,31 @@ static char heap[MICROPY_HEAP_SIZE];
 static char mp_stack[MICROPY_HEAP_SIZE];
 cothread_t t_event, t_mp;
 
+char *nfs_share;
+
 int active_events = mp_event_source_none;
 int mp_blocking_events = mp_event_source_none;
+
+void await(int event_source) {
+    if (active_events & event_source) {
+        active_events &= ~event_source;
+        return;
+    }
+    mp_blocking_events = event_source;
+    co_switch(t_event);
+    mp_blocking_events = mp_event_source_none;
+    active_events &= ~event_source;
+}
+
+STATIC bool init_nfs(void) {
+    mp_obj_t args[2] = {
+        MP_OBJ_TYPE_GET_SLOT(&mp_type_vfs_sddf_fs, make_new)(&mp_type_vfs_sddf_fs, 0, 0, NULL),
+        MP_OBJ_NEW_QSTR(MP_QSTR__slash_),
+    };
+    mp_vfs_mount(2, args, (mp_map_t *)&mp_const_empty_map);
+    MP_STATE_VM(vfs_cur) = MP_STATE_VM(vfs_mount_table);
+    return 0;
+}
 
 #ifndef NDEBUG
 void MP_WEAK __assert_func(const char *file, int line, const char *func, const char *expr) {
@@ -55,9 +80,11 @@ void t_mp_entrypoint(void) {
     gc_init(heap, heap + sizeof(heap));
     mp_init();
 
+    init_nfs();
+
     // Start a normal REPL; will exit when ctrl-D is entered on a blank line.
-    // pyexec_friendly_repl();
-    exec_str(_kitty_python_script, MP_PARSE_FILE_INPUT);
+    pyexec_friendly_repl();
+    // exec_str(_kitty_python_script, MP_PARSE_FILE_INPUT);
 
     // Deinitialise the runtime.
     gc_sweep_all();
@@ -80,9 +107,11 @@ void notified(microkit_channel ch) {
         active_events |= mp_event_source_timer;
         break;
     case VMM_CH:
-        printf("MICROPYTHON|INFO: got notification from VMM\n");
         /* We have gotten a message from the VMM, which means the framebuffer is ready. */
         active_events |= mp_event_source_framebuffer;
+        break;
+    case NFS_CH:
+        active_events |= mp_event_source_nfs;
         break;
     default:
         printf("MICROPYTHON|ERROR: unknown notification received from channel: 0x%lx\n", ch);
@@ -103,14 +132,4 @@ void gc_collect(void) {
     gc_collect_start();
     gc_helper_collect_regs_and_stack();
     gc_collect_end();
-}
-
-// There is no filesystem so stat'ing returns nothing.
-mp_import_stat_t mp_import_stat(const char *path) {
-    return MP_IMPORT_STAT_NO_EXIST;
-}
-
-// There is no filesystem so opening a file raises an exception.
-mp_lexer_t *mp_lexer_new_from_file(const char *filename) {
-    mp_raise_OSError(MP_ENOENT);
 }

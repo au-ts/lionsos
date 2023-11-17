@@ -8,6 +8,10 @@ ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
 
+ifeq ($(strip $(LIBGCC)),)
+$(error LIBGCC must be specified: this should be the directory where libgcc.a can be found)
+endif
+
 MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
 MICROKIT_BOARD := odroidc4
@@ -30,10 +34,14 @@ INITRD := $(VMM_IMAGE_DIR)/rootfs.cpio.gz
 DTS := $(VMM_IMAGE_DIR)/linux.dts
 DTB := $(BUILD_DIR)/linux.dtb
 
-IMAGES := main.elf micropython.elf timer.elf vmm.elf
-CFLAGS := -mtune=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall -Wno-unused-function -I$(BOARD_DIR)/include -target $(TARGET) \
-		  -I$(LIBVMM)/src/arch/aarch64 -I$(LIBVMM)/src -I$(LIBVMM)/src/util -DBOARD_$(MICROKIT_BOARD)
-LDFLAGS := -L$(BOARD_DIR)/lib
+LWIP=$(SDDF)/network/ipstacks/lwip/src
+LIBNFS=../../libnfs
+NFS=../../fs/nfs
+MUSL=../../musllibc
+
+IMAGES := main.elf timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf 
+CFLAGS := -mtune=$(CPU) -mstrict-align -ffreestanding -g -O0 -Wall -Wno-unused-function -I$(BOARD_DIR)/include -target $(TARGET) -I$(LIBVMM)/src/arch/aarch64 -I$(LIBVMM)/src -I$(LIBVMM)/src/util -DBOARD_$(MICROKIT_BOARD)
+LDFLAGS := -L$(BOARD_DIR)/lib 
 LIBS := -lmicrokit -Tmicrokit.ld
 
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
@@ -50,7 +58,7 @@ TIMER_DRIVER := $(SDDF)/drivers/clock/meson
 
 PACKAGE_PYTHON_SCRIPTS := src/package_python_scripts.S
 
-all: $(BUILD_DIR) $(IMAGE_FILE)
+all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -102,13 +110,70 @@ $(BUILD_DIR)/package_python_scripts.o: $(PACKAGE_PYTHON_SCRIPTS) src/kitty.py
 				-target $(TARGET) \
 				$< -o $@
 
-$(BUILD_DIR)/micropython.elf:$(BUILD_DIR)/package_python_scripts.o
+$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o
 	make -C src/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
 			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
-			BUILD=$(BUILD_DIR) \
+			BUILD=$(abspath $(BUILD_DIR)) \
 			PACKAGE_PYTHON_SCRIPTS=package_python_scripts.o
+
+ETHERNET=$(SDDF)/drivers/network/meson/
+$(BUILD_DIR)/meson_ethernet.o: FORCE
+	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include make -C $(ETHERNET)
+
+LIBSHAREDRINGBUFFER=$(SDDF)/network/libethsharedringbuffer/
+$(BUILD_DIR)/sddf_network_sharedringbuffer.o: FORCE
+	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include make -C $(LIBSHAREDRINGBUFFER)
+
+$(BUILD_DIR)/sddf_timer_client.o: FORCE
+	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include TIMER_CHANNEL=9 make -C $(SDDF)/timer/client
+
+$(BUILD_DIR)/musllibc/lib/libc.a:
+	make -C $(MUSL) \
+		C_COMPILER=aarch64-none-elf-gcc \
+		TOOLPREFIX=aarch64-none-elf- \
+		CONFIG_ARCH_AARCH64=y \
+		STAGE_DIR=$(abspath $(BUILD_DIR)/musllibc) \
+		SOURCE_DIR=.
+
+$(BUILD_DIR)/libnfs/lib/libnfs.a: $(BUILD_DIR)/musllibc/lib/libc.a
+	MUSL=$(abspath $(BUILD_DIR)/musllibc) cmake -S ../../libnfs -B $(BUILD_DIR)/libnfs
+	cmake --build $(BUILD_DIR)/libnfs
+
+$(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
+	make -C $(NFS) \
+		BUILD_DIR=$(abspath $(BUILD_DIR)/nfs) \
+		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
+		MUSLLIBC_INCLUDE=$(abspath $(BUILD_DIR)/musllibc/include) \
+		LIBNFS_INCLUDE=$(abspath ../..//libnfs/include)
+
+$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a
+	$(LD) \
+		$(LDFLAGS) \
+		$(BUILD_DIR)/nfs/nfs.a \
+		$(BUILD_DIR)/sddf_network_sharedringbuffer.o \
+		$(BUILD_DIR)/sddf_timer_client.o \
+		-L$(BUILD_DIR)/libnfs/lib \
+		-L$(BUILD_DIR)/musllibc/lib \
+		-L$(LIBGCC) \
+		-lgcc \
+		-lc \
+		$(LIBS) \
+		-lnfs \
+		-o $(BUILD_DIR)/nfs.elf
+
+$(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/meson_ethernet.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+directories:
+	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src))	\
+	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/core)) 	\
+	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/netif))	\
+	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/core/ipv4)) \
+	$(info $(shell mkdir -p $(BUILD_DIR)/nfs))
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
 	$(MICROKIT_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+
+FORCE: ;
