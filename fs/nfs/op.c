@@ -181,7 +181,7 @@ void pwrite_cb(int status, struct nfs_context *nfs, void *data, void *private_da
     microkit_notify(CLIENT_CHANNEL);
 }
 
-void handle_pwrite(fd_t fd, uint64_t nbyte, uint64_t offset) {
+void handle_pwrite(fd_t fd, char *buf, uint64_t nbyte, uint64_t offset) {
     int err;
 
     struct nfsfh *file_handle = NULL;
@@ -191,7 +191,7 @@ void handle_pwrite(fd_t fd, uint64_t nbyte, uint64_t offset) {
         goto fail_begin;
     }
 
-    err = nfs_pwrite_async(nfs, file_handle, offset, nbyte, client_share, pwrite_cb, (void *)fd);
+    err = nfs_pwrite_async(nfs, file_handle, offset, nbyte, buf, pwrite_cb, (void *)fd);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -437,92 +437,108 @@ fail:
     microkit_notify(CLIENT_CHANNEL);
 }
 
-void nfs_protected(microkit_channel ch, microkit_msginfo msginfo) {
-    switch (microkit_msginfo_get_label(msginfo)) {
-    case SDDF_FS_CMD_STAT: {
-        handle_stat64(client_share);
+void nfs_notified(void) {
+    uint32_t cmd;
+    memcpy(&cmd, client_share, 4);
+    switch (cmd) {
+    case SDDF_FS_CMD_OPEN: {
+        handle_open(client_share + 4, O_RDWR | O_CREAT, O_RDWR);
         break;
     }
-    case SDDF_FS_CMD_OPEN: {
-        handle_open(client_share, O_RDWR | O_CREAT, O_RDWR);
+    case SDDF_FS_CMD_STAT: {
+        handle_stat64(client_share + 4);
         break;
     }
     case SDDF_FS_CMD_CLOSE: {
-        fd_t fd = (int)microkit_mr_get(0);
+        fd_t fd;
+        memcpy(&fd, client_share + 4, 8);
         handle_close(fd);
         break;
     }
     case SDDF_FS_CMD_PREAD: {
-        fd_t fd = (int)microkit_mr_get(0);
-        uint64_t nbyte = microkit_mr_get(1);
-        uint64_t offset = microkit_mr_get(2);
+        fd_t fd;
+        uint64_t nbyte, offset;
+        memcpy(&fd, client_share + 4, 8);
+        memcpy(&nbyte, client_share + 12, 8);
+        memcpy(&offset, client_share + 20, 8);
         handle_pread(fd, nbyte, offset);
         break;
     }
     case SDDF_FS_CMD_PWRITE: {
-        fd_t fd = (int)microkit_mr_get(0);
-        uint64_t nbyte = microkit_mr_get(1);
-        uint64_t offset = microkit_mr_get(2);
-        handle_pwrite(fd, nbyte, offset);
+        fd_t fd;
+        uint64_t nbyte, offset;
+        memcpy(&fd, client_share + 4, 8);
+        memcpy(&nbyte, client_share + 12, 8);
+        memcpy(&offset, client_share + 20, 8);
+        char *buf = client_share + 28;
+        handle_pwrite(fd, buf, nbyte, offset);
         break;
     }
     case SDDF_FS_CMD_RENAME: {
-        int oldpath_offset = microkit_mr_get(0);
-        int newpath_offset = microkit_mr_get(1);
-        const char *oldpath = client_share + oldpath_offset;
-        const char *newpath = client_share + newpath_offset;
+        uint64_t oldpath_offset, newpath_offset;
+        memcpy(&oldpath_offset, client_share + 4, 8);
+        memcpy(&newpath_offset, client_share + 12, 8);
+        char *oldpath = client_share + oldpath_offset;
+        char *newpath = client_share + newpath_offset;
         handle_rename(oldpath, newpath);
         break;
     }
     case SDDF_FS_CMD_UNLINK: {
-        handle_unlink(client_share);
+        handle_unlink(client_share + 4);
         break;
     }
     case SDDF_FS_CMD_MKDIR: {
-        handle_mkdir(client_share);
+        handle_mkdir(client_share + 4);
         break;
     }
     case SDDF_FS_CMD_RMDIR: {
-        handle_rmdir(client_share);
+        handle_rmdir(client_share + 4);
         break;
     }
     case SDDF_FS_CMD_OPENDIR: {
-        handle_opendir(client_share);
+        handle_opendir(client_share + 4);
         break;
     }
     case SDDF_FS_CMD_CLOSEDIR: {
-        fd_t fd = (fd_t)microkit_mr_get(0);
+        fd_t fd;
+        memcpy(&fd, client_share + 4, 8);
         handle_closedir(fd);
         break;
     }
     case SDDF_FS_CMD_READDIR: {
-        fd_t fd = microkit_mr_get(0);
+        fd_t fd;
+        memcpy(&fd, client_share + 4, 8);
         handle_readdir(fd);
         break;
     }
     case SDDF_FS_CMD_FSYNC: {
-        fd_t fd = (fd_t)microkit_mr_get(0);
+        fd_t fd;
+        memcpy(&fd, client_share + 4, 8);
         handle_fsync(fd);
         break;
     }
     case SDDF_FS_CMD_SEEKDIR: {
-        fd_t fd = (fd_t)microkit_mr_get(0);
-        long loc = (fd_t)microkit_mr_get(1);
+        fd_t fd;
+        int64_t loc;
+        memcpy(&fd, client_share + 4, 8);
+        memcpy(&loc, client_share + 12, 8);
         handle_seekdir(fd, loc);
         break;
     }
     case SDDF_FS_CMD_TELLDIR: {
-        fd_t fd = (fd_t)microkit_mr_get(0);
+        fd_t fd;
+        memcpy(&fd, client_share + 4, 8);
         handle_telldir(fd);
         break;
     }
     case SDDF_FS_CMD_REWINDDIR: {
-        fd_t fd = (fd_t)microkit_mr_get(0);
+        fd_t fd;
+        memcpy(&fd, client_share + 4, 8);
         handle_rewinddir(fd);
         break;
     }
     default:
-        dlog("unknown ppcall operation");
+        dlog("unknown fs operation");
         break;
     }
 }

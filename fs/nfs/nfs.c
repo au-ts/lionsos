@@ -35,11 +35,6 @@ void nfs_init(void) {
     dlogp(err, "failed to connect to nfs server");
 }
 
-seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo) {
-    nfs_protected(ch, msginfo);
-    return microkit_msginfo_new(0, 0);
-}
-
 void notified(microkit_channel ch) {
     sddf_timer_set_timeout(TIMEOUT);
     switch (ch) {
@@ -74,6 +69,7 @@ void notified(microkit_channel ch) {
         tcp_process_rx();
         break;
     case CLIENT_CHANNEL: {
+        nfs_notified();
         break;
     }
     default:
