@@ -117,7 +117,7 @@
         <setvar symbol="shared_dma_paddr" region_paddr="shared_dma" />
     </protection_domain>
 
-    <protection_domain name="nfs" priority="98" pp="true">
+    <protection_domain name="nfs" priority="98">
         <program_image path="nfs.elf" />
 
         <!-- shared memory for eth ring buffer mechanism -->
