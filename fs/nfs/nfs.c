@@ -9,6 +9,7 @@
 #include <nfsc/libnfs.h>
 #include <nfsc/libnfs-raw.h>
 
+#include "nfs.h"
 #include "util.h"
 #include "fd.h"
 #include "tcp.h"
@@ -16,7 +17,6 @@
 
 #define TIMEOUT (30 * NS_IN_MS)
 
-char *client_share;
 struct nfs_context *nfs;
 
 void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *private_data) {
@@ -80,7 +80,7 @@ void notified(microkit_channel ch) {
 
 void init(void) {
     syscalls_init();
-    dlog("nfs init!");
+    continuation_pool_init();
     tcp_init_0();
     sddf_timer_set_timeout(TIMEOUT);
 }
