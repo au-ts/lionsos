@@ -1,5 +1,10 @@
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
+
+#define SDDF_FS_QUEUE_CAPACITY 5
+
 enum {
     SDDF_FS_CMD_OPEN,
     SDDF_FS_CMD_CLOSE,
@@ -19,30 +24,49 @@ enum {
     SDDF_FS_CMD_REWINDDIR,
 };
 
-struct sddf_fs_path {
-    char str[4096];
-    int len;
+struct sddf_fs_command {
+    uint64_t request_id;
+    uint64_t cmd_type;
+    uint64_t args[4];
 };
 
-struct sddf_fs_filename {
-    char str[255];
-    int len;
+struct sddf_fs_completion {
+    uint64_t request_id;
+    uint64_t data[2];
+    int32_t status;
 };
 
-struct sddf_fs_opendir_request {
-    struct sddf_fs_path path;
+union sddf_fs_message {
+    struct sddf_fs_command command;
+    struct sddf_fs_completion completion;
 };
 
-struct sddf_fs_opendir_response {
-    uint64_t fd;
-    int status;
+struct sddf_fs_queue {
+    union sddf_fs_message buffer[SDDF_FS_QUEUE_CAPACITY];
+    uint32_t read_index;
+    uint32_t write_index;
+    uint32_t size;
 };
 
-struct sddf_fs_readdir_request {
-    uint64_t fd;
-};
+bool sddf_fs_queue_push(struct sddf_fs_queue *queue, union sddf_fs_message message);
+bool sddf_fs_queue_pop(struct sddf_fs_queue *queue, union sddf_fs_message *message);
 
-struct sddf_fs_readdir_response {
-    struct sddf_fs_filename filename;
-    int status;
+struct sddf_fs_stat_64 {
+	uint64_t dev;
+	uint64_t ino;
+	uint64_t mode;
+	uint64_t nlink;
+	uint64_t uid;
+	uint64_t gid;
+	uint64_t rdev;
+	uint64_t size;
+	uint64_t blksize;
+	uint64_t blocks;
+	uint64_t atime;
+	uint64_t mtime;
+	uint64_t ctime;
+	uint64_t atime_nsec;
+	uint64_t mtime_nsec;
+	uint64_t ctime_nsec;
+	uint64_t used;
 };

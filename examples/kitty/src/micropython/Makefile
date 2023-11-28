@@ -49,7 +49,7 @@ SRC_C = \
 SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c modfb.c vfs_sddf_fs_file.c vfs_sddf_fs.c
 
 # Define the required object files.
-OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) ../../build/sddf_timer_client.o
+OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) ../../build/sddf_timer_client.o ../../build/sddf_fs_protocol.o
 
 all: $(BUILD)/micropython.elf
 

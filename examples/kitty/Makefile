@@ -110,7 +110,7 @@ $(BUILD_DIR)/package_python_scripts.o: $(PACKAGE_PYTHON_SCRIPTS) src/kitty.py
 				-target $(TARGET) \
 				$< -o $@
 
-$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o
+$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o
 	make -C src/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -128,6 +128,10 @@ $(BUILD_DIR)/sddf_network_sharedringbuffer.o: FORCE
 
 $(BUILD_DIR)/sddf_timer_client.o: FORCE
 	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include TIMER_CHANNEL=9 make -C $(SDDF)/timer/client
+
+SDDF_FS_PROTOCOL=../../fs/protocol/
+$(BUILD_DIR)/sddf_fs_protocol.o: FORCE
+	BUILD_DIR=$(abspath $(BUILD_DIR)) make -C $(SDDF_FS_PROTOCOL)
 
 $(BUILD_DIR)/musllibc/lib/libc.a:
 	make -C $(MUSL) \
@@ -148,12 +152,13 @@ $(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
 		MUSLLIBC_INCLUDE=$(abspath $(BUILD_DIR)/musllibc/include) \
 		LIBNFS_INCLUDE=$(abspath ../..//libnfs/include)
 
-$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a
+$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a
 	$(LD) \
 		$(LDFLAGS) \
 		$(BUILD_DIR)/nfs/nfs.a \
 		$(BUILD_DIR)/sddf_network_sharedringbuffer.o \
 		$(BUILD_DIR)/sddf_timer_client.o \
+		$(BUILD_DIR)/sddf_fs_protocol.o \
 		-L$(BUILD_DIR)/libnfs/lib \
 		-L$(BUILD_DIR)/musllibc/lib \
 		-L$(LIBGCC) \
