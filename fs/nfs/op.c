@@ -1,5 +1,6 @@
 #include <microkit.h>
 
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -80,7 +81,7 @@ static void stat64_cb(int status, struct nfs_context *nfs, void *data, void *pri
 
     if (status == 0) {
         memcpy(buf, data, sizeof (struct nfs_stat_64));
-    } else {
+    } else if (status != -ENOENT) {
         dlog("failed to stat file (%d): %s", status, data);
     }
 
@@ -578,7 +579,6 @@ void handle_readdir(uint64_t request_id, fd_t fd, char *buf, uint64_t buf_size) 
 
     struct nfsdirent *dirent = nfs_readdir(nfs, dir_handle);
     if (dirent == NULL) {
-        dlog("failed to read dir");
         status = -1;
         goto fail_readdir;
     }
