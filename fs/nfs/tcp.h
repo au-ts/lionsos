@@ -1,3 +1,8 @@
+/*
+ * Copyright 2023, UNSW
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 #define MAX_SOCKETS 10
 #define SOCKET_BUF_SIZE 0x200000
 

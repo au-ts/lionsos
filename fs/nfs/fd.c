@@ -1,3 +1,7 @@
+/*
+ * Copyright 2023, UNSW
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 
 #include <stdint.h>
 #include <assert.h>
