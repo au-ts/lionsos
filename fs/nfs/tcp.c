@@ -33,7 +33,7 @@ typedef enum
 
 typedef struct ethernet_buffer
 {
-    /* The acutal underlying memory of the buffer */
+    /* The actual underlying memory of the buffer */
     uintptr_t buffer;
     /* The physical size of the buffer */
     size_t size;
