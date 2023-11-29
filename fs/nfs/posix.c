@@ -70,24 +70,15 @@ static size_t output(void *data, size_t count)
 
 long sys_brk(va_list ap)
 {
-    uintptr_t ret;
     uintptr_t newbrk = va_arg(ap, uintptr_t);
 
-    /*if the newbrk is 0, return the bottom of the heap*/
-    if (!newbrk)
-    {
-        ret = morecore_base;
+    /* if the newbrk is 0, return the bottom of the heap */
+    if (!newbrk) {
+        return morecore_base;
+    } else if (newbrk < morecore_top && newbrk > (uintptr_t)&morecore_area[0]) {
+        return morecore_base = newbrk;
     }
-    else if (newbrk < morecore_top && newbrk > (uintptr_t)&morecore_area[0])
-    {
-        ret = morecore_base = newbrk;
-    }
-    else
-    {
-        ret = 0;
-    }
-
-    return ret;
+    return 0;
 }
 
 uintptr_t align_addr(uintptr_t addr)
@@ -137,10 +128,8 @@ long sys_write(va_list ap)
         }
         return count;
     }
-    else
-    {
-        return -1;
-    }
+
+    return -1;
 }
 
 long sys_clock_gettime(va_list ap)
