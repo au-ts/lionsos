@@ -4,6 +4,8 @@
  */
 
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 typedef  uint8_t  u8_t;
 typedef uint16_t u16_t;
@@ -52,9 +54,6 @@ typedef uintptr_t mem_ptr_t;
 #define LWIP_PLATFORM_HTONS(x) ( (((u16_t)(x))>>8) | (((x)&0xFF)<<8) )
 #define LWIP_PLATFORM_HTONL(x) ( (((u32_t)(x))>>24) | (((x)&0xFF0000)>>8) \
                                | (((x)&0xFF00)<<8) | (((x)&0xFF)<<24) )
-
-#include <stdio.h>
-#include <stdlib.h>
 
 #define LWIP_RAND                       rand
 
