@@ -5,7 +5,7 @@
 [submodule "sddf"]
 	path = sddf
 	url = https://github.com/au-ts/sddf.git
-	branch = kiss
+	branch = lionsos
 [submodule "micropython"]
 	path = micropython
 	url = https://github.com/Ivan-Velickovic/micropython.git
