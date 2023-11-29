@@ -155,6 +155,7 @@ long sys_ioctl(va_list ap)
     int fd = va_arg(ap, int);
     int request = va_arg(ap, int);
     (void)request;
+    dlog("musl called ioctl on fd %d", fd);
     /* muslc does some ioctls to stdout, so just allow these to silently
        go through */
     if (fd == STDOUT_FD)
