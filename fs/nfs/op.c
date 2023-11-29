@@ -598,7 +598,7 @@ fail_begin:
     reply(request_id, status, 0, 0);
 }
 
-void handle_seekdir(uint64_t request_id, fd_t fd, long loc) {
+void handle_seekdir(uint64_t request_id, fd_t fd, int64_t loc) {
     int err = 0;
 
     struct nfsdir *dir_handle = NULL;
@@ -623,7 +623,7 @@ void handle_telldir(uint64_t request_id, fd_t fd) {
         dlog("invalid fd");
         goto fail;
     }
-    long loc = nfs_telldir(nfs, dir_handle);
+    int64_t loc = nfs_telldir(nfs, dir_handle);
     fd_end_op(fd);
 
 fail:
