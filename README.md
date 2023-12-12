@@ -51,7 +51,7 @@ choose what SDK you need depending on what computer you are working on.
 
 Now you can unpack the SDK (this is on Linux but if you're on macOS just replace the name of the ZIP):
 ```sh
-unzip microkit-sdk-dev-3902541-linux-x86-64.zip
+unzip microkit-sdk-dev-f97a02d-linux-x86-64.zip
 tar xf microkit-sdk-1.2.6.tar.gz
 ```
 
@@ -69,7 +69,7 @@ git submodule update --init
 # Enter the Kitty demo directory
 cd examples/kitty
 # Now compile the demo
-make MICROKIT_SDK=/path/to/microkit-sdk-1.2.6
+make MICROKIT_SDK=/path/to/sdk
 ```
 
 If you need to build a release version of Kitty instead run:
@@ -98,11 +98,11 @@ For now, all experimentation is to be done in the respective repository.
 
 * If you are working on a driver for LionsOS, create an example system in sDDF and experiment
   there before integrating with LionsOS. See the
-  [sDDF README for details](https://github.com/au-ts/sddf/tree/restructure#adding-a-new-driver).
-    * Make sure that you are working on top of the `restructure` branch [here](https://github.com/au-ts/sddf/tree/restructure).
+  [sDDF README for details](https://github.com/au-ts/sddf/tree/lionsos#adding-a-new-driver).
+    * Make sure that you are working on top of the `lionsos` branch [here](https://github.com/au-ts/sddf/tree/lionsos).
       Before making a PR, puush your code to `<name>/<branch-name>` on the `au-ts`
       repository. Then, make a PR from `<name>/<branch-name>` to merge into `restructure`.
-* If you are working on the VMM, create an example system in the VMM and experiment there
+* If you are working on libvmm, create an example system and experiment there
   before integrating with LionsOS.
     * After you have something working, make a PR [here](https://github.com/au-ts/libvmm).
 
