@@ -20,7 +20,7 @@
 #include "tcp.h"
 #include "posix.h"
 
-#define TIMEOUT (30 * NS_IN_MS)
+#define TIMEOUT (10 * NS_IN_MS)
 
 struct nfs_context *nfs;
 
@@ -44,6 +44,7 @@ void notified(microkit_channel ch) {
     sddf_timer_set_timeout(TIMEOUT);
     switch (ch) {
     case TIMER_CHANNEL: {
+        tcp_process_rx();
         tcp_update();
         if (tcp_ready() && nfs == NULL) {
             dlog("network ready, initing nfs");
@@ -67,9 +68,6 @@ void notified(microkit_channel ch) {
         }
         break;
     }
-    case ETHERNET_INIT_CHANNEL:
-        tcp_init_1();
-        break;
     case ETHERNET_RX_CHANNEL:
         tcp_process_rx();
         break;
@@ -81,6 +79,8 @@ void notified(microkit_channel ch) {
         dlog("got notification from unknown channel");
         break;
     }
+
+    tcp_maybe_notify();
 }
 
 void init(void) {

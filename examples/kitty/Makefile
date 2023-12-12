@@ -39,8 +39,22 @@ LIBNFS=../../libnfs
 NFS=../../fs/nfs
 MUSL=../../musllibc
 
-IMAGES := main.elf timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf 
-CFLAGS := -mtune=$(CPU) -mstrict-align -ffreestanding -g -O0 -Wall -Wno-unused-function -I$(BOARD_DIR)/include -target $(TARGET) -I$(LIBVMM)/src/arch/aarch64 -I$(LIBVMM)/src -I$(LIBVMM)/src/util -DBOARD_$(MICROKIT_BOARD)
+IMAGES := main.elf timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf copy.elf mux_rx.elf mux_tx.elf arp.elf
+CFLAGS := \
+	-mtune=$(CPU) \
+	-mstrict-align \
+	-ffreestanding \
+	-g \
+	-O0 \
+	-Wall \
+	-Wno-unused-function \
+	-I$(BOARD_DIR)/include \
+	-target $(TARGET) \
+	-I$(LIBVMM)/src/arch/aarch64 \
+	-I$(LIBVMM)/src \
+	-I$(LIBVMM)/src/util \
+	-DBOARD_$(MICROKIT_BOARD) \
+	-I$(SDDF)/include
 LDFLAGS := -L$(BOARD_DIR)/lib 
 LIBS := -lmicrokit -Tmicrokit.ld
 
@@ -170,6 +184,56 @@ $(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_network_sharedrin
 
 $(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/meson_ethernet.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+NETWORK_COMPONENTS := $(SDDF)/network/components
+NETWORK_COMPONENT_CFLAGS := \
+	-I$(SDDF)/include \
+	-I$(SDDF)/util/include \
+	-I$(BOARD_DIR)/include \
+	-I$(LWIP)/include \
+	-I$(LWIP)/include/ipv4 \
+	-mtune=$(CPU) \
+	-mstrict-align \
+	-ffreestanding \
+	-g \
+	-O0 \
+	-Wall \
+	-Wno-unused-function \
+	-I$(LIBVMM)/src/arch/aarch64 \
+	-I$(LIBVMM)/src \
+	-I$(LIBVMM)/src/util \
+	-DBOARD_$(MICROKIT_BOARD)
+NETWORK_COMPONENTS_LDFLAGS := \
+	-L$(BOARD_DIR)/lib \
+	-L$(SDDF)/lib
+NETWORK_COMPONENTS_LIBS := \
+	-lmicrokit \
+	-Tmicrokit.ld \
+	-lc
+
+$(BUILD_DIR)/copy.o: $(NETWORK_COMPONENTS)/copy.c
+	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
+
+$(BUILD_DIR)/mux_rx.o: $(NETWORK_COMPONENTS)/mux_rx.c
+	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
+
+$(BUILD_DIR)/mux_tx.o: $(NETWORK_COMPONENTS)/mux_tx.c
+	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
+
+$(BUILD_DIR)/arp.o: $(NETWORK_COMPONENTS)/arp.c
+	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
+
+$(BUILD_DIR)/copy.elf: $(BUILD_DIR)/copy.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o
+	$(LD) $(NETWORK_COMPONENTS_LDFLAGS) build/sddf_network_sharedringbuffer.o build/copy.o $(NETWORK_COMPONENTS_LIBS) -o build/copy.elf
+
+$(BUILD_DIR)/mux_rx.elf: $(BUILD_DIR)/mux_rx.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o
+	$(LD) $(NETWORK_COMPONENTS_LDFLAGS) build/sddf_network_sharedringbuffer.o build/mux_rx.o $(NETWORK_COMPONENTS_LIBS) -o build/mux_rx.elf
+
+$(BUILD_DIR)/mux_tx.elf: $(BUILD_DIR)/mux_tx.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o
+	$(LD) $(NETWORK_COMPONENTS_LDFLAGS) build/sddf_network_sharedringbuffer.o build/mux_tx.o $(NETWORK_COMPONENTS_LIBS) -o build/mux_tx.elf
+
+$(BUILD_DIR)/arp.elf: $(BUILD_DIR)/arp.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/nfs/nfs.a
+	$(LD) $(NETWORK_COMPONENTS_LDFLAGS) build/sddf_network_sharedringbuffer.o build/arp.o $(BUILD_DIR)/nfs/nfs.a $(NETWORK_COMPONENTS_LIBS) -o build/arp.elf
 
 directories:
 	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src))	\

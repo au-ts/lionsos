@@ -32,11 +32,45 @@
     <memory_region name="hw_ring_buffer" size="0x10_000" />
     <memory_region name="shared_dma" size="0x200_000" page_size="0x200_000" />
 
-    <!-- shared memory for ring buffer mechanism -->
-    <memory_region name="rx_free" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="rx_used" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="tx_free" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="tx_used" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="shared_dma_rx" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="shared_dma_tx_arp" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="shared_dma_tx_nfs" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="shared_dma_rx_nfs" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="shared_dma_tx_micropython" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="shared_dma_rx_micropython" size="0x200_000" page_size="0x200_000" />
+
+    <!-- shared memory for driver/mux ring buffer mechanism -->
+    <memory_region name="rx_free_drv" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="rx_used_drv" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_free_drv" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_used_drv" size="0x200_000" page_size="0x200_000"/>
+
+    <!-- shared memory for mux_rx/copy ring buffer mechanism -->
+    <memory_region name="rx_free_copy_nfs" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="rx_used_copy_nfs" size="0x200_000" page_size="0x200_000"/>
+    <!-- shared memory for copy/lwip ring buffer mechanism -->
+    <memory_region name="rx_free_nfs" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="rx_used_nfs" size="0x200_000" page_size="0x200_000"/>
+    <!-- shared memory for lwip/mux_tx ring buffer mechanism -->
+    <memory_region name="tx_free_nfs" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_used_nfs" size="0x200_000" page_size="0x200_000"/>
+
+    <!-- shared memory for mux_rx/copy ring buffer mechanism -->
+    <memory_region name="rx_free_copy_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="rx_used_copy_micropython" size="0x200_000" page_size="0x200_000"/>
+    <!-- shared memory for copy/lwip ring buffer mechanism -->
+    <memory_region name="rx_free_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="rx_used_micropython" size="0x200_000" page_size="0x200_000"/>
+    <!-- shared memory for lwip/mux_tx ring buffer mechanism -->
+    <memory_region name="tx_free_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_used_micropython" size="0x200_000" page_size="0x200_000"/>
+
+    <!-- shared memory for rx mux/arp ring buffer mechanism -->
+    <memory_region name="rx_free_arp" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="rx_used_arp" size="0x200_000" page_size="0x200_000"/>
+    <!-- shared memory for arp/mux_tx ring buffer mechanism -->
+    <memory_region name="tx_free_arp" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_used_arp" size="0x200_000" page_size="0x200_000"/>
 
     <memory_region name="rx_cookies" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="tx_cookies" size="0x200_000" page_size="0x200_000"/>
@@ -96,7 +130,7 @@
         <irq irq="5" id="17" />
     </protection_domain>
 
-    <protection_domain name="eth" priority="101" budget="160" period="300" pp="true">
+    <protection_domain name="eth" priority="110" budget="100" period="500">
         <program_image path="ethernet.elf" />
         <map mr="eth" vaddr="0x2_000_000" perms="rw" cached="false"/>
 
@@ -106,63 +140,199 @@
         <map mr="tx_cookies" vaddr="0x3_600_000" perms="rw" cached="true" setvar_vaddr="tx_cookies" />
 
         <!-- shared memory for ring buffer mechanism -->
-        <map mr="rx_free" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
-        <map mr="rx_used" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_used" />
-        <map mr="tx_free" vaddr="0x4_400_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
-        <map mr="tx_used" vaddr="0x4_600_000" perms="rw" cached="true" setvar_vaddr="tx_used" />
-
-        <map mr="shared_dma" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr" />
+        <map mr="rx_free_drv" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
+        <map mr="rx_used_drv" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_used" />
+        <map mr="tx_free_drv" vaddr="0x4_400_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
+        <map mr="tx_used_drv" vaddr="0x4_600_000" perms="rw" cached="true" setvar_vaddr="tx_used" />
 
         <irq irq="40" id="1" /> <!-- ethernet interrupt -->
         <irq irq="96" id="0" />
 
         <!-- we need physical addresses of hw rings and dma region -->
         <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
-        <setvar symbol="shared_dma_paddr" region_paddr="shared_dma" />
+    </protection_domain>
+
+    <protection_domain name="mux_rx" priority="108" pp="true" budget="100" period="500" >
+        <program_image path="mux_rx.elf" />
+        <!-- shared memory for driver/mux ring buffer mechanism -->
+        <map mr="rx_free_drv" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_drv" />
+        <map mr="rx_used_drv" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_used_drv" />
+
+        <!-- shared memory for mux/client ring buffer mechanism -->
+        <map mr="rx_free_copy_nfs" vaddr="0x3_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli0" />
+        <map mr="rx_used_copy_nfs" vaddr="0x3_200_000" perms="rw" cached="true" setvar_vaddr="rx_used_cli0" />
+        <map mr="rx_free_copy_micropython" vaddr="0x3_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli1" />
+        <map mr="rx_used_copy_micropython" vaddr="0x3_600_000" perms="rw" cached="true" setvar_vaddr="rx_used_cli1" />
+        <!-- shared memory for arp/rx_mux ring buffer mechanism -->
+        <map mr="rx_free_arp" vaddr="0x4_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_arp" />
+        <map mr="rx_used_arp" vaddr="0x4_600_000" perms="rw" cached="true" setvar_vaddr="rx_used_arp" />
+
+        <map mr="shared_dma_rx" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr" />
+        <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+
+        <setvar symbol="shared_dma_paddr" region_paddr="shared_dma_rx" />
+    </protection_domain>
+
+    <protection_domain name="copy_nfs" priority="99" budget="100" period="500" >
+        <program_image path="copy.elf" />
+        <map mr="shared_dma_rx_nfs" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr_cli" />
+        <map mr="shared_dma_rx" vaddr="0x2_400_000" perms="r" cached="true" setvar_vaddr="shared_dma_vaddr_mux" />
+
+        <map mr="rx_free_copy_nfs" vaddr="0x3_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_mux" />
+        <map mr="rx_used_copy_nfs" vaddr="0x3_200_000" perms="rw" cached="true" setvar_vaddr="rx_used_mux" />
+
+        <map mr="rx_free_nfs" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli" />
+        <map mr="rx_used_nfs" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_used_cli" />
+
+        <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+    </protection_domain>
+
+    <protection_domain name="copy_micropython" priority="97" budget="20000" >
+        <program_image path="copy.elf" />
+        <map mr="shared_dma_rx_micropython" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr_cli" />
+        <map mr="shared_dma_rx" vaddr="0x2_400_000" perms="r" cached="true" setvar_vaddr="shared_dma_vaddr_mux" />
+
+        <map mr="rx_free_copy_micropython" vaddr="0x3_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_mux" />
+        <map mr="rx_used_copy_micropython" vaddr="0x3_600_000" perms="rw" cached="true" setvar_vaddr="rx_used_mux" />
+
+        <map mr="rx_free_micropython" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli" />
+        <map mr="rx_used_micropython" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_used_cli" />
+
+        <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+    </protection_domain>
+
+    <protection_domain name="mux_tx" priority="109" budget="100" period="500" >
+        <program_image path="mux_tx.elf" />
+        <!-- shared memory for driver/mux ring buffer mechanism -->
+        <map mr="tx_free_drv" vaddr="0x4_400_000" perms="rw" cached="true" setvar_vaddr="tx_free_drv" />
+        <map mr="tx_used_drv" vaddr="0x4_600_000" perms="rw" cached="true" setvar_vaddr="tx_used_drv" />
+
+        <!-- shared memory for mux/client ring buffer mechanism -->
+        <map mr="tx_free_nfs" vaddr="0x3_400_000" perms="rw" cached="true" setvar_vaddr="tx_free_cli0" />
+        <map mr="tx_used_nfs" vaddr="0x3_600_000" perms="rw" cached="true" setvar_vaddr="tx_used_cli0" />
+        <map mr="tx_free_micropython" vaddr="0x3_000_000" perms="rw" cached="true" setvar_vaddr="tx_free_cli1" />
+        <map mr="tx_used_micropython" vaddr="0x3_200_000" perms="rw" cached="true" setvar_vaddr="tx_used_cli1" />
+        <!-- shared memory for arp/tx_mux ring buffer mechanism -->
+        <map mr="tx_free_arp" vaddr="0x5_200_000" perms="rw" cached="true" setvar_vaddr="tx_free_arp" />
+        <map mr="tx_used_arp" vaddr="0x5_400_000" perms="rw" cached="true" setvar_vaddr="tx_used_arp" />
+
+        <map mr="shared_dma_tx_nfs" vaddr="0x2_600_000" perms="r" cached="true" setvar_vaddr="shared_dma_vaddr_cli0" />
+        <map mr="shared_dma_tx_micropython" vaddr="0x2_000_000" perms="r" cached="true" setvar_vaddr="shared_dma_vaddr_cli1" />
+        <map mr="shared_dma_tx_arp" vaddr="0x2_200_000" perms="r" cached="true" setvar_vaddr="shared_dma_vaddr_arp" />
+        <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+
+        <setvar symbol="shared_dma_paddr_arp" region_paddr="shared_dma_tx_arp" />
+        <setvar symbol="shared_dma_paddr_cli0" region_paddr="shared_dma_tx_nfs" />
+        <setvar symbol="shared_dma_paddr_cli1" region_paddr="shared_dma_tx_micropython" />
+    </protection_domain>
+
+
+    <protection_domain name="arp" priority="100" budget="20000" pp="true" >
+        <program_image path="arp.elf" />
+        <!-- shared memory for arp/rx_mux ring buffer mechanism -->
+        <map mr="rx_free_arp" vaddr="0x4_400_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
+        <map mr="rx_used_arp" vaddr="0x4_600_000" perms="rw" cached="true" setvar_vaddr="rx_used" />
+
+        <!-- shared memory for arp/tx_mux ring buffer mechanism -->
+        <map mr="tx_free_arp" vaddr="0x5_200_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
+        <map mr="tx_used_arp" vaddr="0x5_400_000" perms="rw" cached="true" setvar_vaddr="tx_used" />
+
+        <map mr="shared_dma_tx_arp" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr_tx" />
+        <map mr="shared_dma_rx" vaddr="0x2_400_000" perms="r" cached="true" setvar_vaddr="shared_dma_vaddr_rx" />
+        <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
     </protection_domain>
 
     <protection_domain name="nfs" priority="98">
         <program_image path="nfs.elf" />
 
-        <!-- shared memory for eth ring buffer mechanism -->
-        <map mr="rx_free" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
-        <map mr="rx_used" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_used" />
-        <map mr="tx_free" vaddr="0x4_400_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
-        <map mr="tx_used" vaddr="0x4_600_000" perms="rw" cached="true" setvar_vaddr="tx_used" />
-
-        <map mr="shared_dma" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr" />
-
         <map mr="shared_nfs_micropython" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="client_share" />
         <map mr="nfs_command_queue" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="command_queue" />
         <map mr="nfs_completion_queue" vaddr="0x7_902_000" perms="rw" cached="true" setvar_vaddr="completion_queue" />
+
+        <map mr="rx_free_nfs" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
+        <map mr="rx_used_nfs" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_used" />
+        <map mr="tx_free_nfs" vaddr="0x3_400_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
+        <map mr="tx_used_nfs" vaddr="0x3_600_000" perms="rw" cached="true" setvar_vaddr="tx_used" />
+
+        <map mr="shared_dma_rx_nfs" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr_rx" />
+        <map mr="shared_dma_tx_nfs" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr_tx" />
     </protection_domain>
-
-    <channel>
-        <end pd="eth" id="2" />
-        <end pd="nfs" id="2" />
-    </channel>
-
-    <channel>
-        <end pd="eth" id="4" />
-        <end pd="nfs" id="4" />
-    </channel>
 
     <channel>
         <end pd="nfs" id="9" />
         <end pd="timer_driver" id="3" />
     </channel>
     
-    <channel>
-        <!--
-            This channel is so MicroPython can transfer the data it has
-            put in the framebuffer to be given to the Linux driver guest.
-         -->
-        <end pd="micropython" id="0" />
-        <end pd="VMM" id="1" />
-    </channel>
 
     <channel>
         <end pd="micropython" id="7" />
         <end pd="nfs" id="7" />
     </channel>
+
+    
+    <channel>
+        <end pd="eth" id="3" />
+        <end pd="mux_rx" id="3" />
+    </channel>
+
+    <channel>
+        <end pd="mux_rx" id="0" />
+        <end pd="copy_nfs" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="mux_rx" id="1" />
+        <end pd="copy_micropython" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="mux_rx" id="2" />
+        <end pd="arp" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="copy_nfs" id="1" />
+        <end pd="nfs" id="2" />
+    </channel>
+
+    <channel>
+        <end pd="copy_micropython" id="1" />
+        <end pd="micropython" id="2" />
+    </channel>
+
+    <channel>
+        <end pd="mux_tx" id="3" />
+        <end pd="eth" id="2" />
+    </channel>
+
+    <channel>
+        <end pd="mux_tx" id="0" />
+        <end pd="nfs" id="3" />
+    </channel>
+
+    <channel>
+        <end pd="mux_tx" id="1" />
+        <end pd="micropython" id="3" />
+    </channel>
+
+    <channel>
+        <end pd="mux_tx" id="2" />
+        <end pd="arp" id="1" />
+    </channel>
+
+    <channel>
+        <end pd="mux_tx" id="4" />
+        <end pd="timer_driver" id="4" />
+    </channel>
+
+    <channel>
+        <end pd="arp" id="2" />
+        <end pd="nfs" id="11" />
+    </channel>
+
+    <channel>
+        <end pd="arp" id="3" />
+        <end pd="micropython" id="11" />
+    </channel>
+
 </system>

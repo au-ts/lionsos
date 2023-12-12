@@ -7,10 +7,10 @@
 #define SOCKET_BUF_SIZE 0x200000
 
 void tcp_init_0(void);
-void tcp_init_1(void);
 int tcp_ready(void);
 void tcp_update(void);
 void tcp_process_rx(void);
+void tcp_maybe_notify(void);
 
 int tcp_socket_create(void);
 int tcp_socket_connect(int index, int port);
