@@ -30,26 +30,6 @@
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
 
-typedef enum
-{
-    ORIGIN_RX_QUEUE,
-    ORIGIN_TX_QUEUE,
-} ethernet_buffer_origin_t;
-
-typedef struct ethernet_buffer
-{
-    /* The actual underlying memory of the buffer */
-    uintptr_t buffer;
-    /* The physical size of the buffer */
-    size_t size;
-    /* Queue from which the buffer was allocated */
-    char origin;
-    /* Index into buffer_metadata array */
-    unsigned int index;
-    /* in use */
-    bool in_use;
-} ethernet_buffer_t;
-
 typedef struct state
 {
     struct netif netif;
@@ -59,11 +39,13 @@ typedef struct state
     /* Pointers to shared buffers */
     ring_handle_t rx_ring;
     ring_handle_t tx_ring;
-    /*
-     * Metadata associated with buffers
-     */
-    ethernet_buffer_t buffer_metadata[NUM_BUFFERS * 2];
 } state_t;
+
+typedef struct lwip_custom_pbuf
+{
+    struct pbuf_custom custom;
+    uintptr_t buffer;
+} lwip_custom_pbuf_t;
 
 typedef struct {
     struct tcp_pcb *sock_tpcb;
@@ -76,13 +58,6 @@ typedef struct {
     int rx_len;
 } socket_t;
 
-typedef struct lwip_custom_pbuf
-{
-    struct pbuf_custom custom;
-    ethernet_buffer_t *buffer;
-    state_t *state;
-} lwip_custom_pbuf_t;
-
 state_t state;
 
 LWIP_MEMPOOL_DECLARE(
@@ -91,70 +66,131 @@ LWIP_MEMPOOL_DECLARE(
     sizeof(lwip_custom_pbuf_t),
     "Zero-copy RX pool");
 
-ring_buffer_t *rx_free;
-ring_buffer_t *rx_used;
+uintptr_t rx_free;
+uintptr_t rx_used;
 uintptr_t tx_free;
 uintptr_t tx_used;
-uintptr_t copy_rx;
-uintptr_t shared_dma_vaddr;
+uintptr_t shared_dma_vaddr_rx;
+uintptr_t shared_dma_vaddr_tx;
 
 // Should only need 1 at any one time, accounts for any reconnecting that might happen
 socket_t sockets[MAX_SOCKETS] = {0};
 
-bool network_ready;
+static bool network_ready;
+static bool notify_tx = false;
+static bool notify_rx = false;
 
 int tcp_ready(void) {
     return network_ready;
 }
+
+void tcp_maybe_notify(void) {
+    if (notify_rx && state.rx_ring.free_ring->notify_reader) {
+        state.rx_ring.free_ring->notify_reader = false;
+        notify_rx = false;
+        if (!have_signal) {
+            microkit_notify_delayed(ETHERNET_RX_CHANNEL);
+        } else if (signal != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) {
+            microkit_notify(ETHERNET_RX_CHANNEL);
+        }
+    }
+
+    if (notify_tx && state.tx_ring.used_ring->notify_reader) {
+        state.tx_ring.used_ring->notify_reader = false;
+        notify_tx = false;
+        if (!have_signal) {
+            microkit_notify_delayed(ETHERNET_TX_CHANNEL);
+        } else if (signal != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) {
+            microkit_notify(ETHERNET_TX_CHANNEL);
+        }
+    }
+}
+
+#define ROUND_DOWN(n, b) (((n) >> (b)) << (b))
+#define LINE_START(a) ROUND_DOWN(a, CONFIG_L1_CACHE_LINE_SIZE_BITS)
+#define LINE_INDEX(a) (LINE_START(a)>>CONFIG_L1_CACHE_LINE_SIZE_BITS)
+
+static inline void
+dsb(void)
+{
+    asm volatile("dsb sy" ::: "memory");
+}
+
+static inline void 
+dmb(void)
+{
+    asm volatile("dmb sy" ::: "memory");
+}
+
+static inline void
+cleanInvalByVA(unsigned long vaddr)
+{
+    asm volatile("dc civac, %0" : : "r"(vaddr));
+    dsb();
+}
+
+static inline void
+cleanByVA(unsigned long vaddr)
+{
+    asm volatile("dc cvac, %0" : : "r"(vaddr));
+    dmb();
+}
+
+void
+cleanInvalidateCache(unsigned long start, unsigned long end)
+{
+    unsigned long line;
+    unsigned long index;
+    /* Clean the L1 range */
+
+    /* Finally clean and invalidate the L1 range. The extra clean is only strictly neccessary
+     * in a multiprocessor environment to prevent a write being lost if another core is
+     * attempting a store at the same time. As the range should already be clean asking
+     * it to clean again should not affect performance */
+    for (index = LINE_INDEX(start); index < LINE_INDEX(end) + 1; index++) {
+        line = index << CONFIG_L1_CACHE_LINE_SIZE_BITS;
+        cleanInvalByVA(line);
+    }
+}
+
+void
+cleanCache(unsigned long start, unsigned long end)
+{
+    unsigned long line;
+    unsigned long index;
+
+    for (index = LINE_INDEX(start); index < LINE_INDEX(end) + 1; index++) {
+        line = index << CONFIG_L1_CACHE_LINE_SIZE_BITS;
+        cleanByVA(line);
+    }
+}
+
 
 uint32_t sys_now(void) {
     return sddf_timer_time_now() * US_IN_MS;
 }
 
 static void get_mac(void) {
-    microkit_ppcall(ETHERNET_INIT_CHANNEL, microkit_msginfo_new(0, 0));
-    uint32_t palr = microkit_mr_get(0);
-    uint32_t paur = microkit_mr_get(1);
-    state.mac[3] = palr >> 24;
-    state.mac[2] = palr >> 16 & 0xff;
-    state.mac[1] = palr >> 8 & 0xff;
-    state.mac[0] = palr & 0xff;
-    state.mac[5] = paur >> 8 & 0xff;
-    state.mac[4] = paur & 0xff;
+    state.mac[0] = 0x52;
+    state.mac[1] = 0x54;
+    state.mac[2] = 0x1;
+    state.mac[3] = 0;
+    state.mac[4] = 0;
+    state.mac[5] = 10;
 }
 
 static void netif_status_callback(struct netif *netif) {
     if (dhcp_supplied_address(netif)) {
         dlog("DHCP request finished, IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
+
+        microkit_mr_set(0, ip4_addr_get_u32(netif_ip4_addr(netif)));
+        microkit_mr_set(1, (state.mac[0] << 24) | (state.mac[1] << 16) | (state.mac[2] << 8) | (state.mac[3]));
+        microkit_mr_set(2, (state.mac[4] << 24) | (state.mac[5] << 16));
+        microkit_ppcall(ETHERNET_ARP_CHANNEL, microkit_msginfo_new(0, 3));
+
         network_ready = true;
     }
 }
-
-/**
- * Allocate an empty TX buffer from the empty pool
- *
- * @param state client state data.
- * @param length length of buffer required
- *
- */
-static inline ethernet_buffer_t *alloc_tx_buffer(state_t *state, size_t length) {
-    if (BUF_SIZE < length) {
-        dlog("Requested buffer size too large.");
-        return NULL;
-    }
-
-    uintptr_t addr;
-    unsigned int len;
-    ethernet_buffer_t *buffer;
-
-    dequeue_free(&state->tx_ring, &addr, &len, (void **)&buffer);
-    if (!buffer) {
-        dlog("lwip: dequeued a null ethernet buffer");
-    }
-
-    return buffer;
-}
-
 
 static err_t lwip_eth_send(struct netif *netif, struct pbuf *p) {
     /* Grab an available TX buffer, copy pbuf data over,
@@ -164,14 +200,15 @@ static err_t lwip_eth_send(struct netif *netif, struct pbuf *p) {
     if (p->tot_len > BUF_SIZE) {
         return ERR_MEM;
     }
-
-    state_t *state = (state_t *)netif->state;
-
-    ethernet_buffer_t *buffer = alloc_tx_buffer(state, p->tot_len);
-    if (buffer == NULL) {
+    uintptr_t addr;
+    unsigned int len;
+    void *cookie;
+    int err = dequeue_free(&state.tx_ring, &addr, &len, &cookie);
+    if (err) {
         return ERR_MEM;
     }
-    unsigned char *frame = (unsigned char *)buffer->buffer;
+    uintptr_t buffer = addr;
+    unsigned char *frame = (unsigned char *)buffer;
 
     /* Copy all buffers that need to be copied */
     unsigned int copied = 0;
@@ -184,32 +221,19 @@ static err_t lwip_eth_send(struct netif *netif, struct pbuf *p) {
         copied += curr->len;
     }
 
-    int err = seL4_ARM_VSpace_Clean_Data(3, (uintptr_t)frame, (uintptr_t)frame + copied);
-    if (err) {
-        dlog("ARM Vspace clean failed: %d\n", err);
-    }
+    cleanCache((unsigned long) frame, (unsigned long) frame + copied);
 
     /* insert into the used tx queue */
-    int error = enqueue_used(&state->tx_ring, (uintptr_t)frame, copied, buffer);
-    if (error) {
-        dlog("TX used ring full\n");
-        enqueue_free(&(state->tx_ring), (uintptr_t)frame, BUF_SIZE, buffer);
+    err = enqueue_used(&state.tx_ring, (uintptr_t)frame, copied, NULL);
+    if (err) {
+        dlog("TX used ring full");
+        enqueue_free(&(state.tx_ring), (uintptr_t)frame, BUF_SIZE, NULL);
         return ERR_MEM;
     }
 
-    /* Notify the server for next time we recv() */
-    have_signal = true;
-    signal_msg = seL4_MessageInfo_new(0, 0, 0, 0);
-    signal = (BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL);
-    /* NOTE: If driver is passive, we want to Call instead. */
+    notify_tx = true;
 
     return ret;
-}
-
-static inline void return_buffer(state_t *state, ethernet_buffer_t *buffer) {
-    /* As the rx_freeable ring is the size of the number of buffers we have,
-    the ring should never be full. */
-    enqueue_free(&(state->rx_ring), buffer->buffer, BUF_SIZE, buffer);
 }
 
 /**
@@ -221,38 +245,12 @@ static inline void return_buffer(state_t *state, ethernet_buffer_t *buffer) {
  */
 static void interface_free_buffer(struct pbuf *buf) {
     SYS_ARCH_DECL_PROTECT(old_level);
-
     lwip_custom_pbuf_t *custom_pbuf = (lwip_custom_pbuf_t *)buf;
-
     SYS_ARCH_PROTECT(old_level);
-    return_buffer(custom_pbuf->state, custom_pbuf->buffer);
+    enqueue_free(&state.rx_ring, custom_pbuf->buffer, BUF_SIZE, NULL);
+    notify_rx = true;
     LWIP_MEMPOOL_FREE(RX_POOL, custom_pbuf);
     SYS_ARCH_UNPROTECT(old_level);
-}
-
-/**
- * Create a pbuf structure to pass to the network interface.
- *
- * @param state client state data.
- * @param buffer ethernet buffer containing metadata for the actual buffer
- * @param length length of data
- *
- * @return the newly created pbuf.
- */
-static struct pbuf *create_interface_buffer(state_t *state, ethernet_buffer_t *buffer, size_t length) {
-    lwip_custom_pbuf_t *custom_pbuf = (lwip_custom_pbuf_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
-
-    custom_pbuf->state = state;
-    custom_pbuf->buffer = buffer;
-    custom_pbuf->custom.custom_free_function = interface_free_buffer;
-
-    return pbuf_alloced_custom(
-        PBUF_RAW,
-        length,
-        PBUF_REF,
-        &custom_pbuf->custom,
-        (void *)buffer->buffer,
-        buffer->size);
 }
 
 /**
@@ -289,21 +287,22 @@ void tcp_process_rx(void) {
     while (!ring_empty(state.rx_ring.used_ring)) {
         uintptr_t addr;
         unsigned int len;
-        ethernet_buffer_t *buffer;
+        void *cookie;
 
-        dequeue_used(&state.rx_ring, &addr, &len, (void **)&buffer);
+        dequeue_used(&state.rx_ring, &addr, &len, &cookie);
 
-        if (addr != buffer->buffer) {
-            dlog("sanity check failed");
-        }
+        lwip_custom_pbuf_t *custom_pbuf = (lwip_custom_pbuf_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
+        custom_pbuf->buffer = addr;
+        custom_pbuf->custom.custom_free_function = interface_free_buffer;
 
-        /* Invalidate the memory */
-        int err = seL4_ARM_VSpace_Invalidate_Data(3, buffer->buffer, buffer->buffer + ETHER_MTU);
-        if (err) {
-            dlog("ARM Vspace invalidate failed: %d", err);
-        }
-
-        struct pbuf *p = create_interface_buffer(&state, (void *)buffer, len);
+        struct pbuf *p = pbuf_alloced_custom(
+            PBUF_RAW,
+            len,
+            PBUF_REF,
+            &custom_pbuf->custom,
+            (void *)addr,
+            BUF_SIZE
+        );
 
         if (state.netif.input(p, &state.netif) != ERR_OK) {
             // If it is successfully received, the receiver controls whether or not it gets freed.
@@ -321,36 +320,17 @@ void tcp_update(void)
 void tcp_init_0(void)
 {
     /* Set up shared memory regions */
-    ring_init(&state.rx_ring, rx_free, (ring_buffer_t *)rx_used, 1, SIZE, SIZE);
-    ring_init(&state.tx_ring, (ring_buffer_t *)tx_free, (ring_buffer_t *)tx_used, 1, SIZE, SIZE);
+    ring_init(&state.rx_ring, rx_free, rx_used, 1, NUM_BUFFERS, NUM_BUFFERS);
+    ring_init(&state.tx_ring, tx_free, tx_used, 0, NUM_BUFFERS, NUM_BUFFERS);
 
     for (int i = 0; i < NUM_BUFFERS - 1; i++) {
-        ethernet_buffer_t *buffer = &state.buffer_metadata[i];
-        *buffer = (ethernet_buffer_t){
-            .buffer = shared_dma_vaddr + (BUF_SIZE * i),
-            .size = BUF_SIZE,
-            .origin = ORIGIN_RX_QUEUE,
-            .index = i,
-            .in_use = false,
-        };
-        enqueue_free(&state.rx_ring, buffer->buffer, BUF_SIZE, buffer);
+        uintptr_t addr = shared_dma_vaddr_rx + (BUF_SIZE * i);
+        enqueue_free(&state.rx_ring, addr, BUF_SIZE, NULL);
     }
 
-    for (int i = 0; i < NUM_BUFFERS - 1; i++) {
-        ethernet_buffer_t *buffer = &state.buffer_metadata[i + NUM_BUFFERS];
-        *buffer = (ethernet_buffer_t){
-            .buffer = shared_dma_vaddr + (BUF_SIZE * (i + NUM_BUFFERS)),
-            .size = BUF_SIZE,
-            .origin = ORIGIN_TX_QUEUE,
-            .index = i + NUM_BUFFERS,
-            .in_use = false,
-        };
-        enqueue_free(&state.tx_ring, buffer->buffer, BUF_SIZE, buffer);
-    }
-
+    get_mac();
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
-    get_mac();
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
@@ -364,21 +344,37 @@ void tcp_init_0(void)
 
     if (!netif_add(&(state.netif), &ipaddr, &netmask, &gw, &state,
                    ethernet_init, ethernet_input)) {
-        dlog("Netif add returned NULL\n");
+        dlog("Netif add returned NULL");
     }
-
     netif_set_default(&(state.netif));
-
-    microkit_notify(ETHERNET_INIT_CHANNEL);
-}
-
-void tcp_init_1(void)
-{
     netif_set_status_callback(&(state.netif), netif_status_callback);
     netif_set_up(&(state.netif));
 
     int err = dhcp_start(&(state.netif));
     dlogp(err, "failed to start DHCP negotiation");
+
+    state.rx_ring.free_ring->notify_reader = true;
+    state.rx_ring.used_ring->notify_reader = true;
+    state.tx_ring.free_ring->notify_reader = true;
+    state.tx_ring.used_ring->notify_reader = true;
+
+    if (notify_rx && state.rx_ring.free_ring->notify_reader) {
+        notify_rx = false;
+        if (!have_signal) {
+            microkit_notify_delayed(ETHERNET_RX_CHANNEL);
+        } else if (signal != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) {
+            microkit_notify(ETHERNET_RX_CHANNEL);
+        }
+    }
+
+    if (notify_tx && state.tx_ring.used_ring->notify_reader) {
+        notify_tx = false;
+        if (!have_signal) {
+            microkit_notify_delayed(ETHERNET_TX_CHANNEL);
+        } else if (signal != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) {
+            microkit_notify(ETHERNET_TX_CHANNEL);
+        }
+    }
 }
 
 void socket_err_func(void *arg, err_t err)
