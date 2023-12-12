@@ -101,7 +101,7 @@ For now, all experimentation is to be done in the respective repository.
   [sDDF README for details](https://github.com/au-ts/sddf/tree/lionsos#adding-a-new-driver).
     * Make sure that you are working on top of the `lionsos` branch [here](https://github.com/au-ts/sddf/tree/lionsos).
       Before making a PR, push your code to `<name>/<branch-name>` on the `au-ts`
-      repository. Then, make a PR from `<name>/<branch-name>` to merge into `restructure`.
+      repository. Then, make a PR from `<name>/<branch-name>` to merge into `lionsos`.
 * If you are working on libvmm, create an example system and experiment there
   before integrating with LionsOS.
     * After you have something working, make a PR [here](https://github.com/au-ts/libvmm).
