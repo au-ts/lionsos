@@ -335,4 +335,13 @@
         <end pd="micropython" id="11" />
     </channel>
 
+    <!--
+        This channel is so MicroPython can transfer the data it has
+        put in the framebuffer to be given to the Linux driver guest.
+    -->
+    <channel>
+        <end pd="micropython" id="0" />
+        <end pd="VMM" id="1" />
+    </channel>
+    
 </system>
