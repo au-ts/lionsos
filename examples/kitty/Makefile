@@ -229,7 +229,7 @@ $(BUILD_DIR)/mux_rx.elf: $(BUILD_DIR)/mux_rx.o $(BUILD_DIR)/sddf_network_sharedr
 $(BUILD_DIR)/mux_tx.elf: $(BUILD_DIR)/mux_tx.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o
 	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/mux_tx.o $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/mux_tx.elf
 
-$(BUILD_DIR)/arp.elf: $(BUILD_DIR)/arp.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/cache.o $(BUILD_DIR)/nfs/nfs.a
+$(BUILD_DIR)/arp.elf: $(BUILD_DIR)/arp.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/nfs/nfs.a
 	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/arp.o  $(BUILD_DIR)/nfs/lwip/core/inet_chksum.o $(BUILD_DIR)/nfs/lwip/core/def.o $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/arp.elf
 
 directories:
