@@ -90,7 +90,7 @@ void tcp_maybe_notify(void) {
         notify_rx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETHERNET_RX_CHANNEL);
-        } else if (signal != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) {
+        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) {
             microkit_notify(ETHERNET_RX_CHANNEL);
         }
     }
@@ -100,7 +100,7 @@ void tcp_maybe_notify(void) {
         notify_tx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETHERNET_TX_CHANNEL);
-        } else if (signal != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) {
+        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) {
             microkit_notify(ETHERNET_TX_CHANNEL);
         }
     }
@@ -362,7 +362,7 @@ void tcp_init_0(void)
         notify_rx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETHERNET_RX_CHANNEL);
-        } else if (signal != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) {
+        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) {
             microkit_notify(ETHERNET_RX_CHANNEL);
         }
     }
@@ -371,7 +371,7 @@ void tcp_init_0(void)
         notify_tx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETHERNET_TX_CHANNEL);
-        } else if (signal != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) {
+        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) {
             microkit_notify(ETHERNET_TX_CHANNEL);
         }
     }
