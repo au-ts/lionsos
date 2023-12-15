@@ -20,6 +20,13 @@ jobs:
         shell: bash
       - name: Extract Microkit SDK
         run: unzip microkit-sdk.zip && tar -xf microkit-sdk-1.2.6.tar.gz
+      - name: Download and install AArch64 GCC toolchain
+        run: |
+          wget -O aarch64-toolchain.tar.gz https://trustworthy.systems/Downloads/microkit/arm-gnu-toolchain-11.3.rel1-x86_64-aarch64-none-elf.tar.xz%3Frev%3D73ff9780c12348b1b6772a1f54ab4bb3
+          tar xf aarch64-toolchain.tar.gz
+          echo "$(pwd)/arm-gnu-toolchain-11.3.rel1-x86_64-aarch64-none-elf/bin" >> $GITHUB_PATH
       - name: Build Kitty example
-        run: nix-shell --pure --run "make -C examples/kitty MICROKIT_SDK=$(pwd)/microkit-sdk-1.2.6"
-
+        run: export LIBGCC=$(pwd)/arm-gnu-toolchain-11.3.rel1-x86_64-aarch64-none-elf/lib/gcc/aarch64-none-elf/11.3.1 && make -C examples/kitty MICROKIT_SDK=$(pwd)/microkit-sdk-1.2.6
+        env:
+          NFS_SERVER: 0.0.0.0
+          NFS_DIRECTORY: test/
