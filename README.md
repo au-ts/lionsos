@@ -36,6 +36,9 @@ On Nix/NixOS:
 nix-shell --pure
 ```
 
+You will also need an aarch64 GCC toolchain. The system has been tested with this toolchain: (https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf.tar.xz?revision=79f65c42-1a1b-43f2-acb7-a795c8427085&hash=61BBFB526E785D234C5D8718D9BA8E61). Put the bin directory of the GCC toolchain in your PATH.
+
+
 ### Getting the Microkit SDK
 
 There are a lot of changes to Microkit that have been made over the past year which means
@@ -68,6 +71,11 @@ cd LionsOS
 git submodule update --init
 # Enter the Kitty demo directory
 cd examples/kitty
+# Define NFS server to be used by the NFS client
+export NFS_SERVER=0.0.0.0 # IP adddress of NFS server
+export NFS_DIRECTORY=/path/to/dir
+# Define path to libgcc, where $GCC is the GCC toolchain downloaded above
+export LIBGCC=$GCC/lib/gcc/aarch64-none-elf/11.3.1
 # Now compile the demo
 make MICROKIT_SDK=/path/to/sdk
 ```
@@ -90,6 +98,31 @@ by connecting to the console via TFTP with `console odroidc4-<NUM> -f`. You can 
 MQ with the `-a` flag to automatically get a connection where you can also input, like so:
 ```sh
 mq.sh run -c "MicroPython" -a -l mqlog -s odroidc4_pool -f build/kitty.img
+```
+
+### Testing MicroPython's NFS support
+
+The Kitty system includes an NFS client which MicroPython uses as its filesystem. Most (but not all) of MicroPython's standard file IO operations are supported (importing modules, the file object's methods and functions from the `os` module).
+
+```python
+>>> os.listdir()
+[]
+>>> with open('hello.py') as f:
+...     f.write('print("hello world")\n')
+... 
+21
+>>> os.listdir()
+['hello.py']
+>>> with open('hello.py') as f:
+...     print(f.read())
+... 
+print("hello world")
+
+>>> import hello
+hello world
+>>> os.remove('hello.py')
+>>> os.listdir()
+[]
 ```
 
 ## Working on Kitty components
@@ -129,4 +162,3 @@ mdbook serve --open
 * [Microkit development source code](https://github.com/Ivan-Velickovic/microkit)
 * [Odroid-C4 wiki](https://wiki.odroid.com/odroid-c4/odroid-c4)
 * [Odroid-C4 SoC Techincal Reference Manual](https://dn.odroid.com/S905X3/ODROID-C4/Docs/S905X3_Public_Datasheet_Hardkernel.pdf)
-
