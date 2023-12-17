@@ -262,14 +262,14 @@
         <end pd="nfs" id="9" />
         <end pd="timer_driver" id="3" />
     </channel>
-    
+
 
     <channel>
         <end pd="micropython" id="7" />
         <end pd="nfs" id="7" />
     </channel>
 
-    
+
     <channel>
         <end pd="eth" id="3" />
         <end pd="mux_rx" id="3" />
@@ -343,5 +343,5 @@
         <end pd="micropython" id="0" />
         <end pd="VMM" id="1" />
     </channel>
-    
+
 </system>
