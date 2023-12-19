@@ -11,7 +11,7 @@ infrastructure that we will need. It also contains the sDDF and libvmm
 repositories. In the future, we might change the structure but for now we will use
 Git submodules to version control LionsOS.
 
-For documentation on LionsOS itself as well as teh Kitty system, see the
+For documentation on LionsOS itself as well as the Kitty system, see the
 [LionsOS website](https://lionsos.org).
 
 ## Development
