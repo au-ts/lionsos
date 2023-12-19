@@ -39,7 +39,7 @@ LIBNFS=../../libnfs
 NFS=../../fs/nfs
 MUSL=../../musllibc
 
-IMAGES := main.elf timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf copy.elf mux_rx.elf mux_tx.elf arp.elf
+IMAGES := main.elf timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf copy.elf mux_rx.elf mux_tx.elf arp.elf uart_driver.elf serial_mux_rx.elf serial_mux_tx.elf
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
@@ -55,7 +55,7 @@ CFLAGS := \
 	-I$(LIBVMM)/src/util \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include
-LDFLAGS := -L$(BOARD_DIR)/lib 
+LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld
 
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
@@ -124,7 +124,7 @@ $(BUILD_DIR)/package_python_scripts.o: $(PACKAGE_PYTHON_SCRIPTS) src/kitty.py
 				-target $(TARGET) \
 				$< -o $@
 
-$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o
+$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/sddf_serial_sharedringbuffer.o
 	make -C src/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -231,6 +231,38 @@ $(BUILD_DIR)/mux_tx.elf: $(BUILD_DIR)/mux_tx.o $(BUILD_DIR)/sddf_network_sharedr
 
 $(BUILD_DIR)/arp.elf: $(BUILD_DIR)/arp.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/nfs/nfs.a
 	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/arp.o  $(BUILD_DIR)/nfs/lwip/core/inet_chksum.o $(BUILD_DIR)/nfs/lwip/core/def.o $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/arp.elf
+
+# Compiling serial components
+LIB_SERIAL_SHARED_RINGBUFFER := $(SDDF)/serial/libserialsharedringbuffer/
+SERIAL_COMPONENTS := $(SDDF)/serial/components
+UART_DRIVER := $(SDDF)/drivers/serial/meson
+UART_DRIVER_OBJS := uart_driver.o sddf_serial_sharedringbuffer.o
+SERIAL_MUX_RX_OBJS := serial_mux_rx.o sddf_serial_sharedringbuffer.o
+SERIAL_MUX_TX_OBJS := serial_mux_tx.o sddf_serial_sharedringbuffer.o
+
+SERIAL_INCLUDES := -I$(SDDF)/util/include -I$(UART_DRIVER)/include
+SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=1
+
+$(BUILD_DIR)/sddf_serial_sharedringbuffer.o: FORCE
+	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include make -C $(LIB_SERIAL_SHARED_RINGBUFFER)
+
+$(BUILD_DIR)/uart_driver.o: $(UART_DRIVER)/uart.c
+	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/serial_mux_rx.o: $(SERIAL_COMPONENTS)/mux_rx.c
+	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $(SERIAL_NUM_CLIENTS) $< -o $@
+
+$(BUILD_DIR)/serial_mux_tx.o: $(SERIAL_COMPONENTS)/mux_tx.c
+	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $(SERIAL_NUM_CLIENTS) $< -o $@
+
+$(BUILD_DIR)/uart_driver.elf: $(addprefix $(BUILD_DIR)/, $(UART_DRIVER_OBJS))
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+$(BUILD_DIR)/serial_mux_rx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_MUX_RX_OBJS))
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+$(BUILD_DIR)/serial_mux_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_MUX_TX_OBJS))
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 directories:
 	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src))	\

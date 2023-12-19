@@ -11,6 +11,7 @@
 #include "shared/runtime/pyexec.h"
 #include "vfs_sddf_fs.h"
 #include <extmod/vfs.h>
+#include <sddf/serial/shared_ringbuffer.h>
 
 /* Data for the Kitty Python script. */
 extern char _kitty_python_script[];
@@ -22,6 +23,17 @@ static char mp_stack[MICROPY_HEAP_SIZE];
 cothread_t t_event, t_mp;
 
 char *nfs_share;
+
+/* Shared memory regions for sDDF serial sub-system */
+uintptr_t serial_rx_free;
+uintptr_t serial_rx_used;
+uintptr_t serial_tx_free;
+uintptr_t serial_tx_used;
+uintptr_t serial_rx_data;
+uintptr_t serial_tx_data;
+
+ring_handle_t serial_rx_ring;
+ring_handle_t serial_tx_ring;
 
 int active_events = mp_event_source_none;
 int mp_blocking_events = mp_event_source_none;
@@ -50,7 +62,7 @@ STATIC bool init_nfs(void) {
 #ifndef NDEBUG
 void MP_WEAK __assert_func(const char *file, int line, const char *func, const char *expr) {
     // @ivanv: improve/fix, use printf?
-    microkit_dbg_puts("MICROPYTHON|ERROR: Assertion failed!\n");
+    microkit_dbg_puts("MP|ERROR: Assertion failed!\n");
     while (true) {}
 }
 #endif
@@ -73,7 +85,7 @@ static void exec_str(const char *src, mp_parse_input_kind_t input_kind) {
 }
 
 void t_mp_entrypoint(void) {
-    printf("MICROPYTHON|INFO: initialising!\n");
+    printf("MP|INFO: initialising!\n");
 
     // Initialise the MicroPython runtime.
     mp_stack_ctrl_init();
@@ -90,11 +102,20 @@ void t_mp_entrypoint(void) {
     gc_sweep_all();
     mp_deinit();
 
-    printf("MICROPYTHON|INFO: exited!\n");
+    printf("MP|INFO: exited!\n");
     co_switch(t_event);
 }
 
 void init(void) {
+    ring_init(&serial_rx_ring, (ring_buffer_t *)serial_rx_free, (ring_buffer_t *)serial_rx_used, false, BUFFER_SIZE, BUFFER_SIZE);
+    for (int i = 0; i < NUM_BUFFERS - 1; i++) {
+        enqueue_free(&serial_rx_ring, serial_rx_data + ((i + NUM_BUFFERS) * BUFFER_SIZE), BUFFER_SIZE, NULL);
+    }
+    ring_init(&serial_tx_ring, (ring_buffer_t *)serial_tx_free, (ring_buffer_t *)serial_tx_used, false, BUFFER_SIZE, BUFFER_SIZE);
+    for (int i = 0; i < NUM_BUFFERS - 1; i++) {
+        enqueue_free(&serial_tx_ring, serial_tx_data + ((i + NUM_BUFFERS) * BUFFER_SIZE), BUFFER_SIZE, NULL);
+    }
+
     t_event = co_active();
     // @ivanv: figure out a better stack size
     t_mp = co_derive((void *)mp_stack, MICROPY_HEAP_SIZE, t_mp_entrypoint);
@@ -103,6 +124,9 @@ void init(void) {
 
 void notified(microkit_channel ch) {
     switch (ch) {
+    case SERIAL_RX_CH:
+        active_events |= mp_event_source_serial;
+        break;
     case TIMER_CH:
         active_events |= mp_event_source_timer;
         break;
@@ -114,7 +138,7 @@ void notified(microkit_channel ch) {
         active_events |= mp_event_source_nfs;
         break;
     default:
-        printf("MICROPYTHON|ERROR: unknown notification received from channel: 0x%lx\n", ch);
+        printf("MP|ERROR: unexpected notification received from channel: 0x%lx\n", ch);
     }
     if (active_events & mp_blocking_events) {
         co_switch(t_mp);
