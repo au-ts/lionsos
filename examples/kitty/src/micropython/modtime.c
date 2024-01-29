@@ -3,23 +3,20 @@
 #include "micropython.h"
 #include "py/obj.h"
 
+uint64_t mp_hal_time_ns(void) {
+    return mp_obj_new_int(sddf_timer_time_now());
+}
+
 mp_uint_t mp_hal_ticks_us(void) {
-    microkit_dbg_puts("MICROPYTHON|ERROR: mp_hal_ticks_us is unimplemented\n");
-    return 0;
+    return mp_hal_time_ns() / 1000;
 }
 
 mp_uint_t mp_hal_ticks_ms(void) {
-    microkit_dbg_puts("MICROPYTHON|ERROR: ml_hal_ticks_ms is unimplemented\n");
-    return 0;
+    return mp_hal_ticks_us() / 1000;
 }
 
 mp_uint_t mp_hal_ticks_cpu(void) {
     microkit_dbg_puts("MICROPYTHON|ERROR: mp_hal_ticks_cpu is unimplemented\n");
-    return 0;
-}
-
-uint64_t mp_hal_time_ns(void) {
-    microkit_dbg_puts("MICROPYTHON|ERROR: mp_hal_time_ns is unimplemented\n");
     return 0;
 }
 
