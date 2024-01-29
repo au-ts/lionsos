@@ -26,6 +26,9 @@
 #define MICROPY_PY_MACHINE_I2C (1)
 #define MICROPY_HW_ENABLE_HW_I2C (1)
 #define MICROPY_READER_VFS (1)
+#define MICROPY_PY_ASYNCIO (1)
+#define MICROPY_PY_ASYNC_AWAIT (1)
+#define MICROPY_PY_SELECT (1)
 
 #define MICROPY_ENABLE_EXTERNAL_IMPORT (1)
 
@@ -56,3 +59,6 @@ typedef long mp_off_t;
 #define MICROPY_HW_MCU_NAME   "Cortex A55"
 
 #define MP_STATE_PORT MP_STATE_VM
+
+void mp_hal_delay_us(mp_uint_t delay);
+#define MICROPY_EVENT_POLL_HOOK do { mp_hal_delay_us(500); } while (0);
