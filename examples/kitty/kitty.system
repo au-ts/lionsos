@@ -376,11 +376,6 @@
     </channel>
 
     <channel>
-        <end pd="eth_mux_tx" id="4" />
-        <end pd="timer_driver" id="4" />
-    </channel>
-
-    <channel>
         <end pd="eth_copy_nfs" id="1" />
         <end pd="nfs" id="2" />
     </channel>
