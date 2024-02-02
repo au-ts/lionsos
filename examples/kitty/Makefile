@@ -202,7 +202,7 @@ $(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/meson_ethernet.o $(BUILD_DIR)/sddf_netwo
 NETWORK_COMPONENTS := $(SDDF)/network/components
 NETWORK_COMPONENTS_INCLUDE := \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/util/lwip \
+	-I$(SDDF)/include/sddf/util/lwip \
 	-I$(BOARD_DIR)/include \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4 \
