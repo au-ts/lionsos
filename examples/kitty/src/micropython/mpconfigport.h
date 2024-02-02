@@ -29,6 +29,10 @@
 #define MICROPY_PY_ASYNCIO (1)
 #define MICROPY_PY_ASYNC_AWAIT (1)
 #define MICROPY_PY_SELECT (1)
+#define MICROPY_PY_LWIP (1)
+#define MICROPY_ENABLE_SCHEDULER (1)
+#define MICROPY_PY_ERRNO (1)
+#define MICROPY_PY_BUILTINS_MEMORYVIEW (1)
 
 #define MICROPY_ENABLE_EXTERNAL_IMPORT (1)
 
@@ -62,3 +66,7 @@ typedef long mp_off_t;
 
 void mp_hal_delay_us(mp_uint_t delay);
 #define MICROPY_EVENT_POLL_HOOK do { mp_hal_delay_us(500); } while (0);
+
+typedef uint32_t sys_prot_t;
+
+void init_networking(void);

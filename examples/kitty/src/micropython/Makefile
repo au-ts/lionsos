@@ -1,6 +1,10 @@
+CC := aarch64-none-elf-gcc
+LD := aarch64-none-elf-ld
+
 LIONSOS := ../../../..
 SDDF := $(LIONSOS)/sddf
 LIBCO := $(LIONSOS)/libco
+LWIP := $(SDDF)/network/ipstacks/lwip
 # Path to micropython source code
 MICROPYTHON_SRC := $(LIONSOS)/micropython
 
@@ -17,9 +21,60 @@ CPU ?= cortex-a55
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 
 # Set CFLAGS and libraries.
-CFLAGS += -I. -I$(BUILD) -I$(TOP) -I$(SDDF) -I$(SDDF)/util/include -I$(SDDF)/include -I$(BOARD_DIR)/include -I$(LIBCO) -I$(LIONSOS)/fs/include -nostdlib -ffreestanding -mtune=$(CPU)
-LDFLAGS += -L$(BOARD_DIR)/lib -nostdlib
-LIBS += -lm -lmicrokit -Tmicrokit.ld
+CFLAGS += \
+	-I. \
+	-Ilwip_include \
+	-I$(BUILD) \
+	-I$(TOP) \
+	-I$(SDDF) \
+	-I$(SDDF)/include \
+	-I$(BOARD_DIR)/include \
+	-I$(LIBCO) \
+	-I$(LIONSOS)/fs/include \
+	-I$(LWIP)/src/include \
+	-I$(LWIP)/src/include/ipv4 \
+	-ffreestanding \
+	-mtune=$(CPU)
+LDFLAGS += -L$(BOARD_DIR)/lib -L$(SDDF)/lib
+LIBS += -lmicrokit -Tmicrokit.ld -lc
+
+# COREFILES, CORE4FILES: The minimum set of files needed for lwIP.
+COREFILES=core/init.c \
+	core/def.c \
+	core/dns.c \
+	core/inet_chksum.c \
+	core/ip.c \
+	core/mem.c \
+	core/memp.c \
+	core/netif.c \
+	core/pbuf.c \
+	core/raw.c \
+	core/stats.c \
+	core/sys.c \
+	core/altcp.c \
+	core/altcp_alloc.c \
+	core/altcp_tcp.c \
+	core/tcp.c \
+	core/tcp_in.c \
+	core/tcp_out.c \
+	core/timeouts.c \
+	core/udp.c
+
+CORE4FILES=core/ipv4/autoip.c \
+	core/ipv4/dhcp.c \
+	core/ipv4/etharp.c \
+	core/ipv4/icmp.c \
+	core/ipv4/igmp.c \
+	core/ipv4/ip4_frag.c \
+	core/ipv4/ip4.c \
+	core/ipv4/ip4_addr.c
+
+# NETIFFILES: Files implementing various generic network interface functions
+NETIFFILES=netif/ethernet.c
+
+# LWIPFILES: All the above.
+LWIPFILES=$(COREFILES) $(CORE4FILES) $(NETIFFILES)
+LWIP_OBJ=$(addprefix $(BUILD)/micropython/lwip/, $(LWIPFILES:.c=.o))
 
 # Define the required source files.
 SRC_C = \
@@ -30,6 +85,7 @@ SRC_C = \
 	modmachine.c \
 	modfb.c \
 	machine_i2c.c \
+	mpnetworkport.c \
 	vfs_sddf_fs_file.c \
 	vfs_sddf_fs.c \
 	sddf_fs.c \
@@ -38,6 +94,9 @@ SRC_C = \
 	extmod/modos.c \
 	extmod/vfs_reader.c \
 	extmod/machine_i2c.c \
+	extmod/modasyncio.c \
+	extmod/modselect.c \
+	extmod/modlwip.c \
 	shared/readline/readline.c \
 	shared/runtime/gchelper_generic.c \
 	shared/runtime/pyexec.c \
@@ -45,6 +104,7 @@ SRC_C = \
 	shared/libc/string0.c \
 	shared/libc/printf.c \
 	shared/libc/__errno.c \
+	shared/netutils/netutils.c \
 	$(LIBCO)/libco.c
 
 # Define source files containung qstrs.
@@ -53,12 +113,22 @@ SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c modfb
 # Define the required object files.
 OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(BUILD)/sddf_timer_client.o $(BUILD)/sddf_fs_protocol.o $(BUILD)/sddf_serial_sharedringbuffer.o $(BUILD)/sddf_util_cache.o $(BUILD)/sddf_i2c_queue.o
 
-all: $(BUILD)/micropython.elf
+all: directories $(BUILD)/micropython.elf
+
+$(BUILD)/micropython/lwip/%.o: $(LWIP)/src/%.c
+	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD)/micropython.elf: $(OBJ)
 	$(ECHO) "LINK $@"
-	$(Q)$(CC) $(LDFLAGS) -o $@ $(BUILD)/$(PACKAGE_PYTHON_SCRIPTS) $^ $(LIBS)
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@ $(BUILD)/$(PACKAGE_PYTHON_SCRIPTS)
+	# $(Q)$(CC) $(LDFLAGS) -o $@ $(BUILD)/$(PACKAGE_PYTHON_SCRIPTS) $^ $(LIBS)
 	$(Q)$(SIZE) $@
 
 # Include remaining core make rules.
 include $(TOP)/py/mkrules.mk
+
+directories:
+	$(info $(shell mkdir -p $(BUILD_DIR)/micropython/lwip/)) \
+	$(info $(shell mkdir -p $(BUILD_DIR)/micropython/lwip/core)) \
+	$(info $(shell mkdir -p $(BUILD_DIR)/micropython/lwip/netif)) \
+	$(info $(shell mkdir -p $(BUILD_DIR)/micropython/lwip/core/ipv4))
