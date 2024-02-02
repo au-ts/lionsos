@@ -13,6 +13,8 @@
 #include <extmod/vfs.h>
 #include <sddf/serial/shared_ringbuffer.h>
 #include <sddf/i2c/queue.h>
+#include "lwip/init.h"
+#include "mpconfigport.h"
 
 /* Data for the Kitty Python script. */
 extern char _kitty_python_script[];
@@ -100,6 +102,7 @@ start_repl:
     mp_init();
 
     init_nfs();
+    init_networking();
 
     // Start a normal REPL; will exit when ctrl-D is entered on a blank line.
     pyexec_friendly_repl();
@@ -133,7 +136,13 @@ void init(void) {
     co_switch(t_mp);
 }
 
+void pyb_lwip_poll(void);
+void process_rx(void);
+
 void notified(microkit_channel ch) {
+    pyb_lwip_poll();
+    process_rx();
+
     switch (ch) {
     case SERIAL_RX_CH:
         active_events |= mp_event_source_serial;
