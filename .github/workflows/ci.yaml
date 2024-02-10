@@ -11,7 +11,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     steps:
       - name: Checkout KISS repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: 'true'
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
