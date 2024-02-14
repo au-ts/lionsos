@@ -12,6 +12,7 @@
 
 #include <sddf/timer/client.h>
 #include <sddf/network/shared_ringbuffer.h>
+#include <sddf/util/cache.h>
 
 #include <lwip/dhcp.h>
 #include <lwip/init.h>
@@ -84,61 +85,6 @@ static bool notify_rx = false;
 #define LINE_START(a) ROUND_DOWN(a, CONFIG_L1_CACHE_LINE_SIZE_BITS)
 #define LINE_INDEX(a) (LINE_START(a)>>CONFIG_L1_CACHE_LINE_SIZE_BITS)
 
-static inline void
-dsb(void)
-{
-    asm volatile("dsb sy" ::: "memory");
-}
-
-static inline void
-dmb(void)
-{
-    asm volatile("dmb sy" ::: "memory");
-}
-
-static inline void
-cleanInvalByVA(unsigned long vaddr)
-{
-    asm volatile("dc civac, %0" : : "r"(vaddr));
-    dsb();
-}
-
-static inline void
-cleanByVA(unsigned long vaddr)
-{
-    asm volatile("dc cvac, %0" : : "r"(vaddr));
-    dmb();
-}
-
-void
-cleanInvalidateCache(unsigned long start, unsigned long end)
-{
-    unsigned long line;
-    unsigned long index;
-    /* Clean the L1 range */
-
-    /* Finally clean and invalidate the L1 range. The extra clean is only strictly neccessary
-     * in a multiprocessor environment to prevent a write being lost if another core is
-     * attempting a store at the same time. As the range should already be clean asking
-     * it to clean again should not affect performance */
-    for (index = LINE_INDEX(start); index < LINE_INDEX(end) + 1; index++) {
-        line = index << CONFIG_L1_CACHE_LINE_SIZE_BITS;
-        cleanInvalByVA(line);
-    }
-}
-
-void
-cleanCache(unsigned long start, unsigned long end)
-{
-    unsigned long line;
-    unsigned long index;
-
-    for (index = LINE_INDEX(start); index < LINE_INDEX(end) + 1; index++) {
-        line = index << CONFIG_L1_CACHE_LINE_SIZE_BITS;
-        cleanByVA(line);
-    }
-}
-
 u32_t sys_now(void) {
     return mp_hal_ticks_ms();
 }
@@ -182,7 +128,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
         copied += curr->len;
     }
 
-    cleanCache((unsigned long) frame, (unsigned long) frame + copied);
+    cache_clean((unsigned long) frame, (unsigned long) frame + copied);
 
     /* insert into the used tx queue */
     err = enqueue_used(&state.tx_ring, (uintptr_t)frame, copied, NULL);
