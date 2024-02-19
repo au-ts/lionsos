@@ -79,7 +79,7 @@ BLK_DRIVER_VM_DTS_OVERLAYS :=	$(BLK_DRIVER_VM_DTS_DIR)/init.dts \
 
 BLK_DRIVER_VM_DTB := $(BUILD_DIR)/blk_driver_vm.dtb
 
-SDDF := sddf
+SDDF := ../../vmm/examples/virtio/sddf
 
 SDDF_SERIAL_RINGBUFFER := $(SDDF)/serial/libserialsharedringbuffer
 SDDF_SERIAL_COMPONENTS := $(SDDF)/serial/components
@@ -137,11 +137,11 @@ UIO_BLK_DRIVER_OBJS := blk.o libuio.o sddf_blk_shared_queue.o
 # passes an extra `--gcc-toolchain` flag which we do not need.
 CFLAGS := -mstrict-align \
 		  -g3 \
-		  -O3 \
+		  -O0 \
 		  -ffreestanding \
 		  -nostdlib \
 		  -Wno-unused-command-line-argument \
-		  -Wall -Wno-unused-function -Werror \
+		  -Wall -Wno-unused-function \
 		  -I$(VMM_SRC_DIR)/arch/aarch64 -I$(VMM_SRC_DIR) -I$(VMM_SRC_DIR)/util -I$(BOARD_DIR)/include \
 		  -I$(SDDF_SERIAL_DRIVER)/include \
 		  -I$(SDDF)/include \
@@ -158,7 +158,7 @@ CFLAGS_LINUX :=	-g3 \
 				-I$(LINUX_DIR)/include
 
 LDFLAGS := -L$(BOARD_DIR)/lib
-LIBS := -lmicrokit -Tmicrokit.ld
+LIBS := -L$(BUILD_DIR)/musllibc/lib -lc -lmicrokit -Tmicrokit.ld
 
 all: directories $(IMAGE_FILE)
 
