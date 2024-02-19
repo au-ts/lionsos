@@ -95,6 +95,8 @@ BLK_DRIVER_VM_USERLEVEL_INIT := blk_driver_init
 IMAGE_FILE = $(BUILD_DIR)/loader.img
 REPORT_FILE = $(BUILD_DIR)/report.txt
 
+MUSL=../../musllibc
+
 # @ivanv: should only compile printf.o in debug
 VMM_OBJS := printf.o \
 			bitarray.o \
@@ -143,6 +145,7 @@ CFLAGS := -mstrict-align \
 		  -I$(VMM_SRC_DIR)/arch/aarch64 -I$(VMM_SRC_DIR) -I$(VMM_SRC_DIR)/util -I$(BOARD_DIR)/include \
 		  -I$(SDDF_SERIAL_DRIVER)/include \
 		  -I$(SDDF)/include \
+		  -I$(BUILD_DIR)/musllibc/include \
 		  -DBOARD_$(BOARD) \
 		  -DCONFIG_$(CONFIG) \
 		  -target aarch64-none-elf
@@ -275,7 +278,7 @@ $(BUILD_DIR)/uio_blk_driver: $(addprefix $(BUILD_DIR)/, $(UIO_BLK_DRIVER_OBJS))
 	$(TOOLCHAIN)-gcc $(CFLAGS_LINUX) $^ -o $@
 
 # File system building process
-FF_DIR := fs/FatFs/
+FF_DIR := ../../fs/fat/
 
 FatFs_OBJS :=   ff.o \
 				ffsystem.o \
@@ -287,23 +290,44 @@ FatFs_OBJS :=   ff.o \
 				FiberPool.o \
 				FiberFlow.o \
 
-$(BUILD_DIR)/%.o: $(FF_DIR)/ff15/source/%.c Makefile
+CFLAGS_T := \
+	-mstrict-align \
+	-ffreestanding \
+	-g \
+	-O0 \
+	-Wall \
+	-Wno-unused-function \
+	-target aarch64-none-elf \
+	-no-integrated-as \
+
+$(BUILD_DIR)/musllibc/lib/libc.a:
+	make -C $(MUSL) \
+		C_COMPILER=$(CC) \
+		TOOLPREFIX="" \
+		CONFIG_ARCH_AARCH64=y \
+		CONFIG_USER_DEBUG_BUILD=y \
+		STAGE_DIR=$(abspath $(BUILD_DIR)/musllibc) \
+		CFLAGS_MUSL="-mstrict-align -ffreestanding -g -O0 -Wall -Wno-unused-function -target aarch64-none-elf -no-integrated-as" \
+		SOURCE_DIR=.
+
+$(BUILD_DIR)/%.o: $(FF_DIR)/ff15/source/%.c $(BUILD_DIR)/musllibc/lib/libc.a Makefile
+	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/%.o: $(FF_DIR)/%.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/%.o: $(FF_DIR)/FiberPool/%.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/%.o: $(FF_DIR)/FiberFlow/%.c Makefile
+$(BUILD_DIR)/%.o: $(FF_DIR)/FiberPool/FiberFlow/%.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/fs_shared_queue.o: Makefile
-	$(MAKE) -C $(SDDF_SERIAL_RINGBUFFER) MICROKIT_INCLUDE=$(MICROKIT_SDK)
-	cp $(SDDF_SERIAL_RINGBUFFER)/fs_shared_queue.o $(BUILD_DIR)/fs_shared_queue.o
+$(BUILD_DIR)/fs_shared_queue.o: $(FF_DIR)/libfssharedqueue/fs_shared_queue.c Makefile
+	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/FatFs.elf: $(addprefix $(BUILD_DIR)/, $(FatFs_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 # File system building end
-
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(ELFS)) $(SYSTEM_DESCRIPTION) $(BLK_DRIVER_VM_DIR)
 	$(MICROKIT_TOOL) $(SYSTEM_DESCRIPTION) --search-path $(BUILD_DIR) $(BLK_DRIVER_VM_DIR) --board $(BOARD) --config $(CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
