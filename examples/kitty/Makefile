@@ -26,7 +26,7 @@ DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := ../../sddf
-LIBVMM := ../../vmm
+LIBVMM := ../../libvmm
 
 VMM_IMAGE_DIR := src/vmm/images
 LINUX := $(VMM_IMAGE_DIR)/linux
