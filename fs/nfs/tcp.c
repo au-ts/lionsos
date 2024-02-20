@@ -30,6 +30,16 @@
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
 
+#ifndef MAC_BASE_ADDRESS
+#  define MAC_BASE_ADDRESS (0x525401000000ULL)
+#endif
+
+/*
+ * The same base MAC address is used by all components;
+ * each component has a different offset to add to the least significant byte
+ */
+#define MAC_OFFSET (10)
+
 typedef struct state
 {
     struct netif netif;
@@ -171,12 +181,11 @@ uint32_t sys_now(void) {
 }
 
 static void get_mac(void) {
-    state.mac[0] = 0x52;
-    state.mac[1] = 0x54;
-    state.mac[2] = 0x1;
-    state.mac[3] = 0;
-    state.mac[4] = 0;
-    state.mac[5] = 10;
+    int i;
+    for (i = 5; i >= 0; --i) {
+        state.mac[5 - i] = 0xff & (MAC_BASE_ADDRESS >> (i*8));
+    }
+    state.mac[5] += MAC_OFFSET;
 }
 
 static void netif_status_callback(struct netif *netif) {

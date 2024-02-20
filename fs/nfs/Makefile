@@ -24,6 +24,10 @@ ifeq ($(strip $(NFS_DIRECTORY)),)
 $(error NFS_DIRECTORY must be specified)
 endif
 
+ifeq ($(strip $MAC_BASE_ADDRESS)),)
+$(error MAC_BASE ADDRESS must be specified)
+endif
+
 BUILD_DIR ?= .
 
 TOOLCHAIN := aarch64-none-elf
@@ -53,7 +57,8 @@ DEFINE := \
 	-DETHERNET_RX_CHANNEL=2 \
 	-DETHERNET_ARP_CHANNEL=11 \
 	-DTIMER_CHANNEL=9 \
-	-DCLIENT_CHANNEL=7
+	-DCLIENT_CHANNEL=7 \
+	-DMAC_BASE_ADDRESS=${MAC_BASE_ADDRESS}
 
 CFLAGS := $(INCLUDE) $(DEFINE) \
 	-mstrict-align \

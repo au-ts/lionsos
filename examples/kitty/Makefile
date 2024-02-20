@@ -9,13 +9,21 @@ $(error MICROKIT_SDK must be specified)
 endif
 
 ifeq ($(strip $(LIBGCC)),)
-$(error LIBGCC must be specified: this should be the directory where libgcc.a can be found)
+LIBGCC := $(shell dirname $$(aarch64-none-elf-gcc --print-file-name libgcc.a))
 endif
 
 MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
 MICROKIT_BOARD := odroidc4
 CPU := cortex-a55
+
+# '?=' means the variable is regenerated every time the macros is invoked.
+# Get one value once, and use that (':=')
+# If we've buit part of the system with a MAC address, use that and
+# don't geneate a new one
+-include ${BUILD_DIR}/mac_address
+XMAC_BASE_ADDRESS ?= $(shell < /dev/urandom tr -d -c '[:digit:]A-F' | fold -w12 | sed -E -n -e '/^.[26AE]/s/^/0x/' -e '/0x/{s/$$/ULL/;p;q}')
+export MAC_BASE_ADDRESS := ${XMAC_BASE_ADDRESS}
 
 TOOLCHAIN := clang
 CC := clang
@@ -54,7 +62,9 @@ CFLAGS := \
 	-I$(LIBVMM)/src \
 	-I$(LIBVMM)/src/util \
 	-DBOARD_$(MICROKIT_BOARD) \
-	-I$(SDDF)/include
+	-I$(SDDF)/include \
+	-DMAC_BASE_ADDRESS=$(MAC_BASE_ADDRESS)
+
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld
 
@@ -72,7 +82,7 @@ TIMER_DRIVER := $(SDDF)/drivers/clock/meson
 
 PACKAGE_PYTHON_SCRIPTS := src/package_python_scripts.S
 
-all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
+all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE) 
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -82,6 +92,9 @@ $(BUILD_DIR)/%.o: src/%.c
 
 $(BUILD_DIR)/%.o: src/vmm/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/mac_address: ${BUILD_DIR}
+	echo "XMAC_BASE_ADDRESS=${MAC_BASE_ADDRESS}" > $@
 
 $(BUILD_DIR)/timer.o: $(TIMER_DRIVER)/timer.c
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -202,6 +215,7 @@ NETWORK_COMPONENT_CFLAGS := \
 	-Wno-unused-function \
 	-DNO_ASSERT \
 	-DBOARD_$(MICROKIT_BOARD) \
+	-DMAC_BASE_ADDRESS=$(MAC_BASE_ADDRESS) \
 	-MD \
 	-MP
 
