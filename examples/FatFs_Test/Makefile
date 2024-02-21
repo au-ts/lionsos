@@ -299,6 +299,8 @@ FatFs_OBJS :=   ff.o \
 				sddf_blk_shared_queue.o \
 				FiberPool.o \
 				FiberFlow.o \
+				printf.o \
+				util.o \
 
 CFLAGS_T := \
 	-mstrict-align \

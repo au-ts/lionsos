@@ -2,6 +2,7 @@
 #include "../../fs/fat/AsyncFATFs.h"
 #include "../../fs/fat/libfssharedqueue/fs_shared_queue.h"
 #include "../../vmm/src/util/printf.h"
+#include <stdint.h>
 #include <string.h>
 #include <microkit.h>
 
@@ -16,7 +17,8 @@ void* Coroutine_STACK;
 struct sddf_fs_queue *request_queue, *response_queue;
 union sddf_fs_message request, response;
 
-void* freememory;
+const uint64_t freememorylocation = 0x30600000;
+const void *freememory = (void *) freememorylocation;
 
 void send_f_mount(
   FATFS*       fs,    /* [IN] Filesystem object */
@@ -30,6 +32,7 @@ void send_f_mount(
     free += sizeof(FATFS);
     mount_s.path = free;
     strcpy(free, path);
+    printf("Which part is wrong exactly?\n");
     free += 10;
     mount_s.fs = temp_fs;
     mount_s.opt = opt;
@@ -37,7 +40,9 @@ void send_f_mount(
     request.command.cmd_type = SDDF_FS_CMD_MOUNT;
     memcpy(request.command.args, &mount_s, sizeof(mount_s));
     sddf_fs_queue_push(request_queue, request);
+    printf("Is notify causing the problem?\n");
     microkit_notify(FS_Channel);
+    printf("It is not\n");
     Fiber_switch(main_thread);
     sddf_fs_queue_pop(response_queue, &response);
     printf("Fat file system mounting result: %d\n", response.completion.status);
@@ -59,12 +64,15 @@ void test() {
 
 void init(void) {
     printf("Init FiberFlow\n");
+    sddf_fs_init(request_queue);
+    sddf_fs_init(response_queue);
     Fiber_init(main_thread);
     event_thread = Fiber_create(Coroutine_STACK, Coroutine_STACKSIZE, test);
     Fiber_switch(event_thread);
 }
 
 void notified(microkit_channel ch) {
+    printf("FS client RIQ received: %d\n", ch);
     Fiber_switch(event_thread);
 }
 
