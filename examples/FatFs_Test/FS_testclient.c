@@ -3,6 +3,9 @@
 #include "../../fs/fat/libfssharedqueue/fs_shared_queue.h"
 #include "../../vmm/src/util/printf.h"
 #include <string.h>
+#include <microkit.h>
+
+#define FS_Channel 1
 
 static uint8_t Registerpart[AArch64_RegsterPart];
 
@@ -26,7 +29,7 @@ void send_f_mount(
     FATFS* temp_fs = free;
     free += sizeof(FATFS);
     mount_s.path = free;
-    memcpy(free, path, 10);
+    strcpy(free, path);
     free += 10;
     mount_s.fs = temp_fs;
     mount_s.opt = opt;
@@ -34,6 +37,7 @@ void send_f_mount(
     request.command.cmd_type = SDDF_FS_CMD_MOUNT;
     memcpy(request.command.args, &mount_s, sizeof(mount_s));
     sddf_fs_queue_push(request_queue, request);
+    microkit_notify(FS_Channel);
     Fiber_switch(main_thread);
     sddf_fs_queue_pop(response_queue, &response);
     printf("Fat file system mounting result: %d\n", response.completion.status);
@@ -46,19 +50,21 @@ void test() {
     struct f_mount_s mount_s;
     mount_s.fs = fs;
     TCHAR* DriverPath = freememory;
-    freememory+= sizeof("00");
+    freememory+= sizeof("");
     DriverPath = "";
     mount_s.path = DriverPath;
     mount_s.opt = 1;
+    send_f_mount(fs, DriverPath, mount_s.opt);
 }
 
 void init(void) {
+    printf("Init FiberFlow\n");
     Fiber_init(main_thread);
-    Fiber_create(event_thread, Coroutine_STACKSIZE, test);
+    event_thread = Fiber_create(Coroutine_STACK, Coroutine_STACKSIZE, test);
     Fiber_switch(event_thread);
 }
 
-void notified(int ch) {
+void notified(microkit_channel ch) {
     Fiber_switch(event_thread);
 }
 

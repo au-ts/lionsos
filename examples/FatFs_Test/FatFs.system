@@ -16,12 +16,15 @@
     <memory_region name="coroutine_stack3" size="0x40_000" page_size="0x1000"/>
     <memory_region name="coroutine_stack4" size="0x40_000" page_size="0x1000"/>
 
+    <memory_region name="coroutine_client" size="0x40_000" page_size="0x1000"/>
+
     <!-- File system test client -->
     <protection_domain name="Client" priority="50" pp="true">
         <program_image path="Client.elf" />
         <map mr="data_blk_vmm_1" vaddr="0x30600000" perms="rw" cached="true" />
         <map mr="req_client" vaddr="0x31000000" perms="rw" cached="true" />
         <map mr="resp_client" vaddr="0x31200000" perms="rw" cached="true" />
+        <map mr="coroutine_client" vaddr="0x31600000" perms="rw" cached="true" setvar_vaddr="Coroutine_STACK" />
     </protection_domain>
 
     <!-- FAT32 File system -->
@@ -82,7 +85,7 @@
     </protection_domain>
 
     <channel>
-        <end pd="FatFs" id="10"/>
-        <end pd="BLK_DRIVER_VMM" id="1"/>
+        <end pd="FatFs" id="2"/>
+        <end pd="BLK_DRIVER_VMM" id="3"/>
     </channel>
 </system>

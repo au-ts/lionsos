@@ -5,7 +5,10 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
+# Command to compile and run the img
 #  make BOARD=qemu_arm_virt MICROKIT_SDK=~/Sel4/libvmm-blk_benchmark/examples/blk_benchmark/sdk qemu
+
+
 
 ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
@@ -59,6 +62,7 @@ BOARD_DIR := $(MICROKIT_SDK)/board/$(BOARD)/$(CONFIG)
 VMM := ../../vmm
 VMM_TOOLS := $(VMM)/tools
 VMM_SRC_DIR := $(VMM)/src
+VMM_EXAMPLE := $(VMM)/examples
 SYSTEM_DESCRIPTION := FatFs.system
 
 CURRENT_DIR := $(shell pwd)
@@ -66,7 +70,7 @@ CURRENT_DIR := $(shell pwd)
 LINUX_DIR := $(VMM_TOOLS)/linux
 UIO_DRIVERS_DIR := $(LINUX_DIR)/uio_drivers
 
-BLK_DRIVER_VM_DIR := vmm/examples/virtio/board/$(BOARD)/blk_driver_vm
+BLK_DRIVER_VM_DIR := $(VMM)/examples/virtio/board/$(BOARD)/blk_driver_vm
 BLK_DRIVER_VM_DTS_DIR := $(BLK_DRIVER_VM_DIR)/dts
 BLK_DRIVER_VM_ROOTFS_TMP_DIR := $(BUILD_DIR)/blk_driver_vm_rootfs
 
@@ -87,7 +91,7 @@ SDDF_SERIAL_DRIVER := $(SDDF)/drivers/serial/arm
 
 SDDF_BLK_SHAREDQUEUE := $(SDDF)/blk/libblksharedqueue
 
-ELFS := FatFs.elf blk_driver_vmm.elf 
+ELFS := FatFs.elf blk_driver_vmm.elf Client.elf
 
 BLK_DRIVER_VM_USERLEVEL := uio_blk_driver storage_0 storage_1
 BLK_DRIVER_VM_USERLEVEL_INIT := blk_driver_init
@@ -221,6 +225,11 @@ $(BUILD_DIR)/%.o: $(VMM_SRC_DIR)/arch/aarch64/vgic/%.c Makefile
 $(BUILD_DIR)/%.o: $(VMM_SRC_DIR)/virtio/%.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
+# Compiling block_driver_vmm.o
+$(BUILD_DIR)/blk_driver_vmm.o: $(VMM_EXAMPLE)/virtio/blk_driver_vmm.c Makefile
+	$(CC) -c $(CFLAGS) $< -o $@
+# Finish compiling block_driver_vmm.o
+
 $(BUILD_DIR)/%.o: $(SDDF_SERIAL_COMPONENTS)/%.c Makefile
 	$(CC) -c $(CFLAGS) -DSERIAL_NUM_CLIENTS=2 -DSERIAL_TRANSFER_WITH_COLOUR=1 $< -o $@
 
@@ -284,7 +293,8 @@ FatFs_OBJS :=   ff.o \
 				ffsystem.o \
 				ffunicode.o \
                 AsyncFATFs.o \
-				AsyncFATFunc.o\
+				AsyncFATFunc.o \
+				Asyncdiskio.o \
 				fs_shared_queue.o \
 				sddf_blk_shared_queue.o \
 				FiberPool.o \
@@ -328,6 +338,21 @@ $(BUILD_DIR)/fs_shared_queue.o: $(FF_DIR)/libfssharedqueue/fs_shared_queue.c Mak
 $(BUILD_DIR)/FatFs.elf: $(addprefix $(BUILD_DIR)/, $(FatFs_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 # File system building end
+
+# Client building process
+Client_OBJS :=  FS_testclient.o \
+				fs_shared_queue.o \
+				FiberPool.o \
+				FiberFlow.o \
+				printf.o \
+				util.o \
+
+$(BUILD_DIR)/FS_testclient.o: FS_testclient.c Makefile
+	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/Client.elf: $(addprefix $(BUILD_DIR)/, $(Client_OBJS))
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+# Client building end
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(ELFS)) $(SYSTEM_DESCRIPTION) $(BLK_DRIVER_VM_DIR)
 	$(MICROKIT_TOOL) $(SYSTEM_DESCRIPTION) --search-path $(BUILD_DIR) $(BLK_DRIVER_VM_DIR) --board $(BOARD) --config $(CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)

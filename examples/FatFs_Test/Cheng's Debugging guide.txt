@@ -1,0 +1,33 @@
+To compile and run the image in qemu:
+make BOARD=qemu_arm_virt (MICROKIT_SDK=PATH/TO/MICROKIT_SDK) qemu
+
+To directly run a compiled image in qemu:
+qemu-system-aarch64 -machine virt,virtualization=on,secure=off \
+                    -cpu cortex-a53 \
+                    -serial mon:stdio \
+                    -device loader,file=PATH/TO/IMAGE,addr=0x70000000,cpu-num=0 \
+                    -m size=2G \
+                    -nographic \
+
+To set up the qemu for debugging purpose, add -s -S at the end:
+qemu-system-aarch64 -machine virt,virtualization=on,secure=off \
+                    -cpu cortex-a53 \
+                    -serial mon:stdio \
+                    -device loader,file=PATH/TO/IMAGE,addr=0x70000000,cpu-num=0 \
+                    -m size=2G \
+                    -nographic \
+                    -s -S
+
+And then set up GDB debugger:
+// Enter GDB (I am using gdb-multiarch)
+gdb-multiarch
+// Select the right achitecture
+set architecture aarch64
+// Connecting to a remote target
+target remote :1234
+// Load Symbols from Your ELF File
+add-symbol-file PATH/TO/ELF
+// And starting debugging!
+
+add-symbol-file ~/Sel4/LionsOS/examples/FatFs_Test/build/FatFs.elf
+add-symbol-file ~/Sel4/LionsOS/examples/FatFs_Test/build/Client.elf
