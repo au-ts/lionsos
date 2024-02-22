@@ -40,9 +40,7 @@ void send_f_mount(
     request.command.cmd_type = SDDF_FS_CMD_MOUNT;
     memcpy(request.command.args, &mount_s, sizeof(mount_s));
     sddf_fs_queue_push(request_queue, request);
-    printf("Is notify causing the problem?\n");
     microkit_notify(FS_Channel);
-    printf("It is not\n");
     Fiber_switch(main_thread);
     sddf_fs_queue_pop(response_queue, &response);
     printf("Fat file system mounting result: %d\n", response.completion.status);
@@ -73,6 +71,8 @@ void init(void) {
 
 void notified(microkit_channel ch) {
     printf("FS client RIQ received: %d\n", ch);
-    Fiber_switch(event_thread);
+    if (ch == 1) {
+        Fiber_switch(event_thread);  
+    }
 }
 

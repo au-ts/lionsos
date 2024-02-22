@@ -13,7 +13,7 @@ To set up the qemu for debugging purpose, add -s -S at the end:
 qemu-system-aarch64 -machine virt,virtualization=on,secure=off \
                     -cpu cortex-a53 \
                     -serial mon:stdio \
-                    -device loader,file=PATH/TO/IMAGE,addr=0x70000000,cpu-num=0 \
+                    -device loader,file=build/loader.img,addr=0x70000000,cpu-num=0 \
                     -m size=2G \
                     -nographic \
                     -s -S

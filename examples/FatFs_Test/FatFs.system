@@ -30,6 +30,7 @@
     <!-- FAT32 File system -->
     <protection_domain name="FatFs" priority="100" pp="true">
         <program_image path="FatFs.elf" />
+        <map mr="blk_config_vmm_1" vaddr="0x30000000" perms="rw" cached="true" setvar_vaddr="config"/>
         <map mr="req_blk_vmm_1" vaddr="0x30200000" perms="rw" cached="true" setvar_vaddr="request" />
         <map mr="resp_blk_vmm_1" vaddr="0x30400000" perms="rw" cached="true" setvar_vaddr="response" />
         <map mr="data_blk_vmm_1" vaddr="0x30600000" perms="rw" cached="true" />
@@ -89,5 +90,11 @@
     <channel>
         <end pd="FatFs" id="2"/>
         <end pd="BLK_DRIVER_VMM" id="3"/>
+    </channel>
+
+<!-- Avoid the BLK_DRIVER_VMM get killed by Attempted to invoke a null cap -->
+    <channel>
+        <end pd="Client" id="2"/>
+        <end pd="BLK_DRIVER_VMM" id="4"/>
     </channel>
 </system>
