@@ -17,14 +17,12 @@ extern struct sddf_fs_queue *request_queue, *response_queue;
 
 uintptr_t cur_mem;
 
-union sddf_fs_message request, response;
-
-void* mymalloc(uint64_t size) {
-    if (cur_mem + size > memory + size) {
+void* mymalloc(uint64_t buffer_size) {
+    if (cur_mem + buffer_size > memory + size) {
         return (void*)0;
     }
     void *ret = (void *)cur_mem;
-    cur_mem += size;
+    cur_mem += buffer_size;
     return ret;
 }
 
@@ -33,6 +31,7 @@ void mymalloc_init() {
 }
 
 FRESULT fat_mount (FATFS* fs, const TCHAR* path, BYTE opt) {
+    union sddf_fs_message request, response;
     mymalloc_init();
     FATFS* fs_temp = mymalloc(sizeof(FATFS));
     // Do I need to add one here?
@@ -54,5 +53,5 @@ FRESULT fat_mount (FATFS* fs, const TCHAR* path, BYTE opt) {
 }
 
 FRESULT fat_f_open (FIL* fp, const TCHAR* path, BYTE mode) {
-    
+
 }

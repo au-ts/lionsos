@@ -340,8 +340,12 @@ Client_OBJS :=  FS_testclient.o \
 				FiberFlow.o \
 				printf.o \
 				util.o \
+				libfatfs.o \
 
 $(BUILD_DIR)/FS_testclient.o: FS_testclient.c Makefile
+	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/libfatfs.o: libfatfs.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/Client.elf: $(addprefix $(BUILD_DIR)/, $(Client_OBJS))
