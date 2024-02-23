@@ -264,7 +264,7 @@ $(BUILD_DIR)/postmark: $(LINUX_DIR)/postmark.c Makefile
 
 # Create virtual disk
 $(BUILD_DIR)/storage_0: Makefile
-	mkfs.vfat -F 32 -S 512 -s 1 -C $@ 5000
+	mkfs.vfat -F 12 -S 512 -s 8 -C $@ 5000
 
 $(BUILD_DIR)/storage_1: Makefile
 	dd if=/dev/zero of=$@ bs=1K count=100

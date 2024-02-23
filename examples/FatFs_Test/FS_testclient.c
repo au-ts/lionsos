@@ -70,7 +70,7 @@ void init(void) {
 }
 
 void notified(microkit_channel ch) {
-    printf("FS client RIQ received: %d\n", ch);
+    printf("FS client IRQ received: %d\n", ch);
     if (ch == 1) {
         Fiber_switch(event_thread);  
     }
