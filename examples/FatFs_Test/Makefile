@@ -264,18 +264,10 @@ $(BUILD_DIR)/postmark: $(LINUX_DIR)/postmark.c Makefile
 
 # Create virtual disk
 $(BUILD_DIR)/storage_0: Makefile
-	dd if=/dev/zero of=$@ bs=1K count=1000 && \
-	echo -e "g\nn\n1\n50\n\nw" | fdisk $@ && \
-	dd if=/dev/zero of=$(BUILD_DIR)/ext4fs bs=1K count=1000 && \
-	mkfs.ext4 $(BUILD_DIR)/ext4fs_0 290 && \
-	dd if=$(BUILD_DIR)/ext4fs_0 of=$@ bs=512 seek=50 conv=notrunc
-	
+	mkfs.vfat -F 32 -S 512 -s 1 -C $@ 5000
+
 $(BUILD_DIR)/storage_1: Makefile
-	dd if=/dev/zero of=$@ bs=1K count=1000 && \
-	echo -e "g\nn\n1\n50\n\nw" | fdisk $@ && \
-	dd if=/dev/zero of=$(BUILD_DIR)/ext4fs bs=1K count=1000 && \
-	mkfs.ext4 $(BUILD_DIR)/ext4fs_1 290 && \
-	dd if=$(BUILD_DIR)/ext4fs_1 of=$@ bs=512 seek=50 conv=notrunc
+	dd if=/dev/zero of=$@ bs=1K count=100
 
 $(BUILD_DIR)/blk_client_init: $(LINUX_DIR)/blk_client_init Makefile
 	cp $< $@
