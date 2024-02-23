@@ -70,7 +70,8 @@ CURRENT_DIR := $(shell pwd)
 LINUX_DIR := $(VMM_TOOLS)/linux
 UIO_DRIVERS_DIR := $(LINUX_DIR)/uio_drivers
 
-BLK_DRIVER_VM_DIR := $(VMM)/examples/virtio/board/$(BOARD)/blk_driver_vm
+# BLK_DRIVER_VM_DIR := $(VMM)/examples/virtio/board/$(BOARD)/blk_driver_vm
+BLK_DRIVER_VM_DIR := blk/board/$(BOARD)/blk_driver_vm
 BLK_DRIVER_VM_DTS_DIR := $(BLK_DRIVER_VM_DIR)/dts
 BLK_DRIVER_VM_ROOTFS_TMP_DIR := $(BUILD_DIR)/blk_driver_vm_rootfs
 
@@ -226,7 +227,7 @@ $(BUILD_DIR)/%.o: $(VMM_SRC_DIR)/virtio/%.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
 # Compiling block_driver_vmm.o
-$(BUILD_DIR)/blk_driver_vmm.o: $(VMM_EXAMPLE)/virtio/blk_driver_vmm.c Makefile
+$(BUILD_DIR)/blk_driver_vmm.o: blk/blk_driver_vmm.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 # Finish compiling block_driver_vmm.o
 

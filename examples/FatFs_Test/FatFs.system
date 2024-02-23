@@ -84,7 +84,7 @@
             <map mr="data_blk_vmm_1" vaddr="0x30600000" perms="rw" cached="true" />
             <map mr="data_blk_vmm_2" vaddr="0x31600000" perms="rw" cached="true" />
         </virtual_machine>
-        <irq irq="33" id="30" />
+        <irq irq="33" id="30"/>
     </protection_domain>
 
     <channel>

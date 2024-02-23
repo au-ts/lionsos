@@ -1,0 +1,17 @@
+/ {
+    /delete-node/ memory@40000000;
+    /delete-node/ chosen;
+
+    memory@40000000 {
+		reg = <0x00 0x40000000 0x00 0x8000000>;
+		device_type = "memory";
+	};
+
+	chosen {
+		stdout-path = "/pl011@9000000";
+		bootargs = "earlycon=pl011,0x9000000 earlyprintk=serial debug loglevel=8 uio_pdrv_genirq.of_id=generic-uio";
+		linux,stdout-path = "/pl011@9000000";
+		linux,initrd-start = <0x47000000>;
+		linux,initrd-end = <0x47f00000>;
+	};
+};

@@ -22,15 +22,22 @@ uint64_t size = 0x200000;
 
 void test() {
     FATFS fs;
-    const TCHAR* path = "";
+    char line[100];
     int res;
-    res = fat_mount(&fs, path, 1);
+    strcpy(line, "");
+    // File system mounting test
+    res = fat_mount(&fs, line, 1);
     printf("Fat file system mounting result: %d\n", res);
+    // File system opening test
+    FIL fp;
+    strcpy(line, "test_file");
+    res = fat_f_open (&fp, line, FA_CREATE_NEW | FA_WRITE | FA_READ);
+    printf("Fat file system open result: %d\n", res);
     Fiber_switch(main_thread);
 }
 
 void init(void) {
-    printf("Init FiberFlow\n");
+    // printf("Init FiberFlow\n");
     sddf_fs_init(request_queue);
     sddf_fs_init(response_queue);
     Fiber_init(main_thread);
@@ -39,7 +46,7 @@ void init(void) {
 }
 
 void notified(microkit_channel ch) {
-    printf("FS client IRQ received: %d\n", ch);
+    // printf("FS client IRQ received: %d\n", ch);
     if (ch == 1) {
         Fiber_switch(event_thread);  
     }

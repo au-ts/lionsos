@@ -35,7 +35,7 @@ FRESULT fat_mount (FATFS* fs, const TCHAR* path, BYTE opt) {
     mymalloc_init();
     FATFS* fs_temp = mymalloc(sizeof(FATFS));
     // Do I need to add one here?
-    TCHAR* temp_path = mymalloc(strlen(path) + 10);
+    TCHAR* temp_path = mymalloc(100);
     strcpy(temp_path, path);
     struct f_mount_s* temp = mymalloc(sizeof(struct f_mount_s));
     temp->fs = fs_temp;
@@ -53,5 +53,22 @@ FRESULT fat_mount (FATFS* fs, const TCHAR* path, BYTE opt) {
 }
 
 FRESULT fat_f_open (FIL* fp, const TCHAR* path, BYTE mode) {
-
+    union sddf_fs_message request, response;
+    mymalloc_init();
+    FIL *fp_temp = mymalloc(sizeof(FIL));
+    TCHAR* temp_path = mymalloc(100);
+    strcpy(temp_path, path);
+    struct f_open_s* temp = mymalloc(sizeof(struct f_open_s));
+    temp->path = temp_path;
+    temp->fp = fp;
+    temp->mode = mode;
+    request.command.request_id = 1;
+    request.command.cmd_type = SDDF_FS_CMD_OPEN;
+    memcpy(request.command.args, &temp, sizeof(struct f_open_s));
+    sddf_fs_queue_push(request_queue, request);
+    microkit_notify(FS_Channel);
+    Fiber_switch(main_thread);
+    sddf_fs_queue_pop(response_queue, &response);
+    memcpy(fp, fp_temp, sizeof(struct f_open_s));
+    return response.completion.status;
 }
