@@ -30,6 +30,7 @@ void mymalloc_init() {
     cur_mem = memory;
 }
 
+/*
 FRESULT fat_mount (FATFS* fs, const TCHAR* path, BYTE opt) {
     union sddf_fs_message request, response;
     mymalloc_init();
@@ -71,4 +72,42 @@ FRESULT fat_f_open (FIL* fp, const TCHAR* path, BYTE mode) {
     sddf_fs_queue_pop(response_queue, &response);
     memcpy(fp, fp_temp, sizeof(FIL));
     return response.completion.status;
+}
+*/
+
+
+// Zero copy version of the lib, not being used due to issues in driver vm
+FRESULT fat_mount (FATFS* fs, const TCHAR* path, BYTE opt) {
+    union sddf_fs_message request, response;
+    struct f_mount_s* temp = (void*)request.command.args;
+    temp->fs = fs;
+    temp->opt = opt;
+    temp->path = path;
+    request.command.request_id = 1;
+    request.command.cmd_type = SDDF_FS_CMD_MOUNT;
+    sddf_fs_queue_push(request_queue, request);
+    microkit_notify(FS_Channel);
+    Fiber_switch(main_thread);
+    sddf_fs_queue_pop(response_queue, &response);
+    return response.completion.status;
+}
+
+FRESULT fat_f_open (FIL* fp, const TCHAR* path, BYTE mode) {
+    union sddf_fs_message request, response;
+    struct f_open_s* temp = (void*)request.command.args;
+    temp->path = path;
+    temp->fp = fp;
+    temp->mode = mode;
+    request.command.request_id = 1;
+    request.command.cmd_type = SDDF_FS_CMD_OPEN;
+    sddf_fs_queue_push(request_queue, request);
+    microkit_notify(FS_Channel);
+    Fiber_switch(main_thread);
+    sddf_fs_queue_pop(response_queue, &response);
+    return response.completion.status;
+}
+
+FRESULT fat_f_pread (FIL* fp, void* buff, FSIZE_t ofs, UINT btr, UINT* br) {
+    union sddf_fs_message request, response;
+    struct f_open_s* temp = (void*)request.command.args;
 }
