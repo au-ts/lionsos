@@ -140,7 +140,7 @@ void init(void) {
     for (int i = 0; i < NUM_UIO_DEVICE; i++) {
         virq_register(GUEST_VCPU_ID, uio_devices[i].irq, &uio_ack, NULL);
     }
-
+    
     register_passthrough_irq(33, 30);
 
     /* Finally start the guest */

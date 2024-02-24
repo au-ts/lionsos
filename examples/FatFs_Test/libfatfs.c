@@ -43,12 +43,12 @@ FRESULT fat_mount (FATFS* fs, const TCHAR* path, BYTE opt) {
     temp->path = temp_path;
     request.command.request_id = 1;
     request.command.cmd_type = SDDF_FS_CMD_MOUNT;
-    memcpy(request.command.args, &temp, sizeof(struct f_mount_s));
+    memcpy(request.command.args, temp, sizeof(struct f_mount_s));
     sddf_fs_queue_push(request_queue, request);
     microkit_notify(FS_Channel);
     Fiber_switch(main_thread);
     sddf_fs_queue_pop(response_queue, &response);
-    memcpy(fs, fs_temp, sizeof(struct f_mount_s));
+    memcpy(fs, fs_temp, sizeof(FATFS));
     return response.completion.status;
 }
 
@@ -60,15 +60,15 @@ FRESULT fat_f_open (FIL* fp, const TCHAR* path, BYTE mode) {
     strcpy(temp_path, path);
     struct f_open_s* temp = mymalloc(sizeof(struct f_open_s));
     temp->path = temp_path;
-    temp->fp = fp;
+    temp->fp = fp_temp;
     temp->mode = mode;
     request.command.request_id = 1;
     request.command.cmd_type = SDDF_FS_CMD_OPEN;
-    memcpy(request.command.args, &temp, sizeof(struct f_open_s));
+    memcpy(request.command.args, temp, sizeof(struct f_open_s));
     sddf_fs_queue_push(request_queue, request);
     microkit_notify(FS_Channel);
     Fiber_switch(main_thread);
     sddf_fs_queue_pop(response_queue, &response);
-    memcpy(fp, fp_temp, sizeof(struct f_open_s));
+    memcpy(fp, fp_temp, sizeof(FIL));
     return response.completion.status;
 }
