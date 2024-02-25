@@ -20,6 +20,11 @@ union sddf_fs_message request, response;
 uintptr_t memory = 0x30600000;
 uint64_t size = 0x200000;
 
+
+// For the test to work
+// Make sure the blk_config->blocksize in block.c in block driver vm is set to 512 not any other value
+// In real block device driver, the value should be dynamically determined by read the sector 0 of the block device
+// But now, make sure that value is hardcoded to a proper block size, and adjust other hardcoded value as well
 void test() {
     // FATFS fs;
     mymalloc_init();
@@ -35,7 +40,14 @@ void test() {
     strcpy(line, "test_file");
     res = fat_f_open(fp, line, FA_CREATE_NEW | FA_WRITE | FA_READ);
     printf("Fat file system open result: %d\n", res);
-    
+    strcpy(line, "Hello! This is my AsyncFatfs!");
+    uint32_t *wr_num = mymalloc(sizeof(uint32_t));
+    res = fat_f_pwrite(fp, line, 0, strlen(line) + 1, wr_num);
+    printf("Fat file system write result: %d, number of chars written: %d\n", res, *wr_num);
+    memset(line, 0, 100);
+    *wr_num = 0;
+    res = fat_f_pread(fp, line, 0, 30, wr_num);
+    printf("Fat file system read result: %d, number of chars read: %d\n Here is the content from read:\n%s\n", res, *wr_num, line);
     Fiber_switch(main_thread);
 }
 

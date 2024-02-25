@@ -6,7 +6,7 @@ FRESULT fat_f_open (FIL* fp, const TCHAR* path, BYTE mode);
 
 FRESULT fat_f_pread (FIL* fp, void* buff, FSIZE_t ofs, UINT btr, UINT* br);
 
-FRESULT fat_f_pwrite (FIL* fp, void* buff, FSIZE_t ofs, UINT btr, UINT* br);
+FRESULT fat_f_pwrite (FIL* fp, void* buff, FSIZE_t ofs, UINT btw, UINT* bw);
 
 FRESULT fat_f_close (FIL* fp, void* buff, UINT btr, UINT* br);
 

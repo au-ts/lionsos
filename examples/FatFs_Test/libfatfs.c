@@ -109,5 +109,34 @@ FRESULT fat_f_open (FIL* fp, const TCHAR* path, BYTE mode) {
 
 FRESULT fat_f_pread (FIL* fp, void* buff, FSIZE_t ofs, UINT btr, UINT* br) {
     union sddf_fs_message request, response;
-    struct f_open_s* temp = (void*)request.command.args;
+    struct f_pread_s* temp = (void*)request.command.args;
+    temp->fp = fp;
+    temp->buff = buff;
+    temp->ofs = ofs;
+    temp->btr = btr;
+    temp->br = br;
+    request.command.request_id = 1;
+    request.command.cmd_type = SDDF_FS_CMD_PREAD;
+    sddf_fs_queue_push(request_queue, request);
+    microkit_notify(FS_Channel);
+    Fiber_switch(main_thread);
+    sddf_fs_queue_pop(response_queue, &response);
+    return response.completion.status;
+}
+
+FRESULT fat_f_pwrite (FIL* fp, void* buff, FSIZE_t ofs, UINT btw, UINT* bw) {
+    union sddf_fs_message request, response;
+    struct f_pwrite_s* temp = (void*)request.command.args;
+    temp->fp = fp;
+    temp->buff = buff;
+    temp->ofs = ofs;
+    temp->btw = btw;
+    temp->bw = bw;
+    request.command.request_id = 1;
+    request.command.cmd_type = SDDF_FS_CMD_PWRITE;
+    sddf_fs_queue_push(request_queue, request);
+    microkit_notify(FS_Channel);
+    Fiber_switch(main_thread);
+    sddf_fs_queue_pop(response_queue, &response);
+    return response.completion.status;
 }

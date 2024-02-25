@@ -152,7 +152,7 @@ void notified(microkit_channel ch) {
     // printf("IRQ received: %d\n", ch);
     int irq = get_uio_irq_from_ch(ch);
     if (irq != -1) {
-        printf("UIO_IRQ RECEIVED: %d\n", ch);
+        // printf("UIO_IRQ RECEIVED: %d\n", ch);
         virq_inject(GUEST_VCPU_ID, irq);
         return;
     }

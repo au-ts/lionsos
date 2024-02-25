@@ -9,7 +9,8 @@
 
 	chosen {
 		stdout-path = "/pl011@9000000";
-		bootargs = "earlycon=pl011,0x9000000 earlyprintk=serial debug loglevel=8 uio_pdrv_genirq.of_id=generic-uio";
+		// bootargs = "earlycon=pl011,0x9000000 earlyprintk=serial debug loglevel=8 uio_pdrv_genirq.of_id=generic-uio";
+		bootargs = "console=hvc0 earlycon=hvc0 earlyprintk=serial debug loglevel=8 uio_pdrv_genirq.of_id=generic-uio";
 		linux,stdout-path = "/pl011@9000000";
 		linux,initrd-start = <0x47000000>;
 		linux,initrd-end = <0x47f00000>;
