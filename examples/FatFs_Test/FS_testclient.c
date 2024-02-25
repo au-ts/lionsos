@@ -49,16 +49,17 @@ void test() {
     res = fat_f_pwrite(fp, line, 0, strlen(line) + 1, wr_num);
     printf("Fat file system write result: %d, number of chars written: %d\n", res, *wr_num);
 
-/*
+///*
     // close the file to flush the cache
     res = fat_f_close(fp);
     printf("Fat file system close result: %d\n", res);
 
     // Open the file again
+    strcpy(line, "test_file");
     res = fat_f_open(fp, line, FA_READ);
     printf("Fat file system open result: %d\n", res);
     
-*/
+//*/
 
     // Read the string back
     memset(line, 0, 100);
