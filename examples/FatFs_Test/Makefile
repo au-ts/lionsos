@@ -312,7 +312,7 @@ $(BUILD_DIR)/musllibc/lib/libc.a:
 		CONFIG_ARCH_AARCH64=y \
 		CONFIG_USER_DEBUG_BUILD=y \
 		STAGE_DIR=$(abspath $(BUILD_DIR)/musllibc) \
-		CFLAGS_MUSL="-mstrict-align -ffreestanding -g -O0 -Wall -Wno-unused-function -target aarch64-none-elf -no-integrated-as" \
+		CFLAGS="-mstrict-align -ffreestanding -g -O0 -Wall -Wno-unused-function -target aarch64-none-elf -no-integrated-as" \
 		SOURCE_DIR=.
 
 $(BUILD_DIR)/%.o: $(FF_DIR)/ff15/source/%.c $(BUILD_DIR)/musllibc/lib/libc.a Makefile
