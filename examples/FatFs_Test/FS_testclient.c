@@ -32,22 +32,49 @@ void test() {
     char *line = mymalloc(100);
     int res;
     strcpy(line, "");
+
     // File system mounting test
     res = fat_mount(fs, line, 1);
     printf("Fat file system mounting result: %d\n", res);
+
     // File system opening test
     FIL *fp = mymalloc(sizeof(FIL));
     strcpy(line, "test_file");
     res = fat_f_open(fp, line, FA_CREATE_NEW | FA_WRITE | FA_READ);
     printf("Fat file system open result: %d\n", res);
+    
+    // Write to the test_file with a string
     strcpy(line, "Hello! This is my AsyncFatfs!");
     uint32_t *wr_num = mymalloc(sizeof(uint32_t));
     res = fat_f_pwrite(fp, line, 0, strlen(line) + 1, wr_num);
     printf("Fat file system write result: %d, number of chars written: %d\n", res, *wr_num);
+
+/*
+    // close the file to flush the cache
+    res = fat_f_close(fp);
+    printf("Fat file system close result: %d\n", res);
+
+    // Open the file again
+    res = fat_f_open(fp, line, FA_READ);
+    printf("Fat file system open result: %d\n", res);
+    
+*/
+
+    // Read the string back
     memset(line, 0, 100);
     *wr_num = 0;
     res = fat_f_pread(fp, line, 0, 30, wr_num);
     printf("Fat file system read result: %d, number of chars read: %d\n Here is the content from read:\n%s\n", res, *wr_num, line);
+
+    // close the file
+    res = fat_f_close(fp);
+    printf("Fat file system close result: %d\n", res);
+    
+    // Unmount the disk
+    strcpy(line, "");
+    res = fat_unmount(line);
+    printf("Fat file system unmount result: %d\n", res);
+
     Fiber_switch(main_thread);
 }
 

@@ -92,6 +92,10 @@ FRESULT fat_mount (FATFS* fs, const TCHAR* path, BYTE opt) {
     return response.completion.status;
 }
 
+FRESULT fat_unmount(const TCHAR* path) {
+    return fat_mount(0, path, 0);
+}
+
 FRESULT fat_f_open (FIL* fp, const TCHAR* path, BYTE mode) {
     union sddf_fs_message request, response;
     struct f_open_s* temp = (void*)request.command.args;
@@ -134,6 +138,19 @@ FRESULT fat_f_pwrite (FIL* fp, void* buff, FSIZE_t ofs, UINT btw, UINT* bw) {
     temp->bw = bw;
     request.command.request_id = 1;
     request.command.cmd_type = SDDF_FS_CMD_PWRITE;
+    sddf_fs_queue_push(request_queue, request);
+    microkit_notify(FS_Channel);
+    Fiber_switch(main_thread);
+    sddf_fs_queue_pop(response_queue, &response);
+    return response.completion.status;
+}
+
+FRESULT fat_f_close (FIL* fp) {
+    union sddf_fs_message request, response;
+    struct f_close_s* temp = (void*)request.command.args;
+    temp->fp = fp;
+    request.command.request_id = 1;
+    request.command.cmd_type = SDDF_FS_CMD_CLOSE;
     sddf_fs_queue_push(request_queue, request);
     microkit_notify(FS_Channel);
     Fiber_switch(main_thread);

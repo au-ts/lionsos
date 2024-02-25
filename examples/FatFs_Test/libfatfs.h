@@ -8,7 +8,10 @@ FRESULT fat_f_pread (FIL* fp, void* buff, FSIZE_t ofs, UINT btr, UINT* br);
 
 FRESULT fat_f_pwrite (FIL* fp, void* buff, FSIZE_t ofs, UINT btw, UINT* bw);
 
-FRESULT fat_f_close (FIL* fp, void* buff, UINT btr, UINT* br);
+// f_close would sync the file to disk
+FRESULT fat_f_close (FIL* fp);
+
+FRESULT fat_unmount(const TCHAR* path);
 
 void mymalloc_init();
 
