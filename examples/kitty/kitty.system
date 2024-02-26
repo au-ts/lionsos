@@ -169,7 +169,6 @@
         <map mr="tx_used_drv" vaddr="0x4_600_000" perms="rw" cached="true" setvar_vaddr="tx_used" />
 
         <irq irq="40" id="1" /> <!-- ethernet interrupt -->
-        <irq irq="96" id="0" />
 
         <!-- we need physical addresses of hw rings and dma region -->
         <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
