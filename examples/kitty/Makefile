@@ -158,9 +158,9 @@ $(BUILD_DIR)/musllibc/lib/libc.a:
 		STAGE_DIR=$(abspath $(BUILD_DIR)/musllibc) \
 		SOURCE_DIR=.
 
-$(BUILD_DIR)/libnfs/lib/libnfs.a: $(BUILD_DIR)/musllibc/lib/libc.a
-	MUSL=$(abspath $(BUILD_DIR)/musllibc) cmake -S ../../libnfs -B $(BUILD_DIR)/libnfs
-	cmake --build $(BUILD_DIR)/libnfs
+#$(BUILD_DIR)/libnfs/lib/libnfs.a: $(BUILD_DIR)/musllibc/lib/libc.a
+#	MUSL=$(abspath $(BUILD_DIR)/musllibc) cmake -S ../../libnfs -B $(BUILD_DIR)/libnfs
+#	cmake --build $(BUILD_DIR)/libnfs
 
 $(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
 	make -C $(NFS) \
