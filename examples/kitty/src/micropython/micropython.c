@@ -92,7 +92,7 @@ void t_mp_entrypoint(void) {
     gc_init(heap, heap + sizeof(heap));
     mp_init();
 
-    init_nfs();
+    // init_nfs();
 
     // Start a normal REPL; will exit when ctrl-D is entered on a blank line.
     pyexec_friendly_repl();
