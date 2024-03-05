@@ -39,7 +39,7 @@ LIBNFS=../../libnfs
 NFS=../../fs/nfs
 MUSL=../../musllibc
 
-IMAGES := main.elf timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf copy.elf mux_rx.elf mux_tx.elf arp.elf uart_driver.elf serial_mux_rx.elf serial_mux_tx.elf
+IMAGES := main.elf timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf copy.elf mux_rx.elf mux_tx.elf arp.elf uart_driver.elf serial_mux_rx.elf serial_mux_tx.elf i2c_virtualiser.elf i2c_driver.elf
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
@@ -124,7 +124,7 @@ $(BUILD_DIR)/package_python_scripts.o: $(PACKAGE_PYTHON_SCRIPTS) src/kitty.py
 				-target $(TARGET) \
 				$< -o $@
 
-$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/sddf_serial_sharedringbuffer.o $(BUILD_DIR)/sddf_util_cache.o
+$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/sddf_serial_sharedringbuffer.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_i2c_queue.o
 	make -C src/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -144,6 +144,12 @@ $(BUILD_DIR)/sddf_timer_client.o: FORCE
 	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include TIMER_CHANNEL=9 make -C $(SDDF)/timer/client
 
 $(BUILD_DIR)/sddf_util_cache.o: $(SDDF)/util/cache.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/sddf_util_printf.o: $(SDDF)/util/printf.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/sddf_util.o: $(SDDF)/util/util.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 SDDF_FS_PROTOCOL=../../fs/protocol/
@@ -266,6 +272,28 @@ $(BUILD_DIR)/serial_mux_rx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_MUX_RX_OBJS)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/serial_mux_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_MUX_TX_OBJS))
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+# Compiling I2C components
+I2C_QUEUE := $(SDDF)/i2c/queue
+I2C_DRIVER := $(SDDF)/drivers/i2c/meson
+I2C_VIRTUALISER := $(SDDF)/i2c/components
+I2C_VIRTUALISER_OBJS := i2c_virtualiser.o sddf_i2c_queue.o sddf_util_printf.o sddf_util.o
+I2C_DRIVER_OBJS := i2c_driver.o sddf_i2c_queue.o sddf_util_printf.o sddf_util.o
+
+$(BUILD_DIR)/sddf_i2c_queue.o: FORCE
+	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include make -C $(I2C_QUEUE)
+
+$(BUILD_DIR)/i2c_driver.o: $(I2C_DRIVER)/i2c.c
+	$(CC) -c -DI2C_BUS_NUM=2 $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/i2c_virtualiser.o: $(I2C_VIRTUALISER)/virtualiser.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/i2c_virtualiser.elf: $(addprefix $(BUILD_DIR)/, $(I2C_VIRTUALISER_OBJS))
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+$(BUILD_DIR)/i2c_driver.elf: $(addprefix $(BUILD_DIR)/, $(I2C_DRIVER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 directories:
