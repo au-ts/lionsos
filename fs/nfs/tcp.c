@@ -165,9 +165,8 @@ cleanCache(unsigned long start, unsigned long end)
     }
 }
 
-
 uint32_t sys_now(void) {
-    return sddf_timer_time_now() * US_IN_MS;
+    return sddf_timer_time_now() / NS_IN_MS;
 }
 
 static void get_mac(void) {
