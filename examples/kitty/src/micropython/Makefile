@@ -47,7 +47,8 @@ SRC_C = \
 	shared/libc/string0.c \
 	shared/libc/printf.c \
 	shared/libc/__errno.c \
-	$(LIBCO)/libco.c
+	$(LIBCO)/libco.c \
+	$(SDDF)/i2c/queue/queue.c # is this the right way to do this?
 
 # Define source files containung qstrs.
 SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c modfb.c vfs_sddf_fs_file.c vfs_sddf_fs.c modmachine.c machine_i2c.c

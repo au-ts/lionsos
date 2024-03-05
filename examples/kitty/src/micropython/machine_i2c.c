@@ -1,9 +1,16 @@
 #include <microkit.h>
+#include <sddf/i2c/queue.h>
+#include <sddf/i2c/client.h>
+#include <string.h>
+#include "micropython.h"
+
+extern i2c_queue_handle_t i2c_queue_handle;
+extern uintptr_t i2c_data_region;
 
 #include "extmod/machine_i2c.h"
 #include "modmachine.h"
 #include "py/runtime.h"
-
+#include "py/mperrno.h"
 
 #define I2C_AVAILABLE_BUSES 1
 #define I2C_MAX_BUSES 4
@@ -18,8 +25,158 @@ machine_i2c_obj_t i2c_bus_objs[I2C_MAX_BUSES] = {};
 
 #define I2C_DEFAULT_TIMEOUT_US (50000) // 50ms
 
-STATIC int machine_i2c_transfer_single(mp_obj_base_t *self_in, uint16_t addr, size_t len, uint8_t *buf, unsigned int flags) {
+int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
+    /* TODO: check that len is within the data region */
+    /* TODO: this code makes assumptions about there being only a single i2c device */
+    uint8_t *i2c_data = (uint8_t *) i2c_data_region;
+    i2c_data[0] = I2C_TOKEN_START;
+    i2c_data[1] = I2C_TOKEN_ADDR_READ;
+    for (int i = 0; i < len; i++) {
+        i2c_data[i + 2] = I2C_TOKEN_DATA;
+    }
+    i2c_data[len + 2] = I2C_TOKEN_DATA_END;
+    i2c_data[len + 3] = I2C_TOKEN_STOP;
+    i2c_data[len + 4] = I2C_TOKEN_END;
+
+    int ret = i2c_enqueue_request(i2c_queue_handle, addr, i2c_data_region, len + 5);
+    if (ret) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("I2C(%d)'s request queue is full"), self->port);
+        return -MP_ENOMEM;
+    }
+
+    /* Now that we've enqueued our request, wait for the event signalling the I2C response. */
+    mp_blocking_events = mp_event_source_i2c;
+    co_switch(t_event);
+    mp_blocking_events = mp_event_source_none;
+
+    /* Now process the response */
+    size_t bus_address = 0;
+    size_t response_data_offset = 0;
+    unsigned int response_data_len = 0;
+    ret = i2c_dequeue_response(i2c_queue_handle, &bus_address, &response_data_offset, &response_data_len);
+    if (ret) {
+        /* This should be unreacahble, as we should never be signalled unless there is a response
+         * available.
+         */
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("I2C(%d)'s request queue is full"), self->port);
+        return -MP_ENOMEM;
+    }
+
+    uint8_t *response = (uint8_t *) i2c_data_region + response_data_offset;
+    uint8_t *response_data = (uint8_t *) i2c_data_region + response_data_offset + RESPONSE_DATA_OFFSET;
+
+    if (response[RESPONSE_ERR] != I2C_ERR_OK) {
+        /* This should be unreacahble, as we should never be signalled unless there is a response
+         * available.
+         */
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("I2C(%d)'s response failed"), self->port);
+        return -MP_ENOMEM;
+        // TODO: proper error code
+    }
+
+    memcpy(buf, response_data, response_data_len - RESPONSE_DATA_OFFSET);
+
     return 0;
+}
+
+int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
+    uint8_t *i2c_data = (uint8_t *) i2c_data_region;
+    i2c_data[0] = I2C_TOKEN_START;
+    i2c_data[1] = I2C_TOKEN_ADDR_WRITE;
+    int i, j;
+    for (i = 0, j = 2; i < len; i++, j += 2) {
+        i2c_data[j] = I2C_TOKEN_DATA;
+        i2c_data[j+1] = buf[i];
+    }
+    i2c_data[j++] = I2C_TOKEN_STOP;
+    i2c_data[j++] = I2C_TOKEN_END;
+
+    int ret = i2c_enqueue_request(i2c_queue_handle, addr, i2c_data_region, len + 5);
+    if (ret) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("I2C(%d)'s request queue is full"), self->port);
+        return -MP_ENOMEM;
+    }
+
+    /* Now that we've enqueued our request, wait for the event signalling the I2C response. */
+    mp_blocking_events = mp_event_source_i2c;
+    co_switch(t_event);
+    mp_blocking_events = mp_event_source_none;
+
+    /* Now process the response */
+    size_t bus_address = 0;
+    size_t response_data_offset = 0;
+    unsigned int response_data_len = 0;
+    ret = i2c_dequeue_response(i2c_queue_handle, &bus_address, &response_data_offset, &response_data_len);
+    if (ret) {
+        /* This should be unreacahble, as we should never be signalled unless there is a response
+         * available.
+         */
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("I2C(%d)'s response is empty"), self->port);
+        return -MP_ENOMEM;
+    }
+
+    uint8_t *response_data = (uint8_t *) i2c_data_region + response_data_offset;
+
+    if (response_data[RESPONSE_ERR] != I2C_ERR_OK) {
+        /* This should be unreacahble, as we should never be signalled unless there is a response
+         * available.
+         */
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("I2C(%d)'s response failed"), self->port);
+        return -MP_ENOMEM;
+        // TODO: proper error code and print out error info
+    }
+
+    return len;
+}
+
+STATIC int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_machine_i2c_buf_t *bufs, unsigned int flags) {
+    machine_i2c_obj_t *self = MP_OBJ_TO_PTR(obj);
+
+    /* Before doing any transfer operations, we must claim the bus address. */
+    /* TODO: we should provide a wrapper API for this like in the timer API */
+    microkit_msginfo msginfo = microkit_msginfo_new(I2C_BUS_CLAIM, 1);
+    microkit_mr_set(I2C_BUS_SLOT, addr);
+    msginfo = microkit_ppcall(I2C_CH, msginfo);
+    seL4_Word claim_label = microkit_msginfo_get_label(msginfo);
+    if (claim_label == I2C_FAILURE) {
+       mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("I2C(%d): Could not claim bus address %d"), self->port, addr);
+        return -MP_EPERM;
+    }
+
+    size_t remain_len = 0;
+    for (size_t i = 0; i < n; ++i) {
+        remain_len += bufs[i].len;
+    }
+
+    int num_acks = 0; // only valid for write; for read it'll be 0
+    int ret = 0;
+    for (; n--; ++bufs) {
+        remain_len -= bufs->len;
+        if (flags & MP_MACHINE_I2C_FLAG_READ) {
+            ret = i2c_read(self, addr, bufs->buf, bufs->len);
+        } else {
+            ret = i2c_write(self, addr, bufs->buf, bufs->len);
+        }
+        if (ret < 0) {
+            return ret;
+        }
+        num_acks += ret;
+    }
+
+    msginfo = microkit_msginfo_new(I2C_BUS_RELEASE, 1);
+    microkit_mr_set(I2C_BUS_SLOT, addr);
+    msginfo = microkit_ppcall(I2C_CH, msginfo);
+    seL4_Word release_label = microkit_msginfo_get_label(msginfo);
+    assert(release_label == I2C_SUCCESS);
+
+    return num_acks;
 }
 
 mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
@@ -64,8 +221,8 @@ STATIC void machine_i2c_print(const mp_print_t *print, mp_obj_t self_in, mp_prin
 }
 
 STATIC const mp_machine_i2c_p_t machine_i2c_p = {
-    .transfer = mp_machine_i2c_transfer_adaptor,
-    .transfer_single = machine_i2c_transfer_single,
+    .transfer = machine_i2c_transfer
+    // .transfer_single = machine_i2c_transfer_single,
 };
 
 MP_DEFINE_CONST_OBJ_TYPE(
