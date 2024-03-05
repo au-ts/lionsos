@@ -2,17 +2,19 @@
 
 #include "extmod/machine_i2c.h"
 #include "modmachine.h"
+#include "py/runtime.h"
 
 
 #define I2C_AVAILABLE_BUSES 1
 #define I2C_MAX_BUSES 4
 mp_int_t permitted_buses[I2C_AVAILABLE_BUSES] = {1};
-machine_i2c_obj_t buses[I2C_MAX_BUSES] = {};
 
 typedef struct _machine_i2c_obj_t {
     mp_obj_base_t base;
-    i2c_port_t port : 8;
+    size_t port;
 } machine_i2c_obj_t;
+
+machine_i2c_obj_t i2c_bus_objs[I2C_MAX_BUSES] = {};
 
 #define I2C_DEFAULT_TIMEOUT_US (50000) // 50ms
 
@@ -47,7 +49,7 @@ mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
         return NULL;
     }
 
-    machine_hw_i2c_obj_t *self = &machine_hw_i2c_obj[i2c_id];
+    machine_i2c_obj_t *self = &i2c_bus_objs[i2c_id];
     if (self->base.type == NULL) {
         // Created for the first time, set information pins
         self->base.type = &machine_i2c_type;
