@@ -21,6 +21,10 @@
         <map mr="serial_rx_free_micropython" vaddr="0x70_000_000" perms="rw" cached="true" setvar_vaddr="serial_rx_free" />
         <map mr="serial_rx_used_micropython" vaddr="0x70_200_000" perms="rw" cached="true" setvar_vaddr="serial_rx_used" />
         <map mr="serial_rx_data_micropython" vaddr="0x50_600_000" perms="rw" cached="true" setvar_vaddr="serial_rx_data" />
+
+        <map mr="i2c_micropython_request_region" vaddr="0x80_000_000" perms="rw" setvar_vaddr="i2c_request_region" />
+        <map mr="i2c_micropython_response_region" vaddr="0x81_000_000" perms="rw" setvar_vaddr="i2c_response_region" />
+        <map mr="i2c_micropython_data_region" vaddr="0x82_000_000" perms="rw" setvar_vaddr="i2c_data_region" />
     </protection_domain>
 
     <protection_domain name="timer_driver" priority="150" pp="true" passive="true">
@@ -81,7 +85,7 @@
 
     <memory_region name="rx_cookies" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="tx_cookies" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="bus1" size="0x200000" phys_addr="0xff600000" />
+    <!-- <memory_region name="bus1" size="0x200000" phys_addr="0xff600000" />
     <memory_region name="bus2" size="0x3000" phys_addr="0xff800000" />
     <memory_region name="bus3" size="0xf000" phys_addr="0xffd00000" />
     <memory_region name="bus4" size="0x25000" phys_addr="0xffd13000" />
@@ -90,10 +94,11 @@
     <memory_region name="usb2" size="0x100000" phys_addr="0xff500000" />
     <memory_region name="gpu" size="0x40000" phys_addr="0xffe40000" />
     <memory_region name="vpu" size="0x100000" phys_addr="0xff900000" />
-    <memory_region name="eth" size="0x10000" phys_addr="0xff3f0000" />
-    <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0xffc06000" />
+    <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0xffc06000" /> -->
     <!-- UIO framebuffer -->
     <memory_region name="uio_map0" size="0x1800000" />
+
+    <memory_region name="eth" size="0x10000" phys_addr="0xff3f0000" />
 
     <!-- Shared memory regions for the serial sub-system -->
     <memory_region name="serial_tx_data_driver" size="0x200_000" page_size="0x200_000" />
@@ -111,7 +116,47 @@
     <memory_region name="serial_rx_free_micropython" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="serial_rx_used_micropython" size="0x200_000" page_size="0x200_000"/>
 
-    <protection_domain name="VMM" priority="254">
+    <!-- Memory regions for the I2C sub-system -->
+    <memory_region name="i2c_micropython_request_region" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="i2c_micropython_response_region" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="i2c_driver_request_region" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="i2c_driver_response_region" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="i2c_micropython_data_region" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="i2c_bus" size="0x1000" phys_addr="0xFFD1D000"/>
+    <memory_region name="gpio" size="0x4000" phys_addr="0xFF634000"/>
+    <memory_region name="clk" size="0x1000" phys_addr="0xFF63C000"/>
+
+    <protection_domain name="i2c_driver" priority="100">
+        <program_image path="i2c_driver.elf"/>
+
+        <map mr="i2c_driver_request_region" vaddr="0x4_000_000" perms="rw" setvar_vaddr="request_region" />
+        <map mr="i2c_driver_response_region" vaddr="0x5_000_000" perms="rw" setvar_vaddr="response_region" />
+
+        <map mr="i2c_bus" vaddr="0x3_000_000" perms="rw" setvar_vaddr="i2c_regs" cached="false" />
+
+        <map mr="gpio" vaddr="0x3_100_000" perms="rw" setvar_vaddr="gpio_regs" cached="false" />
+        <map mr="clk" vaddr="0x3_200_000" perms="rw" setvar_vaddr="clk_regs" cached="false" />
+
+        <map mr="i2c_micropython_data_region" vaddr="0x10_000_000" perms="rw" />
+
+        <!-- IRQs for the particular I2C bus we are using -->
+        <!-- Main interrupt -->
+        <irq irq="247" id="1" trigger="edge"/>
+        <!-- TO interrupt (timeout?) -->
+        <irq irq="126" id="2" trigger="edge"/>
+    </protection_domain>
+
+    <protection_domain name="i2c_virtualiser" priority="99" pp="true">
+        <program_image path="i2c_virtualiser.elf" />
+
+        <map mr="i2c_micropython_request_region" vaddr="0x4_000_000" perms="rw" />
+        <map mr="i2c_micropython_response_region" vaddr="0x5_000_000" perms="rw" />
+
+        <map mr="i2c_driver_request_region" vaddr="0x6_000_000" perms="rw" setvar_vaddr="driver_request_region" />
+        <map mr="i2c_driver_response_region" vaddr="0x7_000_000" perms="rw" setvar_vaddr="driver_response_region" />
+    </protection_domain>
+
+    <!-- <protection_domain name="VMM" priority="254">
         <program_image path="vmm.elf" />
         <map mr="guest_ram" vaddr="0x20000000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
         <map mr="uio_map0" vaddr="0x30000000" perms="rw" cached="false" />
@@ -129,29 +174,29 @@
             <map mr="vpu" vaddr="0xff900000" perms="rw" cached="false" />
             <map mr="eth" vaddr="0xff3f0000" perms="rw" cached="false" />
             <map mr="gic_vcpu" vaddr="0xffc02000" perms="rw" cached="false" />
-        </virtual_machine>
+        </virtual_machine> -->
         <!-- @ivanv: clean up these IDs once we finishing stripping down the Linux image -->
         <!-- vpu -->
-        <irq irq="35" id="15" trigger="edge" />
+        <!-- <irq irq="35" id="15" trigger="edge" /> -->
         <!-- panfrost-gpu -->
-        <irq irq="192" id="7" />
+        <!-- <irq irq="192" id="7" /> -->
         <!-- panfrost-mmu -->
-        <irq irq="193" id="8" />
+        <!-- <irq irq="193" id="8" /> -->
         <!-- panfrost-job -->
-        <irq irq="194" id="9" />
+        <!-- <irq irq="194" id="9" /> -->
         <!-- i2c -->
-        <irq irq="53" id="10" />
+        <!-- <irq irq="53" id="10" /> -->
         <!-- usb -->
-        <irq irq="63" id="12" />
+        <!-- <irq irq="63" id="12" /> -->
         <!-- usb -->
-        <irq irq="62" id="13" />
+        <!-- <irq irq="62" id="13" /> -->
         <!-- usb -->
-        <irq irq="48" id="16" />
+        <!-- <irq irq="48" id="16" /> -->
         <!-- hdmi -->
-        <irq irq="89" id="14" trigger="edge" />
+        <!-- <irq irq="89" id="14" trigger="edge" /> -->
         <!-- IRQ work interrupts -->
-        <irq irq="5" id="17" />
-    </protection_domain>
+        <!-- <irq irq="5" id="17" /> -->
+    <!-- </protection_domain> -->
 
     <protection_domain name="eth" priority="110" budget="100" period="500">
         <program_image path="ethernet.elf" />
@@ -424,9 +469,18 @@
         This channel is so MicroPython can transfer the data it has
         put in the framebuffer to be given to the Linux driver guest.
     -->
-    <channel>
+<!--     <channel>
         <end pd="micropython" id="0" />
         <end pd="VMM" id="1" />
     </channel>
 
+ -->    <channel>
+        <end pd="i2c_driver" id="0" />
+        <end pd="i2c_virtualiser" id="1" />
+    </channel>
+
+    <channel>
+        <end pd="i2c_virtualiser" id="0" />
+        <end pd="micropython" id="10" />
+    </channel>
 </system>

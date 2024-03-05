@@ -48,13 +48,12 @@ SRC_C = \
 	shared/libc/printf.c \
 	shared/libc/__errno.c \
 	$(LIBCO)/libco.c \
-	$(SDDF)/i2c/queue/queue.c # is this the right way to do this?
 
 # Define source files containung qstrs.
 SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c modfb.c vfs_sddf_fs_file.c vfs_sddf_fs.c modmachine.c machine_i2c.c
 
 # Define the required object files.
-OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(BUILD)/sddf_timer_client.o $(BUILD)/sddf_fs_protocol.o $(BUILD)/sddf_serial_sharedringbuffer.o $(BUILD)/sddf_util_cache.o
+OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(BUILD)/sddf_timer_client.o $(BUILD)/sddf_fs_protocol.o $(BUILD)/sddf_serial_sharedringbuffer.o $(BUILD)/sddf_util_cache.o $(BUILD)/sddf_i2c_queue.o
 
 all: $(BUILD)/micropython.elf
 
