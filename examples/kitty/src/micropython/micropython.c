@@ -12,6 +12,7 @@
 #include "vfs_sddf_fs.h"
 #include <extmod/vfs.h>
 #include <sddf/serial/shared_ringbuffer.h>
+#include <sddf/i2c/queue.h>
 
 /* Data for the Kitty Python script. */
 extern char _kitty_python_script[];
@@ -34,6 +35,11 @@ uintptr_t serial_tx_data;
 
 ring_handle_t serial_rx_ring;
 ring_handle_t serial_tx_ring;
+
+i2c_queue_handle_t i2c_queue_handle;
+uintptr_t i2c_request_region;
+uintptr_t i2c_response_region;
+uintptr_t i2c_data_region;
 
 int active_events = mp_event_source_none;
 int mp_blocking_events = mp_event_source_none;
@@ -116,6 +122,8 @@ void init(void) {
         enqueue_free(&serial_tx_ring, serial_tx_data + ((i + NUM_BUFFERS) * BUFFER_SIZE), BUFFER_SIZE, NULL);
     }
 
+    i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
+
     t_event = co_active();
     // @ivanv: figure out a better stack size
     t_mp = co_derive((void *)mp_stack, MICROPY_HEAP_SIZE, t_mp_entrypoint);
@@ -136,6 +144,9 @@ void notified(microkit_channel ch) {
         break;
     case NFS_CH:
         active_events |= mp_event_source_nfs;
+        break;
+    case I2C_CH:
+        active_events |= mp_event_source_i2c;
         break;
     default:
         printf("MP|ERROR: unexpected notification received from channel: 0x%lx\n", ch);
