@@ -68,7 +68,7 @@ void uio_gpu_ack(size_t vcpu_id, int irq, void *cookie) {
     // Do nothing, there is no actual IRQ to ack since UIO IRQs are virtual!
 }
 
-bool uio_init_handler(size_t vcpu_id, uintptr_t addr) {
+bool uio_init_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data) {
     LOG_VMM("sending notification to MicroPython!\n");
     microkit_notify(MICROPYTHON_CH);
     return true;
