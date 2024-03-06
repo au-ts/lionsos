@@ -261,8 +261,8 @@ void tcp_update(void)
 void tcp_init_0(void)
 {
     /* Set up shared memory regions */
-    ring_init(&state.rx_ring, rx_free, rx_used, 1, NUM_BUFFERS, NUM_BUFFERS);
-    ring_init(&state.tx_ring, tx_free, tx_used, 0, NUM_BUFFERS, NUM_BUFFERS);
+    ring_init(&state.rx_ring, (ring_buffer_t *)rx_free, (ring_buffer_t *)rx_used, 1, NUM_BUFFERS, NUM_BUFFERS);
+    ring_init(&state.tx_ring, (ring_buffer_t *)tx_free, (ring_buffer_t *)tx_used, 0, NUM_BUFFERS, NUM_BUFFERS);
 
     for (int i = 0; i < NUM_BUFFERS - 1; i++) {
         uintptr_t addr = shared_dma_vaddr_rx + (BUF_SIZE * i);
