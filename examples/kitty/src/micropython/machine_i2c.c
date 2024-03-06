@@ -26,7 +26,6 @@ machine_i2c_obj_t i2c_bus_objs[I2C_MAX_BUSES] = {};
 #define I2C_DEFAULT_TIMEOUT_US (50000) // 50ms
 
 int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
-    microkit_dbg_puts("MP|I2C: about to read\n");
     /* TODO: check that len is within the data region */
     /* TODO: this code makes assumptions about there being only a single i2c device */
     uint8_t *i2c_data = (uint8_t *) i2c_data_region;
@@ -46,13 +45,11 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
         return -MP_ENOMEM;
     }
 
-    microkit_dbg_puts("MP|I2C: read, waiting for response\n");
     microkit_notify(I2C_CH);
     /* Now that we've enqueued our request, wait for the event signalling the I2C response. */
     mp_blocking_events = mp_event_source_i2c;
     co_switch(t_event);
     mp_blocking_events = mp_event_source_none;
-    microkit_dbg_puts("MP|I2C: read, got response\n");
 
     /* Now process the response */
     size_t bus_address = 0;
@@ -82,14 +79,11 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
     }
 
     memcpy(buf, response_data, response_data_len - RESPONSE_DATA_OFFSET);
-    microkit_dbg_puts("MP|I2C: read, return from response\n");
 
     return 0;
 }
 
 int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
-    microkit_dbg_puts("MP|I2C: about to write\n");
-
     uint8_t *i2c_data = (uint8_t *) i2c_data_region;
     i2c_data[0] = I2C_TOKEN_START;
     i2c_data[1] = I2C_TOKEN_ADDR_WRITE;
@@ -108,13 +102,11 @@ int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) 
         return -MP_ENOMEM;
     }
 
-    microkit_dbg_puts("MP|I2C: written, waiting for response\n");
     microkit_notify(I2C_CH);
     /* Now that we've enqueued our request, wait for the event signalling the I2C response. */
     mp_blocking_events = mp_event_source_i2c;
     co_switch(t_event);
     mp_blocking_events = mp_event_source_none;
-    microkit_dbg_puts("MP|I2C: written, got response\n");
 
     /* Now process the response */
     size_t bus_address = 0;
@@ -141,7 +133,6 @@ int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) 
         return -MP_ENOMEM;
         // TODO: proper error code and print out error info
     }
-    microkit_dbg_puts("MP|I2C: written, returned response\n");
 
     return len;
 }
@@ -206,8 +197,6 @@ mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
 
     mp_int_t i2c_id = mp_obj_get_int(args[ARG_id].u_obj);
 
-    microkit_dbg_puts("checking bus id is valid");
-
     /* Check that the specified BUS ID is valid */
     int i;
     for (i = 0; i < I2C_AVAILABLE_BUSES; i++) {
@@ -219,16 +208,12 @@ mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
         return NULL;
     }
 
-    microkit_dbg_puts("here 1\n");
-
     machine_i2c_obj_t *self = &i2c_bus_objs[i2c_id];
     if (self->base.type == NULL) {
         // Created for the first time, set information pins
         self->base.type = &machine_i2c_type;
         self->port = i2c_id;
     }
-
-    microkit_dbg_puts("here 2\n");
 
     return MP_OBJ_FROM_PTR(self);
 }
