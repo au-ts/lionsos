@@ -41,7 +41,7 @@ void nfs_init(void) {
 }
 
 void notified(microkit_channel ch) {
-    sddf_timer_set_timeout(TIMEOUT);
+    sddf_timer_set_timeout(TIMER_CHANNEL, TIMEOUT);
     switch (ch) {
     case TIMER_CHANNEL: {
         tcp_process_rx();
@@ -87,5 +87,5 @@ void init(void) {
     syscalls_init();
     continuation_pool_init();
     tcp_init_0();
-    sddf_timer_set_timeout(TIMEOUT);
+    sddf_timer_set_timeout(TIMER_CHANNEL, TIMEOUT);
 }
