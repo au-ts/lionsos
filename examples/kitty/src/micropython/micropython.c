@@ -94,6 +94,7 @@ void t_mp_entrypoint(void) {
     printf("MP|INFO: initialising!\n");
 
     // Initialise the MicroPython runtime.
+start_repl:
     mp_stack_ctrl_init();
     gc_init(heap, heap + sizeof(heap));
     mp_init();
@@ -109,6 +110,8 @@ void t_mp_entrypoint(void) {
     mp_deinit();
 
     printf("MP|INFO: exited!\n");
+    goto start_repl;
+
     co_switch(t_event);
 }
 
