@@ -10,7 +10,7 @@ jobs:
     name: Build Kitty example (Linux x86-64)
     runs-on: [self-hosted, linux, x64]
     steps:
-      - name: Checkout KISS repository
+      - name: Checkout LionsOS repository
         uses: actions/checkout@v4
         with:
           submodules: 'true'
