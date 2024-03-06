@@ -1,5 +1,17 @@
-from machine import I2C
-import time
+
+# We must ignore these imports since they are not available in a normal Python
+# environment where we do the type checking
+from machine import I2C # type: ignore
+from time import sleep_ms # type: ignore
+import sys
+
+MICROPYTHON = sys.implementation.name == "micropython"
+
+# MicroPython does not provide the typing library so first we
+# check that we can import it so we can do type checking with
+# mypy.
+if not MICROPYTHON:
+	from typing import List, Optional
 
 _PN532_I2C_BUS_ADDRESS = (0x48 >> 1)
 
@@ -31,10 +43,10 @@ _PN532_MIFARE_ISO14443A_BAUD_RATE = 0x0
 _INLISTPASSIVETARGET_HEADER = bytearray([_PN532_CMD_INLISTPASSIVETARGET, 0x1, _PN532_MIFARE_ISO14443A_BAUD_RATE])
 
 class PN532:
-	def __init__(self, i2c_bus_number):
+	def __init__(self, i2c_bus_number: int):
 		self.i2c_bus = I2C(i2c_bus_number)
 
-	def _pn532_write_command(self, header, body, retries):
+	def _pn532_write_command(self, header: bytearray, body: bytearray, retries: int) -> bool:
 		data = bytearray(8 + len(header) + len(body))
 
 		data[0] = _PN532_PREAMBLE
@@ -67,7 +79,7 @@ class PN532:
 		self.i2c_bus.writeto(_PN532_I2C_BUS_ADDRESS, data)
 		return self._pn532_read_ack_frame(retries)
 
-	def _pn532_read_ack_frame(self, retries):
+	def _pn532_read_ack_frame(self, retries: int) -> bool:
 		attempts = 0
 		while (attempts < retries):
 			data = self.i2c_bus.readfrom(_PN532_I2C_BUS_ADDRESS, _PN532_ACK_FRAME_SIZE)
@@ -77,18 +89,18 @@ class PN532:
 					value = data[i + 1]
 					if value != _PN532_ACK_FRAME[i]:
 						print("ACK malformed")
-						return -1
+						return False
 
-				return 0
+				return True
 
 			attempts += 1
-			time.sleep_ms(1)
+			sleep_ms(1)
 
 		print("read_ack_frame: device is not ready yet")
-		return -1
+		return True
 
-	def _pn532_read_response_length(self, retries):
-		time.sleep_ms(1)
+	def _pn532_read_response_length(self, retries: int) -> int:
+		sleep_ms(1)
 		length = 0
 		attempts = 0
 
@@ -102,17 +114,17 @@ class PN532:
 					return -1
 
 			attempts += 1
-			time.sleep_ms(1)
+			sleep_ms(1)
 
 		# Send NACK
 		self.i2c_bus.writeto(_PN532_I2C_BUS_ADDRESS, _PN532_NACK)
 		return length
 
-	def pn532_read_response(self, retries):
+	def pn532_read_response(self, retries: int) -> bytearray:
 		length = self._pn532_read_response_length(retries)
 		if (length < 0):
 			print("READ RESPONSE - Length was less than zero")
-			return []
+			return bytearray([])
 
 		attempts = 0
 		num_data_tokens = 7 + length + 2
@@ -122,10 +134,10 @@ class PN532:
 				break
 			elif attempts == retries:
 				print("READ RESPONSE - Ran out of attempts")
-				return []
+				return bytearray([])
 
 			attempts += 1
-			time.sleep_ms(1)
+			sleep_ms(1)
 
 		ret_buf = bytearray(length)
 		assert data[1] == _PN532_PREAMBLE, "preamble failed"
@@ -145,23 +157,23 @@ class PN532:
 
 		return ret_buf
 
-	def read_firmware_version(self):
-		self._pn532_write_command([_PN532_CMD_GETFIRMWAREVERSION], [], _DEFAULT_READ_ACK_FRAME_RETRIES)
+	def read_firmware_version(self) -> Optional[List[int]]:
+		self._pn532_write_command(bytearray([_PN532_CMD_GETFIRMWAREVERSION]), bytearray(), _DEFAULT_READ_ACK_FRAME_RETRIES)
 		firmware_version = self.pn532_read_response(_DEFAULT_READ_RESPONSE_RETRIES)
 		return list(firmware_version)
 
-	def rf_configure(self):
-		self._pn532_write_command(_RFCONFIGURATION_HEADER, [], _DEFAULT_READ_ACK_FRAME_RETRIES)
+	def rf_configure(self) -> bool:
+		self._pn532_write_command(_RFCONFIGURATION_HEADER, bytearray(), _DEFAULT_READ_ACK_FRAME_RETRIES)
 		self.pn532_read_response(_DEFAULT_READ_RESPONSE_RETRIES);
-		return
+		return True
 
-	def SAM_configure(self):
-		self._pn532_write_command(_SAM_CONFIGURE_HEADER, [], _DEFAULT_READ_ACK_FRAME_RETRIES)
+	def sam_configure(self) -> bool:
+		self._pn532_write_command(_SAM_CONFIGURE_HEADER, bytearray(), _DEFAULT_READ_ACK_FRAME_RETRIES)
 		self.pn532_read_response(_DEFAULT_READ_RESPONSE_RETRIES);
-		return
+		return True
 
-	def read_uid(self):
-		self._pn532_write_command(_INLISTPASSIVETARGET_HEADER, [], _DEFAULT_READ_ACK_FRAME_RETRIES)
+	def read_uid(self) -> List[int]:
+		self._pn532_write_command(_INLISTPASSIVETARGET_HEADER, bytearray(), _DEFAULT_READ_ACK_FRAME_RETRIES)
 		buf = self.pn532_read_response(_DEFAULT_READ_RESPONSE_RETRIES)
 		if len(buf) == 0 or buf[0] != 1:
 			return []
@@ -171,4 +183,4 @@ class PN532:
 
 		uid_length = buf[5]
 
-		return buf[6:6+uid_length]
+		return list(buf[6:6+uid_length])
