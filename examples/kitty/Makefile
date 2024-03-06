@@ -124,7 +124,7 @@ $(BUILD_DIR)/package_python_scripts.o: $(PACKAGE_PYTHON_SCRIPTS) src/kitty.py
 				-target $(TARGET) \
 				$< -o $@
 
-$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o  $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/sddf_serial_sharedringbuffer.o $(BUILD_DIR)/sddf_util_cache.o
+$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/sddf_serial_sharedringbuffer.o $(BUILD_DIR)/sddf_util_cache.o
 	make -C src/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -169,7 +169,7 @@ $(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
 		MUSLLIBC_INCLUDE=$(abspath $(BUILD_DIR)/musllibc/include) \
 		LIBNFS_INCLUDE=$(abspath ../..//libnfs/include)
 
-$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a
+$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a $(BUILD_DIR)/sddf_util_cache.o
 	$(LD) \
 		$(LDFLAGS) \
 		$(BUILD_DIR)/nfs/nfs.a \
@@ -192,7 +192,7 @@ $(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/meson_ethernet.o $(BUILD_DIR)/sddf_netwo
 NETWORK_COMPONENTS := $(SDDF)/network/components
 NETWORK_COMPONENTS_INCLUDE := \
 	-I$(SDDF)/include \
-	-I$(SDDF)/util/include \
+	-I$(SDDF)/include/util/lwip \
 	-I$(BOARD_DIR)/include \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4
@@ -234,7 +234,7 @@ $(BUILD_DIR)/mux_tx.elf: $(BUILD_DIR)/mux_tx.o $(BUILD_DIR)/sddf_network_sharedr
 	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/mux_tx.o $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/mux_tx.elf
 
 $(BUILD_DIR)/arp.elf: $(BUILD_DIR)/arp.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_util_cache.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_util_cache.o  $(BUILD_DIR)/arp.o  $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/arp.elf
+	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/arp.o $(BUILD_DIR)/nfs/lwip/core/inet_chksum.o $(BUILD_DIR)/nfs/lwip/core/def.o $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/arp.elf
 
 # Compiling serial components
 LIB_SERIAL_SHARED_RINGBUFFER := $(SDDF)/serial/libserialsharedringbuffer/
