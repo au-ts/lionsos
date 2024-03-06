@@ -62,7 +62,7 @@ class PN532:
 		data[i] = ~sum + 1
 		i += 1
 
-		data[i] = __PN532_POSTAMBLE
+		data[i] = _PN532_POSTAMBLE
 
 		self.i2c_bus.writeto(_PN532_I2C_BUS_ADDRESS, data)
 		return self._pn532_read_ack_frame(retries)
@@ -105,11 +105,11 @@ class PN532:
 			time.sleep_ms(1)
 
 		# Send NACK
-		i2c_bus.writeto(_PN532_I2C_BUS_ADDRESS, _PN532_NACK)
+		self.i2c_bus.writeto(_PN532_I2C_BUS_ADDRESS, _PN532_NACK)
 		return length
 
 	def pn532_read_response(self, retries):
-		length = pn532_read_response_length(retries)
+		length = self._pn532_read_response_length(retries)
 		if (length < 0):
 			print("READ RESPONSE - Length was less than zero")
 			return []
@@ -128,11 +128,11 @@ class PN532:
 			time.sleep_ms(1)
 
 		ret_buf = bytearray(length)
-		assert(data[1] == _PN532_PREAMBLE, "preamble failed")
-		assert(data[2] == _PN532_STARTCODE1, "startcode1 failed")
-		assert(data[3] == _PN532_STARTCODE2, "startcode2 failed")
-		assert(data[4] == length, "length failed")
-		assert(data[5] == ~length + 1, "checksum failed") # @alwin: not too sure about this
+		assert data[1] == _PN532_PREAMBLE, "preamble failed"
+		assert data[2] == _PN532_STARTCODE1, "startcode1 failed"
+		assert data[3] == _PN532_STARTCODE2, "startcode2 failed"
+		assert data[4] == length, "length failed"
+		# assert data[5] == ~length + 1, "checksum failed" # @alwin: not too sure about this
 		# data[6] is probably PN532_TO_HOST command
 		# data[7] is probably an echo of the command
 		i = 0
@@ -147,23 +147,23 @@ class PN532:
 
 	def read_firmware_version(self):
 		self._pn532_write_command([_PN532_CMD_GETFIRMWAREVERSION], [], _DEFAULT_READ_ACK_FRAME_RETRIES)
-		firmware_version = self.pn532_read_response(DEFAULT_READ_RESPONSE_RETRIES)
+		firmware_version = self.pn532_read_response(_DEFAULT_READ_RESPONSE_RETRIES)
 		return list(firmware_version)
 
-	def rf_configuration(self):
+	def rf_configure(self):
 		self._pn532_write_command(_RFCONFIGURATION_HEADER, [], _DEFAULT_READ_ACK_FRAME_RETRIES)
-		self.pn532_read_response(DEFAULT_READ_RESPONSE_RETRIES);
+		self.pn532_read_response(_DEFAULT_READ_RESPONSE_RETRIES);
 		return
 
 	def SAM_configure(self):
 		self._pn532_write_command(_SAM_CONFIGURE_HEADER, [], _DEFAULT_READ_ACK_FRAME_RETRIES)
-		self.pn532_read_response(DEFAULT_READ_RESPONSE_RETRIES);
+		self.pn532_read_response(_DEFAULT_READ_RESPONSE_RETRIES);
 		return
 
 	def read_uid(self):
 		self._pn532_write_command(_INLISTPASSIVETARGET_HEADER, [], _DEFAULT_READ_ACK_FRAME_RETRIES)
-		buf = self.pn532_read_response(DEFAULT_READ_RESPONSE_RETRIES);
-		if buf[0] != 1:
+		buf = self.pn532_read_response(_DEFAULT_READ_RESPONSE_RETRIES)
+		if len(buf) == 0 or buf[0] != 1:
 			return []
 
 		sens_res = buf[2] << 8
