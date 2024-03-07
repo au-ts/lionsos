@@ -220,7 +220,6 @@ STATIC void machine_i2c_print(const mp_print_t *print, mp_obj_t self_in, mp_prin
 
 STATIC const mp_machine_i2c_p_t machine_i2c_p = {
     .transfer = machine_i2c_transfer
-    // .transfer_single = machine_i2c_transfer_single,
 };
 
 MP_DEFINE_CONST_OBJ_TYPE(
@@ -231,5 +230,4 @@ MP_DEFINE_CONST_OBJ_TYPE(
     print, machine_i2c_print,
     protocol, &machine_i2c_p,
     locals_dict, &mp_machine_i2c_locals_dict
-    );
-
+);
