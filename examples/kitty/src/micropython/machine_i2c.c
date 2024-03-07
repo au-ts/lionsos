@@ -4,13 +4,15 @@
 #include <string.h>
 #include "micropython.h"
 
-extern i2c_queue_handle_t i2c_queue_handle;
-extern uintptr_t i2c_data_region;
-
 #include "extmod/machine_i2c.h"
 #include "modmachine.h"
 #include "py/runtime.h"
 #include "py/mperrno.h"
+
+#if MICROPY_PY_MACHINE_I2C && MICROPY_HW_ENABLE_HW_I2C
+
+extern i2c_queue_handle_t i2c_queue_handle;
+extern uintptr_t i2c_data_region;
 
 #define I2C_AVAILABLE_BUSES 1
 #define I2C_MAX_BUSES 4
@@ -231,3 +233,5 @@ MP_DEFINE_CONST_OBJ_TYPE(
     protocol, &machine_i2c_p,
     locals_dict, &mp_machine_i2c_locals_dict
 );
+
+#endif /* MICROPY_PY_MACHINE_I2C && MICROPY_HW_ENABLE_HW_I2C */
