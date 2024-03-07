@@ -30,7 +30,6 @@ SRC_C = \
 	modmachine.c \
 	modfb.c \
 	i2c.c \
-	pyb_i2c.c \
 	machine_i2c.c \
 	vfs_sddf_fs_file.c \
 	vfs_sddf_fs.c \
