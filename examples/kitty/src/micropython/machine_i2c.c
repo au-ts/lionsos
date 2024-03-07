@@ -25,7 +25,7 @@ machine_i2c_obj_t i2c_bus_objs[I2C_MAX_BUSES] = {};
 
 #define I2C_DEFAULT_TIMEOUT_US (50000) // 50ms
 
-int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
+int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, bool stop) {
     /* TODO: check that len is within the data region */
     /* TODO: this code makes assumptions about there being only a single i2c device */
     uint8_t *i2c_data = (uint8_t *) i2c_data_region;
@@ -34,11 +34,15 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
     for (int i = 0; i < len; i++) {
         i2c_data[i + 2] = I2C_TOKEN_DATA;
     }
-    i2c_data[len + 2] = I2C_TOKEN_DATA_END;
-    i2c_data[len + 3] = I2C_TOKEN_STOP;
-    i2c_data[len + 4] = I2C_TOKEN_END;
+    size_t request_data_end = len + 2;
+    i2c_data[request_data_end++] = I2C_TOKEN_DATA_END;
+    /* The MicroPython API allows the caller to decide whether to add a STOP token to the request. */
+    if (stop) {
+        i2c_data[request_data_end++] = I2C_TOKEN_STOP;
+    }
+    i2c_data[request_data_end++] = I2C_TOKEN_END;
 
-    int ret = i2c_enqueue_request(i2c_queue_handle, addr, 0, len + 5);
+    int ret = i2c_enqueue_request(i2c_queue_handle, addr, 0, request_data_end);
     if (ret) {
         mp_raise_msg_varg(&mp_type_RuntimeError,
                           MP_ERROR_TEXT("I2C(%d)'s request queue is full"), self->port);
@@ -117,13 +121,8 @@ int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) 
     uint8_t *response_data = (uint8_t *) i2c_data_region + response_data_offset;
 
     if (response_data[RESPONSE_ERR] != I2C_ERR_OK) {
-        /* This should be unreacahble, as we should never be signalled unless there is a response
-         * available.
-         */
-        mp_raise_msg_varg(&mp_type_RuntimeError,
-                          MP_ERROR_TEXT("I2C(%d)'s response failed in write operation"), self->port);
-        return -MP_ENOMEM;
-        // TODO: proper error code and print out error info
+        /* @ivanv: it should be noted that this does not adhere to the MicroPython API for 'write' currently. */
+        return response_data[RESPONSE_ERR_TOKEN];
     }
 
     return len;
@@ -154,7 +153,7 @@ STATIC int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
     for (; n--; ++bufs) {
         remain_len -= bufs->len;
         if (flags & MP_MACHINE_I2C_FLAG_READ) {
-            ret = i2c_read(self, addr, bufs->buf, bufs->len);
+            ret = i2c_read(self, addr, bufs->buf, bufs->len, flags & MP_MACHINE_I2C_FLAG_STOP);
         } else {
             ret = i2c_write(self, addr, bufs->buf, bufs->len);
         }
