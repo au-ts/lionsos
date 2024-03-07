@@ -68,17 +68,9 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
     uint8_t *response = (uint8_t *) i2c_data_region + response_data_offset;
     uint8_t *response_data = (uint8_t *) i2c_data_region + response_data_offset + RESPONSE_DATA_OFFSET;
 
-    if (response[RESPONSE_ERR] != I2C_ERR_OK) {
-        /* This should be unreacahble, as we should never be signalled unless there is a response
-         * available.
-         */
-        mp_raise_msg_varg(&mp_type_RuntimeError,
-                          MP_ERROR_TEXT("I2C(%d)'s response failed"), self->port);
-        return -MP_ENOMEM;
-        // TODO: proper error code
+    if (response[RESPONSE_ERR] == I2C_ERR_OK) {
+        memcpy(buf, response_data, response_data_len - RESPONSE_DATA_OFFSET);
     }
-
-    memcpy(buf, response_data, response_data_len - RESPONSE_DATA_OFFSET);
 
     return 0;
 }
@@ -129,7 +121,7 @@ int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) 
          * available.
          */
         mp_raise_msg_varg(&mp_type_RuntimeError,
-                          MP_ERROR_TEXT("I2C(%d)'s response failed"), self->port);
+                          MP_ERROR_TEXT("I2C(%d)'s response failed in write operation"), self->port);
         return -MP_ENOMEM;
         // TODO: proper error code and print out error info
     }
@@ -167,6 +159,11 @@ STATIC int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
             ret = i2c_write(self, addr, bufs->buf, bufs->len);
         }
         if (ret < 0) {
+            msginfo = microkit_msginfo_new(I2C_BUS_RELEASE, 1);
+            microkit_mr_set(I2C_BUS_SLOT, addr);
+            msginfo = microkit_ppcall(I2C_CH, msginfo);
+            seL4_Word release_label = microkit_msginfo_get_label(msginfo);
+            assert(release_label == I2C_SUCCESS);
             return ret;
         }
         num_acks += ret;

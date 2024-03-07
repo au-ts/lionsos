@@ -42,6 +42,8 @@ _PN532_CMD_INLISTPASSIVETARGET = 0x4a
 _PN532_MIFARE_ISO14443A_BAUD_RATE = 0x0
 _INLISTPASSIVETARGET_HEADER = bytearray([_PN532_CMD_INLISTPASSIVETARGET, 0x1, _PN532_MIFARE_ISO14443A_BAUD_RATE])
 
+SLEEP_TIME = 1
+
 class PN532:
 	def __init__(self, i2c_bus_number: int):
 		self.i2c_bus = I2C(i2c_bus_number)
@@ -76,15 +78,14 @@ class PN532:
 
 		data[i] = _PN532_POSTAMBLE
 
-		self.i2c_bus.writeto(_PN532_I2C_BUS_ADDRESS, data)
+		ret = self.i2c_bus.writeto(_PN532_I2C_BUS_ADDRESS, data)
 		return self._pn532_read_ack_frame(retries)
 
 	def _pn532_read_ack_frame(self, retries: int) -> bool:
 		attempts = 0
 		while (attempts < retries):
 			data = self.i2c_bus.readfrom(_PN532_I2C_BUS_ADDRESS, _PN532_ACK_FRAME_SIZE)
-
-			if data[0] & 1:
+			if len(data) and data[0] & 1:
 				for i in range(0, _PN532_ACK_FRAME_SIZE - 1):
 					value = data[i + 1]
 					if value != _PN532_ACK_FRAME[i]:
@@ -94,13 +95,13 @@ class PN532:
 				return True
 
 			attempts += 1
-			sleep_ms(1)
+			sleep_ms(SLEEP_TIME)
 
 		print("read_ack_frame: device is not ready yet")
 		return True
 
 	def _pn532_read_response_length(self, retries: int) -> int:
-		sleep_ms(1)
+		sleep_ms(SLEEP_TIME)
 		length = 0
 		attempts = 0
 
@@ -114,7 +115,7 @@ class PN532:
 					return -1
 
 			attempts += 1
-			sleep_ms(1)
+			sleep_ms(SLEEP_TIME)
 
 		# Send NACK
 		self.i2c_bus.writeto(_PN532_I2C_BUS_ADDRESS, _PN532_NACK)
@@ -137,7 +138,7 @@ class PN532:
 				return bytearray([])
 
 			attempts += 1
-			sleep_ms(1)
+			sleep_ms(SLEEP_TIME)
 
 		ret_buf = bytearray(length)
 		assert data[1] == _PN532_PREAMBLE, "preamble failed"
