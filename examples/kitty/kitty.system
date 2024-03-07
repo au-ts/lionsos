@@ -126,7 +126,7 @@
     <memory_region name="gpio" size="0x4000" phys_addr="0xFF634000"/>
     <memory_region name="clk" size="0x1000" phys_addr="0xFF63C000"/>
 
-    <protection_domain name="i2c_driver" priority="100">
+    <protection_domain name="i2c_driver" priority="254">
         <program_image path="i2c_driver.elf"/>
 
         <map mr="i2c_driver_request_region" vaddr="0x4_000_000" perms="rw" setvar_vaddr="request_region" />
@@ -146,7 +146,7 @@
         <irq irq="126" id="2" trigger="edge"/>
     </protection_domain>
 
-    <protection_domain name="i2c_virtualiser" priority="99" pp="true">
+    <protection_domain name="i2c_virtualiser" priority="101" pp="true">
         <program_image path="i2c_virtualiser.elf" />
 
         <map mr="i2c_micropython_request_region" vaddr="0x4_000_000" perms="rw" />
