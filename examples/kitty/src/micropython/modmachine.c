@@ -1,10 +1,11 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "micropython.h"
 #include "extmod/machine_i2c.h"
 #include "modmachine.h"
 
-// #ifdef MICROPY_PY_MACHINE
+#ifdef MICROPY_PY_MACHINE
 
 STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_machine) },
@@ -20,4 +21,4 @@ const mp_obj_module_t mp_module_machine = {
 
 MP_REGISTER_EXTENSIBLE_MODULE(MP_QSTR_machine, mp_module_machine);
 
-// #endif /* MICROPY_PY_MACHINE */
+#endif /* MICROPY_PY_MACHINE */

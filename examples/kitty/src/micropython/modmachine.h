@@ -1,1 +1,7 @@
+#include "micropython.h"
+
+#if MICROPY_PY_MACHINE_I2C && MICROPY_HW_ENABLE_HW_I2C
+
 extern const mp_obj_type_t machine_i2c_type;
+
+#endif
