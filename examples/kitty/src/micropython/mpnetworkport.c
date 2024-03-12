@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "micropython.h"
 #include "py/objlist.h"
 #include "py/runtime.h"
 #include "py/mphal.h"
@@ -26,10 +27,6 @@
 #include <lwip/timeouts.h>
 #include <lwip/err.h>
 #include <netif/etharp.h>
-
-#define ETHERNET_ARP_CHANNEL 11
-#define ETHERNET_RX_CHANNEL 2
-#define ETHERNET_TX_CHANNEL 3
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
@@ -150,7 +147,7 @@ static void netif_status_callback(struct netif *netif) {
         microkit_mr_set(0, ip4_addr_get_u32(netif_ip4_addr(netif)));
         microkit_mr_set(1, (state.mac[0] << 24) | (state.mac[1] << 16) | (state.mac[2] << 8) | (state.mac[3]));
         microkit_mr_set(2, (state.mac[4] << 24) | (state.mac[5] << 16));
-        microkit_ppcall(ETHERNET_ARP_CHANNEL, microkit_msginfo_new(0, 3));
+        microkit_ppcall(ETH_ARP_CH, microkit_msginfo_new(0, 3));
     }
 }
 
@@ -228,18 +225,18 @@ void init_networking(void) {
     if (notify_rx && state.rx_ring.free_ring->notify_reader) {
         notify_rx = false;
         if (!have_signal) {
-            microkit_notify_delayed(ETHERNET_RX_CHANNEL);
-        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) {
-            microkit_notify(ETHERNET_RX_CHANNEL);
+            microkit_notify_delayed(ETH_RX_CH);
+        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_RX_CH) {
+            microkit_notify(ETH_RX_CH);
         }
     }
 
     if (notify_tx && state.tx_ring.used_ring->notify_reader) {
         notify_tx = false;
         if (!have_signal) {
-            microkit_notify_delayed(ETHERNET_TX_CHANNEL);
-        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) {
-            microkit_notify(ETHERNET_TX_CHANNEL);
+            microkit_notify_delayed(ETH_TX_CH);
+        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_TX_CH) {
+            microkit_notify(ETH_TX_CH);
         }
     }
 }
