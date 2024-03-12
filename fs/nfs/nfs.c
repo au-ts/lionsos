@@ -79,13 +79,11 @@ void notified(microkit_channel ch) {
     case ETHERNET_RX_CHANNEL:
         tcp_process_rx();
         break;
-    case CLIENT_CHANNEL: {
+    case CLIENT_CHANNEL:
         nfs_notified();
         break;
-    }
-    case ETHERNET_TX_CHANNEL: {
+    case ETHERNET_TX_CHANNEL:
         break;
-    }
     default:
         dlog("got notification from unknown channel %llu", ch);
         break;
