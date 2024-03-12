@@ -15,6 +15,7 @@ endif
 MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
 MICROKIT_BOARD := odroidc4
+ETHERNET_CONFIG_INCLUDE ?= src/ethernet_config
 CPU := cortex-a55
 
 TOOLCHAIN := clang
@@ -62,7 +63,7 @@ IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
 MAIN_OBJS := main.o
-TIMER_OBJS := timer.o
+TIMER_OBJS := timer.o sddf_util_printf.o sddf_putchar_debug.o
 VMM_OBJS := vmm.o printf.o virq.o linux.o \
 			guest.o psci.o smc.o fault.o \
 			util.o vgic.o vgic_v2.o \
@@ -82,6 +83,15 @@ $(BUILD_DIR)/%.o: src/%.c
 
 $(BUILD_DIR)/%.o: src/vmm/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/sddf_util_printf.o: $(SDDF)/util/printf.c $(SDDF)/include/sddf/util/printf.h
+	$(CC) -c $(CFLAGS) $(SDDF)/util/printf.c -o $@
+
+$(BUILD_DIR)/sddf_putchar_debug.o: $(SDDF)/util/putchar_debug.c
+	$(CC) -c $(CFLAGS) $(SDDF)/util/putchar_debug.c -o $(BUILD_DIR)/sddf_putchar_debug.o
+
+$(BUILD_DIR)/sddf_putchar_serial.o: $(SDDF)/util/putchar_serial.c
+	$(CC) -c $(CFLAGS) $(SDDF)/util/putchar_serial.c -o $(BUILD_DIR)/sddf_putchar_serial.o
 
 $(BUILD_DIR)/timer.o: $(TIMER_DRIVER)/timer.c
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -134,7 +144,7 @@ $(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUIL
 
 ETHERNET=$(SDDF)/drivers/network/meson/
 $(BUILD_DIR)/meson_ethernet.o: FORCE
-	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include make -C $(ETHERNET)
+	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) make -C $(ETHERNET)
 
 LIBSHAREDRINGBUFFER=$(SDDF)/network/libethsharedringbuffer/
 $(BUILD_DIR)/sddf_network_sharedringbuffer.o: FORCE
@@ -144,12 +154,6 @@ $(BUILD_DIR)/sddf_timer_client.o: FORCE
 	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include TIMER_CHANNEL=9 make -C $(SDDF)/timer/client
 
 $(BUILD_DIR)/sddf_util_cache.o: $(SDDF)/util/cache.c
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/sddf_util_printf.o: $(SDDF)/util/printf.c
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/sddf_util.o: $(SDDF)/util/util.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 SDDF_FS_PROTOCOL=../../fs/protocol/
@@ -173,15 +177,15 @@ $(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
 		BUILD_DIR=$(abspath $(BUILD_DIR)/nfs) \
 		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
 		MUSLLIBC_INCLUDE=$(abspath $(BUILD_DIR)/musllibc/include) \
-		LIBNFS_INCLUDE=$(abspath ../..//libnfs/include)
+		LIBNFS_INCLUDE=$(abspath ../../libnfs/include) \
+		ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
 
-$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a $(BUILD_DIR)/sddf_util_cache.o
+$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a
 	$(LD) \
 		$(LDFLAGS) \
 		$(BUILD_DIR)/nfs/nfs.a \
 		$(BUILD_DIR)/sddf_network_sharedringbuffer.o \
 		$(BUILD_DIR)/sddf_timer_client.o \
-		$(BUILD_DIR)/sddf_util_cache.o \
 		$(BUILD_DIR)/sddf_fs_protocol.o \
 		-L$(BUILD_DIR)/libnfs/lib \
 		-L$(BUILD_DIR)/musllibc/lib \
@@ -192,7 +196,7 @@ $(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_network_sharedrin
 		-lnfs \
 		-o $(BUILD_DIR)/nfs.elf
 
-$(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/meson_ethernet.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o
+$(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/meson_ethernet.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_util_printf.o $(BUILD_DIR)/sddf_putchar_debug.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 NETWORK_COMPONENTS := $(SDDF)/network/components
@@ -201,7 +205,8 @@ NETWORK_COMPONENTS_INCLUDE := \
 	-I$(SDDF)/include/util/lwip \
 	-I$(BOARD_DIR)/include \
 	-I$(LWIP)/include \
-	-I$(LWIP)/include/ipv4
+	-I$(LWIP)/include/ipv4 \
+	-Isrc/ethernet_config 
 NETWORK_COMPONENT_CFLAGS := \
 	$(NETWORK_COMPONENTS_INCLUDE) \
 	-mstrict-align \
@@ -216,7 +221,7 @@ NETWORK_COMPONENT_CFLAGS := \
 	-MP
 
 NETWORK_COMPONENTS_LDFLAGS := -L$(BOARD_DIR)/lib -L$(SDDF)/lib -L$(LIBGCC)
-NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc -lgcc
+NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc -lgcc $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_printf.o
 
 $(BUILD_DIR)/copy.o: $(NETWORK_COMPONENTS)/copy.c
 	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
@@ -230,17 +235,17 @@ $(BUILD_DIR)/mux_tx.o: $(NETWORK_COMPONENTS)/mux_tx.c
 $(BUILD_DIR)/arp.o: $(NETWORK_COMPONENTS)/arp.c
 	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
 
-$(BUILD_DIR)/copy.elf: $(BUILD_DIR)/copy.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/copy.o $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/copy.elf
+$(BUILD_DIR)/copy.elf: $(BUILD_DIR)/copy.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_putchar_debug.o
+	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/copy.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/copy.elf
 
-$(BUILD_DIR)/mux_rx.elf: $(BUILD_DIR)/mux_rx.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/mux_rx.o $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/mux_rx.elf
+$(BUILD_DIR)/mux_rx.elf: $(BUILD_DIR)/mux_rx.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
+	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/mux_rx.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/mux_rx.elf
 
-$(BUILD_DIR)/mux_tx.elf: $(BUILD_DIR)/mux_tx.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/mux_tx.o $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/mux_tx.elf
+$(BUILD_DIR)/mux_tx.elf: $(BUILD_DIR)/mux_tx.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
+	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/mux_tx.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/mux_tx.elf
 
-$(BUILD_DIR)/arp.elf: $(BUILD_DIR)/arp.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_util_cache.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/arp.o $(BUILD_DIR)/nfs/lwip/core/inet_chksum.o $(BUILD_DIR)/nfs/lwip/core/def.o $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/arp.elf
+$(BUILD_DIR)/arp.elf: $(BUILD_DIR)/arp.o $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_putchar_serial.o
+	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/sddf_network_sharedringbuffer.o $(BUILD_DIR)/arp.o $(BUILD_DIR)/nfs/lwip/core/inet_chksum.o $(BUILD_DIR)/nfs/lwip/core/def.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_serial.o -o $(BUILD_DIR)/arp.elf
 
 # Compiling serial components
 LIB_SERIAL_SHARED_RINGBUFFER := $(SDDF)/serial/libserialsharedringbuffer/
@@ -278,8 +283,8 @@ $(BUILD_DIR)/serial_mux_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_MUX_TX_OBJS)
 I2C_QUEUE := $(SDDF)/i2c/queue
 I2C_DRIVER := $(SDDF)/drivers/i2c/meson
 I2C_VIRTUALISER := $(SDDF)/i2c/components
-I2C_VIRTUALISER_OBJS := i2c_virtualiser.o sddf_i2c_queue.o sddf_util_printf.o sddf_util.o
-I2C_DRIVER_OBJS := i2c_driver.o sddf_i2c_queue.o sddf_util_printf.o sddf_util.o
+I2C_VIRTUALISER_OBJS := i2c_virtualiser.o sddf_i2c_queue.o sddf_util_printf.o sddf_putchar_debug.o
+I2C_DRIVER_OBJS := i2c_driver.o sddf_i2c_queue.o sddf_util_printf.o sddf_putchar_debug.o
 
 $(BUILD_DIR)/sddf_i2c_queue.o: FORCE
 	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include make -C $(I2C_QUEUE)
