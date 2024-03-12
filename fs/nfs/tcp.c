@@ -9,7 +9,8 @@
 
 #include <sddf/timer/client.h>
 #include <sddf/network/shared_ringbuffer.h>
-#include <sddf/util/cache.h>
+#include <sddf/network/constants.h>
+#include <ethernet_config.h>
 
 #include <lwip/dhcp.h>
 #include <lwip/init.h>
@@ -28,8 +29,6 @@
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
-#define NUM_BUFFERS 512
-#define BUF_SIZE 2048
 
 typedef struct state
 {
@@ -42,11 +41,10 @@ typedef struct state
     ring_handle_t tx_ring;
 } state_t;
 
-typedef struct lwip_custom_pbuf
-{
+typedef struct pbuf_custom_offset {
     struct pbuf_custom custom;
-    uintptr_t buffer;
-} lwip_custom_pbuf_t;
+    uintptr_t offset;
+} pbuf_custom_offset_t;
 
 typedef struct {
     struct tcp_pcb *sock_tpcb;
@@ -63,31 +61,31 @@ state_t state;
 
 LWIP_MEMPOOL_DECLARE(
     RX_POOL,
-    NUM_BUFFERS * 2,
-    sizeof(lwip_custom_pbuf_t),
+    RX_RING_SIZE_CLI0 * 2,
+    sizeof(pbuf_custom_offset_t),
     "Zero-copy RX pool");
 
 uintptr_t rx_free;
 uintptr_t rx_used;
 uintptr_t tx_free;
 uintptr_t tx_used;
-uintptr_t shared_dma_vaddr_rx;
-uintptr_t shared_dma_vaddr_tx;
+uintptr_t rx_buffer_data_region;
+uintptr_t tx_buffer_data_region;
 
 // Should only need 1 at any one time, accounts for any reconnecting that might happen
 socket_t sockets[MAX_SOCKETS] = {0};
 
 static bool network_ready;
-static bool notify_tx = false;
-static bool notify_rx = false;
+static bool notify_tx;
+static bool notify_rx;
 
 int tcp_ready(void) {
     return network_ready;
 }
 
 void tcp_maybe_notify(void) {
-    if (notify_rx && state.rx_ring.free_ring->notify_reader) {
-        state.rx_ring.free_ring->notify_reader = false;
+    if (notify_rx && require_signal(state.rx_ring.free_ring)) {
+        cancel_signal(state.rx_ring.free_ring);
         notify_rx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETHERNET_RX_CHANNEL);
@@ -96,8 +94,8 @@ void tcp_maybe_notify(void) {
         }
     }
 
-    if (notify_tx && state.tx_ring.used_ring->notify_reader) {
-        state.tx_ring.used_ring->notify_reader = false;
+    if (notify_tx && require_signal(state.tx_ring.used_ring)) {
+        cancel_signal(state.tx_ring.used_ring);
         notify_tx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETHERNET_TX_CHANNEL);
@@ -111,22 +109,13 @@ uint32_t sys_now(void) {
     return sddf_timer_time_now(TIMER_CHANNEL) / NS_IN_MS;
 }
 
-static void get_mac(void) {
-    state.mac[0] = 0x52;
-    state.mac[1] = 0x54;
-    state.mac[2] = 0x1;
-    state.mac[3] = 0;
-    state.mac[4] = 0;
-    state.mac[5] = 10;
-}
-
 static void netif_status_callback(struct netif *netif) {
     if (dhcp_supplied_address(netif)) {
         dlog("DHCP request finished, IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
 
         microkit_mr_set(0, ip4_addr_get_u32(netif_ip4_addr(netif)));
-        microkit_mr_set(1, (state.mac[0] << 24) | (state.mac[1] << 16) | (state.mac[2] << 8) | (state.mac[3]));
-        microkit_mr_set(2, (state.mac[4] << 24) | (state.mac[5] << 16));
+        microkit_mr_set(1, (state.mac[0] << 8) | state.mac[1]);
+        microkit_mr_set(2, (state.mac[2] << 24) |  (state.mac[3] << 16) | (state.mac[4] << 8) | state.mac[5]);
         microkit_ppcall(ETHERNET_ARP_CHANNEL, microkit_msginfo_new(0, 3));
 
         network_ready = true;
@@ -134,44 +123,27 @@ static void netif_status_callback(struct netif *netif) {
 }
 
 static err_t lwip_eth_send(struct netif *netif, struct pbuf *p) {
-    /* Grab an available TX buffer, copy pbuf data over,
-    add to used tx ring, notify server */
     err_t ret = ERR_OK;
 
-    if (p->tot_len > BUF_SIZE) {
+    if (p->tot_len > BUFF_SIZE) {
         return ERR_MEM;
     }
-    uintptr_t addr;
-    unsigned int len;
-    void *cookie;
-    int err = dequeue_free(&state.tx_ring, &addr, &len, &cookie);
+
+    buff_desc_t buffer;
+    int err = dequeue_free(&(state.tx_ring), &buffer);
     if (err) {
         return ERR_MEM;
     }
-    uintptr_t buffer = addr;
-    unsigned char *frame = (unsigned char *)buffer;
-
-    /* Copy all buffers that need to be copied */
+    
+    unsigned char *frame = (unsigned char *)(buffer.phys_or_offset + tx_buffer_data_region);
     unsigned int copied = 0;
     for (struct pbuf *curr = p; curr != NULL; curr = curr->next) {
-        unsigned char *buffer_dest = &frame[copied];
-        if ((uintptr_t)buffer_dest != (uintptr_t)curr->payload) {
-            /* Don't copy memory back into the same location */
-            memcpy(buffer_dest, curr->payload, curr->len);
-        }
+        memcpy(frame + copied, curr->payload, curr->len);
         copied += curr->len;
     }
 
-    cache_clean((unsigned long) frame, (unsigned long) frame + copied);
-
-    /* insert into the used tx queue */
-    err = enqueue_used(&state.tx_ring, (uintptr_t)frame, copied, NULL);
-    if (err) {
-        dlog("TX used ring full");
-        enqueue_free(&(state.tx_ring), (uintptr_t)frame, BUF_SIZE, NULL);
-        return ERR_MEM;
-    }
-
+    buffer.len = copied;
+    err = enqueue_used(&state.tx_ring, buffer);
     notify_tx = true;
 
     return ret;
@@ -186,11 +158,12 @@ static err_t lwip_eth_send(struct netif *netif, struct pbuf *p) {
  */
 static void interface_free_buffer(struct pbuf *buf) {
     SYS_ARCH_DECL_PROTECT(old_level);
-    lwip_custom_pbuf_t *custom_pbuf = (lwip_custom_pbuf_t *)buf;
+    pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)buf;
     SYS_ARCH_PROTECT(old_level);
-    enqueue_free(&state.rx_ring, custom_pbuf->buffer, BUF_SIZE, NULL);
+    buff_desc_t buffer = {custom_pbuf_offset->offset, 0};
+    int err __attribute__((unused)) = enqueue_free(&(state.rx_ring), buffer);
     notify_rx = true;
-    LWIP_MEMPOOL_FREE(RX_POOL, custom_pbuf);
+    LWIP_MEMPOOL_FREE(RX_POOL, custom_pbuf_offset);
     SYS_ARCH_UNPROTECT(old_level);
 }
 
@@ -201,11 +174,7 @@ static void interface_free_buffer(struct pbuf *buf) {
  */
 static err_t ethernet_init(struct netif *netif)
 {
-    if (netif->state == NULL)
-    {
-        return ERR_ARG;
-    }
-
+    if (netif->state == NULL) return ERR_ARG;
     state_t *data = netif->state;
 
     netif->hwaddr[0] = data->mac[0];
@@ -220,35 +189,40 @@ static err_t ethernet_init(struct netif *netif)
     netif->linkoutput = lwip_eth_send;
     NETIF_INIT_SNMP(netif, snmp_ifType_ethernet_csmacd, LINK_SPEED);
     netif->flags = NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_LINK_UP | NETIF_FLAG_IGMP;
-
     return ERR_OK;
 }
 
 void tcp_process_rx(void) {
-    while (!ring_empty(state.rx_ring.used_ring)) {
-        uintptr_t addr;
-        unsigned int len;
-        void *cookie;
+    bool reprocess = true;
+    while (reprocess) {
+        while (!ring_empty(state.rx_ring.used_ring)) {
+            buff_desc_t buffer;
+            dequeue_used(&state.rx_ring, &buffer);
 
-        dequeue_used(&state.rx_ring, &addr, &len, &cookie);
+            pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
+            custom_pbuf_offset->offset = buffer.phys_or_offset;
+            custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
 
-        lwip_custom_pbuf_t *custom_pbuf = (lwip_custom_pbuf_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
-        custom_pbuf->buffer = addr;
-        custom_pbuf->custom.custom_free_function = interface_free_buffer;
+            struct pbuf *p = pbuf_alloced_custom(
+                PBUF_RAW,
+                buffer.len,
+                PBUF_REF,
+                &custom_pbuf_offset->custom,
+                (void *)(buffer.phys_or_offset + rx_buffer_data_region),
+                BUFF_SIZE);
 
-        struct pbuf *p = pbuf_alloced_custom(
-            PBUF_RAW,
-            len,
-            PBUF_REF,
-            &custom_pbuf->custom,
-            (void *)addr,
-            BUF_SIZE
-        );
+            if (state.netif.input(p, &state.netif) != ERR_OK) {
+                dlog("netif.input() != ERR_OK");
+                pbuf_free(p);
+            }
+        }
+        
+        request_signal(state.rx_ring.used_ring);
+        reprocess = false;
 
-        if (state.netif.input(p, &state.netif) != ERR_OK) {
-            // If it is successfully received, the receiver controls whether or not it gets freed.
-            dlog("netif.input() != ERR_OK");
-            pbuf_free(p);
+        if (!ring_empty(state.rx_ring.used_ring)) {
+            cancel_signal(state.rx_ring.used_ring);
+            reprocess = true;
         }
     }
 }
@@ -260,18 +234,13 @@ void tcp_update(void)
 
 void tcp_init_0(void)
 {
-    /* Set up shared memory regions */
-    ring_init(&state.rx_ring, (ring_buffer_t *)rx_free, (ring_buffer_t *)rx_used, 1, NUM_BUFFERS, NUM_BUFFERS);
-    ring_init(&state.tx_ring, (ring_buffer_t *)tx_free, (ring_buffer_t *)tx_used, 0, NUM_BUFFERS, NUM_BUFFERS);
+    cli_ring_init_sys(microkit_name, &state.rx_ring, rx_free, rx_used, &state.tx_ring, tx_free, tx_used);
+    buffers_init((ring_buffer_t *)tx_free, 0, state.tx_ring.free_ring->size);
 
-    for (int i = 0; i < NUM_BUFFERS - 1; i++) {
-        uintptr_t addr = shared_dma_vaddr_rx + (BUF_SIZE * i);
-        enqueue_free(&state.rx_ring, addr, BUF_SIZE, NULL);
-    }
-
-    get_mac();
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
+
+    cli_mac_addr_init_sys(microkit_name, state.mac);
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
@@ -294,27 +263,18 @@ void tcp_init_0(void)
     int err = dhcp_start(&(state.netif));
     dlogp(err, "failed to start DHCP negotiation");
 
-    state.rx_ring.free_ring->notify_reader = true;
-    state.rx_ring.used_ring->notify_reader = true;
-    state.tx_ring.free_ring->notify_reader = true;
-    state.tx_ring.used_ring->notify_reader = true;
-
-    if (notify_rx && state.rx_ring.free_ring->notify_reader) {
+    if (notify_rx && require_signal(state.rx_ring.free_ring)) {
+        cancel_signal(state.rx_ring.free_ring);
         notify_rx = false;
-        if (!have_signal) {
-            microkit_notify_delayed(ETHERNET_RX_CHANNEL);
-        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) {
-            microkit_notify(ETHERNET_RX_CHANNEL);
-        }
+        if (!have_signal) microkit_notify_delayed(ETHERNET_RX_CHANNEL);
+        else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) microkit_notify(ETHERNET_RX_CHANNEL);
     }
 
-    if (notify_tx && state.tx_ring.used_ring->notify_reader) {
+    if (notify_tx && require_signal(state.tx_ring.used_ring)) {
+        cancel_signal(state.tx_ring.used_ring);
         notify_tx = false;
-        if (!have_signal) {
-            microkit_notify_delayed(ETHERNET_TX_CHANNEL);
-        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) {
-            microkit_notify(ETHERNET_TX_CHANNEL);
-        }
+        if (!have_signal) microkit_notify_delayed(ETHERNET_TX_CHANNEL);
+        else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) microkit_notify(ETHERNET_TX_CHANNEL);
     }
 }
 

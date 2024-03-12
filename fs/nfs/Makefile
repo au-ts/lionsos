@@ -16,6 +16,10 @@ ifeq ($(strip $(LIBNFS_INCLUDE)),)
 $(error LIBNFS_INCLUDE must be specified)
 endif
 
+ifeq ($(strip $(ETHERNET_CONFIG_INCLUDE)),)
+$(error ETHERNET_CONFIG_INCLUDE must be specified)
+endif
+
 ifeq ($(strip $(NFS_SERVER)),)
 $(error NFS_SERVER must be specified)
 endif
@@ -33,6 +37,7 @@ TARGET := aarch64-none-elf
 LIONSOS := ../..
 LIBNFS := $(LIONSOS)/libnfs
 SDDF := $(LIONSOS)/sddf
+SDDF_UTIL := $(SDDF)/util
 LWIP := $(SDDF)/network/ipstacks/lwip
 MUSL := $(LIONSOS)/musllibc/build
 
@@ -42,6 +47,7 @@ INCLUDE := \
 	-I$(SDDF)/include \
 	-I$(MUSLLIBC_INCLUDE) \
 	-I$(LIBNFS_INCLUDE) \
+	-I$(ETHERNET_CONFIG_INCLUDE) \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
 	-I$(LIONSOS)/fs/include
@@ -103,6 +109,8 @@ OBJ=\
 	$(BUILD_DIR)/op.o \
 	$(BUILD_DIR)/posix.o \
 	$(BUILD_DIR)/tcp.o \
+	$(BUILD_DIR)/printf.o \
+	$(BUILD_DIR)/putchar_debug.o \
 	$(LWIP_OBJ)
 
 all: directories $(BUILD_DIR)/nfs.a
@@ -113,6 +121,12 @@ $(BUILD_DIR)/nfs.a: $(OBJ)
 $(BUILD_DIR)/%.o: %.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
+$(BUILD_DIR)/printf.o: $(SDDF_UTIL)/printf.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/putchar_debug.o: $(SDDF_UTIL)/putchar_debug.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
 $(BUILD_DIR)/lwip/%.o: $(LWIP)/src/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
@@ -121,6 +135,8 @@ $(BUILD_DIR)/fd.o: fd.c fd.h util.h
 $(BUILD_DIR)/op.o: op.c nfs.h fd.h util.h
 $(BUILD_DIR)/tcp.o: tcp.c tcp.h util.h
 $(BUILD_DIR)/posix.o: posix.c posix.h tcp.h util.h
+$(BUILD_DIR)/printf.o: $(SDDF_UTIL)/printf.c
+$(BUILD_DIR)/putchar_debug.o: $(SDDF_UTIL)/putchar_debug.c
 
 directories:
 	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/)) \

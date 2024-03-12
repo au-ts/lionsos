@@ -75,15 +75,19 @@ void notified(microkit_channel ch) {
         nfs_notified();
         break;
     }
+    case ETHERNET_TX_CHANNEL: {
+        break;
+    }
     default:
-        dlog("got notification from unknown channel");
+        dlog("got notification from unknown channel %llu", ch);
         break;
     }
 
     tcp_maybe_notify();
 }
 
-void init(void) {
+void init(void)
+{
     syscalls_init();
     continuation_pool_init();
     tcp_init_0();
