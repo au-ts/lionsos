@@ -9,10 +9,13 @@ extern ring_handle_t serial_tx_ring;
 
 // Receive single character, blocking until one is available.
 int mp_hal_stdin_rx_chr(void) {
-    // Wait for notification from RX multiplexor.
-    mp_blocking_events = mp_event_source_serial;
-    co_switch(t_event);
-    mp_blocking_events = mp_event_source_none;
+    if (ring_empty(serial_rx_ring.used_ring)) {
+        // Wait for notification from RX multiplexor, but only if we
+        // do not already have data to process.
+        mp_blocking_events = mp_event_source_serial;
+        co_switch(t_event);
+        mp_blocking_events = mp_event_source_none;
+    }
     // Dequeue buffer and return char
     uintptr_t buffer = 0;
     unsigned int buffer_len = 0;
