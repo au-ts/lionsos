@@ -160,6 +160,12 @@ void notified(microkit_channel ch) {
     case I2C_CH:
         active_events |= mp_event_source_i2c;
         break;
+    case ETH_RX_CH:
+    case ETH_TX_CH:
+        /* Nothing to do here right now, but we catch it the case where we get
+         * notified by the RX and TX ethernet components since it is expected
+         * we get notifications from them. */
+        break;
     default:
         printf("MP|ERROR: unexpected notification received from channel: 0x%lx\n", ch);
     }
