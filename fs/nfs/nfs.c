@@ -20,6 +20,14 @@
 #include "tcp.h"
 #include "posix.h"
 
+#ifndef ETHERNET_RX_CHANNEL
+#error "Expected ETHERNET_RX_CHANNEL to be defined"
+#endif
+
+#ifndef CLIENT_CHANNEL
+#error "Expected CLIENT_CHANNEL to be defined"
+#endif
+
 #define TIMEOUT (10 * NS_IN_MS)
 
 struct nfs_context *nfs;
