@@ -121,7 +121,6 @@ $(BUILD)/micropython/lwip/%.o: $(LWIP)/src/%.c
 $(BUILD)/micropython.elf: $(OBJ)
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@ $(BUILD)/$(PACKAGE_PYTHON_SCRIPTS)
-	# $(Q)$(CC) $(LDFLAGS) -o $@ $(BUILD)/$(PACKAGE_PYTHON_SCRIPTS) $^ $(LIBS)
 	$(Q)$(SIZE) $@
 
 # Include remaining core make rules.
