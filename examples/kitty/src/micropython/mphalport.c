@@ -1,5 +1,6 @@
 #include <microkit.h>
 #include <unistd.h>
+#include <assert.h>
 #include "micropython.h"
 #include "py/mpconfig.h"
 #include <sddf/serial/shared_ringbuffer.h>
@@ -9,13 +10,17 @@ extern ring_handle_t serial_tx_ring;
 
 // Receive single character, blocking until one is available.
 int mp_hal_stdin_rx_chr(void) {
-    if (ring_empty(serial_rx_ring.used_ring)) {
-        // Wait for notification from RX multiplexor, but only if we
-        // do not already have data to process.
+    // Wait for a notification from the RX multiplexer if we do not have
+    // any data to process.
+
+    // This is in a loop because the notification for a particular
+    // buffer may only be delivered after we have already consumed it.
+    while(ring_empty(serial_rx_ring.used_ring)) {
         mp_blocking_events = mp_event_source_serial;
         co_switch(t_event);
         mp_blocking_events = mp_event_source_none;
     }
+
     // Dequeue buffer and return char
     uintptr_t buffer = 0;
     unsigned int buffer_len = 0;
