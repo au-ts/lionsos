@@ -3,10 +3,10 @@
 #include <assert.h>
 #include "micropython.h"
 #include "py/mpconfig.h"
-#include <sddf/serial/shared_ringbuffer.h>
+#include <sddf/serial/queue.h>
 
-extern ring_handle_t serial_rx_ring;
-extern ring_handle_t serial_tx_ring;
+extern serial_queue_handle_t serial_rx_queue;
+extern serial_queue_handle_t serial_tx_queue;
 
 // Receive single character, blocking until one is available.
 int mp_hal_stdin_rx_chr(void) {
@@ -15,7 +15,7 @@ int mp_hal_stdin_rx_chr(void) {
 
     // This is in a loop because the notification for a particular
     // buffer may only be delivered after we have already consumed it.
-    while(ring_empty(serial_rx_ring.used_ring)) {
+    while(serial_queue_empty(serial_rx_queue.active)) {
         mp_blocking_events = mp_event_source_serial;
         co_switch(t_event);
         mp_blocking_events = mp_event_source_none;
@@ -25,7 +25,7 @@ int mp_hal_stdin_rx_chr(void) {
     uintptr_t buffer = 0;
     unsigned int buffer_len = 0;
     void *cookie = 0;
-    int ret = dequeue_used(&serial_rx_ring, &buffer, &buffer_len, &cookie);
+    int ret = serial_dequeue_active(&serial_rx_queue, &buffer, &buffer_len, &cookie);
     if (ret) {
         microkit_dbg_puts("MP|ERROR: could not dequeue serial RX used buffer\n");
         return 0;
@@ -33,7 +33,7 @@ int mp_hal_stdin_rx_chr(void) {
 
     char ch = ((char *)buffer)[0];
 
-    ret = enqueue_free(&serial_rx_ring, buffer, BUFFER_SIZE, cookie);
+    ret = serial_enqueue_free(&serial_rx_queue, buffer, BUFFER_SIZE, cookie);
     if (ret) {
         microkit_dbg_puts("MP|ERROR: could not enqueue serial RX free buffer\n");
         return 0;
@@ -47,7 +47,7 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
     uintptr_t buffer = 0;
     unsigned int buffer_len = 0;
     void *cookie = 0;
-    int ret = dequeue_free(&serial_tx_ring, &buffer, &buffer_len, &cookie);
+    int ret = serial_dequeue_free(&serial_tx_queue, &buffer, &buffer_len, &cookie);
     if (ret) {
         microkit_dbg_puts("MP|ERROR: could not dequeue serial TX free buffer\n");
         return;
@@ -65,7 +65,7 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
         str_buf[i] = str[i];
     }
 
-    ret = enqueue_used(&serial_tx_ring, buffer, len, cookie);
+    ret = serial_enqueue_active(&serial_tx_queue, buffer, len, cookie);
     // @ivanv: this error condition is a real possibilily and should be handled properly
     if (ret) {
         microkit_dbg_puts("MP|ERROR: could not enqueue used serial TX buffer\n");
