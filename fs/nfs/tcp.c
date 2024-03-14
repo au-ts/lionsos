@@ -161,7 +161,8 @@ static void interface_free_buffer(struct pbuf *buf) {
     pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)buf;
     SYS_ARCH_PROTECT(old_level);
     buff_desc_t buffer = {custom_pbuf_offset->offset, 0};
-    int err __attribute__((unused)) = enqueue_free(&(state.rx_ring), buffer);
+    int err = enqueue_free(&(state.rx_ring), buffer);
+    assert(!err);
     notify_rx = true;
     LWIP_MEMPOOL_FREE(RX_POOL, custom_pbuf_offset);
     SYS_ARCH_UNPROTECT(old_level);
@@ -209,14 +210,15 @@ void tcp_process_rx(void) {
                 PBUF_REF,
                 &custom_pbuf_offset->custom,
                 (void *)(buffer.phys_or_offset + rx_buffer_data_region),
-                BUFF_SIZE);
+                BUFF_SIZE
+            );
 
             if (state.netif.input(p, &state.netif) != ERR_OK) {
                 dlog("netif.input() != ERR_OK");
                 pbuf_free(p);
             }
         }
-        
+
         request_signal(state.rx_ring.used_ring);
         reprocess = false;
 
