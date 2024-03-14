@@ -268,13 +268,13 @@
         <map mr="i2c_micropython_response_region" vaddr="0x81_000_000" perms="rw" setvar_vaddr="i2c_response_region" />
         <map mr="i2c_micropython_data_region" vaddr="0x82_000_000" perms="rw" setvar_vaddr="i2c_data_region" />
 
-        <map mr="rx_free_micropython" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
-        <map mr="rx_used_micropython" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_used" />
-        <map mr="tx_free_micropython" vaddr="0x3_400_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
-        <map mr="tx_used_micropython" vaddr="0x3_600_000" perms="rw" cached="true" setvar_vaddr="tx_used" />
+        <map mr="eth_rx_free_micropython" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
+        <map mr="eth_rx_used_micropython" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_used" />
+        <map mr="eth_tx_free_micropython" vaddr="0x3_400_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
+        <map mr="eth_tx_used_micropython" vaddr="0x3_600_000" perms="rw" cached="true" setvar_vaddr="tx_used" />
 
-        <map mr="shared_dma_rx_micropython" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr_rx" />
-        <map mr="shared_dma_tx_micropython" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr_tx" />
+        <map mr="eth_rx_buffer_data_region_micropython" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_buffer_data_region" />
+        <map mr="eth_tx_buffer_data_region_micropython" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="tx_buffer_data_region" />
     </protection_domain>
 
     <!-- We allocate 256MiB of RAM for the guest. -->

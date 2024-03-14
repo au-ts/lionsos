@@ -140,7 +140,8 @@ $(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUIL
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
 			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
 			BUILD=$(abspath $(BUILD_DIR)) \
-			PACKAGE_PYTHON_SCRIPTS=package_python_scripts.o
+			PACKAGE_PYTHON_SCRIPTS=package_python_scripts.o \
+			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
 
 ETHERNET=$(SDDF)/drivers/network/meson/
 $(BUILD_DIR)/meson_ethernet.o: FORCE

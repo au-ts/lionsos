@@ -1,8 +1,13 @@
+ifeq ($(strip $(ETHERNET_CONFIG_INCLUDE)),)
+$(error ETHERNET_CONFIG_INCLUDE must be specified)
+endif
+
 CC := aarch64-none-elf-gcc
 LD := aarch64-none-elf-ld
 
 LIONSOS := ../../../..
 SDDF := $(LIONSOS)/sddf
+SDDF_UTIL := $(SDDF)/util
 LIBCO := $(LIONSOS)/libco
 LWIP := $(SDDF)/network/ipstacks/lwip
 # Path to micropython source code
@@ -33,6 +38,7 @@ CFLAGS += \
 	-I$(LIONSOS)/fs/include \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
+	-I$(ETHERNET_CONFIG_INCLUDE) \
 	-ffreestanding \
 	-mtune=$(CPU)
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(SDDF)/lib
@@ -105,7 +111,9 @@ SRC_C = \
 	shared/libc/printf.c \
 	shared/libc/__errno.c \
 	shared/netutils/netutils.c \
-	$(LIBCO)/libco.c
+	$(LIBCO)/libco.c \
+	$(SDDF_UTIL)/printf.c \
+	$(SDDF_UTIL)/putchar_debug.c \
 
 # Define source files containung qstrs.
 SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c modfb.c vfs_sddf_fs_file.c vfs_sddf_fs.c modmachine.c machine_i2c.c
