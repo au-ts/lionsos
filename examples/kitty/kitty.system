@@ -57,15 +57,15 @@
 
     <!-- shared memory for serial driver/serial mux ring buffer mechanism -->
     <memory_region name="serial_rx_free_driver" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="serial_rx_used_driver" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_rx_active_driver" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="serial_tx_free_driver" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="serial_tx_used_driver" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_tx_active_driver" size="0x200_000" page_size="0x200_000"/>
 
     <!-- shared memory for serial mux/client ring buffer mechanism -->
     <memory_region name="serial_tx_free_micropython" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="serial_tx_used_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_tx_active_micropython" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="serial_rx_free_micropython" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="serial_rx_used_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_rx_active_micropython" size="0x200_000" page_size="0x200_000"/>
 
     <!-- Memory regions for the I2C sub-system -->
     <memory_region name="i2c_driver_request_region" size="0x200_000" page_size="0x200_000"/>
@@ -201,9 +201,9 @@
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
 
         <map mr="serial_rx_free_driver" vaddr="0x40_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
-        <map mr="serial_rx_used_driver" vaddr="0x40_200_000" perms="rw" cached="true" setvar_vaddr="rx_used" />
+        <map mr="serial_rx_active_driver" vaddr="0x40_200_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
         <map mr="serial_tx_free_driver" vaddr="0x40_400_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
-        <map mr="serial_tx_used_driver" vaddr="0x40_600_000" perms="rw" cached="true" setvar_vaddr="tx_used" />
+        <map mr="serial_tx_active_driver" vaddr="0x40_600_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
 
         <map mr="serial_tx_data_driver" vaddr="0x50_000_000" perms="rw" cached="true" />
         <map mr="serial_rx_data_driver" vaddr="0x50_200_000" perms="rw" cached="true" />
@@ -211,25 +211,25 @@
         <irq irq="225" id="1" trigger="edge" /> <!-- IRQ for UART -->
     </protection_domain>
 
-    <protection_domain name="serial_mux_tx" priority="99" >
-        <program_image path="serial_mux_tx.elf" />
+    <protection_domain name="serial_virt_tx" priority="99" >
+        <program_image path="serial_virt_tx.elf" />
         <map mr="serial_tx_free_driver" vaddr="0x40_400_000" perms="rw" cached="true" setvar_vaddr="tx_free_driver" />
-        <map mr="serial_tx_used_driver" vaddr="0x40_600_000" perms="rw" cached="true" setvar_vaddr="tx_used_driver" />
+        <map mr="serial_tx_active_driver" vaddr="0x40_600_000" perms="rw" cached="true" setvar_vaddr="tx_active_driver" />
 
         <map mr="serial_tx_free_micropython" vaddr="0x60_000_000" perms="rw" cached="true" setvar_vaddr="tx_free_client" />
-        <map mr="serial_tx_used_micropython" vaddr="0x60_200_000" perms="rw" cached="true" setvar_vaddr="tx_used_client" />
+        <map mr="serial_tx_active_micropython" vaddr="0x60_200_000" perms="rw" cached="true" setvar_vaddr="tx_active_client" />
 
         <map mr="serial_tx_data_driver" vaddr="0x50_000_000" perms="rw" cached="true" setvar_vaddr="tx_data_driver" />
         <map mr="serial_tx_data_micropython" vaddr="0x50_400_000" perms="rw" cached="true" setvar_vaddr="tx_data_client" />
     </protection_domain>
 
-    <protection_domain name="serial_mux_rx" priority="98" >
-        <program_image path="serial_mux_rx.elf" />
+    <protection_domain name="serial_virt_rx" priority="98" >
+        <program_image path="serial_virt_rx.elf" />
         <map mr="serial_rx_free_driver" vaddr="0x40_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_driver" />
-        <map mr="serial_rx_used_driver" vaddr="0x40_200_000" perms="rw" cached="true" setvar_vaddr="rx_used_driver" />
+        <map mr="serial_rx_active_driver" vaddr="0x40_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_driver" />
 
         <map mr="serial_rx_free_micropython" vaddr="0x60_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_client" />
-        <map mr="serial_rx_used_micropython" vaddr="0x60_200_000" perms="rw" cached="true" setvar_vaddr="rx_used_client" />
+        <map mr="serial_rx_active_micropython" vaddr="0x60_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_client" />
 
         <map mr="serial_rx_data_driver" vaddr="0x50_200_000" perms="rw" cached="true" setvar_vaddr="rx_data_driver" />
         <map mr="serial_rx_data_micropython" vaddr="0x50_600_000" perms="rw" cached="true" setvar_vaddr="rx_data_client" />
@@ -258,9 +258,9 @@
         <map mr="shared_nfs_micropython" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="nfs_share" />
 
         <map mr="serial_tx_free_micropython" vaddr="0x60_000_000" perms="rw" cached="true" setvar_vaddr="serial_tx_free" />
-        <map mr="serial_tx_used_micropython" vaddr="0x60_200_000" perms="rw" cached="true" setvar_vaddr="serial_tx_used" />
+        <map mr="serial_tx_active_micropython" vaddr="0x60_200_000" perms="rw" cached="true" setvar_vaddr="serial_tx_active" />
         <map mr="serial_rx_free_micropython" vaddr="0x70_000_000" perms="rw" cached="true" setvar_vaddr="serial_rx_free" />
-        <map mr="serial_rx_used_micropython" vaddr="0x70_200_000" perms="rw" cached="true" setvar_vaddr="serial_rx_used" />
+        <map mr="serial_rx_active_micropython" vaddr="0x70_200_000" perms="rw" cached="true" setvar_vaddr="serial_rx_active" />
         <map mr="serial_tx_data_micropython" vaddr="0x50_400_000" perms="rw" cached="true" setvar_vaddr="serial_tx_data" />
         <map mr="serial_rx_data_micropython" vaddr="0x50_600_000" perms="rw" cached="true" setvar_vaddr="serial_rx_data" />
 
@@ -395,21 +395,21 @@
 
     <channel>
         <end pd="uart_driver" id="8"/>
-        <end pd="serial_mux_tx" id="9"/>
+        <end pd="serial_virt_tx" id="9"/>
     </channel>
 
     <channel>
         <end pd="uart_driver" id="10"/>
-        <end pd="serial_mux_rx" id="11"/>
+        <end pd="serial_virt_rx" id="11"/>
     </channel>
 
     <channel>
-        <end pd="serial_mux_rx" id="1"/>
+        <end pd="serial_virt_rx" id="1"/>
         <end pd="micropython" id="8"/>
     </channel>
 
     <channel>
-        <end pd="serial_mux_tx" id="1"/>
+        <end pd="serial_virt_tx" id="1"/>
         <end pd="micropython" id="9"/>
     </channel>
 

@@ -11,7 +11,7 @@
 #include "shared/runtime/pyexec.h"
 #include "vfs_sddf_fs.h"
 #include <extmod/vfs.h>
-#include <sddf/serial/shared_ringbuffer.h>
+#include <sddf/serial/queue.h>
 #include <sddf/i2c/queue.h>
 #include "lwip/init.h"
 #include "mpconfigport.h"
@@ -29,14 +29,14 @@ char *nfs_share;
 
 /* Shared memory regions for sDDF serial sub-system */
 uintptr_t serial_rx_free;
-uintptr_t serial_rx_used;
+uintptr_t serial_rx_active;
 uintptr_t serial_tx_free;
-uintptr_t serial_tx_used;
+uintptr_t serial_tx_active;
 uintptr_t serial_rx_data;
 uintptr_t serial_tx_data;
 
-ring_handle_t serial_rx_ring;
-ring_handle_t serial_tx_ring;
+serial_queue_handle_t serial_rx_queue;
+serial_queue_handle_t serial_tx_queue;
 
 i2c_queue_handle_t i2c_queue_handle;
 uintptr_t i2c_request_region;
@@ -119,13 +119,13 @@ start_repl:
 }
 
 void init(void) {
-    ring_init(&serial_rx_ring, (ring_buffer_t *)serial_rx_free, (ring_buffer_t *)serial_rx_used, false, BUFFER_SIZE, BUFFER_SIZE);
-    for (int i = 0; i < NUM_BUFFERS - 1; i++) {
-        enqueue_free(&serial_rx_ring, serial_rx_data + ((i + NUM_BUFFERS) * BUFFER_SIZE), BUFFER_SIZE, NULL);
+    serial_queue_init(&serial_rx_queue, (serial_queue_t *)serial_rx_free, (serial_queue_t *)serial_rx_active, false, BUFFER_SIZE, BUFFER_SIZE);
+    for (int i = 0; i < NUM_ENTRIES - 1; i++) {
+        serial_enqueue_free(&serial_rx_queue, serial_rx_data + ((i + NUM_ENTRIES) * BUFFER_SIZE), BUFFER_SIZE, NULL);
     }
-    ring_init(&serial_tx_ring, (ring_buffer_t *)serial_tx_free, (ring_buffer_t *)serial_tx_used, false, BUFFER_SIZE, BUFFER_SIZE);
-    for (int i = 0; i < NUM_BUFFERS - 1; i++) {
-        enqueue_free(&serial_tx_ring, serial_tx_data + ((i + NUM_BUFFERS) * BUFFER_SIZE), BUFFER_SIZE, NULL);
+    serial_queue_init(&serial_tx_queue, (serial_queue_t *)serial_tx_free, (serial_queue_t *)serial_tx_active, false, BUFFER_SIZE, BUFFER_SIZE);
+    for (int i = 0; i < NUM_ENTRIES - 1; i++) {
+        serial_enqueue_free(&serial_tx_queue, serial_tx_data + ((i + NUM_ENTRIES) * BUFFER_SIZE), BUFFER_SIZE, NULL);
     }
 
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
