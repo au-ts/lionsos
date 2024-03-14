@@ -205,7 +205,7 @@ NETWORK_COMPONENTS_INCLUDE := \
 	-I$(BOARD_DIR)/include \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4 \
-	-Isrc/ethernet_config 
+	-Isrc/ethernet_config
 NETWORK_COMPONENT_CFLAGS := \
 	$(NETWORK_COMPONENTS_INCLUDE) \
 	-mstrict-align \
