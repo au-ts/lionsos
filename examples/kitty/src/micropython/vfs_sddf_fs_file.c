@@ -7,6 +7,9 @@
 #include <unistd.h>
 #include <stdio.h>
 
+/* MicroPython will ask for a default buffer size to create a stream for when using a VFS. */
+#define VFS_SDDF_FS_FILE_BUFFER_SIZE (1024)
+
 typedef struct _mp_obj_vfs_sddf_fs_file_t {
     mp_obj_base_t base;
     uint64_t fd;
@@ -132,6 +135,9 @@ STATIC mp_uint_t vfs_sddf_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintpt
             break;
         }
         #endif
+        case MP_STREAM_GET_BUFFER_SIZE: {
+            return VFS_SDDF_FS_FILE_BUFFER_SIZE;
+        }
         default:
             *errcode = EINVAL;
             return MP_STREAM_ERROR;
