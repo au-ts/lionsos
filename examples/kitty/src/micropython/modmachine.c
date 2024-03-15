@@ -2,8 +2,8 @@
 #include <stdio.h>
 
 #include "micropython.h"
-#include "extmod/machine_i2c.h"
 #include "modmachine.h"
+#include "extmod/modmachine.h"
 
 #ifdef MICROPY_PY_MACHINE
 

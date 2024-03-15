@@ -4,7 +4,7 @@
 #include <string.h>
 #include "micropython.h"
 
-#include "extmod/machine_i2c.h"
+#include "extmod/modmachine.h"
 #include "modmachine.h"
 #include "py/runtime.h"
 #include "py/mperrno.h"
