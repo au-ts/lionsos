@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <microkit.h>
 
 #define MICROPY_CONFIG_ROM_LEVEL (MICROPY_CONFIG_ROM_LEVEL_CORE_FEATURES)
 
@@ -61,8 +62,12 @@ typedef long mp_off_t;
 #include <alloca.h>
 
 // Define the port's name and hardware.
+#if defined(CONFIG_PLAT_ODROIDC4)
 #define MICROPY_HW_BOARD_NAME "Odroid-C4"
 #define MICROPY_HW_MCU_NAME   "Cortex A55"
+#else
+#error "Unknown platform given for MicroPython config"
+#endif
 
 #define MP_STATE_PORT MP_STATE_VM
 
