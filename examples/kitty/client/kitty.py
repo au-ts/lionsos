@@ -1,29 +1,132 @@
-import time
-import png
-import sys
-import socket
+# import time
+# import png
+# import sys
+# import socket
 import asyncio
-from multiprocessing import shared_memory
-from bdfparser import Font
+from pn532 import PN532
+# from multiprocessing import shared_memory
+# from bdfparser import Font
 
+current_uid = []
+current_equal_count = 0
+current_not_equal_count = 0
+TICKS_TO_CONFIRM = 5
+TICKS_TO_RESET = 3
+token = 0
+reader_stream = None
+writer_stream = None
+
+# @alwin: all the vars highlighted are still (especially) dodgy
+######################################################
+fb = shared_memory.SharedMemory("fb0")
 width = 800
 height = 600
-
-fb = shared_memory.SharedMemory("fb0")
-
+pic = list(png.Reader("catwithfish.png").read()[2])
 font = Font('unifont-13.0.04.bdf')
-pic=list(png.Reader("catwithfish.png").read()[2])
+reset_cb = None
+######################################################
 
-loop = asyncio.new_event_loop()
+
+# Heartbeat to let the server know we still exist
+def heartbeat():
+    global writer_stream
+    while True:
+        writer_stream.write(b'200 0 0\n')
+        await asyncio.sleep(4)
+
+
+async def on_tap(token, card_id):
+    global writer_stream
+    writer_stream.write(
+        bytes(f'100 {token} {hex(card_id)} 1.0' + '\n', 'utf-8'))
+    # @alwin: Should this have an await()?
+    await writer_stream.drain()
+    token = (token + 1) % 1000000
+
+
+# We require TICKS_TO_CONFIRM consecutive ticks with the card_id to
+# count a tap/ Once a card has been read, we require TICKS_TO_RESET
+# consecutive no-card reads to reset to a waiting state. This
+# prevents erroneous double taps
+def read_card(p):
+    global current_uid
+    global current_count
+    global current_not_equal_count
+    global TICKS_TO_RESET
+    global TICKS_TO_CONFIRM
+    global token
+
+    while True:
+        uid = p.read_uid()
+        # Case where:
+        #   - We are not waiting on a specific card
+        #   - p.read_uid() did not return a card ID
+        if uid == [] and current_uid == []:
+            return
+
+        if current_uid == []:
+            # If we are not currently waiting for a specific card
+            current_uid = uid
+            current_count = 1
+        elif current_uid != uid:
+            # If we are waiting on a specific card, but the one we just
+            # read does not match this.
+            current_not_equal_count += 1
+            if (current_count < TICKS_TO_CONFIRM):
+                current_count = 0
+            if (current_not_equal_count == TICKS_TO_RESET):
+                # If we see multiple non-matches in a row,
+                # go back to a reset state
+                print("Resetting...")
+                current_uid = []
+                current_count = 0
+                current_not_equal_count = 0
+        else:
+            # current_uid != [] && current_uid == uid ==> MATCH!
+            current_count += 1
+            current_not_equal_count = 0
+            if (current_count == TICKS_TO_CONFIRM):
+                on_tap(token, current_uid)
+
+        # Read the uid again, this one should always fail
+        # We do this to consume the empty UID packet so it doesn't
+        # mess with our matching. This only applies for MiFare
+        # ultralight cards, which have len(uid) > 4.
+        if (uid != [] and len(uid) > 4):
+            uid = p.read_uid()
+            assert uid == []
+
+        return
+
 
 def set_pixel(x, y, rgba):
-    idx = 4 * (width * y + x) 
+    idx = 4 * (width * y + x)
     fb.buf[idx:(idx + 4)] = bytearray([
         rgba & 0xFF,
         (rgba >> 8) & 0xFF,
         (rgba >> 16) & 0xFF,
         (rgba >> 24) & 0xFF,
     ])
+
+
+def reset_status():
+    fill_rectangle(400, 250, 300, 300, 0x000000FF)
+    draw_string(400, 250, "Tap to pay $1", 2, 0xFFFFFFFF, 0x0, False, False)
+
+
+def draw_image(x0, y0, data):
+    w, h = len(data[0]) // 4, len(data)
+    for y in range(h):
+        for x in range(w):
+            pixel = data[y][(x * 4):(x * 4)+4]
+            rgba = pixel[3] & 0xFF
+            rgba |= (pixel[2] & 0xFF) << 8
+            rgba |= (pixel[1] & 0xFF) << 16
+            rgba |= (pixel[0] & 0xFF) << 24
+            if rgba == 0x000000FF:
+                rgba = 0x303030FF
+            set_pixel(x0 + x, y0 + y, rgba)
+
 
 def draw_bitmap(x, y, bitmap, color1, color2):
     for x_off in range(len(bitmap[0])):
@@ -35,84 +138,80 @@ def draw_bitmap(x, y, bitmap, color1, color2):
             else:
                 set_pixel(x + x_off, y + y_off, 0x000000FF)
 
+
 def draw_string(x, y, string, scale, color1, color2, shadowed, glowing):
     x_off = 8 * scale
     for i in range(len(string)):
         glyph = font.glyph(string[i]).draw()
-        if shadowed: glyph = glyph.shadow()
-        if glowing: glyph = glyph.glow()
+        if shadowed:
+            glyph = glyph.shadow()
+        if glowing:
+            glyph = glyph.glow()
         glyph *= scale
         data = glyph.todata(2)
         draw_bitmap(x + i * x_off, y, data, color1, color2)
 
-def draw_image(x0, y0, data):
-    w, h = len(data[0]) // 4, len(data)
-    for y in range(h):
-        for x in range(w):
-            pixel = data[y][(x * 4):(x * 4)+4]
-            rgba = pixel[3] & 0xFF
-            rgba |= (pixel[2] & 0xFF) << 8
-            rgba |= (pixel[1] & 0xFF) << 16
-            rgba |= (pixel[0] & 0xFF) << 24
-            if rgba == 0x000000FF: rgba = 0x303030FF
-            set_pixel(x0 + x, y0 + y, rgba)
 
 def fill_rectangle(x0, y0, w, h, rgba):
     for x in range(x0, x0 + w):
         for y in range(y0, y0 + h):
             set_pixel(x, y, rgba)
 
-def reset_status():
-    fill_rectangle(400, 250, 300, 300, 0x000000FF)
-    draw_string(400, 250, "Tap to pay $1", 2, 0xFFFFFFFF, 0x0, False, False)
 
-reset_cb = None
+# Helper function for sleeping some number of seconds and
+# calling a function
+async def wait_seconds_and_call(seconds, fn):
+    await asyncio.sleep(seconds)
+    fn()
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-token = 0
 
-def on_tap():
-    global jarcher_bal
-    global token
-    sys.stdin.readline()
-    card_id = hex(123456789012)[2:] 
-    sock.send(bytes(f'100 {token} {card_id} 1.0' + '\n', 'utf-8'))
-    token = (token + 1) % 1000000
-
-def heartbeat():
-    global sock
-    sock.send(b'200 0 0\n')
-    loop.call_later(4, heartbeat)
-
-def on_message():
+# Coroutine responsible for listening to the server
+async def read_from_server():
     global reset_cb
-    global sock
-    global token
-    messages = sock.recv(1000).split(b'\n')
-    for message in messages:
-        print(message)
-        words = message.decode('utf-8').split()
-        if len(words) == 0: continue
-        if words[0] == '101':
-            token = int(words[1])
-            print(f'TOKEN = {token}')
-        elif words[0] == '200':
-            name, balance = words[2], words[4]
-            draw_string(400, 250, f'Thanks {name}', 2, 0xFFFFFFFF, 0x0, False, False)
-            draw_string(400, 300, f'Balance: {balance}', 2, 0xFFFFFFFF, 0x0, False, False)
-            if reset_cb is not None:
-                reset_cb.cancel()
-                reset_cb = None
-            reset_cb = loop.call_later(2, reset_status)
+    while True:
+        messages = await reader_stream.recv(1000).split(b'\n')
+        for message in messages:
+            print(message)
+            words = message.decode('utf-8').split()
+            if len(words) == 0:
+                continue
+            if words[0] == '101':
+                token = int(words[1])
+                print(f'TOKEN = {token}')
+            elif words[0] == '200':
+                name, balance = words[2], words[4]
+                draw_string(400, 250, f'Thanks {name}', 2,
+                            0xFFFFFFFF, 0x0, False, False)
+                draw_string(400, 300, f'Balance: {balance}', 2,
+                            0xFFFFFFFF, 0x0, False, False)
+                if reset_cb is not None:
+                    reset_cb.cancel()
+                    reset_cb = None
+                asyncio.create_task(wait_seconds_and_call(2, reset_status()))
 
-sock.connect(("localhost", 3737))
-sock.setblocking(0)
-heartbeat()
 
-draw_image(0, 40, pic)
-draw_string(400, 100, "Kitty v5", 5, 0xFFFFFFFF, 0x008800FF, True, False)
-reset_status()
+# Coroutine responsible for reading the card
+async def read_card_main():
+    p = PN532(1)
+    p.rf_configure()
+    p.sam_configure()
 
-loop.add_reader(sys.stdin, on_tap)
-loop.add_reader(sock, on_message)
-loop.run_forever() 
+    while True:
+        read_card(p)
+        await asyncio.sleep_ms(100)
+
+
+async def main():
+    reader_stream, writer_stream = await asyncio.open_connection("localhost", 3737)
+
+    draw_image(0, 40, pic)
+    draw_string(400, 100, "Kitty v5", 5, 0xFFFFFFFF, 0x008800FF, True, False)
+
+    asyncio.gather(
+        asyncio.create_task(heartbeat),
+        asyncio.create_task(read_from_server()),
+        asyncio.create_task(read_card_main())
+    )
+
+
+asyncio.run(main())
