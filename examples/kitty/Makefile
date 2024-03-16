@@ -40,7 +40,7 @@ LIBNFS=../../libnfs
 NFS=../../fs/nfs
 MUSL=../../musllibc
 
-IMAGES := main.elf timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf copy.elf mux_rx.elf mux_tx.elf arp.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf i2c_virtualiser.elf i2c_driver.elf
+IMAGES := timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf copy.elf mux_rx.elf mux_tx.elf arp.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf i2c_virtualiser.elf i2c_driver.elf
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
@@ -62,7 +62,6 @@ LIBS := -lmicrokit -Tmicrokit.ld
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
-MAIN_OBJS := main.o
 TIMER_OBJS := timer.o sddf_util_printf.o sddf_putchar_debug.o
 VMM_OBJS := vmm.o printf.o virq.o linux.o \
 			guest.o psci.o smc.o fault.o \
@@ -120,9 +119,6 @@ $(BUILD_DIR)/%.o: $(LIBVMM)/src/arch/aarch64/vgic/%.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/vmm.elf: $(addprefix $(BUILD_DIR)/, $(VMM_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
-$(BUILD_DIR)/main.elf: $(addprefix $(BUILD_DIR)/, $(MAIN_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
