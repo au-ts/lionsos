@@ -16,9 +16,7 @@ int mp_hal_stdin_rx_chr(void) {
     // This is in a loop because the notification for a particular
     // buffer may only be delivered after we have already consumed it.
     while(serial_queue_empty(serial_rx_queue.active)) {
-        mp_blocking_events = mp_event_source_serial;
-        co_switch(t_event);
-        mp_blocking_events = mp_event_source_none;
+        await(mp_event_source_serial);
     }
 
     // Dequeue buffer and return char

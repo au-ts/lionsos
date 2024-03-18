@@ -47,15 +47,13 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, b
     int ret = i2c_enqueue_request(i2c_queue_handle, addr, 0, request_data_end);
     if (ret) {
         mp_raise_msg_varg(&mp_type_RuntimeError,
-                          MP_ERROR_TEXT("I2C(%d)'s request queue is full"), self->port);
+                          MP_ERROR_TEXT("i2c_read: I2C(%d)'s request queue is full"), self->port);
         return -MP_ENOMEM;
     }
 
     microkit_notify(I2C_CH);
     /* Now that we've enqueued our request, wait for the event signalling the I2C response. */
-    mp_blocking_events = mp_event_source_i2c;
-    co_switch(t_event);
-    mp_blocking_events = mp_event_source_none;
+    await(mp_event_source_i2c);
 
     /* Now process the response */
     size_t bus_address = 0;
@@ -67,7 +65,7 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, b
          * available.
          */
         mp_raise_msg_varg(&mp_type_RuntimeError,
-                          MP_ERROR_TEXT("I2C(%d)'s request queue is full"), self->port);
+                          MP_ERROR_TEXT("i2c_read: I2C(%d)'s response queue is empty"), self->port);
         return -MP_ENOMEM;
     }
 
@@ -78,10 +76,13 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, b
         memcpy(buf, response_data, response_data_len - RESPONSE_DATA_OFFSET);
     }
 
+    num_responses++;
+
     return 0;
 }
 
 int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
+    assert(num_requests == num_responses);
     uint8_t *i2c_data = (uint8_t *) i2c_data_region;
     i2c_data[0] = I2C_TOKEN_START;
     i2c_data[1] = I2C_TOKEN_ADDR_WRITE;
@@ -93,18 +94,17 @@ int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) 
     i2c_data[j++] = I2C_TOKEN_STOP;
     i2c_data[j++] = I2C_TOKEN_END;
 
+    num_requests++;
     int ret = i2c_enqueue_request(i2c_queue_handle, addr, 0, j);
     if (ret) {
         mp_raise_msg_varg(&mp_type_RuntimeError,
-                          MP_ERROR_TEXT("I2C(%d)'s request queue is full"), self->port);
+                          MP_ERROR_TEXT("i2c_write: I2C(%d)'s request queue is full"), self->port);
         return -MP_ENOMEM;
     }
 
     microkit_notify(I2C_CH);
     /* Now that we've enqueued our request, wait for the event signalling the I2C response. */
-    mp_blocking_events = mp_event_source_i2c;
-    co_switch(t_event);
-    mp_blocking_events = mp_event_source_none;
+    await(mp_event_source_i2c);
 
     /* Now process the response */
     size_t bus_address = 0;
@@ -126,6 +126,7 @@ int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) 
         /* @ivanv: it should be noted that this does not adhere to the MicroPython API for 'write' currently. */
         return response_data[RESPONSE_ERR_TOKEN];
     }
+    num_responses++;
 
     return len;
 }
