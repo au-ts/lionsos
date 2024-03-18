@@ -63,6 +63,9 @@ static uintptr_t morecore_top = (uintptr_t)&morecore_area[MORECORE_AREA_BYTE_SIZ
    returns 0 if failure, returns newbrk if success.
 */
 
+int fd_socket[MAX_SOCKET_FDS];
+int fd_active[MAX_SOCKET_FDS];
+int socket_refcount[MAX_SOCKETS];
 
 static size_t output(void *data, size_t count)
 {
@@ -249,8 +252,25 @@ long sys_getsockopt(va_list ap)
 
 long sys_socket(va_list ap)
 {
-    int socket_index = tcp_socket_create();
-    long fd = LWIP_FD_START + (long)socket_index;
+    long fd = -1;
+    for (int i = LWIP_FD_START; i < MAX_SOCKET_FDS; i++) {
+	if (!fd_active[i]) {
+	    fd = i;
+	    break;
+	}
+    }
+    if (fd == -1) {
+	dlog("couldn't find available fd");
+	return -1;
+    }
+
+
+    int socket_handle = tcp_socket_create();
+    socket_refcount[socket_handle]++;
+    
+    fd_active[fd] = true;
+    fd_socket[fd] = socket_handle;
+
     return fd;
 }
 
@@ -261,26 +281,73 @@ long sys_bind(va_list ap)
 
 long sys_socket_connect(va_list ap)
 {
-    int sock_index = va_arg(ap, int) - LWIP_FD_START;
+    long fd = va_arg(ap, int);
+
+    assert(fd_active[fd]);
+
+    int socket_handle = fd_socket[fd];
+
+    assert(socket_handle >= 0);
+    assert(socket_handle < MAX_SOCKETS);
+    assert(socket_refcount[socket_handle] != 0);
+
     const struct sockaddr *addr = va_arg(ap, const struct sockaddr *);
     int port = addr->sa_data[0] << 8 | addr->sa_data[1];
-    return (long)tcp_socket_connect(sock_index, port);
+    return (long)tcp_socket_connect(socket_handle, port);
 }
 
 long sys_close(va_list ap)
 {
-    int sock_index = va_arg(ap, int) - LWIP_FD_START;
-    return (long)tcp_socket_close(sock_index);
+    long fd = va_arg(ap, int);
+
+    assert(fd_active[fd]);
+    
+    int socket_handle = fd_socket[fd];
+
+    assert(socket_handle >= 0);
+    assert(socket_handle < MAX_SOCKETS);
+    assert(socket_refcount[socket_handle] != 0);
+
+    fd_socket[fd] = 0;
+    fd_active[fd] = 0;
+
+    socket_refcount[socket_handle]--;
+    if (socket_refcount[socket_handle] == 0) {
+	return (long)tcp_socket_close(socket_handle);
+    }
+
+    return 0;
 }
 
 long sys_dup3(va_list ap)
 {
-    int oldfd = va_arg(ap, int) - LWIP_FD_START;
-    int newfd = va_arg(ap, int) - LWIP_FD_START;
+    int oldfd = va_arg(ap, int);
+    int newfd = va_arg(ap, int);
     int flags = va_arg(ap, int);
     (void)flags;
 
-    return (long)tcp_socket_dup(oldfd, newfd);
+    assert(fd_active[oldfd]);
+    
+    int oldfd_socket_handle = fd_socket[oldfd];
+
+    assert(oldfd_socket_handle >= 0);
+    assert(oldfd_socket_handle < MAX_SOCKETS);
+    assert(socket_refcount[oldfd_socket_handle] != 0);
+
+    if (fd_active[newfd]) {
+	int newfd_socket_handle = fd_socket[newfd];
+	socket_refcount[newfd_socket_handle]--;
+	if (socket_refcount[newfd_socket_handle] == 0) {
+	    tcp_socket_close(newfd_socket_handle);
+	}
+    }
+
+    fd_active[newfd] = true;
+    fd_socket[newfd] = oldfd_socket_handle;
+
+    socket_refcount[oldfd_socket_handle]++;
+
+    return newfd;
 }
 
 long sys_sendto(va_list ap)
@@ -290,8 +357,15 @@ long sys_sendto(va_list ap)
     size_t len = va_arg(ap, size_t);
     int flags = va_arg(ap, int);
 
-    int sock_index = sockfd - LWIP_FD_START;
-    int wrote = tcp_socket_write(sock_index, buf, len);
+    assert(fd_active[sockfd]);
+
+    int socket_handle = fd_socket[sockfd];
+
+    assert(socket_handle >= 0);
+    assert(socket_handle < MAX_SOCKETS);
+    assert(socket_refcount[socket_handle] != 0);
+
+    int wrote = tcp_socket_write(socket_handle, buf, len);
 
     return (long)wrote;
 }
@@ -305,8 +379,15 @@ long sys_recvfrom(va_list ap)
     struct sockaddr *src_addr = va_arg(ap, struct sockaddr *);
     socklen_t *addrlen = va_arg(ap, socklen_t *);
 
-    int sock_index = sockfd - LWIP_FD_START;
-    int read = tcp_socket_recv(sock_index, buf, len);
+    assert(fd_active[sockfd]);
+
+    int socket_handle = fd_socket[sockfd];
+
+    assert(socket_handle >= 0);
+    assert(socket_handle < MAX_SOCKETS);
+    assert(socket_refcount[socket_handle] != 0);
+
+    int read = tcp_socket_recv(socket_handle, buf, len);
 
     if (read == 0 && flags & MSG_DONTWAIT) {
         return -EAGAIN;
@@ -381,5 +462,6 @@ void syscalls_init(void)
 }
 
 int socket_index_of_fd(int fd) {
-    return fd - LWIP_FD_START;
+    assert(fd_active[fd]);
+    return fd_socket[fd];
 }
