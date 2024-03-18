@@ -33,7 +33,7 @@
 struct nfs_context *nfs;
 
 void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *private_data) {
-    dlogp(err, "failed to connect to nfs server (%d): %s", err, nfs_get_error(nfs));
+    dlogp(err, "failed to connect to nfs server (%d): %s", err, data);
     dlogp(!err, "connected to nfs server");
 }
 
