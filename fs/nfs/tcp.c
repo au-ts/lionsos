@@ -358,6 +358,9 @@ err_t socket_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
     
     tcp_sent(tpcb, socket_sent_callback);
     tcp_recv(tpcb, socket_recv_callback);
+
+    tpcb->so_options |= SOF_KEEPALIVE;
+
     return ERR_OK;
 }
 
