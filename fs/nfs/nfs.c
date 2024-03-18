@@ -44,6 +44,10 @@ void nfs_init(void) {
         return;
     }
 
+    /*
+     * We want to have the NFS client attempt to re-connect indefinitely when our connection
+     * with the server is closed or dropped.
+     */
     nfs_set_autoreconnect(nfs, -1);
 
     int err = nfs_mount_async(nfs, NFS_SERVER, NFS_DIRECTORY, nfs_connect_cb, NULL);
