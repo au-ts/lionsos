@@ -44,6 +44,8 @@ void nfs_init(void) {
         return;
     }
 
+    nfs_set_autoreconnect(nfs, -1);
+
     int err = nfs_mount_async(nfs, NFS_SERVER, NFS_DIRECTORY, nfs_connect_cb, NULL);
     dlogp(err, "failed to connect to nfs server");
 }
@@ -63,6 +65,9 @@ void notified(microkit_channel ch) {
             int socket_index = socket_index_of_fd(nfs_fd);
             int revents = nfs_which_events(nfs);
             int sevents = 0;
+	    if (tcp_socket_hup(socket_index)) {
+		sevents |= POLLHUP;
+	    }
             if (revents & POLLOUT && tcp_socket_writable(socket_index)) {
                 sevents |= POLLOUT;
             }

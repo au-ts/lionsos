@@ -46,11 +46,18 @@ typedef struct pbuf_custom_offset {
     uintptr_t offset;
 } pbuf_custom_offset_t;
 
+enum socket_state {
+    socket_state_unallocated,
+    socket_state_bound,
+    socket_state_connecting,
+    socket_state_connected,
+    socket_state_closing,
+    socket_state_closed_by_peer,
+};
+
 typedef struct {
     struct tcp_pcb *sock_tpcb;
-    int port;
-    int connected;
-    int used;
+    enum socket_state state;
 
     char rx_buf[SOCKET_BUF_SIZE];
     int rx_head;
@@ -289,48 +296,76 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
 {
     dlogp(err, "error %d", err);
 
-    if (p == NULL) {
-        dlog("closing connection...");
-        tcp_close(tpcb);
+    socket_t *socket = arg;
+    assert(socket != NULL);
+    int socket_index = (int)(socket - sockets);
+
+    switch (socket->state) {
+
+    case socket_state_connected: {
+        if (p != NULL) {
+            int copied = 0, remaining = p->tot_len;
+            while (remaining != 0) {
+                int rx_tail = (socket->rx_head + socket->rx_len) % SOCKET_BUF_SIZE;
+                int to_copy = MIN(remaining, SOCKET_BUF_SIZE - MAX(socket->rx_len, rx_tail));
+                pbuf_copy_partial(p, socket->rx_buf + rx_tail, to_copy, copied);
+                socket->rx_len += to_copy;
+                copied += to_copy;
+                remaining -= to_copy;
+            }        
+            tcp_recved(tpcb, p->tot_len);
+            pbuf_free(p);
+        } else {
+            socket->state = socket_state_closed_by_peer;
+            tcp_close(tpcb);
+        }
         return ERR_OK;
     }
 
-    socket_t *socket = arg;
-
-    int copied = 0, remaining = p->tot_len;
-    while (remaining != 0) {
-        int rx_tail = (socket->rx_head + socket->rx_len) % SOCKET_BUF_SIZE;
-        int to_copy = MIN(remaining, SOCKET_BUF_SIZE - MAX(socket->rx_len, rx_tail));
-        pbuf_copy_partial(p, socket->rx_buf + rx_tail, to_copy, copied);
-        socket->rx_len += to_copy;
-        copied += to_copy;
-        remaining -= to_copy;
+    case socket_state_closing: {
+        if (p != NULL) {
+            pbuf_free(p);
+        } else {
+            socket->state = socket_state_unallocated;
+            socket->sock_tpcb = NULL;
+            socket->rx_head = 0;
+            socket->rx_len = 0;
+        }
+        return ERR_OK;
     }
-    tcp_recved(tpcb, p->tot_len);
-    pbuf_free(p);
-    return ERR_OK;
+
+    default:
+        dlog("called on invalid socket state: %d (socket=%d)", socket->state, socket_index);
+        assert(false);
+        return ERR_OK;
+    }
 }
 
 static err_t socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len)
 {
+    socket_t *socket = arg;
+    int socket_index = socket - sockets;
     return ERR_OK;
 }
 
-// Connected function
 err_t socket_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
 {
-    ((socket_t *)arg)->connected = 1;
+    socket_t *socket = arg;
+    assert(socket != NULL);
+    assert(socket->state == socket_state_connecting);
+
+    socket->state = socket_state_connected;
+    
     tcp_sent(tpcb, socket_sent_callback);
     tcp_recv(tpcb, socket_recv_callback);
     return ERR_OK;
 }
 
 int tcp_socket_create(void) {
-    int free_index = 0;
-
+    int free_index;
     socket_t *socket = NULL;
     for (free_index = 0; free_index < MAX_SOCKETS; free_index++) {
-        if (!sockets[free_index].used) {
+        if (sockets[free_index].state == socket_state_unallocated) {
             socket = &sockets[free_index];
             break;
         }
@@ -340,29 +375,34 @@ int tcp_socket_create(void) {
         return -1;
     }
 
+    assert(socket->sock_tpcb == NULL);
+    assert(socket->rx_head == 0);
+    assert(socket->rx_len == 0);
+
     socket->sock_tpcb = tcp_new_ip_type(IPADDR_TYPE_V4);
     if (socket->sock_tpcb == NULL) {
         dlog("couldn't create socket");
         return -1;
     }
 
-    socket->used = 1;
+    socket->sock_tpcb->so_options |= SOF_KEEPALIVE;
+
     tcp_err(socket->sock_tpcb, socket_err_func);
     tcp_arg(socket->sock_tpcb, socket);
 
     for (int i = 512; ; i++) {
         if (tcp_bind(socket->sock_tpcb, IP_ADDR_ANY, i) == ERR_OK) {
+            socket->state = socket_state_bound;
             return free_index;
         }
     }
 
-    socket->used = 0;
     return -1;
 }
 
 int tcp_socket_connect(int index, int port) {
     socket_t *sock = &sockets[index];
-    sock->port = port;
+    assert(sock->state == socket_state_bound);
 
     ip_addr_t ipaddr;
     ip4_addr_set_u32(&ipaddr, ipaddr_addr(NFS_SERVER));
@@ -372,50 +412,46 @@ int tcp_socket_connect(int index, int port) {
         dlog("error connecting (%d)", err);
         return 1;
     }
+    sock->state = socket_state_connecting;
 
     return 0;
 }
 
 int tcp_socket_close(int index)
 {
-    socket_t *sock = &sockets[index];
+    socket_t *socket = &sockets[index];
 
-    if (sock->used) {
-        int err = tcp_close(sock->sock_tpcb);
-        if (err != ERR_OK) {
-            dlog("error closing socket (%d)", err);
-            return -1;
-        }
+    switch (socket->state) {
+
+    case socket_state_bound: {
+        socket->state = socket_state_unallocated;
+        socket->sock_tpcb = NULL;
+        socket->rx_head = 0;
+        socket->rx_len = 0;
+        return 0;
     }
 
-    sock->sock_tpcb = NULL;
-    sock->port = 0;
-    sock->connected = 0;
-    sock->used = 0;
-    sock->rx_head = 0;
-    sock->rx_len = 0;
-    return 0;
-}
-
-int tcp_socket_dup(int index_old, int index_new)
-{
-    socket_t *sock_old = &sockets[index_old];
-
-    if (!(0 <= index_new && index_new < MAX_SOCKETS)) {
-        return -1;
+    case socket_state_connected: {
+        socket->state = socket_state_closing;
+        int err = tcp_close(socket->sock_tpcb);
+        dlogp(err != ERR_OK, "error closing socket (%d)", err);
+        return err != ERR_OK;
     }
-    socket_t *sock_new = &sockets[index_new];
+    
+    case socket_state_closed_by_peer: {
+        socket->state = socket_state_unallocated;
+        socket->sock_tpcb = NULL;
+        socket->rx_head = 0;
+        socket->rx_len = 0;
 
-    tcp_close(sock_new->sock_tpcb);
-
-    if (sock_old->used) {
-        sock_new->sock_tpcb = sock_old->sock_tpcb;
-        tcp_arg(sock_new->sock_tpcb, sock_new);
-        sock_new->used = 1;
-        sock_new->port = sock_old->port;
-        return index_new;
+        return 0;
     }
-    return -1;
+
+    default:
+        dlog("called on invalid socket state: %d", socket->state);
+        assert(false);
+        return 0;
+    }
 }
 
 int tcp_socket_write(int index, const char *buf, int len) {
@@ -436,6 +472,7 @@ int tcp_socket_write(int index, const char *buf, int len) {
 
 int tcp_socket_recv(int index, char *buf, int len) {
     socket_t *sock = &sockets[index];
+    assert(sock->state == socket_state_connected);
     int remaining = len;
     while (remaining != 0) {
         int to_copy = MIN(len, MIN(sock->rx_len, SOCKET_BUF_SIZE - sock->rx_head));
@@ -457,4 +494,8 @@ int tcp_socket_readable(int index) {
 
 int tcp_socket_writable(int index) {
     return !ring_empty(state.tx_ring.free_ring);
+}
+
+int tcp_socket_hup(int index) {
+    return sockets[index].state == socket_state_closed_by_peer;
 }

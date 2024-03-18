@@ -20,3 +20,4 @@ int tcp_socket_write(int index, const char *buf, int len);
 int tcp_socket_recv(int index, char *buf, int len);
 int tcp_socket_readable(int index);
 int tcp_socket_writable(int index);
+int tcp_socket_hup(int index);
