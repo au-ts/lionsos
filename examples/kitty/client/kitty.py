@@ -192,6 +192,10 @@ async def read_from_server():
     global writer_stream
     while True:
         try:
+            # @alwin: I don't really know if this is any better than just
+            # .readline(), but I saw it in the webserver and it seemed to
+            # slightly improve reliability (though it could have been some
+            # other change). Needs some more thought/experimentation.
             message = await asyncio.wait_for(reader_stream.readline(), 0.5)
         except OSError:
             # This usually happens when the server does not recieve a heartbeat
