@@ -3,6 +3,7 @@
 # import sys
 # import socket
 import asyncio
+import errno
 from pn532 import PN532
 # from multiprocessing import shared_memory
 # from bdfparser import Font
@@ -16,13 +17,16 @@ token = 0
 reader_stream = None
 writer_stream = None
 
+IP_ADDRESS = "172.16.0.2"
+PORT = 3738
+
 # @alwin: all the vars highlighted are still (especially) dodgy
 ######################################################
-fb = shared_memory.SharedMemory("fb0")
+# fb = shared_memory.SharedMemory("fb0")
 width = 800
 height = 600
-pic = list(png.Reader("catwithfish.png").read()[2])
-font = Font('unifont-13.0.04.bdf')
+# pic = list(png.Reader("catwithfish.png").read()[2])
+# font = Font('unifont-13.0.04.bdf')
 reset_cb = None
 ######################################################
 
@@ -31,16 +35,30 @@ reset_cb = None
 def heartbeat():
     global writer_stream
     while True:
-        writer_stream.write(b'200 0 0\n')
-        await asyncio.sleep(4)
-
+        # @alwin: is it really necessary to have this in a try-catch?
+        try:
+            print("Sending heartbeat")
+            writer_stream.write(b'200 0 0\n')
+            writer_stream.drain()
+            await asyncio.sleep(4)
+        except OSError as e:
+            if (e.errno == errno.ECONNRESET):
+                reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
 async def on_tap(token, card_id):
     global writer_stream
-    writer_stream.write(
-        bytes(f'100 {token} {hex(card_id)} 1.0' + '\n', 'utf-8'))
-    # @alwin: Should this have an await()?
-    await writer_stream.drain()
+    while True:
+        # @alwin: is it really necessary to have this in a try-catch?
+        try:
+            writer_stream.write(
+                bytes(f'100 {token} {''.join('{:02x}'.format(x) for x in card_id)} 1.0' + '\n', 'utf-8'))
+            # @alwin: Should this have an await()?
+            writer_stream.drain()
+            break
+        except OSError as e:
+            if (e.errno == errno.ECONNRESET):
+                reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
+
     token = (token + 1) % 1000000
 
 
@@ -48,7 +66,7 @@ async def on_tap(token, card_id):
 # count a tap/ Once a card has been read, we require TICKS_TO_RESET
 # consecutive no-card reads to reset to a waiting state. This
 # prevents erroneous double taps
-def read_card(p):
+async def read_card(p):
     global current_uid
     global current_count
     global current_not_equal_count
@@ -62,7 +80,8 @@ def read_card(p):
         #   - We are not waiting on a specific card
         #   - p.read_uid() did not return a card ID
         if uid == [] and current_uid == []:
-            return
+            await asyncio.sleep_ms(100)
+            continue
 
         if current_uid == []:
             # If we are not currently waiting for a specific card
@@ -86,7 +105,8 @@ def read_card(p):
             current_count += 1
             current_not_equal_count = 0
             if (current_count == TICKS_TO_CONFIRM):
-                on_tap(token, current_uid)
+                print("Registering tap")
+                await on_tap(token, current_uid)
 
         # Read the uid again, this one should always fail
         # We do this to consume the empty UID packet so it doesn't
@@ -96,7 +116,7 @@ def read_card(p):
             uid = p.read_uid()
             assert uid == []
 
-        return
+        await asyncio.sleep_ms(100)
 
 
 def set_pixel(x, y, rgba):
@@ -168,26 +188,40 @@ async def wait_seconds_and_call(seconds, fn):
 # Coroutine responsible for listening to the server
 async def read_from_server():
     global reset_cb
+    global reader_stream
+    global writer_stream
     while True:
-        messages = await reader_stream.recv(1000).split(b'\n')
-        for message in messages:
-            print(message)
-            words = message.decode('utf-8').split()
-            if len(words) == 0:
-                continue
-            if words[0] == '101':
-                token = int(words[1])
-                print(f'TOKEN = {token}')
-            elif words[0] == '200':
-                name, balance = words[2], words[4]
-                draw_string(400, 250, f'Thanks {name}', 2,
-                            0xFFFFFFFF, 0x0, False, False)
-                draw_string(400, 300, f'Balance: {balance}', 2,
-                            0xFFFFFFFF, 0x0, False, False)
-                if reset_cb is not None:
-                    reset_cb.cancel()
-                    reset_cb = None
-                asyncio.create_task(wait_seconds_and_call(2, reset_status()))
+        try:
+            message = await asyncio.wait_for(reader_stream.readline(), 0.5)
+        except OSError:
+            # This usually happens when the server does not recieve a heartbeat
+            # in time and resets the connection
+            print("CONNECTION RESET")
+            reader_stream.close()
+            writer_stream.close()
+            reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
+            continue
+        except asyncio.TimeoutError:
+            continue
+
+        if len(message) == 0:
+            continue
+
+        print(message)
+        words = message.decode('utf-8').split()
+        if words[0] == '101':
+            token = int(words[1])
+            print(f'TOKEN = {token}')
+        elif words[0] == '200':
+            name, balance = words[2], words[4]
+            draw_string(400, 250, f'Thanks {name}', 2,
+                        0xFFFFFFFF, 0x0, False, False)
+            draw_string(400, 300, f'Balance: {balance}', 2,
+                        0xFFFFFFFF, 0x0, False, False)
+            if reset_cb is not None:
+                reset_cb.cancel()
+                reset_cb = None
+            asyncio.create_task(wait_seconds_and_call(2, reset_status()))
 
 
 # Coroutine responsible for reading the card
@@ -195,23 +229,21 @@ async def read_card_main():
     p = PN532(1)
     p.rf_configure()
     p.sam_configure()
-
-    while True:
-        read_card(p)
-        await asyncio.sleep_ms(100)
+    await read_card(p)
 
 
 async def main():
-    reader_stream, writer_stream = await asyncio.open_connection("localhost", 3737)
+    global reader_stream
+    global writer_stream
+    reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
-    draw_image(0, 40, pic)
-    draw_string(400, 100, "Kitty v5", 5, 0xFFFFFFFF, 0x008800FF, True, False)
+    # draw_image(0, 40, pic)
+    # draw_string(400, 100, "Kitty v5", 5, 0xFFFFFFFF, 0x008800FF, True, False)
 
-    asyncio.gather(
-        asyncio.create_task(heartbeat),
+    await asyncio.gather(
+        asyncio.create_task(heartbeat()),
         asyncio.create_task(read_from_server()),
         asyncio.create_task(read_card_main())
     )
-
 
 asyncio.run(main())

@@ -53,6 +53,7 @@ void await(int event_source) {
     }
     mp_blocking_events = event_source;
     co_switch(t_event);
+    assert(active_events & event_source);
     mp_blocking_events = mp_event_source_none;
     active_events &= ~event_source;
 }
