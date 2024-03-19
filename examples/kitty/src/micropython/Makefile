@@ -39,6 +39,7 @@ CFLAGS += \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
 	-I$(ETHERNET_CONFIG_INCLUDE) \
+	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU)
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(SDDF)/lib -L$(LIBMATH)
