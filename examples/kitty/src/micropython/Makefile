@@ -104,6 +104,8 @@ SRC_C = \
 	extmod/modasyncio.c \
 	extmod/modselect.c \
 	extmod/modlwip.c \
+	extmod/modre.c \
+	extmod/moddeflate.c \
 	shared/readline/readline.c \
 	shared/runtime/gchelper_generic.c \
 	shared/runtime/pyexec.c \
