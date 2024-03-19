@@ -1,4 +1,4 @@
-# import time
+import time
 # import png
 # import sys
 # import socket
@@ -17,7 +17,7 @@ token = 0
 reader_stream = None
 writer_stream = None
 
-IP_ADDRESS = "172.16.0.2"
+IP_ADDRESS = "10.13.0.12"
 PORT = 3738
 
 # @alwin: all the vars highlighted are still (especially) dodgy
@@ -37,23 +37,26 @@ def heartbeat():
     while True:
         # @alwin: is it really necessary to have this in a try-catch?
         try:
-            print("Sending heartbeat")
+            print(f"Sending heartbeat at {time.time()}")
             writer_stream.write(b'200 0 0\n')
-            writer_stream.drain()
-            await asyncio.sleep(4)
+            await writer_stream.drain()
         except OSError as e:
             if (e.errno == errno.ECONNRESET):
                 reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
-async def on_tap(token, card_id):
+        await asyncio.sleep(4)
+
+
+async def on_tap(card_id):
     global writer_stream
+    global token
     while True:
         # @alwin: is it really necessary to have this in a try-catch?
         try:
             writer_stream.write(
                 bytes(f'100 {token} {''.join('{:02x}'.format(x) for x in card_id)} 1.0' + '\n', 'utf-8'))
             # @alwin: Should this have an await()?
-            writer_stream.drain()
+            await writer_stream.drain()
             break
         except OSError as e:
             if (e.errno == errno.ECONNRESET):
@@ -106,7 +109,7 @@ async def read_card(p):
             current_not_equal_count = 0
             if (current_count == TICKS_TO_CONFIRM):
                 print("Registering tap")
-                await on_tap(token, current_uid)
+                await on_tap(current_uid)
 
         # Read the uid again, this one should always fail
         # We do this to consume the empty UID packet so it doesn't
@@ -190,13 +193,15 @@ async def read_from_server():
     global reset_cb
     global reader_stream
     global writer_stream
+    global token
     while True:
         try:
             # @alwin: I don't really know if this is any better than just
             # .readline(), but I saw it in the webserver and it seemed to
             # slightly improve reliability (though it could have been some
             # other change). Needs some more thought/experimentation.
-            message = await asyncio.wait_for(reader_stream.readline(), 0.5)
+            # message = await asyncio.wait_for(reader_stream.readline(), 0.5)
+            message = await reader_stream.readline()
         except OSError:
             # This usually happens when the server does not recieve a heartbeat
             # in time and resets the connection
