@@ -123,6 +123,9 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
     assert(!err);
     notify_tx = true;
 
+    // @alwin: Maybe instead of notify_tx = true, an explicit notify is more appropriate
+    // microkit_notify(ETH_TX_CH);
+
     return ret;
 }
 
