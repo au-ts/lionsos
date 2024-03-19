@@ -255,3 +255,25 @@ void pyb_lwip_poll(void) {
     // Run the lwIP internal updates
     sys_check_timeouts();
 }
+
+void mpnet_handle_notify(void) {
+    if (notify_rx && require_signal(state.rx_ring.free_ring)) {
+        cancel_signal(state.rx_ring.free_ring);
+        notify_rx = false;
+        if (!have_signal) {
+            microkit_notify_delayed(ETH_RX_CH);
+        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_RX_CH) {
+            microkit_notify(ETH_RX_CH);
+        }
+    }
+
+    if (notify_tx && require_signal(state.tx_ring.used_ring)) {
+        cancel_signal(state.tx_ring.used_ring);
+        notify_tx = false;
+        if (!have_signal) {
+            microkit_notify_delayed(ETH_TX_CH);
+        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_TX_CH) {
+            microkit_notify(ETH_TX_CH);
+        }
+    }
+}

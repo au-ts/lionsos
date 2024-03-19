@@ -173,6 +173,8 @@ void notified(microkit_channel ch) {
     if (active_events & mp_blocking_events) {
         co_switch(t_mp);
     }
+
+    mpnet_handle_notify();
 }
 
 // Handle uncaught exceptions (should never be reached in a correct C implementation).
