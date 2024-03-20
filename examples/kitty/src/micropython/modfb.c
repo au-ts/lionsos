@@ -1,36 +1,14 @@
 #include <microkit.h>
+#include <string.h>
 #include "py/runtime.h"
 #include "micropython.h"
 #include "../vmm/uio.h"
 
-uint8_t *uio_framebuffer_region;
-
+extern uintptr_t framebuffer_data_region;
 /*
  * We get notified when we *can* write to the framebuffer, meaning that uPython
  * needs to wait until the framebuffer is ready.
  */
-
-STATIC mp_obj_t fb_set_pixel(mp_obj_t x_o, mp_obj_t y_o, mp_obj_t rgba_o) {
-    uint64_t x = mp_obj_get_int(x_o);
-    uint64_t y = mp_obj_get_int(y_o);
-    uint64_t rgba = mp_obj_get_int(rgba_o);
-
-    uint32_t r = (rgba & 0xff000000) >> 24;
-    uint32_t g = (rgba & 0x00ff0000) >> 16;
-    uint32_t b = (rgba & 0x0000ff00) >> 8;
-    uint32_t a = (rgba & 0x000000ff);
-
-    size_t offset = (x * (BPP/8)) + (y * LINE_LEN);
-
-    *(uio_framebuffer_region + offset) = b;
-    *(uio_framebuffer_region + offset + 1) = g;
-    *(uio_framebuffer_region + offset + 2) = r;
-    *(uio_framebuffer_region + offset + 3) = a;
-
-    return mp_const_none;
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(fb_set_pixel_obj, fb_set_pixel);
-
 STATIC mp_obj_t fb_wait(void) {
     mp_blocking_events = mp_event_source_framebuffer;
     co_switch(t_event);
@@ -41,18 +19,25 @@ STATIC mp_obj_t fb_wait(void) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(fb_wait_obj, fb_wait);
 
-STATIC mp_obj_t fb_flush(void) {
-    microkit_notify(VMM_CH);
+STATIC mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t size_obj) {
+    uint8_t *buf = MP_OBJ_TO_PTR(buf_obj);
+    uint64_t size = mp_obj_get_int(size_obj);
+
+    /* Need to now copy the data from MicroPython's framebuffer abstraction to
+     * our shared memory region */
+
+    memcpy((uint8_t *)framebuffer_data_region, buf, size);
+
+    microkit_notify(FRAMEBUFFER_VMM_CH);
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(fb_flush_obj, fb_flush);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_fb_send_obj, machine_fb_send);
 
 STATIC const mp_rom_map_elem_t fb_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR_fb) },
-    { MP_ROM_QSTR(MP_QSTR_set_pixel), MP_ROM_PTR(&fb_set_pixel_obj) },
     { MP_ROM_QSTR(MP_QSTR_wait), MP_ROM_PTR(&fb_wait_obj) },
-    { MP_ROM_QSTR(MP_QSTR_flush), MP_ROM_PTR(&fb_flush_obj) },
+    { MP_ROM_QSTR(MP_QSTR_machine_fb_send), MP_ROM_PTR(&machine_fb_send_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(fb_module_globals, fb_module_globals_table);
 
