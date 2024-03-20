@@ -22,7 +22,7 @@ extern char _kitty_python_script[];
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
 
-static char mp_stack[MICROPY_HEAP_SIZE];
+static char mp_stack[MICROPY_STACK_SIZE];
 cothread_t t_event, t_mp;
 
 char *nfs_share;
@@ -42,6 +42,8 @@ i2c_queue_handle_t i2c_queue_handle;
 uintptr_t i2c_request_region;
 uintptr_t i2c_response_region;
 uintptr_t i2c_data_region;
+
+uintptr_t framebuffer_data_region;
 
 int active_events = mp_event_source_none;
 int mp_blocking_events = mp_event_source_none;
@@ -151,8 +153,7 @@ void notified(microkit_channel ch) {
     case TIMER_CH:
         active_events |= mp_event_source_timer;
         break;
-    case VMM_CH:
-        /* We have gotten a message from the VMM, which means the framebuffer is ready. */
+    case FRAMEBUFFER_VMM_CH:
         active_events |= mp_event_source_framebuffer;
         break;
     case NFS_CH:

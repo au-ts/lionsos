@@ -17,9 +17,13 @@
 /* Specific to the framebuffer example */
 #include "uio.h"
 
+#if defined(CONFIG_PLAT_ODROIDC4)
 #define GUEST_RAM_SIZE 0x10000000
 #define GUEST_DTB_VADDR 0x2f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
+#define GUEST_INIT_RAM_DISK_VADDR 0x2c000000
+#else
+#error "Need to define platform specific guest info"
+#endif
 
 // @ivanv: need a more systematic way of choosing this IRQ number?
 /*
@@ -43,26 +47,7 @@ extern char _guest_initrd_image_end[];
 /* Microkit will set this variable to the start of the guest RAM memory region. */
 uintptr_t guest_ram_vaddr;
 
-// @ivanv: should be part of libvmm
-#define MAX_IRQ_CH 63
-int passthrough_irq_map[MAX_IRQ_CH];
-
-static void passthrough_device_ack(size_t vcpu_id, int irq, void *cookie) {
-    microkit_channel irq_ch = (microkit_channel)(int64_t)cookie;
-    microkit_irq_ack(irq_ch);
-}
-
-static void register_passthrough_irq(int irq, microkit_channel irq_ch) {
-    LOG_VMM("Register passthrough IRQ %d (channel: 0x%lx)\n", irq, irq_ch);
-    assert(irq_ch < MAX_IRQ_CH);
-    passthrough_irq_map[irq_ch] = irq;
-
-    int err = virq_register(GUEST_VCPU_ID, irq, &passthrough_device_ack, (void *)(int64_t)irq_ch);
-    if (!err) {
-        LOG_VMM_ERR("Failed to register IRQ %d\n", irq);
-        return;
-    }
-}
+uint32_t irqs[] = { 232, 35, 192, 193, 194, 53, 246, 71, 227, 228, 63, 62, 48, 89, 5 };
 
 void uio_gpu_ack(size_t vcpu_id, int irq, void *cookie) {
     // Do nothing, there is no actual IRQ to ack since UIO IRQs are virtual!
@@ -102,30 +87,11 @@ void init(void) {
         return;
     }
 
-    // // @ivanv minimise
-    /* Ethernet */
-    register_passthrough_irq(40, 5);
-    /* Ethernet PHY */
-    register_passthrough_irq(96, 6);
-    /* panfrost-gpu */
-    register_passthrough_irq(192, 7);
-    /* panfrost-mmu */
-    register_passthrough_irq(193, 8);
-    /* panfrost-job */
-    register_passthrough_irq(194, 9);
-    /* I2C */
-    register_passthrough_irq(53, 10);
-    /* USB */
-    register_passthrough_irq(63, 12);
-    /* USB */
-    register_passthrough_irq(62, 13);
-    /* HDMI */
-    register_passthrough_irq(89, 14);
-    /* VPU */
-    register_passthrough_irq(35, 15);
-    /* USB */
-    register_passthrough_irq(48, 16);
-    register_passthrough_irq(5, 17);
+    for (int i = 0; i < sizeof(irqs) / sizeof(uint32_t); i++) {
+        bool success = virq_register_passthrough(GUEST_VCPU_ID, irqs[i], i + 10);
+        /* Should not be any reason for this to fail */
+        assert(success);
+    }
 
     /* Setting up the UIO region for the framebuffer */
     virq_register(GUEST_VCPU_ID, UIO_GPU_IRQ, &uio_gpu_ack, NULL);
@@ -145,15 +111,13 @@ void notified(microkit_channel ch) {
             }
             break;
         }
-        default:
-            if (passthrough_irq_map[ch]) {
-                bool success = vgic_inject_irq(GUEST_VCPU_ID, passthrough_irq_map[ch]);
-                if (!success) {
-                    LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", passthrough_irq_map[ch], GUEST_VCPU_ID);
-                }
-                break;
+        default: {
+            bool success = virq_handle_passthrough(ch);
+            if (!success) {
+                LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", irqs[ch - 10], GUEST_VCPU_ID);
             }
-            printf("Unexpected channel, ch: 0x%lx\n", ch);
+            break;
+        }
     }
 }
 

@@ -6,7 +6,7 @@
 extern cothread_t t_event;
 extern cothread_t t_mp;
 
-#define VMM_CH 0
+#define FRAMEBUFFER_VMM_CH 0
 #define TIMER_CH 1
 #define ETH_RX_CH 2
 #define ETH_TX_CH 3

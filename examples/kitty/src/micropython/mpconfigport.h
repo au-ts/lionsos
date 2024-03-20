@@ -39,6 +39,7 @@
 #define MICROPY_PY_BUILTINS_MEMORYVIEW (1)
 #define MICROPY_PY_RE (1)
 #define MICROPY_PY_DEFLATE (1)
+#define MICROPY_PY_FRAMEBUF (1)
 
 #define MICROPY_FLOAT_IMPL (MICROPY_FLOAT_IMPL_FLOAT)
 
@@ -55,7 +56,8 @@
 
 // @ivanv: odd that 2KB did not work
 // Allocate 1MB for the heap
-#define MICROPY_HEAP_SIZE      (0x100000)
+#define MICROPY_HEAP_SIZE      (0x1000000)
+#define MICROPY_STACK_SIZE      (0x100000)
 
 // Type definitions for the specific machine.
 
