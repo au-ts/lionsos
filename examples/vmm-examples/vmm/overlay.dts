@@ -1,0 +1,18 @@
+/{
+#include "vmm_ram.h"
+	// VMM puts 256Mb RAM at 0x2000000
+	memory@0 {
+		device_type = "memory";
+		reg = <0x00 GUEST_RAM_ADDRESS 0x00 GUEST_RAM_SIZE>;
+	};
+	// We're going to use the passed-through serial device
+        chosen {
+		stdout-path = "serial0:115200n8";
+	        linux,initrd-start = <0x00000000 GUEST_INIT_RAM_DISK_VADDR>;
+	        linux,initrd-end =   <0x00000000 INITRD_END>;
+		bootargs = "ncpu=1 loglevel=8 root=UUID=687ada98-77c2-406d-ae2f-b8a071e057cd rootwait coherent_pool=2M  earlycon ubootpart=c4d340a8-01 libata.force=noncq usb-storage.quirks=0x2537:0x1066:u,0x2537:0x1068:u    cgroup_enable=memory console=ttyAML0,115200";
+	};
+	sm: secure-monitor {
+	  status = "reserved";
+       };
+};
