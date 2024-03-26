@@ -81,6 +81,10 @@ all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
+$(BUILD_DIR)/libm/libm.a: $(LIBMATH)
+	mkdir -p $(BUILD_DIR)/libm
+	cp $(LIBMATH)/libm.a $(BUILD_DIR)/libm/libm.a
+
 $(BUILD_DIR)/%.o: src/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
@@ -134,14 +138,14 @@ $(BUILD_DIR)/package_python_scripts.o: $(PACKAGE_PYTHON_SCRIPTS) src/kitty.py
 				-target $(TARGET) \
 				$< -o $@
 
-$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/sddf_serial_queue.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_i2c_queue.o
+$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/sddf_serial_queue.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_i2c_queue.o $(BUILD_DIR)/libm/libm.a
 	make -C src/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
 			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
 			BUILD=$(abspath $(BUILD_DIR)) \
 			PACKAGE_PYTHON_SCRIPTS=package_python_scripts.o \
-			LIBMATH=$(LIBMATH) \
+			LIBMATH=$(BUILD_DIR)/libm \
 			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
 
 ETHERNET=$(SDDF)/drivers/network/meson/
