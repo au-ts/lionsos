@@ -73,46 +73,10 @@ STATIC mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t h
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(machine_fb_send_obj, machine_fb_send);
 
-STATIC mp_obj_t machine_fb_test(void) {
-    uint8_t *fb_base;
-    fb_config_t *config;
-    config = get_fb_config(framebuffer_data_region);
-    get_fb_base_addr(framebuffer_data_region, &fb_base);
-    printf("xres: %d, yres: %d, bpp: %d\n", config->xres, config->yres, config->bpp);
-    size_t line_len = config->xres * (config->bpp/8);
-    int start = 100;
-    int end = 300;
-    for (int y = start; y < end; y++) {
-        for (int x = start; x < end; x++) {
-
-            uint64_t location = (x * (config->bpp/8)) + (y * line_len);
-            // printf("UIO location: 0x%lx\n", location);
-
-            // if (x == 100 && y == 100) {
-            //     printf("RECT|INFO: first location: 0x%lx\n", location);
-            // }
-            // if (x == 299 && y == 299) {
-            //     printf("RECT|INFO: final location: 0x%lx\n", location);
-            // }
-
-            *(fb_base + location) = 100;        // Some blue
-            *(fb_base + location + 1) = 15+(x-100)/2;     // A little green
-            *(fb_base + location + 2) = 200-(y-100)/5;    // A lot of red
-            *(fb_base + location + 3) = 0;      // No transparency
-        }
-    }
-
-    microkit_notify(FRAMEBUFFER_VMM_CH);
-
-    return mp_const_none;
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(machine_fb_test_obj, machine_fb_test);
-
 STATIC const mp_rom_map_elem_t fb_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR_fb) },
     { MP_ROM_QSTR(MP_QSTR_wait), MP_ROM_PTR(&fb_wait_obj) },
     { MP_ROM_QSTR(MP_QSTR_machine_fb_send), MP_ROM_PTR(&machine_fb_send_obj) },
-    { MP_ROM_QSTR(MP_QSTR_machine_fb_test), MP_ROM_PTR(&machine_fb_test_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(fb_module_globals, fb_module_globals_table);
 
