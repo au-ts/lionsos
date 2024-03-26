@@ -22,55 +22,6 @@ STATIC void vfs_sddf_fs_file_print(const mp_print_t *print, mp_obj_t self_in, mp
     mp_printf(print, "<io.%s %d>", mp_obj_get_type_str(self_in), self->fd);
 }
 
-mp_obj_t mp_vfs_sddf_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj_t mode_in) {
-    mp_obj_vfs_sddf_fs_file_t *o = m_new_obj(mp_obj_vfs_sddf_fs_file_t);
-    // const char *mode_s = mp_obj_str_get_str(mode_in);
-
-    // int mode_rw = 0, mode_x = 0;
-    // while (*mode_s) {
-    //     switch (*mode_s++) {
-    //         case 'r':
-    //             mode_rw = O_RDONLY;
-    //             break;
-    //         case 'w':
-    //             mode_rw = O_WRONLY;
-    //             mode_x = O_CREAT | O_TRUNC;
-    //             break;
-    //         case 'a':
-    //             mode_rw = O_WRONLY;
-    //             mode_x = O_CREAT | O_APPEND;
-    //             break;
-    //         case '+':
-    //             mode_rw = O_RDWR;
-    //             break;
-    //         case 'b':
-    //             type = &mp_type_vfs_posix_fileio;
-    //             break;
-    //         case 't':
-    //             type = &mp_type_vfs_posix_textio;
-    //             break;
-    //     }
-    // }
-
-    o->base.type = type;
-
-    mp_obj_t fid = file_in;
-
-    if (mp_obj_is_small_int(fid)) {
-        o->fd = MP_OBJ_SMALL_INT_VALUE(fid);
-        return MP_OBJ_FROM_PTR(o);
-    }
-
-    const char *fname = mp_obj_str_get_str(fid);
-    struct open_response response = sddf_fs_open(fname);
-    if (response.status != 0) {
-        mp_raise_OSError(response.status);
-        return mp_const_none;
-    }
-    o->fd = response.fd;
-    return MP_OBJ_FROM_PTR(o);
-}
-
 STATIC mp_obj_t vfs_sddf_fs_file_fileno(mp_obj_t self_in) {
     mp_obj_vfs_sddf_fs_file_t *self = MP_OBJ_TO_PTR(self_in);
     // check_fd_is_open(self);
@@ -195,3 +146,54 @@ MP_DEFINE_CONST_OBJ_TYPE(
 const mp_obj_vfs_sddf_fs_file_t mp_sys_stdin_obj = {{&mp_type_vfs_sddf_fs_textio}, STDIN_FILENO};
 const mp_obj_vfs_sddf_fs_file_t mp_sys_stdout_obj = {{&mp_type_vfs_sddf_fs_textio}, STDOUT_FILENO};
 const mp_obj_vfs_sddf_fs_file_t mp_sys_stderr_obj = {{&mp_type_vfs_sddf_fs_textio}, STDERR_FILENO};
+
+mp_obj_t mp_vfs_sddf_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj_t mode_in) {
+    mp_obj_vfs_sddf_fs_file_t *o = m_new_obj(mp_obj_vfs_sddf_fs_file_t);
+    const char *mode_s = mp_obj_str_get_str(mode_in);
+
+    int mode_rw = 0, mode_x = 0;
+    while (*mode_s) {
+        switch (*mode_s++) {
+            case 'r':
+                mode_rw = O_RDONLY;
+                break;
+            case 'w':
+                mode_rw = O_WRONLY;
+                mode_x = O_CREAT | O_TRUNC;
+                break;
+            case 'a':
+                mode_rw = O_WRONLY;
+                mode_x = O_CREAT | O_APPEND;
+                break;
+            case '+':
+                mode_rw = O_RDWR;
+                break;
+            case 'b':
+                type = &mp_type_vfs_sddf_fs_fileio;
+                break;
+            // case 't':
+                // type = &mp_type_vfs_posix_textio;
+                // break;
+            case 't':
+                assert(0);
+        }
+    }
+
+    o->base.type = type;
+
+    mp_obj_t fid = file_in;
+
+    if (mp_obj_is_small_int(fid)) {
+        o->fd = MP_OBJ_SMALL_INT_VALUE(fid);
+        return MP_OBJ_FROM_PTR(o);
+    }
+
+    const char *fname = mp_obj_str_get_str(fid);
+    struct open_response response = sddf_fs_open(fname);
+    if (response.status != 0) {
+        mp_raise_OSError(response.status);
+        return mp_const_none;
+    }
+    o->fd = response.fd;
+    return MP_OBJ_FROM_PTR(o);
+}
