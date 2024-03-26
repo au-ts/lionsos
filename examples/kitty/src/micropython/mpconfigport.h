@@ -7,6 +7,7 @@
 #define MICROPY_PY_BUILTINS_EVAL_EXEC (1)
 
 // #define MICROPY_QSTR_EXTRA_POOL           mp_qstr_frozen_const_pool
+#define MICROPY_ENABLE_SOURCE_LINE (1)
 #define MICROPY_MODULE_WEAK_LINKS (1)
 #define MICROPY_ENABLE_GC (1)
 #define MICROPY_HELPER_REPL (1)
@@ -37,6 +38,7 @@
 #define MICROPY_PY_RE (1)
 #define MICROPY_PY_DEFLATE (1)
 #define MICROPY_PY_FRAMEBUF (1)
+#define MICROPY_PY_UCTYPES (1)
 
 #define MICROPY_FLOAT_IMPL (MICROPY_FLOAT_IMPL_FLOAT)
 
@@ -51,8 +53,7 @@
 #define MICROPY_PY_TIME_TIME_TIME_NS            (1)
 // #define MICROPY_PY_TIME_INCLUDEFILE             "modtime.c"
 
-// @ivanv: odd that 2KB did not work
-// Allocate 1MB for the heap
+// Allocate 16MB for the heap
 #define MICROPY_HEAP_SIZE      (0x1000000)
 #define MICROPY_STACK_SIZE      (0x100000)
 

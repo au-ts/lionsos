@@ -23,7 +23,7 @@
         stdout-path = "/soc/bus@ff800000/serial@3000";
 		linux,initrd-end = <0x00000000 0x2f000000>;
         linux,initrd-start = <0x00000000 0x2c000000>;
-        bootargs = "console=ttynull root=/dev/ram0 nosmp rw loglevel=8 pci=nomsi maxcpus=1 clk_ignore_unused uio_pdrv_genirq.of_id=generic-uio earlyprintk=serial";
+        bootargs = "console=ttynull root=/dev/ram0 nosmp rw loglevel=8 pci=nomsi maxcpus=1 clk_ignore_unused uio_pdrv_genirq.of_id=generic-uio earlyprintk=serial vt.global_cursor_default=0";
 
 		framebuffer-cvbs {
 			compatible = "amlogic,simple-framebuffer\0simple-framebuffer";
