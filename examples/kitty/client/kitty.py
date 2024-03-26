@@ -1,12 +1,16 @@
+import framebuf
+import fb
 import time
-# import png
-# import sys
+from png import png
+import sys
 # import socket
 import asyncio
 import errno
 from pn532 import PN532
 # from multiprocessing import shared_memory
 # from bdfparser import Font
+import font
+from font_writer import CWriter
 
 current_uid = []
 current_equal_count = 0
@@ -17,19 +21,41 @@ token = 0
 reader_stream = None
 writer_stream = None
 
-IP_ADDRESS = "10.13.0.12"
+IP_ADDRESS = "172.16.0.2"
 PORT = 3738
+
+
+class BoolPalette(framebuf.FrameBuffer):
+    def __init__(self, mode):
+        buf = bytearray(4)  # OK for <= 16 bit color
+        super().__init__(buf, 2, 1, mode)
+
+    def fg(self, color):  # Set foreground color
+        self.pixel(1, 0, color)
+
+    def bg(self, color):
+        self.pixel(0, 0, color)
+
+class KittyDisplay(framebuf.FrameBuffer):
+    def __init__(self, width, height):
+        self.buf = bytearray(width * height * 2)
+        self.palette = BoolPalette(framebuf.RGB565)
+        self.width = width
+        self.height = height
+        super().__init__(self.buf, self.width, self.height, framebuf.RGB565)
+
+    def show(self):
+        fb.machine_fb_send(self.buf, self.width, self.height)
+
 
 # @alwin: all the vars highlighted are still (especially) dodgy
 ######################################################
-# fb = shared_memory.SharedMemory("fb0")
-width = 800
-height = 600
-# pic = list(png.Reader("catwithfish.png").read()[2])
-# font = Font('unifont-13.0.04.bdf')
+display_width = 1920
+display_height = 1080
+display = KittyDisplay(display_width, display_height)
+wri = CWriter(display, font)
 reset_cb = None
 ######################################################
-
 
 # Heartbeat to let the server know we still exist
 def heartbeat():
@@ -122,57 +148,67 @@ async def read_card(p):
         await asyncio.sleep_ms(100)
 
 
-def set_pixel(x, y, rgba):
-    idx = 4 * (width * y + x)
-    fb.buf[idx:(idx + 4)] = bytearray([
-        rgba & 0xFF,
-        (rgba >> 8) & 0xFF,
-        (rgba >> 16) & 0xFF,
-        (rgba >> 24) & 0xFF,
-    ])
+def set_pixel(display, x, y, rgba):
+    r = (rgba >> 24) & 0xff
+    g = (rgba >> 16) & 0xff
+    b = (rgba >> 8) & 0xff
+    rgb565 = ((r & 0b11111000) << 8) | ((g & 0b11111100) << 3) | (b >> 3);
+    display.pixel(x, y, rgb565)
+    # idx = 4 * (width * y + x)
+    # fb.buf[idx:(idx + 4)] = bytearray([
+    #     rgba & 0xFF,
+    #     (rgba >> 8) & 0xFF,
+    #     (rgba >> 16) & 0xFF,
+    #     (rgba >> 24) & 0xFF,
+    # ])
 
 
 def reset_status():
-    fill_rectangle(400, 250, 300, 300, 0x000000FF)
-    draw_string(400, 250, "Tap to pay $1", 2, 0xFFFFFFFF, 0x0, False, False)
+    display.rect(300, 300, 700, 700, 0x0, True)
+    wri.set_textpos(display, 300, 540)
+    wri.printstring("waiting for taps...")
+    display.show()
 
 
-def draw_image(x0, y0, data):
-    w, h = len(data[0]) // 4, len(data)
+def draw_image(display, x0, y0, data):
+    # w, h = len(data[0]) // 4, len(data)
+    w = 400
+    h = 430
     for y in range(h):
         for x in range(w):
-            pixel = data[y][(x * 4):(x * 4)+4]
+            pixel = data[(y * w * 4 + (x * 4)):(y * w * 4 + (x * 4))+4]
+            # print(f"KITTY|INFO: {pixel}")
             rgba = pixel[3] & 0xFF
             rgba |= (pixel[2] & 0xFF) << 8
             rgba |= (pixel[1] & 0xFF) << 16
             rgba |= (pixel[0] & 0xFF) << 24
             if rgba == 0x000000FF:
                 rgba = 0x303030FF
-            set_pixel(x0 + x, y0 + y, rgba)
+            set_pixel(display, x0 + x, y0 + y, rgba)
 
 
-def draw_bitmap(x, y, bitmap, color1, color2):
+def draw_bitmap(fbuf, x, y, bitmap, color1, color2):
     for x_off in range(len(bitmap[0])):
         for y_off in range(len(bitmap)):
             if bitmap[y_off][x_off] == 1:
-                set_pixel(x + x_off, y + y_off, color1)
+                set_pixel(fbuf, x + x_off, y + y_off, color1)
             elif bitmap[y_off][x_off] == 2:
-                set_pixel(x + x_off, y + y_off, color2)
+                set_pixel(fbuf, x + x_off, y + y_off, color2)
             else:
-                set_pixel(x + x_off, y + y_off, 0x000000FF)
+                set_pixel(fbuf, x + x_off, y + y_off, 0x000000FF)
 
 
-def draw_string(x, y, string, scale, color1, color2, shadowed, glowing):
+def draw_string(fbuf, x, y, string, scale, color1, color2, shadowed, glowing):
     x_off = 8 * scale
     for i in range(len(string)):
-        glyph = font.glyph(string[i]).draw()
-        if shadowed:
-            glyph = glyph.shadow()
-        if glowing:
-            glyph = glyph.glow()
+        glyph = font.get_ch(string[i])
+        # if shadowed:
+            # glyph = glyph.shadow()
+        # if glowing:
+            # glyph = glyph.glow()
         glyph *= scale
-        data = glyph.todata(2)
-        draw_bitmap(x + i * x_off, y, data, color1, color2)
+        # data = glyph.todata(2)
+        draw_bitmap(fbuf, x + i * x_off, y, glyph, color1, color2)
 
 
 def fill_rectangle(x0, y0, w, h, rgba):
@@ -223,14 +259,22 @@ async def read_from_server():
             print(f'TOKEN = {token}')
         elif words[0] == '200':
             name, balance = words[2], words[4]
-            draw_string(400, 250, f'Thanks {name}', 2,
-                        0xFFFFFFFF, 0x0, False, False)
-            draw_string(400, 300, f'Balance: {balance}', 2,
-                        0xFFFFFFFF, 0x0, False, False)
+            print("KITTY|INFO: got the resposne!")
+
+            display.rect(540, 300, 700, 700, 0x0000, True)
+            wri.set_textpos(display, 300, 400)
+            wri.printstring(f"Thanks {name}")
+            wri.set_textpos(display, 400, 400)
+            wri.printstring(f"Your balance is now {balance}")
+            display.show()
+            # draw_string(400, 250, f'Thanks {name}', 2,
+                        # 0xFFFFFFFF, 0x0, False, False)
+            # draw_string(400, 300, f'Balance: {balance}', 2,
+                        # 0xFFFFFFFF, 0x0, False, False)
             if reset_cb is not None:
                 reset_cb.cancel()
                 reset_cb = None
-            asyncio.create_task(wait_seconds_and_call(2, reset_status()))
+            asyncio.create_task(wait_seconds_and_call(5, reset_status))
 
 
 # Coroutine responsible for reading the card
@@ -240,14 +284,32 @@ async def read_card_main():
     p.sam_configure()
     await read_card(p)
 
-
 async def main():
     global reader_stream
     global writer_stream
     reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
-    # draw_image(0, 40, pic)
+    print(f"KITTY|INFO: starting at {}", time.time())
+    size = 688000
+    cat_buf = bytearray(size)
+    with open("catwithfish.data", "rb") as f:
+        nbytes = f.readinto(cat_buf)
+        print(f"KITTY|INFO: read {nbytes} bytes")
+        pic = memoryview(cat_buf)
+        # print(pic[:4])
+        print("KITTY|INFO: read image, starting to draw")
+        draw_image(display, 0, 40, pic[0:])
+    display.show()
+    print(time.time())
+    print("KITTY|INFO: about to draw string!")
     # draw_string(400, 100, "Kitty v5", 5, 0xFFFFFFFF, 0x008800FF, True, False)
+    wri.setcolor(0xffff, 0x0000)
+    wri.set_textpos(display, 100, 540)
+    wri.printstring("Welcome to Kitty v5!")
+    wri.set_textpos(display, 300, 540)
+    wri.printstring("waiting for taps...")
+
+    display.show()
 
     await asyncio.gather(
         asyncio.create_task(heartbeat()),
