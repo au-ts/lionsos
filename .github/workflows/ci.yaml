@@ -26,8 +26,10 @@ jobs:
           tar xf aarch64-toolchain.tar.gz
           echo "$(pwd)/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf/bin" >> $GITHUB_PATH
       - name: Build Kitty example
-        run: export LIBGCC=$(pwd)/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf/lib/gcc/aarch64-none-elf/12.3.1 && make -C examples/kitty MICROKIT_SDK=$(pwd)/microkit-sdk-1.2.6
+        run: make -C examples/kitty MICROKIT_SDK=$(pwd)/microkit-sdk-1.2.6
         env:
+          LIBGCC: ${PWD}/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf/lib/gcc/aarch64-none-elf/12.3.1
+          LIBMATH: ${PWD}/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf/aarch64-none-elf/lib/
           NFS_SERVER: 0.0.0.0
           NFS_DIRECTORY: test/
   build_kitty_macos_aarch64:
@@ -50,7 +52,9 @@ jobs:
           tar xf aarch64-toolchain.tar.gz
           echo "$(pwd)/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf/bin" >> $GITHUB_PATH
       - name: Build Kitty example
-        run: export LIBGCC=$(pwd)/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf/lib/gcc/aarch64-none-elf/12.3.1 && nix-shell --run 'make -C examples/kitty MICROKIT_SDK=$(pwd)/microkit-sdk-1.2.6'
+        run: nix-shell --run 'make -C examples/kitty MICROKIT_SDK=$(pwd)/microkit-sdk-1.2.6'
         env:
+          LIBGCC: ${PWD}/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf/lib/gcc/aarch64-none-elf/12.3.1
+          LIBMATH: ${PWD}/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf/aarch64-none-elf/lib/
           NFS_SERVER: 0.0.0.0
           NFS_DIRECTORY: test/
