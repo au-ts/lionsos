@@ -12,6 +12,10 @@ ifeq ($(strip $(LIBGCC)),)
 $(error LIBGCC must be specified: this should be the directory where libgcc.a can be found)
 endif
 
+ifeq ($(strip $(LIBMATH)),)
+$(error LIBMATH must be specified: this should be the directory where libm.a can be found)
+endif
+
 MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
 MICROKIT_BOARD := odroidc4
@@ -141,6 +145,7 @@ $(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUIL
 			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
 			BUILD=$(abspath $(BUILD_DIR)) \
 			PACKAGE_PYTHON_SCRIPTS=package_python_scripts.o \
+			LIBMATH=$(LIBMATH) \
 			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
 
 ETHERNET=$(SDDF)/drivers/network/meson/
