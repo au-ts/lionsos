@@ -47,6 +47,11 @@ extern char _guest_initrd_image_end[];
 /* Microkit will set this variable to the start of the guest RAM memory region. */
 uintptr_t guest_ram_vaddr;
 
+/* IRQs to pass-through to the guest */
+/* These are expected to have a 1-1 mapping between index and Microkit channel,
+ * starting from 10. For example, the second IRQ in this list should have the
+ * channel number of 12. This will be cleaned up in the future.
+ */
 uint32_t irqs[] = { 232, 35, 192, 193, 194, 53, 246, 71, 227, 228, 63, 62, 48, 89, 5 };
 
 void uio_gpu_ack(size_t vcpu_id, int irq, void *cookie) {
