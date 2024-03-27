@@ -2,9 +2,11 @@
 #include <sddf/timer/client.h>
 #include "micropython.h"
 #include "py/obj.h"
+#include "py/mphal.h"
+#include "modtime_impl.h"
 
 uint64_t mp_hal_time_ns(void) {
-    return mp_obj_new_int(sddf_timer_time_now(TIMER_CH));
+    return sddf_timer_time_now(TIMER_CH);
 }
 
 mp_uint_t mp_hal_ticks_us(void) {
