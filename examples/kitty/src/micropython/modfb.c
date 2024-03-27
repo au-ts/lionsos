@@ -5,7 +5,7 @@
 #include "micropython.h"
 #include "../vmm/uio.h"
 
-extern uintptr_t framebuffer_data_region;
+extern void *framebuffer_data_region;
 /*
  * We get notified when we *can* write to the framebuffer, meaning that MicroPython
  * needs to wait until the framebuffer is ready.

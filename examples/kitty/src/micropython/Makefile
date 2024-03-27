@@ -142,7 +142,7 @@ $(BUILD)/micropython.elf: $(OBJ)
 include $(TOP)/py/mkrules.mk
 
 directories:
-	$(info $(shell mkdir -p $(BUILD_DIR)/micropython/lwip/)) \
-	$(info $(shell mkdir -p $(BUILD_DIR)/micropython/lwip/core)) \
-	$(info $(shell mkdir -p $(BUILD_DIR)/micropython/lwip/netif)) \
-	$(info $(shell mkdir -p $(BUILD_DIR)/micropython/lwip/core/ipv4))
+	$(shell mkdir -p $(BUILD)/micropython/lwip/)
+	$(shell mkdir -p $(BUILD)/micropython/lwip/core)
+	$(shell mkdir -p $(BUILD)/micropython/lwip/netif)
+	$(shell mkdir -p $(BUILD)/micropython/lwip/core/ipv4)

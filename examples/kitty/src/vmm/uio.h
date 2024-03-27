@@ -41,7 +41,7 @@ void set_fb_config(void *uio_map, fb_config_t config) {
     *(fb_config_t *)uio_map = config;
 }
 
-void get_fb_base_addr(void *uio_map, void **fb_base_addr) {
+void get_fb_base_addr(void *uio_map, uint8_t **fb_base_addr) {
     if (uio_map == NULL) {
         printf("UIO ERROR: uio_map is NULL\n");
         *fb_base_addr = NULL;
