@@ -82,3 +82,5 @@ void mp_hal_delay_us(mp_uint_t delay);
 typedef uint32_t sys_prot_t;
 
 void init_networking(void);
+
+#define MICROPY_PY_TIME_INCLUDEFILE "modtime_impl.h"
