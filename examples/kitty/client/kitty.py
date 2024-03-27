@@ -245,7 +245,7 @@ async def read_from_server():
             if reset_cb is not None:
                 reset_cb.cancel()
                 reset_cb = None
-            asyncio.create_task(wait_seconds_and_call(5, reset_status))
+            asyncio.create_task(wait_seconds_and_call(3, reset_status))
 
 
 # Coroutine responsible for reading the card
