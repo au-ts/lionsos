@@ -65,7 +65,7 @@ STATIC mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t h
      * propogate any cached writes so that it is visible by the Linux user-program that
      * talks to the real framebuffer.
      */
-    cache_clean(framebuffer_data_region, framebuffer_data_region + (width * height * 4));
+    cache_clean((uintptr_t)framebuffer_data_region, (uintptr_t)framebuffer_data_region + (width * height * 4));
     microkit_notify(FRAMEBUFFER_VMM_CH);
 
     return mp_const_none;
