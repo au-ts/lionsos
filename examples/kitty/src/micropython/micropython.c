@@ -140,6 +140,7 @@ void init(void) {
 
 void pyb_lwip_poll(void);
 void process_rx(void);
+void mpnet_handle_notify(void);
 
 void notified(microkit_channel ch) {
     pyb_lwip_poll();
