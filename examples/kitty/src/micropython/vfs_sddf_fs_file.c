@@ -171,11 +171,9 @@ mp_obj_t mp_vfs_sddf_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, m
             case 'b':
                 type = &mp_type_vfs_sddf_fs_fileio;
                 break;
-            // case 't':
-                // type = &mp_type_vfs_posix_textio;
-                // break;
             case 't':
-                assert(0);
+                type = &mp_type_vfs_sddf_fs_textio;
+                break;
         }
     }
 
