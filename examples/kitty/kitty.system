@@ -110,7 +110,7 @@
 
     <protection_domain name="eth" priority="110" budget="100" period="400">
         <program_image path="ethernet.elf" />
-        <map mr="eth" vaddr="0x2_000_000" perms="rw" cached="false"/>
+        <map mr="eth" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth_regs" />
         <map mr="hw_ring_buffer" vaddr="0x2_200_000" perms="rw" cached="false" setvar_vaddr="hw_ring_buffer_vaddr" />
 
         <map mr="eth_rx_free_drv" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
