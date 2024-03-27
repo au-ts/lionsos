@@ -124,7 +124,7 @@ class PN532:
 	def pn532_read_response(self, retries: int) -> bytearray:
 		length = self._pn532_read_response_length(retries)
 		if (length < 0):
-			print("READ RESPONSE - Length was less than zero")
+			# print("READ RESPONSE - Length was less than zero")
 			return bytearray([])
 
 		attempts = 0
@@ -184,4 +184,4 @@ class PN532:
 
 		uid_length = buf[5]
 
-		return list(buf[6:6+uid_length])
+		return buf[6:6+uid_length]
