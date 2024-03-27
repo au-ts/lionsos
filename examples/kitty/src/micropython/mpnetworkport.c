@@ -12,7 +12,7 @@
 #include "extmod/modnetwork.h"
 
 #include <sddf/timer/client.h>
-#include <sddf/network/shared_ringbuffer.h>
+#include <sddf/network/queue.h>
 #include <sddf/util/cache.h>
 #include <sddf/network/constants.h>
 #include <ethernet_config.h>
@@ -56,22 +56,22 @@ typedef struct state
     uint8_t mac[6];
 
     /* Pointers to shared buffers */
-    ring_handle_t rx_ring;
-    ring_handle_t tx_ring;
+    net_queue_handle_t rx_queue;
+    net_queue_handle_t tx_queue;
 } state_t;
 
 state_t state;
 
 LWIP_MEMPOOL_DECLARE(
     RX_POOL,
-    RX_RING_SIZE_CLI1 * 2,
+    RX_QUEUE_SIZE_CLI1 * 2,
     sizeof(pbuf_custom_offset_t),
     "Zero-copy RX pool");
 
 uintptr_t rx_free;
-uintptr_t rx_used;
+uintptr_t rx_active;
 uintptr_t tx_free;
-uintptr_t tx_used;
+uintptr_t tx_active;
 uintptr_t rx_buffer_data_region;
 uintptr_t tx_buffer_data_region;
 
@@ -90,8 +90,8 @@ static void interface_free_buffer(struct pbuf *buf) {
     SYS_ARCH_DECL_PROTECT(old_level);
     pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)buf;
     SYS_ARCH_PROTECT(old_level);
-    buff_desc_t buffer = { custom_pbuf_offset->offset, 0 };
-    enqueue_free(&state.rx_ring, buffer);
+    net_buff_desc_t buffer = { custom_pbuf_offset->offset, 0 };
+    net_enqueue_free(&state.rx_queue, buffer);
     notify_rx = true;
     LWIP_MEMPOOL_FREE(RX_POOL, custom_pbuf_offset);
     SYS_ARCH_UNPROTECT(old_level);
@@ -102,11 +102,11 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
     add to used tx ring, notify server */
     err_t ret = ERR_OK;
 
-    if (p->tot_len > BUFF_SIZE) {
+    if (p->tot_len > NET_BUFFER_SIZE) {
         return ERR_MEM;
     }
-    buff_desc_t buffer;
-    int err = dequeue_free(&state.tx_ring, &buffer);
+    net_buff_desc_t buffer;
+    int err = net_dequeue_free(&state.tx_queue, &buffer);
     if (err) {
         return ERR_MEM;
     }
@@ -119,7 +119,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
 
     /* insert into the used tx queue */
     buffer.len = copied;
-    err = enqueue_used(&state.tx_ring, buffer);
+    err = net_enqueue_active(&state.tx_queue, buffer);
     assert(!err);
     notify_tx = true;
 
@@ -167,8 +167,8 @@ static err_t ethernet_init(struct netif *netif)
 
 void init_networking(void) {
     /* Set up shared memory regions */
-    cli_ring_init_sys(microkit_name, &state.rx_ring, rx_free, rx_used, &state.tx_ring, tx_free, tx_used);
-    buffers_init((ring_buffer_t *)tx_free, 0, state.tx_ring.free_ring->size);
+    cli_queue_init_sys(microkit_name, &state.rx_queue, rx_free, rx_active, &state.tx_queue, tx_free, tx_active);
+    net_buffers_init((net_queue_t *)tx_free, 0, state.tx_queue.free->size);
 
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
@@ -196,8 +196,8 @@ void init_networking(void) {
     int err = dhcp_start(&(state.netif));
     dlogp(err, "failed to start DHCP negotiation");
 
-    if (notify_rx && require_signal(state.rx_ring.free_ring)) {
-        cancel_signal(state.rx_ring.free_ring);
+    if (notify_rx && net_require_signal(state.rx_queue.free)) {
+        net_cancel_signal(state.rx_queue.free);
         notify_rx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETH_RX_CH);
@@ -206,8 +206,8 @@ void init_networking(void) {
         }
     }
 
-    if (notify_tx && require_signal(state.tx_ring.used_ring)) {
-        cancel_signal(state.tx_ring.used_ring);
+    if (notify_tx && net_require_signal(state.tx_queue.active)) {
+        net_cancel_signal(state.tx_queue.active);
         notify_tx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETH_TX_CH);
@@ -220,9 +220,9 @@ void init_networking(void) {
 void process_rx(void) {
     bool reprocess = true;
     while (reprocess) {
-        while (!ring_empty(state.rx_ring.used_ring)) {
-            buff_desc_t buffer;
-            dequeue_used(&state.rx_ring, &buffer);
+        while (!net_queue_empty(state.rx_queue.active)) {
+            net_buff_desc_t buffer;
+            net_dequeue_active(&state.rx_queue, &buffer);
 
             pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
             custom_pbuf_offset->offset = buffer.phys_or_offset;
@@ -234,7 +234,7 @@ void process_rx(void) {
                 PBUF_REF,
                 &custom_pbuf_offset->custom,
                 (void *)(buffer.phys_or_offset + rx_buffer_data_region),
-                BUFF_SIZE
+                NET_BUFFER_SIZE
     	    );
 
             if (state.netif.input(p, &state.netif) != ERR_OK) {
@@ -244,11 +244,11 @@ void process_rx(void) {
             }
         }
 
-        request_signal(state.rx_ring.used_ring);
+        net_request_signal(state.rx_queue.active);
         reprocess = false;
 
-        if (!ring_empty(state.rx_ring.used_ring)) {
-            cancel_signal(state.rx_ring.used_ring);
+        if (!net_queue_empty(state.rx_queue.active)) {
+            net_cancel_signal(state.rx_queue.active);
             reprocess = true;
         }
     }
@@ -260,8 +260,8 @@ void pyb_lwip_poll(void) {
 }
 
 void mpnet_handle_notify(void) {
-    if (notify_rx && require_signal(state.rx_ring.free_ring)) {
-        cancel_signal(state.rx_ring.free_ring);
+    if (notify_rx && net_require_signal(state.rx_queue.free)) {
+        net_cancel_signal(state.rx_queue.free);
         notify_rx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETH_RX_CH);
@@ -270,8 +270,8 @@ void mpnet_handle_notify(void) {
         }
     }
 
-    if (notify_tx && require_signal(state.tx_ring.used_ring)) {
-        cancel_signal(state.tx_ring.used_ring);
+    if (notify_tx && net_require_signal(state.tx_queue.active)) {
+        net_cancel_signal(state.tx_queue.active);
         notify_tx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETH_TX_CH);
