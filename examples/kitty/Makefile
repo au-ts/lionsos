@@ -31,8 +31,9 @@ MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-SDDF := ../../sddf
-LIBVMM := ../../libvmm
+LIONSOS := ../..
+SDDF := $(LIONSOS)/sddf
+LIBVMM := $(LIONSOS)/libvmm
 
 VMM_IMAGE_DIR := src/vmm/images
 LINUX := $(VMM_IMAGE_DIR)/linux
@@ -41,9 +42,9 @@ DTS := $(VMM_IMAGE_DIR)/linux.dts
 DTB := $(BUILD_DIR)/linux.dtb
 
 LWIP=$(SDDF)/network/ipstacks/lwip/src
-LIBNFS=../../libnfs
-NFS=../../fs/nfs
-MUSL=../../musllibc
+LIBNFS=$(LIONSOS)/libnfs
+NFS=$(LIONSOS)/fs/nfs
+MUSL=$(LIONSOS)/musllibc
 
 IMAGES := timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf arp.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf i2c_virt.elf i2c_driver.elf
 CFLAGS := \
@@ -150,7 +151,7 @@ $(BUILD_DIR)/sddf_timer_client.o: FORCE
 $(BUILD_DIR)/sddf_util_cache.o: $(SDDF)/util/cache.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-SDDF_FS_PROTOCOL=../../fs/protocol/
+SDDF_FS_PROTOCOL=$(LIONSOS)/fs/protocol/
 $(BUILD_DIR)/sddf_fs_protocol.o: FORCE
 	BUILD_DIR=$(abspath $(BUILD_DIR)) make -C $(SDDF_FS_PROTOCOL)
 
@@ -163,7 +164,7 @@ $(BUILD_DIR)/musllibc/lib/libc.a:
 		SOURCE_DIR=.
 
 $(BUILD_DIR)/libnfs/lib/libnfs.a: $(BUILD_DIR)/musllibc/lib/libc.a
-	MUSL=$(abspath $(BUILD_DIR)/musllibc) cmake -S ../../libnfs -B $(BUILD_DIR)/libnfs
+	MUSL=$(abspath $(BUILD_DIR)/musllibc) cmake -S $(LIONSOS)/libnfs -B $(BUILD_DIR)/libnfs
 	cmake --build $(BUILD_DIR)/libnfs
 
 $(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
@@ -171,7 +172,7 @@ $(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
 		BUILD_DIR=$(abspath $(BUILD_DIR)/nfs) \
 		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
 		MUSLLIBC_INCLUDE=$(abspath $(BUILD_DIR)/musllibc/include) \
-		LIBNFS_INCLUDE=$(abspath ../../libnfs/include) \
+		LIBNFS_INCLUDE=$(abspath $(LIONSOS)/libnfs/include) \
 		ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
 
 $(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a
