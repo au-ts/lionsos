@@ -64,7 +64,7 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
     ret = serial_enqueue_active(&serial_tx_queue, buffer, len);
     // @ivanv: this error condition is a real possibilily and should be handled properly
     if (ret) {
-        microkit_dbg_puts("MP|ERROR: could not enqueue used serial TX buffer\n");
+        microkit_dbg_puts("MP|ERROR: could not enqueue active serial TX buffer\n");
     }
 
     microkit_notify(SERIAL_TX_CH);
