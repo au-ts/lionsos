@@ -75,8 +75,6 @@ VMM_OBJS := vmm.o printf.o virq.o linux.o \
 
 TIMER_DRIVER := $(SDDF)/drivers/clock/meson
 
-PACKAGE_PYTHON_SCRIPTS := src/package_python_scripts.S
-
 all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
 
 $(BUILD_DIR):
@@ -133,19 +131,12 @@ $(BUILD_DIR)/vmm.elf: $(addprefix $(BUILD_DIR)/, $(VMM_OBJS))
 $(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(BUILD_DIR)/package_python_scripts.o: $(PACKAGE_PYTHON_SCRIPTS) src/kitty.py
-	$(CC) -c -g3 -x assembler-with-cpp \
-				-DKITTY_PYTHON_SCRIPT_PATH=\"src/kitty.py\" \
-				-target $(TARGET) \
-				$< -o $@
-
-$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/package_python_scripts.o $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/libm/libm.a
+$(BUILD_DIR)/micropython.elf: FORCE $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/libm/libm.a
 	make -C src/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
 			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
 			BUILD=$(abspath $(BUILD_DIR)) \
-			PACKAGE_PYTHON_SCRIPTS=package_python_scripts.o \
 			LIBMATH=$(BUILD_DIR)/libm \
 			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
 

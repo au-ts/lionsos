@@ -16,9 +16,6 @@
 #include "lwip/init.h"
 #include "mpconfigport.h"
 
-/* Data for the Kitty Python script. */
-extern char _kitty_python_script[];
-
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
 
@@ -109,7 +106,6 @@ start_repl:
 
     // Start a normal REPL; will exit when ctrl-D is entered on a blank line.
     pyexec_friendly_repl();
-    // exec_str(_kitty_python_script, MP_PARSE_FILE_INPUT);
 
     // Deinitialise the runtime.
     gc_sweep_all();
