@@ -251,7 +251,7 @@
 
     <protection_domain name="micropython" priority="1">
         <program_image path="micropython.elf" />
-        <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="false" setvar_vaddr="framebuffer_data_region" />
+        <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="true" setvar_vaddr="framebuffer_data_region" />
 
         <map mr="nfs_command_queue" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="nfs_command_queue" />
         <map mr="nfs_completion_queue" vaddr="0x7_902_000" perms="rw" cached="true" setvar_vaddr="nfs_completion_queue" />
@@ -301,10 +301,9 @@
     <protection_domain name="framebuffer_vmm" priority="1">
         <program_image path="vmm.elf" />
         <map mr="framebuffer_guest_ram" vaddr="0x20000000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
-        <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="false" />
         <virtual_machine name="linux" id="0" priority="1">
             <map mr="framebuffer_guest_ram" vaddr="0x20000000" perms="rwx" />
-            <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="false" />
+            <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="true" />
             <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
             <map mr="gpio" vaddr="0xff634000" perms="rw" cached="false" />
             <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" />
