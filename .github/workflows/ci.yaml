@@ -13,7 +13,7 @@ jobs:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
         with:
-          submodules: 'true'
+          submodules: 'recursive'
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
       - name: Download Microkit SDK
         run: wget https://trustworthy.systems/Downloads/microkit/microkit-sdk-dev-8e40fe8-linux-x86-64.tar.gz
@@ -38,7 +38,7 @@ jobs:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
         with:
-          submodules: 'true'
+          submodules: 'recursive'
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
       - name: Download Microkit SDK
         run: wget https://trustworthy.systems/Downloads/microkit/microkit-sdk-dev-8e40fe8-macos-aarch64.tar.gz
