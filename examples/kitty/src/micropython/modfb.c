@@ -6,7 +6,7 @@
 
 extern uintptr_t framebuffer_data_region;
 /*
- * We get notified when we *can* write to the framebuffer, meaning that uPython
+ * We get notified when we *can* write to the framebuffer, meaning that MicroPython
  * needs to wait until the framebuffer is ready.
  */
 STATIC mp_obj_t fb_wait(void) {
@@ -34,8 +34,6 @@ STATIC mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t h
     mp_get_buffer(buf_obj, &bufinfo, MP_BUFFER_READ);
     uint16_t *buf = (uint16_t *)bufinfo.buf;
 
-    printf("width: 0x%lx, height: 0x%lx, framebuffer addr: 0x%lx\n", width, height, framebuffer);
-
     /* Need to now copy the data from MicroPython's framebuffer abstraction to
      * our shared memory region */
 
@@ -46,24 +44,16 @@ STATIC mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t h
             uint8_t r5 = (col >> 11) & 0x1f;
             uint8_t g6 = (col >> 5) & 0x3f;
             uint8_t b5 = (col) & 0x1f;
-            // uint8_t r8 = r5 * 8;
-            // uint8_t g8 = g6 * 4;
-            // uint8_t b8 = b5 * 8;
-            // printf("x: 0x%lx, y: 0x%lx, col: 0x%x r5: 0%x, g6: 0x%x, b5: 0x%x, r8: 0x%x, g8: 0x%x, b8: 0x%x\n", x, y, col, r5, g6, b5, r8, g8, b8);
+            /* Conversion from 5-bit for red/blue and 6-bit for green to all being 8-bits. */
             uint8_t r8 = ( r5 * 527 + 23 ) >> 6;
             uint8_t g8 = ( g6 * 259 + 33 ) >> 6;
             uint8_t b8 = ( b5 * 527 + 23 ) >> 6;
-            // uint8_t alpha = 0;
-            // uint32_t bgra = (b8 << 24) | (g8 << 16) | (r8 << 8) | alpha;
 
             uint64_t location = (x * (config->bpp/8)) + (y * line_len);
             framebuffer[location] = b8;
             framebuffer[location + 1] = g8;
             framebuffer[location + 2] = r8;
             framebuffer[location + 3] = 0;
-            // printf("x: 0x%lx, y: 0x%lx, config->bpp: 0x%lx, line_len: 0x%lx\n", x, y, config->bpp, line_len);
-            // printf("framebuffer: 0x%lx, location: 0x%lx, b8: 0x%lx, g8: 0x%lx, r8: 0x%lx, r5: 0x%lx, g6: 0x%lx, b5: 0x%lx\n", framebuffer, location, b8, g8, r8, r5, g6, b5);
-            // framebuffer[x + (width * y)] = bgra;
         }
     }
 
