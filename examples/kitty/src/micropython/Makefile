@@ -41,8 +41,8 @@ CFLAGS += \
 	-I$(ETHERNET_CONFIG_INCLUDE) \
 	-ffreestanding \
 	-mtune=$(CPU)
-LDFLAGS += -L$(BOARD_DIR)/lib -L$(SDDF)/lib
-LIBS += -lmicrokit -Tmicrokit.ld -lc
+LDFLAGS += -L$(BOARD_DIR)/lib -L$(SDDF)/lib -L$(LIBMATH)
+LIBS += -lm -lmicrokit -Tmicrokit.ld -lc
 
 # COREFILES, CORE4FILES: The minimum set of files needed for lwIP.
 COREFILES=core/init.c \
