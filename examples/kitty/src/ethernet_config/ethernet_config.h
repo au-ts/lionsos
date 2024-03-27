@@ -48,7 +48,9 @@ _Static_assert(RX_DATA_REGION_SIZE_DRIV >= RX_QUEUE_SIZE_DRIV * NET_BUFFER_SIZE,
 _Static_assert(RX_DATA_REGION_SIZE_CLI0 >= RX_QUEUE_SIZE_CLI0 * NET_BUFFER_SIZE, "Client0 RX data region size must fit Client0 RX buffers");
 _Static_assert(RX_DATA_REGION_SIZE_CLI1 >= RX_QUEUE_SIZE_CLI1 * NET_BUFFER_SIZE, "Client1 RX data region size must fit Client1 RX buffers");
 
+#ifndef MAX
 #define MAX(a,b) (((a) > (b)) ? (a) : (b))
+#endif
 
 #define ETH_MAX_QUEUE_SIZE MAX(TX_QUEUE_SIZE_DRIV, MAX(RX_QUEUE_SIZE_DRIV, MAX(RX_QUEUE_SIZE_CLI0, RX_QUEUE_SIZE_CLI1)))
 _Static_assert(TX_QUEUE_SIZE_DRIV >= TX_QUEUE_SIZE_ARP + TX_QUEUE_SIZE_CLI0 + TX_QUEUE_SIZE_CLI1, "Driver TX queue must have capacity to fit all of client's TX buffers.");

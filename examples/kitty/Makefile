@@ -288,11 +288,11 @@ $(BUILD_DIR)/i2c_driver.elf: $(addprefix $(BUILD_DIR)/, $(I2C_DRIVER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 directories:
-	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src))	\
-	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/core)) 	\
-	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/netif))	\
-	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/core/ipv4)) \
-	$(info $(shell mkdir -p $(BUILD_DIR)/nfs))
+	$(shell mkdir -p $(BUILD_DIR)/lwip/src)
+	$(shell mkdir -p $(BUILD_DIR)/lwip/src/core)
+	$(shell mkdir -p $(BUILD_DIR)/lwip/src/netif)
+	$(shell mkdir -p $(BUILD_DIR)/lwip/src/core/ipv4)
+	$(shell mkdir -p $(BUILD_DIR)/nfs)
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
 	$(MICROKIT_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
