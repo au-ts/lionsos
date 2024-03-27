@@ -16,9 +16,9 @@ jobs:
           submodules: 'true'
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
       - name: Download Microkit SDK
-        run: wget https://trustworthy.systems/Downloads/microkit//microkit-sdk-dev-8e40fe8-linux-x86-64.tar.gz
+        run: wget https://trustworthy.systems/Downloads/microkit/microkit-sdk-dev-8e40fe8-linux-x86-64.tar.gz
       - name: Extract Microkit SDK
-        run: tar -xf microkit-sdk-1.2.6.tar.gz
+        run: tar -xf microkit-sdk-dev-8e40fe8-linux-x86-64.tar.gz
       - name: Download and install AArch64 GCC toolchain
         run: |
           wget -O aarch64-toolchain.tar.gz https://trustworthy.systems/Downloads/microkit/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf.tar.xz
@@ -41,9 +41,9 @@ jobs:
           submodules: 'true'
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
       - name: Download Microkit SDK
-        run: wget https://trustworthy.systems/Downloads/microkit//microkit-sdk-dev-8e40fe8-macos-aarch64.tar.gz
+        run: wget https://trustworthy.systems/Downloads/microkit/microkit-sdk-dev-8e40fe8-macos-aarch64.tar.gz
       - name: Extract Microkit SDK
-        run: tar -xf microkit-sdk-1.2.6.tar.gz
+        run: tar -xf microkit-sdk-dev-8e40fe8-macos-aarch64.tar.gz
       - name: Download and install AArch64 GCC toolchain
         run: |
           wget -O aarch64-toolchain.tar.gz https://trustworthy.systems/Downloads/microkit/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf.tar.xz
