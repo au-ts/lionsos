@@ -41,8 +41,7 @@ CFLAGS += \
 	-I$(ETHERNET_CONFIG_INCLUDE) \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
-	-mtune=$(CPU) \
-	-DMICROPY_PY_TIME_INCLUDEFILE='"modtime_impl.h"'
+	-mtune=$(CPU)
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(SDDF)/lib -L$(LIBMATH)
 LIBS += -lm -lmicrokit -Tmicrokit.ld -lc
 
