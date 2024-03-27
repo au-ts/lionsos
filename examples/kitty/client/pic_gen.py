@@ -22,3 +22,4 @@ with open("catwithfish.data", "rb") as f:
             if bytearray(pic_pixel) != data_pixel:
                 print(bytearray(pic_pixel), data_pixel, x, y)
             assert bytearray(pic_pixel) == data_pixel
+
