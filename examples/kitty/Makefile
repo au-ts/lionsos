@@ -7,13 +7,14 @@
 ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
+MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
 ifeq ($(strip $(LIBGCC)),)
-$(error LIBGCC must be specified: this should be the directory where libgcc.a can be found)
+LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
 endif
 
 ifeq ($(strip $(LIBMATH)),)
-$(error LIBMATH must be specified: this should be the directory where libm.a can be found)
+LIBMATH:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libm.a)))
 endif
 
 MICROKIT_CONFIG ?= debug
