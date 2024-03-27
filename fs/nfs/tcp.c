@@ -91,8 +91,8 @@ int tcp_ready(void) {
 }
 
 void tcp_maybe_notify(void) {
-    if (notify_rx && net_require_signal(state.rx_queue.free)) {
-        net_cancel_signal(state.rx_queue.free);
+    if (notify_rx && net_require_signal_free(&state.rx_queue)) {
+        net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETHERNET_RX_CHANNEL);
@@ -101,8 +101,8 @@ void tcp_maybe_notify(void) {
         }
     }
 
-    if (notify_tx && net_require_signal(state.tx_queue.active)) {
-        net_cancel_signal(state.tx_queue.active);
+    if (notify_tx && net_require_signal_active(&state.tx_queue)) {
+        net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
         if (!have_signal) {
             microkit_notify_delayed(ETHERNET_TX_CHANNEL);
@@ -142,7 +142,7 @@ static err_t lwip_eth_send(struct netif *netif, struct pbuf *p) {
         return ERR_MEM;
     }
     
-    unsigned char *frame = (unsigned char *)(buffer.phys_or_offset + tx_buffer_data_region);
+    unsigned char *frame = (unsigned char *)(buffer.io_or_offset + tx_buffer_data_region);
     unsigned int copied = 0;
     for (struct pbuf *curr = p; curr != NULL; curr = curr->next) {
         memcpy(frame + copied, curr->payload, curr->len);
@@ -203,12 +203,12 @@ static err_t ethernet_init(struct netif *netif)
 void tcp_process_rx(void) {
     bool reprocess = true;
     while (reprocess) {
-        while (!net_queue_empty(state.rx_queue.active)) {
+        while (!net_queue_empty_active(&state.rx_queue)) {
             net_buff_desc_t buffer;
             net_dequeue_active(&state.rx_queue, &buffer);
 
             pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
-            custom_pbuf_offset->offset = buffer.phys_or_offset;
+            custom_pbuf_offset->offset = buffer.io_or_offset;
             custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
 
             struct pbuf *p = pbuf_alloced_custom(
@@ -216,7 +216,7 @@ void tcp_process_rx(void) {
                 buffer.len,
                 PBUF_REF,
                 &custom_pbuf_offset->custom,
-                (void *)(buffer.phys_or_offset + rx_buffer_data_region),
+                (void *)(buffer.io_or_offset + rx_buffer_data_region),
                 NET_BUFFER_SIZE
             );
 
@@ -226,11 +226,11 @@ void tcp_process_rx(void) {
             }
         }
 
-        net_request_signal(state.rx_queue.active);
+        net_request_signal_active(&state.rx_queue);
         reprocess = false;
 
-        if (!net_queue_empty(state.rx_queue.active)) {
-            net_cancel_signal(state.rx_queue.active);
+        if (!net_queue_empty_active(&state.rx_queue)) {
+            net_cancel_signal_active(&state.rx_queue);
             reprocess = true;
         }
     }
@@ -244,7 +244,7 @@ void tcp_update(void)
 void tcp_init_0(void)
 {
     cli_queue_init_sys(microkit_name, &state.rx_queue, rx_free, rx_active, &state.tx_queue, tx_free, tx_active);
-    net_buffers_init((net_queue_t *)tx_free, 0, state.tx_queue.free->size);
+    net_buffers_init(&state.tx_queue, 0);
 
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
@@ -272,15 +272,15 @@ void tcp_init_0(void)
     int err = dhcp_start(&(state.netif));
     dlogp(err, "failed to start DHCP negotiation");
 
-    if (notify_rx && net_require_signal(state.rx_queue.free)) {
-        net_cancel_signal(state.rx_queue.free);
+    if (notify_rx && net_require_signal_free(&state.rx_queue)) {
+        net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
         if (!have_signal) microkit_notify_delayed(ETHERNET_RX_CHANNEL);
         else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) microkit_notify(ETHERNET_RX_CHANNEL);
     }
 
-    if (notify_tx && net_require_signal(state.tx_queue.active)) {
-        net_cancel_signal(state.tx_queue.active);
+    if (notify_tx && net_require_signal_active(&state.tx_queue)) {
+        net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
         if (!have_signal) microkit_notify_delayed(ETHERNET_TX_CHANNEL);
         else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) microkit_notify(ETHERNET_TX_CHANNEL);
@@ -496,7 +496,7 @@ int tcp_socket_readable(int index) {
 }
 
 int tcp_socket_writable(int index) {
-    return !net_queue_empty(state.tx_queue.free);
+    return !net_queue_empty_free(&state.tx_queue);
 }
 
 int tcp_socket_hup(int index) {
