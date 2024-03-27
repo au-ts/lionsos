@@ -12,6 +12,7 @@ LIBCO := $(LIONSOS)/libco
 LWIP := $(SDDF)/network/ipstacks/lwip
 # Path to micropython source code
 MICROPYTHON_SRC := $(LIONSOS)/micropython
+FROZEN_MANIFEST := $(LIONSOS)/micropython/extmod/asyncio/manifest.py
 
 # Include the core environment definitions; this will set $(TOP).
 include $(MICROPYTHON_SRC)/py/mkenv.mk
@@ -96,6 +97,7 @@ SRC_C = \
 	vfs_sddf_fs_file.c \
 	vfs_sddf_fs.c \
 	sddf_fs.c \
+	frozen_content.c \
 	extmod/modtime.c \
 	extmod/vfs.c \
 	extmod/modos.c \
