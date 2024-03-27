@@ -134,8 +134,7 @@ void init(void) {
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
 
     t_event = co_active();
-    // @ivanv: figure out a better stack size
-    t_mp = co_derive((void *)mp_stack, MICROPY_HEAP_SIZE, t_mp_entrypoint);
+    t_mp = co_derive((void *)mp_stack, MICROPY_STACK_SIZE, t_mp_entrypoint);
     co_switch(t_mp);
 }
 
