@@ -102,40 +102,40 @@ static void virt_mac_addr_init_sys(char *pd_name, uint8_t *macs)
     }
 }
 
-static void cli_queue_init_sys(char *pd_name, net_queue_handle_t *rx_queue, uintptr_t rx_free, uintptr_t rx_used,
-                                net_queue_handle_t *tx_queue, uintptr_t tx_free, uintptr_t tx_used)
+static void cli_queue_init_sys(char *pd_name, net_queue_handle_t *rx_queue, uintptr_t rx_free, uintptr_t rx_active,
+                                net_queue_handle_t *tx_queue, uintptr_t tx_free, uintptr_t tx_active)
 {
     if (__str_match(pd_name, CLI0_NAME)) {
-        net_queue_init(rx_queue, (net_queue_t *) rx_free, (net_queue_t *) rx_used, RX_QUEUE_SIZE_CLI0);
-        net_queue_init(tx_queue, (net_queue_t *) tx_free, (net_queue_t *) tx_used, TX_QUEUE_SIZE_CLI0);
+        net_queue_init(rx_queue, (net_queue_t *) rx_free, (net_queue_t *) rx_active, RX_QUEUE_SIZE_CLI0);
+        net_queue_init(tx_queue, (net_queue_t *) tx_free, (net_queue_t *) tx_active, TX_QUEUE_SIZE_CLI0);
     } else if (__str_match(pd_name, CLI1_NAME)) {
-        net_queue_init(rx_queue, (net_queue_t *) rx_free, (net_queue_t *) rx_used, RX_QUEUE_SIZE_CLI1);
-        net_queue_init(tx_queue, (net_queue_t *) tx_free, (net_queue_t *) tx_used, TX_QUEUE_SIZE_CLI1);
+        net_queue_init(rx_queue, (net_queue_t *) rx_free, (net_queue_t *) rx_active, RX_QUEUE_SIZE_CLI1);
+        net_queue_init(tx_queue, (net_queue_t *) tx_free, (net_queue_t *) tx_active, TX_QUEUE_SIZE_CLI1);
     }
 }
 
-static void copy_queue_init_sys(char *pd_name, net_queue_handle_t *cli_queue, uintptr_t cli_free, uintptr_t cli_used,
-                                net_queue_handle_t *virt_queue, uintptr_t virt_free, uintptr_t virt_used)
+static void copy_queue_init_sys(char *pd_name, net_queue_handle_t *cli_queue, uintptr_t cli_free, uintptr_t cli_active,
+                                net_queue_handle_t *virt_queue, uintptr_t virt_free, uintptr_t virt_active)
 {
     if (__str_match(pd_name, COPY0_NAME)) {
-        net_queue_init(cli_queue, (net_queue_t *) cli_free, (net_queue_t *) cli_used, RX_QUEUE_SIZE_CLI0);
-        net_queue_init(virt_queue, (net_queue_t *) virt_free, (net_queue_t *) virt_used, RX_QUEUE_SIZE_COPY0);
+        net_queue_init(cli_queue, (net_queue_t *) cli_free, (net_queue_t *) cli_active, RX_QUEUE_SIZE_CLI0);
+        net_queue_init(virt_queue, (net_queue_t *) virt_free, (net_queue_t *) virt_active, RX_QUEUE_SIZE_COPY0);
     } else if (__str_match(pd_name, COPY1_NAME)) {
-        net_queue_init(cli_queue, (net_queue_t *) cli_free, (net_queue_t *) cli_used, RX_QUEUE_SIZE_CLI1);
-        net_queue_init(virt_queue, (net_queue_t *) virt_free, (net_queue_t *) virt_used, RX_QUEUE_SIZE_COPY1);
+        net_queue_init(cli_queue, (net_queue_t *) cli_free, (net_queue_t *) cli_active, RX_QUEUE_SIZE_CLI1);
+        net_queue_init(virt_queue, (net_queue_t *) virt_free, (net_queue_t *) virt_active, RX_QUEUE_SIZE_COPY1);
     }
 }
 
-static void virt_queue_init_sys(char *pd_name, net_queue_handle_t *cli_queue, uintptr_t cli_free, uintptr_t cli_used)
+static void virt_queue_init_sys(char *pd_name, net_queue_handle_t *cli_queue, uintptr_t cli_free, uintptr_t cli_active)
 {
     if (__str_match(pd_name, VIRT_RX_NAME)) {
-        net_queue_init(cli_queue, (net_queue_t *) cli_free, (net_queue_t *) cli_used, RX_QUEUE_SIZE_ARP);
-        net_queue_init(&cli_queue[1], (net_queue_t *) (cli_free + 2 * DATA_REGION_SIZE), (net_queue_t *) (cli_used + 2 * DATA_REGION_SIZE), RX_QUEUE_SIZE_CLI0);
-        net_queue_init(&cli_queue[2], (net_queue_t *) (cli_free + 4 * DATA_REGION_SIZE), (net_queue_t *) (cli_used + 4 * DATA_REGION_SIZE), RX_QUEUE_SIZE_CLI1);
+        net_queue_init(cli_queue, (net_queue_t *) cli_free, (net_queue_t *) cli_active, RX_QUEUE_SIZE_ARP);
+        net_queue_init(&cli_queue[1], (net_queue_t *) (cli_free + 2 * DATA_REGION_SIZE), (net_queue_t *) (cli_active + 2 * DATA_REGION_SIZE), RX_QUEUE_SIZE_CLI0);
+        net_queue_init(&cli_queue[2], (net_queue_t *) (cli_free + 4 * DATA_REGION_SIZE), (net_queue_t *) (cli_active + 4 * DATA_REGION_SIZE), RX_QUEUE_SIZE_CLI1);
     } else if (__str_match(pd_name, VIRT_TX_NAME)) {
-        net_queue_init(cli_queue, (net_queue_t *) cli_free, (net_queue_t *) cli_used, TX_QUEUE_SIZE_ARP);
-        net_queue_init(&cli_queue[1], (net_queue_t *) (cli_free + 2 * DATA_REGION_SIZE), (net_queue_t *) (cli_used + 2 * DATA_REGION_SIZE), TX_QUEUE_SIZE_CLI0);
-        net_queue_init(&cli_queue[2], (net_queue_t *) (cli_free + 4 * DATA_REGION_SIZE), (net_queue_t *) (cli_used + 4 * DATA_REGION_SIZE), TX_QUEUE_SIZE_CLI1);
+        net_queue_init(cli_queue, (net_queue_t *) cli_free, (net_queue_t *) cli_active, TX_QUEUE_SIZE_ARP);
+        net_queue_init(&cli_queue[1], (net_queue_t *) (cli_free + 2 * DATA_REGION_SIZE), (net_queue_t *) (cli_active + 2 * DATA_REGION_SIZE), TX_QUEUE_SIZE_CLI0);
+        net_queue_init(&cli_queue[2], (net_queue_t *) (cli_free + 4 * DATA_REGION_SIZE), (net_queue_t *) (cli_active + 4 * DATA_REGION_SIZE), TX_QUEUE_SIZE_CLI1);
     }
 }
 

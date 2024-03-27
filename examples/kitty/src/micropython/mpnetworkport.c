@@ -99,7 +99,7 @@ static void interface_free_buffer(struct pbuf *buf) {
 
 static err_t netif_output(struct netif *netif, struct pbuf *p) {
     /* Grab an available TX buffer, copy pbuf data over,
-    add to used tx ring, notify server */
+    add to active tx queue, notify server */
     err_t ret = ERR_OK;
 
     if (p->tot_len > NET_BUFFER_SIZE) {
@@ -117,7 +117,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
         copied += curr->len;
     }
 
-    /* insert into the used tx queue */
+    /* insert into the active tx queue */
     buffer.len = copied;
     err = net_enqueue_active(&state.tx_queue, buffer);
     assert(!err);
