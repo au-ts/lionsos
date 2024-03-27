@@ -1,5 +1,6 @@
 #include <microkit.h>
 #include <string.h>
+#include <sddf/util/cache.h>
 #include "py/runtime.h"
 #include "micropython.h"
 #include "../vmm/uio.h"
@@ -57,6 +58,14 @@ STATIC mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t h
         }
     }
 
+    /*
+     * The UIO user-level program in the Linux virtual machine will have this framebuffer
+     * data region mapped in as uncached as that is what the Linux UIO framework does.
+     * This means that since we are using cached mappings within our client code, we must
+     * propogate any cached writes so that it is visible by the Linux user-program that
+     * talks to the real framebuffer.
+     */
+    cache_clean(framebuffer_data_region, framebuffer_data_region + (width * height * 4));
     microkit_notify(FRAMEBUFFER_VMM_CH);
 
     return mp_const_none;
