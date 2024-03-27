@@ -9,7 +9,7 @@
 #include <sys/types.h>
 
 #include <sddf/timer/client.h>
-#include <sddf/network/shared_ringbuffer.h>
+#include <sddf/network/queue.h>
 
 #include <nfsc/libnfs.h>
 #include <nfsc/libnfs-raw.h>

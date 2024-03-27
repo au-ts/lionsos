@@ -124,11 +124,11 @@ start_repl:
 void init(void) {
     serial_queue_init(&serial_rx_queue, (serial_queue_t *)serial_rx_free, (serial_queue_t *)serial_rx_active, false, BUFFER_SIZE, BUFFER_SIZE);
     for (int i = 0; i < NUM_ENTRIES - 1; i++) {
-        serial_enqueue_free(&serial_rx_queue, serial_rx_data + ((i + NUM_ENTRIES) * BUFFER_SIZE), BUFFER_SIZE, NULL);
+        serial_enqueue_free(&serial_rx_queue, serial_rx_data + ((i + NUM_ENTRIES) * BUFFER_SIZE), BUFFER_SIZE);
     }
     serial_queue_init(&serial_tx_queue, (serial_queue_t *)serial_tx_free, (serial_queue_t *)serial_tx_active, false, BUFFER_SIZE, BUFFER_SIZE);
     for (int i = 0; i < NUM_ENTRIES - 1; i++) {
-        serial_enqueue_free(&serial_tx_queue, serial_tx_data + ((i + NUM_ENTRIES) * BUFFER_SIZE), BUFFER_SIZE, NULL);
+        serial_enqueue_free(&serial_tx_queue, serial_tx_data + ((i + NUM_ENTRIES) * BUFFER_SIZE), BUFFER_SIZE);
     }
 
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
