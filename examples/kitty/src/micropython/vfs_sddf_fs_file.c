@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <string.h>
 
 /* MicroPython will ask for a default buffer size to create a stream for when using a VFS. */
 #define VFS_SDDF_FS_FILE_BUFFER_SIZE (1024)
