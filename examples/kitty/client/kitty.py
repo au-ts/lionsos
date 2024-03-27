@@ -25,6 +25,14 @@ IP_ADDRESS = "172.16.0.2"
 PORT = 3738
 
 
+def info(s):
+    print("CLIENT|INFO: " + str(s))
+
+
+def error(s):
+    print("CLIENT|ERROR: " + str(s))
+
+
 class BoolPalette(framebuf.FrameBuffer):
     def __init__(self, mode):
         buf = bytearray(4)  # OK for <= 16 bit color
@@ -35,6 +43,7 @@ class BoolPalette(framebuf.FrameBuffer):
 
     def bg(self, color):
         self.pixel(0, 0, color)
+
 
 class KittyDisplay(framebuf.FrameBuffer):
     def __init__(self, width, height):
@@ -63,7 +72,7 @@ def heartbeat():
     while True:
         # @alwin: is it really necessary to have this in a try-catch?
         try:
-            print(f"Sending heartbeat at {time.time()}")
+            info(f"Sending heartbeat at {time.time()}")
             writer_stream.write(b'200 0 0\n')
             await writer_stream.drain()
         except OSError as e:
@@ -125,7 +134,7 @@ async def read_card(p):
             if (current_not_equal_count == TICKS_TO_RESET):
                 # If we see multiple non-matches in a row,
                 # go back to a reset state
-                print("Resetting...")
+                info("Resetting...")
                 current_uid = []
                 current_count = 0
                 current_not_equal_count = 0
@@ -134,7 +143,7 @@ async def read_card(p):
             current_count += 1
             current_not_equal_count = 0
             if (current_count == TICKS_TO_CONFIRM):
-                print("Registering tap")
+                info("Registering tap")
                 await on_tap(current_uid)
 
         # Read the uid again, this one should always fail
@@ -154,13 +163,6 @@ def set_pixel(display, x, y, rgba):
     b = (rgba >> 8) & 0xff
     rgb565 = ((r & 0b11111000) << 8) | ((g & 0b11111100) << 3) | (b >> 3);
     display.pixel(x, y, rgb565)
-    # idx = 4 * (width * y + x)
-    # fb.buf[idx:(idx + 4)] = bytearray([
-    #     rgba & 0xFF,
-    #     (rgba >> 8) & 0xFF,
-    #     (rgba >> 16) & 0xFF,
-    #     (rgba >> 24) & 0xFF,
-    # ])
 
 
 def reset_status():
@@ -187,36 +189,6 @@ def draw_image(display, x0, y0, data):
             set_pixel(display, x0 + x, y0 + y, rgba)
 
 
-def draw_bitmap(fbuf, x, y, bitmap, color1, color2):
-    for x_off in range(len(bitmap[0])):
-        for y_off in range(len(bitmap)):
-            if bitmap[y_off][x_off] == 1:
-                set_pixel(fbuf, x + x_off, y + y_off, color1)
-            elif bitmap[y_off][x_off] == 2:
-                set_pixel(fbuf, x + x_off, y + y_off, color2)
-            else:
-                set_pixel(fbuf, x + x_off, y + y_off, 0x000000FF)
-
-
-def draw_string(fbuf, x, y, string, scale, color1, color2, shadowed, glowing):
-    x_off = 8 * scale
-    for i in range(len(string)):
-        glyph = font.get_ch(string[i])
-        # if shadowed:
-            # glyph = glyph.shadow()
-        # if glowing:
-            # glyph = glyph.glow()
-        glyph *= scale
-        # data = glyph.todata(2)
-        draw_bitmap(fbuf, x + i * x_off, y, glyph, color1, color2)
-
-
-def fill_rectangle(x0, y0, w, h, rgba):
-    for x in range(x0, x0 + w):
-        for y in range(y0, y0 + h):
-            set_pixel(x, y, rgba)
-
-
 # Helper function for sleeping some number of seconds and
 # calling a function
 async def wait_seconds_and_call(seconds, fn):
@@ -241,7 +213,7 @@ async def read_from_server():
         except OSError:
             # This usually happens when the server does not recieve a heartbeat
             # in time and resets the connection
-            print("CONNECTION RESET")
+            error("CONNECTION RESET")
             reader_stream.close()
             writer_stream.close()
             reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
@@ -252,15 +224,14 @@ async def read_from_server():
         if len(message) == 0:
             continue
 
-        print(message)
+        info(message)
         words = message.decode('utf-8').split()
         if words[0] == '101':
             token = int(words[1])
-            print(f'TOKEN = {token}')
+            info(f'TOKEN = {token}')
         elif words[0] == '200':
+            info("got response")
             name, balance = words[2], words[4]
-            print("KITTY|INFO: got the resposne!")
-
             display.rect(540, 300, 700, 700, 0x0000, True)
             wri.set_textpos(display, 300, 400)
             wri.printstring(f"Thanks {name}")
