@@ -170,11 +170,8 @@ def handle_connection(conn: socket.socket, uber: socket.socket) -> None:
                 cur_txid = (cur_txid + 1) % 1000000
 
                 # Make the magic numbers
-                # card_id = int(b"0x%s" % cardno, 16)
-                # issue_lvl = 1  # Let's pretend that it's 1.
-                # region_id = 1          # UNSW magic
-                # facility_id = 32510    # UNSW magic
-                conn.sendall("200 Thanks Alwin Credit $1000\n".encode())
+                card_id = int(b"0x%s" % cardno, 16)
+                conn.sendall(f"200 Thanks {card_id}\n".encode())
 
 
 class ConnectionThread(threading.Thread):

@@ -1,14 +1,11 @@
 import framebuf
 import fb
 import time
-from png import png
 import sys
 # import socket
 import asyncio
 import errno
 from pn532 import PN532
-# from multiprocessing import shared_memory
-# from bdfparser import Font
 import font
 from font_writer import CWriter
 
@@ -231,17 +228,13 @@ async def read_from_server():
             info(f'TOKEN = {token}')
         elif words[0] == '200':
             info("got response")
-            name, balance = words[2], words[4]
+            card_id = words[2]
             display.rect(540, 300, 700, 700, 0x0000, True)
             wri.set_textpos(display, 300, 400)
-            wri.printstring(f"Thanks {name}")
+            wri.printstring(f"Thanks for your purchase!")
             wri.set_textpos(display, 400, 400)
-            wri.printstring(f"Your balance is now {balance}")
+            wri.printstring(f"Card UID: {card_id}")
             display.show()
-            # draw_string(400, 250, f'Thanks {name}', 2,
-                        # 0xFFFFFFFF, 0x0, False, False)
-            # draw_string(400, 300, f'Balance: {balance}', 2,
-                        # 0xFFFFFFFF, 0x0, False, False)
             if reset_cb is not None:
                 reset_cb.cancel()
                 reset_cb = None
