@@ -269,7 +269,9 @@ async def main():
     # draw_string(400, 100, "Kitty v5", 5, 0xFFFFFFFF, 0x008800FF, True, False)
     wri.setcolor(0xffff, 0x0000)
     wri.set_textpos(display, 100, 540)
-    wri.printstring("Welcome to Kitty v5!")
+    wri.printstring("Welcome to Kitty v5")
+    wri.set_textpos(display, 200, 540)
+    wri.printstring("Running on LionsOS!")
     wri.set_textpos(display, 300, 540)
     wri.printstring("waiting for taps...")
 
