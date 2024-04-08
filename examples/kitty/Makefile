@@ -138,7 +138,7 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_timer_client.o $
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
 			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
 			BUILD=$(abspath $(BUILD_DIR)) \
-			LIBMATH=$(BUILD_DIR)/libm \
+			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
 			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
 
 ETHERNET=$(SDDF)/drivers/network/meson/
