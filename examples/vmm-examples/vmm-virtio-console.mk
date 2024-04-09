@@ -35,10 +35,10 @@ CC := clang
 LD := ld.lld
 TARGET := aarch64-none-elf
 
-CHECK_VARIANT:=.variant.$(shell md5sum ${SYSTEM})
+CHECK_VARIANT:=.variant.$(shell echo ${SYSTEM} ${MICROKIT_CONFIG} ${MICROKIT_SDK} | md5sum - | sed 's/ *-$$//')
 .variant.%:
 	-rm -f .variant.*
-	> $@
+	echo "${VARIANT} ${MICROKIT_CONFIG}" > $@
 
 # Uncomment these lines to use an uninstalled microkit
 #export PYTHONPATH := $(realpath $(MICROKIT_SDK)/../../tool/)

@@ -4,10 +4,13 @@ Simple VM with passthrough
 This directory contains what's needed to run a complete VM with
 passthrough of all components on an Odroid C4.
 
-The ethernetsddf branch uses LionsOS console drivers.
-
 Such a VM can be used to develop new LionsOS components, and is fairly
 easy to adapt to other systems.
+
+There are two variants available: `passthrough`, the default, passes
+through all devices to the virtual machine.  The other, `virtio-cons`
+uses a virtio-console device hooked up to the sDDF UART driver.
+
 
 What you need
 ================
@@ -74,3 +77,10 @@ MICROKIT_SDK=.../path-to/microkit-sdk-1.2.6 LionsOS=.../path-to/LionsOS make
 If all goes well, a directory called `build`,and a
 bootable image `boot/vmdev.img`, will be created.
 
+
+You can choose the variant to build on the Make command line:
+```
+export MICROKIT_SDK=.../path-to/microkit-sdk-1.2.6 
+export LionsOS=.../path-to/LionsOS 
+make VARIANT=virtio-console
+```

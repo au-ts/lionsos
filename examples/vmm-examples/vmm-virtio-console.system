@@ -170,7 +170,7 @@ cached="false" /> */
   </protection_domain>
 
   <protection_domain name="serial_tx_virtualiser" priority="99" >
-    <program_image path="serial_TX_virtualiser.elf" />
+    <program_image path="serial_tx_virt.elf" />
 
     <map mr="serial_tx_free_driver" vaddr=SERIAL_TX_FREE_DRIVER perms="rw"
 	 cached="true" setvar_vaddr="tx_free_driver" />
@@ -183,7 +183,7 @@ cached="false" /> */
   </protection_domain>
 
   <protection_domain name="serial_rx_virtualiser" priority="98" >
-    <program_image path="serial_RX_virtualiser.elf" />
+    <program_image path="serial_rx_virt.elf" />
 
     <map mr="serial_rx_free_driver" vaddr=SERIAL_RX_FREE_DRIVER perms="rw" cached="true" setvar_vaddr="rx_free_driver" />
     <map mr="serial_rx_active_driver" vaddr=SERIAL_RX_ACTIVE_DRIVER perms="rw" cached="true" setvar_vaddr="rx_active_driver" />
