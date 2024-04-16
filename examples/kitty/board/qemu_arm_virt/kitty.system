@@ -269,6 +269,8 @@
             <map mr="pcie_bus" vaddr="0x8000000000" perms="rw" cached="false" />
             <map mr="gic_v2m" vaddr="0x8020000" perms="rw" cached="false" />
         </virtual_machine>
+        <!-- IRQ for pass-through graphics -->
+        <irq irq="37" id="10" />
     </protection_domain>
 
     <channel>
