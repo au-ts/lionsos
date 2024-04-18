@@ -72,7 +72,8 @@ IMAGES := timer.elf \
 		  micropython.elf \
 		  uart_driver.elf \
 		  serial_virt_rx.elf \
-		  serial_virt_tx.elf
+		  serial_virt_tx.elf \
+		  i2c_driver.elf
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
@@ -304,11 +305,11 @@ I2C_DRIVER_OBJS := i2c_driver.o sddf_util_printf.o sddf_putchar_debug.o
 $(BUILD_DIR)/i2c_driver.o: $(I2C_DRIVER)/i2c.c
 	$(CC) -c -DI2C_BUS_NUM=2 $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/i2c_virt.o: $(I2C_VIRT)/virt.c
-	$(CC) -c $(CFLAGS) $< -o $@
+# $(BUILD_DIR)/i2c_virt.o: $(I2C_VIRT)/virt.c
+# 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/i2c_virt.elf: $(addprefix $(BUILD_DIR)/, $(I2C_VIRT_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+# $(BUILD_DIR)/i2c_virt.elf: $(addprefix $(BUILD_DIR)/, $(I2C_VIRT_OBJS))
+# 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/i2c_driver.elf: $(addprefix $(BUILD_DIR)/, $(I2C_DRIVER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
@@ -333,7 +334,11 @@ qemu: all
 			-netdev user,id=netdev0 \
 			-global virtio-mmio.force-legacy=false \
 			-d guest_errors \
-			-device virtio-gpu-pci
+			-device virtio-gpu-pci \
+			-chardev socket,path=vi2c.sock00,id=vi2c \
+			-device vhost-user-i2c-device,chardev=vi2c,id=i2c \
+			-object memory-backend-file,id=mem,size=2G,mem-path=/dev/shm,share=on \
+			-numa node,memdev=mem 
 
 FORCE: ;
 
