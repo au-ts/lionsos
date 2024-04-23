@@ -403,6 +403,9 @@ long sys_recvfrom(va_list ap)
     if (read == 0 && flags & MSG_DONTWAIT) {
         return -EAGAIN;
     }
+    if (read == -1) {
+        return -ENOTCONN;
+    }
     
     return (long)read;
 }
