@@ -385,7 +385,7 @@ long sys_recvfrom(va_list ap)
 {
     int sockfd = va_arg(ap, int);
     void *buf = va_arg(ap, void *);
-    size_t len = va_arg(ap, size_t);
+    ssize_t len = va_arg(ap, int);
     int flags = va_arg(ap, int);
     struct sockaddr *src_addr = va_arg(ap, struct sockaddr *);
     socklen_t *addrlen = va_arg(ap, socklen_t *);
