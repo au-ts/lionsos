@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#define MAX_SOCKETS 10
 #define SOCKET_BUF_SIZE 0x200000
+#define MAX_SOCKETS 3
 
 void tcp_init_0(void);
 int tcp_ready(void);
