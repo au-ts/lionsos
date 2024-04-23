@@ -132,7 +132,7 @@ void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data
         fd_set_file(fd, file);
         reply(cont->request_id, status, fd, 0);
     } else {
-        dlog("failed to open file\n");
+        dlog("failed to open file (%d): %s\n", status, data);
         reply(cont->request_id, status, 0, 0);
         fd_free(fd);
     }
