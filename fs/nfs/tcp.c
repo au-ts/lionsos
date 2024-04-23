@@ -304,6 +304,11 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
 
     case socket_state_connected: {
         if (p != NULL) {
+            int capacity = SOCKET_BUF_SIZE - socket->rx_len;
+            if (capacity < p->tot_len) {
+                return ERR_MEM;
+            }
+
             int copied = 0, remaining = p->tot_len;
             while (remaining != 0) {
                 int rx_tail = (socket->rx_head + socket->rx_len) % SOCKET_BUF_SIZE;
