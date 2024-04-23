@@ -313,7 +313,6 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
                 copied += to_copy;
                 remaining -= to_copy;
             }        
-            tcp_recved(tpcb, p->tot_len);
             pbuf_free(p);
         } else {
             socket->state = socket_state_closed_by_peer;
@@ -489,6 +488,7 @@ int tcp_socket_recv(int index, char *buf, int len) {
         sock->rx_len -= to_copy;
         remaining -= to_copy;
     }
+    tcp_recved(sock->sock_tpcb, copied);
     return len;
 }
 
