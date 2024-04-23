@@ -171,7 +171,7 @@ fail_enqueue:
 fail_continuation:
     fd_free(fd);
 fail_alloc:
-    reply(cont->request_id, err, 0, 0);
+    reply(request_id, err, 0, 0);
 }
 
 void close_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
