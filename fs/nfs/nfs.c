@@ -28,7 +28,7 @@
 #error "Expected CLIENT_CHANNEL to be defined"
 #endif
 
-#define TIMEOUT (10 * NS_IN_MS)
+#define TIMEOUT (1 * NS_IN_MS)
 
 struct nfs_context *nfs;
 
