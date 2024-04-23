@@ -475,7 +475,9 @@ int tcp_socket_write(int index, const char *buf, int len) {
 
 int tcp_socket_recv(int index, char *buf, int len) {
     socket_t *sock = &sockets[index];
-    assert(sock->state == socket_state_connected);
+    if (sock->state != socket_state_connected) {
+        return -1;
+    }
     int remaining = len;
     while (remaining != 0) {
         int to_copy = MIN(len, MIN(sock->rx_len, SOCKET_BUF_SIZE - sock->rx_head));
