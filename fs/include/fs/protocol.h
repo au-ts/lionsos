@@ -42,10 +42,9 @@ union sddf_fs_message {
 };
 
 struct sddf_fs_queue {
+    uint64_t head;
+    uint64_t tail;
     union sddf_fs_message buffer[SDDF_FS_QUEUE_CAPACITY];
-    uint32_t read_index;
-    uint32_t write_index;
-    uint32_t size;
 };
 
 bool sddf_fs_queue_push(struct sddf_fs_queue *queue, union sddf_fs_message message);
