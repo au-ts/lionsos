@@ -80,6 +80,10 @@ void reply(uint64_t request_id, uint64_t status, uint64_t data0, uint64_t data1)
     microkit_notify(CLIENT_CHANNEL);
 }
 
+bool buffer_valid(const char *buf, uint64_t len) {
+    return buf >= client_share && (buf + len) <= (client_share + CLIENT_SHARE_SIZE);
+}
+
 static void stat64_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     void *buf = (void *)cont->data[0];
@@ -661,7 +665,8 @@ void nfs_notified(void) {
         uint64_t path_offset = cmd.args[0];
         char *path = client_share + path_offset;
         uint64_t path_len = cmd.args[1];
-        if (path_offset + path_len >= CLIENT_SHARE_SIZE) {
+        if (!buffer_valid(path, path_len)) {
+            dlog("bad buffer provided");
             reply(request_id, 1, 0, 0);
             break;
         }
@@ -673,19 +678,19 @@ void nfs_notified(void) {
         uint64_t path_offset = cmd.args[0];
         char *path = client_share + path_offset;
         uint64_t path_len = cmd.args[1];
-        if (path_offset + path_len >= CLIENT_SHARE_SIZE) {
+        if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
             reply(request_id, 1, 0, 0);
             break;
         }
         path[path_len - 1] = '\0';
         uint64_t buf_offset = cmd.args[2];
-        if (buf_offset + sizeof (struct sddf_fs_stat_64) > CLIENT_SHARE_SIZE) {
+        char *buf = client_share + buf_offset;
+        if (!buffer_valid(buf, sizeof (struct sddf_fs_stat_64))) {
             dlog("bad buffer provided");
             reply(request_id, 1, 0, 0);
             break;
         }
-        char *buf = client_share + buf_offset;
         handle_stat64(request_id, path, buf);
         break;
     }
@@ -700,7 +705,7 @@ void nfs_notified(void) {
         const char *buf = client_share + buf_offset;
         uint64_t nbyte = cmd.args[2];
         uint64_t offset = cmd.args[3];
-        if (buf_offset + nbyte > CLIENT_SHARE_SIZE) {
+        if (!buffer_valid(buf, nbyte)) {
             dlog("bad buffer provided");
             reply(request_id, 1, 0, 0);
             break;
@@ -714,7 +719,7 @@ void nfs_notified(void) {
         char *buf = client_share + buf_offset;
         uint64_t nbyte = cmd.args[2];
         uint64_t offset = cmd.args[3];
-        if (buf_offset > nbyte > CLIENT_SHARE_SIZE) {
+        if (!buffer_valid(buf, nbyte)) {
             dlog("bad buffer provided");
             reply(request_id, 1, 0, 0);
             break;
@@ -725,15 +730,15 @@ void nfs_notified(void) {
     case SDDF_FS_CMD_RENAME: {
         uint64_t oldpath_offset = cmd.args[0];
         uint64_t oldpath_len = cmd.args[1];
+        char *oldpath = client_share + oldpath_offset;
         uint64_t newpath_offset = cmd.args[2];
         uint64_t newpath_len = cmd.args[3];
-        if ((oldpath_offset + oldpath_len > CLIENT_SHARE_SIZE) || (newpath_offset + newpath_len > CLIENT_SHARE_SIZE)) {
+        char *newpath = client_share + newpath_offset;
+        if (!buffer_valid(oldpath, oldpath_len) || !buffer_valid(newpath, newpath_len)) {
             dlog("bad buffer provided");
             reply(request_id, 1, 0, 0);
             break;
         }
-        char *oldpath = client_share + oldpath_offset;
-        char *newpath = client_share + newpath_offset;
         oldpath[oldpath_len - 1] = '\0';
         newpath[newpath_len - 1] = '\0';
 
@@ -743,12 +748,12 @@ void nfs_notified(void) {
     case SDDF_FS_CMD_UNLINK: {
         uint64_t path_offset = cmd.args[0];
         uint64_t path_len = cmd.args[1];
-        if (path_offset + path_len > CLIENT_SHARE_SIZE) {
+        char *path = client_share + path_offset;
+        if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
             reply(request_id, 1, 0, 0);
             break;
         }
-        char *path = client_share + path_offset;
         path[path_len - 1] = '\0';
 
         handle_unlink(request_id, path);
@@ -757,12 +762,12 @@ void nfs_notified(void) {
     case SDDF_FS_CMD_MKDIR: {
         uint64_t path_offset = cmd.args[0];
         uint64_t path_len = cmd.args[1];
-        if (path_offset + path_len > CLIENT_SHARE_SIZE) {
+        char *path = client_share + path_offset;
+        if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
             reply(request_id, 1, 0, 0);
             break;
         }
-        char *path = client_share + path_offset;
         path[path_len - 1] = '\0';
 
         handle_mkdir(request_id, path);
@@ -771,12 +776,12 @@ void nfs_notified(void) {
     case SDDF_FS_CMD_RMDIR: {
         uint64_t path_offset = cmd.args[0];
         uint64_t path_len = cmd.args[1];
-        if (path_offset + path_len > CLIENT_SHARE_SIZE) {
+        char *path = client_share + path_offset;
+        if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
             reply(request_id, 1, 0, 0);
             break;
         }
-        char *path = client_share + path_offset;
         path[path_len - 1] = '\0';
 
         handle_rmdir(request_id, path);
@@ -785,12 +790,12 @@ void nfs_notified(void) {
     case SDDF_FS_CMD_OPENDIR: {
         uint64_t path_offset = cmd.args[0];
         uint64_t path_len = cmd.args[1];
-        if (path_offset + path_len > CLIENT_SHARE_SIZE) {
+        char *path = client_share + path_offset;
+        if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
             reply(request_id, 1, 0, 0);
             break;
         }
-        char *path = client_share + path_offset;
         path[path_len - 1] = '\0';
 
         handle_opendir(request_id, path);
@@ -805,12 +810,12 @@ void nfs_notified(void) {
         fd_t fd = cmd.args[0];
         uint64_t buf_offset = cmd.args[1];
         uint64_t buf_size = cmd.args[2];
-        if (buf_offset + buf_size > CLIENT_SHARE_SIZE) {
+        char *buf = client_share + buf_offset;
+        if (!buffer_valid(buf, buf_size)) {
             dlog("bad buffer provided");
             reply(request_id, 1, 0, 0);
             break;
         }
-        char *buf = client_share + buf_offset;
         handle_readdir(request_id, fd, buf, buf_size);
         break;
     }
