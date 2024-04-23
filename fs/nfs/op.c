@@ -233,11 +233,9 @@ fail_begin:
 void pread_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fd_t fd = cont->data[0];
-    char *buf = (char *)cont->data[1];
 
     if (status >= 0) {
         int len_read = status;
-        memcpy(buf, data, len_read);
         reply(cont->request_id, status, len_read, 0);
     } else {
         reply(cont->request_id, status, 0, 0);
@@ -268,7 +266,7 @@ void handle_pread(uint64_t request_id, fd_t fd, const char *buf, uint64_t nbyte,
     cont->data[0] = fd;
     cont->data[1] = (uint64_t)buf;
 
-    err = nfs_pread_async(nfs, file_handle, offset, nbyte, pread_cb, cont);
+    err = nfs_pread_async(nfs, file_handle, buf, nbyte, offset, pread_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;

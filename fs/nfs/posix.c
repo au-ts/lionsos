@@ -213,6 +213,17 @@ long sys_writev(va_list ap)
         {
             ret += output(iov[i].iov_base, iov[i].iov_len);
         }
+    } else {
+        // fildes must refer to socket
+        int socket_handle = fd_socket[fildes];
+
+        assert(socket_handle >= 0);
+        assert(socket_handle < MAX_SOCKETS);
+        assert(socket_refcount[socket_handle] != 0);
+
+        for (int i = 0; i < iovcnt; i++) {
+            ret += tcp_socket_write(socket_handle, iov[i].iov_base, iov[i].iov_len);
+        }
     }
     return ret;
 }
