@@ -9,6 +9,7 @@ bool sddf_fs_queue_push(struct sddf_fs_queue *queue, union sddf_fs_message messa
         return false;
     }
     queue->buffer[tail % SDDF_FS_QUEUE_CAPACITY] = message;
+    __atomic_thread_fence(__ATOMIC_RELEASE);
     queue->tail = tail + 1;
     return true;
 }
@@ -19,6 +20,7 @@ bool sddf_fs_queue_pop(struct sddf_fs_queue *queue, union sddf_fs_message *messa
         return false;
     }
     *message = queue->buffer[head % SDDF_FS_QUEUE_CAPACITY];
+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
     queue->head = head + 1;
     return true;
 }
