@@ -60,8 +60,8 @@ typedef struct {
     enum socket_state state;
 
     char rx_buf[SOCKET_BUF_SIZE];
-    int rx_head;
-    int rx_len;
+    ssize_t rx_head;
+    ssize_t rx_len;
 } socket_t;
 
 state_t state;
@@ -461,7 +461,7 @@ int tcp_socket_close(int index)
     }
 }
 
-int tcp_socket_write(int index, const char *buf, int len) {
+int tcp_socket_write(int index, const char *buf, size_t len) {
     socket_t *sock = &sockets[index];
     int to_write = MIN(len, tcp_sndbuf(sock->sock_tpcb));
     int err = tcp_write(sock->sock_tpcb, (void *)buf, to_write, 1);
@@ -477,14 +477,14 @@ int tcp_socket_write(int index, const char *buf, int len) {
     return to_write;
 }
 
-int tcp_socket_recv(int index, char *buf, int len) {
+ssize_t tcp_socket_recv(int index, char *buf, ssize_t len) {
     socket_t *sock = &sockets[index];
     if (sock->state != socket_state_connected) {
         return -1;
     }
-    int copied = 0;
+    ssize_t copied = 0;
     while (copied != len) {
-        int to_copy = MIN(len - copied, MIN(sock->rx_len, SOCKET_BUF_SIZE - sock->rx_head));
+        ssize_t to_copy = MIN(len - copied, MIN(sock->rx_len, SOCKET_BUF_SIZE - sock->rx_head));
         if (to_copy == 0) {
             break;
         }
