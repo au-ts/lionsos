@@ -482,19 +482,19 @@ int tcp_socket_recv(int index, char *buf, int len) {
     if (sock->state != socket_state_connected) {
         return -1;
     }
-    int remaining = len;
-    while (remaining != 0) {
-        int to_copy = MIN(len, MIN(sock->rx_len, SOCKET_BUF_SIZE - sock->rx_head));
+    int copied = 0;
+    while (copied != len) {
+        int to_copy = MIN(len - copied, MIN(sock->rx_len, SOCKET_BUF_SIZE - sock->rx_head));
         if (to_copy == 0) {
-            return len - remaining;
+            break;
         }
-        memcpy(buf, sock->rx_buf + sock->rx_head, to_copy);
+        memcpy(buf + copied, sock->rx_buf + sock->rx_head, to_copy);
         sock->rx_head = (sock->rx_head + to_copy) % SOCKET_BUF_SIZE;
         sock->rx_len -= to_copy;
-        remaining -= to_copy;
+        copied += to_copy;
     }
     tcp_recved(sock->sock_tpcb, copied);
-    return len;
+    return copied;
 }
 
 int tcp_socket_readable(int index) {
