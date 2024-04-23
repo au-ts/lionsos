@@ -4,21 +4,21 @@
 #include <fs/protocol.h>
 
 bool sddf_fs_queue_push(struct sddf_fs_queue *queue, union sddf_fs_message message) {
-    if (queue->size == SDDF_FS_QUEUE_CAPACITY) {
+    uint64_t tail = queue->tail;
+    if (tail + 1 == queue->head) {
         return false;
     }
-    queue->buffer[queue->write_index] = message;
-    queue->write_index = (queue->write_index + 1) % SDDF_FS_QUEUE_CAPACITY;
-    queue->size++;
+    queue->buffer[tail % SDDF_FS_QUEUE_CAPACITY] = message;
+    queue->tail = tail + 1;
     return true;
 }
 
 bool sddf_fs_queue_pop(struct sddf_fs_queue *queue, union sddf_fs_message *message) {
-    if (queue->size == 0) {
+    uint64_t head = queue->head;
+    if (head == queue->tail) {
         return false;
     }
-    *message = queue->buffer[queue->read_index];
-    queue->read_index = (queue->read_index + 1) % SDDF_FS_QUEUE_CAPACITY;
-    queue->size--;
+    *message = queue->buffer[head % SDDF_FS_QUEUE_CAPACITY];
+    queue->head = head + 1;
     return true;
 }
