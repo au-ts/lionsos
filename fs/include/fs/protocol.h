@@ -27,7 +27,7 @@ enum {
 struct sddf_fs_command {
     uint64_t request_id;
     uint64_t cmd_type;
-    uint64_t args[4];
+    uint64_t args[6];
 };
 
 struct sddf_fs_completion {
@@ -44,6 +44,7 @@ union sddf_fs_message {
 struct sddf_fs_queue {
     uint64_t head;
     uint64_t tail;
+    uint64_t padding[6];
     union sddf_fs_message buffer[SDDF_FS_QUEUE_CAPACITY];
 };
 
