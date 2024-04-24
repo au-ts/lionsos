@@ -83,7 +83,7 @@ static bool notify_rx = false;
 #define LINE_INDEX(a) (LINE_START(a)>>CONFIG_L1_CACHE_LINE_SIZE_BITS)
 
 u32_t sys_now(void) {
-    return mp_hal_ticks_ms();
+    return mp_time_time_get();
 }
 
 static void interface_free_buffer(struct pbuf *buf) {
