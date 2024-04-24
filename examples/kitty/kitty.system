@@ -75,9 +75,9 @@
     <memory_region name="i2c_micropython_data_region" size="0x200_000" page_size="0x200_000"/>
 
     <!-- shared memory for micropython/nfs queue -->
-    <memory_region name="shared_nfs_micropython" size="0x200_000" />
-    <memory_region name="nfs_command_queue" size="0x2_000" />
-    <memory_region name="nfs_completion_queue" size="0x2_000" />
+    <memory_region name="shared_nfs_micropython" size="0x4000000" />
+    <memory_region name="nfs_command_queue" size="0x8_000" />
+    <memory_region name="nfs_completion_queue" size="0x8_000" />
 
     <protection_domain name="i2c_driver" priority="254">
         <program_image path="i2c_driver.elf"/>
@@ -244,18 +244,18 @@
         <map mr="eth_rx_buffer_data_region_nfs" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="rx_buffer_data_region" />
         <map mr="eth_tx_buffer_data_region_nfs" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="tx_buffer_data_region" />
 
-        <map mr="nfs_command_queue" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="command_queue" />
-        <map mr="nfs_completion_queue" vaddr="0x7_902_000" perms="rw" cached="true" setvar_vaddr="completion_queue" />
-        <map mr="shared_nfs_micropython" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="client_share" />
+        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="command_queue" />
+        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="completion_queue" />
+        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="client_share" />
     </protection_domain>
 
     <protection_domain name="micropython" priority="1">
         <program_image path="micropython.elf" />
         <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="true" setvar_vaddr="framebuffer_data_region" />
 
-        <map mr="nfs_command_queue" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="nfs_command_queue" />
-        <map mr="nfs_completion_queue" vaddr="0x7_902_000" perms="rw" cached="true" setvar_vaddr="nfs_completion_queue" />
-        <map mr="shared_nfs_micropython" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="nfs_share" />
+        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="nfs_command_queue" />
+        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="nfs_completion_queue" />
+        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="nfs_share" />
 
         <map mr="serial_tx_free_micropython" vaddr="0x60_000_000" perms="rw" cached="true" setvar_vaddr="serial_tx_free" />
         <map mr="serial_tx_active_micropython" vaddr="0x60_200_000" perms="rw" cached="true" setvar_vaddr="serial_tx_active" />

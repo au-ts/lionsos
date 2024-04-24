@@ -26,7 +26,7 @@
 #include "fd.h"
 
 #define MAX_CONCURRENT_OPS 100
-#define CLIENT_SHARE_SIZE 0x200000
+#define CLIENT_SHARE_SIZE 0x4000000
 
 struct sddf_fs_queue *command_queue;
 struct sddf_fs_queue *completion_queue;
