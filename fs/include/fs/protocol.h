@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define SDDF_FS_QUEUE_CAPACITY 5
+#define SDDF_FS_QUEUE_CAPACITY 511
 
 enum {
     SDDF_FS_CMD_OPEN,
