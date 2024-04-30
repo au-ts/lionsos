@@ -482,7 +482,7 @@ void handle_mkdir(uint64_t request_id, const char *path) {
     }
     cont->request_id = request_id;
 
-    err = nfs_mkdir_async(nfs, path, mkdir_cb, NULL);
+    err = nfs_mkdir_async(nfs, path, mkdir_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
