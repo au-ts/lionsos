@@ -110,6 +110,7 @@ SRC_C = \
 	extmod/moddeflate.c \
 	extmod/modframebuf.c \
 	extmod/moductypes.c \
+	extmod/modjson.c \
 	shared/readline/readline.c \
 	shared/runtime/gchelper_generic.c \
 	shared/runtime/pyexec.c \
