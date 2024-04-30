@@ -80,6 +80,14 @@ void reply(uint64_t request_id, uint64_t status, uint64_t data0, uint64_t data1)
     microkit_notify(CLIENT_CHANNEL);
 }
 
+void reply_success(uint64_t request_id, uint64_t data0, uint64_t data1) {
+    reply(request_id, 0, data0, data1);
+}
+
+void reply_err(uint64_t request_id) {
+    reply(request_id, 1, 0, 0);
+}
+
 bool buffer_valid(const char *buf, uint64_t len) {
     return buf >= client_share && (buf + len) <= (client_share + CLIENT_SHARE_SIZE);
 }
@@ -90,12 +98,12 @@ static void stat64_cb(int status, struct nfs_context *nfs, void *data, void *pri
 
     if (status == 0) {
         memcpy(buf, data, sizeof (struct nfs_stat_64));
-    } else if (status != -ENOENT) {
-        dlog("failed to stat file (%d): %s", status, data);
+        reply_success(cont->request_id, 0, 0);
+    } else {
+        dlogp(status != -ENOENT, "failed to stat file (%d): %s", status, data);
+        reply_err(cont->request_id);
     }
-
     continuation_free(cont);
-    reply(cont->request_id, status, 0, 0);
 }
 
 void handle_stat64(uint64_t request_id, const char *path, void *buf) {
@@ -120,7 +128,7 @@ void handle_stat64(uint64_t request_id, const char *path, void *buf) {
 fail_enqueue:
     continuation_free(cont);
 fail_continuation:
-    reply(request_id, err, 0, 0);
+    reply_err(request_id);
 }
 
 void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -130,11 +138,11 @@ void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data
 
     if (status == 0) {
         fd_set_file(fd, file);
-        reply(cont->request_id, status, fd, 0);
+        reply_success(cont->request_id, fd, 0);
     } else {
         dlog("failed to open file (%d): %s\n", status, data);
-        reply(cont->request_id, status, 0, 0);
         fd_free(fd);
+        reply_err(cont->request_id);
     }
     continuation_free(cont);
 }
@@ -171,7 +179,7 @@ fail_enqueue:
 fail_continuation:
     fd_free(fd);
 fail_alloc:
-    reply(request_id, err, 0, 0);
+    reply_err(request_id);
 }
 
 void close_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -181,12 +189,12 @@ void close_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
 
     if (status == 0) {
         fd_free(fd);
+        reply_success(cont->request_id, 0, 0);
     } else {
         dlog("failed to close file: %d (%s)", status, nfs_get_error(nfs));
         fd_set_file(fd, fh);
+        reply_err(cont->request_id);
     }
-
-    reply(cont->request_id, status, 0, 0);
     continuation_free(cont);
 }
 
@@ -231,7 +239,7 @@ fail_continuation:
     fd_set_file(fd, file_handle);
 fail_unset:
 fail_begin:
-    reply(request_id, err, 0, 0);
+    reply_err(request_id);
 }
 
 void pread_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -240,10 +248,10 @@ void pread_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
 
     if (status >= 0) {
         int len_read = status;
-        reply(cont->request_id, status, len_read, 0);
+        reply_success(cont->request_id, len_read, 0);
     } else {
-        reply(cont->request_id, status, 0, 0);
         dlog("failed to read file: %d (%s)", status, data);
+        reply_err(cont->request_id);
     }
 
     fd_end_op(fd);
@@ -283,17 +291,21 @@ fail_enqueue:
 fail_continuation:
     fd_end_op(fd);
 fail_begin:
-    reply(request_id, err, 0, 0);
+    reply_err(request_id);
 }
 
 void pwrite_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fd_t fd = cont->data[0];
 
-    dlogp(status < 0, "failed to write to file: %d (%s)", status, data);
-
+    if (status >= 0) {
+        reply_success(cont->request_id, status, 0);
+    } else {
+        dlog("failed to write to file: %d (%s)", status, data);
+        reply_err(cont->request_id);
+    }
+    
     fd_end_op(fd);
-    reply(cont->request_id, status, 0, 0);
     continuation_free(cont);
 }
 
@@ -329,13 +341,17 @@ fail_enqueue:
 fail_continuation:
     fd_end_op(fd);
 fail_begin:
-    reply(request_id, err, 0, 0);
+    reply_err(request_id);
 }
 
 void rename_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    dlogp(status != 0, "failed to write to file: %d (%s)", status, data);
-    reply(cont->request_id, status, 0, 0);
+    if (status == 0) {
+        reply_success(cont->request_id, 0, 0);
+    } else {
+        dlog("failed to write to file: %d (%s)", status, data);
+        reply_err(cont->request_id);
+    }
     continuation_free(cont);
 }
 
@@ -360,13 +376,17 @@ void handle_rename(uint64_t request_id, const char *oldpath, const char *newpath
 fail_enqueue:
     continuation_free(cont);
 fail_continuation:
-    reply(request_id, err, 0, 0);
+    reply_err(request_id);
 }
 
 void unlink_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    dlogp(status != 0, "failed to unlink file");
-    reply(cont->request_id, status, 0, 0);
+    if (status == 0) {
+        reply_success(cont->request_id, 0, 0);
+    } else {
+        reply_err(cont->request_id);
+        dlog("failed to unlink file");
+    }
     continuation_free(cont);
 }
 
@@ -391,13 +411,17 @@ void handle_unlink(uint64_t request_id, const char *path) {
 fail_enqueue:
     continuation_free(cont);
 fail_continuation:
-    reply(request_id, err, 0, 0);
+    reply_err(request_id);
 }
 
 void fsync_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    dlogp(status != 0, "fsync failed: %d (%s)", status, data);
-    reply(cont->request_id, status, 0, 0);
+    if (status == 0) {
+        reply_success(cont->request_id, 0, 0);
+    } else {
+        dlog("fsync failed: %d (%s)", status, data);
+        reply_err(cont->request_id);
+    }
     continuation_free(cont);
 }
 
@@ -433,13 +457,17 @@ fail_enqueue:
 fail_continuation:
     fd_end_op(fd);
 fail_begin:
-    reply(request_id, err, 0, 0);
+    reply_err(request_id);
 }
 
 void mkdir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    dlogp(status != 0, "failed to write to file: %d (%s)", status, data);
-    reply(cont->request_id, status, 0, 0);
+    if (status == 0) {
+        reply_success(cont->request_id, 0, 0);
+    } else {
+        dlog("failed to write to file: %d (%s)", status, data);
+        reply_err(cont->request_id);
+    }
     continuation_free(cont);
 }
 
@@ -465,13 +493,17 @@ void handle_mkdir(uint64_t request_id, const char *path) {
 fail_enqueue:
     continuation_free(cont);
 fail_continuation:
-    reply(request_id, err, 0, 0);
+    reply_err(request_id);
 }
 
 void rmdir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = continuation_alloc();
-    dlogp(status != 0, "failed to write to file: %d (%s)", status, data);
-    reply(cont->request_id, status, 0, 0);
+    if (status == 0) {
+        reply_success(cont->request_id, 0, 0);
+    } else {
+        reply_err(cont->request_id);
+        dlog("failed to write to file: %d (%s)", status, data);
+    }
     continuation_free(cont);
 }
 
@@ -497,7 +529,7 @@ void handle_rmdir(uint64_t request_id, const char *path) {
 fail_enqueue:
     continuation_free(cont);
 fail_continuation:
-    reply(request_id, err, 0, 0);
+    reply_err(request_id);
 }
 
 void opendir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -508,10 +540,10 @@ void opendir_cb(int status, struct nfs_context *nfs, void *data, void *private_d
 
     if (status == 0) {
         fd_set_dir(fd, dir);
-        reply(cont->request_id, status, fd, 0);
+        reply_success(cont->request_id, fd, 0);
     } else {
         dlog("failed to open directory: %d (%s)", status, data);
-        reply(cont->request_id, status, 0, 0);
+        reply_err(cont->request_id);
         fd_free(fd);
     }
 
@@ -550,7 +582,7 @@ fail_enqueue:
 fail_continuation:
     fd_free(fd);
 fail_alloc:
-    reply(request_id, err, 0, 0);
+    reply_err(request_id);
 }
 
 void handle_closedir(uint64_t request_id, fd_t fd) {
@@ -573,7 +605,11 @@ void handle_closedir(uint64_t request_id, fd_t fd) {
     nfs_closedir(nfs, dir_handle);
     fd_free(fd);
 fail:
-    reply(request_id, err, 0, 0);
+    if (!err) {
+        reply_success(request_id, 0, 0);
+    } else {
+        reply_err(request_id);
+    }
 }
 
 void handle_readdir(uint64_t request_id, fd_t fd, char *buf, uint64_t buf_size) {
@@ -602,7 +638,11 @@ fail_strcpy:
 fail_readdir:
     fd_end_op(fd);
 fail_begin:
-    reply(request_id, status, 0, 0);
+    if (status == 0) {
+        reply_success(request_id, 0, 0);
+    } else {
+        reply_err(request_id);
+    }
 }
 
 void handle_seekdir(uint64_t request_id, fd_t fd, int64_t loc) {
@@ -618,7 +658,11 @@ void handle_seekdir(uint64_t request_id, fd_t fd, int64_t loc) {
     fd_end_op(fd);
 
 fail:
-    reply(request_id, err, 0, 0);
+    if (!err) {
+        reply_success(request_id, 0, 0);
+    } else {
+        reply_err(request_id);
+    }
 }
 
 void handle_telldir(uint64_t request_id, fd_t fd) {
@@ -634,7 +678,11 @@ void handle_telldir(uint64_t request_id, fd_t fd) {
     fd_end_op(fd);
 
 fail:
-    reply(request_id, err, loc, 0);
+    if (!err) {
+        reply_success(request_id, loc, 0);
+    } else {
+        reply_err(request_id);
+    }
 }
 
 void handle_rewinddir(uint64_t request_id, fd_t fd) {
@@ -650,7 +698,11 @@ void handle_rewinddir(uint64_t request_id, fd_t fd) {
     fd_end_op(fd);
 
 fail:
-    reply(request_id, err, 0, 0);
+    if (!err) {
+        reply_success(request_id, 0, 0);
+    } else {
+        reply_err(request_id);
+    }
 }
 
 void nfs_notified(void) {
@@ -667,7 +719,7 @@ void nfs_notified(void) {
         uint64_t path_len = cmd.args[1];
         if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
-            reply(request_id, 1, 0, 0);
+            reply_err(request_id);
             break;
         }
         path[path_len - 1] = '\0';
@@ -680,7 +732,7 @@ void nfs_notified(void) {
         uint64_t path_len = cmd.args[1];
         if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
-            reply(request_id, 1, 0, 0);
+            reply_err(request_id);
             break;
         }
         path[path_len - 1] = '\0';
@@ -688,7 +740,7 @@ void nfs_notified(void) {
         char *buf = client_share + buf_offset;
         if (!buffer_valid(buf, sizeof (struct sddf_fs_stat_64))) {
             dlog("bad buffer provided");
-            reply(request_id, 1, 0, 0);
+            reply_err(request_id);
             break;
         }
         handle_stat64(request_id, path, buf);
@@ -707,7 +759,7 @@ void nfs_notified(void) {
         uint64_t offset = cmd.args[3];
         if (!buffer_valid(buf, nbyte)) {
             dlog("bad buffer provided");
-            reply(request_id, 1, 0, 0);
+            reply_err(request_id);
             break;
         }
         handle_pread(request_id, fd, buf, nbyte, offset);
@@ -721,7 +773,7 @@ void nfs_notified(void) {
         uint64_t offset = cmd.args[3];
         if (!buffer_valid(buf, nbyte)) {
             dlog("bad buffer provided");
-            reply(request_id, 1, 0, 0);
+            reply_err(request_id);
             break;
         }
         handle_pwrite(request_id, fd, buf, nbyte, offset);
@@ -736,7 +788,7 @@ void nfs_notified(void) {
         char *newpath = client_share + newpath_offset;
         if (!buffer_valid(oldpath, oldpath_len) || !buffer_valid(newpath, newpath_len)) {
             dlog("bad buffer provided");
-            reply(request_id, 1, 0, 0);
+            reply_err(request_id);
             break;
         }
         oldpath[oldpath_len - 1] = '\0';
@@ -751,7 +803,7 @@ void nfs_notified(void) {
         char *path = client_share + path_offset;
         if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
-            reply(request_id, 1, 0, 0);
+            reply_err(request_id);
             break;
         }
         path[path_len - 1] = '\0';
@@ -765,7 +817,7 @@ void nfs_notified(void) {
         char *path = client_share + path_offset;
         if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
-            reply(request_id, 1, 0, 0);
+            reply_err(request_id);
             break;
         }
         path[path_len - 1] = '\0';
@@ -779,7 +831,7 @@ void nfs_notified(void) {
         char *path = client_share + path_offset;
         if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
-            reply(request_id, 1, 0, 0);
+            reply_err(request_id);
             break;
         }
         path[path_len - 1] = '\0';
@@ -793,7 +845,7 @@ void nfs_notified(void) {
         char *path = client_share + path_offset;
         if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
-            reply(request_id, 1, 0, 0);
+            reply_err(request_id);
             break;
         }
         path[path_len - 1] = '\0';
@@ -813,7 +865,7 @@ void nfs_notified(void) {
         char *buf = client_share + buf_offset;
         if (!buffer_valid(buf, buf_size)) {
             dlog("bad buffer provided");
-            reply(request_id, 1, 0, 0);
+            reply_err(request_id);
             break;
         }
         handle_readdir(request_id, fd, buf, buf_size);
