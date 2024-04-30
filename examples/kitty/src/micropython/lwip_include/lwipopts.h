@@ -26,7 +26,7 @@
 #define LWIP_DNS 1
 
 #define MEM_ALIGNMENT 4
-#define MEM_SIZE 0x20000
+#define MEM_SIZE 0x30000
 
 #define ETHARP_SUPPORT_STATIC_ENTRIES 1
 #define SYS_LIGHTWEIGHT_PROT 0
@@ -40,9 +40,9 @@
 #define CHECKSUM_CHECK_ICMP6 0
 
 #define TCP_MSS 2000 // maximum segment size, max size of a single packet
-#define TCP_WND (50 * TCP_MSS) // tcp window, max data we can receive at once
-#define TCP_SND_BUF (50 * TCP_MSS) // send buffer space
-#define TCP_SND_QUEUELEN 2500 // max queued pbufs
+#define TCP_WND 0x800000 // tcp window, max data we can receive at once
+#define TCP_SND_BUF TCP_WND // send buffer space
+#define TCP_SNDLOWAT TCP_MSS
 
 #define TCP_QUEUE_OOSEQ 1 // hold out-of-sequence packets instead of immediately dropping them
 #define LWIP_TCP_SACK_OUT 1 // support sending selective acknowledgements
@@ -52,7 +52,7 @@
 
 #define LWIP_TCP_TIMESTAMPS 1 // support tcp timestamp option
 
-#define PBUF_POOL_SIZE 1000
+#define PBUF_POOL_SIZE 5000
 #define MEMP_NUM_PBUF TCP_SND_QUEUELEN
 #define MEMP_NUM_TCP_SEG TCP_SND_QUEUELEN
 #define MEMP_NUM_SYS_TIMEOUT 512
