@@ -30,7 +30,7 @@
 
 struct sddf_fs_queue *command_queue;
 struct sddf_fs_queue *completion_queue;
-void *client_share;
+char *client_share;
 
 struct continuation {
     uint64_t request_id;
