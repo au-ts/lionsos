@@ -70,7 +70,6 @@ STATIC bool init_nfs(void) {
 
 #ifndef NDEBUG
 void MP_WEAK __assert_func(const char *file, int line, const char *func, const char *expr) {
-    // @ivanv: improve/fix, use printf?
     printf("MP: Assertion failure: %s:%d:%s:%s\n", file, line, func, expr);
     while (true) {}
 }
