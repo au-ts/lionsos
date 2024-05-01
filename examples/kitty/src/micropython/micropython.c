@@ -142,6 +142,7 @@ void mpnet_handle_notify(void);
 void notified(microkit_channel ch) {
     pyb_lwip_poll();
     process_rx();
+    fs_process_completions();
 
     switch (ch) {
     case SERIAL_RX_CH:

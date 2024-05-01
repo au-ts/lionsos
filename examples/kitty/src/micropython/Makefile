@@ -94,6 +94,7 @@ SRC_C = \
 	modfb.c \
 	machine_i2c.c \
 	mpnetworkport.c \
+	modfs_raw.c \
 	vfs_sddf_fs_file.c \
 	vfs_sddf_fs.c \
 	fs_helpers.c \
@@ -124,7 +125,7 @@ SRC_C = \
 	$(SDDF_UTIL)/putchar_debug.c \
 
 # Define source files containung qstrs.
-SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c modfb.c vfs_sddf_fs_file.c vfs_sddf_fs.c modmachine.c machine_i2c.c
+SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c modfb.c vfs_sddf_fs_file.c vfs_sddf_fs.c modmachine.c machine_i2c.c modfs_raw.c
 
 # Define the required object files.
 OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(BUILD)/sddf_timer_client.o $(LWIP_OBJ) $(BUILD)/sddf_fs_protocol.o $(BUILD)/sddf_util_cache.o
