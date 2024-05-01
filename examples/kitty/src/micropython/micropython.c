@@ -140,8 +140,8 @@ void process_rx(void);
 void mpnet_handle_notify(void);
 
 void notified(microkit_channel ch) {
-    pyb_lwip_poll();
     process_rx();
+    pyb_lwip_poll();
     fs_process_completions();
 
     switch (ch) {
