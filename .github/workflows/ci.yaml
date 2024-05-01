@@ -8,7 +8,7 @@ on:
 jobs:
   build_kitty_linux_x86_64:
     name: Build Kitty example (Linux x86-64)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
@@ -23,6 +23,10 @@ jobs:
           wget -O aarch64-toolchain.tar.gz https://trustworthy.systems/Downloads/microkit/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf.tar.xz
           tar xf aarch64-toolchain.tar.gz
           echo "$(pwd)/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf/bin" >> $GITHUB_PATH
+      - name: Install apt dependencies
+        run: |
+          sudo apt update
+          sudo apt install make clang lld device-tree-compiler
       - name: Build Kitty example
         run: |
           cd micropython
