@@ -2,14 +2,15 @@
 #include "py/mpthread.h"
 #include "py/runtime.h"
 #include "py/stream.h"
-#include "sddf_fs.h"
+#include "fs_helpers.h"
+#include "micropython.h"
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 
 /* MicroPython will ask for a default buffer size to create a stream for when using a VFS. */
-#define VFS_SDDF_FS_FILE_BUFFER_SIZE (1024)
+#define VFS_SDDF_FS_FILE_BUFFER_SIZE (FS_BUFFER_SIZE)
 
 typedef struct _mp_obj_vfs_sddf_fs_file_t {
     mp_obj_base_t base;
@@ -40,25 +41,47 @@ STATIC mp_uint_t vfs_sddf_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size,
     mp_obj_vfs_sddf_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
     // check_fd_is_open(o);
 
-    struct read_response response = sddf_fs_pread(o->fd, size, o->pos);
-    if (response.status < 0) {
+    ptrdiff_t read_buffer;
+    int err = fs_buffer_allocate(&read_buffer);
+    if (err) {
+        return MP_STREAM_ERROR;
+    } 
+
+    struct sddf_fs_completion completion;
+    err = fs_command_blocking(&completion, SDDF_FS_CMD_PREAD, o->fd, read_buffer, size, o->pos);
+    if (err || completion.status != 0) {
+        fs_buffer_free(read_buffer);
         return MP_STREAM_ERROR;
     }
-    o->pos += response.len;
-    memcpy(buf, response.data, response.len);
-    return (mp_uint_t)response.len;
+
+    memcpy(buf, fs_buffer_ptr(read_buffer), completion.data[0]);
+    o->pos += completion.data[0];
+    fs_buffer_free(read_buffer);
+
+    return (mp_uint_t)completion.data[0];
 }
 
 STATIC mp_uint_t vfs_sddf_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t size, int *errcode) {
     mp_obj_vfs_sddf_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
     // check_fd_is_open(o);
 
-    int response = sddf_fs_pwrite(o->fd, buf, size, o->pos);
-    if (response <= 0) {
+    ptrdiff_t write_buffer;
+    int err = fs_buffer_allocate(&write_buffer);
+    if (err) {
         return MP_STREAM_ERROR;
     }
-    o->pos += response;
-    return (mp_uint_t)response;
+
+    memcpy(fs_buffer_ptr(write_buffer), buf, size);
+
+    struct sddf_fs_completion completion;
+    err = fs_command_blocking(&completion, SDDF_FS_CMD_PWRITE, o->fd, write_buffer, size, o->pos);
+    fs_buffer_free(write_buffer);
+
+    if (completion.status != 0) {
+        return MP_STREAM_ERROR;
+    }
+    o->pos += completion.data[0];
+    return (mp_uint_t)completion.data[0];
 }
 
 STATIC mp_uint_t vfs_sddf_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, int *errcode) {
@@ -73,12 +96,16 @@ STATIC mp_uint_t vfs_sddf_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintpt
             return 0;
         }
         case MP_STREAM_SEEK: {
-            mp_raise_NotImplementedError(MP_ERROR_TEXT("seek on file not available"));
+            struct mp_stream_seek_t *s = (struct mp_stream_seek_t *)arg;
+            o->pos = s->offset;
+            // TODO: use s->whence
             return 0;
         }
-        case MP_STREAM_CLOSE:
-            sddf_fs_close(o->fd);
+        case MP_STREAM_CLOSE: {
+            struct sddf_fs_completion completion;
+            fs_command_blocking(&completion, SDDF_FS_CMD_CLOSE, o->fd, 0, 0, 0);
             return 0;
+        }
         case MP_STREAM_GET_FILENO:
             return o->fd;
         #if MICROPY_PY_USELECT
@@ -188,11 +215,25 @@ mp_obj_t mp_vfs_sddf_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, m
     }
 
     const char *fname = mp_obj_str_get_str(fid);
-    struct open_response response = sddf_fs_open(fname);
-    if (response.status != 0) {
-        mp_raise_OSError(response.status);
+
+    ptrdiff_t path_buffer;
+    int err = fs_buffer_allocate(&path_buffer);
+    if (err) {
+        mp_raise_OSError(err);
         return mp_const_none;
     }
-    o->fd = response.fd;
+
+    uint64_t path_len = strlen(fname) + 1;
+    strcpy(fs_buffer_ptr(path_buffer), fname);
+
+    struct sddf_fs_completion completion;
+    fs_command_blocking(&completion, SDDF_FS_CMD_OPEN, path_buffer, path_len, 0, 0);
+
+    fs_buffer_free(path_buffer);
+    if (completion.status != 0) {
+        mp_raise_OSError(completion.status);
+        return mp_const_none;
+    }
+    o->fd = completion.data[0];
     return MP_OBJ_FROM_PTR(o);
 }

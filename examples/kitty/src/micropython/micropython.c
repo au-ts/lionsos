@@ -15,6 +15,7 @@
 #include <sddf/i2c/queue.h>
 #include "lwip/init.h"
 #include "mpconfigport.h"
+#include "fs_helpers.h"
 
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
