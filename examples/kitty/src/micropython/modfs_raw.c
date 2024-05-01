@@ -2,6 +2,7 @@
 #include "py/runtime.h"
 #include "micropython.h"
 #include "fs_helpers.h"
+#include <fcntl.h>
 #include <string.h>
 
 mp_obj_t request_flags[SDDF_FS_QUEUE_CAPACITY];
@@ -38,7 +39,7 @@ STATIC mp_obj_t request_open(mp_obj_t path_in, mp_obj_t flag_in) {
     strcpy(fs_buffer_ptr(path_buffer), path);
 
     request_flags[request_id] = flag_in;
-    fs_command_issue(request_id, SDDF_FS_CMD_OPEN, path_buffer, path_len, 0, 0);
+    fs_command_issue(request_id, SDDF_FS_CMD_OPEN, path_buffer, path_len, O_RDONLY, 0644);
 
     return mp_obj_new_int_from_uint(request_id);
 }
