@@ -227,7 +227,7 @@ mp_obj_t mp_vfs_sddf_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, m
     strcpy(fs_buffer_ptr(path_buffer), fname);
 
     struct sddf_fs_completion completion;
-    fs_command_blocking(&completion, SDDF_FS_CMD_OPEN, path_buffer, path_len, 0, 0);
+    fs_command_blocking(&completion, SDDF_FS_CMD_OPEN, path_buffer, path_len, mode_x | mode_rw, 0644);
 
     fs_buffer_free(path_buffer);
     if (completion.status != 0) {

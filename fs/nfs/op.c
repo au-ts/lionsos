@@ -717,13 +717,15 @@ void nfs_notified(void) {
         uint64_t path_offset = cmd.args[0];
         char *path = client_share + path_offset;
         uint64_t path_len = cmd.args[1];
+        uint64_t flags = cmd.args[2];
+        uint64_t mode = cmd.args[3];
         if (!buffer_valid(path, path_len)) {
             dlog("bad buffer provided");
             reply_err(request_id);
             break;
         }
         path[path_len - 1] = '\0';
-        handle_open(request_id, path, O_RDWR | O_CREAT, O_RDWR);
+        handle_open(request_id, path, flags, mode);
         break;
     }
     case SDDF_FS_CMD_STAT: {
