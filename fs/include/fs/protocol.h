@@ -44,6 +44,7 @@ union sddf_fs_message {
 struct sddf_fs_queue {
     uint64_t head;
     uint64_t tail;
+    /* Add explicit padding to ensure buffer entries are cache-entry aligned. */
     uint64_t padding[6];
     union sddf_fs_message buffer[SDDF_FS_QUEUE_CAPACITY];
 };
