@@ -96,7 +96,7 @@ SRC_C = \
 	mpnetworkport.c \
 	vfs_sddf_fs_file.c \
 	vfs_sddf_fs.c \
-	sddf_fs.c \
+	fs_helpers.c \
 	frozen_content.c \
 	extmod/modtime.c \
 	extmod/vfs.c \
