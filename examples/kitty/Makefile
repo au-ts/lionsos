@@ -132,7 +132,7 @@ $(BUILD_DIR)/vmm.elf: $(addprefix $(BUILD_DIR)/, $(VMM_OBJS))
 $(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/libm/libm.a
+$(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/libm/libm.a
 	make -C src/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -144,9 +144,6 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_timer_client.o $
 ETHERNET=$(SDDF)/drivers/network/meson/
 $(BUILD_DIR)/meson_ethernet.o: FORCE
 	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) make -C $(ETHERNET)
-
-$(BUILD_DIR)/sddf_timer_client.o: FORCE
-	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include TIMER_CHANNEL=9 make -C $(SDDF)/timer/client
 
 $(BUILD_DIR)/sddf_util_cache.o: $(SDDF)/util/cache.c
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -175,11 +172,10 @@ $(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
 		LIBNFS_INCLUDE=$(abspath $(LIONSOS)/libnfs/include) \
 		ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
 
-$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_timer_client.o $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a
+$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_fs_protocol.o $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a
 	$(LD) \
 		$(LDFLAGS) \
 		$(BUILD_DIR)/nfs/nfs.a \
-		$(BUILD_DIR)/sddf_timer_client.o \
 		$(BUILD_DIR)/sddf_fs_protocol.o \
 		-L$(BUILD_DIR)/libnfs/lib \
 		-L$(BUILD_DIR)/musllibc/lib \
