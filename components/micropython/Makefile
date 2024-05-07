@@ -5,7 +5,7 @@ endif
 CC := aarch64-none-elf-gcc
 LD := aarch64-none-elf-ld
 
-LIONSOS := ../../../..
+LIONSOS := ../../
 SDDF := $(LIONSOS)/dep/sddf
 SDDF_UTIL := $(SDDF)/util
 LIBCO := $(LIONSOS)/lib/libco
