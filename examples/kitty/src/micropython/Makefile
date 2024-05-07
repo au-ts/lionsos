@@ -8,7 +8,7 @@ LD := aarch64-none-elf-ld
 LIONSOS := ../../../..
 SDDF := $(LIONSOS)/sddf
 SDDF_UTIL := $(SDDF)/util
-LIBCO := $(LIONSOS)/libco
+LIBCO := $(LIONSOS)/lib/libco
 LWIP := $(SDDF)/network/ipstacks/lwip
 # Path to micropython source code
 MICROPYTHON_SRC := $(LIONSOS)/micropython
