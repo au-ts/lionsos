@@ -50,7 +50,7 @@ INCLUDE := \
 	-I$(ETHERNET_CONFIG_INCLUDE) \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
-	-I$(LIONSOS)/fs/include
+	-I$(LIONSOS)/include
 
 DEFINE := \
 	-DNFS_SERVER="\"$(NFS_SERVER)\"" \

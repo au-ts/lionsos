@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <fs/protocol.h>
+#include <lions_os/fs/protocol.h>
 
 bool sddf_fs_queue_push(struct sddf_fs_queue *queue, union sddf_fs_message message) {
     if (queue->tail + 1 == __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE)) {
