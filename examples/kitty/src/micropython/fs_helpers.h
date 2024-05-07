@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <fs/protocol.h>
+#include <lions_os/fs/protocol.h>
 
 #define FS_BUFFER_SIZE 0x8000
 

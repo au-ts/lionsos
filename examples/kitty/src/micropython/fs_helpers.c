@@ -2,7 +2,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
-#include <fs/protocol.h>
+#include <lions_os/fs/protocol.h>
 #include "micropython.h"
 #include "fs_helpers.h"
 
