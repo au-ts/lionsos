@@ -1,5 +1,5 @@
 #define LIBCO_C
-#include "libco.h"
+#include <lions_os/libco.h>
 #include "settings.h"
 
 #ifdef __cplusplus
