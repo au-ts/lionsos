@@ -43,7 +43,7 @@ DTB := $(BUILD_DIR)/linux.dtb
 
 LWIP=$(SDDF)/network/ipstacks/lwip/src
 LIBNFS=$(LIONSOS)/libnfs
-NFS=$(LIONSOS)/fs/nfs
+NFS=$(LIONSOS)/components/fs/nfs
 MUSL=$(LIONSOS)/musllibc
 
 IMAGES := timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf arp.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf i2c_virt.elf i2c_driver.elf
