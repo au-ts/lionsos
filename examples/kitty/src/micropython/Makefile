@@ -36,7 +36,7 @@ CFLAGS += \
 	-I$(SDDF)/include \
 	-I$(BOARD_DIR)/include \
 	-I$(LIBCO) \
-	-I$(LIONSOS)/fs/include \
+	-I$(LIONSOS)/include \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
 	-I$(ETHERNET_CONFIG_INCLUDE) \
