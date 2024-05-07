@@ -34,7 +34,7 @@ TOOLCHAIN := aarch64-none-elf
 CC := $(TOOLCHAIN)-gcc
 TARGET := aarch64-none-elf
 
-LIONSOS := ../..
+LIONSOS := ../../..
 LIBNFS := $(LIONSOS)/libnfs
 SDDF := $(LIONSOS)/sddf
 SDDF_UTIL := $(SDDF)/util
