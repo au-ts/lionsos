@@ -100,7 +100,9 @@ void t_mp_entrypoint(void) {
     printf("MP|INFO: initialising!\n");
 
     // Initialise the MicroPython runtime.
+#ifndef EXEC_MODULE
 start_repl:
+#endif
     mp_stack_ctrl_init();
     gc_init(heap, heap + sizeof(heap));
     mp_init();
@@ -109,14 +111,20 @@ start_repl:
     init_networking();
 
     // Start a normal REPL; will exit when ctrl-D is entered on a blank line.
+#ifndef EXEC_MODULE
     pyexec_friendly_repl();
+#else
+    pyexec_frozen_module(EXEC_MODULE, false);
+#endif
 
     // Deinitialise the runtime.
     gc_sweep_all();
     mp_deinit();
 
     printf("MP|INFO: exited!\n");
+#ifndef EXEC_MODULE
     goto start_repl;
+#endif
 
     co_switch(t_event);
 }
