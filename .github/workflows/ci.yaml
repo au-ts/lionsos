@@ -28,14 +28,7 @@ jobs:
           sudo apt update
           sudo apt install make clang lld device-tree-compiler
       - name: Build Kitty example
-        run: |
-          cd micropython
-          git submodule update --init lib/micropython-lib
-          cd ..
-          make -C examples/kitty MICROKIT_SDK=$(pwd)/microkit-sdk-1.2.6
-        env:
-          NFS_SERVER: 0.0.0.0
-          NFS_DIRECTORY: test/
+        run: ./ci/kitty.sh $(pwd) $(pwd)/microkit-sdk-1.2.6
   build_kitty_macos_aarch64:
     name: Build Kitty example (macOS ARM64)
     runs-on: [self-hosted, macos, ARM64]
@@ -54,11 +47,4 @@ jobs:
           tar xf aarch64-toolchain.tar.gz
           echo "$(pwd)/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf/bin" >> $GITHUB_PATH
       - name: Build Kitty example
-        run: |
-          cd micropython
-          git submodule update --init lib/micropython-lib
-          cd ..
-          nix-shell --run 'make -C examples/kitty MICROKIT_SDK=$(pwd)/microkit-sdk-1.2.6'
-        env:
-          NFS_SERVER: 0.0.0.0
-          NFS_DIRECTORY: test/
+        run: nix-shell --run "./ci/kitty.sh $(pwd) $(pwd)/microkit-sdk-1.2.6"
