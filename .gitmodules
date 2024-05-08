@@ -1,18 +1,18 @@
 [submodule "libvmm"]
-	path = libvmm
+	path = dep/libvmm
 	url = https://github.com/au-ts/libvmm.git
 	branch = main
 [submodule "sddf"]
-	path = sddf
+	path = dep/sddf
 	url = https://github.com/au-ts/sddf.git
 	branch = main
 [submodule "micropython"]
-	path = micropython
+	path = dep/micropython
 	url = https://github.com/micropython/micropython.git
 [submodule "musllibc"]
-	path = musllibc
+	path = dep/musllibc
 	url = git@github.com:au-ts/musllibc.git
 	branch = sel4
 [submodule "libnfs"]
-	path = libnfs
+	path = dep/libnfs
 	url = git@github.com:au-ts/libnfs.git
