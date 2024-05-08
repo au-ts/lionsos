@@ -1,5 +1,5 @@
 #define LIBCO_C
-#include <lions_os/libco.h>
+#include <lions/libco.h>
 #include "settings.h"
 
 #include <assert.h>
