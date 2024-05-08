@@ -46,6 +46,10 @@ CFLAGS += \
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(SDDF)/lib -L$(LIBMATH)
 LIBS += -lm -lmicrokit -Tmicrokit.ld -lc
 
+ifdef EXEC_MODULE
+CFLAGS += -DEXEC_MODULE=\"$(EXEC_MODULE)\"
+endif
+
 # COREFILES, CORE4FILES: The minimum set of files needed for lwIP.
 COREFILES=core/init.c \
 	core/def.c \
