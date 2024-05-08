@@ -20,7 +20,7 @@ MICROKIT_SDK=$2
 export NFS_SERVER=0.0.0.0
 export NFS_DIRECTORY=test
 
-cd $LIONSOS/micropython
+cd $LIONSOS/dep/micropython
 git submodule update --init lib/micropython-lib
 cd $LIONSOS/examples/kitty
 make BUILD_DIR=$BUILD_DIR MICROKIT_SDK=$MICROKIT_SDK LIONSOS=$LIONSOS

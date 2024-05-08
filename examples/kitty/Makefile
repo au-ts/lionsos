@@ -32,8 +32,8 @@ DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 LIONSOS ?= ../..
-SDDF := $(LIONSOS)/sddf
-LIBVMM := $(LIONSOS)/libvmm
+SDDF := $(LIONSOS)/dep/sddf
+LIBVMM := $(LIONSOS)/dep/libvmm
 
 VMM_IMAGE_DIR := src/vmm/images
 LINUX := $(VMM_IMAGE_DIR)/linux
@@ -42,9 +42,9 @@ DTS := $(VMM_IMAGE_DIR)/linux.dts
 DTB := $(BUILD_DIR)/linux.dtb
 
 LWIP=$(SDDF)/network/ipstacks/lwip/src
-LIBNFS=$(LIONSOS)/libnfs
+LIBNFS=$(LIONSOS)/dep/libnfs
 NFS=$(LIONSOS)/components/fs/nfs
-MUSL=$(LIONSOS)/musllibc
+MUSL=$(LIONSOS)/dep/musllibc
 
 IMAGES := timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf arp.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf i2c_virt.elf i2c_driver.elf
 CFLAGS := \
@@ -157,7 +157,7 @@ $(BUILD_DIR)/musllibc/lib/libc.a:
 		SOURCE_DIR=.
 
 $(BUILD_DIR)/libnfs/lib/libnfs.a: $(BUILD_DIR)/musllibc/lib/libc.a
-	MUSL=$(abspath $(BUILD_DIR)/musllibc) cmake -S $(LIONSOS)/libnfs -B $(BUILD_DIR)/libnfs
+	MUSL=$(abspath $(BUILD_DIR)/musllibc) cmake -S $(LIBNFS) -B $(BUILD_DIR)/libnfs
 	cmake --build $(BUILD_DIR)/libnfs
 
 $(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
@@ -165,7 +165,7 @@ $(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
 		BUILD_DIR=$(abspath $(BUILD_DIR)/nfs) \
 		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
 		MUSLLIBC_INCLUDE=$(abspath $(BUILD_DIR)/musllibc/include) \
-		LIBNFS_INCLUDE=$(abspath $(LIONSOS)/libnfs/include) \
+		LIBNFS_INCLUDE=$(abspath $(LIBNFS)/include) \
 		ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
 
 $(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a
@@ -291,6 +291,6 @@ $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
 FORCE: ;
 
 mpy-cross:
-	make -C $(LIONSOS)/micropython/mpy-cross
+	make -C $(LIONSOS)/dep/micropython/mpy-cross
 
 .PHONY: mpy-cross

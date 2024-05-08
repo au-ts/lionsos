@@ -35,11 +35,11 @@ CC := $(TOOLCHAIN)-gcc
 TARGET := aarch64-none-elf
 
 LIONSOS := ../../..
-LIBNFS := $(LIONSOS)/libnfs
-SDDF := $(LIONSOS)/sddf
+LIBNFS := $(LIONSOS)/dep/libnfs
+SDDF := $(LIONSOS)/dep/sddf
 SDDF_UTIL := $(SDDF)/util
 LWIP := $(SDDF)/network/ipstacks/lwip
-MUSL := $(LIONSOS)/musllibc/build
+MUSL := $(LIONSOS)/dep/musllibc/build
 
 INCLUDE := \
 	-Ilwip_include \
