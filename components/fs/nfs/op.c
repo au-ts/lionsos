@@ -19,7 +19,7 @@
 #include <nfsc/libnfs.h>
 #include <nfsc/libnfs-raw.h>
 
-#include <lions_os/fs/protocol.h>
+#include <lions/fs/protocol.h>
 
 #include "nfs.h"
 #include "util.h"
