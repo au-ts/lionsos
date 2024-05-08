@@ -36,12 +36,16 @@ uintptr_t serial_tx_data;
 serial_queue_handle_t serial_rx_queue;
 serial_queue_handle_t serial_tx_queue;
 
+#ifdef ENABLE_I2C
 i2c_queue_handle_t i2c_queue_handle;
 uintptr_t i2c_request_region;
 uintptr_t i2c_response_region;
 uintptr_t i2c_data_region;
+#endif
 
+#ifdef ENABLE_FRAMEBUFFER
 uintptr_t framebuffer_data_region;
+#endif
 
 int active_events = mp_event_source_none;
 int mp_blocking_events = mp_event_source_none;
@@ -127,7 +131,9 @@ void init(void) {
         serial_enqueue_free(&serial_tx_queue, serial_tx_data + ((i + NUM_ENTRIES) * BUFFER_SIZE), BUFFER_SIZE);
     }
 
+#ifdef ENABLE_I2C
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
+#endif
 
     t_event = co_active();
     t_mp = co_derive((void *)mp_stack, MICROPY_STACK_SIZE, t_mp_entrypoint);
@@ -150,15 +156,19 @@ void notified(microkit_channel ch) {
     case TIMER_CH:
         active_events |= mp_event_source_timer;
         break;
+#ifdef ENABLE_FRAMEBUFFER
     case FRAMEBUFFER_VMM_CH:
         active_events |= mp_event_source_framebuffer;
         break;
+#endif
     case NFS_CH:
         active_events |= mp_event_source_nfs;
         break;
+#ifdef ENABLE_I2C
     case I2C_CH:
         active_events |= mp_event_source_i2c;
         break;
+#endif
     case ETH_RX_CH:
     case ETH_TX_CH:
         /* Nothing to do here right now, but we catch it the case where we get
