@@ -1,6 +1,6 @@
 #pragma once
 
-#include <lions_os/libco.h>
+#include <lions/libco.h>
 #include <stdint.h>
 
 extern cothread_t t_event;
