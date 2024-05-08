@@ -90,9 +90,6 @@ SRC_C = \
 	mphalport.c \
 	modmyport.c \
 	modtime.c \
-	modmachine.c \
-	modfb.c \
-	machine_i2c.c \
 	mpnetworkport.c \
 	modfs_raw.c \
 	vfs_sddf_fs_file.c \
@@ -103,13 +100,11 @@ SRC_C = \
 	extmod/vfs.c \
 	extmod/modos.c \
 	extmod/vfs_reader.c \
-	extmod/machine_i2c.c \
 	extmod/modasyncio.c \
 	extmod/modselect.c \
 	extmod/modlwip.c \
 	extmod/modre.c \
 	extmod/moddeflate.c \
-	extmod/modframebuf.c \
 	extmod/moductypes.c \
 	extmod/modjson.c \
 	shared/readline/readline.c \
@@ -122,10 +117,23 @@ SRC_C = \
 	shared/netutils/netutils.c \
 	$(LIBCO)/libco.c \
 	$(SDDF_UTIL)/printf.c \
-	$(SDDF_UTIL)/putchar_debug.c \
+	$(SDDF_UTIL)/putchar_debug.c
+
 
 # Define source files containung qstrs.
-SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c modfb.c vfs_sddf_fs_file.c vfs_sddf_fs.c modmachine.c machine_i2c.c modfs_raw.c
+SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c vfs_sddf_fs_file.c vfs_sddf_fs.c modfs_raw.c
+
+ifdef ENABLE_I2C
+SRC_C += modmachine.c machine_i2c.c extmod/machine_i2c.c
+SRC_QSTR += modmachine.c machine_i2c.c
+CFLAGS += -DENABLE_I2C
+endif
+
+ifdef ENABLE_FRAMEBUFFER
+SRC_C += modfb.c extmod/modframebuf.c
+SRC_QSTR += modfb.c
+CFLAGS += -DENABLE_FRAMEBUFFER
+endif
 
 # Define the required object files.
 OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ) $(BUILD)/sddf_util_cache.o
