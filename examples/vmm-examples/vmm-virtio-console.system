@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+#include "vmm_ram.h"
+<system>
+  <!-- For VM with everything passed through -->
+  <!-- Memory regions -->
+  <!-- Guest Ram: 1Gb -->
+  <!-- Physical memory regions -->
+  /*
+  * Guest RAM.  Size and Address filled in by build system.
+  */
+  <memory_region name="guest_ram" size=GUESTRAMSIZE  page_size="0x200_000" phys_addr=GUESTRAMADDR />
+  /*
+  * Device regions from Device Tree
+  */
+  <memory_region name="bus1" size="0x200000" phys_addr="0xff600000" />
+  /*
+  * Split Bus 2, so he UART can be given to the UART driver
+  */
+  <memory_region name="bus2" size="0x3000" phys_addr="0xff800000" />
+  <memory_region name="uart" size="0x1000" phys_addr="0xff803000" />
+  <memory_region name="bus2a" size="0x1C0000" phys_addr="0xff804000" />
+  
+  <memory_region name="bus3" size="0x100000" phys_addr="0xffd00000" />
+  <!-- <memory_region name="bus4" size="0x25000"
+       phys_addr="0xffd13000" /> -->
+  <!-- <memory_region name="eMMCA" size="0x1000"
+       phys_addr="0xffe03000" /> -->
+  <memory_region name="eMMCB" size="0x1000" phys_addr="0xffe05000" />
+  <memory_region name="eMMCC" size="0x1000" phys_addr="0xffe07000" />
+  <memory_region name="usb" size="0x1000" phys_addr="0xffe09000" />
+  <memory_region name="usb1" size="0x40000" phys_addr="0xff400000" />
+  <memory_region name="usb2" size="0x100000" phys_addr="0xff500000" />
+  <memory_region name="gpu" size="0x40000" phys_addr="0xffe40000" />
+/*  <memory_region name="vpu" size="0x100000" phys_addr="0xff900000"
+/> */
+  <memory_region name="eth" size="0x10000" phys_addr="0xff3f0000" />
+  <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0xffc06000" />
+
+ /*
+  * Memory regions assigned by tool from RAM
+  */
+  /*
+   * Regions for the shared queues used by the Serial driver and
+   * virtualiser
+   */
+  <memory_region name="serial_rx_free_driver" size="0x200_000"
+		 page_size="0x200_000"/>
+  <memory_region name="serial_rx_active_driver" size="0x200_000"
+		 page_size="0x200_000"/>
+  <memory_region name="serial_tx_free_driver" size="0x200_000"
+		 page_size="0x200_000"/>
+  <memory_region name="serial_tx_active_driver" size="0x200_000"
+		 page_size="0x200_000"/>
+  <memory_region name="serial_tx_data_driver" size="0x200_000"
+    page_size="0x200_000"/>
+  <memory_region name="serial_rx_data_driver" size="0x200_000"
+    page_size="0x200_000"/>
+
+  /*
+   * Regions for the shared queues between VMM and Serial Virtualiser
+   */
+   
+   <memory_region name="serial_rx_free_VMM" size="0x200_000"
+		  page_size="0x200_000"/>
+   <memory_region name="serial_rx_active_VMM" size="0x200_000"
+		  page_size="0x200_000"/>
+   <memory_region name="serial_tx_free_VMM" size="0x200_000"
+		  page_size="0x200_000"/>
+   <memory_region name="serial_tx_active_VMM" size="0x200_000"
+		  page_size="0x200_000"/>
+   <memory_region name="serial_rx_data_VMM" size="0x200_000"
+		  page_size="0x200_000"/>
+   <memory_region name="serial_tx_data_VMM" size="0x200_000"
+		  page_size="0x200_000"/>
+
+  <protection_domain name="VMM" priority="10">
+    <program_image path="vmm.elf" />
+    <map mr="guest_ram" vaddr=GUESTRAMADDR perms="rw" setvar_vaddr="guest_ram_vaddr" />
+    <virtual_machine name="linux" id="0" priority="1">
+      <map mr="guest_ram" vaddr=GUESTRAMADDR perms="rwx" />
+      <map mr="eMMCB" vaddr="0xffe05000" perms="rw"
+	   cached="false" />
+      <map mr="eMMCC" vaddr="0xffe07000" perms="rw"
+	   cached="false" />
+      <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
+      <map mr="bus2" vaddr="0xff800000" perms="rw"
+	   cached="false" /> 
+      <map mr="bus2a" vaddr="0xff804000" perms="rw" cached="false" /> 
+      <map mr="bus3" vaddr="0xffd00000" perms="rw" cached="false" />
+      <!-- <map mr="bus4" vaddr="0xffd13000" perms="rw" cached="false"
+           /> -->
+      <map mr="usb" vaddr="0xffe09000" perms="rw" cached="false" />
+      <map mr="usb1" vaddr="0xff400000" perms="rw" cached="false" />
+      <map mr="usb2" vaddr="0xff500000" perms="rw" cached="false" />
+      <map mr="gpu" vaddr="0xffe40000" perms="rw" cached="false" />
+/*            <map mr="vpu" vaddr="0xff900000" perms="rw"
+cached="false" /> */
+      <map mr="eth" vaddr="0xff3f0000" perms="rw" cached="false" />
+      <map mr="gic_vcpu" vaddr="0xffc02000" perms="rw" cached="false" />
+
+    </virtual_machine>
+
+    <!-- Regions for virtio Console -->
+    <map mr="serial_rx_free_VMM" vaddr=SERIAL_RX_FREE_VMM perms="rw"
+	 cached="true" setvar_vaddr="serial_rx_free"/>
+    <map mr="serial_rx_active_VMM" vaddr=SERIAL_RX_ACTIVE_VMM perms="rw"
+	 cached="true" setvar_vaddr="serial_rx_active"/>
+    <map mr="serial_tx_free_VMM" vaddr=SERIAL_TX_FREE_VMM perms="rw"
+	 cached="true" setvar_vaddr="serial_tx_free"/>
+    <map mr="serial_tx_active_VMM" vaddr=SERIAL_TX_ACTIVE_VMM perms="rw"
+	 cached="true" setvar_vaddr="serial_tx_active"/>
+    <map mr="serial_rx_data_VMM" vaddr=SERIAL_RX_DATA_VMM perms="rw"
+	 cached="true" setvar_vaddr="serial_rx_data"/>
+    <map mr="serial_tx_data_VMM" vaddr=SERIAL_TX_DATA_VMM perms="rw"
+	 cached="true" setvar_vaddr="serial_tx_data"/>
+
+    <!-- @ivanv: clean up these IDs once we finishing stripping down the Linux image -->
+    <!-- vpu -->
+    <irq irq="35" id="15" trigger="edge" />
+    <!-- panfrost-gpu -->
+    <irq irq="192" id="7" />
+    <!-- panfrost-mmu -->
+    <irq irq="193" id="8" />
+    <!-- panfrost-job -->
+    <irq irq="194" id="9" />
+    <!-- i2c -->
+    <irq irq="53" id="10" />
+    <!-- usb -->
+    <irq irq="63" id="12" />
+    <!-- usb -->
+    <irq irq="62" id="13" />
+    <!-- usb -->
+    <irq irq="48" id="16" />
+    <!-- hdmi -->
+    <irq irq="89" id="14" trigger="edge" />
+    <!-- IRQ work interrupts -->
+    <irq irq="5" id="17" />
+    <!-- eMMCB -->
+    <irq irq="222" id="18" />
+    <!-- eMMCC -->
+    <irq irq="223" id="19" />
+    <!-- Ethernet -->
+    <irq irq="40" id="21"/>
+    <!-- Ethernet internal PHY: Not used -->
+    /* <irq irq="41" id="22"/> */
+    <!-- GPIO IRQs -->
+    <irq irq="96" id="23" trigger="edge"/>
+    <irq irq="97" id="24" trigger="edge"/>
+    <irq irq="98" id="25" trigger="edge"/>
+    <irq irq="99" id="26" trigger="edge"/>
+    <irq irq="100" id="27" trigger="edge"/>
+    <irq irq="101" id="28" trigger="edge"/>
+    <irq irq="102" id="29" trigger="edge"/>
+    <irq irq="103" id="30" trigger="edge"/>
+  </protection_domain>
+
+  <protection_domain name="uart_driver" priority="100" >
+    <program_image path="uart_driver.elf" />
+
+    <map mr="uart" vaddr="0xff803000" perms="rw" cached="false" setvar_vaddr="uart_base"/>
+    <map mr="serial_rx_free_driver" vaddr=SERIAL_RX_FREE_DRIVER perms="rw" cached="true" setvar_vaddr="rx_free" />
+    <map mr="serial_rx_active_driver" vaddr=SERIAL_RX_ACTIVE_DRIVER perms="rw" cached="true" setvar_vaddr="rx_active" />
+    <map mr="serial_tx_free_driver" vaddr=SERIAL_TX_FREE_DRIVER perms="rw" cached="true" setvar_vaddr="tx_free" />
+    <map mr="serial_tx_active_driver" vaddr=SERIAL_TX_ACTIVE_DRIVER perms="rw" cached="true" setvar_vaddr="tx_active" />
+    <map mr="serial_tx_data_driver" vaddr=SERIAL_TX_DATA_DRIVER perms="rw" cached="true" />
+    <map mr="serial_rx_data_driver" vaddr=SERIAL_RX_DATA_DRIVER perms="rw" cached="true" />
+
+    <!-- IRQ for UART -->
+    <irq irq="225" id="1" trigger="edge" />
+  </protection_domain>
+
+  <protection_domain name="serial_tx_virtualiser" priority="99" >
+    <program_image path="serial_TX_virtualiser.elf" />
+
+    <map mr="serial_tx_free_driver" vaddr=SERIAL_TX_FREE_DRIVER perms="rw"
+	 cached="true" setvar_vaddr="tx_free_driver" />
+    <map mr="serial_tx_active_driver" vaddr=SERIAL_TX_ACTIVE_DRIVER perms="rw" cached="true" setvar_vaddr="tx_active_driver" />
+
+    <map mr="serial_tx_free_VMM" vaddr=SERIAL_TX_FREE_VMM perms="rw" cached="true" setvar_vaddr="tx_free_client" />
+    <map mr="serial_tx_active_VMM" vaddr=SERIAL_TX_ACTIVE_VMM perms="rw" cached="true" setvar_vaddr="tx_active_client" />
+    <map mr="serial_tx_data_driver" vaddr=SERIAL_TX_DATA_DRIVER perms="rw" cached="true" setvar_vaddr="tx_data_driver" />
+    <map mr="serial_tx_data_VMM" vaddr=SERIAL_TX_DATA_VMM perms="rw" cached="true" setvar_vaddr="tx_data_client" />
+  </protection_domain>
+
+  <protection_domain name="serial_rx_virtualiser" priority="98" >
+    <program_image path="serial_RX_virtualiser.elf" />
+
+    <map mr="serial_rx_free_driver" vaddr=SERIAL_RX_FREE_DRIVER perms="rw" cached="true" setvar_vaddr="rx_free_driver" />
+    <map mr="serial_rx_active_driver" vaddr=SERIAL_RX_ACTIVE_DRIVER perms="rw" cached="true" setvar_vaddr="rx_active_driver" />
+
+    <map mr="serial_rx_free_VMM" vaddr=SERIAL_RX_FREE_VMM perms="rw" cached="true" setvar_vaddr="rx_free_client" />
+    <map mr="serial_rx_active_VMM" vaddr=SERIAL_RX_ACTIVE_VMM perms="rw" cached="true" setvar_vaddr="rx_active_client" />
+
+    <map mr="serial_rx_data_driver" vaddr=SERIAL_RX_DATA_DRIVER perms="rw" cached="true" setvar_vaddr="rx_data_driver" />
+    <map mr="serial_rx_data_VMM" vaddr=SERIAL_RX_DATA_VMM perms="rw" cached="true" setvar_vaddr="rx_data_client" />
+  </protection_domain>
+
+    <channel>
+        <end pd="uart_driver" id="8"/>
+        <end pd="serial_tx_virtualiser" id="9"/>
+    </channel>
+
+    <channel>
+        <end pd="uart_driver" id="10"/>
+        <end pd="serial_rx_virtualiser" id="11"/>
+    </channel>
+
+    <channel>
+      <end pd="VMM" id="1"/>
+      <end pd="serial_tx_virtualiser" id="1"/>
+    </channel>
+
+    <channel>
+      <end pd="VMM" id="2"/>
+      <end pd="serial_rx_virtualiser" id="1"/>
+    </channel>
+    
+</system>

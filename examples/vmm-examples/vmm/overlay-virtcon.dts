@@ -1,0 +1,33 @@
+/{
+#include "vmm_ram.h"
+	// VMM puts 256Mb RAM at 0x2000000
+	memory@0 {
+		device_type = "memory";
+		reg = <0x00 GUEST_RAM_ADDRESS 0x00 GUEST_RAM_SIZE>;
+	};
+	// We're going to use the virtIO console as serial
+        chosen {
+	        stdout-path = "virtio-console@130000";
+	        linux,initrd-start = <0x00000000 GUEST_INIT_RAM_DISK_VADDR>;
+	        linux,initrd-end =   <0x00000000 INITRD_END>;
+		bootargs = "console=hvc0 earlycon=hvc0 ncpu=1 loglevel=8 root=UUID=687ada98-77c2-406d-ae2f-b8a071e057cd rootwait coherent_pool=2M ubootpart=c4d340a8-01 libata.force=noncq usb-storage.quirks=0x2537:0x1066:u,0x2537:0x1068:u    cgroup_enable=memory";
+	};
+	sm: secure-monitor {
+	  status = "reserved";
+	};
+	
+	virtio-console@130000 {
+		compatible = "virtio,mmio";
+		reg = <0x00 VIRTIO_SERIAL_ADDR 0x00 VIRTIO_CONSOLE_SIZE>;
+		interrupts = <0x00 MMIO_CONSOLE_IRQ 0x04>;
+	};
+
+
+	soc {
+	   bus@ff800000 {
+	   	   serial@3000 {
+	   	   	       status = "disabled";
+	           };
+	   };
+        };
+};
