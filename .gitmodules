@@ -16,6 +16,6 @@
 [submodule "libnfs"]
 	path = dep/libnfs
 	url = git@github.com:au-ts/libnfs.git
-[submodule "fs/fat"]
-	path = fs/fat
+[submodule "components/fs/fat"]
+	path = components/fs/fat
 	url = git@github.com:Cheng-Li1/AsyncFATFs.git
