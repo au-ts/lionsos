@@ -14,16 +14,9 @@
 #include "virq.h"
 #include "tcb.h"
 #include "vcpu.h"
-/* Specific to the framebuffer example */
-#include "uio.h"
 
-#if defined(CONFIG_PLAT_ODROIDC4)
-#define GUEST_RAM_SIZE 0x10000000
-#define GUEST_DTB_VADDR 0x2f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2c000000
-#else
-#error "Need to define platform specific guest info"
-#endif
+#include "vmm_ram.h"
+#define GUEST_DTB_VADDR 0x8f000000
 
 // @ivanv: need a more systematic way of choosing this IRQ number?
 /*
@@ -32,8 +25,6 @@
  * IRQs delivered by the VMM into the guest.
  */
 #define UIO_GPU_IRQ 50
-/* For when we get notified from MicroPython */
-#define MICROPYTHON_CH 1
 
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
@@ -47,24 +38,32 @@ extern char _guest_initrd_image_end[];
 /* Microkit will set this variable to the start of the guest RAM memory region. */
 uintptr_t guest_ram_vaddr;
 
-/* IRQs to pass-through to the guest */
-/* These are expected to have a 1-1 mapping between index and Microkit channel,
- * starting from 10. For example, the second IRQ in this list should have the
- * channel number of 12. This will be cleaned up in the future.
- */
-uint32_t irqs[] = { 232, 35, 192, 193, 194, 53, 246, 71, 227, 228, 63, 62, 48, 89, 5 };
+// @ivanv: should be part of libvmm
+#define MAX_IRQ_CH 63
+int passthrough_irq_map[MAX_IRQ_CH];
 
-void uio_gpu_ack(size_t vcpu_id, int irq, void *cookie) {
-    // Do nothing, there is no actual IRQ to ack since UIO IRQs are virtual!
+static void passthrough_device_ack(size_t vcpu_id, int irq, void *cookie) {
+    microkit_channel irq_ch = (microkit_channel)(int64_t)cookie;
+    microkit_irq_ack(irq_ch);
 }
 
-bool uio_init_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data) {
-    LOG_VMM("sending notification to MicroPython!\n");
-    microkit_notify(MICROPYTHON_CH);
-    return true;
+static void register_passthrough_irq(int irq, microkit_channel irq_ch) {
+    LOG_VMM("Register passthrough IRQ %d (channel: 0x%lx)\n", irq, irq_ch);
+    assert(irq_ch < MAX_IRQ_CH);
+    passthrough_irq_map[irq_ch] = irq;
+
+    int err = virq_register(GUEST_VCPU_ID, irq, &passthrough_device_ack, (void *)(int64_t)irq_ch);
+    if (!err) {
+        LOG_VMM_ERR("Failed to register IRQ %d\n", irq);
+        return;
+    }
 }
+
 
 void init(void) {
+    int i;
+    int j;
+
     /* Initialise the VMM, the VCPU(s), and start the guest */
     LOG_VMM("starting \"%s\"\n", microkit_name);
     /* Place all the binaries in the right locations before starting the guest */
@@ -92,15 +91,39 @@ void init(void) {
         return;
     }
 
-    for (int i = 0; i < sizeof(irqs) / sizeof(uint32_t); i++) {
-        bool success = virq_register_passthrough(GUEST_VCPU_ID, irqs[i], i + 10);
-        /* Should not be any reason for this to fail */
-        assert(success);
-    }
-
-    /* Setting up the UIO region for the framebuffer */
-    virq_register(GUEST_VCPU_ID, UIO_GPU_IRQ, &uio_gpu_ack, NULL);
-    fault_register_vm_exception_handler(UIO_INIT_ADDRESS, sizeof(size_t), &uio_init_handler, NULL);
+    // // @ivanv minimise
+    /* Ethernet */
+    register_passthrough_irq(40, 21);
+    /* Ethernet PHY */
+    register_passthrough_irq(41, 22);
+    /* panfrost-gpu */
+    register_passthrough_irq(192, 7);
+    /* panfrost-mmu */
+    register_passthrough_irq(193, 8);
+    /* panfrost-job */
+    register_passthrough_irq(194, 9);
+    /* I2C */
+    register_passthrough_irq(53, 10);
+    /* USB */
+    register_passthrough_irq(63, 12);
+    /* USB */
+    register_passthrough_irq(62, 13);
+    /* HDMI */
+    register_passthrough_irq(89, 14);
+    /* VPU */
+    register_passthrough_irq(35, 15);
+    /* USB */
+    register_passthrough_irq(48, 16);
+    register_passthrough_irq(5, 17);
+    /* eMMCB */
+    register_passthrough_irq(222, 18);
+    /* eMMCC */
+    register_passthrough_irq(223, 19);
+    /* serial */
+    register_passthrough_irq(225, 20);
+    /* GPIO IRQs */
+    for (i = 96, j = 23; i < 104; i++, j++)
+        register_passthrough_irq(i, j);
 
     /* Finally start the guest */
     guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
@@ -108,21 +131,15 @@ void init(void) {
 
 void notified(microkit_channel ch) {
     switch (ch) {
-        case MICROPYTHON_CH: {
-            LOG_VMM("Got message from MicroPython, injecting IRQ\n");
-            bool success = virq_inject(GUEST_VCPU_ID, UIO_GPU_IRQ);
-            if (!success) {
-                LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", UIO_GPU_IRQ, GUEST_VCPU_ID);
+        default:
+            if (passthrough_irq_map[ch]) {
+                bool success = vgic_inject_irq(GUEST_VCPU_ID, passthrough_irq_map[ch]);
+                if (!success) {
+                    LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", passthrough_irq_map[ch], GUEST_VCPU_ID);
+                }
+                break;
             }
-            break;
-        }
-        default: {
-            bool success = virq_handle_passthrough(ch);
-            if (!success) {
-                LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", irqs[ch - 10], GUEST_VCPU_ID);
-            }
-            break;
-        }
+            printf("Unexpected channel, ch: 0x%lx\n", ch);
     }
 }
 
