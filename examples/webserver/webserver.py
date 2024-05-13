@@ -10,7 +10,7 @@ app = Microdot()
 async def index(request):
     path = f'{base_dir}/index.html'
     f = await fs_async.open(path)
-    return send_file(path, stream=f) #, max_age=60)
+    return send_file(path, stream=f)
 
 @app.route('/<path:path>')
 async def static(request, path):
@@ -28,9 +28,9 @@ async def static(request, path):
     max_age = 3600
     if stat[0] & 0o170000 == 0o40000: # directory
         path = f'{path}/index.html'
-        max_age = 60
+        max_age = 0
 
     f = await fs_async.open(path)
-    return send_file(path, stream=f) #, max_age=max_age)
+    return send_file(path, stream=f, max_age=max_age)
 
 app.run()
