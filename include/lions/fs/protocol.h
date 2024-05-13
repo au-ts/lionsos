@@ -50,7 +50,7 @@ struct sddf_fs_queue {
 };
 
 static bool sddf_fs_queue_push(struct sddf_fs_queue *queue, union sddf_fs_message message) {
-    if (queue->tail + 1 == __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE)) {
+    if (queue->tail - __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE) == SDDF_FS_QUEUE_CAPACITY) {
         return false;
     }
     queue->buffer[queue->tail % SDDF_FS_QUEUE_CAPACITY] = message;
