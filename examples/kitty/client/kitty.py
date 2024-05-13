@@ -324,3 +324,5 @@ def run(i2c_flag = True, nfs_flag = True):
     enable_nfs = nfs_flag
 
     asyncio.run(main())
+
+print("\033[95m\nWelcome to Kitty!\nUsage: kitty.run(bool I2C_ENABLE, bool NFS_ENABLE).\033[0m")
