@@ -33,4 +33,4 @@ async def static(request, path):
     f = await fs_async.open(path)
     return send_file(path, stream=f, max_age=max_age)
 
-app.run()
+app.run(debug=True)
