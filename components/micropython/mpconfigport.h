@@ -42,6 +42,7 @@
 #define MICROPY_LONGINT_IMPL MICROPY_LONGINT_IMPL_MPZ
 #define MICROPY_PY_JSON (1)
 #define MICROPY_PY_IO_IOBASE (1)
+#define MICROPY_PY_SYS_STDFILES (1)
 
 #define MICROPY_FLOAT_IMPL (MICROPY_FLOAT_IMPL_FLOAT)
 
@@ -73,6 +74,9 @@ typedef long mp_off_t;
 #if defined(CONFIG_PLAT_ODROIDC4)
 #define MICROPY_HW_BOARD_NAME "Odroid-C4"
 #define MICROPY_HW_MCU_NAME   "Cortex A55"
+#elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
+#define MICROPY_HW_BOARD_NAME "QEMU virt (AArch64)"
+#define MICROPY_HW_MCU_NAME   "Cortex A53"
 #else
 #error "Unknown platform given for MicroPython config"
 #endif

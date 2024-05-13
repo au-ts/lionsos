@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sddf/util/printf.h>
 
 typedef  uint8_t  u8_t;
 typedef uint16_t u16_t;
@@ -60,13 +61,13 @@ typedef uintptr_t mem_ptr_t;
 /* Plaform specific diagnostic output */
 #define LWIP_PLATFORM_DIAG(x)                                   \
         do {                                                    \
-            printf x;                                           \
+            sddf_printf x;                                           \
         } while(0)
 
 #define LWIP_PLATFORM_ASSERT(x)                                 \
         do {                                                    \
             if (!x) {                                           \
-                printf("assertion violated: %s : %s:%d:%s\n",     \
+                sddf_printf("assertion violated: %s : %s:%d:%s\n",     \
                        #x, __FILE__, __LINE__, __FUNCTION__);   \
                 while(1);                                       \
             }                                                   \
