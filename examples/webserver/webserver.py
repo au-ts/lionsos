@@ -26,7 +26,6 @@ async def static(request, path):
         return 'File not found', 404
 
     max_age = 3600
-    stat = os.stat(path)
     if stat[0] & 0o170000 == 0o40000: # directory
         path = f'{path}/index.html'
         max_age = 60
