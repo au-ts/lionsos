@@ -4,6 +4,11 @@ import fs_async
 from microdot import Microdot, send_file
 from config import base_dir
 
+extra_content_type_map = {
+    'pdf': 'application/pdf',
+    'svg': 'image/svg+xml',
+}
+
 app = Microdot()
 
 @app.route('/')
@@ -30,7 +35,12 @@ async def static(request, path):
         path = f'{path}/index.html'
         max_age = 0
 
+    content_type = None
+    ext = path.split('.')[-1]
+    if ext in extra_content_type_map:
+        content_type = extra_content_type_map[ext]
+
     f = await fs_async.open(path)
-    return send_file(path, stream=f, max_age=max_age)
+    return send_file(path, stream=f, content_type=content_type, max_age=max_age)
 
 app.run(debug=True)
