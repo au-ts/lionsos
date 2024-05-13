@@ -55,7 +55,6 @@ void nfs_init(void) {
 }
 
 void notified(microkit_channel ch) {
-    sddf_timer_set_timeout(TIMER_CHANNEL, TIMEOUT);
     switch (ch) {
     case TIMER_CHANNEL: {
         tcp_process_rx();
@@ -83,6 +82,7 @@ void notified(microkit_channel ch) {
                 dlogp(err, "nfs_service error");
             }
         }
+        sddf_timer_set_timeout(TIMER_CHANNEL, TIMEOUT);
         break;
     }
     case ETHERNET_RX_CHANNEL:
