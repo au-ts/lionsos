@@ -11,7 +11,7 @@ extern void *framebuffer_data_region;
  * needs to wait until the framebuffer is ready.
  */
 STATIC mp_obj_t fb_wait(void) {
-    microkit_cothread_wait_on_channel(FRAMEBUFFER_VMM_CH);
+     microkit_cothread_wait_on_channel(FRAMEBUFFER_VMM_CH);
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(fb_wait_obj, fb_wait);
@@ -22,35 +22,42 @@ STATIC mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t h
 
     fb_config_t *config = get_fb_config(framebuffer_data_region);
 
-    size_t line_len = config->xres * (config->bpp/8);
-
     uint64_t width = mp_obj_get_int(width_obj);
     uint64_t height = mp_obj_get_int(height_obj);
 
     mp_buffer_info_t bufinfo;
     mp_get_buffer(buf_obj, &bufinfo, MP_BUFFER_READ);
-    uint16_t *buf = (uint16_t *)bufinfo.buf;
+    uint8_t *buf = (uint8_t *)bufinfo.buf;
 
     /* Need to now copy the data from MicroPython's framebuffer abstraction to
      * our shared memory region */
 
-    /* Need to convert RGB565 to BGR888 */
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            uint16_t col = buf[x + (width * y)];
-            uint8_t r5 = (col >> 11) & 0x1f;
-            uint8_t g6 = (col >> 5) & 0x3f;
-            uint8_t b5 = (col) & 0x1f;
+    // Scaling factor
+    double scale_x = width / (double) config->xres;
+    double scale_y = height / (double) config->yres;
+
+    for (int dst_y = 0; dst_y < config->yres; dst_y++) {
+        for (int dst_x = 0; dst_x < config->xres; dst_x++) {
+            int src_x = dst_x * scale_x;
+            int src_y = dst_y * scale_y;
+
+            int src_offset = (src_y * width + src_x) * 2;
+            int dst_offset = (dst_y * config->xres + dst_x) * 4;
+
+            uint16_t src_val = *(uint16_t *)(buf + src_offset);
+
+            uint8_t r5 = (src_val >> 11) & 0x1f;
+            uint8_t g6 = (src_val >> 5) & 0x3f;
+            uint8_t b5 = (src_val) & 0x1f;
             /* Conversion from 5-bit for red/blue and 6-bit for green to all being 8-bits. */
             uint8_t r8 = ( r5 * 527 + 23 ) >> 6;
             uint8_t g8 = ( g6 * 259 + 33 ) >> 6;
             uint8_t b8 = ( b5 * 527 + 23 ) >> 6;
 
-            uint64_t location = (x * (config->bpp/8)) + (y * line_len);
-            framebuffer[location] = b8;
-            framebuffer[location + 1] = g8;
-            framebuffer[location + 2] = r8;
-            framebuffer[location + 3] = 0;
+            framebuffer[dst_offset + 0] = b8; // Blue
+            framebuffer[dst_offset + 1] = g8; // Green
+            framebuffer[dst_offset + 2] = r8; // Red
+            framebuffer[dst_offset + 3] = 0; // Alpha
         }
     }
 

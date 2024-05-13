@@ -14,13 +14,31 @@ MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-PLATFORM := meson
 SDDF := $(LIONSOS)/dep/sddf
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 
-VMM_IMAGE_DIR := ${KITTY_DIR}/src/vmm/images
-LINUX := linux
-INITRD := rootfs.cpio.gz
+ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
+	NET_DRIV_DIR := meson
+	UART_DRIV_DIR := meson
+	TIMER_DRIV_DIR := meson
+	I2C_DRIV_DIR := meson
+	CPU := cortex-a55
+	INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
+	LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
+else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
+	NET_DRIV_DIR := virtio
+	UART_DRIV_DIR := arm
+	TIMER_DRIV_DIR := arm
+	CPU := cortex-a53
+	QEMU := qemu-system-aarch64
+	INITRD := 8d4a14e2c92a638d68f04832580a57b94e8a4f6b-rootfs.cpio.gz
+	LINUX := 75757e2972d5dc528d98cab377e2c74a9e02d6f9-linux
+else
+$(error Unsupported MICROKIT_BOARD given)
+endif
+
+VMM_IMAGE_DIR := ${KITTY_DIR}/board/$(MICROKIT_BOARD)/framebuffer_vmm_images
+VMM_SRC_DIR := ${KITTY_DIR}/src/vmm
 DTS := $(VMM_IMAGE_DIR)/linux.dts
 DTB := linux.dtb
 
@@ -84,15 +102,18 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 	${SDDF}/drivers/serial/${PLATFORM}/uart_driver.mk \
 	${SDDF}/network/components/network_components.mk \
 	${SDDF}/serial/components/serial_components.mk \
-	${SDDF}/i2c/components/i2c_virt.mk \
 	${SDDF}/libco/libco.mk
 
+# We can build the kitty system without the I2C Driver
+ifneq ($(I2C_DRIV_DIR), )
+SDDF_MAKFILES += ${SDDF}/drivers/i2c/${I2C_DRIV_DIR}/i2c_driver.mk
+endif
 include ${SDDF_MAKEFILES}
 include ${LIBVMM_DIR}/vmm.mk
 
 # Build the VMM for graphics
 VMM_OBJS := vmm.o package_guest_images.o
-VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}:${VMM_IMAGE_DIR}/..
+VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}:${VMM_SRC_DIR}
 
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $< > $@
@@ -110,22 +131,39 @@ package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
 vmm.elf: ${VMM_OBJS} libvmm.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-micropython.elf: mpy-cross libsddf_util_debug.a libco.a $(LIONSOS)/dep/libmicrokitco
+# Build with two threads in parallel
+nproc=2
+
+micropython.elf: mpy-cross libsddf_util_debug.a libco.a config.py manifest.py \
+		kitty.py pn532.py font.py writer.py \
+		$(LIONSOS)/dep/libmicrokitco
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
 			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
 			MICROPY_MPYCROSS=$(abspath mpy_cross/mpy-cross) \
 			MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
-			BUILD=$(abspath .) \
+			BUILD=$(abspath $(BUILD_DIR)) \
 			LIBMATH=${LIBMATH} \
-			FROZEN_MANIFEST=${KITTY_DIR}/manifest.py \
+			FROZEN_MANIFEST=$(abspath manifest.py) \
 			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
 			ENABLE_I2C=1 \
 			ENABLE_FRAMEBUFFER=1 \
 			V=1
 
-musllibc/lib/libc.a: ${MUSL}/Makefile
+config.py: ${KITTY_DIR}/board/$(MICROKIT_BOARD)/config.py
+	cp $< $@
+
+manifest.py: ${KITTY_DIR}/manifest.py
+	cp ${KITTY_DIR}/manifest.py $@
+
+%.py: ${KITTY_DIR}/client/%.py
+	cp $< $@
+
+%.py: ${KITTY_DIR}/client/font/%.py
+	cp $< $@
+
+musllibc/lib/libc.a:
 	make -C $(MUSL) \
 		C_COMPILER=aarch64-none-elf-gcc \
 		TOOLPREFIX=aarch64-none-elf- \
@@ -163,8 +201,8 @@ ${IMAGES}: libsddf_util_debug.a
 %.o: %.c ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
-$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${KITTY_DIR}/kitty.system
-	$(MICROKIT_TOOL) ${KITTY_DIR}/kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${KITTY_DIR}/board/${MICROKIT_BOARD}/kitty.system
+	$(MICROKIT_TOOL) ${KITTY_DIR}/board/${MICROKIT_BOARD}/kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 FORCE:
 
@@ -201,3 +239,23 @@ ${MUSL}/Makefile:
 
 ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &: 
 	cd ${LIONSOS}; git submodule update --init dep/sddf
+
+qemu: $(IMAGE_FILE)
+	$(QEMU) -machine virt,virtualization=on \
+			-cpu cortex-a53 \
+			-serial mon:stdio \
+			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
+			-m size=2G \
+			-device virtio-net-device,netdev=netdev0 \
+			-netdev user,id=netdev0 \
+			-global virtio-mmio.force-legacy=false \
+			-d guest_errors \
+			-device virtio-gpu-pci
+
+clean::
+	${RM} -f *.elf .depend* $
+	find . -name \*.[do] |xargs --no-run-if-empty rm
+
+clobber:: clean
+	rm -f *.a
+	rm -f ${IMAGE_FILE} ${REPORT_FILE}

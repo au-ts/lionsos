@@ -8,6 +8,7 @@
 # * drawing and updating the UI based on card taps from
 #   users and responses from the server.
 #
+
 import framebuf
 import fb
 import time
@@ -16,7 +17,8 @@ import asyncio
 import errno
 from pn532 import PN532
 import font
-from font_writer import CWriter
+from writer import CWriter
+from config import enable_i2c, enable_nfs, display_width, display_height
 
 current_uid = []
 current_equal_count = 0
@@ -26,9 +28,16 @@ TICKS_TO_RESET = 3
 token = 0
 reader_stream = None
 writer_stream = None
+stdin_ready = True
 
-IP_ADDRESS = "172.16.0.2"
+IP_ADDRESS = ""
 PORT = 3738
+
+""" Globals for dealing with UI """
+# KittyDisplay instance
+display = None
+# Display text writer
+wri = None
 
 
 def info(s):
@@ -60,15 +69,9 @@ class KittyDisplay(framebuf.FrameBuffer):
         super().__init__(self.buf, self.width, self.height, framebuf.RGB565)
 
     def show(self):
+        fb.wait()
         fb.machine_fb_send(self.buf, self.width, self.height)
 
-
-################## DISPLAY GLOBALS ###################
-display_width = 1920
-display_height = 1080
-display = KittyDisplay(display_width, display_height)
-wri = CWriter(display, font)
-######################################################
 
 # Heartbeat to let the server know we still exist
 def heartbeat():
@@ -79,7 +82,7 @@ def heartbeat():
             writer_stream.write(b'200 0 0\n')
             await writer_stream.drain()
         except OSError as e:
-            if (e.errno == errno.ECONNRESET):
+            if e.errno == errno.ECONNRESET:
                 error("RESETTING CONNECTION")
                 reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
@@ -91,20 +94,43 @@ async def on_tap(card_id):
     global token
     display.rect(200, 400, 1000, 1000, 0x0, True)
     wri.set_textpos(display, 430, 370)
-    wri.printstring(f"Processing...")
+    wri.printstring("Processing...")
     display.show()
     while True:
         try:
             writer_stream.write(
-                bytes(f'100 {token} {''.join('{:02x}'.format(x) for x in card_id)} 1.0' + '\n', 'utf-8'))
+                bytes(f'100 {token} {''.join('{:02x}'.format(x) for x in card_id)} 1.0' + '\n', 'utf-8')
+            )
             await writer_stream.drain()
             break
         except OSError as e:
-            if (e.errno == errno.ECONNRESET):
+            if e.errno == errno.ECONNRESET:
                 error("RESETTING CONNECTION")
                 reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
     token = (token + 1) % 1000000
+
+
+async def read_stdin():
+    sreader = asyncio.StreamReader(sys.stdin)
+    global token
+    global stdin_ready
+    while True:
+        if token != 0 and stdin_ready:
+            stdin_ready = False
+            print("\033[34mPlease enter card number: \033[0m")
+            uid_str = await sreader.readline()
+            info(f"Got card ID: {uid_str.strip()}")
+            uid = []
+            try:
+                uid.append(int(uid_str))
+            except ValueError:
+                print(f"Card ID '{uid_str}' must be an integer")
+                stdin_ready = True
+                continue
+            await on_tap(uid)
+
+        await asyncio.sleep_ms(100)
 
 
 # We require TICKS_TO_CONFIRM consecutive ticks with the card_id to
@@ -118,7 +144,6 @@ async def read_card(p):
     global TICKS_TO_RESET
     global TICKS_TO_CONFIRM
     global token
-
     while True:
         uid = p.read_uid()
         # Case where:
@@ -136,9 +161,9 @@ async def read_card(p):
             # If we are waiting on a specific card, but the one we just
             # read does not match this.
             current_not_equal_count += 1
-            if (current_count < TICKS_TO_CONFIRM):
+            if current_count < TICKS_TO_CONFIRM:
                 current_count = 0
-            if (current_not_equal_count == TICKS_TO_RESET):
+            if current_not_equal_count == TICKS_TO_RESET:
                 # If we see multiple non-matches in a row,
                 # go back to a reset state
                 info("Resetting...")
@@ -149,7 +174,7 @@ async def read_card(p):
             # current_uid != [] && current_uid == uid ==> MATCH!
             current_count += 1
             current_not_equal_count = 0
-            if (current_count == TICKS_TO_CONFIRM):
+            if current_count == TICKS_TO_CONFIRM:
                 info("Registering tap")
                 await on_tap(current_uid)
 
@@ -157,7 +182,7 @@ async def read_card(p):
         # We do this to consume the empty UID packet so it doesn't
         # mess with our matching. This only applies for MiFare
         # ultralight cards, which have len(uid) > 4.
-        if (uid != [] and len(uid) > 4):
+        if len(uid) > 4:
             uid = p.read_uid()
             assert uid == []
 
@@ -168,15 +193,18 @@ def set_pixel(display, x, y, rgba):
     r = (rgba >> 24) & 0xff
     g = (rgba >> 16) & 0xff
     b = (rgba >> 8) & 0xff
-    rgb565 = ((r & 0b11111000) << 8) | ((g & 0b11111100) << 3) | (b >> 3);
+    rgb565 = ((r & 0b11111000) << 8) | ((g & 0b11111100) << 3) | (b >> 3)
     display.pixel(x, y, rgb565)
 
 
 def reset_status():
+    global stdin_ready
     display.rect(200, 400, 1000, 1000, 0x0, True)
     wri.set_textpos(display, 430, 330)
     wri.printstring("Waiting for taps...")
     display.show()
+    # Now we are ready to accept new taps
+    stdin_ready = True
 
 
 def draw_image(display, x0, y0, data):
@@ -230,11 +258,10 @@ async def read_from_server():
             token = int(words[1])
             info(f'TOKEN = {token}')
         elif words[0] == '200':
-            info("got response")
             card_id = words[2]
             display.rect(200, 400, 1000, 1000, 0x0, True)
             wri.set_textpos(display, 400, 260)
-            wri.printstring(f"Thanks for your purchase!")
+            wri.printstring("Thanks for your purchase!")
             wri.set_textpos(display, 470, 235)
             wri.printstring(f"Card UID: {card_id}")
             display.show()
@@ -243,26 +270,41 @@ async def read_from_server():
 
 # Coroutine responsible for reading the card
 async def read_card_main():
-    p = PN532(1)
-    p.rf_configure()
-    p.sam_configure()
-    await read_card(p)
+    global stdin_ready
+    # While we are processing a tap, we cannot accept other taps.
+    # We consider to be finished processing after the server has
+    # responded, and after we have then called reset_status()
+    if enable_i2c:
+        p = PN532(1)
+        p.rf_configure()
+        p.sam_configure()
+        await read_card(p)
+    elif stdin_ready is True:
+        await read_stdin()
+    pass
+
 
 async def main():
+    # Only read the image from NFS if flag is set. Otherwise
+    # we will just print strings.
     global reader_stream
     global writer_stream
+    info(f"starting at {time.time()}")
     reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
-    info(f"starting at {time.time()}")
-    size = 688000
-    cat_buf = bytearray(size)
-    with open("catwithfish.data", "rb") as f:
-        nbytes = f.readinto(cat_buf)
-        info(f"read {nbytes} bytes")
-        pic = memoryview(cat_buf)
-        info("read image, starting to draw")
-        draw_image(display, 50, -70, pic[0:])
-    display.show()
+    # The cat picture is stored on the NFS directory, do not load it if we do not
+    # have access to it.
+    if enable_nfs:
+        size = 688000
+        cat_buf = bytearray(size)
+        with open("catwithfish.data", "rb") as f:
+            nbytes = f.readinto(cat_buf)
+            info(f"read {nbytes} bytes")
+            pic = memoryview(cat_buf)
+            info("read image, starting to draw")
+            draw_image(display, 50, -70, pic[0:])
+        display.show()
+
     wri.setcolor(0xffff, 0x0000)
     wri.set_textpos(display, 100, 500)
     wri.printstring("Welcome to Kitty v5")
@@ -281,4 +323,25 @@ async def main():
         asyncio.create_task(read_card_main())
     )
 
-asyncio.run(main())
+
+def help_prompt():
+    print("\nWelcome to Kitty!\nUsage: kitty.run(String IP_ADDRESS).\n\
+            IP_ADDRESS: The IP address of the kitty server.")
+
+
+def run(ip="172.16.0.2"):
+    global display
+    global wri
+    global IP_ADDRESS
+
+    if not isinstance(ip, str):
+        print("KITTY: IP address should be of type string")
+        return
+
+    display = KittyDisplay(display_width, display_height)
+    wri = CWriter(display, font)
+    IP_ADDRESS = ip
+    asyncio.run(main())
+
+
+help_prompt()
