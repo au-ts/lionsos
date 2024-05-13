@@ -74,9 +74,9 @@ void notified(microkit_channel ch) {
             int socket_index = socket_index_of_fd(nfs_fd);
             int revents = nfs_which_events(nfs);
             int sevents = 0;
-	    if (tcp_socket_hup(socket_index)) {
-		sevents |= POLLHUP;
-	    }
+            if (tcp_socket_hup(socket_index)) {
+                sevents |= POLLHUP;
+            }
             if (revents & POLLOUT && tcp_socket_writable(socket_index)) {
                 sevents |= POLLOUT;
             }
