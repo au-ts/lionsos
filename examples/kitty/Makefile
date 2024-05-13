@@ -26,8 +26,6 @@ export KITTY_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 export CONFIG_INCLUDE ?= $(abspath src/config)
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
-export MICROKIT_BOARD := odroidc4
-export CPU := cortex-a55
 
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
