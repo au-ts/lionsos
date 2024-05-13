@@ -9,13 +9,30 @@ extra_content_type_map = {
     'svg': 'image/svg+xml',
 }
 
+class FileStream:
+    def __init__(self, f):
+        self.f = f
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        buf = await self.f.read(0x8000)
+        if len(buf) == 0:
+            raise StopAsyncIteration
+        return buf
+
+    async def aclose(self):
+        await self.f.close()
+
+
 app = Microdot()
 
 @app.route('/')
 async def index(request):
     path = f'{base_dir}/index.html'
     f = await fs_async.open(path)
-    return send_file(path, stream=f)
+    return send_file(path, stream=FileStream(f))
 
 @app.route('/<path:path>')
 async def static(request, path):
@@ -41,6 +58,6 @@ async def static(request, path):
         content_type = extra_content_type_map[ext]
 
     f = await fs_async.open(path)
-    return send_file(path, stream=f, content_type=content_type, max_age=max_age)
+    return send_file(path, stream=FileStream(f), content_type=content_type, max_age=max_age)
 
 app.run(debug=True)
