@@ -23,7 +23,25 @@ MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
 MICROKIT_BOARD := odroidc4
 ETHERNET_CONFIG_INCLUDE ?= src/ethernet_config
-CPU := cortex-a55
+
+ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
+	CPU := cortex-a55
+	MICROKIT_BOARD := odroidc4
+	SDDF_ETHERNET := meson
+	SDDF_SERIAL := meson
+	SDDF_I2C := meson
+	SDDF_TIMER := meson
+	IMAGES := timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf arp.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf i2c_virt.elf i2c_driver.elf
+else ifeq ($(strip $(MICROKIT_BOARD)), qemu_arm_virt)
+	CPU := cortex-a53
+	MICROKIT_BOARD := qemu_arm_virt
+	SDDF_ETHERNET := virtio
+	SDDF_SERIAL := arm
+	SDDF_TIMER := arm
+	IMAGES := timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf arp.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf
+else
+$(error Unsupported MICROKIT_BOARD given)
+endif
 
 TOOLCHAIN := clang
 CC := clang
@@ -31,13 +49,15 @@ LD := ld.lld
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
+QEMU := qemu-system-aarch64
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
+SYSTEM_FILE := board/$(MICROKIT_BOARD)/kitty.system
 LIONSOS ?= ../..
 SDDF := $(LIONSOS)/dep/sddf
 LIBVMM := $(LIONSOS)/dep/libvmm
 
-VMM_IMAGE_DIR := src/vmm/images
+VMM_IMAGE_DIR := board/$(MICROKIT_BOARD)/vmm_images
 LINUX := $(VMM_IMAGE_DIR)/linux
 INITRD := $(VMM_IMAGE_DIR)/rootfs.cpio.gz
 DTS := $(VMM_IMAGE_DIR)/linux.dts
@@ -48,7 +68,10 @@ LIBNFS=$(LIONSOS)/dep/libnfs
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL=$(LIONSOS)/dep/musllibc
 
+<<<<<<< HEAD
 IMAGES := timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf i2c_virt.elf i2c_driver.elf
+=======
+>>>>>>> f6f820d (kitty: qemu support.)
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
@@ -76,7 +99,7 @@ VMM_OBJS := vmm.o printf.o virq.o linux.o \
 			util.o vgic.o vgic_v2.o \
 			package_guest_images.o tcb.o vcpu.o
 
-TIMER_DRIVER := $(SDDF)/drivers/clock/meson
+TIMER_DRIVER := $(SDDF)/drivers/clock/$(SDDF_TIMER)
 
 all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
 
@@ -146,9 +169,9 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(B
 			ENABLE_I2C=1 \
 			ENABLE_FRAMEBUFFER=1
 
-ETHERNET=$(SDDF)/drivers/network/meson
-$(BUILD_DIR)/ethernet.o: $(ETHERNET)/ethernet.c $(ETHERNET)/ethernet.h
-	$(CC) -c $(CFLAGS) $(ETHERNET)/ethernet.c -I$(abspath $(ETHERNET_CONFIG_INCLUDE)) -o $(BUILD_DIR)/ethernet.o
+ETHERNET=$(SDDF)/drivers/network/$(SDDF_ETHERNET)/
+$(BUILD_DIR)/ethernet.o: FORCE
+	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) make -C $(ETHERNET)
 
 $(BUILD_DIR)/sddf_util_cache.o: $(SDDF)/util/cache.c
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -221,7 +244,10 @@ $(BUILD_DIR)/eth_virt_rx.o: $(NETWORK_COMPONENTS)/virt_rx.c
 $(BUILD_DIR)/eth_virt_tx.o: $(NETWORK_COMPONENTS)/virt_tx.c
 	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
 
-$(BUILD_DIR)/eth_copy.elf: $(BUILD_DIR)/eth_copy.o $(BUILD_DIR)/sddf_putchar_debug.o
+$(BUILD_DIR)/arp.o: $(NETWORK_COMPONENTS)/arp.c
+	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
+
+$(BUILD_DIR)/eth_copy.elf: $(BUILD_DIR)/eth_copy.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
 	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_copy.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/eth_copy.elf
 
 $(BUILD_DIR)/eth_virt_rx.elf: $(BUILD_DIR)/eth_virt_rx.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
@@ -232,7 +258,7 @@ $(BUILD_DIR)/eth_virt_tx.elf: $(BUILD_DIR)/eth_virt_tx.o $(BUILD_DIR)/sddf_util_
 
 # Compiling serial components
 SERIAL_COMPONENTS := $(SDDF)/serial/components
-UART_DRIVER := $(SDDF)/drivers/serial/meson
+UART_DRIVER := $(SDDF)/drivers/serial/$(SDDF_SERIAL)
 UART_DRIVER_OBJS := uart_driver.o sddf_putchar_debug.o sddf_util_printf.o
 SERIAL_VIRT_RX_OBJS := serial_virt_rx.o
 SERIAL_VIRT_TX_OBJS := serial_virt_tx.o
@@ -259,23 +285,25 @@ $(BUILD_DIR)/serial_virt_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_TX_OBJ
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 # Compiling I2C components
-I2C_QUEUE := $(SDDF)/i2c/queue
-I2C_DRIVER := $(SDDF)/drivers/i2c/meson
-I2C_VIRT := $(SDDF)/i2c/components
-I2C_VIRT_OBJS := i2c_virt.o sddf_util_printf.o sddf_putchar_debug.o
-I2C_DRIVER_OBJS := i2c_driver.o sddf_util_printf.o sddf_putchar_debug.o
+ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
+	I2C_QUEUE := $(SDDF)/i2c/queue
+	I2C_DRIVER := $(SDDF)/drivers/i2c/$(SDDF_I2C)
+	I2C_VIRT := $(SDDF)/i2c/components
+	I2C_VIRT_OBJS := i2c_virt.o sddf_util_printf.o sddf_putchar_debug.o
+	I2C_DRIVER_OBJS := i2c_driver.o sddf_util_printf.o sddf_putchar_debug.o
 
-$(BUILD_DIR)/i2c_driver.o: $(I2C_DRIVER)/i2c.c
-	$(CC) -c -DI2C_BUS_NUM=2 $(CFLAGS) $< -o $@
+	$(BUILD_DIR)/i2c_driver.o: $(I2C_DRIVER)/i2c.c
+		$(CC) -c -DI2C_BUS_NUM=2 $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/i2c_virt.o: $(I2C_VIRT)/virt.c
-	$(CC) -c $(CFLAGS) $< -o $@
+	$(BUILD_DIR)/i2c_virt.o: $(I2C_VIRT)/virt.c
+		$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/i2c_virt.elf: $(addprefix $(BUILD_DIR)/, $(I2C_VIRT_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+	$(BUILD_DIR)/i2c_virt.elf: $(addprefix $(BUILD_DIR)/, $(I2C_VIRT_OBJS))
+		$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(BUILD_DIR)/i2c_driver.elf: $(addprefix $(BUILD_DIR)/, $(I2C_DRIVER_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+	$(BUILD_DIR)/i2c_driver.elf: $(addprefix $(BUILD_DIR)/, $(I2C_DRIVER_OBJS))
+		$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+endif
 
 directories:
 	$(shell mkdir -p $(BUILD_DIR)/lwip/src)
@@ -284,8 +312,20 @@ directories:
 	$(shell mkdir -p $(BUILD_DIR)/lwip/src/core/ipv4)
 	$(shell mkdir -p $(BUILD_DIR)/nfs)
 
-$(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
-	$(MICROKIT_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) $(SYSTEM_FILE)
+	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+
+qemu: all
+	$(QEMU) -machine virt,virtualization=on \
+			-cpu cortex-a53 \
+			-serial mon:stdio \
+			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
+			-m size=2G \
+			-device virtio-net-device,netdev=netdev0 \
+			-netdev user,id=netdev0 \
+			-global virtio-mmio.force-legacy=false \
+			-d guest_errors \
+			-device virtio-gpu-pci
 
 FORCE: ;
 
