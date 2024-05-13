@@ -18,4 +18,4 @@
 	url = git@github.com:au-ts/libnfs.git
 [submodule "microdot"]
 	path = dep/microdot
-	url = https://github.com/miguelgrinberg/microdot
+	url = https://github.com/au-ts/microdot
