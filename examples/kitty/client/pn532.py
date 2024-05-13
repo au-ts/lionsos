@@ -184,4 +184,4 @@ class PN532:
 
 		uid_length = buf[5]
 
-		return buf[6:6+uid_length]
+		return list(buf[6:6+uid_length])

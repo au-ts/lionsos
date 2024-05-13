@@ -19,6 +19,10 @@
 #define GUEST_RAM_SIZE 0x10000000
 #define GUEST_DTB_VADDR 0x2f000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x2c000000
+#elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
+#define GUEST_RAM_SIZE 0x10000000
+#define GUEST_DTB_VADDR 0x4f000000
+#define GUEST_INIT_RAM_DISK_VADDR 0x4d000000
 #else
 #error "Need to define platform specific guest info"
 #endif
@@ -50,14 +54,19 @@ uintptr_t guest_ram_vaddr;
  * starting from 10. For example, the second IRQ in this list should have the
  * channel number of 12. This will be cleaned up in the future.
  */
+#if defined(CONFIG_PLAT_ODROIDC4)
 uint32_t irqs[] = { 232, 35, 192, 193, 194, 53, 246, 71, 227, 228, 63, 62, 48, 89, 5 };
+#elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
+uint32_t irqs[] = { 35, 36, 37, 38 };
+#else
+#error "Need to define platform specific pass-through IRQs"
+#endif
 
 void uio_gpu_ack(size_t vcpu_id, int irq, void *cookie) {
     // Do nothing, there is no actual IRQ to ack since UIO IRQs are virtual!
 }
 
 bool uio_init_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data) {
-    LOG_VMM("sending notification to MicroPython!\n");
     microkit_notify(MICROPYTHON_CH);
     return true;
 }
@@ -107,7 +116,6 @@ void init(void) {
 void notified(microkit_channel ch) {
     switch (ch) {
         case MICROPYTHON_CH: {
-            LOG_VMM("Got message from MicroPython, injecting IRQ\n");
             bool success = virq_inject(GUEST_VCPU_ID, UIO_GPU_IRQ);
             if (!success) {
                 LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", UIO_GPU_IRQ, GUEST_VCPU_ID);
