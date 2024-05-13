@@ -4,6 +4,7 @@
 #include "micropython.h"
 #include "py/mpconfig.h"
 #include <sddf/serial/queue.h>
+#include "py/stream.h"
 
 extern serial_queue_handle_t serial_rx_queue;
 extern serial_queue_handle_t serial_tx_queue;
@@ -68,4 +69,17 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
     }
 
     microkit_notify(SERIAL_TX_CH);
+}
+
+uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
+    // @krishnan: Check if this is correct. Saying we can read if theres buffers in active
+    // and we can transmit if free queue is not empty
+    uintptr_t ret = 0;
+    if ((poll_flags & MP_STREAM_POLL_RD) && !serial_queue_empty(serial_rx_queue.active)) {
+        ret |= MP_STREAM_POLL_RD;
+    }
+    if ((poll_flags & MP_STREAM_POLL_WR) && !serial_queue_empty(serial_tx_queue.free)) {
+        ret |= MP_STREAM_POLL_WR;
+    }
+    return ret;
 }
