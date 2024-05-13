@@ -5,6 +5,7 @@
 #include "micropython.h"
 #include "py/mpconfig.h"
 #include <sddf/serial/queue.h>
+#include "py/stream.h"
 
 // Receive single character, blocking until one is available.
 int mp_hal_stdin_rx_chr(void) {
@@ -54,4 +55,31 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len)
             serial_cancel_consumer_signal(&serial_tx_queue_handle);
         }
     }
+
+    // @ivanv: use memcpy instead? Wait for libc integration first
+    char *str_buf = (char *) buffer;
+    for (int i = 0; i < len; i++) {
+        str_buf[i] = str[i];
+    }
+
+    ret = serial_enqueue_active(&serial_tx_queue, buffer, len);
+    // @ivanv: this error condition is a real possibilily and should be handled properly
+    if (ret) {
+        microkit_dbg_puts("MP|ERROR: could not enqueue active serial TX buffer\n");
+    }
+
+    microkit_notify(SERIAL_TX_CH);
+}
+
+uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
+    // @krishnan: Check if this is correct. Saying we can read if theres buffers in active
+    // and we can transmit if free queue is not empty
+    uintptr_t ret = 0;
+    if ((poll_flags & MP_STREAM_POLL_RD) && !serial_queue_empty(serial_rx_queue.active)) {
+        ret |= MP_STREAM_POLL_RD;
+    }
+    if ((poll_flags & MP_STREAM_POLL_WR) && !serial_queue_empty(serial_tx_queue.free)) {
+        ret |= MP_STREAM_POLL_WR;
+    }
+    return ret;
 }
