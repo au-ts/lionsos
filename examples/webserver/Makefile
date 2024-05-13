@@ -9,8 +9,8 @@ $(error MICROKIT_SDK must be specified)
 endif
 MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
-ifeq ($(strip $(WEBSITE_BASE_DIR)),)
-$(error WWW_BASE_DIR must be specified)
+ifeq ($(strip $(WEBSITE_DIR)),)
+$(error WEBSITE_DIR must be specified)
 endif
 
 ifeq ($(strip $(LIBGCC)),)
@@ -103,7 +103,7 @@ $(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/libm/libm.a manifest.py
-	echo "base_dir='$(WEBSITE_BASE_DIR)'" >$(BUILD_DIR)/config.py
+	echo "base_dir='$(WEBSITE_DIR)'" >$(BUILD_DIR)/config.py
 	cp manifest.py webserver.py $(BUILD_DIR)
 	make -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
