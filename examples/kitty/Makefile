@@ -285,24 +285,23 @@ $(BUILD_DIR)/serial_virt_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_TX_OBJ
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 # Compiling I2C components
-ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
-	I2C_QUEUE := $(SDDF)/i2c/queue
-	I2C_DRIVER := $(SDDF)/drivers/i2c/$(SDDF_I2C)
-	I2C_VIRT := $(SDDF)/i2c/components
-	I2C_VIRT_OBJS := i2c_virt.o sddf_util_printf.o sddf_putchar_debug.o
-	I2C_DRIVER_OBJS := i2c_driver.o sddf_util_printf.o sddf_putchar_debug.o
+ifeq ($(MICROKIT_BOARD),odroidc4)
+I2C_DRIVER := $(SDDF)/drivers/i2c/$(SDDF_I2C)
+I2C_VIRT := $(SDDF)/i2c/components
+I2C_VIRT_OBJS := i2c_virt.o sddf_util_printf.o sddf_putchar_debug.o
+I2C_DRIVER_OBJS := i2c_driver.o sddf_util_printf.o sddf_putchar_debug.o
 
-	$(BUILD_DIR)/i2c_driver.o: $(I2C_DRIVER)/i2c.c
-		$(CC) -c -DI2C_BUS_NUM=2 $(CFLAGS) $< -o $@
+$(BUILD_DIR)/i2c_driver.o: $(I2C_DRIVER)/i2c.c
+	$(CC) -c -DI2C_BUS_NUM=2 $(CFLAGS) $< -o $@
 
-	$(BUILD_DIR)/i2c_virt.o: $(I2C_VIRT)/virt.c
-		$(CC) -c $(CFLAGS) $< -o $@
+$(BUILD_DIR)/i2c_virt.o: $(I2C_VIRT)/virt.c
+	$(CC) -c $(CFLAGS) $< -o $@
 
-	$(BUILD_DIR)/i2c_virt.elf: $(addprefix $(BUILD_DIR)/, $(I2C_VIRT_OBJS))
-		$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+$(BUILD_DIR)/i2c_virt.elf: $(addprefix $(BUILD_DIR)/, $(I2C_VIRT_OBJS))
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-	$(BUILD_DIR)/i2c_driver.elf: $(addprefix $(BUILD_DIR)/, $(I2C_DRIVER_OBJS))
-		$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+$(BUILD_DIR)/i2c_driver.elf: $(addprefix $(BUILD_DIR)/, $(I2C_DRIVER_OBJS))
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 endif
 
 directories:
