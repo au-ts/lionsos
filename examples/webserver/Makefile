@@ -10,7 +10,7 @@ endif
 MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
 ifeq ($(strip $(WEBSITE_DIR)),)
-$(error WEBSITE_DIR must be specified)
+$(error "WEBSITE_DIR must be specified: this is the filesystem path of the directory containing the website's files")
 endif
 
 ifeq ($(strip $(LIBGCC)),)
