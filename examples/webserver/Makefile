@@ -32,18 +32,10 @@ CC := clang
 LD := ld.lld
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
-DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 LIONSOS ?= ../..
 SDDF := $(LIONSOS)/dep/sddf
-LIBVMM := $(LIONSOS)/dep/libvmm
-
-VMM_IMAGE_DIR := src/vmm/images
-LINUX := $(VMM_IMAGE_DIR)/linux
-INITRD := $(VMM_IMAGE_DIR)/rootfs.cpio.gz
-DTS := $(VMM_IMAGE_DIR)/linux.dts
-DTB := $(BUILD_DIR)/linux.dtb
 
 LWIP=$(SDDF)/network/ipstacks/lwip/src
 LIBNFS=$(LIONSOS)/dep/libnfs
@@ -82,9 +74,6 @@ $(BUILD_DIR)/libm/libm.a: $(LIBMATH)
 	cp $(LIBMATH)/libm.a $(BUILD_DIR)/libm/libm.a
 
 $(BUILD_DIR)/%.o: src/%.c
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/%.o: src/vmm/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/sddf_util_printf.o: $(SDDF)/util/printf.c $(SDDF)/include/sddf/util/printf.h
