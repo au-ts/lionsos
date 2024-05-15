@@ -18,11 +18,23 @@ rm -rf $BUILD_DIR
 
 export NFS_SERVER=0.0.0.0
 export NFS_DIRECTORY=test
-export BUILD_DIR=$BUILD_DIR
-export MICROKIT_SDK=$MICROKIT_SDK
-export LIONSOS=$LIONSOS
 
+cd $LIONSOS/dep/micropython
+git submodule update --init lib/micropython-lib
 cd $LIONSOS/examples/kitty
-make submodules
-make
 
+build_kitty() {
+    BOARD=$1
+    echo "CI|INFO: building kitty with board: ${BOARD}"
+    rm -rf ${BUILD_DIR}
+    make BUILD_DIR=$BUILD_DIR MICROKIT_SDK=$MICROKIT_SDK LIONSOS=$LIONSOS MICROKIT_BOARD=$BOARD
+}
+
+BOARDS=("odroidc4" "qemu_arm_virt")
+for BOARD in "${BOARDS[@]}"
+do
+    build_kitty ${BOARD}
+done
+
+echo ""
+echo "CI|INFO: Passed all kitty tests"
