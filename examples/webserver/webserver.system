@@ -3,9 +3,6 @@
     <memory_region name="uart" size="0x1_000" phys_addr="0xff803000" />
     <memory_region name="eth" size="0x10_000" phys_addr="0xff3f0000" />
     <memory_region name="timer" size="0x1_000" phys_addr="0xffd0f000" />
-    <memory_region name="i2c_bus" size="0x1000" phys_addr="0xffd1d000"/>
-    <memory_region name="gpio" size="0x4000" phys_addr="0xff634000"/>
-    <memory_region name="clk" size="0x1000" phys_addr="0xff63c000"/>
 
     <!-- eth driver/device ring buffer mechanism -->
     <memory_region name="hw_ring_buffer" size="0x10_000" />
