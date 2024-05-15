@@ -14,7 +14,6 @@ extern cothread_t t_mp;
 #define SERIAL_RX_CH 8
 #define SERIAL_TX_CH 9
 #define I2C_CH 10
-#define ETH_ARP_CH 11
 
 enum {
 	mp_event_source_none = 0,
