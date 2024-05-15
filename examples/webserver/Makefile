@@ -63,6 +63,8 @@ REPORT_FILE := $(BUILD_DIR)/report.txt
 TIMER_OBJS := timer.o sddf_util_printf.o sddf_putchar_debug.o
 TIMER_DRIVER := $(SDDF)/drivers/clock/meson
 
+.EXTRA_PREREQS := submodules
+
 all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
 
 $(BUILD_DIR):
@@ -233,7 +235,15 @@ $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) webserver.sy
 
 FORCE: ;
 
+submodules:
+	git submodule update --init $(LIONSOS)/dep/libnfs
+	git submodule update --init $(LIONSOS)/dep/microdot
+	git submodule update --init $(LIONSOS)/dep/micropython
+	git submodule update --init $(LIONSOS)/dep/musllibc
+	git submodule update --init $(LIONSOS)/dep/sddf
+	(cd $(LIONSOS)/dep/micropython/; git submodule update --init lib/micropython-lib)
+
 mpy-cross:
 	make -C $(LIONSOS)/dep/micropython/mpy-cross
 
-.PHONY: mpy-cross
+.PHONY: mpy-cross submodules
