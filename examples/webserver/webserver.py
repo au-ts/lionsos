@@ -9,6 +9,13 @@ extra_content_type_map = {
     'svg': 'image/svg+xml',
 }
 
+# Microdot requires an object representing a file or string. That
+# object can be one of several different types that look like a file,
+# string or generator, but if provided any type that is not an async
+# iterator then it will default to its own async wrapper. That async
+# wrapper uses a fixed buffer size for reading from the file, which is
+# suboptimal. Hence we implement our own class which uses a better
+# buffer size.
 class FileStream:
     def __init__(self, f):
         self.f = f
