@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # This script aims to build an already checked out version of LionsOS.
 #
