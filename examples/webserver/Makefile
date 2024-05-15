@@ -47,8 +47,7 @@ CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
 	-ffreestanding \
-	-g \
-	-O0 \
+	-O3 \
 	-Wall \
 	-Wno-unused-function \
 	-I$(BOARD_DIR)/include \
