@@ -46,10 +46,6 @@ CFLAGS += \
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(SDDF)/lib -L$(LIBMATH)
 LIBS += -lm -lmicrokit -Tmicrokit.ld -lc
 
-ifdef EXEC_MODULE
-CFLAGS += -DEXEC_MODULE=\"$(EXEC_MODULE)\"
-endif
-
 # COREFILES, CORE4FILES: The minimum set of files needed for lwIP.
 COREFILES=core/init.c \
 	core/def.c \
@@ -126,6 +122,11 @@ SRC_C = \
 
 # Define source files containung qstrs.
 SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c vfs_sddf_fs_file.c vfs_sddf_fs.c modfs_raw.c
+
+# Frozen module to execute; otherwise run REPL
+ifdef EXEC_MODULE
+CFLAGS += -DEXEC_MODULE=\"$(EXEC_MODULE)\"
+endif
 
 ifdef ENABLE_I2C
 SRC_C += modmachine.c machine_i2c.c extmod/machine_i2c.c
