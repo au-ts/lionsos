@@ -1,7 +1,7 @@
 ifeq ($(strip $(ETHERNET_CONFIG_INCLUDE)),)
 $(error ETHERNET_CONFIG_INCLUDE must be specified)
 endif
-
+LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
 CC := aarch64-none-elf-gcc
 LD := aarch64-none-elf-ld
 
@@ -44,7 +44,7 @@ CFLAGS += \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU)
-LDFLAGS += -L$(BOARD_DIR)/lib -L$(SDDF)/lib -L$(LIBMATH)
+LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBC) -L$(LIBMATH)
 LIBS += -lm -lmicrokit -Tmicrokit.ld -lc
 
 # COREFILES, CORE4FILES: The minimum set of files needed for lwIP.
@@ -83,7 +83,7 @@ NETIFFILES=netif/ethernet.c
 
 # LWIPFILES: All the above.
 LWIPFILES=$(COREFILES) $(CORE4FILES) $(NETIFFILES)
-LWIP_OBJ=$(addprefix $(BUILD)/micropython/lwip/, $(LWIPFILES:.c=.o))
+LWIP_OBJ=$(addprefix $(BUILD)/micropython/lwip/, $(LWIPFILES:.c=.o)) $(BUILD)/newlibc.o
 
 # Define the required source files.
 SRC_C = \
@@ -133,6 +133,9 @@ SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c modfb
 OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ) $(BUILD)/sddf_util_cache.o
 
 all: directories $(BUILD)/micropython.elf
+
+$(BUILD)/newlibc.o: $(SDDF_UTIL)/newlibc.c
+	$(CC) -c $(CFLAGS) $(SDDF_UTIL)/newlibc.c -o $(BUILD)/newlibc.o
 
 $(BUILD)/micropython/lwip/%.o: $(LWIP)/src/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
