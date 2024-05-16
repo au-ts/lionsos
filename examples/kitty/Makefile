@@ -313,7 +313,8 @@ qemu: all
 			-netdev user,id=netdev0 \
 			-global virtio-mmio.force-legacy=false \
 			-d guest_errors \
-			-device virtio-gpu-pci
+			-device virtio-gpu-pci \
+			-trace events=events.txt
 
 FORCE: ;
 

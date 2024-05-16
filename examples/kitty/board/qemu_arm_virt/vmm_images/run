@@ -1,0 +1,1 @@
+aarch64-linux-gnu-gcc board/qemu_arm_virt/vmm_images/uio_fb.c -o board/qemu_arm_virt/vmm_images/uio_fb && board/qemu_arm_virt/vmm_images/packrootfs board/qemu_arm_virt/vmm_images/rootfs_base.cpio.gz board/qemu_arm_virt/vmm_images/tmp -o board/qemu_arm_virt/vmm_images/rootfs.cpio.gz --startup board/qemu_arm_virt/vmm_images/fb_init --home board/qemu_arm_virt/vmm_images/uio_fb

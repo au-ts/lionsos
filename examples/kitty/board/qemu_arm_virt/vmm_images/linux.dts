@@ -268,6 +268,15 @@
 		status = "disabled";
 	};
 
+	pl011@9000000 {
+		status = "okay";
+		clock-names = "uartclk\0apb_pclk";
+		clocks = <0x8000 0x8000>;
+		interrupts = <0x00 0x01 0x04>;
+		reg = <0x00 0x9000000 0x00 0x1000>;
+		compatible = "arm,pl011\0arm,primecell";
+	};
+
 	cpus {
 		#size-cells = <0x00>;
 		#address-cells = <0x01>;
@@ -314,7 +323,8 @@
 	};
 
 	chosen {
-		bootargs = "console=ttynull uio_pdrv_genirq.of_id=generic-uio pci=nomsi vt.global_cursor_default=0 logo.nologo";
+		stdout-path = "/pl011@9000000";
+		bootargs = "uio_pdrv_genirq.of_id=generic-uio pci=nomsi vt.global_cursor_default=0 logo.nologo";
 		linux,initrd-start = <0x4d000000>;
 		linux,initrd-end = <0x4f000000>;
 		// vt.global_cursor_default=0 logo.nologo

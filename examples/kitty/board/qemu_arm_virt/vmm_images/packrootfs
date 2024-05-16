@@ -1,0 +1,93 @@
+#!/bin/bash
+
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <rootfs> <tmpdir> [-o output_rootfs] [--startup files...] [--home files...] [--etc files...]"
+    exit 1
+fi
+
+rootfs=$1
+tmpdir=$2
+startup_files=()
+home_files=()
+etc_files=()
+output_rootfs=""
+
+shift 2
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --startup)
+            shift
+            while [[ $# -gt 0 ]] && ! [[ $1 == --* ]]; do
+                startup_files+=("$1")
+                shift
+            done
+            ;;
+        --home)
+            shift
+            while [[ $# -gt 0 ]] && ! [[ $1 == --* ]]; do
+                home_files+=("$1")
+                shift
+            done
+            ;;
+        --etc)
+            shift
+            while [[ $# -gt 0 ]] && ! [[ $1 == --* ]]; do
+                etc_files+=("$1")
+                shift
+            done
+            ;;
+        -o)
+            shift
+            if [[ $# -gt 0 ]]; then
+                output_rootfs=$1
+                shift
+            else
+                echo "Error: -o option requires an argument."
+                exit 1
+            fi
+            ;;
+        *)
+            echo "Unknown option $1"
+            exit 1
+            ;;
+    esac
+done
+
+if [ -z "$output_rootfs" ]; then
+    output_rootfs="rootfs_modified.cpio.gz"
+fi
+
+rm -rf "$tmpdir"
+mkdir -p "$tmpdir"
+mkdir -p "$tmpdir/root"
+mkdir -p "$tmpdir/etc/init.d"
+
+# Copy home files to /root
+for file in "${home_files[@]}"; do
+    cp -- "$file" "$tmpdir/root/$(basename "$file")"
+    chmod +x "$tmpdir/root/$(basename "$file")"
+done
+
+# Copy startup files to /etc/init.d and prefix with S99
+for file in "${startup_files[@]}"; do
+    cp -- "$file" "$tmpdir/etc/init.d/S99$(basename "$file")"
+    chmod +x "$tmpdir/etc/init.d/S99$(basename "$file")"
+done
+
+# Copy etc files to /etc
+for file in "${etc_files[@]}"; do
+    cp -- "$file" "$tmpdir/etc/$(basename "$file")"
+done
+
+if [[ "$output_rootfs" == /* ]]; then
+    final_output_path="$output_rootfs"
+else
+    final_output_path="$(pwd)/$output_rootfs"
+fi
+
+# Create CPIO from tmpdir and concatenate it with given rootfs, gzip result.
+# This is required as we cannot unpack roofs on macOS.
+({
+    gunzip -dc "$rootfs";
+    cd "$tmpdir" && find . | cpio -o -H newc
+} | gzip > "$final_output_path")
