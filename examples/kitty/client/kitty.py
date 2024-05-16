@@ -17,7 +17,7 @@ TICKS_TO_RESET = 3
 token = 0
 reader_stream = None
 writer_stream = None
-
+card_ready = True
 # These are defaulted to true.
 # If you wish to disable, set in kitty.run()
 enable_i2c = True
@@ -56,6 +56,7 @@ class KittyDisplay(framebuf.FrameBuffer):
         super().__init__(self.buf, self.width, self.height, framebuf.RGB565)
 
     def show(self):
+        fb.wait()
         fb.machine_fb_send(self.buf, self.width, self.height)
 
 
@@ -65,6 +66,7 @@ display_width = 1920
 display_height = 1080
 display = KittyDisplay(display_width, display_height)
 wri = CWriter(display, font)
+# @krishnan: Is this reset_cb used? It seems to always be None
 reset_cb = None
 ######################################################
 
@@ -110,8 +112,10 @@ async def on_tap(card_id):
 async def read_stdin():
     sreader = asyncio.StreamReader(sys.stdin)
     global token
+    global card_ready
     while True:
-        if (token != 0):
+        if (token != 0 and card_ready is True):
+            card_ready = False
             print("\033[91mPlease enter card number: \033[0m")
             uid_str = await sreader.readline()
             print(f"Got id: {uid_str.strip()}")
@@ -119,6 +123,7 @@ async def read_stdin():
             try:
                 uid.append(int(uid_str))
             except ValueError as e:
+                card_ready = True
                 continue
             await on_tap(uid)
 
@@ -136,48 +141,50 @@ async def read_card(p):
     global TICKS_TO_RESET
     global TICKS_TO_CONFIRM
     global token
+    global card_ready
     while True:
-
-        uid = p.read_uid()
-        # Case where:
-        #   - We are not waiting on a specific card
-        #   - p.read_uid() did not return a card ID
-        if uid == [] and current_uid == []:
-            await asyncio.sleep_ms(100)
-            continue
-
-        if current_uid == []:
-            # If we are not currently waiting for a specific card
-            current_uid = uid
-            current_count = 1
-        elif current_uid != uid:
-            # If we are waiting on a specific card, but the one we just
-            # read does not match this.
-            current_not_equal_count += 1
-            if (current_count < TICKS_TO_CONFIRM):
-                current_count = 0
-            if (current_not_equal_count == TICKS_TO_RESET):
-                # If we see multiple non-matches in a row,
-                # go back to a reset state
-                info("Resetting...")
-                current_uid = []
-                current_count = 0
-                current_not_equal_count = 0
-        else:
-            # current_uid != [] && current_uid == uid ==> MATCH!
-            current_count += 1
-            current_not_equal_count = 0
-            if (current_count == TICKS_TO_CONFIRM):
-                info("Registering tap")
-                await on_tap(current_uid)
-
-        # Read the uid again, this one should always fail
-        # We do this to consume the empty UID packet so it doesn't
-        # mess with our matching. This only applies for MiFare
-        # ultralight cards, which have len(uid) > 4.
-        if (uid != [] and len(uid) > 4):
+        if card_ready is True:
+            card_ready = False
             uid = p.read_uid()
-            assert uid == []
+            # Case where:
+            #   - We are not waiting on a specific card
+            #   - p.read_uid() did not return a card ID
+            if uid == [] and current_uid == []:
+                await asyncio.sleep_ms(100)
+                continue
+
+            if current_uid == []:
+                # If we are not currently waiting for a specific card
+                current_uid = uid
+                current_count = 1
+            elif current_uid != uid:
+                # If we are waiting on a specific card, but the one we just
+                # read does not match this.
+                current_not_equal_count += 1
+                if (current_count < TICKS_TO_CONFIRM):
+                    current_count = 0
+                if (current_not_equal_count == TICKS_TO_RESET):
+                    # If we see multiple non-matches in a row,
+                    # go back to a reset state
+                    info("Resetting...")
+                    current_uid = []
+                    current_count = 0
+                    current_not_equal_count = 0
+            else:
+                # current_uid != [] && current_uid == uid ==> MATCH!
+                current_count += 1
+                current_not_equal_count = 0
+                if (current_count == TICKS_TO_CONFIRM):
+                    info("Registering tap")
+                    await on_tap(current_uid)
+
+            # Read the uid again, this one should always fail
+            # We do this to consume the empty UID packet so it doesn't
+            # mess with our matching. This only applies for MiFare
+            # ultralight cards, which have len(uid) > 4.
+            if (uid != [] and len(uid) > 4):
+                uid = p.read_uid()
+                assert uid == []
 
         await asyncio.sleep_ms(100)
 
@@ -190,10 +197,13 @@ def set_pixel(display, x, y, rgba):
 
 
 def reset_status():
+    global card_ready
     display.rect(300, 300, 800, 800, 0x0, True)
     wri.set_textpos(display, 300, 540)
     wri.printstring("Waiting for taps...")
     display.show()
+    # Now we are ready to accept new taps
+    card_ready = True
 
 
 def draw_image(display, x0, y0, data):
@@ -270,13 +280,18 @@ async def read_from_server():
 
 # Coroutine responsible for reading the card
 async def read_card_main():
-    if (enable_i2c is True):
-        p = PN532(1)
-        p.rf_configure()
-        p.sam_configure()
-        await read_card(p)
-    else:
-        await read_stdin()
+    global card_ready
+    # While we are processing a tap, we cannot accept other taps.
+    # We consider to be finished processing after the server has
+    # responded, and after we have then called reset_status()
+    if card_ready is True:
+        if (enable_i2c is True):
+            p = PN532(1)
+            p.rf_configure()
+            p.sam_configure()
+            await read_card(p)
+        else:
+            await read_stdin()
     pass
 
 async def main():
@@ -311,7 +326,7 @@ async def main():
     wri.printstring("Waiting for taps...")
 
     display.show()
-
+    print("Finished showing text\n");
 
     await asyncio.gather(
         asyncio.create_task(heartbeat()),
