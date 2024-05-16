@@ -10,12 +10,11 @@ if [ "$#" -ne 2 ]; then
     exit 1
 fi
 
-BUILD_DIR=$(pwd)/ci_build
-
-rm -rf $BUILD_DIR
-
 LIONSOS=$1
 MICROKIT_SDK=$2
+
+BUILD_DIR=$LIONSOS/ci_build/webserver
+rm -rf $BUILD_DIR
 
 export NFS_SERVER=0.0.0.0
 export NFS_DIRECTORY=test

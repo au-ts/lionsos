@@ -6,8 +6,8 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build_kitty_linux_x86_64:
-    name: Build Kitty example (Linux x86-64)
+  build_examples_linux_x86_64:
+    name: Build example systems (Linux x86-64)
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout LionsOS repository
@@ -27,10 +27,10 @@ jobs:
         uses: cachix/install-nix-action@v25
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-      - name: Build Kitty example
-        run: nix-shell --run "./ci/kitty.sh $(pwd) $(pwd)/microkit-sdk-1.2.6"
-  build_kitty_macos_aarch64:
-    name: Build Kitty example (macOS ARM64)
+      - name: Run examples script
+        run: nix-shell --run "./ci/examples.sh $(pwd) $(pwd)/microkit-sdk-1.2.6"
+  build_examples_macos_aarch64:
+    name: Build example systems (macOS ARM64)
     runs-on: [self-hosted, macos, ARM64]
     steps:
       - name: Checkout LionsOS repository
@@ -46,47 +46,5 @@ jobs:
           wget -O aarch64-toolchain.tar.gz https://trustworthy.systems/Downloads/microkit/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf.tar.xz
           tar xf aarch64-toolchain.tar.gz
           echo "$(pwd)/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf/bin" >> $GITHUB_PATH
-      - name: Build Kitty example
-        run: nix-shell --run "./ci/kitty.sh $(pwd) $(pwd)/microkit-sdk-1.2.6"
-  build_webserver_linux_x86_64:
-    name: Build webserver example (Linux x86-64)
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout LionsOS repository
-        uses: actions/checkout@v4
-        with:
-          submodules: 'true'
-      - name: Download Microkit SDK
-        run: wget https://trustworthy.systems/Downloads/microkit/microkit-sdk-dev-8e40fe8-linux-x86-64.tar.gz
-      - name: Extract Microkit SDK
-        run: tar -xf microkit-sdk-dev-8e40fe8-linux-x86-64.tar.gz
-      - name: Download and install AArch64 GCC toolchain
-        run: |
-          wget -O aarch64-toolchain.tar.gz https://trustworthy.systems/Downloads/microkit/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf.tar.xz
-          tar xf aarch64-toolchain.tar.gz
-          echo "$(pwd)/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf/bin" >> $GITHUB_PATH
-      - name: Install Nix
-        uses: cachix/install-nix-action@v25
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-      - name: Build webserver example
-        run: nix-shell --run "./ci/webserver.sh $(pwd) $(pwd)/microkit-sdk-1.2.6"
-  build_webserver_macos_aarch64:
-    name: Build webserver example (macOS ARM64)
-    runs-on: [self-hosted, macos, ARM64]
-    steps:
-      - name: Checkout LionsOS repository
-        uses: actions/checkout@v4
-        with:
-          submodules: 'true'
-      - name: Download Microkit SDK
-        run: wget https://trustworthy.systems/Downloads/microkit/microkit-sdk-dev-8e40fe8-macos-aarch64.tar.gz
-      - name: Extract Microkit SDK
-        run: tar -xf microkit-sdk-dev-8e40fe8-macos-aarch64.tar.gz
-      - name: Download and install AArch64 GCC toolchain
-        run: |
-          wget -O aarch64-toolchain.tar.gz https://trustworthy.systems/Downloads/microkit/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf.tar.xz
-          tar xf aarch64-toolchain.tar.gz
-          echo "$(pwd)/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf/bin" >> $GITHUB_PATH
-      - name: Build webserver example
-        run: nix-shell --run "./ci/webserver.sh $(pwd) $(pwd)/microkit-sdk-1.2.6"
+      - name: Run examples script
+        run: nix-shell --run "./ci/examples.sh $(pwd) $(pwd)/microkit-sdk-1.2.6"
