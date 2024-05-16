@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# This script aims to build a already checked out version of LionsOS.
+# This script aims to build an already checked out version of LionsOS.
 #
 
 set -e
