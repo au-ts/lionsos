@@ -1,5 +1,5 @@
 #
-# Copyright 2023, UNSW
+# Copyright 2024, UNSW
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
@@ -8,6 +8,10 @@ ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
 MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
+
+ifeq ($(strip $(WEBSITE_DIR)),)
+$(error "WEBSITE_DIR must be specified: this is the filesystem path of the directory containing the website's files")
+endif
 
 ifeq ($(strip $(LIBGCC)),)
 LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
@@ -20,7 +24,7 @@ endif
 MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
 MICROKIT_BOARD := odroidc4
-ETHERNET_CONFIG_INCLUDE ?= src/ethernet_config
+ETHERNET_CONFIG_INCLUDE ?= ethernet_config
 CPU := cortex-a55
 
 TOOLCHAIN := clang
@@ -28,53 +32,38 @@ CC := clang
 LD := ld.lld
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
-DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 LIONSOS ?= ../..
 SDDF := $(LIONSOS)/dep/sddf
-LIBVMM := $(LIONSOS)/dep/libvmm
-
-VMM_IMAGE_DIR := src/vmm/images
-LINUX := $(VMM_IMAGE_DIR)/linux
-INITRD := $(VMM_IMAGE_DIR)/rootfs.cpio.gz
-DTS := $(VMM_IMAGE_DIR)/linux.dts
-DTB := $(BUILD_DIR)/linux.dtb
 
 LWIP=$(SDDF)/network/ipstacks/lwip/src
 LIBNFS=$(LIONSOS)/dep/libnfs
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL=$(LIONSOS)/dep/musllibc
 
-IMAGES := timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf arp.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf i2c_virt.elf i2c_driver.elf
+IMAGES := timer.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf arp.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
 	-ffreestanding \
-	-g \
-	-O0 \
+	-O3 \
 	-Wall \
 	-Wno-unused-function \
 	-I$(BOARD_DIR)/include \
 	-target $(TARGET) \
-	-I$(LIBVMM)/src/arch/aarch64 \
-	-I$(LIBVMM)/src \
-	-I$(LIBVMM)/src/util \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld
 
-IMAGE_FILE := $(BUILD_DIR)/kitty.img
+IMAGE_FILE := $(BUILD_DIR)/webserver.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
 TIMER_OBJS := timer.o sddf_util_printf.o sddf_putchar_debug.o
-VMM_OBJS := vmm.o printf.o virq.o linux.o \
-			guest.o psci.o smc.o fault.o \
-			util.o vgic.o vgic_v2.o \
-			package_guest_images.o tcb.o vcpu.o
-
 TIMER_DRIVER := $(SDDF)/drivers/clock/meson
+
+.EXTRA_PREREQS := submodules
 
 all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
 
@@ -86,9 +75,6 @@ $(BUILD_DIR)/libm/libm.a: $(LIBMATH)
 	cp $(LIBMATH)/libm.a $(BUILD_DIR)/libm/libm.a
 
 $(BUILD_DIR)/%.o: src/%.c
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/%.o: src/vmm/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/sddf_util_printf.o: $(SDDF)/util/printf.c $(SDDF)/include/sddf/util/printf.h
@@ -103,36 +89,12 @@ $(BUILD_DIR)/sddf_putchar_serial.o: $(SDDF)/util/putchar_serial.c
 $(BUILD_DIR)/timer.o: $(TIMER_DRIVER)/timer.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(DTB): $(DTS)
-	$(DTC) -q -I dts -O dtb $< > $@
-
-$(BUILD_DIR)/package_guest_images.o: $(LIBVMM)/tools/package_guest_images.S $(VMM_IMAGE_DIR) $(LINUX) $(INITRD) $(DTB)
-	$(CC) -c -g3 -x assembler-with-cpp \
-					-DGUEST_KERNEL_IMAGE_PATH=\"$(LINUX)\" \
-					-DGUEST_DTB_IMAGE_PATH=\"$(DTB)\" \
-					-DGUEST_INITRD_IMAGE_PATH=\"$(INITRD)\" \
-					-target $(TARGET) \
-					$< -o $@
-
-$(BUILD_DIR)/%.o: $(LIBVMM)/src/%.c Makefile
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/%.o: $(LIBVMM)/src/util/%.c Makefile
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/%.o: $(LIBVMM)/src/arch/aarch64/%.c Makefile
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/%.o: $(LIBVMM)/src/arch/aarch64/vgic/%.c Makefile
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/vmm.elf: $(addprefix $(BUILD_DIR)/, $(VMM_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
 $(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/libm/libm.a
+$(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/libm/libm.a manifest.py
+	echo "base_dir='$(WEBSITE_DIR)'" >$(BUILD_DIR)/config.py
+	cp manifest.py webserver.py $(BUILD_DIR)
 	make -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -140,8 +102,8 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(B
 			BUILD=$(abspath $(BUILD_DIR)) \
 			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
 			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) \
-			ENABLE_I2C=1 \
-			ENABLE_FRAMEBUFFER=1
+			FROZEN_MANIFEST=$(abspath $(BUILD_DIR)/manifest.py) \
+			EXEC_MODULE="webserver.py"
 
 ETHERNET=$(SDDF)/drivers/network/meson/
 $(BUILD_DIR)/meson_ethernet.o: FORCE
@@ -192,7 +154,7 @@ NETWORK_COMPONENTS_INCLUDE := \
 	-I$(BOARD_DIR)/include \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4 \
-	-Isrc/ethernet_config
+	-Iethernet_config
 NETWORK_COMPONENT_CFLAGS := \
 	$(NETWORK_COMPONENTS_INCLUDE) \
 	-mstrict-align \
@@ -261,25 +223,6 @@ $(BUILD_DIR)/serial_virt_rx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_RX_OBJ
 $(BUILD_DIR)/serial_virt_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_TX_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-# Compiling I2C components
-I2C_QUEUE := $(SDDF)/i2c/queue
-I2C_DRIVER := $(SDDF)/drivers/i2c/meson
-I2C_VIRT := $(SDDF)/i2c/components
-I2C_VIRT_OBJS := i2c_virt.o sddf_util_printf.o sddf_putchar_debug.o
-I2C_DRIVER_OBJS := i2c_driver.o sddf_util_printf.o sddf_putchar_debug.o
-
-$(BUILD_DIR)/i2c_driver.o: $(I2C_DRIVER)/i2c.c
-	$(CC) -c -DI2C_BUS_NUM=2 $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/i2c_virt.o: $(I2C_VIRT)/virt.c
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/i2c_virt.elf: $(addprefix $(BUILD_DIR)/, $(I2C_VIRT_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
-$(BUILD_DIR)/i2c_driver.elf: $(addprefix $(BUILD_DIR)/, $(I2C_DRIVER_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
 directories:
 	$(shell mkdir -p $(BUILD_DIR)/lwip/src)
 	$(shell mkdir -p $(BUILD_DIR)/lwip/src/core)
@@ -287,12 +230,20 @@ directories:
 	$(shell mkdir -p $(BUILD_DIR)/lwip/src/core/ipv4)
 	$(shell mkdir -p $(BUILD_DIR)/nfs)
 
-$(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
-	$(MICROKIT_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) webserver.system
+	$(MICROKIT_TOOL) webserver.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 FORCE: ;
+
+submodules:
+	git submodule update --init $(LIONSOS)/dep/libnfs
+	git submodule update --init $(LIONSOS)/dep/microdot
+	git submodule update --init $(LIONSOS)/dep/micropython
+	git submodule update --init $(LIONSOS)/dep/musllibc
+	git submodule update --init $(LIONSOS)/dep/sddf
+	(cd $(LIONSOS)/dep/micropython/; git submodule update --init lib/micropython-lib)
 
 mpy-cross:
 	make -C $(LIONSOS)/dep/micropython/mpy-cross
 
-.PHONY: mpy-cross
+.PHONY: mpy-cross submodules
