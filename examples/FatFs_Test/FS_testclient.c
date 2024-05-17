@@ -1,3 +1,5 @@
+// This example is intended to validate old, draft file system and will be reconstruct soon to test the latest fatfs
+
 #include "../../fs/fat/FiberPool/FiberFlow/FiberFlow.h"
 #include "../../fs/fat/libfssharedqueue/fs_shared_queue.h"
 #include "../../vmm/src/util/printf.h"
