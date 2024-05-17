@@ -49,18 +49,6 @@ struct sddf_fs_queue {
     union sddf_fs_message buffer[SDDF_FS_QUEUE_CAPACITY];
 };
 
-// This queue full check seems to not working for me
-// Why it is not like this? If both head and tail are init as 0
-/*
-    static bool sddf_fs_queue_push(struct sddf_fs_queue *queue, union sddf_fs_message message) {
-        if ((queue->tail + 1) % SDDF_FS_QUEUE_CAPACITY == __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE)) {
-            return false;
-        }
-        queue->buffer[queue->tail] = message;
-        __atomic_store_n(&queue->tail, (queue->tail + 1) % SDDF_FS_QUEUE_CAPACITY, __ATOMIC_RELEASE);
-        return true;
-    }
-*/
 static bool sddf_fs_queue_push(struct sddf_fs_queue *queue, union sddf_fs_message message) {
     if (queue->tail - __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE) == SDDF_FS_QUEUE_CAPACITY) {
         return false;
@@ -70,17 +58,6 @@ static bool sddf_fs_queue_push(struct sddf_fs_queue *queue, union sddf_fs_messag
     return true;
 }
 
-// And this function should be changed to this
-/*
-    static bool sddf_fs_queue_pop(struct sddf_fs_queue *queue, union sddf_fs_message *message) {
-        if (queue->head == __atomic_load_n(&queue->tail, __ATOMIC_ACQUIRE)) {
-            return false;
-        }
-        *message = queue->buffer[queue->head];
-        __atomic_store_n(&queue->head, (queue->head + 1) % SDDF_FS_QUEUE_CAPACITY, __ATOMIC_RELEASE);
-        return true;
-    }
-*/
 static bool sddf_fs_queue_pop(struct sddf_fs_queue *queue, union sddf_fs_message *message) {
     if (queue->head == __atomic_load_n(&queue->tail, __ATOMIC_ACQUIRE)) {
         return false;
@@ -90,11 +67,10 @@ static bool sddf_fs_queue_pop(struct sddf_fs_queue *queue, union sddf_fs_message
     return true;
 }
 
+// Ineffienct implementation of checking if queue is full or empty
+// Should be changed later
 static bool sddf_fs_queue_full(struct sddf_fs_queue *queue) {
-    // Calculate next position of tail in a circular buffer
-    uint64_t next_tail = (queue->tail + 1) % SDDF_FS_QUEUE_CAPACITY;
-    // Check if the next position of tail equals the head
-    return next_tail == __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE);
+    return __atomic_load_n(&queue->tail, __ATOMIC_ACQUIRE) - __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE) == SDDF_FS_QUEUE_CAPACITY;
 }
 
 static bool sddf_fs_queue_empty(struct sddf_fs_queue *queue) {
