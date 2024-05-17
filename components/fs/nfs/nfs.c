@@ -31,10 +31,16 @@
 #define TIMEOUT (1 * NS_IN_MS)
 
 struct nfs_context *nfs;
+static bool nfs_connected;
 
 void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *private_data) {
-    dlogp(err, "failed to connect to nfs server (%d): %s", err, data);
-    dlogp(!err, "connected to nfs server");
+    if (!err) {
+        nfs_connected = true;
+        nfs_notified();
+        dlog("connected to nfs server");
+    } else {
+        dlog("failed to connect to nfs server (%d): %s", err, data);
+    }
 }
 
 void nfs_init(void) {
@@ -55,7 +61,6 @@ void nfs_init(void) {
 }
 
 void notified(microkit_channel ch) {
-    sddf_timer_set_timeout(TIMER_CHANNEL, TIMEOUT);
     switch (ch) {
     case TIMER_CHANNEL: {
         tcp_process_rx();
@@ -69,9 +74,9 @@ void notified(microkit_channel ch) {
             int socket_index = socket_index_of_fd(nfs_fd);
             int revents = nfs_which_events(nfs);
             int sevents = 0;
-	    if (tcp_socket_hup(socket_index)) {
-		sevents |= POLLHUP;
-	    }
+            if (tcp_socket_hup(socket_index)) {
+                sevents |= POLLHUP;
+            }
             if (revents & POLLOUT && tcp_socket_writable(socket_index)) {
                 sevents |= POLLOUT;
             }
@@ -83,6 +88,7 @@ void notified(microkit_channel ch) {
                 dlogp(err, "nfs_service error");
             }
         }
+        sddf_timer_set_timeout(TIMER_CHANNEL, TIMEOUT);
         break;
     }
     case ETHERNET_RX_CHANNEL:
@@ -92,7 +98,9 @@ void notified(microkit_channel ch) {
         /* Nothing to do in this case */
         break;
     case CLIENT_CHANNEL:
-        nfs_notified();
+        if (nfs_connected) {
+            nfs_notified();
+        }
         break;
     default:
         dlog("got notification from unknown channel %llu", ch);

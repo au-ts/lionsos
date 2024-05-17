@@ -21,6 +21,7 @@ struct oftable_slot {
 
     void *handle;
     uint64_t busy_count;
+    uint64_t generation;
 };
 
 struct oftable_slot oftable[MAX_OPEN_FILES];
@@ -42,6 +43,7 @@ static int of_free(struct oftable_slot *of) {
     switch (of->state) {
     case state_allocated:
         of->state = state_free;
+        of->generation++;
         return 0;
     default:
         return -1;
@@ -140,19 +142,24 @@ static int of_end_op(struct oftable_slot *of) {
 }
 
 static struct oftable_slot *fd_to_of(fd_t fd) {
-    struct oftable_slot *slot = (struct oftable_slot *)fd;
-    if (slot < oftable || slot >= oftable + MAX_OPEN_FILES) {
+    uint64_t index = fd % MAX_OPEN_FILES;
+    uint64_t generation = (fd - index) / MAX_OPEN_FILES;
+    if (index >= MAX_OPEN_FILES) {
         return NULL;
     }
-    return slot;
+    struct oftable_slot *of = &oftable[index];
+    if (generation < of->generation) {
+        return NULL;
+    }
+    return of;
 }
 
 static fd_t of_to_fd(struct oftable_slot *of) {
-    return (fd_t)of;
+    return (uint64_t)(of - oftable) + of->generation * MAX_OPEN_FILES;
 }
 
 int fd_alloc(fd_t *fd) {
-    struct oftable_slot *of = 0;
+    struct oftable_slot *of;
     int err = of_alloc(&of);
     if (!err) {
         *fd = of_to_fd(of);

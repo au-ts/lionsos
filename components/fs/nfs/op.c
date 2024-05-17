@@ -707,195 +707,194 @@ fail:
 
 void nfs_notified(void) {
     union sddf_fs_message message;
-    bool success = sddf_fs_queue_pop(command_queue, &message);
-    assert(success);
+    while (sddf_fs_queue_pop(command_queue, &message)) {
+        struct sddf_fs_command cmd = message.command;
+        uint64_t request_id = cmd.request_id;
+        switch (cmd.cmd_type) {
+        case SDDF_FS_CMD_OPEN: {
+            uint64_t path_offset = cmd.args[0];
+            char *path = client_share + path_offset;
+            uint64_t path_len = cmd.args[1];
+            uint64_t flags = cmd.args[2];
+            uint64_t mode = cmd.args[3];
+            if (!buffer_valid(path, path_len)) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            path[path_len - 1] = '\0';
+            handle_open(request_id, path, flags, mode);
+            break;
+        }
+        case SDDF_FS_CMD_STAT: {
+            uint64_t path_offset = cmd.args[0];
+            char *path = client_share + path_offset;
+            uint64_t path_len = cmd.args[1];
+            if (!buffer_valid(path, path_len)) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            path[path_len - 1] = '\0';
+            uint64_t buf_offset = cmd.args[2];
+            char *buf = client_share + buf_offset;
+            if (!buffer_valid(buf, sizeof (struct sddf_fs_stat_64))) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            handle_stat64(request_id, path, buf);
+            break;
+        }
+        case SDDF_FS_CMD_CLOSE: {
+            fd_t fd = cmd.args[0];
+            handle_close(request_id, fd);
+            break;
+        }
+        case SDDF_FS_CMD_PREAD: {
+            fd_t fd = cmd.args[0];
+            uint64_t buf_offset = cmd.args[1];
+            const char *buf = client_share + buf_offset;
+            uint64_t nbyte = cmd.args[2];
+            uint64_t offset = cmd.args[3];
+            if (!buffer_valid(buf, nbyte)) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            handle_pread(request_id, fd, buf, nbyte, offset);
+            break;
+        }
+        case SDDF_FS_CMD_PWRITE: {
+            fd_t fd = cmd.args[0];
+            uint64_t buf_offset = cmd.args[1];
+            char *buf = client_share + buf_offset;
+            uint64_t nbyte = cmd.args[2];
+            uint64_t offset = cmd.args[3];
+            if (!buffer_valid(buf, nbyte)) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            handle_pwrite(request_id, fd, buf, nbyte, offset);
+            break;
+        }
+        case SDDF_FS_CMD_RENAME: {
+            uint64_t oldpath_offset = cmd.args[0];
+            uint64_t oldpath_len = cmd.args[1];
+            char *oldpath = client_share + oldpath_offset;
+            uint64_t newpath_offset = cmd.args[2];
+            uint64_t newpath_len = cmd.args[3];
+            char *newpath = client_share + newpath_offset;
+            if (!buffer_valid(oldpath, oldpath_len) || !buffer_valid(newpath, newpath_len)) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            oldpath[oldpath_len - 1] = '\0';
+            newpath[newpath_len - 1] = '\0';
 
-    struct sddf_fs_command cmd = message.command;
-    uint64_t request_id = cmd.request_id;
-    switch (cmd.cmd_type) {
-    case SDDF_FS_CMD_OPEN: {
-        uint64_t path_offset = cmd.args[0];
-        char *path = client_share + path_offset;
-        uint64_t path_len = cmd.args[1];
-        uint64_t flags = cmd.args[2];
-        uint64_t mode = cmd.args[3];
-        if (!buffer_valid(path, path_len)) {
-            dlog("bad buffer provided");
-            reply_err(request_id);
+            handle_rename(request_id, oldpath, newpath);
             break;
         }
-        path[path_len - 1] = '\0';
-        handle_open(request_id, path, flags, mode);
-        break;
-    }
-    case SDDF_FS_CMD_STAT: {
-        uint64_t path_offset = cmd.args[0];
-        char *path = client_share + path_offset;
-        uint64_t path_len = cmd.args[1];
-        if (!buffer_valid(path, path_len)) {
-            dlog("bad buffer provided");
-            reply_err(request_id);
-            break;
-        }
-        path[path_len - 1] = '\0';
-        uint64_t buf_offset = cmd.args[2];
-        char *buf = client_share + buf_offset;
-        if (!buffer_valid(buf, sizeof (struct sddf_fs_stat_64))) {
-            dlog("bad buffer provided");
-            reply_err(request_id);
-            break;
-        }
-        handle_stat64(request_id, path, buf);
-        break;
-    }
-    case SDDF_FS_CMD_CLOSE: {
-        fd_t fd = cmd.args[0];
-        handle_close(request_id, fd);
-        break;
-    }
-    case SDDF_FS_CMD_PREAD: {
-        fd_t fd = cmd.args[0];
-        uint64_t buf_offset = cmd.args[1];
-        const char *buf = client_share + buf_offset;
-        uint64_t nbyte = cmd.args[2];
-        uint64_t offset = cmd.args[3];
-        if (!buffer_valid(buf, nbyte)) {
-            dlog("bad buffer provided");
-            reply_err(request_id);
-            break;
-        }
-        handle_pread(request_id, fd, buf, nbyte, offset);
-        break;
-    }
-    case SDDF_FS_CMD_PWRITE: {
-        fd_t fd = cmd.args[0];
-        uint64_t buf_offset = cmd.args[1];
-        char *buf = client_share + buf_offset;
-        uint64_t nbyte = cmd.args[2];
-        uint64_t offset = cmd.args[3];
-        if (!buffer_valid(buf, nbyte)) {
-            dlog("bad buffer provided");
-            reply_err(request_id);
-            break;
-        }
-        handle_pwrite(request_id, fd, buf, nbyte, offset);
-        break;
-    }
-    case SDDF_FS_CMD_RENAME: {
-        uint64_t oldpath_offset = cmd.args[0];
-        uint64_t oldpath_len = cmd.args[1];
-        char *oldpath = client_share + oldpath_offset;
-        uint64_t newpath_offset = cmd.args[2];
-        uint64_t newpath_len = cmd.args[3];
-        char *newpath = client_share + newpath_offset;
-        if (!buffer_valid(oldpath, oldpath_len) || !buffer_valid(newpath, newpath_len)) {
-            dlog("bad buffer provided");
-            reply_err(request_id);
-            break;
-        }
-        oldpath[oldpath_len - 1] = '\0';
-        newpath[newpath_len - 1] = '\0';
+        case SDDF_FS_CMD_UNLINK: {
+            uint64_t path_offset = cmd.args[0];
+            uint64_t path_len = cmd.args[1];
+            char *path = client_share + path_offset;
+            if (!buffer_valid(path, path_len)) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            path[path_len - 1] = '\0';
 
-        handle_rename(request_id, oldpath, newpath);
-        break;
-    }
-    case SDDF_FS_CMD_UNLINK: {
-        uint64_t path_offset = cmd.args[0];
-        uint64_t path_len = cmd.args[1];
-        char *path = client_share + path_offset;
-        if (!buffer_valid(path, path_len)) {
-            dlog("bad buffer provided");
-            reply_err(request_id);
+            handle_unlink(request_id, path);
             break;
         }
-        path[path_len - 1] = '\0';
+        case SDDF_FS_CMD_MKDIR: {
+            uint64_t path_offset = cmd.args[0];
+            uint64_t path_len = cmd.args[1];
+            char *path = client_share + path_offset;
+            if (!buffer_valid(path, path_len)) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            path[path_len - 1] = '\0';
 
-        handle_unlink(request_id, path);
-        break;
-    }
-    case SDDF_FS_CMD_MKDIR: {
-        uint64_t path_offset = cmd.args[0];
-        uint64_t path_len = cmd.args[1];
-        char *path = client_share + path_offset;
-        if (!buffer_valid(path, path_len)) {
-            dlog("bad buffer provided");
-            reply_err(request_id);
+            handle_mkdir(request_id, path);
             break;
         }
-        path[path_len - 1] = '\0';
+        case SDDF_FS_CMD_RMDIR: {
+            uint64_t path_offset = cmd.args[0];
+            uint64_t path_len = cmd.args[1];
+            char *path = client_share + path_offset;
+            if (!buffer_valid(path, path_len)) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            path[path_len - 1] = '\0';
 
-        handle_mkdir(request_id, path);
-        break;
-    }
-    case SDDF_FS_CMD_RMDIR: {
-        uint64_t path_offset = cmd.args[0];
-        uint64_t path_len = cmd.args[1];
-        char *path = client_share + path_offset;
-        if (!buffer_valid(path, path_len)) {
-            dlog("bad buffer provided");
-            reply_err(request_id);
+            handle_rmdir(request_id, path);
             break;
         }
-        path[path_len - 1] = '\0';
+        case SDDF_FS_CMD_OPENDIR: {
+            uint64_t path_offset = cmd.args[0];
+            uint64_t path_len = cmd.args[1];
+            char *path = client_share + path_offset;
+            if (!buffer_valid(path, path_len)) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            path[path_len - 1] = '\0';
 
-        handle_rmdir(request_id, path);
-        break;
-    }
-    case SDDF_FS_CMD_OPENDIR: {
-        uint64_t path_offset = cmd.args[0];
-        uint64_t path_len = cmd.args[1];
-        char *path = client_share + path_offset;
-        if (!buffer_valid(path, path_len)) {
-            dlog("bad buffer provided");
-            reply_err(request_id);
+            handle_opendir(request_id, path);
             break;
         }
-        path[path_len - 1] = '\0';
-
-        handle_opendir(request_id, path);
-        break;
-    }
-    case SDDF_FS_CMD_CLOSEDIR: {
-        fd_t fd = cmd.args[0];
-        handle_closedir(request_id, fd);
-        break;
-    }
-    case SDDF_FS_CMD_READDIR: {
-        fd_t fd = cmd.args[0];
-        uint64_t buf_offset = cmd.args[1];
-        uint64_t buf_size = cmd.args[2];
-        char *buf = client_share + buf_offset;
-        if (!buffer_valid(buf, buf_size)) {
-            dlog("bad buffer provided");
-            reply_err(request_id);
+        case SDDF_FS_CMD_CLOSEDIR: {
+            fd_t fd = cmd.args[0];
+            handle_closedir(request_id, fd);
             break;
         }
-        handle_readdir(request_id, fd, buf, buf_size);
-        break;
-    }
-    case SDDF_FS_CMD_FSYNC: {
-        fd_t fd = cmd.args[0];
-        handle_fsync(request_id, fd);
-        break;
-    }
-    case SDDF_FS_CMD_SEEKDIR: {
-        fd_t fd = cmd.args[0];
-        int64_t loc = cmd.args[1];
-        handle_seekdir(request_id, fd, loc);
-        break;
-    }
-    case SDDF_FS_CMD_TELLDIR: {
-        fd_t fd = cmd.args[0];
-        handle_telldir(request_id, fd);
-        break;
-    }
-    case SDDF_FS_CMD_REWINDDIR: {
-        fd_t fd = cmd.args[0];
-        handle_rewinddir(request_id, fd);
-        break;
-    }
-    default:
-        dlog("unknown fs operation");
-        break;
+        case SDDF_FS_CMD_READDIR: {
+            fd_t fd = cmd.args[0];
+            uint64_t buf_offset = cmd.args[1];
+            uint64_t buf_size = cmd.args[2];
+            char *buf = client_share + buf_offset;
+            if (!buffer_valid(buf, buf_size)) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            handle_readdir(request_id, fd, buf, buf_size);
+            break;
+        }
+        case SDDF_FS_CMD_FSYNC: {
+            fd_t fd = cmd.args[0];
+            handle_fsync(request_id, fd);
+            break;
+        }
+        case SDDF_FS_CMD_SEEKDIR: {
+            fd_t fd = cmd.args[0];
+            int64_t loc = cmd.args[1];
+            handle_seekdir(request_id, fd, loc);
+            break;
+        }
+        case SDDF_FS_CMD_TELLDIR: {
+            fd_t fd = cmd.args[0];
+            handle_telldir(request_id, fd);
+            break;
+        }
+        case SDDF_FS_CMD_REWINDDIR: {
+            fd_t fd = cmd.args[0];
+            handle_rewinddir(request_id, fd);
+            break;
+        }
+        default:
+            dlog("unknown fs operation");
+            break;
+        }
     }
 }

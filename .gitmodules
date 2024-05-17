@@ -16,6 +16,9 @@
 [submodule "libnfs"]
 	path = dep/libnfs
 	url = git@github.com:au-ts/libnfs.git
+[submodule "microdot"]
+	path = dep/microdot
+	url = https://github.com/miguelgrinberg/microdot.git
 [submodule "components/fs/fat"]
 	path = components/fs/fat
 	url = git@github.com:Cheng-Li1/AsyncFATFs.git
