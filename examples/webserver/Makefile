@@ -21,6 +21,8 @@ ifeq ($(strip $(LIBMATH)),)
 LIBMATH:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libm.a)))
 endif
 
+LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
+
 MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
 MICROKIT_BOARD := odroidc4
@@ -42,7 +44,7 @@ LIBNFS=$(LIONSOS)/dep/libnfs
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL=$(LIONSOS)/dep/musllibc
 
-IMAGES := timer.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf arp.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf
+IMAGES := timer.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
@@ -106,8 +108,8 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(B
 			EXEC_MODULE="webserver.py"
 
 ETHERNET=$(SDDF)/drivers/network/meson/
-$(BUILD_DIR)/meson_ethernet.o: FORCE
-	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) make -C $(ETHERNET)
+$(BUILD_DIR)/ethernet.o: $(ETHERNET)/ethernet.c $(ETHERNET)/ethernet.h
+	$(CC) -c $(CFLAGS) $(ETHERNET)/ethernet.c -I$(abspath $(ETHERNET_CONFIG_INCLUDE)) -o $(BUILD_DIR)/ethernet.o
 
 $(BUILD_DIR)/sddf_util_cache.o: $(SDDF)/util/cache.c
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -145,7 +147,7 @@ $(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/libnfs/lib/libnfs.a $(
 		-lnfs \
 		-o $(BUILD_DIR)/nfs.elf
 
-$(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/meson_ethernet.o $(BUILD_DIR)/sddf_util_printf.o $(BUILD_DIR)/sddf_putchar_debug.o
+$(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/ethernet.o $(BUILD_DIR)/sddf_util_printf.o $(BUILD_DIR)/sddf_putchar_debug.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 NETWORK_COMPONENTS := $(SDDF)/network/components
@@ -157,6 +159,7 @@ NETWORK_COMPONENTS_INCLUDE := \
 	-Iethernet_config
 NETWORK_COMPONENT_CFLAGS := \
 	$(NETWORK_COMPONENTS_INCLUDE) \
+	-DNUM_NETWORK_CLIENTS=2 \
 	-mstrict-align \
 	-ffreestanding \
 	-g \
@@ -171,6 +174,9 @@ NETWORK_COMPONENT_CFLAGS := \
 NETWORK_COMPONENTS_LDFLAGS := -L$(BOARD_DIR)/lib -L$(SDDF)/lib -L$(LIBGCC)
 NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc -lgcc $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_printf.o
 
+NETWORK_COMPONENTS_LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIBGCC) -L$(LIBC)
+NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc -lgcc $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_printf.o
+
 $(BUILD_DIR)/eth_copy.o: $(NETWORK_COMPONENTS)/copy.c
 	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
 
@@ -178,9 +184,6 @@ $(BUILD_DIR)/eth_virt_rx.o: $(NETWORK_COMPONENTS)/virt_rx.c
 	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
 
 $(BUILD_DIR)/eth_virt_tx.o: $(NETWORK_COMPONENTS)/virt_tx.c
-	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
-
-$(BUILD_DIR)/arp.o: $(NETWORK_COMPONENTS)/arp.c
 	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
 
 $(BUILD_DIR)/eth_copy.elf: $(BUILD_DIR)/eth_copy.o $(BUILD_DIR)/sddf_putchar_debug.o
@@ -191,10 +194,6 @@ $(BUILD_DIR)/eth_virt_rx.elf: $(BUILD_DIR)/eth_virt_rx.o $(BUILD_DIR)/sddf_util_
 
 $(BUILD_DIR)/eth_virt_tx.elf: $(BUILD_DIR)/eth_virt_tx.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
 	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_virt_tx.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/eth_virt_tx.elf
-
-$(BUILD_DIR)/arp.elf: $(BUILD_DIR)/arp.o $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/sddf_putchar_serial.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/arp.o $(BUILD_DIR)/nfs/lwip/core/inet_chksum.o $(BUILD_DIR)/nfs/lwip/core/def.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_serial.o -o $(BUILD_DIR)/arp.elf
-
 # Compiling serial components
 SERIAL_COMPONENTS := $(SDDF)/serial/components
 UART_DRIVER := $(SDDF)/drivers/serial/meson
