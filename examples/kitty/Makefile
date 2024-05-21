@@ -197,7 +197,6 @@ NETWORK_COMPONENTS_INCLUDE := \
 	-Isrc/ethernet_config
 NETWORK_COMPONENT_CFLAGS := \
 	$(NETWORK_COMPONENTS_INCLUDE) \
-	-DNUM_NETWORK_CLIENTS=2 \
 	-mstrict-align \
 	-ffreestanding \
 	-g \
