@@ -171,11 +171,8 @@ NETWORK_COMPONENT_CFLAGS := \
 	-MD \
 	-MP
 
-NETWORK_COMPONENTS_LDFLAGS := -L$(BOARD_DIR)/lib -L$(SDDF)/lib -L$(LIBGCC)
-NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc -lgcc $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_printf.o
-
-NETWORK_COMPONENTS_LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIBGCC) -L$(LIBC)
-NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc -lgcc $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_printf.o
+NETWORK_COMPONENTS_LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIBC)
+NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_printf.o
 
 $(BUILD_DIR)/eth_copy.o: $(NETWORK_COMPONENTS)/copy.c
 	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
