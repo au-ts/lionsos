@@ -123,7 +123,6 @@ SRC_C = \
 	shared/runtime/gchelper_generic.c \
 	shared/runtime/pyexec.c \
 	shared/runtime/stdout_helpers.c \
-	shared/runtime/sys_stdio_mphal.c \
 	shared/libc/string0.c \
 	shared/libc/printf.c \
 	shared/libc/__errno.c \
@@ -148,6 +147,15 @@ ifdef ENABLE_FRAMEBUFFER
 SRC_C += modfb.c extmod/modframebuf.c
 SRC_QSTR += modfb.c
 CFLAGS += -DENABLE_FRAMEBUFFER
+endif
+
+ifdef ENABLE_VFS_STDIO
+CFLAGS += -DENABLE_VFS_STDIO
+endif
+
+ifdef ENABLE_SERIAL_STDIO
+SRC_C += shared/runtime/sys_stdio_mphal.c
+CFLAGS += -DENABLE_SERIAL_STDIO
 endif
 
 # Define the required object files.
