@@ -133,11 +133,6 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
 static void netif_status_callback(struct netif *netif) {
     if (dhcp_supplied_address(netif)) {
         dlog("DHCP request finished, IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
-
-        microkit_mr_set(0, ip4_addr_get_u32(netif_ip4_addr(netif)));
-        microkit_mr_set(1, (state.mac[0] << 8) | state.mac[1]);
-        microkit_mr_set(2, (state.mac[2] << 24) |  (state.mac[3] << 16) | (state.mac[4] << 8) | state.mac[5]);
-        microkit_ppcall(ETH_ARP_CH, microkit_msginfo_new(0, 3));
     }
 }
 
