@@ -68,7 +68,6 @@ void uio_gpu_ack(size_t vcpu_id, int irq, void *cookie) {
 }
 
 bool uio_init_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data) {
-    LOG_VMM("sending notification to MicroPython!\n");
     microkit_notify(MICROPYTHON_CH);
     return true;
 }
@@ -118,7 +117,6 @@ void init(void) {
 void notified(microkit_channel ch) {
     switch (ch) {
         case MICROPYTHON_CH: {
-            LOG_VMM("Got message from MicroPython, injecting IRQ\n");
             bool success = virq_inject(GUEST_VCPU_ID, UIO_GPU_IRQ);
             if (!success) {
                 LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", UIO_GPU_IRQ, GUEST_VCPU_ID);
@@ -127,7 +125,6 @@ void notified(microkit_channel ch) {
         }
         default: {
             bool success = virq_handle_passthrough(ch);
-            LOG_VMM("injecting pass-through IRQ 0x%lx\n", ch);
             if (!success) {
                 LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", irqs[ch - 10], GUEST_VCPU_ID);
             }
