@@ -34,3 +34,8 @@ void mp_hal_delay_ms(mp_uint_t delay) {
 mp_obj_t mp_time_time_get(void) {
     return mp_obj_new_int(sddf_timer_time_now(TIMER_CH) / 1000 / 1000);
 }
+
+mp_obj_t mp_time_localtime_get(void) {
+    mp_raise_NotImplementedError(MP_ERROR_TEXT("real-time clock not available"));
+    return mp_const_none;
+}
