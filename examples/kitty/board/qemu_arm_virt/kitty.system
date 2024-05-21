@@ -8,8 +8,6 @@
 
     <!-- eth driver/device ring buffer mechanism -->
     <memory_region name="hw_ring_buffer" size="0x10_000" />
-    <memory_region name="virtio_net_tx_headers" size="0x10_000" />
-    <memory_region name="virtio_net_rx_headers" size="0x10_000" />
 
     <!-- eth DMA and virtualised DMA regions -->
     <memory_region name="eth_rx_buffer_data_region" size="0x200_000" page_size="0x200_000" />
@@ -72,7 +70,7 @@
 
     <protection_domain name="eth" priority="110" budget="100" period="400">
         <program_image path="ethernet.elf" />
-        <map mr="eth_regs" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth_regs"/>
+            <map mr="eth_regs" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth_regs"/>
 
             <map mr="eth_rx_free_drv" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
             <map mr="eth_rx_active_drv" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
@@ -80,16 +78,9 @@
             <map mr="eth_tx_active_drv" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
 
             <map mr="hw_ring_buffer" vaddr="0x2_200_000" perms="rw" cached="false" setvar_vaddr="hw_ring_buffer_vaddr" />
-            <map mr="virtio_net_tx_headers" vaddr="0x4_000_000" perms="rw" cached="false" setvar_vaddr="virtio_net_tx_headers_vaddr" />
-            <map mr="virtio_net_rx_headers" vaddr="0x4_200_000" perms="rw" cached="false" setvar_vaddr="virtio_net_rx_headers_vaddr" />
-
-            <!-- <map mr="virtio_net_driver_dma" vaddr="0x7_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_driver_dma_vaddr" /> -->
-            <!-- <setvar symbol="virtio_net_driver_dma_paddr" region_paddr="virtio_net_driver_dma" /> -->
 
             <irq irq="79" id="0" trigger="edge" /> <!--> ethernet interrupt -->
             <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
-            <setvar symbol="virtio_net_tx_headers_paddr" region_paddr="virtio_net_tx_headers" />
-            <setvar symbol="virtio_net_rx_headers_paddr" region_paddr="virtio_net_rx_headers" />
 
     </protection_domain>
 
