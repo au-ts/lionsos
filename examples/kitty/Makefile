@@ -168,7 +168,8 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(B
 			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) \
 			FROZEN_MANIFEST=$(abspath manifest.py) \
 			ENABLE_I2C=1 \
-			ENABLE_FRAMEBUFFER=1
+			ENABLE_FRAMEBUFFER=1 \
+			ENABLE_SERIAL_STDIO=1
 
 ETHERNET=$(SDDF)/drivers/network/$(SDDF_ETHERNET)/
 $(BUILD_DIR)/ethernet.o: FORCE
