@@ -58,10 +58,10 @@ LIONSOS ?= ../..
 SDDF := $(LIONSOS)/dep/sddf
 LIBVMM := $(LIONSOS)/dep/libvmm
 
-VMM_IMAGE_DIR := board/$(MICROKIT_BOARD)/vmm_images
-LINUX := $(VMM_IMAGE_DIR)/linux
-INITRD := $(VMM_IMAGE_DIR)/rootfs.cpio.gz
-DTS := $(VMM_IMAGE_DIR)/linux.dts
+FRAMEBUFFER_VMM_IMAGE_DIR := board/$(MICROKIT_BOARD)/framebuffer_vmm_images
+LINUX := $(FRAMEBUFFER_VMM_IMAGE_DIR)/linux
+INITRD := $(FRAMEBUFFER_VMM_IMAGE_DIR)/rootfs.cpio.gz
+DTS := $(FRAMEBUFFER_VMM_IMAGE_DIR)/linux.dts
 DTB := $(BUILD_DIR)/linux.dtb
 
 LWIP=$(SDDF)/network/ipstacks/lwip/src
@@ -132,7 +132,7 @@ $(BUILD_DIR)/timer.o: $(TIMER_DRIVER)/timer.c
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $< > $@
 
-$(BUILD_DIR)/package_guest_images.o: $(LIBVMM)/tools/package_guest_images.S $(VMM_IMAGE_DIR) $(LINUX) $(INITRD) $(DTB)
+$(BUILD_DIR)/package_guest_images.o: $(LIBVMM)/tools/package_guest_images.S $(FRAMEBUFFER_VMM_IMAGE_DIR) $(LINUX) $(INITRD) $(DTB)
 	$(CC) -c -g3 -x assembler-with-cpp \
 					-DGUEST_KERNEL_IMAGE_PATH=\"$(LINUX)\" \
 					-DGUEST_DTB_IMAGE_PATH=\"$(DTB)\" \
