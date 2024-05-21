@@ -1,10 +1,10 @@
 import os
 import asyncio
 import fs_async
-from microdot import Microdot, send_file
+from microdot import Microdot, Response
 from config import base_dir
 
-extra_content_type_map = {
+content_types_map = Response.types_map | {
     'pdf': 'application/pdf',
     'svg': 'image/svg+xml',
 }
@@ -33,38 +33,42 @@ class FileStream:
         await self.f.close()
 
 
-app = Microdot()
-
-@app.route('/')
-async def index(request):
-    path = f'{base_dir}/index.html'
-    f = await fs_async.open(path)
-    return send_file(path, stream=FileStream(f))
-
-@app.route('/<path:path>')
-async def static(request, path):
+async def send_file(path):
     if '..' in path:
         # directory traversal is not allowed
-        return 'Not found', 404
-
+        return Response(status_code=404, reason='Not Found')
     path = f'{base_dir}/{path}'
+
+    headers = {
+        'Content-Type': 'application/octet-stream',
+        'Cache-Control': 'max-age=3600'
+    }
 
     try:
         stat = await fs_async.stat(path)
     except:
-        return 'File not found', 404
+        return Response(status_code=404, reason='Not Found')
 
-    max_age = 3600
     if stat[0] & 0o170000 == 0o40000: # directory
         path = f'{path}/index.html'
-        max_age = 0
+        headers['Cache-Control'] = 'max-age=0'
 
-    content_type = None
     ext = path.split('.')[-1]
-    if ext in extra_content_type_map:
-        content_type = extra_content_type_map[ext]
+    if ext in content_types_map:
+        headers['Content-Type'] = content_types_map[ext]
 
     f = await fs_async.open(path)
-    return send_file(path, stream=FileStream(f), content_type=content_type, max_age=max_age)
+    return Response(body=FileStream(f), headers=headers)
+
+
+app = Microdot()
+
+@app.route('/')
+async def index(request):
+    return await send_file('index.html')
+
+@app.route('/<path:path>')
+async def static(request, path):
+    return await send_file(path)
 
 app.run(debug=True, port=80)
