@@ -67,4 +67,4 @@ async def static(request, path):
     f = await fs_async.open(path)
     return send_file(path, stream=FileStream(f), content_type=content_type, max_age=max_age)
 
-app.run(debug=True)
+app.run(debug=True, port=80)
