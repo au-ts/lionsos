@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#define ARP_CHANNEL 7
 
 
 extern struct nfs_context *nfs;
