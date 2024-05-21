@@ -105,7 +105,8 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(B
 			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
 			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) \
 			FROZEN_MANIFEST=$(abspath $(BUILD_DIR)/manifest.py) \
-			EXEC_MODULE="webserver.py"
+			EXEC_MODULE="webserver.py" \
+			ENABLE_VFS_STIDO=1
 
 ETHERNET=$(SDDF)/drivers/network/meson/
 $(BUILD_DIR)/ethernet.o: $(ETHERNET)/ethernet.c $(ETHERNET)/ethernet.h
