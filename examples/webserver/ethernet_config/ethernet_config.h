@@ -2,7 +2,7 @@
 
 #include <sddf/network/queue.h>
 
-#define NUM_CLIENTS 2
+#define NUM_NETWORK_CLIENTS 2
 
 #define CLI0_NAME "nfs"
 #define CLI1_NAME "micropython"
