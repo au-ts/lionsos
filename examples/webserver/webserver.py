@@ -1,6 +1,7 @@
 import os
 import asyncio
 import fs_async
+import time
 from microdot import Microdot, Response
 from config import base_dir
 
@@ -33,6 +34,18 @@ class FileStream:
         await self.f.close()
 
 
+def format_http_date(timestamp):
+    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    year, month, mday, hour, minute, second, weekday, yearday = time.gmtime(timestamp)
+    formatted_date = "{}, {:02d} {} {:04d} {:02d}:{:02d}:{:02d} GMT".format(
+        days[weekday], mday, months[month-1], year, hour, minute, second
+    )
+
+    return formatted_date
+
+
 async def send_file(path):
     if '..' in path:
         # directory traversal is not allowed
@@ -52,10 +65,17 @@ async def send_file(path):
     if stat[0] & 0o170000 == 0o40000: # directory
         path = f'{path}/index.html'
         headers['Cache-Control'] = 'max-age=0'
+        try:
+            stat = await fs_async.stat(path)
+        except:
+            return Response(status_code=404, reason='Not Found')
 
     ext = path.split('.')[-1]
     if ext in content_types_map:
         headers['Content-Type'] = content_types_map[ext]
+
+    mtime = stat[8]
+    headers['Last-Modified'] = format_http_date(mtime)
 
     f = await fs_async.open(path)
     return Response(body=FileStream(f), headers=headers)
