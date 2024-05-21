@@ -76,7 +76,7 @@ async def send_file(path, request_headers):
 
     response_headers = {
         'Content-Type': 'application/octet-stream',
-        'Cache-Control': 'max-age=3600'
+        'Cache-Control': 'max-age=31536000'
     }
 
     try:
@@ -86,7 +86,6 @@ async def send_file(path, request_headers):
 
     if stat[0] & 0o170000 == 0o40000: # directory
         path = f'{path}/index.html'
-        response_headers['Cache-Control'] = 'max-age=0'
         try:
             stat = await fs_async.stat(path)
         except:
@@ -95,6 +94,14 @@ async def send_file(path, request_headers):
     ext = path.split('.')[-1]
     if ext in content_types_map:
         response_headers['Content-Type'] = content_types_map[ext]
+
+    short_cache_types = [
+        'text/html',
+        'text/css',
+        'application/javascript'
+    ]
+    if response_headers['Content-Type'] in short_cache_types:
+        response_headers['Cache-Control'] = 'max-age=600'
 
     mtime = stat[8]
 
