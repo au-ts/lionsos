@@ -23,7 +23,7 @@ card_ready = True
 enable_i2c = True
 enable_nfs = True
 
-IP_ADDRESS = "10.0.2.2"
+IP_ADDRESS = ""
 PORT = 3738
 
 
@@ -335,13 +335,25 @@ async def main():
     )
 
 
-def run(i2c_flag = True, nfs_flag = True):
+def run(ip, i2c_flag = True, nfs_flag = True):
     global enable_i2c
     global enable_nfs
+    global IP_ADDRESS
+
+    if (type(ip) != str):
+        print("KITTY: IP address should be of type string")
+        return
+    if (type(i2c_flag) != bool):
+        print("KITTY: i2c_flag should be of type bool")
+        return
+    if (type(nfs_flag) != bool):
+        print("KITTY: nfs_flag should be of type bool")
+        return
 
     enable_i2c = i2c_flag
     enable_nfs = nfs_flag
-
+    IP_ADDRESS = ip
     asyncio.run(main())
 
-print("\033[95m\nWelcome to Kitty!\nUsage: kitty.run(bool I2C_ENABLE, bool NFS_ENABLE).\033[0m")
+print("\033[95m\nWelcome to Kitty!\nUsage: kitty.run(String IP_ADDRESS, bool I2C_ENABLE, bool NFS_ENABLE).\n \
+      NOTE: If running on QEMU, use IP_ADDRESS \"10.0.2.2\"\033[0m")
