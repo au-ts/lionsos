@@ -34,6 +34,28 @@ class FileStream:
         await self.f.close()
 
 
+def parse_http_date(date_str):
+    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    parts = date_str.split()
+
+    weekday = parts[0][:-1]
+    day = int(parts[1])
+    month = months.index(parts[2]) + 1
+    year = int(parts[3])
+    time_parts = parts[4].split(':')
+    hour = int(time_parts[0])
+    minute = int(time_parts[1])
+    second = int(time_parts[2])
+
+    # yearday and isdst can be set to 0 since they are not used by mktime
+    time_tuple = (year, month, day, hour, minute, second, 0, 0, 0)
+    timestamp = time.mktime(time_tuple)
+
+    return timestamp
+
+
 def format_http_date(timestamp):
     days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -46,13 +68,13 @@ def format_http_date(timestamp):
     return formatted_date
 
 
-async def send_file(path):
+async def send_file(path, request_headers):
     if '..' in path:
         # directory traversal is not allowed
         return Response(status_code=404, reason='Not Found')
     path = f'{base_dir}/{path}'
 
-    headers = {
+    response_headers = {
         'Content-Type': 'application/octet-stream',
         'Cache-Control': 'max-age=3600'
     }
@@ -64,7 +86,7 @@ async def send_file(path):
 
     if stat[0] & 0o170000 == 0o40000: # directory
         path = f'{path}/index.html'
-        headers['Cache-Control'] = 'max-age=0'
+        response_headers['Cache-Control'] = 'max-age=0'
         try:
             stat = await fs_async.stat(path)
         except:
@@ -72,23 +94,31 @@ async def send_file(path):
 
     ext = path.split('.')[-1]
     if ext in content_types_map:
-        headers['Content-Type'] = content_types_map[ext]
+        response_headers['Content-Type'] = content_types_map[ext]
 
     mtime = stat[8]
-    headers['Last-Modified'] = format_http_date(mtime)
+
+    try:
+        imstime = parse_http_date(request_headers['If-Modified-Since'])
+        if imstime >= mtime:
+            return Response(status_code=304, reason='Not Modified', headers=response_headers)
+    except:
+        pass # malformed If-Modified-Since header should be ignored
+
+    response_headers['Last-Modified'] = format_http_date(mtime)
 
     f = await fs_async.open(path)
-    return Response(body=FileStream(f), headers=headers)
+    return Response(body=FileStream(f), headers=response_headers)
 
 
 app = Microdot()
 
 @app.route('/')
 async def index(request):
-    return await send_file('index.html')
+    return await send_file('index.html', request.headers)
 
 @app.route('/<path:path>')
 async def static(request, path):
-    return await send_file(path)
+    return await send_file(path, request.headers)
 
 app.run(debug=True, port=80)
