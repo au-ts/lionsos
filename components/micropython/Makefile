@@ -114,6 +114,7 @@ SRC_C = \
 	shared/libc/string0.c \
 	shared/libc/printf.c \
 	shared/libc/__errno.c \
+	shared/timeutils/timeutils.c \
 	shared/netutils/netutils.c \
 	$(LIBCO)/libco.c \
 	$(SDDF_UTIL)/printf.c \
