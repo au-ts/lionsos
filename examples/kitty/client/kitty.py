@@ -17,7 +17,7 @@ TICKS_TO_RESET = 3
 token = 0
 reader_stream = None
 writer_stream = None
-card_ready = True
+stdin_ready = True
 # These are defaulted to true.
 # If you wish to disable, set in kitty.run()
 enable_i2c = True
@@ -112,10 +112,10 @@ async def on_tap(card_id):
 async def read_stdin():
     sreader = asyncio.StreamReader(sys.stdin)
     global token
-    global card_ready
+    global stdin_ready
     while True:
-        if (token != 0 and card_ready is True):
-            card_ready = False
+        if (token != 0 and stdin_ready is True):
+            stdin_ready = False
             print("\033[91mPlease enter card number: \033[0m")
             uid_str = await sreader.readline()
             print(f"Got id: {uid_str.strip()}")
@@ -123,7 +123,7 @@ async def read_stdin():
             try:
                 uid.append(int(uid_str))
             except ValueError as e:
-                card_ready = True
+                stdin_ready = True
                 continue
             await on_tap(uid)
 
@@ -141,50 +141,48 @@ async def read_card(p):
     global TICKS_TO_RESET
     global TICKS_TO_CONFIRM
     global token
-    global card_ready
+    print("In reading card")
     while True:
-        if card_ready is True:
-            card_ready = False
-            uid = p.read_uid()
-            # Case where:
-            #   - We are not waiting on a specific card
-            #   - p.read_uid() did not return a card ID
-            if uid == [] and current_uid == []:
-                await asyncio.sleep_ms(100)
-                continue
+        uid = p.read_uid()
+        # Case where:
+        #   - We are not waiting on a specific card
+        #   - p.read_uid() did not return a card ID
+        if uid == [] and current_uid == []:
+            await asyncio.sleep_ms(100)
+            continue
 
-            if current_uid == []:
-                # If we are not currently waiting for a specific card
-                current_uid = uid
-                current_count = 1
-            elif current_uid != uid:
-                # If we are waiting on a specific card, but the one we just
-                # read does not match this.
-                current_not_equal_count += 1
-                if (current_count < TICKS_TO_CONFIRM):
-                    current_count = 0
-                if (current_not_equal_count == TICKS_TO_RESET):
-                    # If we see multiple non-matches in a row,
-                    # go back to a reset state
-                    info("Resetting...")
-                    current_uid = []
-                    current_count = 0
-                    current_not_equal_count = 0
-            else:
-                # current_uid != [] && current_uid == uid ==> MATCH!
-                current_count += 1
+        if current_uid == []:
+            # If we are not currently waiting for a specific card
+            current_uid = uid
+            current_count = 1
+        elif current_uid != uid:
+            # If we are waiting on a specific card, but the one we just
+            # read does not match this.
+            current_not_equal_count += 1
+            if (current_count < TICKS_TO_CONFIRM):
+                current_count = 0
+            if (current_not_equal_count == TICKS_TO_RESET):
+                # If we see multiple non-matches in a row,
+                # go back to a reset state
+                info("Resetting...")
+                current_uid = []
+                current_count = 0
                 current_not_equal_count = 0
-                if (current_count == TICKS_TO_CONFIRM):
-                    info("Registering tap")
-                    await on_tap(current_uid)
+        else:
+            # current_uid != [] && current_uid == uid ==> MATCH!
+            current_count += 1
+            current_not_equal_count = 0
+            if (current_count == TICKS_TO_CONFIRM):
+                info("Registering tap")
+                await on_tap(current_uid)
 
-            # Read the uid again, this one should always fail
-            # We do this to consume the empty UID packet so it doesn't
-            # mess with our matching. This only applies for MiFare
-            # ultralight cards, which have len(uid) > 4.
-            if (uid != [] and len(uid) > 4):
-                uid = p.read_uid()
-                assert uid == []
+        # Read the uid again, this one should always fail
+        # We do this to consume the empty UID packet so it doesn't
+        # mess with our matching. This only applies for MiFare
+        # ultralight cards, which have len(uid) > 4.
+        if (uid != [] and len(uid) > 4):
+            uid = p.read_uid()
+            assert uid == []
 
         await asyncio.sleep_ms(100)
 
@@ -197,13 +195,13 @@ def set_pixel(display, x, y, rgba):
 
 
 def reset_status():
-    global card_ready
+    global stdin_ready
     display.rect(300, 300, 800, 800, 0x0, True)
     wri.set_textpos(display, 300, 540)
     wri.printstring("Waiting for taps...")
     display.show()
     # Now we are ready to accept new taps
-    card_ready = True
+    stdin_ready = True
 
 
 def draw_image(display, x0, y0, data):
@@ -280,18 +278,17 @@ async def read_from_server():
 
 # Coroutine responsible for reading the card
 async def read_card_main():
-    global card_ready
+    global stdin_ready
     # While we are processing a tap, we cannot accept other taps.
     # We consider to be finished processing after the server has
     # responded, and after we have then called reset_status()
-    if card_ready is True:
-        if (enable_i2c is True):
-            p = PN532(1)
-            p.rf_configure()
-            p.sam_configure()
-            await read_card(p)
-        else:
-            await read_stdin()
+    if (enable_i2c is True):
+        p = PN532(1)
+        p.rf_configure()
+        p.sam_configure()
+        await read_card(p)
+    elif stdin_ready is True:
+        await read_stdin()
     pass
 
 async def main():
@@ -335,7 +332,7 @@ async def main():
     )
 
 
-def run(ip, i2c_flag = True, nfs_flag = True):
+def run(ip = "172.16.0.2", i2c_flag = True, nfs_flag = True):
     global enable_i2c
     global enable_nfs
     global IP_ADDRESS
