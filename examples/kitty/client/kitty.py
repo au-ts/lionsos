@@ -141,7 +141,6 @@ async def read_card(p):
     global TICKS_TO_RESET
     global TICKS_TO_CONFIRM
     global token
-    print("In reading card")
     while True:
         uid = p.read_uid()
         # Case where:
@@ -323,7 +322,6 @@ async def main():
     wri.printstring("Waiting for taps...")
 
     display.show()
-    print("Finished showing text\n");
 
     await asyncio.gather(
         asyncio.create_task(heartbeat()),
