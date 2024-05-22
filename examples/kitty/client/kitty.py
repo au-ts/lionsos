@@ -12,7 +12,7 @@ from font_writer import CWriter
 current_uid = []
 current_equal_count = 0
 current_not_equal_count = 0
-TICKS_TO_CONFIRM = 5
+TICKS_TO_CONFIRM = 2
 TICKS_TO_RESET = 3
 token = 0
 reader_stream = None
@@ -82,6 +82,10 @@ def heartbeat():
 async def on_tap(card_id):
     global writer_stream
     global token
+    display.rect(300, 300, 800, 800, 0x0, True)
+    wri.set_textpos(display, 300, 540)
+    wri.printstring(f"Processing...")
+    display.show()
     while True:
         # @alwin: is it really necessary to have this in a try-catch?
         try:
