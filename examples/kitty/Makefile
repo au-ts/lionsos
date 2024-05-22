@@ -69,10 +69,6 @@ LIBNFS=$(LIONSOS)/dep/libnfs
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL=$(LIONSOS)/dep/musllibc
 
-<<<<<<< HEAD
-IMAGES := timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf i2c_virt.elf i2c_driver.elf
-=======
->>>>>>> f6f820d (kitty: qemu support.)
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
@@ -173,7 +169,7 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(B
 
 ETHERNET=$(SDDF)/drivers/network/$(SDDF_ETHERNET)/
 $(BUILD_DIR)/ethernet.o: FORCE
-	BUILD_DIR=$(abspath $(BUILD_DIR)) MICROKIT_INCLUDE=$(BOARD_DIR)/include ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) make -C $(ETHERNET)
+	$(CC) -c $(CFLAGS) $(ETHERNET)/ethernet.c -I$(abspath $(ETHERNET_CONFIG_INCLUDE)) -o $(BUILD_DIR)/ethernet.o
 
 $(BUILD_DIR)/sddf_util_cache.o: $(SDDF)/util/cache.c
 	$(CC) -c $(CFLAGS) $< -o $@
