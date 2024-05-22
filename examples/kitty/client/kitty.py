@@ -165,7 +165,7 @@ def set_pixel(display, x, y, rgba):
 def reset_status():
     display.rect(300, 300, 800, 800, 0x0, True)
     wri.set_textpos(display, 300, 540)
-    wri.printstring("waiting for taps...")
+    wri.printstring("Waiting for taps...")
     display.show()
 
 
@@ -273,7 +273,7 @@ async def main():
     wri.set_textpos(display, 200, 540)
     wri.printstring("Running on LionsOS!")
     wri.set_textpos(display, 300, 540)
-    wri.printstring("waiting for taps...")
+    wri.printstring("Waiting for taps...")
 
     display.show()
 
