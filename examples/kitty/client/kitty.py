@@ -54,26 +54,24 @@ class KittyDisplay(framebuf.FrameBuffer):
         fb.machine_fb_send(self.buf, self.width, self.height)
 
 
-# @alwin: all the vars highlighted are still (especially) dodgy
-######################################################
+################## DISPLAY GLOBALS ###################
 display_width = 1920
 display_height = 1080
 display = KittyDisplay(display_width, display_height)
 wri = CWriter(display, font)
-reset_cb = None
 ######################################################
 
 # Heartbeat to let the server know we still exist
 def heartbeat():
     global writer_stream
     while True:
-        # @alwin: is it really necessary to have this in a try-catch?
         try:
             info(f"Sending heartbeat at {time.time()}")
             writer_stream.write(b'200 0 0\n')
             await writer_stream.drain()
         except OSError as e:
             if (e.errno == errno.ECONNRESET):
+                info("ERROR: RESETTING CONNECTION")
                 reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
         await asyncio.sleep(4)
@@ -82,20 +80,19 @@ def heartbeat():
 async def on_tap(card_id):
     global writer_stream
     global token
-    display.rect(300, 300, 800, 800, 0x0, True)
-    wri.set_textpos(display, 300, 540)
+    display.rect(200, 400, 1000, 1000, 0x0, True)
+    wri.set_textpos(display, 430, 370)
     wri.printstring(f"Processing...")
     display.show()
     while True:
-        # @alwin: is it really necessary to have this in a try-catch?
         try:
             writer_stream.write(
                 bytes(f'100 {token} {''.join('{:02x}'.format(x) for x in card_id)} 1.0' + '\n', 'utf-8'))
-            # @alwin: Should this have an await()?
             await writer_stream.drain()
             break
         except OSError as e:
             if (e.errno == errno.ECONNRESET):
+                info("ERROR: RESETTING CONNECTION")
                 reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
     token = (token + 1) % 1000000
@@ -167,8 +164,8 @@ def set_pixel(display, x, y, rgba):
 
 
 def reset_status():
-    display.rect(300, 300, 800, 800, 0x0, True)
-    wri.set_textpos(display, 300, 540)
+    display.rect(200, 400, 1000, 1000, 0x0, True)
+    wri.set_textpos(display, 430, 330)
     wri.printstring("Waiting for taps...")
     display.show()
 
@@ -199,17 +196,11 @@ async def wait_seconds_and_call(seconds, fn):
 
 # Coroutine responsible for listening to the server
 async def read_from_server():
-    global reset_cb
     global reader_stream
     global writer_stream
     global token
     while True:
         try:
-            # @alwin: I don't really know if this is any better than just
-            # .readline(), but I saw it in the webserver and it seemed to
-            # slightly improve reliability (though it could have been some
-            # other change). Needs some more thought/experimentation.
-            # message = await asyncio.wait_for(reader_stream.readline(), 0.5)
             message = await reader_stream.readline()
         except OSError:
             # This usually happens when the server does not recieve a heartbeat
@@ -233,15 +224,12 @@ async def read_from_server():
         elif words[0] == '200':
             info("got response")
             card_id = words[2]
-            display.rect(540, 300, 700, 700, 0x0000, True)
-            wri.set_textpos(display, 300, 400)
+            display.rect(200, 400, 1000, 1000, 0x0, True)
+            wri.set_textpos(display, 400, 260)
             wri.printstring(f"Thanks for your purchase!")
-            wri.set_textpos(display, 400, 400)
+            wri.set_textpos(display, 470, 235)
             wri.printstring(f"Card UID: {card_id}")
             display.show()
-            if reset_cb is not None:
-                reset_cb.cancel()
-                reset_cb = None
             asyncio.create_task(wait_seconds_and_call(3, reset_status))
 
 
@@ -266,17 +254,19 @@ async def main():
         pic = memoryview(cat_buf)
         # print(pic[:4])
         print("KITTY|INFO: read image, starting to draw")
-        draw_image(display, 0, 40, pic[0:])
+        draw_image(display, 50, -70, pic[0:])
     display.show()
     print(time.time())
     print("KITTY|INFO: about to draw string!")
     # draw_string(400, 100, "Kitty v5", 5, 0xFFFFFFFF, 0x008800FF, True, False)
     wri.setcolor(0xffff, 0x0000)
-    wri.set_textpos(display, 100, 540)
+    wri.set_textpos(display, 100, 500)
     wri.printstring("Welcome to Kitty v5")
-    wri.set_textpos(display, 200, 540)
+    wri.set_textpos(display, 200, 500)
+    wri.setcolor(0x8e27, 0x0000)
     wri.printstring("Running on LionsOS!")
-    wri.set_textpos(display, 300, 540)
+    wri.setcolor(0xffff, 0x0000)
+    wri.set_textpos(display, 430, 330)
     wri.printstring("Waiting for taps...")
 
     display.show()
