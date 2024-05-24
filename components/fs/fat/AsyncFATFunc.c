@@ -25,6 +25,7 @@ bool* Dirs_BitList;
 DIR* Dirs;
 
 // Init the structure without using malloc
+// Could this has potential alignment issue?
 void init_metadata(void* fs_metadata) {
     char* base = (char*)fs_metadata;
 
