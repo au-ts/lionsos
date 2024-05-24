@@ -1,0 +1,9 @@
+.{ .name = "FatFs", .version = "0.1.0", .dependencies = .{ .FiberPool = .{ .path = "FiberPool" } }, .paths = .{
+    "ff15",
+    "AsyncFATFs.c",
+    "AsyncFATFs.h",
+    "AsyncFATFunc.c",
+    "Asyncdiskio.c",
+    "build.zig",
+    "build.zig.zon",
+} }
