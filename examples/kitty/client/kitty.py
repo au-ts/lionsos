@@ -22,6 +22,8 @@ writer_stream = None
 # If you wish to disable, set in kitty.run()
 enable_i2c = True
 enable_nfs = True
+card_ready = True
+
 
 IP_ADDRESS = "10.0.2.2"
 PORT = 3738
@@ -56,6 +58,7 @@ class KittyDisplay(framebuf.FrameBuffer):
         super().__init__(self.buf, self.width, self.height, framebuf.RGB565)
 
     def show(self):
+        fb.wait()
         fb.machine_fb_send(self.buf, self.width, self.height)
 
 
@@ -186,10 +189,13 @@ def set_pixel(display, x, y, rgba):
 
 
 def reset_status():
+    global card_ready
+    print("kitty: printing reset")
     display.rect(300, 300, 800, 800, 0x0, True)
     wri.set_textpos(display, 300, 540)
     wri.printstring("waiting for taps...")
     display.show()
+    card_ready = True
 
 
 def draw_image(display, x0, y0, data):
@@ -266,12 +272,14 @@ async def read_from_server():
 
 # Coroutine responsible for reading the card
 async def read_card_main():
+    global card_ready
     if (enable_i2c is True):
         p = PN532(1)
         p.rf_configure()
         p.sam_configure()
         await read_card(p)
-    else:
+    elif (card_ready is True):
+        card_ready = False
         await read_stdin()
     pass
 

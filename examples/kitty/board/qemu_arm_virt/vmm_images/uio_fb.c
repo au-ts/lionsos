@@ -22,7 +22,7 @@ int get_uio_map_addr(char *path, void **addr) {
     // Get address of map0 from UIO device
     size_t addr_fp = open("/sys/class/uio/uio0/maps/map0/addr", O_RDONLY);
     if (addr_fp == -1) {
-        printf("Error opening file");
+        printf("Error opening file uio0 map addr");
         return 1;
     }
 
@@ -54,7 +54,7 @@ int get_uio_map_size(char *path, size_t *size) {
     // Get size of map0 from UIO device
     size_t size_fp = open("/sys/class/uio/uio0/maps/map0/size", O_RDONLY);
     if (size_fp == -1) {
-        printf("Error opening file");
+        printf("Error opening file uio0 map size");
         return 4;
     }
 
@@ -84,7 +84,7 @@ int get_uio_map_offset(char *path, size_t *offset) {
     // Get offset of map0 from UIO device
     size_t offset_fp = open("/sys/class/uio/uio0/maps/map0/offset", O_RDONLY);
     if (offset_fp == -1) {
-        printf("Error opening file");
+        printf("Error opening file uio0 map offset");
         return 7;
     }
 
@@ -114,7 +114,7 @@ int main() {
     void *addr;
     size_t size;
     size_t offset;
-    
+
     get_uio_map_addr("/sys/class/uio/uio0/maps/map0/addr", &addr);
     get_uio_map_size("/sys/class/uio/uio0/maps/map0/size", &size);
     get_uio_map_offset("/sys/class/uio/uio0/maps/map0/offset", &offset);
@@ -129,7 +129,7 @@ int main() {
     // Open /dev/fb0 device to read config info and allow mmap
     int fb_fp = open("/dev/fb0", O_RDWR);
     if (fb_fp == -1) {
-        printf("Error opening file");
+        printf("Error opening file fb0");
         return 10;
     }
     printf("UIO FB|INFO: opened /dev/fb0\n");
@@ -214,9 +214,15 @@ int main() {
         if (read_value >= irq_count) {
             // Copy contents of map0 into fbmap
             printf("UIO FB|INFO: Copying from map0 to fbmap\n");
-            memcpy(fbmap, fb_base, screensize);
+            int ret = memcpy(fbmap, fb_base, screensize);
+            if (ret == -1) {
+                printf("memcpy error: %s\n", strerror(errno));
+            }
             printf("UIO FB|INFO: finished copying\n");
-            msync(fbmap, screensize, MS_SYNC);
+            ret = msync(fbmap, screensize, MS_SYNC);
+            if (ret == -1) {
+                printf("msync error: %s\n", strerror(errno));
+            }
             printf("UIO FB|INFO: finished msyncing fbmap\n");
         }
 
