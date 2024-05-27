@@ -15,6 +15,30 @@
 #include "tcb.h"
 #include "vcpu.h"
 #include "uio.h"
+#include <virtio/virtio.h>
+#include <virtio/console.h>
+#include <sddf/serial/queue.h>
+
+/* Virtio Console */
+#define SERIAL_VIRT_TX_CH 2
+#define SERIAL_VIRT_RX_CH 3
+
+#define VIRTIO_CONSOLE_IRQ (74)
+#define VIRTIO_CONSOLE_BASE (0x130000)
+#define VIRTIO_CONSOLE_SIZE (0x1000)
+
+uintptr_t serial_rx_free;
+uintptr_t serial_rx_active;
+uintptr_t serial_tx_free;
+uintptr_t serial_tx_active;
+uintptr_t serial_rx_data;
+uintptr_t serial_tx_data;
+
+serial_queue_handle_t serial_rx_h;
+serial_queue_handle_t serial_tx_h;
+sddf_handler_t sddf_serial_handlers[SDDF_SERIAL_NUM_HANDLES];
+
+static struct virtio_device virtio_console;
 
 #if defined(CONFIG_PLAT_ODROIDC4)
 #define GUEST_RAM_SIZE 0x10000000
@@ -111,6 +135,61 @@ void init(void) {
     virq_register(GUEST_VCPU_ID, UIO_GPU_IRQ, &uio_gpu_ack, NULL);
     fault_register_vm_exception_handler(UIO_INIT_ADDRESS, sizeof(size_t), &uio_init_handler, NULL);
 
+    /* virtIO console */
+    sddf_serial_handlers[SDDF_SERIAL_RX_HANDLE].queue_h = &serial_rx_h;
+    sddf_serial_handlers[SDDF_SERIAL_RX_HANDLE].config = NULL;
+    sddf_serial_handlers[SDDF_SERIAL_RX_HANDLE].data = (uintptr_t)serial_rx_data;
+    sddf_serial_handlers[SDDF_SERIAL_RX_HANDLE].data_size = 0; /* Unused */
+    sddf_serial_handlers[SDDF_SERIAL_RX_HANDLE].ch = SERIAL_VIRT_RX_CH;
+
+    sddf_serial_handlers[SDDF_SERIAL_TX_HANDLE].queue_h = &serial_tx_h;
+    sddf_serial_handlers[SDDF_SERIAL_TX_HANDLE].config = NULL;
+    sddf_serial_handlers[SDDF_SERIAL_TX_HANDLE].data = (uintptr_t)serial_tx_data;
+    sddf_serial_handlers[SDDF_SERIAL_TX_HANDLE].data_size = 0; /* Unusued */
+    sddf_serial_handlers[SDDF_SERIAL_TX_HANDLE].ch = SERIAL_VIRT_TX_CH;
+
+    /* Initialise our sDDF queues for the serial device */
+    serial_queue_init(sddf_serial_handlers[SDDF_SERIAL_RX_HANDLE].queue_h,
+                      (serial_queue_t *)serial_rx_free,
+                      (serial_queue_t *)serial_rx_active,
+                      true,
+                      NUM_ENTRIES,
+                      NUM_ENTRIES);
+    for (int i = 0; i < NUM_ENTRIES - 1; i++) {
+        int ret = serial_enqueue_free(sddf_serial_handlers[SDDF_SERIAL_RX_HANDLE].queue_h, serial_rx_data + (i * BUFFER_SIZE),
+                                      BUFFER_SIZE);
+        if (ret != 0) {
+            microkit_dbg_puts(microkit_name);
+            microkit_dbg_puts(": server rx buffer population, unable to enqueue\n");
+        }
+    }
+    /* Neither ring should be plugged and hence all buffers we send should actually end up at the driver. */
+    assert(!serial_queue_plugged(((serial_queue_handle_t *)sddf_serial_handlers[SDDF_SERIAL_RX_HANDLE].queue_h)->free));
+    assert(!serial_queue_plugged(((serial_queue_handle_t *)sddf_serial_handlers[SDDF_SERIAL_RX_HANDLE].queue_h)->active));
+
+    serial_queue_init(sddf_serial_handlers[SDDF_SERIAL_TX_HANDLE].queue_h,
+                      (serial_queue_t *)serial_tx_free,
+                      (serial_queue_t *)serial_tx_active,
+                      true,
+                      NUM_ENTRIES,
+                      NUM_ENTRIES);
+    for (int i = 0; i < NUM_ENTRIES - 1; i++) {
+        int ret = serial_enqueue_free(sddf_serial_handlers[SDDF_SERIAL_TX_HANDLE].queue_h, serial_tx_data + (i * BUFFER_SIZE),
+                                      BUFFER_SIZE);
+        assert(ret == 0);
+        if (ret != 0) {
+            microkit_dbg_puts(microkit_name);
+            microkit_dbg_puts(": server tx buffer population, unable to enqueue\n");
+        }
+    }
+    assert(!serial_queue_plugged(((serial_queue_handle_t *)sddf_serial_handlers[SDDF_SERIAL_RX_HANDLE].queue_h)->free));
+    assert(!serial_queue_plugged(((serial_queue_handle_t *)sddf_serial_handlers[SDDF_SERIAL_RX_HANDLE].queue_h)->active));
+
+    /* Initialise virtIO console device */
+    success = virtio_mmio_device_init(&virtio_console, CONSOLE, VIRTIO_CONSOLE_BASE, VIRTIO_CONSOLE_SIZE,
+                                      VIRTIO_CONSOLE_IRQ, sddf_serial_handlers);
+    assert(success);
+
     /* Finally start the guest */
     guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
 }
@@ -123,6 +202,11 @@ void notified(microkit_channel ch) {
             if (!success) {
                 LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", UIO_GPU_IRQ, GUEST_VCPU_ID);
             }
+            break;
+        } case SERIAL_VIRT_RX_CH: {
+            /* We have received an event from the serial multiplexor, so we
+            * call the virtIO console handling */
+            virtio_console_handle_rx(&virtio_console);
             break;
         }
         default: {

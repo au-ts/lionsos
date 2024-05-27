@@ -140,14 +140,14 @@ int main() {
         return 21;
     }
 
-    // Activate framebuffer]
-    printf("Zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n");
-    // vinfo.activate |= FB_ACTIVATE_NOW | FB_ACTIVATE_FORCE;
-    // if (0 > ioctl(fb_fp, FBIOPUT_VSCREENINFO, &vinfo)) {
-    //     printf("Failed to refresh\n");
-    //     return 21;
-    // }
-    printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n");
+    // Activate framebuffer
+    printf("Activating framebuffer...\n");
+    vinfo.activate |= FB_ACTIVATE_NOW | FB_ACTIVATE_FORCE;
+    if (0 > ioctl(fb_fp, FBIOPUT_VSCREENINFO, &vinfo)) {
+        printf("Failed to refresh\n");
+        return 21;
+    }
+    printf("Activated framebuffer\n");
     // Figure out the size of the screen in bytes
     screensize = vinfo.xres * vinfo.yres * vinfo.bits_per_pixel / 8;
 

@@ -47,6 +47,8 @@
     <memory_region name="serial_tx_data_micropython" size="0x200_000" page_size="0x200_000" />
     <memory_region name="serial_rx_data_driver" size="0x200_000" page_size="0x200_000" />
     <memory_region name="serial_rx_data_micropython" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="serial_tx_data_framebuffer_vmm" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="serial_rx_data_framebuffer_vmm" size="0x200_000" page_size="0x200_000" />
 
     <!-- shared memory for serial driver/serial virt queue mechanism -->
     <memory_region name="serial_rx_free_driver" size="0x200_000" page_size="0x200_000"/>
@@ -59,6 +61,10 @@
     <memory_region name="serial_tx_active_micropython" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="serial_rx_free_micropython" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="serial_rx_active_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_tx_free_framebuffer_vmm" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_tx_active_framebuffer_vmm" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_rx_free_framebuffer_vmm" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_rx_active_framebuffer_vmm" size="0x200_000" page_size="0x200_000"/>
 
     <!-- shared memory for micropython/nfs queue -->
     <memory_region name="shared_nfs_micropython" size="0x200_000" />
@@ -172,6 +178,10 @@
 
         <map mr="serial_tx_data_driver" vaddr="0x50_000_000" perms="rw" cached="true" setvar_vaddr="tx_data_driver" />
         <map mr="serial_tx_data_micropython" vaddr="0x50_400_000" perms="rw" cached="true" setvar_vaddr="tx_data_client" />
+
+        <map mr="serial_tx_data_framebuffer_vmm" vaddr="0x5_600_000" perms="rw" setvar_vaddr="tx_data_client2" />
+        <map mr="serial_tx_free_framebuffer_vmm" vaddr="0x5_A00_000" perms="rw" setvar_vaddr="tx_free_client2" />
+        <map mr="serial_tx_active_framebuffer_vmm" vaddr="0x5_C00_000" perms="rw" setvar_vaddr="tx_active_client2" />
     </protection_domain>
 
     <protection_domain name="serial_virt_rx" priority="98" >
@@ -184,6 +194,10 @@
 
         <map mr="serial_rx_data_driver" vaddr="0x50_200_000" perms="rw" cached="true" setvar_vaddr="rx_data_driver" />
         <map mr="serial_rx_data_micropython" vaddr="0x50_600_000" perms="rw" cached="true" setvar_vaddr="rx_data_client" />
+
+        <map mr="serial_rx_data_framebuffer_vmm" vaddr="0x5_800_000" perms="rw" setvar_vaddr="rx_data_client2" />
+        <map mr="serial_rx_free_framebuffer_vmm" vaddr="0x5_E00_000" perms="rw" setvar_vaddr="rx_free_client2" />
+        <map mr="serial_rx_active_framebuffer_vmm" vaddr="0x6_000_000" perms="rw" setvar_vaddr="rx_active_client2" />
     </protection_domain>
 
     <protection_domain name="nfs" priority="98">
@@ -235,6 +249,13 @@
     <protection_domain name="framebuffer_vmm" priority="1">
         <program_image path="vmm.elf" />
         <map mr="framebuffer_guest_ram" vaddr="0x40000000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
+        <map mr="serial_tx_data_framebuffer_vmm" vaddr="0x5_600_000" perms="rw" setvar_vaddr="serial_tx_data" />
+        <map mr="serial_rx_data_framebuffer_vmm" vaddr="0x5_800_000" perms="rw" setvar_vaddr="serial_rx_data" />
+        <map mr="serial_tx_free_framebuffer_vmm" vaddr="0x5_A00_000" perms="rw" setvar_vaddr="serial_tx_free" />
+        <map mr="serial_tx_active_framebuffer_vmm" vaddr="0x5_C00_000" perms="rw" setvar_vaddr="serial_tx_active" />
+        <map mr="serial_rx_free_framebuffer_vmm" vaddr="0x5_E00_000" perms="rw" setvar_vaddr="serial_rx_free" />
+        <map mr="serial_rx_active_framebuffer_vmm" vaddr="0x6_000_000" perms="rw" setvar_vaddr="serial_rx_active" />
+
         <virtual_machine name="linux" id="0" priority="1">
             <map mr="uart" vaddr="0x9000000" perms="rw" cached="false" />
             <map mr="framebuffer_guest_ram" vaddr="0x40000000" perms="rwx" />
@@ -249,6 +270,16 @@
         <!-- IRQ for pass-through graphics -->
         <irq irq="37" id="10" />
     </protection_domain>
+    
+    <channel>
+        <end pd="framebuffer_vmm" id="2"/>
+        <end pd="serial_virt_tx" id="2"/>
+    </channel>
+
+     <channel>
+        <end pd="framebuffer_vmm" id="3"/>
+        <end pd="serial_virt_rx" id="2"/>
+    </channel>
 
     <channel>
         <end pd="eth" id="2" />

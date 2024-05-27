@@ -80,6 +80,7 @@ CFLAGS := \
 	-I$(LIBVMM)/src/arch/aarch64 \
 	-I$(LIBVMM)/src \
 	-I$(LIBVMM)/src/util \
+	-I$(LIBVMM)/src/virtio \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include
 LDFLAGS := -L$(BOARD_DIR)/lib
@@ -88,11 +89,14 @@ LIBS := -lmicrokit -Tmicrokit.ld
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
-TIMER_OBJS := timer.o sddf_util_printf.o sddf_putchar_debug.o
+TIMER_OBJS := timer.o sddf_util_printf.o sddf_util_putchar_debug.o
 VMM_OBJS := vmm.o printf.o virq.o linux.o \
 			guest.o psci.o smc.o fault.o \
 			util.o vgic.o vgic_v2.o \
-			package_guest_images.o tcb.o vcpu.o
+			package_guest_images.o tcb.o vcpu.o \
+			virtio.o mmio.o console.o block.o \
+			sddf_blk_fsmalloc.o sddf_blk_bitarray.o \
+			sddf_util_putchar_debug.o sddf_util_printf.o \
 
 TIMER_DRIVER := $(SDDF)/drivers/clock/$(SDDF_TIMER)
 
@@ -111,14 +115,11 @@ $(BUILD_DIR)/%.o: src/%.c
 $(BUILD_DIR)/%.o: src/vmm/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/sddf_util_printf.o: $(SDDF)/util/printf.c $(SDDF)/include/sddf/util/printf.h
-	$(CC) -c $(CFLAGS) $(SDDF)/util/printf.c -o $@
+$(BUILD_DIR)/sddf_util_%.o: $(SDDF)/util/%.c
+	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/sddf_putchar_debug.o: $(SDDF)/util/putchar_debug.c
-	$(CC) -c $(CFLAGS) $(SDDF)/util/putchar_debug.c -o $(BUILD_DIR)/sddf_putchar_debug.o
-
-$(BUILD_DIR)/sddf_putchar_serial.o: $(SDDF)/util/putchar_serial.c
-	$(CC) -c $(CFLAGS) $(SDDF)/util/putchar_serial.c -o $(BUILD_DIR)/sddf_putchar_serial.o
+$(BUILD_DIR)/sddf_blk_%.o: $(SDDF)/blk/util/%.c
+	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/timer.o: $(TIMER_DRIVER)/timer.c
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -144,6 +145,9 @@ $(BUILD_DIR)/%.o: $(LIBVMM)/src/arch/aarch64/%.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/%.o: $(LIBVMM)/src/arch/aarch64/vgic/%.c Makefile
+	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/%.o: $(LIBVMM)/src/virtio/%.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/vmm.elf: $(addprefix $(BUILD_DIR)/, $(VMM_OBJS))
@@ -201,7 +205,7 @@ $(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/libnfs/lib/libnfs.a $(
 		-lnfs \
 		-o $(BUILD_DIR)/nfs.elf
 
-$(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/ethernet.o $(BUILD_DIR)/sddf_util_printf.o $(BUILD_DIR)/sddf_putchar_debug.o
+$(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/ethernet.o $(BUILD_DIR)/sddf_util_printf.o $(BUILD_DIR)/sddf_util_putchar_debug.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 NETWORK_COMPONENTS := $(SDDF)/network/components
@@ -236,24 +240,24 @@ $(BUILD_DIR)/eth_virt_rx.o: $(NETWORK_COMPONENTS)/virt_rx.c
 $(BUILD_DIR)/eth_virt_tx.o: $(NETWORK_COMPONENTS)/virt_tx.c
 	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
 
-$(BUILD_DIR)/eth_copy.elf: $(BUILD_DIR)/eth_copy.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_copy.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/eth_copy.elf
+$(BUILD_DIR)/eth_copy.elf: $(BUILD_DIR)/eth_copy.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_putchar_debug.o
+	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_copy.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_util_putchar_debug.o -o $(BUILD_DIR)/eth_copy.elf
 
-$(BUILD_DIR)/eth_virt_rx.elf: $(BUILD_DIR)/eth_virt_rx.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_virt_rx.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/eth_virt_rx.elf
+$(BUILD_DIR)/eth_virt_rx.elf: $(BUILD_DIR)/eth_virt_rx.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_putchar_debug.o
+	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_virt_rx.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_util_putchar_debug.o -o $(BUILD_DIR)/eth_virt_rx.elf
 
-$(BUILD_DIR)/eth_virt_tx.elf: $(BUILD_DIR)/eth_virt_tx.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_virt_tx.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/eth_virt_tx.elf
+$(BUILD_DIR)/eth_virt_tx.elf: $(BUILD_DIR)/eth_virt_tx.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_putchar_debug.o
+	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_virt_tx.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_util_putchar_debug.o -o $(BUILD_DIR)/eth_virt_tx.elf
 
 # Compiling serial components
 SERIAL_COMPONENTS := $(SDDF)/serial/components
 UART_DRIVER := $(SDDF)/drivers/serial/$(SDDF_SERIAL)
-UART_DRIVER_OBJS := uart_driver.o sddf_putchar_debug.o sddf_util_printf.o
+UART_DRIVER_OBJS := uart_driver.o sddf_util_putchar_debug.o sddf_util_printf.o
 SERIAL_VIRT_RX_OBJS := serial_virt_rx.o
 SERIAL_VIRT_TX_OBJS := serial_virt_tx.o
 
 SERIAL_INCLUDES := -I$(SDDF)/util/include -I$(UART_DRIVER)/include
-SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=1
+SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=2
 
 $(BUILD_DIR)/uart_driver.o: $(UART_DRIVER)/uart.c
 	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $< -o $@
@@ -277,8 +281,8 @@ $(BUILD_DIR)/serial_virt_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_TX_OBJ
 ifeq ($(MICROKIT_BOARD),odroidc4)
 I2C_DRIVER := $(SDDF)/drivers/i2c/$(SDDF_I2C)
 I2C_VIRT := $(SDDF)/i2c/components
-I2C_VIRT_OBJS := i2c_virt.o sddf_util_printf.o sddf_putchar_debug.o
-I2C_DRIVER_OBJS := i2c_driver.o sddf_util_printf.o sddf_putchar_debug.o
+I2C_VIRT_OBJS := i2c_virt.o sddf_util_printf.o sddf_util_putchar_debug.o
+I2C_DRIVER_OBJS := i2c_driver.o sddf_util_printf.o sddf_util_putchar_debug.o
 
 $(BUILD_DIR)/i2c_driver.o: $(I2C_DRIVER)/i2c.c
 	$(CC) -c -DI2C_BUS_NUM=2 $(CFLAGS) $< -o $@
