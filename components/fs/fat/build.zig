@@ -73,7 +73,6 @@ pub fn build(b: *std.Build) void {
     // Since we are relying on Zig to produce the final ELF, it needs to do the
     // linking step as well.
     const microkit_board_dir = b.fmt("{s}/board/{s}/{s}", .{ microkit_sdk, microkit_board, microkit_config });
-    const microkit_tool = b.fmt("{s}/bin/microkit", .{microkit_sdk});
     const libmicrokit = b.fmt("{s}/lib/libmicrokit.a", .{microkit_board_dir});
     const libmicrokit_linker_script = b.fmt("{s}/lib/microkit.ld", .{microkit_board_dir});
     const libmicrokit_include = b.fmt("{s}/include", .{microkit_board_dir});
@@ -100,12 +99,31 @@ pub fn build(b: *std.Build) void {
 
     fs.addObjectFile(.{ .path = libmicrokit });
 
+    // Command to compile musl libc
+    // const make_command = b.fmt("CONFIG_USER_DEBUG_BUILD=y CONFIG_ARCH_AARCH64=y C_COMPILER=aarch64-none-elf-gcc TOOLPREFIX=aarch64-none-elf- SOURCE_DIR=. STAGE_DIR=../../components/fs/fat/build make");
+    const make_command = b.fmt("CONFIG_USER_DEBUG_BUILD=y CONFIG_ARCH_AARCH64=y C_COMPILER=clang TOOLPREFIX= NK_CFLAGS=\"-mstrict-align -ffreestanding -g -O0 -Wall -Wno-unused-function -target aarch64-none-elf -no-integrated-as\" SOURCE_DIR=. STAGE_DIR=../../components/fs/fat/build make");
+
+    const make_step = b.addSystemCommand(&[_][]const u8{
+        "sh", "-c", make_command,
+    }, "Call Makefile to build dependencies");
+
+    make_step.setCwd(.{ .path = "../../dep/musllibc/" });
+
+    b.default_step = make_step.step;
+
+    fs.addObjectFile(.{ .path = "build/lib/libc.a" });
+
     // Add all source files
     fs.addCSourceFile(.{ .file = b.path("AsyncFATFs.c"), .flags = &.{"-mstrict-align"} });
     fs.addCSourceFile(.{ .file = b.path("AsyncFATFunc.c"), .flags = &.{"-mstrict-align"} });
     fs.addCSourceFile(.{ .file = b.path("Asyncdiskio.c"), .flags = &.{"-mstrict-align"} });
     fs.addCSourceFile(.{ .file = b.path("ff15/source/ff.c"), .flags = &.{"-mstrict-align -nostdlib"} });
     fs.addCSourceFile(.{ .file = b.path("ff15/source/ffunicode.c"), .flags = &.{"-mstrict-align"} });
+
+    // For printf
+    // fs.addCSourceFile(.{ .file = b.path("../../../dep/sddf/util/printf.c"), .flags = &.{"-mstrict-align"} });
+
+    fs.setLinkerScript(.{ .path = libmicrokit_linker_script });
 
     b.installArtifact(fs);
 }
