@@ -46,6 +46,10 @@ void* fs_metadata;
 // Flag for checking if the fat is mounted or not
 bool fat_mounted = false;
 
+// Flag for determine if there are blk_requests pushed by the file system
+// It is used to determine whether to notify the blk device driver
+bool blk_request_pushed = false;
+
 typedef enum {
     FREE,
     INUSE
@@ -196,9 +200,6 @@ void notified(microkit_channel ch) {
 
     // This variable track if the fs should send back reply to the file system client
     bool Client_have_replies = false;
-    // Flag for determine if there are blk_requests pushed by the file system
-    // It is used to determine whether to notify the blk device driver
-    bool blk_request_pushed = false;
     
     // Compromised code here, mount file system itself
     // This part can be a little bit ugly as I have not thought of mount the file system itself 
