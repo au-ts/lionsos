@@ -61,11 +61,15 @@
     <memory_region name="serial_tx_queue_nfs" size="0x1_000" />
 
     <!-- Memory regions for the I2C sub-system -->
-    <memory_region name="i2c_driver_request_region" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="i2c_driver_response_region" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="i2c_micropython_request_region" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="i2c_micropython_response_region" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="i2c_micropython_data_region" size="0x200_000" page_size="0x200_000"/>
+    <!--
+        We transfer minimal data over I2C and so a data region size of 0x1000
+        is more than enough for our use-case.
+    -->
+    <memory_region name="i2c_driver_request_region" size="0x1_000" />
+    <memory_region name="i2c_driver_response_region" size="0x1_000" />
+    <memory_region name="i2c_micropython_request_region" size="0x1_000" />
+    <memory_region name="i2c_micropython_response_region" size="0x1_000" />
+    <memory_region name="i2c_micropython_data_region" size="0x1_000" />
 
     <!-- shared memory for micropython/nfs queue -->
     <memory_region name="shared_nfs_micropython" size="0x4000000" />
