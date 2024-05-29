@@ -1,4 +1,5 @@
-// Zig build system, not work yet
+// Zig build script for building FatFs
+// zig build -Dsdk=../../../../libvmm-blk_benchmark/examples/blk_benchmark/sdk -Dboard=odroidc4
 const std = @import("std");
 
 const MicrokitBoard = enum { qemu_arm_virt, odroidc4, maaxboard };
@@ -46,6 +47,33 @@ fn findTarget(board: MicrokitBoard) std.zig.CrossTarget {
 }
 
 const ConfigOptions = enum { debug, release, benchmark };
+
+// Function to collect all .c files in a directory to a [_][]const u8
+fn collectCSourceFilesFromDir(dir: []const u8, allocator: *const std.mem.Allocator) ![]const []const u8 {
+    const fs = std.fs;
+
+    // Initialize an ArrayList to store the file paths
+    var files = std.ArrayList([]const u8).init(allocator);
+
+    // Open the directory
+    const directory = try fs.cwd().openDir(dir, .{});
+    defer directory.close();
+
+    // Iterate over the directory entries
+    var it = try directory.iterate();
+    while (try it.next()) |entry| {
+        // Check if the entry is a .c file
+        if (entry.kind == .File and std.mem.endsWith(u8, entry.name, ".c")) {
+            // Join the directory and file name to get the full path
+            const file_path = try std.fs.path.join(&[_][]const u8{ dir, entry.name });
+            // Append the file path to the list
+            try files.append(file_path);
+        }
+    }
+
+    // Return the list of file paths as a slice
+    return files.toOwnedSlice();
+}
 
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
@@ -101,27 +129,37 @@ pub fn build(b: *std.Build) void {
 
     // Command to compile musl libc
     // const make_command = b.fmt("CONFIG_USER_DEBUG_BUILD=y CONFIG_ARCH_AARCH64=y C_COMPILER=aarch64-none-elf-gcc TOOLPREFIX=aarch64-none-elf- SOURCE_DIR=. STAGE_DIR=../../components/fs/fat/build make");
-    const make_command = b.fmt("CONFIG_USER_DEBUG_BUILD=y CONFIG_ARCH_AARCH64=y C_COMPILER=clang TOOLPREFIX= NK_CFLAGS=\"-mstrict-align -ffreestanding -g -O0 -Wall -Wno-unused-function -target aarch64-none-elf -no-integrated-as\" SOURCE_DIR=. STAGE_DIR=../../components/fs/fat/build make");
+    // const make_command = b.fmt("CONFIG_USER_DEBUG_BUILD=y CONFIG_ARCH_AARCH64=y C_COMPILER=clang TOOLPREFIX= NK_CFLAGS=\"-mstrict-align -ffreestanding -g -O0 -Wall -Wno-unused-function -target aarch64-none-elf -no-integrated-as\" SOURCE_DIR=. STAGE_DIR=../../components/fs/fat/build make", .{});
 
-    const make_step = b.addSystemCommand(&[_][]const u8{
-        "sh", "-c", make_command,
-    }, "Call Makefile to build dependencies");
+    // const make_step = b.addSystemCommand(&[_][]const u8{
+    //     "sh", "-c", make_command,
+    // });
+    // make_step.setCwd(.{ .path = "../../../dep/musllibc/" });
 
-    make_step.setCwd(.{ .path = "../../dep/musllibc/" });
+    // b.default_step = &(make_step.step);
 
-    b.default_step = make_step.step;
-
+    // Include musllibc
+    fs.addIncludePath(.{ .path = "build/include/" });
     fs.addObjectFile(.{ .path = "build/lib/libc.a" });
 
-    // Add all source files
+    // Add all file system related source files
     fs.addCSourceFile(.{ .file = b.path("AsyncFATFs.c"), .flags = &.{"-mstrict-align"} });
     fs.addCSourceFile(.{ .file = b.path("AsyncFATFunc.c"), .flags = &.{"-mstrict-align"} });
     fs.addCSourceFile(.{ .file = b.path("Asyncdiskio.c"), .flags = &.{"-mstrict-align"} });
-    fs.addCSourceFile(.{ .file = b.path("ff15/source/ff.c"), .flags = &.{"-mstrict-align -nostdlib"} });
+    fs.addCSourceFile(.{
+        .file = b.path("ff15/source/ff.c"),
+        .flags = &.{ "-mstrict-align", "-nostdlib" },
+    });
     fs.addCSourceFile(.{ .file = b.path("ff15/source/ffunicode.c"), .flags = &.{"-mstrict-align"} });
 
     // For printf
-    // fs.addCSourceFile(.{ .file = b.path("../../../dep/sddf/util/printf.c"), .flags = &.{"-mstrict-align"} });
+    // const printf_src_file = collectCSourceFilesFromDir("../../../dep/sddf/util/", &std.heap.page_allocator);
+    // fs.addCSourceFiles(.{
+    //    .files = &printf_src_file,
+    //    .flags = &.{
+    //        "-mstrict-align",
+    //    },
+    // });
 
     fs.setLinkerScript(.{ .path = libmicrokit_linker_script });
 
