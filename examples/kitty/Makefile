@@ -78,7 +78,7 @@ VMM_OBJS := vmm.o printf.o virq.o linux.o \
 
 TIMER_DRIVER := $(SDDF)/drivers/clock/meson
 
-all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
+all: submodules $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -283,6 +283,12 @@ directories:
 	$(shell mkdir -p $(BUILD_DIR)/lwip/src/netif)
 	$(shell mkdir -p $(BUILD_DIR)/lwip/src/core/ipv4)
 	$(shell mkdir -p $(BUILD_DIR)/nfs)
+
+submodules:
+	@if git submodule status | egrep -q '^[-]' ; then \
+			git submodule update --init; \
+			cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib ; \
+	fi
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
 	$(MICROKIT_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
