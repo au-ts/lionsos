@@ -1,1 +1,3 @@
-static inline void mp_hal_set_interrupt_char(char c) {}
+#include "shared/runtime/interrupt_char.h"
+
+int process_sddf_rx_chr(void);

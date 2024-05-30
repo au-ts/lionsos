@@ -4,39 +4,84 @@
 #include "micropython.h"
 #include "py/mpconfig.h"
 #include <sddf/serial/queue.h>
+#include "py/stream.h"
+#include "py/ringbuf.h"
+#include "shared/runtime/interrupt_char.h"
 
 extern serial_queue_handle_t serial_rx_queue;
 extern serial_queue_handle_t serial_tx_queue;
 
+/* This is the internal micropython ringbuffer we will copy into from our sDDF
+ringbuffers. */
+STATIC uint8_t stdin_ringbuf_array[NUM_ENTRIES];
+ringbuf_t stdin_ringbuf = { stdin_ringbuf_array, sizeof(stdin_ringbuf_array) };
+
+int process_sddf_rx_chr(void) {
+    /* Check if our stdin_ringbuf is full. If it is, then we will
+    let the sDDF queues buffer our input. */
+    int retval = 0;
+
+    while (!serial_queue_empty(serial_rx_queue.active) && ringbuf_free(&stdin_ringbuf) != 0) {
+        // Dequeue buffer and return char
+        uintptr_t buffer = 0;
+        unsigned int buffer_len = 0;
+        int ret = serial_dequeue_active(&serial_rx_queue, &buffer, &buffer_len);
+        if (ret) {
+            microkit_dbg_puts("MP|ERROR: could not dequeue serial RX used buffer\n");
+            return 0;
+        }
+
+        char ch = ((char *)buffer)[0];
+
+        ret = serial_enqueue_free(&serial_rx_queue, buffer, BUFFER_SIZE);
+        if (ret) {
+            microkit_dbg_puts("MP|ERROR: could not enqueue serial RX free buffer\n");
+            return 0;
+        }
+
+        if (ch == mp_interrupt_char) {
+            mp_sched_keyboard_interrupt();
+            /* Delete all previous buffer entries. */
+            memset(stdin_ringbuf_array, sizeof(uint8_t) * NUM_ENTRIES);
+            stdin_ringbuf.iget = 0;
+            stdin_ringbuf.iput = 0;
+            retval = 1;
+            break;
+        }
+
+        /* Add this character to our MP stdin_ringbuf. */
+        int re1t = ringbuf_put(&stdin_ringbuf, ch);
+        if (re1t == -1) {
+            microkit_dbg_puts("ERR: unable to place char in internal ringbuf\n");
+        }
+
+    }
+
+    return retval;
+}
+
 // Receive single character, blocking until one is available.
 int mp_hal_stdin_rx_chr(void) {
-    // Wait for a notification from the RX multiplexer if we do not have
-    // any data to process.
-
-    // This is in a loop because the notification for a particular
-    // buffer may only be delivered after we have already consumed it.
-    while(serial_queue_empty(serial_rx_queue.active)) {
-        await(mp_event_source_serial);
+    /* We will process all data in our MP stdin_ringbuf, if that is empty
+    and we are still attempting to read, we will await a notif from the rx
+    multiplexer. */
+    int c = 0;
+    if (ringbuf_peek(&stdin_ringbuf) != -1) {
+        /* There is nothing left in the internal ringbuf */
+        c = ringbuf_get(&stdin_ringbuf);
+    } else {
+        /* We will await on a serial event here. Once the serial event has occured, we should have populated the internal ringbuffer with a character. */
+        while (ringbuf_peek(&stdin_ringbuf) == -1) {
+            await(mp_event_source_serial);
+        }
+        c = ringbuf_get(&stdin_ringbuf);
     }
 
-    // Dequeue buffer and return char
-    uintptr_t buffer = 0;
-    unsigned int buffer_len = 0;
-    int ret = serial_dequeue_active(&serial_rx_queue, &buffer, &buffer_len);
-    if (ret) {
-        microkit_dbg_puts("MP|ERROR: could not dequeue serial RX used buffer\n");
-        return 0;
-    }
+    /* Proces the sDDF queues again, in the case that we have buffered our input
+    in them. */
+    process_sddf_rx_chr();
 
-    char ch = ((char *)buffer)[0];
-
-    ret = serial_enqueue_free(&serial_rx_queue, buffer, BUFFER_SIZE);
-    if (ret) {
-        microkit_dbg_puts("MP|ERROR: could not enqueue serial RX free buffer\n");
-        return 0;
-    }
-
-    return ch;
+    return c;
 }
 
 // Send the string of given length.
@@ -68,4 +113,15 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
     }
 
     microkit_notify(SERIAL_TX_CH);
+}
+
+uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
+    uintptr_t ret = 0;
+    if ((poll_flags & MP_STREAM_POLL_RD) && ringbuf_peek(&stdin_ringbuf)) {
+        ret |= MP_STREAM_POLL_RD;
+    }
+    if ((poll_flags & MP_STREAM_POLL_WR) && !serial_queue_empty(serial_tx_queue.free)) {
+        ret |= MP_STREAM_POLL_WR;
+    }
+    return ret;
 }
