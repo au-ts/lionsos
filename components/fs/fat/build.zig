@@ -16,6 +16,7 @@ const targets = [_]Target{ .{
         .cpu_model = .{ .explicit = &std.Target.arm.cpu.cortex_a53 },
         .os_tag = .freestanding,
         .abi = .none,
+        .ofmt = .elf,
     },
 }, .{
     .board = MicrokitBoard.odroidc4,
@@ -24,6 +25,7 @@ const targets = [_]Target{ .{
         .cpu_model = .{ .explicit = &std.Target.arm.cpu.cortex_a55 },
         .os_tag = .freestanding,
         .abi = .none,
+        .ofmt = .elf,
     },
 }, .{
     .board = MicrokitBoard.maaxboard,
@@ -32,6 +34,7 @@ const targets = [_]Target{ .{
         .cpu_model = .{ .explicit = &std.Target.arm.cpu.cortex_a53 },
         .os_tag = .freestanding,
         .abi = .none,
+        .ofmt = .elf,
     },
 } };
 
@@ -106,7 +109,7 @@ pub fn build(b: *std.Build) void {
     const libmicrokit_include = b.fmt("{s}/include", .{microkit_board_dir});
 
     const fs = b.addExecutable(.{
-        .name = "FatFs",
+        .name = "FatFs.elf",
         .target = target,
         .optimize = optimize,
         .strip = false,
