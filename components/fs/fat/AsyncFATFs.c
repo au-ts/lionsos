@@ -19,7 +19,7 @@
 #define SDDF_ARGS_SIZE 6
 
 #ifdef FS_DEBUG_PRINT
-#include "../../vmm/src/util/printf.h"
+#include "../../../dep/sddf/include/sddf/util/printf.h"
 #endif
 
 blk_queue_handle_t blk_queue_handle_memory;
@@ -186,7 +186,7 @@ void notified(microkit_channel ch) {
                 blk_dequeue_resp(blk_queue_handle, &status, &success_count, &id);
                 
                 #ifdef FS_DEBUG_PRINT
-                printf_("blk_dequeue_resp: status: %d addr: 0x%lx count: %d success_count: %d ID: %d\n", status, addr, count, success_count, id);
+                sddf_printf("blk_dequeue_resp: status: %d addr: 0x%lx count: %d success_count: %d ID: %d\n", status, addr, count, success_count, id);
                 #endif
 
                 FiberPool_SetArgs(RequestPool[id].handle, (void* )(status));

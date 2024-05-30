@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <memory_region name="uart" size="0x1_000" phys_addr="0xff803000" />
+    
+    <!-- serial DMA and virtualised DMA regions -->
+    <memory_region name="serial_tx_data_driver" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="serial_tx_data_micropython" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="serial_rx_data_driver" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="serial_rx_data_micropython" size="0x200_000" page_size="0x200_000" />
+
+    <!-- shared memory for serial driver/serial virt queue mechanism -->
+    <memory_region name="serial_rx_free_driver" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_rx_active_driver" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_tx_free_driver" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_tx_active_driver" size="0x200_000" page_size="0x200_000"/>
+
+    <!-- shared memory for serial virt/client queue mechanism -->
+    <memory_region name="serial_tx_free_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_tx_active_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_rx_free_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="serial_rx_active_micropython" size="0x200_000" page_size="0x200_000"/>
+
+    <!-- shared memory for micropython/nfs queue -->
+    <memory_region name="shared_nfs_micropython" size="0x4000000" />
+    <memory_region name="nfs_command_queue" size="0x8_000" />
+    <memory_region name="nfs_completion_queue" size="0x8_000" />
+    
+    <protection_domain name="uart_driver" priority="100" >
+        <program_image path="uart_driver.elf" />
+        <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+
+        <map mr="serial_rx_free_driver" vaddr="0x40_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
+        <map mr="serial_rx_active_driver" vaddr="0x40_200_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
+        <map mr="serial_tx_free_driver" vaddr="0x40_400_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
+        <map mr="serial_tx_active_driver" vaddr="0x40_600_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
+
+        <map mr="serial_tx_data_driver" vaddr="0x50_000_000" perms="rw" cached="true" />
+        <map mr="serial_rx_data_driver" vaddr="0x50_200_000" perms="rw" cached="true" />
+
+        <irq irq="225" id="1" trigger="edge" /> <!-- IRQ for UART -->
+    </protection_domain>
+
+    <protection_domain name="serial_virt_tx" priority="99" >
+        <program_image path="serial_virt_tx.elf" />
+        <map mr="serial_tx_free_driver" vaddr="0x40_400_000" perms="rw" cached="true" setvar_vaddr="tx_free_driver" />
+        <map mr="serial_tx_active_driver" vaddr="0x40_600_000" perms="rw" cached="true" setvar_vaddr="tx_active_driver" />
+
+        <map mr="serial_tx_free_micropython" vaddr="0x60_000_000" perms="rw" cached="true" setvar_vaddr="tx_free_client" />
+        <map mr="serial_tx_active_micropython" vaddr="0x60_200_000" perms="rw" cached="true" setvar_vaddr="tx_active_client" />
+
+        <map mr="serial_tx_data_driver" vaddr="0x50_000_000" perms="rw" cached="true" setvar_vaddr="tx_data_driver" />
+        <map mr="serial_tx_data_micropython" vaddr="0x50_400_000" perms="rw" cached="true" setvar_vaddr="tx_data_client" />
+    </protection_domain>
+
+    <protection_domain name="serial_virt_rx" priority="98" >
+        <program_image path="serial_virt_rx.elf" />
+        <map mr="serial_rx_free_driver" vaddr="0x40_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_driver" />
+        <map mr="serial_rx_active_driver" vaddr="0x40_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_driver" />
+
+        <map mr="serial_rx_free_micropython" vaddr="0x60_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_client" />
+        <map mr="serial_rx_active_micropython" vaddr="0x60_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_client" />
+
+        <map mr="serial_rx_data_driver" vaddr="0x50_200_000" perms="rw" cached="true" setvar_vaddr="rx_data_driver" />
+        <map mr="serial_rx_data_micropython" vaddr="0x50_600_000" perms="rw" cached="true" setvar_vaddr="rx_data_client" />
+    </protection_domain>
+
+    <protection_domain name="micropython" priority="1">
+        <program_image path="micropython.elf" />
+        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="nfs_command_queue" />
+        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="nfs_completion_queue" />
+        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="nfs_share" />
+
+        <map mr="serial_tx_free_micropython" vaddr="0x60_000_000" perms="rw" cached="true" setvar_vaddr="serial_tx_free" />
+        <map mr="serial_tx_active_micropython" vaddr="0x60_200_000" perms="rw" cached="true" setvar_vaddr="serial_tx_active" />
+        <map mr="serial_rx_free_micropython" vaddr="0x70_000_000" perms="rw" cached="true" setvar_vaddr="serial_rx_free" />
+        <map mr="serial_rx_active_micropython" vaddr="0x70_200_000" perms="rw" cached="true" setvar_vaddr="serial_rx_active" />
+        <map mr="serial_tx_data_micropython" vaddr="0x50_400_000" perms="rw" cached="true" setvar_vaddr="serial_tx_data" />
+        <map mr="serial_rx_data_micropython" vaddr="0x50_600_000" perms="rw" cached="true" setvar_vaddr="serial_rx_data" />
+    </protection_domain>
+    
+    <!-- FAT File system -->
+    <protection_domain name="FatFs" priority="100" pp="true">
+        <program_image path="FatFs.elf" />
+        <map mr="blk_config_vmm_1" vaddr="0x30000000" perms="rw" cached="false" setvar_vaddr="config"/>
+        <map mr="req_blk_vmm_1" vaddr="0x30200000" perms="rw" cached="false" setvar_vaddr="request" />
+        <map mr="resp_blk_vmm_1" vaddr="0x30400000" perms="rw" cached="false" setvar_vaddr="response" />
+        <map mr="data_blk_vmm_1" vaddr="0x30600000" perms="rw" cached="false" setvar_vaddr="fs_metadata"/>
+
+        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="Fatfs_command_queue" />
+        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="Fatfs_completion_queue" />
+        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" />
+
+        <map mr="coroutine_stack1" vaddr="0x32000000" perms="rw" cached="true" setvar_vaddr="Coroutine_STACK_ONE" />
+        <map mr="coroutine_stack2" vaddr="0x32050000" perms="rw" cached="true" setvar_vaddr="Coroutine_STACK_TWO" />
+        <map mr="coroutine_stack3" vaddr="0x32100000" perms="rw" cached="true" setvar_vaddr="Coroutine_STACK_THREE" />
+        <map mr="coroutine_stack4" vaddr="0x32150000" perms="rw" cached="true" setvar_vaddr="Coroutine_STACK_FOUR" />
+    </protection_domain>
+
+</system>
