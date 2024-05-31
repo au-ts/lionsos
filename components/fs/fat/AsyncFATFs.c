@@ -200,6 +200,8 @@ void notified(microkit_channel ch) {
 
     // This variable track if the fs should send back reply to the file system client
     bool Client_have_replies = false;
+
+    blk_request_pushed = false;
     
     // Compromised code here, mount file system itself
     // This part can be a little bit ugly as I have not thought of mount the file system itself 
@@ -210,9 +212,17 @@ void notified(microkit_channel ch) {
         if (blk_request_pushed == true) {
             microkit_notify(Server_CH);
         }
-        if (RequestPool[1].handle == INVALID_COHANDLE && RequestPool[1].stat == INUSE) {
+        if (RequestPool[1].handle == INVALID_COHANDLE && RequestPool[1].stat == INUSE && RequestPool[1].args[Status_bit] == ASYNCFR_OK) {
             RequestPool[1].stat = FREE;
             fat_mounted = true;
+            #ifdef FS_DEBUG_PRINT
+            sddf_printf("Auto mounting fat file system succeed\n");
+            #endif
+        }
+        else if (RequestPool[1].handle == INVALID_COHANDLE && RequestPool[1].stat == INUSE) {
+            #ifdef FS_DEBUG_PRINT
+            sddf_printf("Auto mounting fat file system failed, file system not available \n");
+            #endif
         }
     }
 
