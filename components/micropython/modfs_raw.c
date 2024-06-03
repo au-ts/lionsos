@@ -178,6 +178,7 @@ STATIC mp_obj_t complete_stat(mp_obj_t request_id_in) {
     fs_buffer_free(command.args[0]);
 
     if (completion.status) {
+        fs_buffer_free(command.args[2]);
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
