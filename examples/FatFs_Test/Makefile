@@ -6,7 +6,8 @@
 #
 
 # Command to compile and run the img
-#  make BOARD=qemu_arm_virt MICROKIT_SDK=~/Sel4/libvmm-blk_benchmark/examples/blk_benchmark/sdk qemu
+# make BOARD=qemu_arm_virt MICROKIT_SDK=~/Sel4/libvmm-blk_benchmark/examples/blk_benchmark/sdk qemu
+# make MICROKIT_SDK=~/Sel4/microkit-sdk-1.2.6
 
 
 
