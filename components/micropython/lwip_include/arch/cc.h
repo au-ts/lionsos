@@ -21,9 +21,9 @@ typedef int64_t  s64_t;
 typedef uintptr_t mem_ptr_t;
 
 
-#define U16_F "hu"
+#define U16_F "u"
 #define S16_F "d"
-#define X16_F "hx"
+#define X16_F "x"
 #define U32_F "u"
 #define S32_F "d"
 #define X32_F "x"
