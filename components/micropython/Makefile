@@ -26,6 +26,11 @@ CROSS_COMPILE ?= aarch64-none-elf-
 CPU ?= cortex-a55
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 
+DIRECTORIES := $(BUILD)/micropython/lwip/core \
+	      $(BUILD)/micropython/lwip/netif \
+	      $(BUILD)/micropython/lwip/core/ipv4
+
+
 # Set CFLAGS and libraries.
 CFLAGS += \
 	-I. \
@@ -116,9 +121,6 @@ SRC_C = \
 	shared/libc/__errno.c \
 	shared/timeutils/timeutils.c \
 	shared/netutils/netutils.c \
-	$(LIBCO)/libco.c \
-	$(SDDF_UTIL)/printf.c \
-	$(SDDF_UTIL)/putchar_debug.c
 
 
 # Define source files containung qstrs.
@@ -142,9 +144,9 @@ CFLAGS += -DENABLE_FRAMEBUFFER
 endif
 
 # Define the required object files.
-OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ) $(BUILD)/sddf_util_cache.o
+OBJ := $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ)
 
-all: directories $(BUILD)/micropython.elf
+all:  $(BUILD)/micropython.elf
 
 $(BUILD)/newlibc.o: $(SDDF_UTIL)/newlibc.c
 	$(CC) -c $(CFLAGS) $(SDDF_UTIL)/newlibc.c -o $(BUILD)/newlibc.o
@@ -157,11 +159,15 @@ $(BUILD)/micropython.elf: $(OBJ)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
 
+${BUILD}/micropython.elf: LIBS+= ${BUILD_DIR}/libco.a ${BUILD_DIR}/libsddf_util_debug.a
+${BUILD}/micropython.elf: |${DIRECTORIES}
+${BUILD}/micropython.elf: |${BUILD}/micropython/submodules-stamp
+
 # Include remaining core make rules.
 include $(TOP)/py/mkrules.mk
 
-directories:
-	$(shell mkdir -p $(BUILD)/micropython/lwip/)
-	$(shell mkdir -p $(BUILD)/micropython/lwip/core)
-	$(shell mkdir -p $(BUILD)/micropython/lwip/netif)
-	$(shell mkdir -p $(BUILD)/micropython/lwip/core/ipv4)
+${DIRECTORIES}:
+	mkdir -p $@
+
+${BUILD}/micropython/submodules-stamp:
+	touch $@

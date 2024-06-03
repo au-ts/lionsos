@@ -98,13 +98,13 @@
     </protection_domain>
 
     <protection_domain name="timer_driver" priority="150" pp="true" passive="true">
-        <program_image path="timer.elf" />
+        <program_image path="timer_driver.elf" />
         <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" />
         <irq irq="42" id="0" trigger="edge" /> <!-- timer interrupt -->
     </protection_domain>
 
     <protection_domain name="eth" priority="110" budget="100" period="400">
-        <program_image path="ethernet.elf" />
+        <program_image path="eth_driver.elf" />
         <map mr="eth" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth_regs" />
         <map mr="hw_ring_buffer" vaddr="0x2_200_000" perms="rw" cached="false" setvar_vaddr="hw_ring_buffer_vaddr" />
 
@@ -119,7 +119,7 @@
     </protection_domain>
 
     <protection_domain name="eth_virt_rx" priority="108" pp="true" budget="100" period="500" >
-        <program_image path="eth_virt_rx.elf" />
+        <program_image path="network_virt_rx.elf" />
         <map mr="eth_rx_free_drv" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_drv" />
         <map mr="eth_rx_active_drv" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_drv" />
 
@@ -133,7 +133,7 @@
     </protection_domain>
 
     <protection_domain name="eth_copy_nfs" priority="99" budget="100" period="500" >
-        <program_image path="eth_copy.elf" />
+        <program_image path="copy.elf" />
         <map mr="eth_rx_free_copy_nfs" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_virt" />
         <map mr="eth_rx_active_copy_nfs" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_virt" />
 
@@ -145,7 +145,7 @@
     </protection_domain>
 
     <protection_domain name="eth_copy_mp" priority="97" budget="20000" >
-        <program_image path="eth_copy.elf" />
+        <program_image path="copy.elf" />
         <map mr="eth_rx_free_copy_micropython" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_virt" />
         <map mr="eth_rx_active_copy_micropython" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_virt" />
 
@@ -157,7 +157,7 @@
     </protection_domain>
 
     <protection_domain name="eth_virt_tx" priority="109" budget="100" period="500" >
-        <program_image path="eth_virt_tx.elf" />
+        <program_image path="network_virt_tx.elf" />
         <map mr="eth_tx_free_drv" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="tx_free_drv" />
         <map mr="eth_tx_active_drv" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="tx_active_drv" />
 
@@ -188,7 +188,7 @@
     </protection_domain>
 
     <protection_domain name="serial_virt_tx" priority="99" >
-        <program_image path="serial_virt_tx.elf" />
+        <program_image path="serial_tx_virt.elf" />
         <map mr="serial_tx_free_driver" vaddr="0x40_400_000" perms="rw" cached="true" setvar_vaddr="tx_free_driver" />
         <map mr="serial_tx_active_driver" vaddr="0x40_600_000" perms="rw" cached="true" setvar_vaddr="tx_active_driver" />
 
@@ -200,7 +200,7 @@
     </protection_domain>
 
     <protection_domain name="serial_virt_rx" priority="98" >
-        <program_image path="serial_virt_rx.elf" />
+        <program_image path="serial_rx_virt.elf" />
         <map mr="serial_rx_free_driver" vaddr="0x40_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_driver" />
         <map mr="serial_rx_active_driver" vaddr="0x40_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_driver" />
 
