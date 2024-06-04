@@ -170,7 +170,9 @@ void init(void) {
   must also be empty.
 */
 void notified(microkit_channel ch) {
-    //printf("FS IRQ received: %d\n", ch);
+    #ifdef FS_DEBUG_PRINT
+    sddf_printf("FS IRQ received::%d\n", ch);
+    #endif
     union sddf_fs_message message;
     // Compromised code here, polling for server's state until it is ready
     while (!config->ready) {}
@@ -186,7 +188,7 @@ void notified(microkit_channel ch) {
                 blk_dequeue_resp(blk_queue_handle, &status, &success_count, &id);
                 
                 #ifdef FS_DEBUG_PRINT
-                sddf_printf("blk_dequeue_resp: status: %d addr: 0x%lx count: %d success_count: %d ID: %d\n", status, addr, count, success_count, id);
+                sddf_printf("blk_dequeue_resp: status: %d success_count: %d ID: %d\n", status, success_count, id);
                 #endif
 
                 FiberPool_SetArgs(RequestPool[id].handle, (void* )(status));
@@ -195,6 +197,9 @@ void notified(microkit_channel ch) {
             break;
         }
         default:
+            #ifdef FS_DEBUG_PRINT
+            sddf_printf("Unknown channel:%d\n", ch);
+            #endif
             return;
     }
 
