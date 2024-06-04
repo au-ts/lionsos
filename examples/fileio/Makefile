@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
+# make MICROKIT_SDK=~/Sel4/microkit-sdk-1.2.6
 ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
@@ -95,7 +96,7 @@ SERIAL_VIRT_RX_OBJS := serial_virt_rx.o
 SERIAL_VIRT_TX_OBJS := serial_virt_tx.o
 
 SERIAL_INCLUDES := -I$(SDDF)/util/include -I$(UART_DRIVER)/include
-SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=1
+SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=2
 
 $(BUILD_DIR)/uart_driver.o: $(UART_DRIVER)/uart.c
 	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $< -o $@

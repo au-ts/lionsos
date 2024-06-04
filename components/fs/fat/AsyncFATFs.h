@@ -1,5 +1,7 @@
 #include "ff15/source/ff.h"
 
+# define FS_DEBUG_PRINT
+
 typedef enum {
 	ASYNCFR_OK = 0,				/* (0) Succeeded */
 	ASYNCFR_DISK_ERR,			/* (1) A hard error occurred in the low level disk I/O layer */

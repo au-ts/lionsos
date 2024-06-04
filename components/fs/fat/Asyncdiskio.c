@@ -1,11 +1,13 @@
 #include "ff15/source/ff.h"
 #include "ff15/source/diskio.h"
+#include "AsyncFATFs.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include "../../../dep/sddf/include/sddf/blk/queue.h"
 #include "FiberPool/FiberPool.h"
+
 #ifdef FS_DEBUG_PRINT
-#include "../../vmm/src/util/printf.h"
+#include "../../../dep/sddf/include/sddf/util/printf.h"
 #endif
 
 #define SD 0 /* Map SD card to physical drive 0 */

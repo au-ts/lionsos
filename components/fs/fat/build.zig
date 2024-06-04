@@ -1,5 +1,6 @@
 // Zig build script for building FatFs
 // zig build -Dsdk=../../../../libvmm-blk_benchmark/examples/blk_benchmark/sdk -Dboard=odroidc4
+// zig build -Dsdk=/home/li/Sel4/microkit-sdk-1.2.6 -Dboard=odroidc4
 const std = @import("std");
 
 const MicrokitBoard = enum { qemu_arm_virt, odroidc4, maaxboard };
@@ -154,6 +155,9 @@ pub fn build(b: *std.Build) void {
         .flags = &.{ "-mstrict-align", "-nostdlib" },
     });
     fs.addCSourceFile(.{ .file = b.path("ff15/source/ffunicode.c"), .flags = &.{"-mstrict-align"} });
+
+    fs.addCSourceFile(.{ .file = b.path("../../../dep/sddf/util/printf.c"), .flags = &.{"-mstrict-align"} });
+    fs.addCSourceFile(.{ .file = b.path("../../../dep/sddf/util/putchar_debug.c"), .flags = &.{"-mstrict-align"} });
 
     // For printf
     // const printf_src_file = collectCSourceFilesFromDir("../../../dep/sddf/util/", &std.heap.page_allocator);
