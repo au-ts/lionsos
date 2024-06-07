@@ -328,7 +328,7 @@ void handle_pwrite(uint64_t request_id, fd_t fd, char *buf, uint64_t nbyte, uint
     cont->request_id = request_id;
     cont->data[0] = fd;
 
-    err = nfs_pwrite_async(nfs, file_handle, offset, nbyte, buf, pwrite_cb, cont);
+    err = nfs_pwrite_async(nfs, file_handle, buf, nbyte, offset, pwrite_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
