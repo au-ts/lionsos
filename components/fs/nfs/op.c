@@ -147,7 +147,7 @@ void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data
     continuation_free(cont);
 }
 
-void handle_open(uint64_t request_id, const char *path, int flags, int mode) {
+void handle_open(uint64_t request_id, const char *path, uint64_t flags) {
     int err;
 
     fd_t fd;
@@ -166,7 +166,21 @@ void handle_open(uint64_t request_id, const char *path, int flags, int mode) {
     cont->request_id = request_id;
     cont->data[0] = fd;
 
-    err = nfs_open2_async(nfs, path, flags, mode, open_cb, cont);
+    int posix_flags = 0;
+    if (flags & SDDF_FS_OPEN_FLAGS_READ_ONLY) {
+        posix_flags |= O_RDONLY;
+    }
+    if (flags & SDDF_FS_OPEN_FLAGS_WRITE_ONLY) {
+        posix_flags |= O_WRONLY;
+    }
+    if (flags & SDDF_FS_OPEN_FLAGS_READ_WRITE) {
+        posix_flags |= O_RDWR;
+    }
+    if (flags & SDDF_FS_OPEN_FLAGS_CREATE) {
+        posix_flags |= O_CREAT;
+    }
+
+    err = nfs_open2_async(nfs, path, posix_flags, 0644, open_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -716,14 +730,13 @@ void nfs_notified(void) {
             char *path = client_share + path_offset;
             uint64_t path_len = cmd.args[1];
             uint64_t flags = cmd.args[2];
-            uint64_t mode = cmd.args[3];
             if (!buffer_valid(path, path_len)) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
             }
             path[path_len - 1] = '\0';
-            handle_open(request_id, path, flags, mode);
+            handle_open(request_id, path, flags);
             break;
         }
         case SDDF_FS_CMD_STAT: {
