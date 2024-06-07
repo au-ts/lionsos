@@ -36,7 +36,7 @@ LIONSOS ?= ../..
 SDDF := $(LIONSOS)/dep/sddf
 LIBVMM := $(LIONSOS)/dep/libvmm
 
-IMAGES := micropython.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf
+IMAGES := micropython.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf fatfs.elf blk_virt.elf blk_driver_vmm.elf
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
@@ -55,7 +55,7 @@ CFLAGS := \
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld
 
-IMAGE_FILE := $(BUILD_DIR)/kitty.img
+IMAGE_FILE := $(BUILD_DIR)/fileio.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
 all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
@@ -116,8 +116,8 @@ $(BUILD_DIR)/serial_virt_rx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_RX_OBJ
 $(BUILD_DIR)/serial_virt_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_TX_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
-	$(MICROKIT_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) fileio.system
+	$(MICROKIT_TOOL) fileio.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 FORCE: ;
 
