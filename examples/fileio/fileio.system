@@ -52,6 +52,11 @@
     <memory_region name="req_blk_vmm_1" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="resp_blk_vmm_1" size="0x200_000" page_size="0x200_000"/>
 
+    <memory_region name="blk_config_driver" size="0x1000" page_size="0x1000" />
+    <memory_region name="req_blk_driver" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="resp_blk_driver" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="data_blk_driver" size="0x200_000" page_size="0x200_000" />
+
     <protection_domain name="uart_driver" priority="100" >
         <program_image path="uart_driver.elf" />
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
@@ -117,8 +122,8 @@
     </protection_domain>
     
     <!-- FAT File system -->
-    <protection_domain name="FatFs" priority="100" pp="true">
-        <program_image path="FatFs.elf" />
+    <protection_domain name="fatfs" priority="100" pp="true">
+        <program_image path="fatfs.elf" />
         <map mr="blk_config_vmm_1" vaddr="0x30000000" perms="rw" cached="false" setvar_vaddr="config"/>
         <map mr="req_blk_vmm_1" vaddr="0x30200000" perms="rw" cached="false" setvar_vaddr="request" />
         <map mr="resp_blk_vmm_1" vaddr="0x30400000" perms="rw" cached="false" setvar_vaddr="response" />
@@ -149,18 +154,26 @@
 
     <!-- UIO irq status page -->
     <memory_region name="uio_irq_status" size="0x1000" page_size="0x1000" />
-    
+
+    <memory_region name="blk_driver_vm_ram" size="0x6_000_000" page_size="0x200_000" phys_addr="0x20_000_000"/>
+    <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0xffc06000" />
+    <memory_region name="sd" size="0x1000" phys_addr="0xffe05000" />
+    <memory_region name="bus1" size="0x200000" phys_addr="0xff600000" />
+    <memory_region name="bus2-1" size="0x3000" phys_addr="0xff800000" />
+    <memory_region name="bus2-2" size="0x96000" phys_addr="0xff804000" />
+    <memory_region name="bus3" size="0x100000" phys_addr="0xffd00000" />
+
     <protection_domain name="BLK_DRIVER_VMM" priority="200" budget="100" period="400">
         <program_image path="blk_driver_vmm.elf" />
         <map mr="blk_driver_vm_ram" vaddr="0x20000000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
 
-        <map mr="rx_free_serial_vmm_3" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="serial_rx_free" />
-        <map mr="rx_active_serial_vmm_3" vaddr="0x6_200_000" perms="rw" cached="true" setvar_vaddr="serial_rx_active" />
-        <map mr="tx_free_serial_vmm_3" vaddr="0x103_400_000" perms="rw" cached="true" setvar_vaddr="serial_tx_free" />
-        <map mr="tx_active_serial_vmm_3" vaddr="0x103_600_000" perms="rw" cached="true" setvar_vaddr="serial_tx_active" />
+        <map mr="serial_rx_free_blk_vm" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="serial_rx_free" />
+        <map mr="serial_rx_active_blk_vm" vaddr="0x6_200_000" perms="rw" cached="true" setvar_vaddr="serial_rx_active" />
+        <map mr="serial_tx_free_blk_vm" vaddr="0x103_400_000" perms="rw" cached="true" setvar_vaddr="serial_tx_free" />
+        <map mr="serial_tx_active_blk_vm" vaddr="0x103_600_000" perms="rw" cached="true" setvar_vaddr="serial_tx_active" />
 
-        <map mr="tx_data_serial_vmm_3" vaddr="0x8_c00_000" perms="rw" cached="true" setvar_vaddr="serial_tx_data" />
-        <map mr="rx_data_serial_vmm_3" vaddr="0x8_e00_000" perms="rw" cached="true" setvar_vaddr="serial_rx_data" />
+        <map mr="serial_tx_data_blk_vm" vaddr="0x8_c00_000" perms="rw" cached="true" setvar_vaddr="serial_tx_data" />
+        <map mr="serial_rx_data_blk_vm" vaddr="0x8_e00_000" perms="rw" cached="true" setvar_vaddr="serial_rx_data" />
 
         <virtual_machine name="blk_driver_linux" id="0" priority="200">
             <map mr="blk_driver_vm_ram" vaddr="0x20000000" perms="rwx" />
@@ -170,7 +183,6 @@
             <map mr="sd" vaddr="0xffe05000" perms="rw" cached="false" />
             <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
             <map mr="bus2-1" vaddr="0xff800000" perms="rw" cached="false" />
-            <map mr="uart" vaddr="0xff803000" perms="rw" cached="false" />
             <map mr="bus2-2" vaddr="0xff804000" perms="rw" cached="false" />
             <map mr="bus3" vaddr="0xffd00000" perms="rw" cached="false" />
 
@@ -209,11 +221,11 @@
     
     <channel>
         <end pd="micropython" id="7"/>
-        <end pd="FatFs" id="1"/>
+        <end pd="fatfs" id="1"/>
     </channel>
 
     <channel>
-        <end pd="FatFs" id="2"/>
+        <end pd="fatfs" id="2"/>
         <end pd="BLK_VIRT" id="3"/>
     </channel>
 
