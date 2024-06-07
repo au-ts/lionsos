@@ -179,22 +179,19 @@ mp_obj_t mp_vfs_sddf_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, m
     mp_obj_vfs_sddf_fs_file_t *o = m_new_obj(mp_obj_vfs_sddf_fs_file_t);
     const char *mode_s = mp_obj_str_get_str(mode_in);
 
-    int mode_rw = 0, mode_x = 0;
+    uint64_t flags = 0;
     while (*mode_s) {
         switch (*mode_s++) {
             case 'r':
-                mode_rw = O_RDONLY;
+                flags |= SDDF_FS_OPEN_FLAGS_READ_ONLY;
                 break;
             case 'w':
-                mode_rw = O_WRONLY;
-                mode_x = O_CREAT | O_TRUNC;
-                break;
             case 'a':
-                mode_rw = O_WRONLY;
-                mode_x = O_CREAT | O_APPEND;
+                flags |= SDDF_FS_OPEN_FLAGS_WRITE_ONLY;
+                flags |= SDDF_FS_OPEN_FLAGS_CREATE;
                 break;
             case '+':
-                mode_rw = O_RDWR;
+                flags |= SDDF_FS_OPEN_FLAGS_READ_WRITE;
                 break;
             case 'b':
                 type = &mp_type_vfs_sddf_fs_fileio;
@@ -227,7 +224,7 @@ mp_obj_t mp_vfs_sddf_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, m
     strcpy(fs_buffer_ptr(path_buffer), fname);
 
     struct sddf_fs_completion completion;
-    fs_command_blocking(&completion, SDDF_FS_CMD_OPEN, path_buffer, path_len, mode_x | mode_rw, 0644);
+    fs_command_blocking(&completion, SDDF_FS_CMD_OPEN, path_buffer, path_len, flags, 0);
 
     fs_buffer_free(path_buffer);
     if (completion.status != 0) {
