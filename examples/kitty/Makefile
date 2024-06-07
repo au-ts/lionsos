@@ -19,10 +19,12 @@ endif
 
 LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
 
+
 MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
 MICROKIT_BOARD := odroidc4
 ETHERNET_CONFIG_INCLUDE ?= src/ethernet_config
+SERIAL_CONFIG_INCLUDE ?= src/serial_config
 CPU := cortex-a55
 
 TOOLCHAIN := clang
@@ -65,7 +67,7 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include
 LDFLAGS := -L$(BOARD_DIR)/lib
-LIBS := -lmicrokit -Tmicrokit.ld
+LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
@@ -134,7 +136,7 @@ $(BUILD_DIR)/vmm.elf: $(addprefix $(BUILD_DIR)/, $(VMM_OBJS))
 $(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/libm/libm.a manifest.py
+$(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o  $(SDDF)/util/putchar_serial.o $(BUILD_DIR)/libm/libm.a manifest.py
 	make -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -142,6 +144,7 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(B
 			BUILD=$(abspath $(BUILD_DIR)) \
 			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
 			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) \
+			SERIAL_CONFIG_INCLUDE=$(abspath $(SERIAL_CONFIG_INCLUDE)) \
 			FROZEN_MANIFEST=$(abspath manifest.py) \
 			ENABLE_I2C=1 \
 			ENABLE_FRAMEBUFFER=1
@@ -210,7 +213,7 @@ NETWORK_COMPONENT_CFLAGS := \
 	-MP
 
 NETWORK_COMPONENTS_LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIBGCC) -L$(LIBC)
-NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc -lgcc $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_printf.o
+NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc -lgcc libsddf_util_debug.a
 
 $(BUILD_DIR)/eth_copy.o: $(NETWORK_COMPONENTS)/copy.c
 	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
@@ -221,42 +224,44 @@ $(BUILD_DIR)/eth_virt_rx.o: $(NETWORK_COMPONENTS)/virt_rx.c
 $(BUILD_DIR)/eth_virt_tx.o: $(NETWORK_COMPONENTS)/virt_tx.c
 	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
 
-$(BUILD_DIR)/eth_copy.elf: $(BUILD_DIR)/eth_copy.o $(BUILD_DIR)/sddf_putchar_debug.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_copy.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/eth_copy.elf
+$(BUILD_DIR)/eth_copy.elf: $(BUILD_DIR)/eth_copy.o
+	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_copy.o $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/eth_copy.elf
 
-$(BUILD_DIR)/eth_virt_rx.elf: $(BUILD_DIR)/eth_virt_rx.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_virt_rx.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/eth_virt_rx.elf
+$(BUILD_DIR)/eth_virt_rx.elf: $(BUILD_DIR)/eth_virt_rx.o $(BUILD_DIR)/sddf_util_cache.o
+	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_virt_rx.o $(NETWORK_COMPONENTS_LIBS) -o $(BUILD_DIR)/eth_virt_rx.elf
 
-$(BUILD_DIR)/eth_virt_tx.elf: $(BUILD_DIR)/eth_virt_tx.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_virt_tx.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/eth_virt_tx.elf
+$(BUILD_DIR)/eth_virt_tx.elf: $(BUILD_DIR)/eth_virt_tx.o $(BUILD_DIR)/sddf_util_cache.o
+	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_virt_tx.o $(NETWORK_COMPONENTS_LIBS)  -o $(BUILD_DIR)/eth_virt_tx.elf
 
 # Compiling serial components
-SERIAL_COMPONENTS := $(SDDF)/serial/components
-UART_DRIVER := $(SDDF)/drivers/serial/meson
-UART_DRIVER_OBJS := uart_driver.o sddf_putchar_debug.o sddf_util_printf.o
-SERIAL_VIRT_RX_OBJS := serial_virt_rx.o
-SERIAL_VIRT_TX_OBJS := serial_virt_tx.o
+# SERIAL_COMPONENTS := $(SDDF)/serial/components
+# UART_DRIVER := $(SDDF)/drivers/serial/meson
+# UART_DRIVER_OBJS := uart_driver.o sddf_putchar_debug.o sddf_util_printf.o
+# SERIAL_VIRT_RX_OBJS := serial_virt_rx.o
+# SERIAL_VIRT_TX_OBJS := serial_virt_tx.o
 
-SERIAL_INCLUDES := -I$(SDDF)/util/include -I$(UART_DRIVER)/include
-SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=1
+# SERIAL_INCLUDES := -I$(SDDF)/include -I$(UART_DRIVER)/include -I$(SERIAL_CONFIG_INCLUDE)
+# SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=1
 
-$(BUILD_DIR)/uart_driver.o: $(UART_DRIVER)/uart.c
-	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $< -o $@
+# $(BUILD_DIR)/uart_driver.o: $(UART_DRIVER)/uart.c
+# 	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/serial_virt_rx.o: $(SERIAL_COMPONENTS)/virt_rx.c
-	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $(SERIAL_NUM_CLIENTS) $< -o $@
+# $(BUILD_DIR)/serial_virt_rx.o: $(SERIAL_COMPONENTS)/virt_rx.c
+# 	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $(SERIAL_NUM_CLIENTS) $< -o $@
 
-$(BUILD_DIR)/serial_virt_tx.o: $(SERIAL_COMPONENTS)/virt_tx.c
-	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $(SERIAL_NUM_CLIENTS) $< -o $@
+# $(BUILD_DIR)/serial_virt_tx.o: $(SERIAL_COMPONENTS)/virt_tx.c
+# 	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $(SERIAL_NUM_CLIENTS) $< -o $@
 
-$(BUILD_DIR)/uart_driver.elf: $(addprefix $(BUILD_DIR)/, $(UART_DRIVER_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+# $(BUILD_DIR)/uart_driver.elf: $(addprefix $(BUILD_DIR)/, $(UART_DRIVER_OBJS))
+# 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(BUILD_DIR)/serial_virt_rx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_RX_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+# $(BUILD_DIR)/serial_virt_rx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_RX_OBJS))
+# 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(BUILD_DIR)/serial_virt_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_TX_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+# $(BUILD_DIR)/serial_virt_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_TX_OBJS))
+# 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+
 
 # Compiling I2C components
 I2C_QUEUE := $(SDDF)/i2c/queue
@@ -284,8 +289,12 @@ directories:
 	$(shell mkdir -p $(BUILD_DIR)/lwip/src/core/ipv4)
 	$(shell mkdir -p $(BUILD_DIR)/nfs)
 
+$(addprefix $(BUILD_DIR)/, $(IMAGES)): libsddf_util_debug.a
+
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
 	$(MICROKIT_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+
+include ${SDDF}/util/util.mk
 
 FORCE: ;
 

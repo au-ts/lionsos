@@ -40,11 +40,12 @@ CFLAGS += \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
 	-I$(ETHERNET_CONFIG_INCLUDE) \
+	-I$(SERIAL_CONFIG_INCLUDE) \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU)
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBC) -L$(LIBMATH)
-LIBS += -lm -lmicrokit -Tmicrokit.ld -lc
+LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(LIONSOS)/examples/kitty/libsddf_util_debug.a
 
 # COREFILES, CORE4FILES: The minimum set of files needed for lwIP.
 COREFILES=core/init.c \
@@ -142,7 +143,7 @@ CFLAGS += -DENABLE_FRAMEBUFFER
 endif
 
 # Define the required object files.
-OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ) $(BUILD)/sddf_util_cache.o
+OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ) $(BUILD)/sddf_util_cache.o $(SDDF)/util/putchar_serial.o
 
 all: directories $(BUILD)/micropython.elf
 
