@@ -131,7 +131,7 @@
 
         <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="Fatfs_command_queue" />
         <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="Fatfs_completion_queue" />
-        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" />
+        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="client_data_offset"/>
 
         <map mr="coroutine_stack1" vaddr="0x32000000" perms="rw" cached="true" setvar_vaddr="Coroutine_STACK_ONE" />
         <map mr="coroutine_stack2" vaddr="0x32050000" perms="rw" cached="true" setvar_vaddr="Coroutine_STACK_TWO" />
