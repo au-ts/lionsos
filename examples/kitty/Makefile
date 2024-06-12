@@ -78,7 +78,7 @@ VMM_OBJS := vmm.o printf.o virq.o linux.o \
 
 TIMER_DRIVER := $(SDDF)/drivers/clock/meson
 
-all: submodules $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
+all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -285,10 +285,8 @@ directories:
 	$(shell mkdir -p $(BUILD_DIR)/nfs)
 
 submodules:
-	@if git submodule status | egrep -q '^[-]' ; then \
-			git submodule update --init; \
-			cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib ; \
-	fi
+	git submodule update --init
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
 	$(MICROKIT_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
@@ -298,4 +296,4 @@ FORCE: ;
 mpy-cross:
 	make -C $(LIONSOS)/dep/micropython/mpy-cross
 
-.PHONY: mpy-cross
+.PHONY: mpy-cross submodules
