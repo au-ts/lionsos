@@ -52,9 +52,6 @@ uintptr_t i2c_data_region;
 uintptr_t framebuffer_data_region;
 #endif
 
-int active_events = mp_event_source_none;
-int mp_blocking_events = mp_event_source_none;
-
 // Map an event source to a Microkit channel. Return 0 on success.
 int event_source_to_microkit_channel(int event_source, microkit_channel *ret) {
     switch (event_source) {
