@@ -16,8 +16,8 @@
   #elif defined(__riscv)
     #include "riscv64.c"
   #else
-    #error "libco: err1: unsupported processor, compiler or operating system"
+    #error "libco: err: unsupported target processor"
   #endif
 #else
-  #error "libco: err2: unsupported processor, compiler or operating system"
+  #error "libco: err2: unsupported compiler"
 #endif
