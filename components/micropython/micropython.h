@@ -33,12 +33,4 @@ enum {
 	mp_event_source_nfs = 32,
 };
 
-// bitwise-OR of currently active event sources
-extern int active_events;
-
-// bitwise-OR of event sources micropython is current blocked on
-// micropython should set this before switching to the event thread
-// and reset it after control is switched back to it
-extern int mp_blocking_events;
-
 void await(int event_source);
