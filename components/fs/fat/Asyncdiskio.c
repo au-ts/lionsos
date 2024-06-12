@@ -84,7 +84,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 			Fiber_block();
 			res = (DRESULT)(uintptr_t)Fiber_GetArgs();
 			#ifdef FS_DEBUG_PRINT
-			print_sector_data(buff, 512);
+			// print_sector_data(buff, 512);
 			#endif
 			break;
 		}

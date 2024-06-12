@@ -5,6 +5,9 @@
 #include <string.h>
 #include "../../../include/lions/fs/protocol.h"
 
+#ifdef FS_DEBUG_PRINT
+#include "../../../dep/sddf/include/sddf/util/printf.h"
+#endif
 /*
 This file define a bunch of wrapper functions of FATFs functions so thos functions can be run in the 
 coroutine.
@@ -23,6 +26,9 @@ bool* File_BitList;
 FIL* Files;
 bool* Dirs_BitList;
 DIR* Dirs;
+
+// Every buffer 
+extern uintptr_t client_data_offset;
 
 // Init the structure without using malloc
 // Could this has potential alignment issue?
@@ -80,7 +86,17 @@ void fat_open() {
     }
     FIL* file = &(Files[fd]);
 
-    FRESULT RET = f_open(file, (void *)args[0], args[1]);
+    char* filepath = (void *)(args[0] + client_data_offset);
+
+    #ifdef FS_DEBUG_PRINT
+    sddf_printf("fat_open: file path: %s\n", (char *)filepath);
+    sddf_printf("fat_open: open flag: %lu\n", args[1]);
+    #endif
+
+    // Micropython seems to always use open flag FA_CREATE_ALWAYS, so a hack here is to always use FA_OPEN_ALWAYS
+    // It should be changed back after Micropython fix this
+    // FRESULT RET = f_open(file, filepath, args[1]);
+    FRESULT RET = f_open(file, filepath, (FA_OPEN_ALWAYS|FA_READ|FA_WRITE));
     
     // Error handling
     if (RET != FR_OK) {
@@ -98,7 +114,7 @@ void fat_open() {
 void fat_pwrite() {
     uint64_t *args = Fiber_GetArgs();
     uint64_t fd = args[0];
-    void* data = (void *) args[1];
+    void* data = (void *) (args[1] + client_data_offset);
     uint64_t btw = args[2];
     uint64_t offset = args[3];
     
@@ -124,7 +140,7 @@ void fat_pwrite() {
 void fat_pread() {
     uint64_t *args = Fiber_GetArgs();
     uint64_t fd = args[0];
-    void* data = (void *) args[1];
+    void* data = (void *) (args[1] + client_data_offset);
     uint64_t btr = args[2];
     uint64_t offset = args[3];
     
@@ -141,7 +157,15 @@ void fat_pread() {
     
     uint32_t br = 0;
 
+    #ifdef FS_DEBUG_PRINT
+    sddf_printf("fat_read: bytes to be read: %lu\n", btr);
+    #endif
+
     RET = f_read(file, data, btr, &br);
+
+    #ifdef FS_DEBUG_PRINT
+    sddf_printf("fat_read: content read: \n%s\n", (char *)data);
+    #endif
 
     Function_Fill_Response(args, RET, br, 0);
     Fiber_kill();
@@ -173,10 +197,14 @@ void fat_close() {
 void fat_stat() {
     uint64_t *args = Fiber_GetArgs();
     
-    const void* filename = (void*) args[0];
-    // Should I add valid String check here?
+    const void* filename = (void*) args[0] + client_data_offset;
+    struct sddf_fs_stat_64* file_stat = (void*)args[2] + client_data_offset;
 
-    struct sddf_fs_stat_64* file_stat = (void*)args[2];
+    // Should I add valid String check here?
+    #ifdef FS_DEBUG_PRINT
+    sddf_printf("fat_stat:asking for filename: %s\n", (const char*)filename);
+    #endif
+    
     FILINFO fileinfo;
 
     FRESULT RET = f_stat(filename, &fileinfo);
@@ -221,8 +249,8 @@ void fat_rename() {
     uint64_t *args = Fiber_GetArgs();
     uint64_t fd = args[0];
 
-    const void* oldpath = (void*)args[0];
-    const void* newpath = (void*)args[2];
+    const void* oldpath = (void*)args[0] + client_data_offset;
+    const void* newpath = (void*)args[2] + client_data_offset;
     
     FRESULT RET = f_rename(oldpath, newpath);
    
@@ -233,7 +261,7 @@ void fat_rename() {
 void fat_unlink() {
     uint64_t *args = Fiber_GetArgs();
 
-    const void* path = (void*)(args[0]);
+    const void* path = (void*)(args[0] + client_data_offset);
 
     FRESULT RET = f_unlink(path);
 
@@ -244,7 +272,7 @@ void fat_unlink() {
 void fat_mkdir() {
     uint64_t *args = Fiber_GetArgs();
 
-    const void* path = (void*)(args[0]);
+    const void* path = (void*)(args[0] + client_data_offset);
 
     FRESULT RET = f_mkdir(path);
 
@@ -254,7 +282,7 @@ void fat_mkdir() {
 
 void fat_rmdir() {
     uint64_t *args = Fiber_GetArgs();
-    const void* path = (void*)(args[0]);
+    const void* path = (void*)(args[0] + client_data_offset);
 
     FRESULT RET = f_rmdir(path);
 
@@ -271,7 +299,13 @@ void fat_opendir() {
     }
     DIR* dir = &(Dirs[fd]);
 
-    FRESULT RET = f_opendir(dir, (void *)args[0]);
+    char* path = (char *)(args[0] + client_data_offset);
+
+    #ifdef FS_DEBUG_PRINT
+    sddf_printf("FAT opendir directory path: %s\n", path);
+    #endif
+
+    FRESULT RET = f_opendir(dir, path);
     
     // Error handling
     if (RET != FR_OK) {
@@ -291,7 +325,7 @@ void fat_readdir() {
     
     // Maybe add validation check of file descriptor here
     uint64_t fd = args[0];
-    void* name = (void*)args[1];
+    void* name = (void*)(args[1] + client_data_offset);
     
     FILINFO fno;
     FRESULT RET = f_readdir(&Dirs[fd], &fno);

@@ -40,6 +40,8 @@ void* Coroutine_STACK_TWO;
 void* Coroutine_STACK_THREE;
 void* Coroutine_STACK_FOUR;
 
+uintptr_t client_data_offset;
+
 // File system metadata region
 void* fs_metadata;
 
@@ -273,6 +275,9 @@ void notified(microkit_channel ch) {
                 message.completion.request_id = RequestPool[i].request_id;
                 Fill_Client_Response(&message, &(RequestPool[i]));
                 sddf_fs_queue_push(Fatfs_completion_queue, message);
+                #ifdef FS_DEBUG_PRINT
+                sddf_printf("FS enqueue response:status: %d\n", message.completion.status);
+                #endif
                 RequestPool[i].stat= FREE;
                 Client_have_replies = true;
             }
@@ -284,10 +289,13 @@ void notified(microkit_channel ch) {
         while (true) {
             index = FiberPool_FindFree();
             if (index == INVALID_COHANDLE || sddf_fs_queue_empty(Fatfs_command_queue) 
-                  || sddf_fs_queue_empty(Fatfs_completion_queue)) {
+                  || sddf_fs_queue_full(Fatfs_completion_queue)) {
                break;
             }
             sddf_fs_queue_pop(Fatfs_command_queue, &message);
+            #ifdef FS_DEBUG_PRINT
+            sddf_printf("FS dequeue request:CMD type: %lu\n", message.command.cmd_type);
+            #endif
             SetUp_request(index, message);
             RequestPool[index].stat = INUSE;
             New_request_popped = true;
@@ -295,9 +303,15 @@ void notified(microkit_channel ch) {
     }
     // If there are replies to client or server, reply back here
     if (Client_have_replies == true) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("FS notify client\n");
+        #endif
         microkit_notify(Client_CH);
     }
     if (blk_request_pushed == true) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("FS notify driver\n");
+        #endif
         microkit_notify(Server_CH);
     }
 }
