@@ -16,11 +16,16 @@
 #include "lwip/init.h"
 #include "mpconfigport.h"
 #include "fs_helpers.h"
+#include <libmicrokitco.h>
+
+#define CO_CONTROL_SIZE 0x1000
 
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
 
 static char mp_stack[MICROPY_STACK_SIZE];
+static char co_controller_mem[CO_CONTROL_SIZE];
+
 cothread_t t_event, t_mp;
 
 char *nfs_share;
@@ -50,16 +55,42 @@ uintptr_t framebuffer_data_region;
 int active_events = mp_event_source_none;
 int mp_blocking_events = mp_event_source_none;
 
-void await(int event_source) {
-    if (active_events & event_source) {
-        active_events &= ~event_source;
-        return;
+// Map an event source to a Microkit channel. Return 0 on success.
+int event_source_to_microkit_channel(int event_source, microkit_channel *ret) {
+    switch (event_source) {
+        case mp_event_source_serial:
+            *ret = SERIAL_RX_CH;
+            break;
+        case mp_event_source_timer:
+            *ret = TIMER_CH;
+            break;
+        case mp_event_source_nfs:
+            *ret = NFS_CH;
+            break;
+#ifdef ENABLE_FRAMEBUFFER
+        case mp_event_source_framebuffer:
+            *ret = FRAMEBUFFER_VMM_CH;
+            break;
+#endif
+#ifdef ENABLE_I2C
+        case mp_event_source_i2c:
+            *ret = I2C_CH;
+            break;
+#endif
+        default:
+            return 1;
     }
-    mp_blocking_events = event_source;
-    co_switch(t_event);
-    assert(active_events & event_source);
-    mp_blocking_events = mp_event_source_none;
-    active_events &= ~event_source;
+
+    return 0;
+}
+
+void await(int event_source) {
+    microkit_channel ch;
+    if (event_source_to_microkit_channel(event_source, &ch) == 0) {
+        microkit_cothread_wait(ch);
+    } else {
+        printf("MP|ERROR: await() called with unknown event source: %d\n", event_source);
+    }
 }
 
 STATIC bool init_nfs(void) {
@@ -126,7 +157,7 @@ start_repl:
     goto start_repl;
 #endif
 
-    co_switch(t_event);
+    // libmicrokitco will gracefully clean up when a cothread return, no need to do anything here
 }
 
 void init(void) {
@@ -143,9 +174,21 @@ void init(void) {
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
 #endif
 
-    t_event = co_active();
-    t_mp = co_derive((void *)mp_stack, MICROPY_STACK_SIZE, t_mp_entrypoint);
-    co_switch(t_mp);
+    co_err_t co_err = microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, &mp_stack);
+    if (co_err != co_no_err) {
+        printf("MP|ERROR: Cannot initialise libmicrokitco, err is: %s", microkit_cothread_pretty_error(co_err));
+        while (true) {}
+    }
+
+    microkit_cothread_t _mp_cothread_handle;
+    co_err = microkit_cothread_spawn(t_mp_entrypoint, ready_true, &_mp_cothread_handle, 0);
+    if (co_err != co_no_err) {
+        printf("MP|ERROR: Cannot initialise Micropython cothread, err is: %s", microkit_cothread_pretty_error(co_err));
+        while (true) {}
+    }
+
+    // Run the Micropython cothread
+    microkit_cothread_yield();
 }
 
 void pyb_lwip_poll(void);
@@ -157,38 +200,8 @@ void notified(microkit_channel ch) {
     pyb_lwip_poll();
     fs_process_completions();
 
-    switch (ch) {
-    case SERIAL_RX_CH:
-        active_events |= mp_event_source_serial;
-        break;
-    case TIMER_CH:
-        active_events |= mp_event_source_timer;
-        break;
-#ifdef ENABLE_FRAMEBUFFER
-    case FRAMEBUFFER_VMM_CH:
-        active_events |= mp_event_source_framebuffer;
-        break;
-#endif
-    case NFS_CH:
-        active_events |= mp_event_source_nfs;
-        break;
-#ifdef ENABLE_I2C
-    case I2C_CH:
-        active_events |= mp_event_source_i2c;
-        break;
-#endif
-    case ETH_RX_CH:
-    case ETH_TX_CH:
-        /* Nothing to do here right now, but we catch it the case where we get
-         * notified by the RX and TX ethernet components since it is expected
-         * we get notifications from them. */
-        break;
-    default:
-        printf("MP|ERROR: unexpected notification received from channel: 0x%lx\n", ch);
-    }
-    if (active_events & mp_blocking_events) {
-        co_switch(t_mp);
-    }
+    // We ignore errors because notified can be invoked without the MP cothread awaiting in cases such as an async I/O completing.
+    microkit_cothread_recv_ntfn(ch);
 
     mpnet_handle_notify();
 }
