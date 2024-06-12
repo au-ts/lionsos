@@ -7,7 +7,7 @@ import asyncio
 import errno
 from pn532 import PN532
 import font
-from font_writer import CWriter
+from writer import CWriter
 
 current_uid = []
 current_equal_count = 0
@@ -17,8 +17,13 @@ TICKS_TO_RESET = 3
 token = 0
 reader_stream = None
 writer_stream = None
+stdin_ready = True
+# These are defaulted to true.
+# If you wish to disable, set in kitty.run()
+enable_i2c = True
+enable_nfs = True
 
-IP_ADDRESS = "172.16.0.2"
+IP_ADDRESS = ""
 PORT = 3738
 
 
@@ -51,6 +56,7 @@ class KittyDisplay(framebuf.FrameBuffer):
         super().__init__(self.buf, self.width, self.height, framebuf.RGB565)
 
     def show(self):
+        fb.wait()
         fb.machine_fb_send(self.buf, self.width, self.height)
 
 
@@ -60,6 +66,7 @@ display_width = 1920
 display_height = 1080
 display = KittyDisplay(display_width, display_height)
 wri = CWriter(display, font)
+# @krishnan: Is this reset_cb used? It seems to always be None
 reset_cb = None
 ######################################################
 
@@ -101,6 +108,28 @@ async def on_tap(card_id):
     token = (token + 1) % 1000000
 
 
+
+async def read_stdin():
+    sreader = asyncio.StreamReader(sys.stdin)
+    global token
+    global stdin_ready
+    while True:
+        if (token != 0 and stdin_ready is True):
+            stdin_ready = False
+            print("\033[91mPlease enter card number: \033[0m")
+            uid_str = await sreader.readline()
+            print(f"Got id: {uid_str.strip()}")
+            uid = []
+            try:
+                uid.append(int(uid_str))
+            except ValueError as e:
+                stdin_ready = True
+                continue
+            await on_tap(uid)
+
+        await asyncio.sleep_ms(100)
+
+
 # We require TICKS_TO_CONFIRM consecutive ticks with the card_id to
 # count a tap/ Once a card has been read, we require TICKS_TO_RESET
 # consecutive no-card reads to reset to a waiting state. This
@@ -112,7 +141,6 @@ async def read_card(p):
     global TICKS_TO_RESET
     global TICKS_TO_CONFIRM
     global token
-
     while True:
         uid = p.read_uid()
         # Case where:
@@ -157,7 +185,6 @@ async def read_card(p):
 
         await asyncio.sleep_ms(100)
 
-
 def set_pixel(display, x, y, rgba):
     r = (rgba >> 24) & 0xff
     g = (rgba >> 16) & 0xff
@@ -167,10 +194,13 @@ def set_pixel(display, x, y, rgba):
 
 
 def reset_status():
+    global stdin_ready
     display.rect(300, 300, 800, 800, 0x0, True)
     wri.set_textpos(display, 300, 540)
     wri.printstring("Waiting for taps...")
     display.show()
+    # Now we are ready to accept new taps
+    stdin_ready = True
 
 
 def draw_image(display, x0, y0, data):
@@ -247,27 +277,39 @@ async def read_from_server():
 
 # Coroutine responsible for reading the card
 async def read_card_main():
-    p = PN532(1)
-    p.rf_configure()
-    p.sam_configure()
-    await read_card(p)
+    global stdin_ready
+    # While we are processing a tap, we cannot accept other taps.
+    # We consider to be finished processing after the server has
+    # responded, and after we have then called reset_status()
+    if (enable_i2c is True):
+        p = PN532(1)
+        p.rf_configure()
+        p.sam_configure()
+        await read_card(p)
+    elif stdin_ready is True:
+        await read_stdin()
+    pass
 
 async def main():
+    # Only read the image from NFS if flag is set. Otherwise
+    # we will just print strings.
     global reader_stream
     global writer_stream
+    print(f"KITTY|INFO: starting at {time.time()}, IP: {IP_ADDRESS}, PORT: {PORT}")
     reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
-    print(f"KITTY|INFO: starting at {}", time.time())
-    size = 688000
-    cat_buf = bytearray(size)
-    with open("catwithfish.data", "rb") as f:
-        nbytes = f.readinto(cat_buf)
-        print(f"KITTY|INFO: read {nbytes} bytes")
-        pic = memoryview(cat_buf)
-        # print(pic[:4])
-        print("KITTY|INFO: read image, starting to draw")
-        draw_image(display, 0, 40, pic[0:])
-    display.show()
+    if (enable_nfs):
+        size = 688000
+        cat_buf = bytearray(size)
+        with open("catwithfish.data", "rb") as f:
+            nbytes = f.readinto(cat_buf)
+            print(f"KITTY|INFO: read {nbytes} bytes")
+            pic = memoryview(cat_buf)
+            # print(pic[:4])
+            print("KITTY|INFO: read image, starting to draw")
+            draw_image(display, 0, 40, pic[0:])
+        display.show()
+
     print(time.time())
     print("KITTY|INFO: about to draw string!")
     # draw_string(400, 100, "Kitty v5", 5, 0xFFFFFFFF, 0x008800FF, True, False)
@@ -287,4 +329,26 @@ async def main():
         asyncio.create_task(read_card_main())
     )
 
-asyncio.run(main())
+
+def run(ip = "172.16.0.2", i2c_flag = True, nfs_flag = True):
+    global enable_i2c
+    global enable_nfs
+    global IP_ADDRESS
+
+    if (type(ip) != str):
+        print("KITTY: IP address should be of type string")
+        return
+    if (type(i2c_flag) != bool):
+        print("KITTY: i2c_flag should be of type bool")
+        return
+    if (type(nfs_flag) != bool):
+        print("KITTY: nfs_flag should be of type bool")
+        return
+
+    enable_i2c = i2c_flag
+    enable_nfs = nfs_flag
+    IP_ADDRESS = ip
+    asyncio.run(main())
+
+print("\033[95m\nWelcome to Kitty!\nUsage: kitty.run(String IP_ADDRESS, bool I2C_ENABLE, bool NFS_ENABLE).\n \
+      NOTE: If running on QEMU, use IP_ADDRESS \"10.0.2.2\"\033[0m")

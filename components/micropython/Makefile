@@ -141,6 +141,15 @@ SRC_QSTR += modfb.c
 CFLAGS += -DENABLE_FRAMEBUFFER
 endif
 
+ifdef ENABLE_VFS_STDIO
+CFLAGS += -DENABLE_VFS_STDIO
+endif
+
+ifdef ENABLE_SERIAL_STDIO
+SRC_C += shared/runtime/sys_stdio_mphal.c
+CFLAGS += -DENABLE_SERIAL_STDIO
+endif
+
 # Define the required object files.
 OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ) $(BUILD)/sddf_util_cache.o
 

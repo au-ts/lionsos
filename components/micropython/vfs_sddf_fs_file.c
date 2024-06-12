@@ -45,7 +45,7 @@ STATIC mp_uint_t vfs_sddf_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size,
     int err = fs_buffer_allocate(&read_buffer);
     if (err) {
         return MP_STREAM_ERROR;
-    } 
+    }
 
     struct sddf_fs_completion completion;
     err = fs_command_blocking(&completion, SDDF_FS_CMD_PREAD, o->fd, read_buffer, size, o->pos);
@@ -171,9 +171,11 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &vfs_sddf_fs_rawfile_locals_dict
 );
 
+#ifdef ENABLE_VFS_STDIO
 const mp_obj_vfs_sddf_fs_file_t mp_sys_stdin_obj = {{&mp_type_vfs_sddf_fs_textio}, STDIN_FILENO};
 const mp_obj_vfs_sddf_fs_file_t mp_sys_stdout_obj = {{&mp_type_vfs_sddf_fs_textio}, STDOUT_FILENO};
 const mp_obj_vfs_sddf_fs_file_t mp_sys_stderr_obj = {{&mp_type_vfs_sddf_fs_textio}, STDERR_FILENO};
+#endif
 
 mp_obj_t mp_vfs_sddf_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj_t mode_in) {
     mp_obj_vfs_sddf_fs_file_t *o = m_new_obj(mp_obj_vfs_sddf_fs_file_t);
