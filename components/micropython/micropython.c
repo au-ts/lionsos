@@ -124,7 +124,7 @@ static void exec_str(const char *src, mp_parse_input_kind_t input_kind) {
     }
 }
 
-void t_mp_entrypoint(void) {
+size_t t_mp_entrypoint(void) {
     printf("MP|INFO: initialising!\n");
 
     // Initialise the MicroPython runtime.
@@ -154,7 +154,8 @@ start_repl:
     goto start_repl;
 #endif
 
-    // libmicrokitco will gracefully clean up when a cothread return, no need to do anything here
+    // libmicrokitco will gracefully clean up when a cothread return, no need to do anything special here
+    return 0;
 }
 
 void init(void) {
@@ -171,7 +172,7 @@ void init(void) {
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
 #endif
 
-    co_err_t co_err = microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, &mp_stack);
+    co_err_t co_err = microkit_cothread_init((uintptr_t) &co_controller_mem, MICROPY_STACK_SIZE, &mp_stack);
     if (co_err != co_no_err) {
         printf("MP|ERROR: Cannot initialise libmicrokitco, err is: %s", microkit_cothread_pretty_error(co_err));
         while (true) {}
