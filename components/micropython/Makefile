@@ -8,7 +8,7 @@ LD := aarch64-none-elf-ld
 LIONSOS := $(abspath ../../)
 SDDF := $(LIONSOS)/dep/sddf
 SDDF_UTIL := $(SDDF)/util
-LIBCO := $(LIONSOS)/lib/libco
+LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LWIP := $(SDDF)/network/ipstacks/lwip
 # Path to micropython source code
 MICROPYTHON_SRC := $(LIONSOS)/dep/micropython
@@ -35,7 +35,7 @@ CFLAGS += \
 	-I$(SDDF) \
 	-I$(SDDF)/include \
 	-I$(BOARD_DIR)/include \
-	-I$(LIBCO) \
+	-I$(LIBMICROKITCO_PATH) \
 	-I$(LIONSOS)/include \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
@@ -45,6 +45,19 @@ CFLAGS += \
 	-mtune=$(CPU)
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBC) -L$(LIBMATH)
 LIBS += -lm -lmicrokit -Tmicrokit.ld -lc
+
+# Include libmicrokitco for blocking in Micropython
+BUILD_DIR=$(BUILD)
+TARGET=aarch64-none-elf
+TOOLCHAIN=$(TARGET)
+LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
+LIBMICROKITCO_1T_OBJ := $(BUILD_DIR)/libmicrokitco/libmicrokitco_1ct_aarch64-none-elf.o
+LIBMICROKITCO_PREEMPTIVE_UNBLOCK := 1
+
+export LIBMICROKITCO_PATH LIBMICROKITCO_PREEMPTIVE_UNBLOCK TARGET MICROKIT_SDK BUILD_DIR MICROKIT_BOARD MICROKIT_CONFIG CPU TOOLCHAIN
+
+$(LIBMICROKITCO_1T_OBJ):
+	make -f $(LIBMICROKITCO_PATH)/Makefile LIBMICROKITCO_MAX_COTHREADS=1
 
 # COREFILES, CORE4FILES: The minimum set of files needed for lwIP.
 COREFILES=core/init.c \
@@ -116,10 +129,8 @@ SRC_C = \
 	shared/libc/__errno.c \
 	shared/timeutils/timeutils.c \
 	shared/netutils/netutils.c \
-	$(LIBCO)/libco.c \
 	$(SDDF_UTIL)/printf.c \
 	$(SDDF_UTIL)/putchar_debug.c
-
 
 # Define source files containung qstrs.
 SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c vfs_fs_file.c vfs_fs.c modfs_raw.c
@@ -142,7 +153,7 @@ CFLAGS += -DENABLE_FRAMEBUFFER
 endif
 
 # Define the required object files.
-OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ) $(BUILD)/sddf_util_cache.o
+OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ) $(BUILD)/sddf_util_cache.o $(LIBMICROKITCO_1T_OBJ)
 
 all: directories $(BUILD)/micropython.elf
 
