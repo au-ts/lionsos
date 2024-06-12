@@ -13,9 +13,11 @@
     #include "arm.c"
   #elif defined(__aarch64__)
     #include "aarch64.c"
+  #elif defined(__riscv)
+    #include "riscv64.c"
   #else
-    #error "libco: unsupported processor, compiler or operating system"
+    #error "libco: err1: unsupported processor, compiler or operating system"
   #endif
 #else
-  #error "libco: unsupported processor, compiler or operating system"
+  #error "libco: err2: unsupported processor, compiler or operating system"
 #endif
