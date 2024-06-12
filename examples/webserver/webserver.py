@@ -69,6 +69,9 @@ def format_http_date(timestamp):
 
 
 async def send_file(path, request_headers):
+    if 'X-Real-IP' in request_headers:
+        print(f'GET {path} {request_headers["X-Real-IP"]}')
+
     if '..' in path:
         # directory traversal is not allowed
         return Response(status_code=404, reason='Not Found')
