@@ -110,7 +110,7 @@ pub fn build(b: *std.Build) void {
     const libmicrokit_include = b.fmt("{s}/include", .{microkit_board_dir});
 
     const fs = b.addExecutable(.{
-        .name = "FatFs.elf",
+        .name = "fatfs.elf",
         .target = target,
         .optimize = optimize,
         .strip = false,

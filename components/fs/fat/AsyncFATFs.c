@@ -130,6 +130,19 @@ void SetUp_request(int32_t index, union sddf_fs_message message) {
     return;
 }
 
+// For debug
+#ifdef FS_DEBUG_PRINT
+void print_sector_data(uint8_t *buffer, unsigned long size) {
+    for (unsigned long i = 0; i < size; i++) {
+        if (i % 16 == 0) {
+            sddf_printf("\n%04lx  ", i); // Print the offset at the start of each line
+        }
+        sddf_printf("%02x ", buffer[i]); // Print each byte in hexadecimal
+    }
+    sddf_printf("\n");
+}
+#endif
+
 void init(void) {
     // Init the block device queue
     // Have to make sure who initialize this SDDF queue
@@ -226,7 +239,7 @@ void notified(microkit_channel ch) {
         }
         else if (RequestPool[1].handle == INVALID_COHANDLE && RequestPool[1].stat == INUSE) {
             #ifdef FS_DEBUG_PRINT
-            sddf_printf("Auto mounting fat file system failed, file system not available \n");
+            sddf_printf("Auto mounting fat file system failed, file system not available. Error code:%lu\n", RequestPool[1].args[Status_bit]);
             #endif
         }
     }

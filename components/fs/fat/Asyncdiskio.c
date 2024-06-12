@@ -75,16 +75,19 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     DRESULT res;
 	switch (pdrv) {
-	default: {
-		#ifdef FS_DEBUG_PRINT
-		sddf_printf("blk_enqueue_readreq: addr: 0x%lx sector: %ld, count: %ld ID: %ld\n", buff, sector, count, Get_Cohandle());
-		#endif
-        blk_enqueue_req(blk_queue_handle, READ_BLOCKS, (uintptr_t)buff, sector, count,Get_Cohandle());
-		blk_request_pushed = true;
-        Fiber_block();
-        res = (DRESULT)(uintptr_t)Fiber_GetArgs();
-        break;
-    }
+		default: {
+			#ifdef FS_DEBUG_PRINT
+			sddf_printf("blk_enqueue_read: addr: 0x%lx sector: %u, count: %u ID: %d\n", (uintptr_t)buff, sector, count, Get_Cohandle());
+			#endif
+			blk_enqueue_req(blk_queue_handle, READ_BLOCKS, (uintptr_t)buff, sector, count,Get_Cohandle());
+			blk_request_pushed = true;
+			Fiber_block();
+			res = (DRESULT)(uintptr_t)Fiber_GetArgs();
+			#ifdef FS_DEBUG_PRINT
+			print_sector_data(buff, 512);
+			#endif
+			break;
+		}
 	}
     return res;
 }
@@ -92,15 +95,16 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
     DRESULT res;
 	switch (pdrv) {
-	default:
-	    #ifdef FS_DEBUG_PRINT
-	    sddf_printf("blk_enqueue_writereq: addr: 0x%lx sector: %ld, count: %ld ID: %ld\n", buff, sector, count, Get_Cohandle());
-		#endif
-        blk_enqueue_req(blk_queue_handle, WRITE_BLOCKS, (uintptr_t)buff, sector, count,Get_Cohandle());
-		blk_request_pushed = true;
-        Fiber_block();
-        res = (DRESULT)(uintptr_t)Fiber_GetArgs();
-        break;
+		default: {
+			#ifdef FS_DEBUG_PRINT
+			sddf_printf("blk_enqueue_write: addr: 0x%lx sector: %u, count: %u ID: %d\n", (uintptr_t)buff, sector, count, Get_Cohandle());
+			#endif
+			blk_enqueue_req(blk_queue_handle, WRITE_BLOCKS, (uintptr_t)buff, sector, count,Get_Cohandle());
+			blk_request_pushed = true;
+			Fiber_block();
+			res = (DRESULT)(uintptr_t)Fiber_GetArgs();
+			break;
+		}
 	}
     return res;
 }

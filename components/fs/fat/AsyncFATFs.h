@@ -52,3 +52,8 @@ void fat_sync();
 void fat_seekdir();
 void fat_readdir();
 void fat_rewinddir();
+
+// For debug
+#ifdef FS_DEBUG_PRINT
+void print_sector_data(uint8_t *buffer, unsigned long size);
+#endif
