@@ -284,14 +284,18 @@ directories:
 	$(shell mkdir -p $(BUILD_DIR)/lwip/src/core/ipv4)
 	$(shell mkdir -p $(BUILD_DIR)/nfs)
 
-submodules:
-	git submodule update --init
-	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
-
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
 	$(MICROKIT_TOOL) kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 FORCE: ;
+
+submodules:
+	git submodule update --init $(LIONSOS)/dep/libvmm
+	git submodule update --init $(LIONSOS)/dep/libnfs
+	git submodule update --init $(LIONSOS)/dep/micropython
+	git submodule update --init $(LIONSOS)/dep/musllibc
+	git submodule update --init $(LIONSOS)/dep/sddf
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
 mpy-cross:
 	make -C $(LIONSOS)/dep/micropython/mpy-cross
