@@ -142,10 +142,6 @@ typedef struct _vfs_fs_ilistdir_it_t {
 STATIC mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
     vfs_fs_ilistdir_it_t *self = MP_OBJ_TO_PTR(self_in);
 
-    if (self->dir == 0) {
-        return MP_OBJ_STOP_ITERATION;
-    }
-
     for (;;) {
         ptrdiff_t name_buffer;
         int err = fs_buffer_allocate(&name_buffer);
