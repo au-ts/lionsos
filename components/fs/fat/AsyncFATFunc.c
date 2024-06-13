@@ -122,6 +122,10 @@ void fat_pwrite() {
     FIL* file = &(Files[fd]);
     FRESULT RET = FR_TIMEOUT;
 
+    #ifdef FS_DEBUG_PRINT
+    sddf_printf("fat_write: bytes to be write: %lu, read offset: %lu\n", btw, offset);
+    #endif
+
     RET = f_lseek(file, offset);
 
     if (RET != FR_OK) {
@@ -132,6 +136,15 @@ void fat_pwrite() {
     uint32_t bw = 0;
 
     RET = f_write(file, data, btw, &bw);
+
+    #ifdef FS_DEBUG_PRINT
+    if (RET == FR_OK) {
+        sddf_printf("fat_write: byte written: %u, content written: \n%.*s\n", bw, bw, (char *)data);
+    }
+    else {
+        sddf_printf("fat_write: error");
+    }
+    #endif
 
     Function_Fill_Response(args, RET, bw, 0);
     Fiber_kill();
@@ -148,6 +161,10 @@ void fat_pread() {
     FIL* file = &(Files[fd]);
     FRESULT RET = FR_TIMEOUT;
 
+    #ifdef FS_DEBUG_PRINT
+    sddf_printf("fat_read: bytes to be read: %lu, read offset: %lu\n", btr, offset);
+    #endif
+
     RET = f_lseek(file, offset);
 
     if (RET != FR_OK) {
@@ -157,14 +174,15 @@ void fat_pread() {
     
     uint32_t br = 0;
 
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("fat_read: bytes to be read: %lu\n", btr);
-    #endif
-
     RET = f_read(file, data, btr, &br);
 
     #ifdef FS_DEBUG_PRINT
-    sddf_printf("fat_read: content read: \n%s\n", (char *)data);
+    if (RET == FR_OK) {
+        sddf_printf("fat_read: byte read: %u, content read: \n%.*s\n", br, br, (char *)data);
+    }
+    else {
+        sddf_printf("fat_read: error");
+    }
     #endif
 
     Function_Fill_Response(args, RET, br, 0);
@@ -325,16 +343,42 @@ void fat_readdir() {
     
     // Maybe add validation check of file descriptor here
     uint64_t fd = args[0];
+    
+    uint64_t BUFFER_SIZE = args[2];
+
+    #ifdef FS_DEBUG_PRINT
+    sddf_printf("FAT readdir file descriptor: %lu\n", fd);
+    #endif
     void* name = (void*)(args[1] + client_data_offset);
     
     FILINFO fno;
     FRESULT RET = f_readdir(&Dirs[fd], &fno);
+
+    if (RET == FR_OK && BUFFER_SIZE <= strlen(fno.fname)) {
+        RET = FR_INVALID_PARAMETER;
+    }
     
     if (RET == FR_OK) {
         strcpy(name, fno.fname);
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("FAT readdir file name: %s\n", (char*)name);
+        #endif
     }
 
     Function_Fill_Response(args, RET, 0, 0);
+    Fiber_kill();
+}
+
+// Not sure if this one is implemented correctly
+void fat_telldir(){
+    uint64_t *args = Fiber_GetArgs();
+
+    uint64_t fd = args[0];
+    DIR* dp = &(Dirs[fd]);
+
+    uint32_t offset = f_telldir(dp);
+
+    Function_Fill_Response(args, FR_OK, offset, 0);
     Fiber_kill();
 }
 
