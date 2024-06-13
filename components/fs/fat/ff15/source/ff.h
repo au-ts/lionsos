@@ -347,6 +347,9 @@ TCHAR* f_gets (TCHAR* buff, int len, FIL* fp);						/* Get a string from the fil
 #define f_rmdir(path) f_unlink(path)
 #define f_unmount(path) f_mount(0, path, 0)
 
+/* Functions implemented by Cheng */
+// Not sure if this one is right or wrong
+#define f_telldir(dp) ((dp)->dptr)
 
 
 

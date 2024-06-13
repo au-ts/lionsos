@@ -108,8 +108,9 @@ void (*operation_functions[])() = {
     fat_opendir,
     fat_closedir,
     fat_sync,
-    fat_seekdir,
     fat_readdir,
+    fat_seekdir,
+    fat_telldir,
     fat_rewinddir,
 };
 
