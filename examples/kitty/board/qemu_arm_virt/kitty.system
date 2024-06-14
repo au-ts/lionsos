@@ -237,7 +237,10 @@
             <map mr="gic_v2m" vaddr="0x8020000" perms="rw" cached="false" />
         </virtual_machine>
         <!-- IRQ for pass-through graphics -->
-        <irq irq="37" id="10" />
+        <irq irq="35" id="10" />
+        <irq irq="36" id="11" />
+        <irq irq="37" id="12" />
+        <irq irq="38" id="13" />
     </protection_domain>
 
     <channel>
