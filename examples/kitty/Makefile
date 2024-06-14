@@ -22,7 +22,7 @@ LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a))
 
 MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
-MICROKIT_BOARD := odroidc4
+MICROKIT_BOARD ?= odroidc4
 ETHERNET_CONFIG_INCLUDE ?= src/ethernet_config
 
 ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
