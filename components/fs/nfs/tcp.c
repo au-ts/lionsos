@@ -458,9 +458,18 @@ int tcp_socket_close(int index)
 
 int tcp_socket_write(int index, const char *buf, size_t len) {
     socket_t *sock = &sockets[index];
-    int to_write = MIN(len, tcp_sndbuf(sock->sock_tpcb));
+    int available = tcp_sndbuf(sock->sock_tpcb);
+
+    if (available == 0) {
+        dlog("no space available");
+        return -2;
+    }
+    int to_write = MIN(len, available);
     int err = tcp_write(sock->sock_tpcb, (void *)buf, to_write, 1);
-    if (err != ERR_OK) {
+    if (err == ERR_MEM) {
+        dlog("tcp_write returned ERR_MEM");
+        return -2;
+    } else if (err != ERR_OK) {
         dlog("tcp_write failed (%d)", err);
         return -1;
     }
