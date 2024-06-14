@@ -289,7 +289,15 @@ $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) kitty.system
 
 FORCE: ;
 
+submodules:
+	git submodule update --init $(LIONSOS)/dep/libvmm
+	git submodule update --init $(LIONSOS)/dep/libnfs
+	git submodule update --init $(LIONSOS)/dep/micropython
+	git submodule update --init $(LIONSOS)/dep/musllibc
+	git submodule update --init $(LIONSOS)/dep/sddf
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+
 mpy-cross:
 	make -C $(LIONSOS)/dep/micropython/mpy-cross
 
-.PHONY: mpy-cross
+.PHONY: mpy-cross submodules

@@ -19,6 +19,11 @@ rm -rf $BUILD_DIR
 export NFS_SERVER=0.0.0.0
 export NFS_DIRECTORY=test
 export WEBSITE_DIR=www
+export BUILD_DIR=$BUILD_DIR
+export MICROKIT_SDK=$MICROKIT_SDK
+export LIONSOS=$LIONSOS
 
 cd $LIONSOS/examples/webserver
-make BUILD_DIR=$BUILD_DIR MICROKIT_SDK=$MICROKIT_SDK LIONSOS=$LIONSOS
+make submodules
+make
+
