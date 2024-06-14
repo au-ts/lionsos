@@ -52,41 +52,11 @@ uintptr_t i2c_data_region;
 uintptr_t framebuffer_data_region;
 #endif
 
-// Map an event source to a Microkit channel. Return 0 on success.
-int event_source_to_microkit_channel(int event_source, microkit_channel *ret) {
-    switch (event_source) {
-        case mp_event_source_serial:
-            *ret = SERIAL_RX_CH;
-            break;
-        case mp_event_source_timer:
-            *ret = TIMER_CH;
-            break;
-        case mp_event_source_nfs:
-            *ret = NFS_CH;
-            break;
-#ifdef ENABLE_FRAMEBUFFER
-        case mp_event_source_framebuffer:
-            *ret = FRAMEBUFFER_VMM_CH;
-            break;
-#endif
-#ifdef ENABLE_I2C
-        case mp_event_source_i2c:
-            *ret = I2C_CH;
-            break;
-#endif
-        default:
-            return 1;
-    }
+void await(microkit_channel event_ch) {
+    co_err_t err = microkit_cothread_wait(event_ch);
 
-    return 0;
-}
-
-void await(int event_source) {
-    microkit_channel ch;
-    if (event_source_to_microkit_channel(event_source, &ch) == 0) {
-        microkit_cothread_wait(ch);
-    } else {
-        printf("MP|ERROR: await() called with unknown event source: %d\n", event_source);
+    if (err != co_no_err) {
+        printf("MP|ERROR: await(): %s", microkit_cothread_pretty_error(err));
     }
 }
 

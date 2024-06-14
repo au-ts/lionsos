@@ -11,7 +11,7 @@ extern void *framebuffer_data_region;
  * needs to wait until the framebuffer is ready.
  */
 STATIC mp_obj_t fb_wait(void) {
-    await(mp_event_source_framebuffer);
+    await(FRAMEBUFFER_VMM_CH);
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(fb_wait_obj, fb_wait);

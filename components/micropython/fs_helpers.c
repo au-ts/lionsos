@@ -121,7 +121,7 @@ int fs_command_blocking(struct sddf_fs_completion *completion, uint32_t cmd_type
     fs_command_issue(request_id, cmd_type, arg0, arg1, arg2, arg3);
 
     while (!request_metadata[request_id].complete) {
-        await(mp_event_source_nfs);
+        await(NFS_CH);
     }
 
     fs_command_complete(request_id, NULL, completion);
