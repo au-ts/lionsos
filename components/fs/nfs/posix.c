@@ -222,7 +222,18 @@ long sys_writev(va_list ap)
         assert(socket_refcount[socket_handle] != 0);
 
         for (int i = 0; i < iovcnt; i++) {
-            ret += tcp_socket_write(socket_handle, iov[i].iov_base, iov[i].iov_len);
+            int wrote = tcp_socket_write(socket_handle, iov[i].iov_base, iov[i].iov_len);
+            if (wrote < 0) {
+                if (ret == 0) {
+                    if (wrote == -2) {
+                        ret = -EAGAIN;
+                    } else {
+                        ret = -1;
+                    }
+                }
+                return ret;
+            }
+            ret += wrote;
         }
     }
     return ret;
@@ -377,6 +388,9 @@ long sys_sendto(va_list ap)
     assert(socket_refcount[socket_handle] != 0);
 
     int wrote = tcp_socket_write(socket_handle, buf, len);
+    if (wrote == -2) {
+        return -EAGAIN;
+    }
 
     return (long)wrote;
 }
