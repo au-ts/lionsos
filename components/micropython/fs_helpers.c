@@ -7,21 +7,21 @@
 #include "fs_helpers.h"
 
 extern char *nfs_share;
-struct sddf_fs_queue *nfs_command_queue;
-struct sddf_fs_queue *nfs_completion_queue;
+struct fs_queue *nfs_command_queue;
+struct fs_queue *nfs_completion_queue;
 
-#define REQUEST_ID_MAXIMUM (SDDF_FS_QUEUE_CAPACITY - 1)
+#define REQUEST_ID_MAXIMUM (FS_QUEUE_CAPACITY - 1)
 struct request_metadata {
-    struct sddf_fs_command command;
-    struct sddf_fs_completion completion;
+    struct fs_command command;
+    struct fs_completion completion;
     bool used;
     bool complete;
-} request_metadata[SDDF_FS_QUEUE_CAPACITY];
+} request_metadata[FS_QUEUE_CAPACITY];
 
-#define NUM_BUFFERS SDDF_FS_QUEUE_CAPACITY * 4
+#define NUM_BUFFERS FS_QUEUE_CAPACITY * 4
 struct buffer_metadata {
     bool used;
-} buffer_metadata[SDDF_FS_QUEUE_CAPACITY];
+} buffer_metadata[FS_QUEUE_CAPACITY];
 
 int fs_request_allocate(uint64_t *request_id) {
     for (uint64_t i = 0; i < NUM_BUFFERS; i++) {
@@ -64,9 +64,9 @@ char *fs_buffer_ptr(ptrdiff_t buffer) {
 }
 
 void fs_process_completions(void) {
-    union sddf_fs_message message;
-    while (sddf_fs_queue_pop(nfs_completion_queue, &message)) {
-        struct sddf_fs_completion completion = message.completion;
+    union fs_message message;
+    while (fs_queue_pop(nfs_completion_queue, &message)) {
+        struct fs_completion completion = message.completion;
 
         if (completion.request_id > REQUEST_ID_MAXIMUM) {
             printf("received bad fs completion: invalid request id: %lu\n", completion.request_id);
@@ -83,8 +83,8 @@ void fs_command_issue(uint64_t request_id, uint32_t cmd_type, uint64_t arg0, uin
     assert(request_id <= REQUEST_ID_MAXIMUM);
     assert(request_metadata[request_id].used);
 
-    union sddf_fs_message message;
-    message.command = (struct sddf_fs_command) {
+    union fs_message message;
+    message.command = (struct fs_command) {
         .request_id = request_id,
         .cmd_type = cmd_type,
         .args = {
@@ -94,14 +94,14 @@ void fs_command_issue(uint64_t request_id, uint32_t cmd_type, uint64_t arg0, uin
             [3] = arg3,
         }
     };
-    bool success = sddf_fs_queue_push(nfs_command_queue, message);
+    bool success = fs_queue_push(nfs_command_queue, message);
     assert(success);
     microkit_notify(NFS_CH);
 
     request_metadata[request_id].command = message.command;
 }
 
-void fs_command_complete(uint64_t request_id, struct sddf_fs_command *command, struct sddf_fs_completion *completion) {
+void fs_command_complete(uint64_t request_id, struct fs_command *command, struct fs_completion *completion) {
     assert(request_metadata[request_id].complete);
     if (command != NULL) {
         *command = request_metadata[request_id].command;
@@ -111,7 +111,7 @@ void fs_command_complete(uint64_t request_id, struct sddf_fs_command *command, s
     }
 }
 
-int fs_command_blocking(struct sddf_fs_completion *completion, uint32_t cmd_type, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3) {
+int fs_command_blocking(struct fs_completion *completion, uint32_t cmd_type, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3) {
     uint64_t request_id;
     int err = fs_request_allocate(&request_id);
     if (err) {
