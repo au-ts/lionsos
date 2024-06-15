@@ -10,35 +10,35 @@
 #include <string.h>
 
 /* MicroPython will ask for a default buffer size to create a stream for when using a VFS. */
-#define VFS_SDDF_FS_FILE_BUFFER_SIZE (FS_BUFFER_SIZE)
+#define VFS_FS_FILE_BUFFER_SIZE (FS_BUFFER_SIZE)
 
-typedef struct _mp_obj_vfs_sddf_fs_file_t {
+typedef struct _mp_obj_vfs_fs_file_t {
     mp_obj_base_t base;
     uint64_t fd;
     uint64_t pos;
-} mp_obj_vfs_sddf_fs_file_t;
+} mp_obj_vfs_fs_file_t;
 
-STATIC void vfs_sddf_fs_file_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+STATIC void vfs_fs_file_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     (void)kind;
-    mp_obj_vfs_sddf_fs_file_t *self = MP_OBJ_TO_PTR(self_in);
+    mp_obj_vfs_fs_file_t *self = MP_OBJ_TO_PTR(self_in);
     mp_printf(print, "<io.%s %d>", mp_obj_get_type_str(self_in), self->fd);
 }
 
-STATIC mp_obj_t vfs_sddf_fs_file_fileno(mp_obj_t self_in) {
-    mp_obj_vfs_sddf_fs_file_t *self = MP_OBJ_TO_PTR(self_in);
+STATIC mp_obj_t vfs_fs_file_fileno(mp_obj_t self_in) {
+    mp_obj_vfs_fs_file_t *self = MP_OBJ_TO_PTR(self_in);
     // check_fd_is_open(self);
     return MP_OBJ_NEW_SMALL_INT(self->fd);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(vfs_sddf_fs_file_fileno_obj, vfs_sddf_fs_file_fileno);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(vfs_fs_file_fileno_obj, vfs_fs_file_fileno);
 
-STATIC mp_obj_t vfs_sddf_fs_file___exit__(size_t n_args, const mp_obj_t *args) {
+STATIC mp_obj_t vfs_fs_file___exit__(size_t n_args, const mp_obj_t *args) {
     (void)n_args;
     return mp_stream_close(args[0]);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(vfs_sddf_fs_file___exit___obj, 4, 4, vfs_sddf_fs_file___exit__);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(vfs_fs_file___exit___obj, 4, 4, vfs_fs_file___exit__);
 
-STATIC mp_uint_t vfs_sddf_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int *errcode) {
-    mp_obj_vfs_sddf_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
+STATIC mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int *errcode) {
+    mp_obj_vfs_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
     // check_fd_is_open(o);
 
     ptrdiff_t read_buffer;
@@ -47,8 +47,8 @@ STATIC mp_uint_t vfs_sddf_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size,
         return MP_STREAM_ERROR;
     } 
 
-    struct sddf_fs_completion completion;
-    err = fs_command_blocking(&completion, SDDF_FS_CMD_PREAD, o->fd, read_buffer, size, o->pos);
+    struct fs_completion completion;
+    err = fs_command_blocking(&completion, FS_CMD_PREAD, o->fd, read_buffer, size, o->pos);
     if (err || completion.status != 0) {
         fs_buffer_free(read_buffer);
         return MP_STREAM_ERROR;
@@ -61,8 +61,8 @@ STATIC mp_uint_t vfs_sddf_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size,
     return (mp_uint_t)completion.data[0];
 }
 
-STATIC mp_uint_t vfs_sddf_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t size, int *errcode) {
-    mp_obj_vfs_sddf_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
+STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t size, int *errcode) {
+    mp_obj_vfs_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
     // check_fd_is_open(o);
 
     ptrdiff_t write_buffer;
@@ -73,8 +73,8 @@ STATIC mp_uint_t vfs_sddf_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_
 
     memcpy(fs_buffer_ptr(write_buffer), buf, size);
 
-    struct sddf_fs_completion completion;
-    err = fs_command_blocking(&completion, SDDF_FS_CMD_PWRITE, o->fd, write_buffer, size, o->pos);
+    struct fs_completion completion;
+    err = fs_command_blocking(&completion, FS_CMD_PWRITE, o->fd, write_buffer, size, o->pos);
     fs_buffer_free(write_buffer);
 
     if (completion.status != 0) {
@@ -84,8 +84,8 @@ STATIC mp_uint_t vfs_sddf_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_
     return (mp_uint_t)completion.data[0];
 }
 
-STATIC mp_uint_t vfs_sddf_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, int *errcode) {
-    mp_obj_vfs_sddf_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
+STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, int *errcode) {
+    mp_obj_vfs_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
 
     if (request != MP_STREAM_CLOSE) {
         // check_fd_is_open(o);
@@ -102,8 +102,8 @@ STATIC mp_uint_t vfs_sddf_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintpt
             return 0;
         }
         case MP_STREAM_CLOSE: {
-            struct sddf_fs_completion completion;
-            fs_command_blocking(&completion, SDDF_FS_CMD_CLOSE, o->fd, 0, 0, 0);
+            struct fs_completion completion;
+            fs_command_blocking(&completion, FS_CMD_CLOSE, o->fd, 0, 0, 0);
             return 0;
         }
         case MP_STREAM_GET_FILENO:
@@ -115,7 +115,7 @@ STATIC mp_uint_t vfs_sddf_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintpt
         }
         #endif
         case MP_STREAM_GET_BUFFER_SIZE: {
-            return VFS_SDDF_FS_FILE_BUFFER_SIZE;
+            return VFS_FS_FILE_BUFFER_SIZE;
         }
         default:
             *errcode = EINVAL;
@@ -123,8 +123,8 @@ STATIC mp_uint_t vfs_sddf_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintpt
     }
 }
 
-STATIC const mp_rom_map_elem_t vfs_sddf_fs_rawfile_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR_fileno), MP_ROM_PTR(&vfs_sddf_fs_file_fileno_obj) },
+STATIC const mp_rom_map_elem_t vfs_fs_rawfile_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_fileno), MP_ROM_PTR(&vfs_fs_file_fileno_obj) },
     { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&mp_stream_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_readinto), MP_ROM_PTR(&mp_stream_readinto_obj) },
     { MP_ROM_QSTR(MP_QSTR_readline), MP_ROM_PTR(&mp_stream_unbuffered_readline_obj) },
@@ -135,69 +135,69 @@ STATIC const mp_rom_map_elem_t vfs_sddf_fs_rawfile_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_flush), MP_ROM_PTR(&mp_stream_flush_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&mp_stream_close_obj) },
     { MP_ROM_QSTR(MP_QSTR___enter__), MP_ROM_PTR(&mp_identity_obj) },
-    { MP_ROM_QSTR(MP_QSTR___exit__), MP_ROM_PTR(&vfs_sddf_fs_file___exit___obj) },
+    { MP_ROM_QSTR(MP_QSTR___exit__), MP_ROM_PTR(&vfs_fs_file___exit___obj) },
 };
 
-STATIC MP_DEFINE_CONST_DICT(vfs_sddf_fs_rawfile_locals_dict, vfs_sddf_fs_rawfile_locals_dict_table);
+STATIC MP_DEFINE_CONST_DICT(vfs_fs_rawfile_locals_dict, vfs_fs_rawfile_locals_dict_table);
 
-STATIC const mp_stream_p_t vfs_sddf_fs_fileio_stream_p = {
-    .read = vfs_sddf_fs_file_read,
-    .write = vfs_sddf_fs_file_write,
-    .ioctl = vfs_sddf_fs_file_ioctl,
+STATIC const mp_stream_p_t vfs_fs_fileio_stream_p = {
+    .read = vfs_fs_file_read,
+    .write = vfs_fs_file_write,
+    .ioctl = vfs_fs_file_ioctl,
 };
 
 MP_DEFINE_CONST_OBJ_TYPE(
-    mp_type_vfs_sddf_fs_fileio,
+    mp_type_vfs_fs_fileio,
     MP_QSTR_FileIO,
     MP_TYPE_FLAG_ITER_IS_STREAM,
-    print, vfs_sddf_fs_file_print,
-    protocol, &vfs_sddf_fs_fileio_stream_p,
-    locals_dict, &vfs_sddf_fs_rawfile_locals_dict
+    print, vfs_fs_file_print,
+    protocol, &vfs_fs_fileio_stream_p,
+    locals_dict, &vfs_fs_rawfile_locals_dict
 );
 
-STATIC const mp_stream_p_t vfs_sddf_fs_textio_stream_p = {
-    .read = vfs_sddf_fs_file_read,
-    .write = vfs_sddf_fs_file_write,
-    .ioctl = vfs_sddf_fs_file_ioctl,
+STATIC const mp_stream_p_t vfs_fs_textio_stream_p = {
+    .read = vfs_fs_file_read,
+    .write = vfs_fs_file_write,
+    .ioctl = vfs_fs_file_ioctl,
     .is_text = true,
 };
 
 MP_DEFINE_CONST_OBJ_TYPE(
-    mp_type_vfs_sddf_fs_textio,
+    mp_type_vfs_fs_textio,
     MP_QSTR_TextIOWrapper,
     MP_TYPE_FLAG_ITER_IS_STREAM,
-    print, vfs_sddf_fs_file_print,
-    protocol, &vfs_sddf_fs_textio_stream_p,
-    locals_dict, &vfs_sddf_fs_rawfile_locals_dict
+    print, vfs_fs_file_print,
+    protocol, &vfs_fs_textio_stream_p,
+    locals_dict, &vfs_fs_rawfile_locals_dict
 );
 
-const mp_obj_vfs_sddf_fs_file_t mp_sys_stdin_obj = {{&mp_type_vfs_sddf_fs_textio}, STDIN_FILENO};
-const mp_obj_vfs_sddf_fs_file_t mp_sys_stdout_obj = {{&mp_type_vfs_sddf_fs_textio}, STDOUT_FILENO};
-const mp_obj_vfs_sddf_fs_file_t mp_sys_stderr_obj = {{&mp_type_vfs_sddf_fs_textio}, STDERR_FILENO};
+const mp_obj_vfs_fs_file_t mp_sys_stdin_obj = {{&mp_type_vfs_fs_textio}, STDIN_FILENO};
+const mp_obj_vfs_fs_file_t mp_sys_stdout_obj = {{&mp_type_vfs_fs_textio}, STDOUT_FILENO};
+const mp_obj_vfs_fs_file_t mp_sys_stderr_obj = {{&mp_type_vfs_fs_textio}, STDERR_FILENO};
 
-mp_obj_t mp_vfs_sddf_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj_t mode_in) {
-    mp_obj_vfs_sddf_fs_file_t *o = m_new_obj(mp_obj_vfs_sddf_fs_file_t);
+mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj_t mode_in) {
+    mp_obj_vfs_fs_file_t *o = m_new_obj(mp_obj_vfs_fs_file_t);
     const char *mode_s = mp_obj_str_get_str(mode_in);
 
     uint64_t flags = 0;
     while (*mode_s) {
         switch (*mode_s++) {
             case 'r':
-                flags |= SDDF_FS_OPEN_FLAGS_READ_ONLY;
+                flags |= FS_OPEN_FLAGS_READ_ONLY;
                 break;
             case 'w':
             case 'a':
-                flags |= SDDF_FS_OPEN_FLAGS_WRITE_ONLY;
-                flags |= SDDF_FS_OPEN_FLAGS_CREATE;
+                flags |= FS_OPEN_FLAGS_WRITE_ONLY;
+                flags |= FS_OPEN_FLAGS_CREATE;
                 break;
             case '+':
-                flags |= SDDF_FS_OPEN_FLAGS_READ_WRITE;
+                flags |= FS_OPEN_FLAGS_READ_WRITE;
                 break;
             case 'b':
-                type = &mp_type_vfs_sddf_fs_fileio;
+                type = &mp_type_vfs_fs_fileio;
                 break;
             case 't':
-                type = &mp_type_vfs_sddf_fs_textio;
+                type = &mp_type_vfs_fs_textio;
                 break;
         }
     }
@@ -223,8 +223,8 @@ mp_obj_t mp_vfs_sddf_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, m
     uint64_t path_len = strlen(fname) + 1;
     strcpy(fs_buffer_ptr(path_buffer), fname);
 
-    struct sddf_fs_completion completion;
-    fs_command_blocking(&completion, SDDF_FS_CMD_OPEN, path_buffer, path_len, flags, 0);
+    struct fs_completion completion;
+    fs_command_blocking(&completion, FS_CMD_OPEN, path_buffer, path_len, flags, 0);
 
     fs_buffer_free(path_buffer);
     if (completion.status != 0) {
