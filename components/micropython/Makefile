@@ -92,8 +92,8 @@ SRC_C = \
 	modtime.c \
 	mpnetworkport.c \
 	modfs_raw.c \
-	vfs_sddf_fs_file.c \
-	vfs_sddf_fs.c \
+	vfs_fs_file.c \
+	vfs_fs.c \
 	fs_helpers.c \
 	frozen_content.c \
 	extmod/modtime.c \
@@ -122,7 +122,7 @@ SRC_C = \
 
 
 # Define source files containung qstrs.
-SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c vfs_sddf_fs_file.c vfs_sddf_fs.c modfs_raw.c
+SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c vfs_fs_file.c vfs_fs.c modfs_raw.c
 
 # Frozen module to execute; otherwise run REPL
 ifdef EXEC_MODULE
