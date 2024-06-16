@@ -430,12 +430,14 @@ fail_continuation:
 
 void fsync_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
+    fd_t fd = cont->data[0];
     if (status == 0) {
         reply_success(cont->request_id, 0, 0);
     } else {
         dlog("fsync failed: %d (%s)", status, data);
         reply_err(cont->request_id);
     }
+    fd_end_op(fd);
     continuation_free(cont);
 }
 
@@ -457,6 +459,7 @@ void handle_fsync(uint64_t request_id, fd_t fd) {
         goto fail_continuation;
     }
     cont->request_id = request_id;
+    cont->data[0] = fd;
 
     err = nfs_fsync_async(nfs, file_handle, fsync_cb, cont);
     if (err) {
