@@ -82,6 +82,9 @@ STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t siz
         return MP_STREAM_ERROR;
     }
     o->pos += completion.data[0];
+    if (o->pos > o->size) {
+        o->size = o->pos;
+    }
     return (mp_uint_t)completion.data[0];
 }
 
@@ -98,8 +101,16 @@ STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t a
         }
         case MP_STREAM_SEEK: {
             struct mp_stream_seek_t *s = (struct mp_stream_seek_t *)arg;
-            o->pos = s->offset;
-            // TODO: use s->whence
+            if (s->whence == MP_SEEK_CUR) {
+                o->pos += s->offset;
+            } else if (s->whence == MP_SEEK_END) {
+                o->pos = o->size + s->offset;
+                if (o->pos > o->size) {
+                    o->size = o->pos;
+                }
+            } else {
+                o->pos = s->offset;
+            }
             return 0;
         }
         case MP_STREAM_CLOSE: {
