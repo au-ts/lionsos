@@ -121,6 +121,7 @@ void handle_stat64(uint64_t request_id, const char *path, void *buf) {
     err = nfs_stat64_async(nfs, path, stat64_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
+        goto fail_enqueue;
     }
 
     return;
