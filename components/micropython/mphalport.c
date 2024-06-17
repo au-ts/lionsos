@@ -16,11 +16,9 @@ ringbuffers. */
 STATIC uint8_t stdin_ringbuf_array[NUM_ENTRIES];
 ringbuf_t stdin_ringbuf = { stdin_ringbuf_array, sizeof(stdin_ringbuf_array) };
 
-int process_sddf_rx_chr(void) {
+bool process_sddf_rx_chr(void) {
     /* Check if our stdin_ringbuf is full. If it is, then we will
     let the sDDF queues buffer our input. */
-    int retval = 0;
-
     while (!serial_queue_empty(serial_rx_queue.active) && ringbuf_free(&stdin_ringbuf) != 0) {
         // Dequeue buffer and return char
         uintptr_t buffer = 0;
@@ -36,11 +34,9 @@ int process_sddf_rx_chr(void) {
         if (ch == mp_interrupt_char) {
             mp_sched_keyboard_interrupt();
             /* Delete all previous buffer entries. */
-            memset(stdin_ringbuf_array, sizeof(uint8_t) * NUM_ENTRIES);
             stdin_ringbuf.iget = 0;
             stdin_ringbuf.iput = 0;
-            retval = 1;
-            break;
+            return true;
         }
 
         /* Add this character to our MP stdin_ringbuf. */
@@ -48,7 +44,7 @@ int process_sddf_rx_chr(void) {
         assert(ret == 0);
     }
 
-    return retval;
+    return false;
 }
 
 // Receive single character, blocking until one is available.
@@ -57,18 +53,15 @@ int mp_hal_stdin_rx_chr(void) {
     and we are still attempting to read, we will await a notif from the rx
     multiplexer. */
     int c = 0;
-    if (ringbuf_peek(&stdin_ringbuf) != -1) {
-        /* There is nothing left in the internal ringbuf */
-        c = ringbuf_get(&stdin_ringbuf);
-    } else {
-        /* We will await on a serial event here. Once the serial event has occured, we should have populated the internal ringbuffer with a character. */
-        while (ringbuf_peek(&stdin_ringbuf) == -1) {
-            await(mp_event_source_serial);
-        }
-        c = ringbuf_get(&stdin_ringbuf);
+
+    /* We will await on a serial event here. Once the serial event has occured, we should have populated the internal ringbuffer with a character. */
+    while (ringbuf_peek(&stdin_ringbuf) == -1) {
+        await(mp_event_source_serial);
     }
 
-    /* Proces the sDDF queues again, in the case that we have buffered our input
+    c = ringbuf_get(&stdin_ringbuf);
+
+    /* Process the sDDF queues again, in the case that we have buffered our input
     in them. */
     process_sddf_rx_chr();
 
