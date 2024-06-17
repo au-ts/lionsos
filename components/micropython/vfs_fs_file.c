@@ -179,19 +179,25 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
     mp_obj_vfs_fs_file_t *o = m_new_obj(mp_obj_vfs_fs_file_t);
     const char *mode_s = mp_obj_str_get_str(mode_in);
 
-    uint64_t flags = 0;
+    uint64_t rw = 0;
+    bool create = false;
+    bool truncate = false;
     while (*mode_s) {
         switch (*mode_s++) {
             case 'r':
-                flags |= FS_OPEN_FLAGS_READ_ONLY;
+                rw = FS_OPEN_FLAGS_READ_ONLY;
                 break;
             case 'w':
+                rw = FS_OPEN_FLAGS_WRITE_ONLY;
+                create = true;
+                truncate = true;
+                break;
             case 'a':
-                flags |= FS_OPEN_FLAGS_WRITE_ONLY;
-                flags |= FS_OPEN_FLAGS_CREATE;
+                rw = FS_OPEN_FLAGS_WRITE_ONLY;
+                create = true;
                 break;
             case '+':
-                flags |= FS_OPEN_FLAGS_READ_WRITE;
+                rw = FS_OPEN_FLAGS_READ_WRITE;
                 break;
             case 'b':
                 type = &mp_type_vfs_fs_fileio;
@@ -200,6 +206,10 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
                 type = &mp_type_vfs_fs_textio;
                 break;
         }
+    }
+    uint64_t flags = rw;
+    if (create) {
+        flags |= SDDF_FS_OPEN_FLAGS_CREATE;
     }
 
     o->base.type = type;
@@ -232,5 +242,10 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
         return mp_const_none;
     }
     o->fd = completion.data[0];
+
+    if (truncate) {
+        fs_command_blocking(&completion, SDDF_FS_CMD_TRUNCATE, o->fd, 0, 0, 0);
+    }
+
     return MP_OBJ_FROM_PTR(o);
 }
