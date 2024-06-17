@@ -474,6 +474,53 @@ fail_begin:
     reply_err(request_id);
 }
 
+void truncate_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+    struct continuation *cont = private_data;
+    fd_t fd = cont->data[0];
+    if (status == 0) {
+        reply_success(cont->request_id, 0, 0);
+    } else {
+        dlog("ftruncate failed: %d (%s)", status, data);
+        reply_err(cont->request_id);
+    }
+    fd_end_op(fd);
+    continuation_free(cont);
+}
+
+void handle_truncate(uint64_t request_id, fd_t fd, uint64_t length) {
+    int err = 0;
+
+    struct nfsfh *file_handle = NULL;
+    err = fd_begin_op_file(fd, &file_handle);
+    if (err) {
+        dlog("invalid fd");
+        goto fail_begin;
+    }
+
+    struct continuation *cont = continuation_alloc();
+    if (cont == NULL) {
+        dlog("no free continuations");
+        goto fail_continuation;
+    }
+    cont->request_id = request_id;
+    cont->data[0] = fd;
+
+    err = nfs_ftruncate_async(nfs, file_handle, length, truncate_cb, cont);
+    if (err) {
+        dlog("failed to enqueue command");
+        goto fail_enqueue;
+    }
+
+    return;
+
+fail_enqueue:
+    continuation_free(cont);
+fail_continuation:
+    fd_end_op(fd);
+fail_begin:
+    reply_err(request_id);
+}
+
 void mkdir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     if (status == 0) {
@@ -822,6 +869,12 @@ void nfs_notified(void) {
             path[path_len - 1] = '\0';
 
             handle_unlink(request_id, path);
+            break;
+        }
+        case FS_CMD_TRUNCATE: {
+            uint64_t fd = cmd.args[0];
+            uint64_t length = cmd.args[1];
+            handle_truncate(request_id, fd, length);
             break;
         }
         case FS_CMD_MKDIR: {
