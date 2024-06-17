@@ -16,6 +16,7 @@ enum {
     FS_CMD_OPEN,
     FS_CMD_CLOSE,
     FS_CMD_STAT,
+    FS_CMD_FSTAT,
     FS_CMD_PREAD,
     FS_CMD_PWRITE,
     FS_CMD_RENAME,
