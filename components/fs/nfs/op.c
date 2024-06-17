@@ -132,6 +132,57 @@ fail_continuation:
     reply_err(request_id);
 }
 
+void fstat_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+    struct continuation *cont = private_data;
+    fd_t fd = cont->data[0];
+    void *buf = (void *)cont->data[1];
+
+    if (status == 0) {
+        memcpy(buf, data, sizeof (struct nfs_stat_64));
+        reply_success(cont->request_id, 0, 0);
+    } else {
+        dlog("failed to stat file (fd=%lu) (%d): %s", fd, status, data);
+        reply_err(cont->request_id);
+    }
+    fd_end_op(fd);
+    continuation_free(cont);
+}
+
+void handle_fstat(uint64_t request_id, fd_t fd, void *buf) {
+    int err = 0;
+
+    struct nfsfh *file_handle = NULL;
+    err = fd_begin_op_file(fd, &file_handle);
+    if (err) {
+        dlog("invalid fd: %d", fd);
+        goto fail_begin;
+    }
+
+    struct continuation *cont = continuation_alloc();
+    if (cont == NULL) {
+        dlog("no free continuations");
+        goto fail_continuation;
+    }
+    cont->request_id = request_id;
+    cont->data[0] = fd;
+    cont->data[1] = (uint64_t) buf;
+
+    err = nfs_fstat64_async(nfs, file_handle, fstat_cb, cont);
+    if (err) {
+        dlog("failed to enqueue command");
+        goto fail_enqueue;
+    }
+
+    return;
+
+fail_enqueue:
+    continuation_free(cont);
+fail_continuation:
+    fd_end_op(fd);
+fail_begin:
+    reply_err(request_id);
+}
+
 void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     struct nfsfh *file = data;
@@ -808,6 +859,18 @@ void nfs_notified(void) {
                 break;
             }
             handle_stat64(request_id, path, buf);
+            break;
+        }
+        case FS_CMD_FSTAT: {
+            uint64_t fd = cmd.args[0];
+            uint64_t buf_offset = cmd.args[1];
+            char *buf = client_share + buf_offset;
+            if (!buffer_valid(buf, sizeof (struct fs_stat_64))) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            handle_fstat(request_id, fd, buf);
             break;
         }
         case FS_CMD_CLOSE: {
