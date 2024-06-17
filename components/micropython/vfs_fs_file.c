@@ -16,6 +16,7 @@ typedef struct _mp_obj_vfs_fs_file_t {
     mp_obj_base_t base;
     uint64_t fd;
     uint64_t pos;
+    uint64_t size;
 } mp_obj_vfs_fs_file_t;
 
 STATIC void vfs_fs_file_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
@@ -182,6 +183,7 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
     uint64_t rw = 0;
     bool create = false;
     bool truncate = false;
+    bool append = false;
     while (*mode_s) {
         switch (*mode_s++) {
             case 'r':
@@ -195,6 +197,7 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
             case 'a':
                 rw = FS_OPEN_FLAGS_WRITE_ONLY;
                 create = true;
+                append = true;
                 break;
             case '+':
                 rw = FS_OPEN_FLAGS_READ_WRITE;
@@ -209,7 +212,7 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
     }
     uint64_t flags = rw;
     if (create) {
-        flags |= SDDF_FS_OPEN_FLAGS_CREATE;
+        flags |= FS_OPEN_FLAGS_CREATE;
     }
 
     o->base.type = type;
@@ -223,28 +226,46 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
 
     const char *fname = mp_obj_str_get_str(fid);
 
-    ptrdiff_t path_buffer;
-    int err = fs_buffer_allocate(&path_buffer);
+    ptrdiff_t buffer;
+    int err = fs_buffer_allocate(&buffer);
     if (err) {
         mp_raise_OSError(err);
         return mp_const_none;
     }
 
     uint64_t path_len = strlen(fname) + 1;
-    strcpy(fs_buffer_ptr(path_buffer), fname);
+    strcpy(fs_buffer_ptr(buffer), fname);
 
     struct fs_completion completion;
-    fs_command_blocking(&completion, FS_CMD_OPEN, path_buffer, path_len, flags, 0);
+    fs_command_blocking(&completion, FS_CMD_OPEN, buffer, path_len, flags, 0);
 
-    fs_buffer_free(path_buffer);
     if (completion.status != 0) {
+        fs_buffer_free(buffer);
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
     o->fd = completion.data[0];
 
+    fs_command_blocking(&completion, FS_CMD_FSTAT, o->fd, buffer, 0, 0);
+    if (completion.status != 0) {
+        fs_command_blocking(&completion, FS_CMD_CLOSE, o->fd, 0, 0, 0);
+        fs_buffer_free(buffer);
+        mp_raise_OSError(completion.status);
+        return mp_const_none;
+    }
+    struct fs_stat_64 *sb = fs_buffer_ptr(buffer);
+    o->size = sb->size;
+    fs_buffer_free(buffer);
+
     if (truncate) {
-        fs_command_blocking(&completion, SDDF_FS_CMD_TRUNCATE, o->fd, 0, 0, 0);
+        fs_command_blocking(&completion, FS_CMD_TRUNCATE, o->fd, 0, 0, 0);
+        if (completion.status != 0) {
+            fs_command_blocking(&completion, FS_CMD_CLOSE, o->fd, 0, 0, 0);
+            mp_raise_OSError(completion.status);
+            return mp_const_none;
+        }
+    } else if (append) {
+        o->pos = o->size;
     }
 
     return MP_OBJ_FROM_PTR(o);
