@@ -26,18 +26,12 @@ int process_sddf_rx_chr(void) {
         uintptr_t buffer = 0;
         unsigned int buffer_len = 0;
         int ret = serial_dequeue_active(&serial_rx_queue, &buffer, &buffer_len);
-        if (ret) {
-            microkit_dbg_puts("MP|ERROR: could not dequeue serial RX used buffer\n");
-            return 0;
-        }
+        assert(ret == 0);
 
         char ch = ((char *)buffer)[0];
 
         ret = serial_enqueue_free(&serial_rx_queue, buffer, BUFFER_SIZE);
-        if (ret) {
-            microkit_dbg_puts("MP|ERROR: could not enqueue serial RX free buffer\n");
-            return 0;
-        }
+        assert(ret == 0);
 
         if (ch == mp_interrupt_char) {
             mp_sched_keyboard_interrupt();
@@ -51,10 +45,7 @@ int process_sddf_rx_chr(void) {
 
         /* Add this character to our MP stdin_ringbuf. */
         ret = ringbuf_put(&stdin_ringbuf, ch);
-        if (ret == -1) {
-            microkit_dbg_puts("ERR: unable to place char in internal ringbuf\n");
-        }
-
+        assert(ret == 0);
     }
 
     return retval;
