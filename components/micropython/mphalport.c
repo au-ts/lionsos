@@ -50,8 +50,8 @@ int process_sddf_rx_chr(void) {
         }
 
         /* Add this character to our MP stdin_ringbuf. */
-        int re1t = ringbuf_put(&stdin_ringbuf, ch);
-        if (re1t == -1) {
+        ret = ringbuf_put(&stdin_ringbuf, ch);
+        if (ret == -1) {
             microkit_dbg_puts("ERR: unable to place char in internal ringbuf\n");
         }
 
