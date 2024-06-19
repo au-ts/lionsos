@@ -1,0 +1,1 @@
+#define DATA_REGION_SIZE 0x4000000
