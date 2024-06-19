@@ -149,7 +149,7 @@ void init(void) {
     }
 
     microkit_cothread_t _mp_cothread_handle;
-    co_err = microkit_cothread_spawn(t_mp_entrypoint, ready_true, &_mp_cothread_handle, 0);
+    co_err = microkit_cothread_spawn(t_mp_entrypoint, true, &_mp_cothread_handle, 0);
     if (co_err != co_no_err) {
         printf("MP|ERROR: Cannot initialise Micropython cothread, err is: %s", microkit_cothread_pretty_error(co_err));
         while (true) {}
