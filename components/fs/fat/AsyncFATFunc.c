@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include "../../../include/lions/fs/protocol.h"
+#include "fatfs_config.h"
 
 #ifdef FS_DEBUG_PRINT
 #include "../../../dep/sddf/include/sddf/util/printf.h"
@@ -12,6 +13,12 @@
 This file define a bunch of wrapper functions of FATFs functions so thos functions can be run in the 
 coroutine.
 */
+
+// Sanity check functions
+// Checking if the memory region that provided by request is within valid memory region
+static inline bool within_data_region(uint64_t offset, uint64_t buffer_size) {
+    return (offset <= DATA_REGION_SIZE) && (buffer_size <= DATA_REGION_SIZE - offset);
+}
 
 void Function_Fill_Response(void* data, FRESULT result, uint64_t RETDATA, uint64_t RETDATA2) {
     uint64_t *args = (uint64_t *) data;
@@ -27,11 +34,21 @@ FIL* Files;
 bool* Dirs_BitList;
 DIR* Dirs;
 
+// Checking if the descriptor is mapped to a valid object
+static inline bool validate_file_descriptor(uint64_t fd) {
+    return (fd < MAX_OPENED_FILENUM) && File_BitList[fd];
+}
+
+// Checking if the descriptor is mapped to a valid object
+static inline bool validate_dir_descriptor(uint64_t fd) {
+    return (fd < MAX_OPENED_DIRNUM) && Dirs_BitList[fd];
+}
+
 // Every buffer 
 extern uintptr_t client_data_offset;
 
 // Init the structure without using malloc
-// Could this has potential alignment issue?
+// Could this have potential alignment issue?
 void init_metadata(void* fs_metadata) {
     char* base = (char*)fs_metadata;
 
@@ -117,14 +134,22 @@ void fat_pwrite() {
     void* data = (void *) (args[1] + client_data_offset);
     uint64_t btw = args[2];
     uint64_t offset = args[3];
-    
-    // Maybe add validation check of file descriptor here
-    FIL* file = &(Files[fd]);
-    FRESULT RET = FR_TIMEOUT;
 
     #ifdef FS_DEBUG_PRINT
     sddf_printf("fat_write: bytes to be write: %lu, read offset: %lu\n", btw, offset);
     #endif
+
+    if (!within_data_region(args[1], btw)) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("fat_write: Trying to write into invalid memory region\n");
+        #endif
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+
+    // Maybe add validation check of file descriptor here
+    FIL* file = &(Files[fd]);
+    FRESULT RET = FR_TIMEOUT;
 
     RET = f_lseek(file, offset);
 
@@ -156,7 +181,15 @@ void fat_pread() {
     void* data = (void *) (args[1] + client_data_offset);
     uint64_t btr = args[2];
     uint64_t offset = args[3];
-    
+
+    if (!within_data_region(args[1], btr)) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("fat_read: Trying to write into invalid memory region\n");
+        #endif
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+
     // Maybe add validation check of file descriptor here
     FIL* file = &(Files[fd]);
     FRESULT RET = FR_TIMEOUT;
