@@ -5,7 +5,7 @@
 #include <fcntl.h>
 #include <string.h>
 
-mp_obj_t request_flags[SDDF_FS_QUEUE_CAPACITY];
+mp_obj_t request_flags[FS_QUEUE_CAPACITY];
 
 void fs_request_flag_set(uint64_t request_id) {
     mp_obj_t flag = request_flags[request_id];
@@ -39,7 +39,7 @@ STATIC mp_obj_t request_open(mp_obj_t path_in, mp_obj_t flag_in) {
     strcpy(fs_buffer_ptr(path_buffer), path);
 
     request_flags[request_id] = flag_in;
-    fs_command_issue(request_id, SDDF_FS_CMD_OPEN, path_buffer, path_len, O_RDONLY, 0644);
+    fs_command_issue(request_id, FS_CMD_OPEN, path_buffer, path_len, O_RDONLY, 0644);
 
     return mp_obj_new_int_from_uint(request_id);
 }
@@ -48,8 +48,8 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(request_open_obj, request_open);
 STATIC mp_obj_t complete_open(mp_obj_t request_id_in) {
     uint64_t request_id = mp_obj_get_int(request_id_in);
 
-    struct sddf_fs_command command;
-    struct sddf_fs_completion completion;
+    struct fs_command command;
+    struct fs_completion completion;
     fs_command_complete(request_id, &command, &completion);
 
     fs_buffer_free(command.args[0]);
@@ -73,7 +73,7 @@ STATIC mp_obj_t request_close(mp_obj_t fd_in, mp_obj_t flag_in) {
         return mp_const_none;
     }
     request_flags[request_id] = flag_in;
-    fs_command_issue(request_id, SDDF_FS_CMD_CLOSE, fd, 0, 0, 0);
+    fs_command_issue(request_id, FS_CMD_CLOSE, fd, 0, 0, 0);
     return mp_obj_new_int_from_uint(request_id);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(request_close_obj, request_close);
@@ -81,8 +81,8 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(request_close_obj, request_close);
 STATIC mp_obj_t complete_close(mp_obj_t request_id_in) {
     uint64_t request_id = mp_obj_get_int(request_id_in);
 
-    struct sddf_fs_command command;
-    struct sddf_fs_completion completion;
+    struct fs_command command;
+    struct fs_completion completion;
     fs_command_complete(request_id, &command, &completion);
 
     fs_request_free(request_id);
@@ -113,7 +113,7 @@ STATIC mp_obj_t request_pread(mp_uint_t n_args, const mp_obj_t *args) {
     }
 
     request_flags[request_id] = flag;
-    fs_command_issue(request_id, SDDF_FS_CMD_PREAD, fd, read_buffer, nbyte, offset);
+    fs_command_issue(request_id, FS_CMD_PREAD, fd, read_buffer, nbyte, offset);
     return mp_obj_new_int_from_uint(request_id);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(request_pread_obj, 4, 4, request_pread);
@@ -121,8 +121,8 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(request_pread_obj, 4, 4, request_prea
 STATIC mp_obj_t complete_pread(mp_obj_t request_id_in) {
     uint64_t request_id = mp_obj_get_int(request_id_in);
 
-    struct sddf_fs_command command;
-    struct sddf_fs_completion completion;
+    struct fs_command command;
+    struct fs_completion completion;
     fs_command_complete(request_id, &command, &completion);
     fs_request_free(request_id);
 
@@ -163,7 +163,7 @@ STATIC mp_obj_t request_stat(mp_obj_t path_in, mp_obj_t flag_in) {
     strcpy(fs_buffer_ptr(path_buffer), path);
 
     request_flags[request_id] = flag_in;
-    fs_command_issue(request_id, SDDF_FS_CMD_STAT, path_buffer, path_len, output_buffer, 0);
+    fs_command_issue(request_id, FS_CMD_STAT, path_buffer, path_len, output_buffer, 0);
     return mp_obj_new_int_from_uint(request_id);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(request_stat_obj, request_stat);
@@ -171,18 +171,19 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(request_stat_obj, request_stat);
 STATIC mp_obj_t complete_stat(mp_obj_t request_id_in) {
     uint64_t request_id = mp_obj_get_int(request_id_in);
 
-    struct sddf_fs_command command;
-    struct sddf_fs_completion completion;
+    struct fs_command command;
+    struct fs_completion completion;
     fs_command_complete(request_id, &command, &completion);
     fs_request_free(request_id);
     fs_buffer_free(command.args[0]);
 
     if (completion.status) {
+        fs_buffer_free(command.args[2]);
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
 
-    struct sddf_fs_stat_64 *sb = (struct sddf_fs_stat_64 *)fs_buffer_ptr(command.args[2]);
+    struct fs_stat_64 *sb = (struct fs_stat_64 *)fs_buffer_ptr(command.args[2]);
     mp_obj_tuple_t *t = MP_OBJ_TO_PTR(mp_obj_new_tuple(10, NULL));
     t->items[0] = MP_OBJ_NEW_SMALL_INT(sb->mode);
     t->items[1] = mp_obj_new_int_from_uint(sb->ino);

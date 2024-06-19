@@ -28,8 +28,8 @@
 #define MAX_CONCURRENT_OPS 100
 #define CLIENT_SHARE_SIZE 0x4000000
 
-struct sddf_fs_queue *command_queue;
-struct sddf_fs_queue *completion_queue;
+struct fs_queue *command_queue;
+struct fs_queue *completion_queue;
 char *client_share;
 
 struct continuation {
@@ -66,7 +66,7 @@ void continuation_free(struct continuation *cont) {
 }
 
 void reply(uint64_t request_id, uint64_t status, uint64_t data0, uint64_t data1) {
-    union sddf_fs_message message = {
+    union fs_message message = {
         .completion = {
             .request_id = request_id,
             .status = status,
@@ -76,7 +76,7 @@ void reply(uint64_t request_id, uint64_t status, uint64_t data0, uint64_t data1)
             }
         }
     };
-    sddf_fs_queue_push(completion_queue, message);
+    fs_queue_push(completion_queue, message);
     microkit_notify(CLIENT_CHANNEL);
 }
 
@@ -121,6 +121,7 @@ void handle_stat64(uint64_t request_id, const char *path, void *buf) {
     err = nfs_stat64_async(nfs, path, stat64_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
+        goto fail_enqueue;
     }
 
     return;
@@ -128,6 +129,57 @@ void handle_stat64(uint64_t request_id, const char *path, void *buf) {
 fail_enqueue:
     continuation_free(cont);
 fail_continuation:
+    reply_err(request_id);
+}
+
+void fstat_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+    struct continuation *cont = private_data;
+    fd_t fd = cont->data[0];
+    void *buf = (void *)cont->data[1];
+
+    if (status == 0) {
+        memcpy(buf, data, sizeof (struct nfs_stat_64));
+        reply_success(cont->request_id, 0, 0);
+    } else {
+        dlog("failed to stat file (fd=%lu) (%d): %s", fd, status, data);
+        reply_err(cont->request_id);
+    }
+    fd_end_op(fd);
+    continuation_free(cont);
+}
+
+void handle_fstat(uint64_t request_id, fd_t fd, void *buf) {
+    int err = 0;
+
+    struct nfsfh *file_handle = NULL;
+    err = fd_begin_op_file(fd, &file_handle);
+    if (err) {
+        dlog("invalid fd: %d", fd);
+        goto fail_begin;
+    }
+
+    struct continuation *cont = continuation_alloc();
+    if (cont == NULL) {
+        dlog("no free continuations");
+        goto fail_continuation;
+    }
+    cont->request_id = request_id;
+    cont->data[0] = fd;
+    cont->data[1] = (uint64_t) buf;
+
+    err = nfs_fstat64_async(nfs, file_handle, fstat_cb, cont);
+    if (err) {
+        dlog("failed to enqueue command");
+        goto fail_enqueue;
+    }
+
+    return;
+
+fail_enqueue:
+    continuation_free(cont);
+fail_continuation:
+    fd_end_op(fd);
+fail_begin:
     reply_err(request_id);
 }
 
@@ -167,16 +219,16 @@ void handle_open(uint64_t request_id, const char *path, uint64_t flags) {
     cont->data[0] = fd;
 
     int posix_flags = 0;
-    if (flags & SDDF_FS_OPEN_FLAGS_READ_ONLY) {
+    if (flags & FS_OPEN_FLAGS_READ_ONLY) {
         posix_flags |= O_RDONLY;
     }
-    if (flags & SDDF_FS_OPEN_FLAGS_WRITE_ONLY) {
+    if (flags & FS_OPEN_FLAGS_WRITE_ONLY) {
         posix_flags |= O_WRONLY;
     }
-    if (flags & SDDF_FS_OPEN_FLAGS_READ_WRITE) {
+    if (flags & FS_OPEN_FLAGS_READ_WRITE) {
         posix_flags |= O_RDWR;
     }
-    if (flags & SDDF_FS_OPEN_FLAGS_CREATE) {
+    if (flags & FS_OPEN_FLAGS_CREATE) {
         posix_flags |= O_CREAT;
     }
 
@@ -430,12 +482,14 @@ fail_continuation:
 
 void fsync_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
+    fd_t fd = cont->data[0];
     if (status == 0) {
         reply_success(cont->request_id, 0, 0);
     } else {
         dlog("fsync failed: %d (%s)", status, data);
         reply_err(cont->request_id);
     }
+    fd_end_op(fd);
     continuation_free(cont);
 }
 
@@ -457,8 +511,56 @@ void handle_fsync(uint64_t request_id, fd_t fd) {
         goto fail_continuation;
     }
     cont->request_id = request_id;
+    cont->data[0] = fd;
 
     err = nfs_fsync_async(nfs, file_handle, fsync_cb, cont);
+    if (err) {
+        dlog("failed to enqueue command");
+        goto fail_enqueue;
+    }
+
+    return;
+
+fail_enqueue:
+    continuation_free(cont);
+fail_continuation:
+    fd_end_op(fd);
+fail_begin:
+    reply_err(request_id);
+}
+
+void truncate_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+    struct continuation *cont = private_data;
+    fd_t fd = cont->data[0];
+    if (status == 0) {
+        reply_success(cont->request_id, 0, 0);
+    } else {
+        dlog("ftruncate failed: %d (%s)", status, data);
+        reply_err(cont->request_id);
+    }
+    fd_end_op(fd);
+    continuation_free(cont);
+}
+
+void handle_truncate(uint64_t request_id, fd_t fd, uint64_t length) {
+    int err = 0;
+
+    struct nfsfh *file_handle = NULL;
+    err = fd_begin_op_file(fd, &file_handle);
+    if (err) {
+        dlog("invalid fd");
+        goto fail_begin;
+    }
+
+    struct continuation *cont = continuation_alloc();
+    if (cont == NULL) {
+        dlog("no free continuations");
+        goto fail_continuation;
+    }
+    cont->request_id = request_id;
+    cont->data[0] = fd;
+
+    err = nfs_ftruncate_async(nfs, file_handle, length, truncate_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -720,12 +822,12 @@ fail:
 }
 
 void nfs_notified(void) {
-    union sddf_fs_message message;
-    while (sddf_fs_queue_pop(command_queue, &message)) {
-        struct sddf_fs_command cmd = message.command;
+    union fs_message message;
+    while (fs_queue_pop(command_queue, &message)) {
+        struct fs_command cmd = message.command;
         uint64_t request_id = cmd.request_id;
         switch (cmd.cmd_type) {
-        case SDDF_FS_CMD_OPEN: {
+        case FS_CMD_OPEN: {
             uint64_t path_offset = cmd.args[0];
             char *path = client_share + path_offset;
             uint64_t path_len = cmd.args[1];
@@ -739,7 +841,7 @@ void nfs_notified(void) {
             handle_open(request_id, path, flags);
             break;
         }
-        case SDDF_FS_CMD_STAT: {
+        case FS_CMD_STAT: {
             uint64_t path_offset = cmd.args[0];
             char *path = client_share + path_offset;
             uint64_t path_len = cmd.args[1];
@@ -751,7 +853,7 @@ void nfs_notified(void) {
             path[path_len - 1] = '\0';
             uint64_t buf_offset = cmd.args[2];
             char *buf = client_share + buf_offset;
-            if (!buffer_valid(buf, sizeof (struct sddf_fs_stat_64))) {
+            if (!buffer_valid(buf, sizeof (struct fs_stat_64))) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
@@ -759,12 +861,24 @@ void nfs_notified(void) {
             handle_stat64(request_id, path, buf);
             break;
         }
-        case SDDF_FS_CMD_CLOSE: {
+        case FS_CMD_FSTAT: {
+            uint64_t fd = cmd.args[0];
+            uint64_t buf_offset = cmd.args[1];
+            char *buf = client_share + buf_offset;
+            if (!buffer_valid(buf, sizeof (struct fs_stat_64))) {
+                dlog("bad buffer provided");
+                reply_err(request_id);
+                break;
+            }
+            handle_fstat(request_id, fd, buf);
+            break;
+        }
+        case FS_CMD_CLOSE: {
             fd_t fd = cmd.args[0];
             handle_close(request_id, fd);
             break;
         }
-        case SDDF_FS_CMD_PREAD: {
+        case FS_CMD_PREAD: {
             fd_t fd = cmd.args[0];
             uint64_t buf_offset = cmd.args[1];
             const char *buf = client_share + buf_offset;
@@ -778,7 +892,7 @@ void nfs_notified(void) {
             handle_pread(request_id, fd, buf, nbyte, offset);
             break;
         }
-        case SDDF_FS_CMD_PWRITE: {
+        case FS_CMD_PWRITE: {
             fd_t fd = cmd.args[0];
             uint64_t buf_offset = cmd.args[1];
             char *buf = client_share + buf_offset;
@@ -792,7 +906,7 @@ void nfs_notified(void) {
             handle_pwrite(request_id, fd, buf, nbyte, offset);
             break;
         }
-        case SDDF_FS_CMD_RENAME: {
+        case FS_CMD_RENAME: {
             uint64_t oldpath_offset = cmd.args[0];
             uint64_t oldpath_len = cmd.args[1];
             char *oldpath = client_share + oldpath_offset;
@@ -810,7 +924,7 @@ void nfs_notified(void) {
             handle_rename(request_id, oldpath, newpath);
             break;
         }
-        case SDDF_FS_CMD_UNLINK: {
+        case FS_CMD_UNLINK: {
             uint64_t path_offset = cmd.args[0];
             uint64_t path_len = cmd.args[1];
             char *path = client_share + path_offset;
@@ -824,7 +938,13 @@ void nfs_notified(void) {
             handle_unlink(request_id, path);
             break;
         }
-        case SDDF_FS_CMD_MKDIR: {
+        case FS_CMD_TRUNCATE: {
+            uint64_t fd = cmd.args[0];
+            uint64_t length = cmd.args[1];
+            handle_truncate(request_id, fd, length);
+            break;
+        }
+        case FS_CMD_MKDIR: {
             uint64_t path_offset = cmd.args[0];
             uint64_t path_len = cmd.args[1];
             char *path = client_share + path_offset;
@@ -838,7 +958,7 @@ void nfs_notified(void) {
             handle_mkdir(request_id, path);
             break;
         }
-        case SDDF_FS_CMD_RMDIR: {
+        case FS_CMD_RMDIR: {
             uint64_t path_offset = cmd.args[0];
             uint64_t path_len = cmd.args[1];
             char *path = client_share + path_offset;
@@ -852,7 +972,7 @@ void nfs_notified(void) {
             handle_rmdir(request_id, path);
             break;
         }
-        case SDDF_FS_CMD_OPENDIR: {
+        case FS_CMD_OPENDIR: {
             uint64_t path_offset = cmd.args[0];
             uint64_t path_len = cmd.args[1];
             char *path = client_share + path_offset;
@@ -866,12 +986,12 @@ void nfs_notified(void) {
             handle_opendir(request_id, path);
             break;
         }
-        case SDDF_FS_CMD_CLOSEDIR: {
+        case FS_CMD_CLOSEDIR: {
             fd_t fd = cmd.args[0];
             handle_closedir(request_id, fd);
             break;
         }
-        case SDDF_FS_CMD_READDIR: {
+        case FS_CMD_READDIR: {
             fd_t fd = cmd.args[0];
             uint64_t buf_offset = cmd.args[1];
             uint64_t buf_size = cmd.args[2];
@@ -884,23 +1004,23 @@ void nfs_notified(void) {
             handle_readdir(request_id, fd, buf, buf_size);
             break;
         }
-        case SDDF_FS_CMD_FSYNC: {
+        case FS_CMD_FSYNC: {
             fd_t fd = cmd.args[0];
             handle_fsync(request_id, fd);
             break;
         }
-        case SDDF_FS_CMD_SEEKDIR: {
+        case FS_CMD_SEEKDIR: {
             fd_t fd = cmd.args[0];
             int64_t loc = cmd.args[1];
             handle_seekdir(request_id, fd, loc);
             break;
         }
-        case SDDF_FS_CMD_TELLDIR: {
+        case FS_CMD_TELLDIR: {
             fd_t fd = cmd.args[0];
             handle_telldir(request_id, fd);
             break;
         }
-        case SDDF_FS_CMD_REWINDDIR: {
+        case FS_CMD_REWINDDIR: {
             fd_t fd = cmd.args[0];
             handle_rewinddir(request_id, fd);
             break;

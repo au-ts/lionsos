@@ -77,6 +77,9 @@ void notified(microkit_channel ch) {
             if (tcp_socket_hup(socket_index)) {
                 sevents |= POLLHUP;
             }
+            if (tcp_socket_err(socket_index)) {
+                sevents |= POLLERR;
+            }
             if (revents & POLLOUT && tcp_socket_writable(socket_index)) {
                 sevents |= POLLOUT;
             }
