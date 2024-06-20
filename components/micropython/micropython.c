@@ -18,13 +18,11 @@
 #include "fs_helpers.h"
 #include <libmicrokitco.h>
 
-#define CO_CONTROL_SIZE 0x1000
-
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
 
 static char mp_stack[MICROPY_STACK_SIZE];
-static char co_controller_mem[CO_CONTROL_SIZE];
+static char co_controller_mem[LIBMICROKITCO_CONTROLLER_SIZE];
 
 cothread_t t_event, t_mp;
 
