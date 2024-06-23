@@ -51,7 +51,7 @@ uintptr_t framebuffer_data_region;
 #endif
 
 void await(microkit_channel event_ch) {
-    co_err_t err = microkit_cothread_wait(event_ch);
+    co_err_t err = microkit_cothread_wait_on_channel(event_ch);
 
     if (err != co_no_err) {
         printf("MP|ERROR: await(): %s", microkit_cothread_pretty_error(err));
@@ -92,7 +92,7 @@ static void exec_str(const char *src, mp_parse_input_kind_t input_kind) {
     }
 }
 
-size_t t_mp_entrypoint(void) {
+void t_mp_entrypoint(void) {
     printf("MP|INFO: initialising!\n");
 
     // Initialise the MicroPython runtime.
@@ -123,7 +123,6 @@ start_repl:
 #endif
 
     // libmicrokitco will gracefully clean up when a cothread return, no need to do anything special here
-    return 0;
 }
 
 void init(void) {
@@ -147,7 +146,7 @@ void init(void) {
     }
 
     microkit_cothread_t _mp_cothread_handle;
-    co_err = microkit_cothread_spawn(t_mp_entrypoint, true, &_mp_cothread_handle, 0);
+    co_err = microkit_cothread_spawn(t_mp_entrypoint, true, &_mp_cothread_handle, NULL);
     if (co_err != co_no_err) {
         printf("MP|ERROR: Cannot initialise Micropython cothread, err is: %s", microkit_cothread_pretty_error(co_err));
         while (true) {}
