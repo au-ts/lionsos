@@ -2,6 +2,7 @@
 #include "ff15/source/ff.h"
 #include "FiberPool/FiberPool.h"
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 #include "../../../include/lions/fs/protocol.h"
 #include "fatfs_config.h"
@@ -13,6 +14,12 @@
 This file define a bunch of wrapper functions of FATFs functions so thos functions can be run in the 
 coroutine.
 */
+
+typedef enum : uint8_t {
+    FREE = 0,
+    INUSE = 1,
+    CLEANUP = 2,
+} Descriptor_Status;
 
 // Sanity check functions
 // Checking if the memory region that provided by request is within valid memory region
@@ -28,20 +35,21 @@ void Function_Fill_Response(void* data, FRESULT result, uint64_t RETDATA, uint64
     return;
 }
 
+Descriptor_Status* Fs_Status;
 FATFS* Fatfs;
-bool* File_BitList;
+Descriptor_Status* File_Status;
 FIL* Files;
-bool* Dirs_BitList;
+Descriptor_Status* Dir_Status;
 DIR* Dirs;
 
 // Checking if the descriptor is mapped to a valid object
 static inline bool validate_file_descriptor(uint64_t fd) {
-    return (fd < MAX_OPENED_FILENUM) && File_BitList[fd];
+    return (fd < MAX_OPENED_FILENUM) && File_Status[fd] == INUSE;
 }
 
 // Checking if the descriptor is mapped to a valid object
 static inline bool validate_dir_descriptor(uint64_t fd) {
-    return (fd < MAX_OPENED_DIRNUM) && Dirs_BitList[fd];
+    return (fd < MAX_OPENED_DIRNUM) && Dir_Status[fd] == INUSE;
 }
 
 // Every buffer 
@@ -50,19 +58,46 @@ extern uintptr_t client_data_offset;
 // Init the structure without using malloc
 // Could this have potential alignment issue?
 void init_metadata(void* fs_metadata) {
-    char* base = (char*)fs_metadata;
-
+    uint64_t base = (uint64_t)fs_metadata;
+    
+    // Allocate memory for Fs_Status
+    Fs_Status = (Descriptor_Status*)base;
+    base += sizeof(Descriptor_Status) * MAX_FATFS;
+    
+    // Allocate memory for FATFS
     Fatfs = (FATFS*)base;
-    File_BitList = (bool*)(base + sizeof(FATFS));
-    Files = (FIL*)(base + sizeof(FATFS) + sizeof(bool) * MAX_OPENED_FILENUM);
-    Dirs_BitList = (bool*)(base + sizeof(FATFS) + sizeof(bool) * MAX_OPENED_FILENUM + sizeof(FIL) * MAX_OPENED_FILENUM);
-    Dirs = (DIR*)(base + sizeof(FATFS) + sizeof(bool) * MAX_OPENED_FILENUM + sizeof(FIL) * MAX_OPENED_FILENUM + sizeof(bool) * MAX_OPENED_DIRNUM);
+    base += sizeof(FATFS) * MAX_FATFS;
+    
+    // Allocate memory for File_Status
+    File_Status = (Descriptor_Status*)base;
+    base += sizeof(Descriptor_Status) * MAX_OPENED_FILENUM;
+    
+    // Allocate memory for Files
+    Files = (FIL*)base;
+    base += sizeof(FIL) * MAX_OPENED_FILENUM;
+    
+    // Allocate memory for Dir_Status
+    Dir_Status = (Descriptor_Status*)base;
+    base += sizeof(Descriptor_Status) * MAX_OPENED_DIRNUM;
+    
+    // Allocate memory for Dirs
+    Dirs = (DIR*)base;
+}
+
+uint32_t Find_FreeFs() {
+    uint32_t i;
+    for (i = 0; i < MAX_FATFS; i++) {
+        if (Fs_Status[i] == FREE) {
+            return i;
+        }
+    }
+    return i;
 }
 
 uint32_t Find_FreeFile() {
     uint32_t i;
     for (i = 0; i < MAX_OPENED_FILENUM; i++) {
-        if (File_BitList[i] == 0) {
+        if (File_Status[i] == FREE) {
             return i;
         }
     }
@@ -72,7 +107,7 @@ uint32_t Find_FreeFile() {
 uint32_t Find_FreeDir() {
     uint32_t i;
     for (i = 0; i < MAX_OPENED_DIRNUM; i++) {
-        if (Dirs_BitList[i] == 0) {
+        if (Dir_Status[i] == FREE) {
             return i;
         }
     }
@@ -82,20 +117,52 @@ uint32_t Find_FreeDir() {
 // Change here later to support more than one FAT volumes
 void fat_mount() {
     uint64_t *args = Fiber_GetArgs();
+    if (Fs_Status[0] != FREE) {
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+    Fs_Status[0] = INUSE;
     FRESULT RET = f_mount(&(Fatfs[0]), "", 1);
+    if (RET != FR_OK) {
+        Fs_Status[0] = FREE;
+    }
     Function_Fill_Response(args, RET, 0, 0);
     Fiber_kill();
 }
 
 void fat_unmount() {
     uint64_t *args = Fiber_GetArgs();
+    if (Fs_Status[0] != INUSE) {
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+    Fs_Status[0] = CLEANUP;
     FRESULT RET = f_unmount("");
+    if (RET == FR_OK) {
+        Fs_Status[0] = FREE;
+    }
+    else {
+        Fs_Status[0] = INUSE;
+    }
     Function_Fill_Response(args, RET, 0, 0);
     Fiber_kill();
 }
 
 void fat_open() {
     uint64_t *args = Fiber_GetArgs();
+
+    uint64_t buffer = args[0];
+    uint64_t size = args[1];
+    uint64_t openflag = args[2];
+
+    if (!within_data_region(buffer, size) && size <= MAX_PATH_LEN) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("fat_open: Contain invalid memory region\n");
+        #endif
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+
     uint32_t fd = Find_FreeFile();
     if (fd == MAX_OPENED_FILENUM) {
         Function_Fill_Response(args, FR_TOO_MANY_OPEN_FILES, 0, 0);
@@ -103,26 +170,39 @@ void fat_open() {
     }
     FIL* file = &(Files[fd]);
 
-    char* filepath = (void *)(args[0] + client_data_offset);
+    // Set the position to INUSE to indicate this file structure is in use
+    File_Status[fd] = INUSE;
+    
+    // Copy the name to our name buffer
+    char filename[size];
 
+    memcpy(filename, (char*) (buffer + client_data_offset), size);
+    
+    // Check if there is a null-terminator at the end, it should be fine if it is not the only null-terminator
+    if (filename[size - 1] != '\0') {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("fat_open: Contain invalid string\n");
+        #endif
+        File_Status[fd] = FREE;
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+
+    // Add open flag checking and mapping here
     #ifdef FS_DEBUG_PRINT
-    sddf_printf("fat_open: file path: %s\n", (char *)filepath);
-    sddf_printf("fat_open: open flag: %lu\n", args[1]);
+    sddf_printf("fat_open: file path: %s\n", filename);
+    sddf_printf("fat_open: open flag: %lu\n", openflag);
     #endif
 
     // Micropython seems to always use open flag FA_CREATE_ALWAYS, so a hack here is to always use FA_OPEN_ALWAYS
     // It should be changed back after Micropython fix this
-    // FRESULT RET = f_open(file, filepath, args[1]);
-    FRESULT RET = f_open(file, filepath, (FA_OPEN_ALWAYS|FA_READ|FA_WRITE));
+    // FRESULT RET = f_open(file, filename, args[2]);
+    FRESULT RET = f_open(file, filename, (FA_OPEN_ALWAYS|FA_READ|FA_WRITE));
     
     // Error handling
     if (RET != FR_OK) {
-        Function_Fill_Response(args, RET, 0, 0);
-        Fiber_kill();
+        File_Status[fd] = FREE;
     }
-    
-    // Set the position to 1 to indicate this file structure is in use
-    File_BitList[fd] = 1;
 
     Function_Fill_Response(args, RET, fd, 0);
     Fiber_kill();
@@ -131,7 +211,7 @@ void fat_open() {
 void fat_pwrite() {
     uint64_t *args = Fiber_GetArgs();
     uint64_t fd = args[0];
-    void* data = (void *) (args[1] + client_data_offset);
+    uint64_t buffer = args[1];
     uint64_t btw = args[2];
     uint64_t offset = args[3];
 
@@ -139,13 +219,15 @@ void fat_pwrite() {
     sddf_printf("fat_write: bytes to be write: %lu, read offset: %lu\n", btw, offset);
     #endif
 
-    if (!within_data_region(args[1], btw)) {
+    if (!within_data_region(buffer, btw) || !validate_file_descriptor(fd)) {
         #ifdef FS_DEBUG_PRINT
         sddf_printf("fat_write: Trying to write into invalid memory region\n");
         #endif
         Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
         Fiber_kill();
     }
+
+    void* data = (void *) (buffer + client_data_offset);
 
     // Maybe add validation check of file descriptor here
     FIL* file = &(Files[fd]);
@@ -178,17 +260,19 @@ void fat_pwrite() {
 void fat_pread() {
     uint64_t *args = Fiber_GetArgs();
     uint64_t fd = args[0];
-    void* data = (void *) (args[1] + client_data_offset);
+    uint64_t buffer = args[1];
     uint64_t btr = args[2];
     uint64_t offset = args[3];
 
-    if (!within_data_region(args[1], btr)) {
+    if (!within_data_region(buffer, btr)) {
         #ifdef FS_DEBUG_PRINT
         sddf_printf("fat_read: Trying to write into invalid memory region\n");
         #endif
         Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
         Fiber_kill();
     }
+
+    void* data = (void *) (buffer + client_data_offset);
 
     // Maybe add validation check of file descriptor here
     FIL* file = &(Files[fd]);
@@ -226,14 +310,17 @@ void fat_close() {
     uint64_t *args = Fiber_GetArgs();
     uint64_t fd = args[0];
 
-    if (fd < 0 || fd >= MAX_OPENED_FILENUM) {
+    if (fd >= MAX_OPENED_FILENUM && File_Status[fd] == 0) {
+        #ifdef FS_DEBUG_PRINT
+            sddf_printf("fat_close: Invalid file descriptor\n");
+        #endif
         Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
         Fiber_kill();
     }
 
     FRESULT RET = f_close(&(Files[fd]));
     if (RET == FR_OK) {
-        File_BitList[fd] = 0;
+        File_Status[fd] = 0;
     }
     Function_Fill_Response(args, RET, 0, 0);
     Fiber_kill();
@@ -333,7 +420,12 @@ void fat_mkdir() {
 
 void fat_rmdir() {
     uint64_t *args = Fiber_GetArgs();
-    const void* path = (void*)(args[0] + client_data_offset);
+    
+    uint64_t buffer = args[0];
+
+    // String checks
+    
+    const void* path = (void*)(buffer + client_data_offset);
 
     FRESULT RET = f_rmdir(path);
 
@@ -343,14 +435,32 @@ void fat_rmdir() {
 
 void fat_opendir() {
     uint64_t *args = Fiber_GetArgs();
+
+    uint64_t path_buffer = args[0];
+    uint64_t path_len = args[1];
+
+    // Sanity check
+    if (!within_data_region(path_buffer, path_len)) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("fat_readdir: Invalid dir descriptor or Invalid buffer\n");
+        #endif
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+
+    // String validation here
+
     uint32_t fd = Find_FreeDir();
     if (fd == MAX_OPENED_DIRNUM) {
         Function_Fill_Response(args, FR_TOO_MANY_OPEN_FILES, 0, 0);
         Fiber_kill();
     }
+    
     DIR* dir = &(Dirs[fd]);
+    // Set the position to 1 to indicate this file structure is in use
+    Dir_Status[fd] = 1;
 
-    char* path = (char *)(args[0] + client_data_offset);
+    char* path = (char *)(path_buffer + client_data_offset);
 
     #ifdef FS_DEBUG_PRINT
     sddf_printf("FAT opendir directory path: %s\n", path);
@@ -361,11 +471,10 @@ void fat_opendir() {
     // Error handling
     if (RET != FR_OK) {
         Function_Fill_Response(args, RET, 0, 0);
+        // Free this Dir structure
+        Dir_Status[fd] = 0;
         Fiber_kill();
     }
-    
-    // Set the position to 1 to indicate this file structure is in use
-    Dirs_BitList[fd] = 1;
 
     Function_Fill_Response(args, RET, fd, 0);
     Fiber_kill();
@@ -374,20 +483,32 @@ void fat_opendir() {
 void fat_readdir() {
     uint64_t *args = Fiber_GetArgs();
     
-    // Maybe add validation check of file descriptor here
+    // Dir descriptor
     uint64_t fd = args[0];
-    
-    uint64_t BUFFER_SIZE = args[2];
+
+    uint64_t buffer = args[1];
+    uint64_t size = args[2];
 
     #ifdef FS_DEBUG_PRINT
     sddf_printf("FAT readdir file descriptor: %lu\n", fd);
     #endif
-    void* name = (void*)(args[1] + client_data_offset);
+
+    // Sanity check
+    if (!within_data_region(buffer, size) || !validate_dir_descriptor(fd)) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("fat_readdir: Invalid dir descriptor or Invalid buffer\n");
+        #endif
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+
+    void* name = (void*)(buffer + client_data_offset);
     
     FILINFO fno;
     FRESULT RET = f_readdir(&Dirs[fd], &fno);
 
-    if (RET == FR_OK && BUFFER_SIZE <= strlen(fno.fname)) {
+    // The buffer most have a size that is minimum length of the name plus one
+    if (RET == FR_OK && size <= strlen(fno.fname)) {
         RET = FR_INVALID_PARAMETER;
     }
     
@@ -407,6 +528,15 @@ void fat_telldir(){
     uint64_t *args = Fiber_GetArgs();
 
     uint64_t fd = args[0];
+
+    if (!validate_dir_descriptor(fd)) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("fat_telldir: Invalid dir descriptor\n");
+        #endif
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+
     DIR* dp = &(Dirs[fd]);
 
     uint32_t offset = f_telldir(dp);
@@ -421,6 +551,14 @@ void fat_rewinddir() {
     // Maybe add validation check of file descriptor here
     uint64_t fd = args[0];
 
+    if (!validate_dir_descriptor(fd)) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("fat_telldir: Invalid dir descriptor\n");
+        #endif
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+
     FRESULT RET = f_readdir(&Dirs[fd], 0);
 
     Function_Fill_Response(args, RET, 0, 0);
@@ -433,6 +571,14 @@ void fat_sync() {
     // Maybe add validation check of file descriptor here
     uint64_t fd = args[0];
 
+    if (!validate_file_descriptor(fd)) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("fat_sync: Invalid file descriptor\n");
+        #endif
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+
     FRESULT RET = f_sync(&(Files[fd]));
 
     Function_Fill_Response(args, RET, 0, 0);
@@ -442,10 +588,21 @@ void fat_sync() {
 void fat_closedir() {
     uint64_t *args = Fiber_GetArgs();
 
-    // Maybe add validation check of file descriptor here
     uint64_t fd = args[0];
 
+    if (!validate_dir_descriptor(fd)) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("fat_closedir: Invalid dir descriptor\n");
+        #endif
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
+
     FRESULT RET = f_closedir(&Dirs[fd]);
+
+    if (RET == FR_OK) {
+        Dir_Status[fd] = 0;
+    }
 
     Function_Fill_Response(args, RET, 0, 0);
     Fiber_kill();
@@ -460,6 +617,14 @@ void fat_seekdir() {
 
     uint64_t fd = args[0];
     int64_t loc = args[1];
+
+    if (!validate_dir_descriptor(fd)) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("fat_seekdir: Invalid dir descriptor\n");
+        #endif
+        Function_Fill_Response(args, FR_INVALID_PARAMETER, 0, 0);
+        Fiber_kill();
+    }
     
     FRESULT RET = f_readdir(&Dirs[fd], 0);
     FILINFO fno;

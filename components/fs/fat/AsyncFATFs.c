@@ -9,8 +9,6 @@
 #include <stdint.h>
 #include <microkit.h>
 
-#define RequestPool_Size 128
-
 #define Coroutine_STACKSIZE 0x40000
 
 #define Client_CH 1
@@ -233,7 +231,7 @@ void notified(microkit_channel ch) {
         if (blk_request_pushed == true) {
             microkit_notify(Server_CH);
         }
-        if (RequestPool[1].handle == INVALID_COHANDLE && RequestPool[1].stat == INUSE && RequestPool[1].args[Status_bit] == ASYNCFR_OK) {
+        if (RequestPool[1].handle == INVALID_COHANDLE && RequestPool[1].stat == INUSE && RequestPool[1].args[Status_bit] == FR_OK) {
             RequestPool[1].stat = FREE;
             fat_mounted = true;
             #ifdef FS_DEBUG_PRINT
