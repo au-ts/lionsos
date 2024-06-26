@@ -1,8 +1,17 @@
+#
+# The purpose of this script is to do all the client side
+# 'business logic' for the Kitty system. This includes:
+# * waiting for and receiving card taps via the I2C card
+#   reader.
+# * connecting to the server over the network to register
+#   card taps.
+# * drawing and updating the UI based on card taps from
+#   users and responses from the server.
+#
 import framebuf
 import fb
 import time
 import sys
-# import socket
 import asyncio
 import errno
 from pn532 import PN532
@@ -71,7 +80,7 @@ def heartbeat():
             await writer_stream.drain()
         except OSError as e:
             if (e.errno == errno.ECONNRESET):
-                info("ERROR: RESETTING CONNECTION")
+                error("RESETTING CONNECTION")
                 reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
         await asyncio.sleep(4)
@@ -92,7 +101,7 @@ async def on_tap(card_id):
             break
         except OSError as e:
             if (e.errno == errno.ECONNRESET):
-                info("ERROR: RESETTING CONNECTION")
+                error("RESETTING CONNECTION")
                 reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
     token = (token + 1) % 1000000
@@ -177,7 +186,6 @@ def draw_image(display, x0, y0, data):
     for y in range(h):
         for x in range(w):
             pixel = data[(y * w * 4 + (x * 4)):(y * w * 4 + (x * 4))+4]
-            # print(f"KITTY|INFO: {pixel}")
             rgba = pixel[3] & 0xFF
             rgba |= (pixel[2] & 0xFF) << 8
             rgba |= (pixel[1] & 0xFF) << 16
@@ -245,20 +253,16 @@ async def main():
     global writer_stream
     reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
-    print(f"KITTY|INFO: starting at {}", time.time())
+    info(f"starting at {}", time.time())
     size = 688000
     cat_buf = bytearray(size)
     with open("catwithfish.data", "rb") as f:
         nbytes = f.readinto(cat_buf)
-        print(f"KITTY|INFO: read {nbytes} bytes")
+        info(f"read {nbytes} bytes")
         pic = memoryview(cat_buf)
-        # print(pic[:4])
-        print("KITTY|INFO: read image, starting to draw")
+        info("read image, starting to draw")
         draw_image(display, 50, -70, pic[0:])
     display.show()
-    print(time.time())
-    print("KITTY|INFO: about to draw string!")
-    # draw_string(400, 100, "Kitty v5", 5, 0xFFFFFFFF, 0x008800FF, True, False)
     wri.setcolor(0xffff, 0x0000)
     wri.set_textpos(display, 100, 500)
     wri.printstring("Welcome to Kitty v5")
