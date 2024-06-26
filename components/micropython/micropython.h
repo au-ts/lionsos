@@ -1,6 +1,5 @@
 #pragma once
 
-#include <lions/libco.h>
 #include <stdint.h>
 #include <microkit.h>
 
