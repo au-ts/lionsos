@@ -63,7 +63,7 @@
     <memory_region name="serial_rx_active_micropython" size="0x200_000" page_size="0x200_000"/>
 
     <!-- Memory regions for the I2C sub-system -->
-    <!-- These request/response regions are bounded by (64 +(160 * NUM_ENTRIES)) -->
+     <!-- This system transfers minimal data over I2C and so a data region size of 0x1000 is more than enough for our use-case. -->
     <memory_region name="i2c_driver_request_region" size="0x1_000" />
     <memory_region name="i2c_driver_response_region" size="0x1_000" />
     <memory_region name="i2c_micropython_request_region" size="0x1_000" />
