@@ -17,8 +17,8 @@ enum {
     FS_CMD_CLOSE,
     FS_CMD_STAT,
     FS_CMD_FSTAT,
-    FS_CMD_PREAD,
-    FS_CMD_PWRITE,
+    FS_CMD_READ,
+    FS_CMD_WRITE,
     FS_CMD_RENAME,
     FS_CMD_UNLINK,
     FS_CMD_TRUNCATE,
@@ -77,17 +77,17 @@ typedef struct fs_cmd_params_fstat {
     fs_buffer_t buf;
 } fs_cmd_params_fstat_t;
 
-typedef struct fs_cmd_params_pread {
+typedef struct fs_cmd_params_read {
     uint64_t fd;
     uint64_t offset;
     fs_buffer_t buf;
-} fs_cmd_params_pread_t;
+} fs_cmd_params_read_t;
 
-typedef struct fs_cmd_params_pwrite {
+typedef struct fs_cmd_params_write {
     uint64_t fd;
     uint64_t offset;
     fs_buffer_t buf;
-} fs_cmd_params_pwrite_t;
+} fs_cmd_params_write_t;
 
 typedef struct fs_cmd_params_rename {
     fs_buffer_t old_path;
@@ -146,8 +146,8 @@ typedef union fs_cmd_params {
     fs_cmd_params_close_t close;
     fs_cmd_params_stat_t stat;
     fs_cmd_params_fstat_t fstat;
-    fs_cmd_params_pread_t pread;
-    fs_cmd_params_pwrite_t pwrite;
+    fs_cmd_params_read_t read;
+    fs_cmd_params_write_t write;
     fs_cmd_params_rename_t rename;
     fs_cmd_params_unlink_t unlink;
     fs_cmd_params_truncate_t truncate;
