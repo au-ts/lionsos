@@ -59,7 +59,7 @@ void fs_buffer_free(ptrdiff_t buffer) {
     buffer_metadata[i].used = false;
 }
 
-char *fs_buffer_ptr(ptrdiff_t buffer) {
+void *fs_buffer_ptr(ptrdiff_t buffer) {
     return nfs_share + buffer;
 }
 
