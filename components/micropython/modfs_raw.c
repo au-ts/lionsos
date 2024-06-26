@@ -127,8 +127,8 @@ STATIC mp_obj_t request_pread(mp_uint_t n_args, const mp_obj_t *args) {
     request_flags[request_id] = flag;
     fs_command_issue((fs_cmd_t){
         .id = request_id,
-        .type = FS_CMD_PREAD,
-        .params.pread = {
+        .type = FS_CMD_READ,
+        .params.read = {
             .fd = fd,
             .offset = offset,
             .buf.offset = read_buffer,
@@ -147,8 +147,8 @@ STATIC mp_obj_t complete_pread(mp_obj_t request_id_in) {
     fs_command_complete(request_id, &command, &completion);
     fs_request_free(request_id);
 
-    mp_obj_t ret = mp_obj_new_bytes(fs_buffer_ptr(command.params.pread.buf.offset), completion.data[0]);
-    fs_buffer_free(command.params.pread.buf.offset);
+    mp_obj_t ret = mp_obj_new_bytes(fs_buffer_ptr(command.params.read.buf.offset), completion.data[0]);
+    fs_buffer_free(command.params.read.buf.offset);
     return ret;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(complete_pread_obj, complete_pread);

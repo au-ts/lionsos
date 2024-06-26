@@ -50,8 +50,8 @@ STATIC mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int 
 
     fs_cmpl_t completion;
     err = fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_PREAD,
-        .params.pread = {
+        .type = FS_CMD_READ,
+        .params.read = {
             .fd = o->fd,
             .offset = o->pos,
             .buf.offset = read_buffer,
@@ -84,8 +84,8 @@ STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t siz
 
     fs_cmpl_t completion;
     err = fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_PWRITE,
-        .params.pwrite = {
+        .type = FS_CMD_WRITE,
+        .params.write = {
             .fd = o->fd,
             .offset = o->pos,
             .buf.offset = write_buffer,
