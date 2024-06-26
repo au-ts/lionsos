@@ -89,7 +89,9 @@ void reply_err(uint64_t request_id) {
 }
 
 void *get_buffer(fs_buffer_t buf) {
-    if (buf.offset + buf.size > CLIENT_SHARE_SIZE) {
+    if (buf.offset >= CLIENT_SHARE_SIZE
+        || buf.size > CLIENT_SHARE_SIZE - buf.offset
+        || buf.size == 0) {
         return NULL;
     }
     return (void *)(client_share + buf.offset);
