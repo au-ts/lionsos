@@ -11,7 +11,7 @@ void fs_request_flag_set(uint64_t request_id);
 
 int fs_buffer_allocate(ptrdiff_t *buffer);
 void fs_buffer_free(ptrdiff_t buffer);
-char *fs_buffer_ptr(ptrdiff_t buffer);
+void *fs_buffer_ptr(ptrdiff_t buffer);
 
 void fs_process_completions(void);
 
