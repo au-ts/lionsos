@@ -25,7 +25,7 @@
 #include "util.h"
 #include "fd.h"
 
-#define MAX_CONCURRENT_OPS 100
+#define MAX_CONCURRENT_OPS FS_QUEUE_CAPACITY
 #define CLIENT_SHARE_SIZE 0x4000000
 
 struct fs_queue *command_queue;
