@@ -24,14 +24,29 @@ export CPU := cortex-a55
 
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
+nproc:= $(shell sh -c "if test -f /proc/cpuinfo; then grep processor /proc/cpuinfo | wc -l; else echo 2; fi")
 
 all: ${IMAGE_FILE}
 
-qemu ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
-	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} $(notdir $@)
 
-${BUILD_DIR}/Makefile: kitty.mk
+qemu ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
+	${MAKE} -j${nproc} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} $(notdir $@)
+
+MAKEFILE_CSUM := .makefile_config-$(shell echo -- ${NFS_SERVER} ${NFS_DIRECTORY} ${MICROKIT_SDK} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
+${BUILD_DIR}/${MAKEFLAG_CSUM}:
 	mkdir -p ${BUILD_DIR}
+	-rm -f ${BUILD}/.makefile_config-*
+	> $@
+
+${BUILD_DIR}/Makefile: kitty.mk ${BUILD_DIR}/${MAKEFLAG_CSUM}
+	mkdir -p ${BUILD_DIR}
+	echo 'MICROKIT_SDK:=${MICROKIT_SDK}' > $@
+	echo 'MICROKIT_CONFIG:=${MICROKIT_CONFIG}' >> $@
+	echo 'MICROKIT_BOARD:=${MICROKIT_BOARD}' >> $@
+	echo 'NFS_SERVER:=${NFS_SERVER}' >> $@
+	echo 'NFS_DIRECTORY:=${NFS_DIRECTORY}' >> $@
+	echo 'LIONS_OS:=${LIONS_OS}' >> $@
+	echo 'KITTY_DIR:=${KITTY_DIR}' >> $@
 	cp kitty.mk $@
 
 submodules:
@@ -40,6 +55,7 @@ submodules:
 	git submodule update --init $(LIONSOS)/dep/micropython
 	git submodule update --init $(LIONSOS)/dep/musllibc
 	git submodule update --init $(LIONSOS)/dep/sddf
--	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+
 
 FORCE:

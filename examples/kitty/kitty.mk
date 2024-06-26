@@ -90,16 +90,13 @@ LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 IMAGE_FILE := kitty.img
 REPORT_FILE := report.txt
 
-all: cache.o
+all: ${IMAGE_FILE} ${REPORT_FILE}
+
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 
 ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
-
-
-%.elf: %.o
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 include ${SDDF}/util/util.mk
 include ${LIBVMM_DIR}/vmm.mk
@@ -120,23 +117,21 @@ $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $< > $@
 
 package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
-			$(VMM_IMAGE_DIR) $(LINUX) $(INITRD) $(DTB)
+			$(LINUX) $(INITRD) $(DTB)
 	$(CC) -c -g3 -x assembler-with-cpp \
-					-DGUEST_KERNEL_IMAGE_PATH=\"$(LINUX)\" \
-					-DGUEST_DTB_IMAGE_PATH=\"$(DTB)\" \
-					-DGUEST_INITRD_IMAGE_PATH=\"$(INITRD)\" \
-					-target $(TARGET) \
-					$< -o $@
+		-DGUEST_KERNEL_IMAGE_PATH=\"$(LINUX)\" \
+		-DGUEST_DTB_IMAGE_PATH=\"$(DTB)\" \
+		-DGUEST_INITRD_IMAGE_PATH=\"$(INITRD)\" \
+		-target $(TARGET) \
+		$< -o $@
 
 
 vmm.elf: ${VMM_OBJS} libvmm.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-# Build the 
-nproc=2
-
+# Build the Micropython interpreter with 2 processors.
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a # libm/libm.a 
-	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
+	make  -C $(LIONSOS)/components/micropython -j2 \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
 			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
@@ -184,13 +179,14 @@ nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
 
 ${IMAGES}: libsddf_util_debug.a
 
-%.o: %.c
-	${CC} ${CFLAGS} -c -o $@ $<
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${KITTY_DIR}/kitty.system
 	$(MICROKIT_TOOL) ${KITTY_DIR}/kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 FORCE:
+
+%.o: %.c
+	${CC} ${CFLAGS} -c -o $@ $<
 
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
