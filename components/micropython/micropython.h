@@ -3,9 +3,6 @@
 #include <stdint.h>
 #include <microkit.h>
 
-extern cothread_t t_event;
-extern cothread_t t_mp;
-
 #ifdef ENABLE_FRAMEBUFFER
 #define FRAMEBUFFER_VMM_CH 0
 #endif
