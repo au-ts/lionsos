@@ -63,11 +63,11 @@ STATIC mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int 
         return MP_STREAM_ERROR;
     }
 
-    memcpy(buf, fs_buffer_ptr(read_buffer), completion.data[0]);
-    o->pos += completion.data[0];
+    memcpy(buf, fs_buffer_ptr(read_buffer), completion.data.read.len_read);
+    o->pos += completion.data.read.len_read;
     fs_buffer_free(read_buffer);
 
-    return (mp_uint_t)completion.data[0];
+    return (mp_uint_t)completion.data.read.len_read;
 }
 
 STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t size, int *errcode) {
@@ -97,11 +97,11 @@ STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t siz
     if (completion.status != 0) {
         return MP_STREAM_ERROR;
     }
-    o->pos += completion.data[0];
+    o->pos += completion.data.write.len_written;
     if (o->pos > o->size) {
         o->size = o->pos;
     }
-    return (mp_uint_t)completion.data[0];
+    return (mp_uint_t)completion.data.write.len_written;
 }
 
 STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, int *errcode) {
@@ -277,7 +277,7 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
-    o->fd = completion.data[0];
+    o->fd = completion.data.open.fd;
 
     fs_command_blocking(&completion, (fs_cmd_t){
         .type = FS_CMD_FSTAT,
