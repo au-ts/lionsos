@@ -13,6 +13,11 @@ enum {
 };
 
 enum {
+    FS_STATUS_SUCCESS = 0,
+    FS_STATUS_ERROR = 1,
+};
+
+enum {
     FS_CMD_OPEN,
     FS_CMD_CLOSE,
     FS_CMD_STAT,
@@ -170,10 +175,43 @@ typedef struct fs_cmd {
     fs_cmd_params_t params;
 } fs_cmd_t;
 
+typedef struct fs_cmpl_data_open {
+    uint64_t fd;
+} fs_cmpl_data_open_t;
+
+typedef struct fs_cmpl_data_read {
+    uint64_t len_read;
+} fs_cmpl_data_read_t;
+
+typedef struct fs_cmpl_data_write {
+    uint64_t len_written;
+} fs_cmpl_data_write_t;
+
+typedef struct fs_cmpl_data_opendir {
+    uint64_t fd;
+} fs_cmpl_data_opendir_t;
+
+typedef struct fs_cmpl_data_readdir {
+    uint64_t path_len;
+} fs_cmpl_data_readdir_t;
+
+typedef struct fs_cmpl_data_telldir {
+    uint64_t location;
+} fs_cmpl_data_telldir_t;
+
+typedef union fs_cmpl_data {
+    fs_cmpl_data_open_t open;
+    fs_cmpl_data_read_t read;
+    fs_cmpl_data_write_t write;
+    fs_cmpl_data_opendir_t opendir;
+    fs_cmpl_data_readdir_t readdir;
+    fs_cmpl_data_telldir_t telldir;
+} fs_cmpl_data_t;
+
 typedef struct fs_cmpl {
     uint64_t id;
-    uint64_t data[2];
-    int32_t status;
+    uint64_t status;
+    fs_cmpl_data_t data;
 } fs_cmpl_t;
 
 typedef union fs_msg {
