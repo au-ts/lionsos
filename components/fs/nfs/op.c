@@ -66,8 +66,9 @@ void continuation_free(struct continuation *cont) {
 }
 
 void reply(fs_cmpl_t cmpl) {
-    fs_msg_t message = { .cmpl = cmpl };
-    fs_queue_push(completion_queue, message);
+    assert(fs_queue_size_producer(completion_queue) != FS_QUEUE_CAPACITY);
+    fs_queue_idx_empty(completion_queue, 0)->cmpl = cmpl;
+    fs_queue_publish_production(completion_queue, 1);
     microkit_notify(CLIENT_CHANNEL);
 }
 
@@ -771,9 +772,12 @@ fail:
 }
 
 void nfs_notified(void) {
-    fs_msg_t message;
-    while (fs_queue_pop(command_queue, &message)) {
-        fs_cmd_t cmd = message.cmd;
+    uint64_t command_count = fs_queue_size_consumer(command_queue);
+    uint64_t completion_space = FS_QUEUE_CAPACITY - fs_queue_size_producer(completion_queue);
+    // don't dequeue a command if we have no space to enqueue its completion
+    uint64_t to_consume = MIN(command_count, completion_space);
+    for (uint64_t i = 0; i < to_consume; i++) {
+        fs_cmd_t cmd = fs_queue_idx_filled(command_queue, i)->cmd;
         uint64_t request_id = cmd.id;
         switch (cmd.type) {
         case FS_CMD_OPEN: {
@@ -952,5 +956,6 @@ void nfs_notified(void) {
             break;
         }
     }
+    fs_queue_publish_consumption(command_queue, to_consume);
 }
 
