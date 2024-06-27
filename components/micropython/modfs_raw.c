@@ -67,7 +67,7 @@ STATIC mp_obj_t complete_open(mp_obj_t request_id_in) {
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
-    return mp_obj_new_int_from_uint(completion.data[0]);
+    return mp_obj_new_int_from_uint(completion.data.opendir.fd);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(complete_open_obj, complete_open);
 
@@ -147,7 +147,7 @@ STATIC mp_obj_t complete_pread(mp_obj_t request_id_in) {
     fs_command_complete(request_id, &command, &completion);
     fs_request_free(request_id);
 
-    mp_obj_t ret = mp_obj_new_bytes(fs_buffer_ptr(command.params.read.buf.offset), completion.data[0]);
+    mp_obj_t ret = mp_obj_new_bytes(fs_buffer_ptr(command.params.read.buf.offset), completion.data.read.len_read);
     fs_buffer_free(command.params.read.buf.offset);
     return ret;
 }
