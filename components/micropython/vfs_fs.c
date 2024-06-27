@@ -240,7 +240,7 @@ STATIC mp_obj_t vfs_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
-    iter->dir = completion.data[0];
+    iter->dir = completion.data.opendir.fd;
     return MP_OBJ_FROM_PTR(iter);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_ilistdir_obj, vfs_fs_ilistdir);
