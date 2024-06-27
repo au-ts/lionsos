@@ -65,8 +65,9 @@ void *fs_buffer_ptr(ptrdiff_t buffer) {
 
 void fs_process_completions(void) {
     fs_msg_t message;
-    while (fs_queue_pop(nfs_completion_queue, &message)) {
-        fs_cmpl_t completion = message.cmpl;
+    uint64_t to_consume = fs_queue_size_consumer(nfs_completion_queue);
+    for (uint64_t i = 0; i < to_consume; i++) {
+        fs_cmpl_t completion = fs_queue_idx_filled(nfs_completion_queue, i)->cmpl;
 
         if (completion.id > REQUEST_ID_MAXIMUM) {
             printf("received bad fs completion: invalid request id: %lu\n", completion.id);
@@ -77,6 +78,7 @@ void fs_process_completions(void) {
         request_metadata[completion.id].complete = true;
         fs_request_flag_set(completion.id);
     }
+    fs_queue_publish_consumption(nfs_completion_queue, to_consume);
 }
 
 void fs_command_issue(fs_cmd_t cmd) {
@@ -84,7 +86,9 @@ void fs_command_issue(fs_cmd_t cmd) {
     assert(request_metadata[cmd.id].used);
 
     fs_msg_t message = { .cmd = cmd };
-    bool success = fs_queue_push(nfs_command_queue, message);
+    assert(fs_queue_size_producer(nfs_command_queue) != FS_QUEUE_CAPACITY);
+    *fs_queue_idx_empty(nfs_command_queue, 0) = message;
+    fs_queue_publish_production(nfs_command_queue, 1);
     microkit_notify(NFS_CH);
     request_metadata[cmd.id].command = cmd;
 }

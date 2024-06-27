@@ -229,20 +229,28 @@ typedef struct fs_queue {
     fs_msg_t buffer[FS_QUEUE_CAPACITY];
 } fs_queue_t;
 
-static bool fs_queue_push(fs_queue_t *queue, fs_msg_t msg) {
-    if (queue->tail - __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE) == FS_QUEUE_CAPACITY) {
-        return false;
-    }
-    queue->buffer[queue->tail % FS_QUEUE_CAPACITY] = msg;
-    __atomic_store_n(&queue->tail, queue->tail + 1, __ATOMIC_RELEASE);
-    return true;
+static inline uint64_t fs_queue_size_consumer(fs_queue_t *queue) {
+    return queue->tail - __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE);
 }
 
-static bool fs_queue_pop(fs_queue_t *queue, fs_msg_t *msg) {
-    if (queue->head == __atomic_load_n(&queue->tail, __ATOMIC_ACQUIRE)) {
-        return false;
-    }
-    *msg = queue->buffer[queue->head % FS_QUEUE_CAPACITY];
-    __atomic_store_n(&queue->head, queue->head + 1, __ATOMIC_RELEASE);
-    return true;
+static inline uint64_t fs_queue_size_producer(fs_queue_t *queue) {
+    return __atomic_load_n(&queue->tail, __ATOMIC_ACQUIRE) - queue->head;
+}
+
+static inline fs_msg_t *fs_queue_idx_filled(fs_queue_t *queue, uint64_t index) {
+    index = queue->head + index;
+    return &queue->buffer[index % FS_QUEUE_CAPACITY];
+}
+
+static inline fs_msg_t *fs_queue_idx_empty(fs_queue_t *queue, uint64_t index) {
+    index = queue->tail + index;
+    return &queue->buffer[index % FS_QUEUE_CAPACITY];
+}
+
+static inline void fs_queue_publish_consumption(fs_queue_t *queue, uint64_t amount_consumed) {
+    __atomic_store_n(&queue->head, queue->head + amount_consumed, __ATOMIC_RELEASE);
+}
+
+static inline void fs_queue_publish_production(fs_queue_t *queue, uint64_t amount_produced) {
+    __atomic_store_n(&queue->tail, queue->tail + amount_produced, __ATOMIC_RELEASE);
 }
