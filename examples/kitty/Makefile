@@ -10,6 +10,10 @@ endif
 MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
 
+ifeq ($(strip $(MICROKIT_BOARD)),)
+$(error MICROKIT_BOARD must be specified)
+endif
+
 ifeq ($(strip $(LIBGCC)),)
 LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
 endif
@@ -22,7 +26,6 @@ LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a))
 
 MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
-MICROKIT_BOARD ?= odroidc4
 ETHERNET_CONFIG_INCLUDE ?= src/ethernet_config
 
 ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
