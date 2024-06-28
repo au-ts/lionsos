@@ -54,8 +54,8 @@ STATIC mp_import_stat_t mp_vfs_fs_import_stat(void *self_in, const char *path) {
     err = fs_buffer_allocate(&output_buffer);
     assert(!err);
 
-    uint64_t path_len = strlen(path) + 1;
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
     fs_cmpl_t completion;
     fs_command_blocking(&completion, (fs_cmd_t){
@@ -219,8 +219,8 @@ STATIC mp_obj_t vfs_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
         mp_raise_OSError(err);
         return mp_const_none;
     }
-    uint64_t path_len = strlen(path) + 1;
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
     fs_cmpl_t completion;
     err = fs_command_blocking(&completion, (fs_cmd_t){
@@ -262,8 +262,8 @@ STATIC mp_obj_t vfs_fs_mkdir(mp_obj_t self_in, mp_obj_t path_in) {
         return mp_const_none;
     }
 
-    uint64_t path_len = strlen(path) + 1;
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
     
     fs_cmpl_t completion;
     err = fs_command_blocking(&completion, (fs_cmd_t){
@@ -298,8 +298,8 @@ STATIC mp_obj_t vfs_fs_remove(mp_obj_t self_in, mp_obj_t path_in) {
         return mp_const_none;
     }
 
-    uint64_t path_len = strlen(path) + 1;
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
     fs_cmpl_t completion;
     err = fs_command_blocking(&completion, (fs_cmd_t){
@@ -337,11 +337,11 @@ STATIC mp_obj_t vfs_fs_rename(mp_obj_t self_in, mp_obj_t old_path_in, mp_obj_t n
         mp_raise_OSError(err);
     }
 
-    uint64_t old_path_len = strlen(old_path) + 1;
-    uint64_t new_path_len = strlen(new_path) + 1;
+    uint64_t old_path_len = strlen(old_path);
+    uint64_t new_path_len = strlen(new_path);
 
-    strcpy(fs_buffer_ptr(old_path_buffer), old_path);
-    strcpy(fs_buffer_ptr(new_path_buffer), new_path);
+    memcpy(fs_buffer_ptr(old_path_buffer), old_path, old_path_len);
+    memcpy(fs_buffer_ptr(new_path_buffer), new_path, new_path_len);
 
     fs_cmpl_t completion;
     fs_command_blocking(&completion, (fs_cmd_t){
@@ -375,8 +375,8 @@ STATIC mp_obj_t vfs_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
         return mp_const_none;
     }
 
-    uint64_t path_len = strlen(path) + 1;
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
     fs_cmpl_t completion;
     fs_command_blocking(&completion, (fs_cmd_t){
@@ -409,8 +409,8 @@ STATIC mp_obj_t vfs_fs_stat(mp_obj_t self_in, mp_obj_t path_in) {
     err = fs_buffer_allocate(&output_buffer);
     assert(!err);
 
-    uint64_t path_len = strlen(path) + 1;
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
     fs_cmpl_t completion;
     fs_command_blocking(&completion, (fs_cmd_t){
