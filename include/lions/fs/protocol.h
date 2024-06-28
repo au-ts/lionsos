@@ -38,6 +38,8 @@ enum {
     FS_CMD_REWINDDIR,
 };
 
+#define FS_NUM_COMMANDS 18
+
 typedef struct fs_stat {
 	uint64_t dev;
 	uint64_t ino;
