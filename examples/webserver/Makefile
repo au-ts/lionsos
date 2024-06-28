@@ -162,7 +162,7 @@ NETWORK_COMPONENT_CFLAGS := \
 	-mstrict-align \
 	-ffreestanding \
 	-g \
-	-O0 \
+	-O3 \
 	-Wall \
 	-Wno-unused-function \
 	-DNO_ASSERT \
