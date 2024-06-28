@@ -849,7 +849,7 @@ void handle_readdir(fs_cmd_t cmd) {
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, 0 };
 
     char *buf = get_buffer(params.buf);
-    if (buf == NULL) {
+    if (buf == NULL || params.buf.size < FS_MAX_NAME_LENGTH) {
         dlog("invalid output buffer provided");
         goto fail_buffer;
     }
@@ -874,7 +874,7 @@ void handle_readdir(fs_cmd_t cmd) {
         cmpl.status = FS_STATUS_ERROR;
         goto fail_strcpy;
     }
-    strcpy(buf, dirent->name);
+    memcpy(buf, dirent->name, name_len);
     cmpl.data.readdir.path_len = name_len;
 
 fail_strcpy:
