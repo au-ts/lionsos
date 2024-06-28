@@ -32,6 +32,8 @@ struct fs_queue *command_queue;
 struct fs_queue *completion_queue;
 char *client_share;
 
+char path_buffer[4096][2];
+
 struct continuation {
     uint64_t request_id;
     uint64_t data[4];
@@ -137,6 +139,19 @@ void *get_buffer(fs_buffer_t buf) {
     return (void *)(client_share + buf.offset);
 }
 
+char *copy_path(int slot, fs_buffer_t buf) {
+    assert(0 <= slot && slot < 2);
+
+    char *client_buf = get_buffer(buf);
+    if (client_buf == NULL || buf.size > FS_MAX_PATH_LENGTH) {
+        return NULL;
+    }
+
+    memcpy(path_buffer[slot], client_buf, buf.size);
+    path_buffer[slot][buf.size] = '\0';
+    return path_buffer[slot];
+}
+
 static void stat64_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, FS_STATUS_SUCCESS, 0 };
@@ -155,12 +170,11 @@ static void stat64_cb(int status, struct nfs_context *nfs, void *data, void *pri
 void handle_stat(fs_cmd_t cmd) {
     fs_cmd_params_stat_t params = cmd.params.stat;
 
-    char *path = get_buffer(params.path);
+    char *path = copy_path(0, params.path);
     if (path == NULL) {
         dlog("invalid path buffer provided");
         goto fail_buffer;
     }
-    path[params.path.size - 1] = '\0';
 
     void *buf = get_buffer(params.buf);
     if (buf == NULL || params.buf.size < sizeof (struct nfs_stat_64)) {
@@ -270,12 +284,11 @@ void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data
 void handle_open(fs_cmd_t cmd) {
     struct fs_cmd_params_open params = cmd.params.open;
 
-    char *path = get_buffer(params.path);
+    char *path = copy_path(0, params.path);
     if (path == NULL) {
         dlog("invalid path buffer provided");
         goto fail_buffer;
     }
-    path[params.path.size - 1] = '\0';
 
     fd_t fd;
     int err = fd_alloc(&fd);
@@ -446,7 +459,7 @@ void write_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
     fd_t fd = cont->data[0];
 
     if (status >= 0) {
-        cmpl.data.write.len_written = status;    
+        cmpl.data.write.len_written = status;
     } else {
         dlog("failed to write to file: %d (%s)", status, data);
         cmpl.status = FS_STATUS_ERROR;
@@ -511,14 +524,12 @@ void rename_cb(int status, struct nfs_context *nfs, void *data, void *private_da
 void handle_rename(fs_cmd_t cmd) {
     fs_cmd_params_rename_t params = cmd.params.rename;
 
-    char *old_path = get_buffer(params.old_path);
-    char *new_path = get_buffer(params.new_path);
+    char *old_path = copy_path(0, params.old_path);
+    char *new_path = copy_path(1, params.new_path);
     if (old_path == NULL || new_path == NULL) {
-        dlog("invalid buffer provided");
+        dlog("invalid path buffer provided");
         goto fail_buffer;
     }
-    old_path[params.old_path.size - 1] = '\0';
-    new_path[params.new_path.size - 1] = '\0';
 
     struct continuation *cont = continuation_alloc();
     assert(cont != NULL);
@@ -554,12 +565,11 @@ void unlink_cb(int status, struct nfs_context *nfs, void *data, void *private_da
 void handle_unlink(fs_cmd_t cmd) {
     fs_cmd_params_unlink_t params = cmd.params.unlink;
 
-    char *path = get_buffer(params.path);
+    char *path = copy_path(0, params.path);
     if (path == NULL) {
         dlog("invalid path buffer provided");
         goto fail_buffer;
     }
-    path[params.path.size - 1] = '\0';
 
     struct continuation *cont = continuation_alloc();
     assert(cont != NULL);
@@ -687,12 +697,11 @@ void mkdir_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
 void handle_mkdir(fs_cmd_t cmd) {
     fs_cmd_params_mkdir_t params = cmd.params.mkdir;
 
-    char *path = get_buffer(params.path);
+    char *path = copy_path(0, params.path);
     if (path == NULL) {
         dlog("invalid path buffer provided");
         goto fail_buffer;
     }
-    path[params.path.size - 1] = '\0';
 
     struct continuation *cont = continuation_alloc();
     assert(cont != NULL);
@@ -729,12 +738,11 @@ void rmdir_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
 void handle_rmdir(fs_cmd_t cmd) {
     fs_cmd_params_rmdir_t params = cmd.params.rmdir;
 
-    char *path = get_buffer(params.path);
+    char *path = copy_path(0, params.path);
     if (path == NULL) {
         dlog("invalid path buffer provided");
         goto fail_buffer;
     }
-    path[params.path.size - 1] = '\0';
 
     struct continuation *cont = continuation_alloc();
     assert(cont != NULL);
@@ -781,7 +789,7 @@ void handle_opendir(fs_cmd_t cmd) {
     fs_cmd_params_opendir_t params = cmd.params.opendir;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, 0 };
 
-    char *path = get_buffer(params.path);
+    char *path = copy_path(0, params.path);
     if (path == NULL) {
         dlog("invalid path buffer provided");
         cmpl.status = FS_STATUS_ERROR;

@@ -260,7 +260,7 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
     }
 
     uint64_t path_len = strlen(fname) + 1;
-    strcpy(fs_buffer_ptr(buffer), fname);
+    memcpy(fs_buffer_ptr(buffer), fname, path_len);
 
     fs_cmpl_t completion;
     fs_command_blocking(&completion, (fs_cmd_t){
