@@ -111,6 +111,7 @@ SRC_C = \
 	shared/runtime/gchelper_generic.c \
 	shared/runtime/pyexec.c \
 	shared/runtime/stdout_helpers.c \
+	shared/runtime/interrupt_char.c \
 	shared/libc/string0.c \
 	shared/libc/printf.c \
 	shared/libc/__errno.c \

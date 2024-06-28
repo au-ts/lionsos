@@ -16,6 +16,7 @@
 #include "lwip/init.h"
 #include "mpconfigport.h"
 #include "fs_helpers.h"
+#include "mphalport.h"
 
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
@@ -57,6 +58,9 @@ void await(int event_source) {
     }
     mp_blocking_events = event_source;
     co_switch(t_event);
+    /* This handles any interrupts that have been raised whilst
+    the t_event co-routine was running. */
+    mp_handle_pending(true);
     assert(active_events & event_source);
     mp_blocking_events = mp_event_source_none;
     active_events &= ~event_source;
@@ -157,8 +161,13 @@ void notified(microkit_channel ch) {
     pyb_lwip_poll();
     fs_process_completions();
 
+    bool kbd_interrupt_recvd = false;
     switch (ch) {
     case SERIAL_RX_CH:
+        /* Whenever we get a serial notification, we consume whatever we have
+        been given by the virtualiser, and place it in an internal micropython
+        ring buffer. This is so that we can process interrupt characters. */
+        kbd_interrupt_recvd = process_sddf_rx_chr();
         active_events |= mp_event_source_serial;
         break;
     case TIMER_CH:
@@ -186,7 +195,7 @@ void notified(microkit_channel ch) {
     default:
         printf("MP|ERROR: unexpected notification received from channel: 0x%lx\n", ch);
     }
-    if (active_events & mp_blocking_events) {
+    if ((active_events & mp_blocking_events) || kbd_interrupt_recvd) {
         co_switch(t_mp);
     }
 
