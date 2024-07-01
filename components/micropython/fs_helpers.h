@@ -15,6 +15,6 @@ void *fs_buffer_ptr(ptrdiff_t buffer);
 
 void fs_process_completions(void);
 
-void fs_command_issue(uint64_t request_id, uint32_t cmd_type, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3);
-void fs_command_complete(uint64_t request_id, struct fs_command *command, struct fs_completion *completion);
-int fs_command_blocking(struct fs_completion *completion, uint32_t cmd_type, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3);
+void fs_command_issue(fs_cmd_t cmd);
+void fs_command_complete(uint64_t request_id, fs_cmd_t *cmd, fs_cmpl_t *cmpl);
+int fs_command_blocking(fs_cmpl_t *cmpl, fs_cmd_t cmd);
