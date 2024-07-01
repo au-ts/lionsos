@@ -866,8 +866,8 @@ void handle_readdir(fs_cmd_t cmd) {
 
     struct nfsdirent *dirent = nfs_readdir(nfs, dir_handle);
     if (dirent == NULL) {
-        cmpl.status = FS_STATUS_ERROR;
-        goto fail_readdir;
+        cmpl.status = FS_STATUS_END_OF_DIRECTORY;
+        goto end_of_dir;
     }
 
     uint64_t name_len = strlen(dirent->name) + 1;
@@ -875,7 +875,7 @@ void handle_readdir(fs_cmd_t cmd) {
     memcpy(buf, dirent->name, name_len);
     cmpl.data.readdir.path_len = name_len;
 
-fail_readdir:
+end_of_dir:
     fd_end_op(params.fd);
 fail_begin:
 fail_buffer:
