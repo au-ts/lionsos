@@ -54,6 +54,9 @@ enum {
 
     // could not create file as directory is full
     FS_STATUS_DIRECTORY_IS_FULL = 12,
+
+    // command type is invalid
+    FS_STATUS_INVALID_COMMAND = 13,
 };
 
 enum {
