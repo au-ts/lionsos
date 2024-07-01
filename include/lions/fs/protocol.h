@@ -218,7 +218,7 @@ typedef union fs_cmd_params {
     fs_cmd_params_telldir_t telldir;
     fs_cmd_params_rewinddir_t rewinddir;
 
-    char min_size[48];
+    uint8_t min_size[48];
 } fs_cmd_params_t;
 
 typedef struct fs_cmd {
@@ -277,7 +277,7 @@ typedef struct fs_queue {
     uint64_t head;
     uint64_t tail;
     /* Add explicit padding to ensure buffer entries are cache-entry aligned. */
-    uint64_t padding[6];
+    uint8_t padding[48];
     fs_msg_t buffer[FS_QUEUE_CAPACITY];
 } fs_queue_t;
 
