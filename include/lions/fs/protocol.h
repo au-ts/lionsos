@@ -8,6 +8,7 @@
 #define FS_MAX_NAME_LENGTH 256
 #define FS_MAX_PATH_LENGTH 4096
 
+// flags to control the behaviour of the open command
 enum {
     FS_OPEN_FLAGS_READ_ONLY = 0,
     FS_OPEN_FLAGS_WRITE_ONLY = 1,
@@ -15,6 +16,8 @@ enum {
     FS_OPEN_FLAGS_CREATE = 4,
 };
 
+// status codes that represent the result of an operation
+// each completion message will contain a status code from the below
 enum {
     // operation succeeded
     FS_STATUS_SUCCESS = 0,
@@ -62,6 +65,7 @@ enum {
     FS_STATUS_END_OF_DIRECTORY = 14,
 };
 
+// these constants each represent a type of command that may be issued by the client to the server
 enum {
     FS_CMD_OPEN,
     FS_CMD_CLOSE,
@@ -83,6 +87,7 @@ enum {
     FS_CMD_REWINDDIR,
 };
 
+// the number of different types of command
 #define FS_NUM_COMMANDS 18
 
 typedef struct fs_stat {
