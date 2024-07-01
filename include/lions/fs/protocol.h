@@ -16,8 +16,44 @@ enum {
 };
 
 enum {
+    // operation succeeded
     FS_STATUS_SUCCESS = 0,
+
+    // operation failed for unspecified reason
     FS_STATUS_ERROR = 1,
+
+    // client-provided buffer is invalid
+    FS_STATUS_INVALID_BUFFER = 2,
+
+    // client-provided path or path buffer is invalid
+    FS_STATUS_INVALID_PATH = 3,
+
+    // client-provided file descriptor is invalid
+    FS_STATUS_INVALID_FD = 4,
+
+    // server failed to allocate
+    FS_STATUS_ALLOCATION_ERROR = 5,
+
+    // failed to close file descriptor because it had other unfinished outstanding operations
+    FS_STATUS_OUTSTANDING_OPERATIONS = 6,
+
+    // client-provided file name is invalid
+    FS_STATUS_INVALID_NAME = 7,
+
+    // server has reached its limit of open files
+    FS_STATUS_TOO_MANY_OPEN_FILES = 8,
+
+    // server was denied by backing device or protocol
+    FS_STATUS_SERVER_WAS_DENIED = 9,
+
+    // cannot write to file that is opened without write permissions
+    FS_STATUS_INVALID_WRITE = 10,
+
+    // cannot read from file that is opened without read permissions
+    FS_STATUS_INVALID_READ = 11,
+
+    // could not create file as directory is full
+    FS_STATUS_DIRECTORY_IS_FULL = 12,
 };
 
 enum {
