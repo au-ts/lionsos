@@ -91,7 +91,7 @@ void process_commands(void) {
     for (uint64_t i = 0; i < to_consume; i++) {
         fs_cmd_t cmd = fs_queue_idx_filled(command_queue, i)->cmd;
         if (cmd.type >= FS_NUM_COMMANDS) {
-            reply((fs_cmpl_t){ .id = cmd.id, .status = FS_STATUS_ERROR, 0 });
+            reply((fs_cmpl_t){ .id = cmd.id, .status = FS_STATUS_INVALID_COMMAND, 0 });
             continue;
         }
         cmd_handler[cmd.type](cmd);
