@@ -57,6 +57,9 @@ enum {
 
     // command type is invalid
     FS_STATUS_INVALID_COMMAND = 13,
+
+    // end of directory
+    FS_STATUS_END_OF_DIRECTORY = 14,
 };
 
 enum {
