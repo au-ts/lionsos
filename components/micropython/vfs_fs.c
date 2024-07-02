@@ -54,13 +54,21 @@ STATIC mp_import_stat_t mp_vfs_fs_import_stat(void *self_in, const char *path) {
     err = fs_buffer_allocate(&output_buffer);
     assert(!err);
 
-    uint64_t path_len = strlen(path) + 1;
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
-    struct fs_completion completion;
-    fs_command_blocking(&completion, FS_CMD_STAT, path_buffer, path_len, output_buffer, 0);
+    fs_cmpl_t completion;
+    fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_STAT,
+        .params.stat = {
+            .path.offset = path_buffer,
+            .path.size = path_len,
+            .buf.offset = output_buffer,
+            .buf.size = FS_BUFFER_SIZE,
+        }
+    });
 
-    struct fs_stat_64 stat;
+    fs_stat_t stat;
     memcpy(&stat, fs_buffer_ptr(output_buffer), sizeof stat);
 
     fs_buffer_free(output_buffer);
@@ -147,8 +155,15 @@ STATIC mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
         int err = fs_buffer_allocate(&name_buffer);
         assert(!err);
 
-        struct fs_completion completion;
-        fs_command_blocking(&completion, FS_CMD_READDIR, self->dir, name_buffer, FS_BUFFER_SIZE, 0);
+        fs_cmpl_t completion;
+        fs_command_blocking(&completion, (fs_cmd_t){
+            .type = FS_CMD_READDIR,
+            .params.readdir = {
+                .fd = self->dir,
+                .buf.offset = name_buffer,
+                .buf.size = FS_BUFFER_SIZE,
+            }
+        });
 
         if (completion.status != 0) {
             fs_buffer_free(name_buffer);
@@ -179,8 +194,11 @@ STATIC mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
         return MP_OBJ_FROM_PTR(t);
     }
 
-    struct fs_completion completion;
-    fs_command_blocking(&completion, FS_CMD_CLOSEDIR, self->dir, 0, 0, 0);
+    fs_cmpl_t completion;
+    fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_CLOSEDIR,
+        .params.closedir.fd = self->dir,
+    });
     self->dir = 0;
     return MP_OBJ_STOP_ITERATION;
 }
@@ -201,11 +219,17 @@ STATIC mp_obj_t vfs_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
         mp_raise_OSError(err);
         return mp_const_none;
     }
-    uint64_t path_len = strlen(path) + 1;
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
-    struct fs_completion completion;
-    err = fs_command_blocking(&completion, FS_CMD_OPENDIR, path_buffer, path_len, 0, 0);
+    fs_cmpl_t completion;
+    err = fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_OPENDIR,
+        .params.opendir = {
+            .path.offset = path_buffer,
+            .path.size = path_len,
+        }
+    });
     fs_buffer_free(path_buffer);
     if (err) {
         mp_raise_OSError(err);
@@ -216,7 +240,7 @@ STATIC mp_obj_t vfs_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
-    iter->dir = completion.data[0];
+    iter->dir = completion.data.opendir.fd;
     return MP_OBJ_FROM_PTR(iter);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_ilistdir_obj, vfs_fs_ilistdir);
@@ -239,10 +263,16 @@ STATIC mp_obj_t vfs_fs_mkdir(mp_obj_t self_in, mp_obj_t path_in) {
     }
 
     uint64_t path_len = strlen(path);
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
     
-    struct fs_completion completion;
-    err = fs_command_blocking(&completion, FS_CMD_MKDIR, path_buffer, path_len, 0, 0);
+    fs_cmpl_t completion;
+    err = fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_MKDIR,
+        .params.mkdir = {
+            .path.offset = path_buffer,
+            .path.size = path_len,
+        }
+    });
     if (err) {
         fs_buffer_free(path_buffer);
         mp_raise_OSError(err);
@@ -268,11 +298,17 @@ STATIC mp_obj_t vfs_fs_remove(mp_obj_t self_in, mp_obj_t path_in) {
         return mp_const_none;
     }
 
-    uint64_t path_len = strlen(path) + 1;
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
-    struct fs_completion completion;
-    err = fs_command_blocking(&completion, FS_CMD_UNLINK, path_buffer, path_len, 0, 0);
+    fs_cmpl_t completion;
+    err = fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_UNLINK,
+        .params.unlink = {
+            .path.offset = path_buffer,
+            .path.size = path_len,
+        }
+    });
 
     fs_buffer_free(path_buffer);
 
@@ -301,14 +337,22 @@ STATIC mp_obj_t vfs_fs_rename(mp_obj_t self_in, mp_obj_t old_path_in, mp_obj_t n
         mp_raise_OSError(err);
     }
 
-    uint64_t old_path_len = strlen(old_path) + 1;
-    uint64_t new_path_len = strlen(new_path) + 1;
+    uint64_t old_path_len = strlen(old_path);
+    uint64_t new_path_len = strlen(new_path);
 
-    strcpy(fs_buffer_ptr(old_path_buffer), old_path);
-    strcpy(fs_buffer_ptr(new_path_buffer), new_path);
+    memcpy(fs_buffer_ptr(old_path_buffer), old_path, old_path_len);
+    memcpy(fs_buffer_ptr(new_path_buffer), new_path, new_path_len);
 
-    struct fs_completion completion;
-    fs_command_blocking(&completion, FS_CMD_RENAME, old_path_buffer, old_path_len, new_path_buffer, new_path_len);
+    fs_cmpl_t completion;
+    fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_RENAME,
+        .params.rename = {
+            .old_path.offset = old_path_buffer,
+            .old_path.size = old_path_len,
+            .new_path.offset = new_path_buffer,
+            .new_path.size = new_path_len,
+        }
+    });
 
     fs_buffer_free(old_path_buffer);
     fs_buffer_free(new_path_buffer);
@@ -332,10 +376,16 @@ STATIC mp_obj_t vfs_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
     }
 
     uint64_t path_len = strlen(path);
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
-    struct fs_completion completion;
-    fs_command_blocking(&completion, FS_CMD_RMDIR, path_buffer, path_len, 0, 0);
+    fs_cmpl_t completion;
+    fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_RMDIR,
+        .params.rmdir = {
+            .path.offset = path_buffer,
+            .path.size = path_len,
+        }
+    });
 
     fs_buffer_free(path_buffer);
 
@@ -359,13 +409,21 @@ STATIC mp_obj_t vfs_fs_stat(mp_obj_t self_in, mp_obj_t path_in) {
     err = fs_buffer_allocate(&output_buffer);
     assert(!err);
 
-    uint64_t path_len = strlen(path) + 1;
-    strcpy(fs_buffer_ptr(path_buffer), path);
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
-    struct fs_completion completion;
-    fs_command_blocking(&completion, FS_CMD_STAT, path_buffer, path_len, output_buffer, 0);
+    fs_cmpl_t completion;
+    fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_STAT,
+        .params.stat = {
+            .path.offset = path_buffer,
+            .path.size = path_len,
+            .buf.offset = output_buffer,
+            .buf.size = FS_BUFFER_SIZE,
+        }
+    });
 
-    struct fs_stat_64 sb;
+    fs_stat_t sb;
     memcpy(&sb, fs_buffer_ptr(output_buffer), sizeof sb);
 
     fs_buffer_free(output_buffer);

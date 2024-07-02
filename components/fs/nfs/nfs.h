@@ -8,7 +8,7 @@
 extern struct nfs_context *nfs;
 
 void continuation_pool_init(void);
-void nfs_notified(void);
+void process_commands(void);
 
 int must_notify_rx(void);
 int must_notify_tx(void);
