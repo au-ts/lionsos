@@ -23,8 +23,8 @@
 blk_queue_handle_t blk_queue_handle_memory;
 blk_queue_handle_t *blk_queue_handle = &blk_queue_handle_memory;
 
-struct sddf_fs_queue *Fatfs_command_queue;
-struct sddf_fs_queue *Fatfs_completion_queue;
+struct fs_queue *Fatfs_command_queue;
+struct fs_queue *Fatfs_completion_queue;
 
 blk_req_queue_t *request;
 blk_resp_queue_t *response;
@@ -114,7 +114,7 @@ void (*operation_functions[])() = {
 
 static FSRequest RequestPool[MAX_COROUTINE_NUM];
 
-void Fill_Client_Response(union sddf_fs_message* message, const FSRequest* Finished_Request) {
+void Fill_Client_Response(union fs_message* message, const FSRequest* Finished_Request) {
     message->completion.status = Finished_Request->args[Status_bit];
     message->completion.data[0] = Finished_Request->args[First_data_bit];
     message->completion.data[1] = Finished_Request->args[Second_data_bit];
@@ -122,7 +122,7 @@ void Fill_Client_Response(union sddf_fs_message* message, const FSRequest* Finis
 }
 
 // Setting up the request in the requestpool and push the request to the FiberPool
-void SetUp_request(int32_t index, union sddf_fs_message message) {
+void SetUp_request(int32_t index, union fs_message message) {
     RequestPool[index].request_id = message.command.request_id;
     RequestPool[index].cmd = message.command.cmd_type;
     memcpy(RequestPool[index].args, message.command.args, SDDF_ARGS_SIZE * sizeof(uint64_t));
@@ -187,7 +187,7 @@ void notified(microkit_channel ch) {
     #ifdef FS_DEBUG_PRINT
     sddf_printf("FS IRQ received::%d\n", ch);
     #endif
-    union sddf_fs_message message;
+    union fs_message message;
     // Compromised code here, polling for server's state until it is ready
     while (!config->ready) {}
 
@@ -273,7 +273,7 @@ void notified(microkit_channel ch) {
             if (RequestPool[i].handle == INVALID_COHANDLE && RequestPool[i].stat == INUSE) {
                 message.completion.request_id = RequestPool[i].request_id;
                 Fill_Client_Response(&message, &(RequestPool[i]));
-                sddf_fs_queue_push(Fatfs_completion_queue, message);
+                fs_queue_push(Fatfs_completion_queue, message);
                 #ifdef FS_DEBUG_PRINT
                 sddf_printf("FS enqueue response:status: %d\n", message.completion.status);
                 #endif
@@ -291,7 +291,7 @@ void notified(microkit_channel ch) {
                   || sddf_fs_queue_full(Fatfs_completion_queue)) {
                break;
             }
-            sddf_fs_queue_pop(Fatfs_command_queue, &message);
+            fs_queue_pop(Fatfs_command_queue, &message);
             #ifdef FS_DEBUG_PRINT
             sddf_printf("FS dequeue request:CMD type: %lu\n", message.command.cmd_type);
             #endif

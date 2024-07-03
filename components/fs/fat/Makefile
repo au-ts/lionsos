@@ -13,12 +13,11 @@ LDFLAGS := -L$(BOARD_DIR)/lib
 LIONSOS ?= ../../../
 MUSL = $(LIONSOS)/dep/musllibc
 
-FatFs_OBJS :=   ff.o \z
+FatFs_OBJS :=   ff.o \
 				ffunicode.o \
                 AsyncFATFs.o \
 				AsyncFATFunc.o \
 				Asyncdiskio.o \
-				fs_shared_queue.o \
 				sddf_blk_shared_queue.o \
 				FiberPool.o \
 				FiberFlow.o \

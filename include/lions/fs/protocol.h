@@ -78,11 +78,11 @@ static bool fs_queue_pop(struct fs_queue *queue, union fs_message *message) {
 
 // Ineffienct implementation of checking if queue is full or empty
 // Should be changed later
-static bool sddf_fs_queue_full(struct sddf_fs_queue *queue) {
-    return __atomic_load_n(&queue->tail, __ATOMIC_ACQUIRE) - __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE) == SDDF_FS_QUEUE_CAPACITY;
+static bool sddf_fs_queue_full(struct fs_queue *queue) {
+    return __atomic_load_n(&queue->tail, __ATOMIC_ACQUIRE) - __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE) == FS_QUEUE_CAPACITY;
 }
 
-static bool sddf_fs_queue_empty(struct sddf_fs_queue *queue) {
+static bool sddf_fs_queue_empty(struct fs_queue *queue) {
     // Compare head and tail directly
     return __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE) == __atomic_load_n(&queue->tail, __ATOMIC_ACQUIRE);
 }
