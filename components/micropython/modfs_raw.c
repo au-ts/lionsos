@@ -63,7 +63,7 @@ STATIC mp_obj_t complete_open(mp_obj_t request_id_in) {
     fs_buffer_free(command.params.open.path.offset);
     fs_request_free(request_id);
 
-    if (completion.status) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
@@ -207,7 +207,7 @@ STATIC mp_obj_t complete_stat(mp_obj_t request_id_in) {
     fs_request_free(request_id);
     fs_buffer_free(command.params.stat.path.offset);
 
-    if (completion.status) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         fs_buffer_free(command.params.stat.buf.offset);
         mp_raise_OSError(completion.status);
         return mp_const_none;
