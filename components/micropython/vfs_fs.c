@@ -74,7 +74,7 @@ STATIC mp_import_stat_t mp_vfs_fs_import_stat(void *self_in, const char *path) {
     fs_buffer_free(output_buffer);
     fs_buffer_free(path_buffer);
 
-    if (completion.status != 0) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         return MP_IMPORT_STAT_NO_EXIST;
     } else if (stat.mode & 0040000) { // TODO name constant
         return MP_IMPORT_STAT_DIR;
@@ -165,7 +165,7 @@ STATIC mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
             }
         });
 
-        if (completion.status != 0) {
+        if (completion.status != FS_STATUS_SUCCESS) {
             fs_buffer_free(name_buffer);
             break;
         }
@@ -236,7 +236,7 @@ STATIC mp_obj_t vfs_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
         return mp_const_none;
     }
 
-    if (completion.status != 0) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
@@ -280,7 +280,7 @@ STATIC mp_obj_t vfs_fs_mkdir(mp_obj_t self_in, mp_obj_t path_in) {
 
     fs_buffer_free(path_buffer);
 
-    if (completion.status != 0) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         mp_raise_OSError(completion.status);
     }
     return mp_const_none;
@@ -312,7 +312,7 @@ STATIC mp_obj_t vfs_fs_remove(mp_obj_t self_in, mp_obj_t path_in) {
 
     fs_buffer_free(path_buffer);
 
-    if (completion.status != 0) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         mp_raise_OSError(completion.status);
     }
     return mp_const_none;
@@ -357,7 +357,7 @@ STATIC mp_obj_t vfs_fs_rename(mp_obj_t self_in, mp_obj_t old_path_in, mp_obj_t n
     fs_buffer_free(old_path_buffer);
     fs_buffer_free(new_path_buffer);
 
-    if (completion.status != 0) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         mp_raise_OSError(completion.status);
     }
     return mp_const_none;
@@ -389,7 +389,7 @@ STATIC mp_obj_t vfs_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
 
     fs_buffer_free(path_buffer);
 
-    if (completion.status != 0) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         mp_raise_OSError(completion.status);
     }
     return mp_const_none;
@@ -429,7 +429,7 @@ STATIC mp_obj_t vfs_fs_stat(mp_obj_t self_in, mp_obj_t path_in) {
     fs_buffer_free(output_buffer);
     fs_buffer_free(path_buffer);
 
-    if (completion.status != 0) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
