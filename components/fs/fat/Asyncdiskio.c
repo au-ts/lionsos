@@ -17,7 +17,7 @@ extern blk_queue_handle_t *blk_queue_handle;
 extern bool blk_request_pushed;
 
 DSTATUS disk_initialize (
-	BYTE pdrv				/* Physical drive nmuber to identify the drive */
+	BYTE pdrv				/* Physical drive number to identify the drive */
 )
 {
 	DSTATUS stat;
