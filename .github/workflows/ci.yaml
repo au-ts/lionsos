@@ -12,8 +12,6 @@ jobs:
     steps:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
-        with:
-          submodules: 'true'
       - name: Download Microkit SDK
         run: wget https://trustworthy.systems/Downloads/microkit/microkit-sdk-dev-8e40fe8-linux-x86-64.tar.gz
       - name: Extract Microkit SDK
@@ -35,8 +33,6 @@ jobs:
     steps:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
-        with:
-          submodules: 'true'
       - name: Download Microkit SDK
         run: wget https://trustworthy.systems/Downloads/microkit/microkit-sdk-dev-8e40fe8-macos-aarch64.tar.gz
       - name: Extract Microkit SDK

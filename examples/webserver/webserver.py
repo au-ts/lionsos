@@ -1,10 +1,11 @@
 import os
 import asyncio
 import fs_async
-from microdot import Microdot, send_file
+import time
+from microdot import Microdot, Response
 from config import base_dir
 
-extra_content_type_map = {
+content_types_map = Response.types_map | {
     'pdf': 'application/pdf',
     'svg': 'image/svg+xml',
 }
@@ -33,38 +34,101 @@ class FileStream:
         await self.f.close()
 
 
-app = Microdot()
+def parse_http_date(date_str):
+    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-@app.route('/')
-async def index(request):
-    path = f'{base_dir}/index.html'
-    f = await fs_async.open(path)
-    return send_file(path, stream=FileStream(f))
+    parts = date_str.split()
 
-@app.route('/<path:path>')
-async def static(request, path):
+    weekday = parts[0][:-1]
+    day = int(parts[1])
+    month = months.index(parts[2]) + 1
+    year = int(parts[3])
+    time_parts = parts[4].split(':')
+    hour = int(time_parts[0])
+    minute = int(time_parts[1])
+    second = int(time_parts[2])
+
+    # yearday and isdst can be set to 0 since they are not used by mktime
+    time_tuple = (year, month, day, hour, minute, second, 0, 0, 0)
+    timestamp = time.mktime(time_tuple)
+
+    return timestamp
+
+
+def format_http_date(timestamp):
+    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    year, month, mday, hour, minute, second, weekday, yearday = time.gmtime(timestamp)
+    formatted_date = "{}, {:02d} {} {:04d} {:02d}:{:02d}:{:02d} GMT".format(
+        days[weekday], mday, months[month-1], year, hour, minute, second
+    )
+
+    return formatted_date
+
+
+async def send_file(path, request_headers):
+    if 'X-Real-IP' in request_headers:
+        print(f'GET {path} {request_headers["X-Real-IP"]}')
+
     if '..' in path:
         # directory traversal is not allowed
-        return 'Not found', 404
-
+        return Response(status_code=404, reason='Not Found')
     path = f'{base_dir}/{path}'
+
+    response_headers = {
+        'Content-Type': 'application/octet-stream',
+        'Cache-Control': 'max-age=31536000'
+    }
 
     try:
         stat = await fs_async.stat(path)
     except:
-        return 'File not found', 404
+        return Response(status_code=404, reason='Not Found')
 
-    max_age = 3600
     if stat[0] & 0o170000 == 0o40000: # directory
         path = f'{path}/index.html'
-        max_age = 0
+        try:
+            stat = await fs_async.stat(path)
+        except:
+            return Response(status_code=404, reason='Not Found')
 
-    content_type = None
     ext = path.split('.')[-1]
-    if ext in extra_content_type_map:
-        content_type = extra_content_type_map[ext]
+    if ext in content_types_map:
+        response_headers['Content-Type'] = content_types_map[ext]
+
+    short_cache_types = [
+        'text/html',
+        'text/css',
+        'application/javascript'
+    ]
+    if response_headers['Content-Type'] in short_cache_types:
+        response_headers['Cache-Control'] = 'max-age=600'
+
+    mtime = stat[8]
+
+    try:
+        imstime = parse_http_date(request_headers['If-Modified-Since'])
+        if imstime >= mtime:
+            return Response(status_code=304, reason='Not Modified', headers=response_headers)
+    except:
+        pass # malformed If-Modified-Since header should be ignored
+
+    response_headers['Last-Modified'] = format_http_date(mtime)
 
     f = await fs_async.open(path)
-    return send_file(path, stream=FileStream(f), content_type=content_type, max_age=max_age)
+    return Response(body=FileStream(f), headers=response_headers)
 
-app.run(debug=True)
+
+app = Microdot()
+
+@app.route('/')
+async def index(request):
+    return await send_file('index.html', request.headers)
+
+@app.route('/<path:path>')
+async def static(request, path):
+    return await send_file(path, request.headers)
+
+app.run(debug=True, port=80)

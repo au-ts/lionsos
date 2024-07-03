@@ -53,6 +53,7 @@ enum socket_state {
     socket_state_connected,
     socket_state_closing,
     socket_state_closed_by_peer,
+    socket_state_error,
 };
 
 typedef struct {
@@ -119,11 +120,6 @@ uint32_t sys_now(void) {
 static void netif_status_callback(struct netif *netif) {
     if (dhcp_supplied_address(netif)) {
         dlog("DHCP request finished, IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
-
-        microkit_mr_set(0, ip4_addr_get_u32(netif_ip4_addr(netif)));
-        microkit_mr_set(1, (state.mac[0] << 8) | state.mac[1]);
-        microkit_mr_set(2, (state.mac[2] << 24) |  (state.mac[3] << 16) | (state.mac[4] << 8) | state.mac[5]);
-        microkit_ppcall(ETHERNET_ARP_CHANNEL, microkit_msginfo_new(0, 3));
 
         network_ready = true;
     }
@@ -289,6 +285,8 @@ void tcp_init_0(void)
 
 void socket_err_func(void *arg, err_t err)
 {
+    socket_t *socket = arg;
+    socket->state = socket_state_error;
     dlog("error %d with socket", err);
 }
 
@@ -430,14 +428,6 @@ int tcp_socket_close(int index)
 
     switch (socket->state) {
 
-    case socket_state_bound: {
-        socket->state = socket_state_unallocated;
-        socket->sock_tpcb = NULL;
-        socket->rx_head = 0;
-        socket->rx_len = 0;
-        return 0;
-    }
-
     case socket_state_connected: {
         socket->state = socket_state_closing;
         int err = tcp_close(socket->sock_tpcb);
@@ -445,6 +435,8 @@ int tcp_socket_close(int index)
         return err != ERR_OK;
     }
     
+    case socket_state_bound:
+    case socket_state_error:
     case socket_state_closed_by_peer: {
         socket->state = socket_state_unallocated;
         socket->sock_tpcb = NULL;
@@ -463,9 +455,18 @@ int tcp_socket_close(int index)
 
 int tcp_socket_write(int index, const char *buf, size_t len) {
     socket_t *sock = &sockets[index];
-    int to_write = MIN(len, tcp_sndbuf(sock->sock_tpcb));
+    int available = tcp_sndbuf(sock->sock_tpcb);
+
+    if (available == 0) {
+        dlog("no space available");
+        return -2;
+    }
+    int to_write = MIN(len, available);
     int err = tcp_write(sock->sock_tpcb, (void *)buf, to_write, 1);
-    if (err != ERR_OK) {
+    if (err == ERR_MEM) {
+        dlog("tcp_write returned ERR_MEM");
+        return -2;
+    } else if (err != ERR_OK) {
         dlog("tcp_write failed (%d)", err);
         return -1;
     }
@@ -508,4 +509,8 @@ int tcp_socket_writable(int index) {
 
 int tcp_socket_hup(int index) {
     return sockets[index].state == socket_state_closed_by_peer;
+}
+
+int tcp_socket_err(int index) {
+    return sockets[index].state == socket_state_error;
 }

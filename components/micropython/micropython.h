@@ -18,7 +18,6 @@ extern cothread_t t_mp;
 #ifdef ENABLE_I2C
 #define I2C_CH 10
 #endif
-#define ETH_ARP_CH 11
 
 enum {
 	mp_event_source_none = 0,

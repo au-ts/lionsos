@@ -4,21 +4,21 @@
 #include "py/mpthread.h"
 #include "py/builtin.h"
 #include "extmod/vfs.h"
-#include "vfs_sddf_fs.h"
+#include "vfs_fs.h"
 #include "micropython.h"
 #include "fs_helpers.h"
 
 #include <stdio.h>
 #include <string.h>
 
-typedef struct _mp_obj_vfs_sddf_fs_t {
+typedef struct _mp_obj_vfs_fs_t {
     mp_obj_base_t base;
     vstr_t root;
     size_t root_len;
     bool readonly;
-} mp_obj_vfs_sddf_fs_t;
+} mp_obj_vfs_fs_t;
 
-STATIC const char *vfs_sddf_fs_get_path_str(mp_obj_vfs_sddf_fs_t *self, mp_obj_t path) {
+STATIC const char *vfs_fs_get_path_str(mp_obj_vfs_fs_t *self, mp_obj_t path) {
     if (self->root_len == 0) {
         return mp_obj_str_get_str(path);
     } else {
@@ -28,7 +28,7 @@ STATIC const char *vfs_sddf_fs_get_path_str(mp_obj_vfs_sddf_fs_t *self, mp_obj_t
     }
 }
 
-STATIC mp_obj_t vfs_sddf_fs_get_path_obj(mp_obj_vfs_sddf_fs_t *self, mp_obj_t path) {
+STATIC mp_obj_t vfs_fs_get_path_obj(mp_obj_vfs_fs_t *self, mp_obj_t path) {
     if (self->root_len == 0) {
         return path;
     } else {
@@ -38,8 +38,8 @@ STATIC mp_obj_t vfs_sddf_fs_get_path_obj(mp_obj_vfs_sddf_fs_t *self, mp_obj_t pa
     }
 }
 
-STATIC mp_import_stat_t mp_vfs_sddf_fs_import_stat(void *self_in, const char *path) {
-    mp_obj_vfs_sddf_fs_t *self = self_in;
+STATIC mp_import_stat_t mp_vfs_fs_import_stat(void *self_in, const char *path) {
+    mp_obj_vfs_fs_t *self = self_in;
     if (self->root_len != 0) {
         self->root.len = self->root_len;
         vstr_add_str(&self->root, path);
@@ -57,10 +57,10 @@ STATIC mp_import_stat_t mp_vfs_sddf_fs_import_stat(void *self_in, const char *pa
     uint64_t path_len = strlen(path) + 1;
     strcpy(fs_buffer_ptr(path_buffer), path);
 
-    struct sddf_fs_completion completion;
-    fs_command_blocking(&completion, SDDF_FS_CMD_STAT, path_buffer, path_len, output_buffer, 0);
+    struct fs_completion completion;
+    fs_command_blocking(&completion, FS_CMD_STAT, path_buffer, path_len, output_buffer, 0);
 
-    struct sddf_fs_stat_64 stat;
+    struct fs_stat_64 stat;
     memcpy(&stat, fs_buffer_ptr(output_buffer), sizeof stat);
 
     fs_buffer_free(output_buffer);
@@ -75,10 +75,10 @@ STATIC mp_import_stat_t mp_vfs_sddf_fs_import_stat(void *self_in, const char *pa
     }
 }
 
-STATIC mp_obj_t vfs_sddf_fs_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+STATIC mp_obj_t vfs_fs_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 1, false);
 
-    mp_obj_vfs_sddf_fs_t *vfs = mp_obj_malloc(mp_obj_vfs_sddf_fs_t, type);
+    mp_obj_vfs_fs_t *vfs = mp_obj_malloc(mp_obj_vfs_fs_t, type);
     vstr_init(&vfs->root, 0);
     if (n_args == 1) {
         vstr_add_str(&vfs->root, mp_obj_str_get_str(args[0]));
@@ -90,8 +90,8 @@ STATIC mp_obj_t vfs_sddf_fs_make_new(const mp_obj_type_t *type, size_t n_args, s
     return MP_OBJ_FROM_PTR(vfs);
 }
 
-STATIC mp_obj_t vfs_sddf_fs_mount(mp_obj_t self_in, mp_obj_t readonly, mp_obj_t mkfs) {
-    // mp_obj_vfs_sddf_fs_t *self = MP_OBJ_TO_PTR(self_in);
+STATIC mp_obj_t vfs_fs_mount(mp_obj_t self_in, mp_obj_t readonly, mp_obj_t mkfs) {
+    // mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
     // if (mp_obj_is_true(readonly)) {
     //     self->readonly = true;
     // }
@@ -100,59 +100,55 @@ STATIC mp_obj_t vfs_sddf_fs_mount(mp_obj_t self_in, mp_obj_t readonly, mp_obj_t 
     // }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(vfs_sddf_fs_mount_obj, vfs_sddf_fs_mount);
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(vfs_fs_mount_obj, vfs_fs_mount);
 
-STATIC mp_obj_t vfs_sddf_fs_umount(mp_obj_t self_in) {
+STATIC mp_obj_t vfs_fs_umount(mp_obj_t self_in) {
     (void)self_in;
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(vfs_sddf_fs_umount_obj, vfs_sddf_fs_umount);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(vfs_fs_umount_obj, vfs_fs_umount);
 
-STATIC mp_obj_t vfs_sddf_fs_open(mp_obj_t self_in, mp_obj_t path_in, mp_obj_t mode_in) {
-    mp_obj_vfs_sddf_fs_t *self = MP_OBJ_TO_PTR(self_in);
+STATIC mp_obj_t vfs_fs_open(mp_obj_t self_in, mp_obj_t path_in, mp_obj_t mode_in) {
+    mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
     const char *mode = mp_obj_str_get_str(mode_in);
     if (self->readonly
         && (strchr(mode, 'w') != NULL || strchr(mode, 'a') != NULL || strchr(mode, '+') != NULL)) {
         mp_raise_OSError(MP_EROFS);
     }
     if (!mp_obj_is_small_int(path_in)) {
-        path_in = vfs_sddf_fs_get_path_obj(self, path_in);
+        path_in = vfs_fs_get_path_obj(self, path_in);
     }
-    return mp_vfs_sddf_fs_file_open(&mp_type_vfs_sddf_fs_textio, path_in, mode_in);
+    return mp_vfs_fs_file_open(&mp_type_vfs_fs_textio, path_in, mode_in);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(vfs_sddf_fs_open_obj, vfs_sddf_fs_open);
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(vfs_fs_open_obj, vfs_fs_open);
 
-STATIC mp_obj_t vfs_sddf_fs_chdir(mp_obj_t self_in, mp_obj_t path_in) {
+STATIC mp_obj_t vfs_fs_chdir(mp_obj_t self_in, mp_obj_t path_in) {
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_sddf_fs_chdir_obj, vfs_sddf_fs_chdir);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_chdir_obj, vfs_fs_chdir);
 
-STATIC mp_obj_t vfs_sddf_fs_getcwd(mp_obj_t self_in) {
+STATIC mp_obj_t vfs_fs_getcwd(mp_obj_t self_in) {
     return mp_obj_new_str("/", strlen("/"));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(vfs_sddf_fs_getcwd_obj, vfs_sddf_fs_getcwd);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(vfs_fs_getcwd_obj, vfs_fs_getcwd);
 
-typedef struct _vfs_sddf_fs_ilistdir_it_t {
+typedef struct _vfs_fs_ilistdir_it_t {
     mp_obj_base_t base;
     mp_fun_1_t iternext;
     bool is_str;
     uint64_t dir;
-} vfs_sddf_fs_ilistdir_it_t;
+} vfs_fs_ilistdir_it_t;
 
-STATIC mp_obj_t vfs_sddf_fs_ilistdir_it_iternext(mp_obj_t self_in) {
-    vfs_sddf_fs_ilistdir_it_t *self = MP_OBJ_TO_PTR(self_in);
-
-    if (self->dir == 0) {
-        return MP_OBJ_STOP_ITERATION;
-    }
+STATIC mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
+    vfs_fs_ilistdir_it_t *self = MP_OBJ_TO_PTR(self_in);
 
     for (;;) {
         ptrdiff_t name_buffer;
         int err = fs_buffer_allocate(&name_buffer);
         assert(!err);
 
-        struct sddf_fs_completion completion;
-        fs_command_blocking(&completion, SDDF_FS_CMD_READDIR, self->dir, name_buffer, FS_BUFFER_SIZE, 0);
+        struct fs_completion completion;
+        fs_command_blocking(&completion, FS_CMD_READDIR, self->dir, name_buffer, FS_BUFFER_SIZE, 0);
 
         if (completion.status != 0) {
             fs_buffer_free(name_buffer);
@@ -183,18 +179,18 @@ STATIC mp_obj_t vfs_sddf_fs_ilistdir_it_iternext(mp_obj_t self_in) {
         return MP_OBJ_FROM_PTR(t);
     }
 
-    struct sddf_fs_completion completion;
-    fs_command_blocking(&completion, SDDF_FS_CMD_CLOSEDIR, self->dir, 0, 0, 0);
+    struct fs_completion completion;
+    fs_command_blocking(&completion, FS_CMD_CLOSEDIR, self->dir, 0, 0, 0);
     self->dir = 0;
     return MP_OBJ_STOP_ITERATION;
 }
 
-STATIC mp_obj_t vfs_sddf_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
-    mp_obj_vfs_sddf_fs_t *self = MP_OBJ_TO_PTR(self_in);
-    vfs_sddf_fs_ilistdir_it_t *iter = mp_obj_malloc(vfs_sddf_fs_ilistdir_it_t, &mp_type_polymorph_iter);
-    iter->iternext = vfs_sddf_fs_ilistdir_it_iternext;
+STATIC mp_obj_t vfs_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
+    mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
+    vfs_fs_ilistdir_it_t *iter = mp_obj_malloc(vfs_fs_ilistdir_it_t, &mp_type_polymorph_iter);
+    iter->iternext = vfs_fs_ilistdir_it_iternext;
     iter->is_str = mp_obj_get_type(path_in) == &mp_type_str;
-    const char *path = vfs_sddf_fs_get_path_str(self, path_in);
+    const char *path = vfs_fs_get_path_str(self, path_in);
     if (path[0] == '\0') {
         path = ".";
     }
@@ -208,8 +204,8 @@ STATIC mp_obj_t vfs_sddf_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
     uint64_t path_len = strlen(path) + 1;
     strcpy(fs_buffer_ptr(path_buffer), path);
 
-    struct sddf_fs_completion completion;
-    err = fs_command_blocking(&completion, SDDF_FS_CMD_OPENDIR, path_buffer, path_len, 0, 0);
+    struct fs_completion completion;
+    err = fs_command_blocking(&completion, FS_CMD_OPENDIR, path_buffer, path_len, 0, 0);
     fs_buffer_free(path_buffer);
     if (err) {
         mp_raise_OSError(err);
@@ -223,7 +219,7 @@ STATIC mp_obj_t vfs_sddf_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
     iter->dir = completion.data[0];
     return MP_OBJ_FROM_PTR(iter);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_sddf_fs_ilistdir_obj, vfs_sddf_fs_ilistdir);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_ilistdir_obj, vfs_fs_ilistdir);
 
 typedef struct _mp_obj_listdir_t {
     mp_obj_base_t base;
@@ -231,9 +227,9 @@ typedef struct _mp_obj_listdir_t {
     uint64_t dir;
 } mp_obj_listdir_t;
 
-STATIC mp_obj_t vfs_sddf_fs_mkdir(mp_obj_t self_in, mp_obj_t path_in) {
-    mp_obj_vfs_sddf_fs_t *self = MP_OBJ_TO_PTR(self_in);
-    const char *path = vfs_sddf_fs_get_path_str(self, path_in);
+STATIC mp_obj_t vfs_fs_mkdir(mp_obj_t self_in, mp_obj_t path_in) {
+    mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
+    const char *path = vfs_fs_get_path_str(self, path_in);
 
     ptrdiff_t path_buffer;
     int err = fs_buffer_allocate(&path_buffer);
@@ -245,8 +241,8 @@ STATIC mp_obj_t vfs_sddf_fs_mkdir(mp_obj_t self_in, mp_obj_t path_in) {
     uint64_t path_len = strlen(path);
     strcpy(fs_buffer_ptr(path_buffer), path);
     
-    struct sddf_fs_completion completion;
-    err = fs_command_blocking(&completion, SDDF_FS_CMD_MKDIR, path_buffer, path_len, 0, 0);
+    struct fs_completion completion;
+    err = fs_command_blocking(&completion, FS_CMD_MKDIR, path_buffer, path_len, 0, 0);
     if (err) {
         fs_buffer_free(path_buffer);
         mp_raise_OSError(err);
@@ -259,11 +255,11 @@ STATIC mp_obj_t vfs_sddf_fs_mkdir(mp_obj_t self_in, mp_obj_t path_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_sddf_fs_mkdir_obj, vfs_sddf_fs_mkdir);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_mkdir_obj, vfs_fs_mkdir);
 
-STATIC mp_obj_t vfs_sddf_fs_remove(mp_obj_t self_in, mp_obj_t path_in) {
-    mp_obj_vfs_sddf_fs_t *self = MP_OBJ_TO_PTR(self_in);
-    const char *path = vfs_sddf_fs_get_path_str(self, path_in);
+STATIC mp_obj_t vfs_fs_remove(mp_obj_t self_in, mp_obj_t path_in) {
+    mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
+    const char *path = vfs_fs_get_path_str(self, path_in);
 
     ptrdiff_t path_buffer;
     int err = fs_buffer_allocate(&path_buffer);
@@ -275,8 +271,8 @@ STATIC mp_obj_t vfs_sddf_fs_remove(mp_obj_t self_in, mp_obj_t path_in) {
     uint64_t path_len = strlen(path) + 1;
     strcpy(fs_buffer_ptr(path_buffer), path);
 
-    struct sddf_fs_completion completion;
-    err = fs_command_blocking(&completion, SDDF_FS_CMD_UNLINK, path_buffer, path_len, 0, 0);
+    struct fs_completion completion;
+    err = fs_command_blocking(&completion, FS_CMD_UNLINK, path_buffer, path_len, 0, 0);
 
     fs_buffer_free(path_buffer);
 
@@ -285,12 +281,12 @@ STATIC mp_obj_t vfs_sddf_fs_remove(mp_obj_t self_in, mp_obj_t path_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_sddf_fs_remove_obj, vfs_sddf_fs_remove);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_remove_obj, vfs_fs_remove);
 
-STATIC mp_obj_t vfs_sddf_fs_rename(mp_obj_t self_in, mp_obj_t old_path_in, mp_obj_t new_path_in) {
-    mp_obj_vfs_sddf_fs_t *self = MP_OBJ_TO_PTR(self_in);
-    const char *old_path = vfs_sddf_fs_get_path_str(self, old_path_in);
-    const char *new_path = vfs_sddf_fs_get_path_str(self, new_path_in);
+STATIC mp_obj_t vfs_fs_rename(mp_obj_t self_in, mp_obj_t old_path_in, mp_obj_t new_path_in) {
+    mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
+    const char *old_path = vfs_fs_get_path_str(self, old_path_in);
+    const char *new_path = vfs_fs_get_path_str(self, new_path_in);
 
     ptrdiff_t old_path_buffer;
     int err = fs_buffer_allocate(&old_path_buffer);
@@ -311,8 +307,8 @@ STATIC mp_obj_t vfs_sddf_fs_rename(mp_obj_t self_in, mp_obj_t old_path_in, mp_ob
     strcpy(fs_buffer_ptr(old_path_buffer), old_path);
     strcpy(fs_buffer_ptr(new_path_buffer), new_path);
 
-    struct sddf_fs_completion completion;
-    fs_command_blocking(&completion, SDDF_FS_CMD_RENAME, old_path, old_path_len, new_path, new_path_len);
+    struct fs_completion completion;
+    fs_command_blocking(&completion, FS_CMD_RENAME, old_path_buffer, old_path_len, new_path_buffer, new_path_len);
 
     fs_buffer_free(old_path_buffer);
     fs_buffer_free(new_path_buffer);
@@ -322,11 +318,11 @@ STATIC mp_obj_t vfs_sddf_fs_rename(mp_obj_t self_in, mp_obj_t old_path_in, mp_ob
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(vfs_sddf_fs_rename_obj, vfs_sddf_fs_rename);
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(vfs_fs_rename_obj, vfs_fs_rename);
 
-STATIC mp_obj_t vfs_sddf_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
-    mp_obj_vfs_sddf_fs_t *self = MP_OBJ_TO_PTR(self_in);
-    const char *path = vfs_sddf_fs_get_path_str(self, path_in);
+STATIC mp_obj_t vfs_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
+    mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
+    const char *path = vfs_fs_get_path_str(self, path_in);
     
     ptrdiff_t path_buffer;
     int err = fs_buffer_allocate(&path_buffer);
@@ -338,8 +334,8 @@ STATIC mp_obj_t vfs_sddf_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
     uint64_t path_len = strlen(path);
     strcpy(fs_buffer_ptr(path_buffer), path);
 
-    struct sddf_fs_completion completion;
-    fs_command_blocking(&completion, SDDF_FS_CMD_RMDIR, path_buffer, path_len, 0, 0);
+    struct fs_completion completion;
+    fs_command_blocking(&completion, FS_CMD_RMDIR, path_buffer, path_len, 0, 0);
 
     fs_buffer_free(path_buffer);
 
@@ -348,12 +344,12 @@ STATIC mp_obj_t vfs_sddf_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_sddf_fs_rmdir_obj, vfs_sddf_fs_rmdir);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_rmdir_obj, vfs_fs_rmdir);
 
-STATIC mp_obj_t vfs_sddf_fs_stat(mp_obj_t self_in, mp_obj_t path_in) {
-    mp_obj_vfs_sddf_fs_t *self = MP_OBJ_TO_PTR(self_in);
+STATIC mp_obj_t vfs_fs_stat(mp_obj_t self_in, mp_obj_t path_in) {
+    mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
 
-    const char *path = vfs_sddf_fs_get_path_str(self, path_in);
+    const char *path = vfs_fs_get_path_str(self, path_in);
 
     ptrdiff_t path_buffer;
     int err = fs_buffer_allocate(&path_buffer);
@@ -366,10 +362,10 @@ STATIC mp_obj_t vfs_sddf_fs_stat(mp_obj_t self_in, mp_obj_t path_in) {
     uint64_t path_len = strlen(path) + 1;
     strcpy(fs_buffer_ptr(path_buffer), path);
 
-    struct sddf_fs_completion completion;
-    fs_command_blocking(&completion, SDDF_FS_CMD_STAT, path_buffer, path_len, output_buffer, 0);
+    struct fs_completion completion;
+    fs_command_blocking(&completion, FS_CMD_STAT, path_buffer, path_len, output_buffer, 0);
 
-    struct sddf_fs_stat_64 sb;
+    struct fs_stat_64 sb;
     memcpy(&sb, fs_buffer_ptr(output_buffer), sizeof sb);
 
     fs_buffer_free(output_buffer);
@@ -393,36 +389,36 @@ STATIC mp_obj_t vfs_sddf_fs_stat(mp_obj_t self_in, mp_obj_t path_in) {
     t->items[9] = mp_obj_new_int_from_uint(sb.ctime);
     return MP_OBJ_FROM_PTR(t);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_sddf_fs_stat_obj, vfs_sddf_fs_stat);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_stat_obj, vfs_fs_stat);
 
-STATIC const mp_rom_map_elem_t vfs_sddf_fs_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR_mount), MP_ROM_PTR(&vfs_sddf_fs_mount_obj) },
-    { MP_ROM_QSTR(MP_QSTR_umount), MP_ROM_PTR(&vfs_sddf_fs_umount_obj) },
-    { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&vfs_sddf_fs_open_obj) },
+STATIC const mp_rom_map_elem_t vfs_fs_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_mount), MP_ROM_PTR(&vfs_fs_mount_obj) },
+    { MP_ROM_QSTR(MP_QSTR_umount), MP_ROM_PTR(&vfs_fs_umount_obj) },
+    { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&vfs_fs_open_obj) },
 
-    { MP_ROM_QSTR(MP_QSTR_chdir), MP_ROM_PTR(&vfs_sddf_fs_chdir_obj) },
-    { MP_ROM_QSTR(MP_QSTR_getcwd), MP_ROM_PTR(&vfs_sddf_fs_getcwd_obj) },
-    { MP_ROM_QSTR(MP_QSTR_ilistdir), MP_ROM_PTR(&vfs_sddf_fs_ilistdir_obj) },
-    { MP_ROM_QSTR(MP_QSTR_mkdir), MP_ROM_PTR(&vfs_sddf_fs_mkdir_obj) },
-    { MP_ROM_QSTR(MP_QSTR_remove), MP_ROM_PTR(&vfs_sddf_fs_remove_obj) },
-    { MP_ROM_QSTR(MP_QSTR_rename), MP_ROM_PTR(&vfs_sddf_fs_rename_obj) },
-    { MP_ROM_QSTR(MP_QSTR_rmdir), MP_ROM_PTR(&vfs_sddf_fs_rmdir_obj) },
-    { MP_ROM_QSTR(MP_QSTR_stat), MP_ROM_PTR(&vfs_sddf_fs_stat_obj) },
+    { MP_ROM_QSTR(MP_QSTR_chdir), MP_ROM_PTR(&vfs_fs_chdir_obj) },
+    { MP_ROM_QSTR(MP_QSTR_getcwd), MP_ROM_PTR(&vfs_fs_getcwd_obj) },
+    { MP_ROM_QSTR(MP_QSTR_ilistdir), MP_ROM_PTR(&vfs_fs_ilistdir_obj) },
+    { MP_ROM_QSTR(MP_QSTR_mkdir), MP_ROM_PTR(&vfs_fs_mkdir_obj) },
+    { MP_ROM_QSTR(MP_QSTR_remove), MP_ROM_PTR(&vfs_fs_remove_obj) },
+    { MP_ROM_QSTR(MP_QSTR_rename), MP_ROM_PTR(&vfs_fs_rename_obj) },
+    { MP_ROM_QSTR(MP_QSTR_rmdir), MP_ROM_PTR(&vfs_fs_rmdir_obj) },
+    { MP_ROM_QSTR(MP_QSTR_stat), MP_ROM_PTR(&vfs_fs_stat_obj) },
     // #if MICROPY_PY_UOS_STATVFS
-    // { MP_ROM_QSTR(MP_QSTR_statvfs), MP_ROM_PTR(&vfs_sddf_fs_statvfs_obj) },
+    // { MP_ROM_QSTR(MP_QSTR_statvfs), MP_ROM_PTR(&vfs_fs_statvfs_obj) },
     // #endif
 };
-STATIC MP_DEFINE_CONST_DICT(vfs_sddf_fs_locals_dict, vfs_sddf_fs_locals_dict_table);
+STATIC MP_DEFINE_CONST_DICT(vfs_fs_locals_dict, vfs_fs_locals_dict_table);
 
-STATIC const mp_vfs_proto_t vfs_sddf_fs_proto = {
-    .import_stat = mp_vfs_sddf_fs_import_stat,
+STATIC const mp_vfs_proto_t vfs_fs_proto = {
+    .import_stat = mp_vfs_fs_import_stat,
 };
 
 MP_DEFINE_CONST_OBJ_TYPE(
-    mp_type_vfs_sddf_fs,
+    mp_type_vfs_fs,
     MP_QSTR_VfsSddf,
     MP_TYPE_FLAG_NONE,
-    make_new, vfs_sddf_fs_make_new,
-    protocol, &vfs_sddf_fs_proto,
-    locals_dict, &vfs_sddf_fs_locals_dict
+    make_new, vfs_fs_make_new,
+    protocol, &vfs_fs_proto,
+    locals_dict, &vfs_fs_locals_dict
 );

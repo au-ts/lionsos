@@ -11,11 +11,11 @@
 	url = https://github.com/micropython/micropython.git
 [submodule "musllibc"]
 	path = dep/musllibc
-	url = git@github.com:au-ts/musllibc.git
+	url = https://github.com/au-ts/musllibc.git
 	branch = sel4
 [submodule "libnfs"]
 	path = dep/libnfs
-	url = git@github.com:au-ts/libnfs.git
+	url = https://github.com/au-ts/libnfs.git
 [submodule "microdot"]
 	path = dep/microdot
 	url = https://github.com/miguelgrinberg/microdot.git

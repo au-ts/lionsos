@@ -9,7 +9,7 @@
 #include "py/stackctrl.h"
 #include "shared/runtime/gchelper.h"
 #include "shared/runtime/pyexec.h"
-#include "vfs_sddf_fs.h"
+#include "vfs_fs.h"
 #include <extmod/vfs.h>
 #include <sddf/serial/queue.h>
 #include <sddf/i2c/queue.h>
@@ -64,7 +64,7 @@ void await(int event_source) {
 
 STATIC bool init_nfs(void) {
     mp_obj_t args[2] = {
-        MP_OBJ_TYPE_GET_SLOT(&mp_type_vfs_sddf_fs, make_new)(&mp_type_vfs_sddf_fs, 0, 0, NULL),
+        MP_OBJ_TYPE_GET_SLOT(&mp_type_vfs_fs, make_new)(&mp_type_vfs_fs, 0, 0, NULL),
         MP_OBJ_NEW_QSTR(MP_QSTR__slash_),
     };
     mp_vfs_mount(2, args, (mp_map_t *)&mp_const_empty_map);
