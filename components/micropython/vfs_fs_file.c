@@ -58,7 +58,7 @@ STATIC mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int 
             .buf.size = size,
         }
     });
-    if (err || completion.status != 0) {
+    if (err || completion.status != FS_STATUS_SUCCESS) {
         fs_buffer_free(read_buffer);
         return MP_STREAM_ERROR;
     }
@@ -94,7 +94,7 @@ STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t siz
     });
     fs_buffer_free(write_buffer);
 
-    if (completion.status != 0) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         return MP_STREAM_ERROR;
     }
     o->pos += completion.data.write.len_written;
@@ -272,7 +272,7 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
         }
     });
 
-    if (completion.status != 0) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         fs_buffer_free(buffer);
         mp_raise_OSError(completion.status);
         return mp_const_none;
@@ -287,7 +287,7 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
             .buf.size = FS_BUFFER_SIZE,
         }
     });
-    if (completion.status != 0) {
+    if (completion.status != FS_STATUS_SUCCESS) {
         fs_command_blocking(&completion, (fs_cmd_t){
             .type = FS_CMD_CLOSE,
             .params.close.fd = o->fd,
@@ -301,7 +301,7 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
     fs_buffer_free(buffer);
 
     if (truncate) {
-        if (completion.status != 0) {
+        if (completion.status != FS_STATUS_SUCCESS) {
             fs_command_blocking(&completion, (fs_cmd_t){
                 .type = FS_CMD_CLOSE,
                 .params.close.fd = o->fd,
