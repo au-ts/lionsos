@@ -145,7 +145,7 @@ class PN532:
 		assert data[2] == _PN532_STARTCODE1, "startcode1 failed"
 		assert data[3] == _PN532_STARTCODE2, "startcode2 failed"
 		assert data[4] == length, "length failed"
-		# assert data[5] == ~length + 1, "checksum failed" # @alwin: not too sure about this
+		assert data[5] == (~length + 1) + 2**8, "checksum failed"
 		# data[6] is probably PN532_TO_HOST command
 		# data[7] is probably an echo of the command
 		i = 0

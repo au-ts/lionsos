@@ -308,7 +308,7 @@ STATIC mp_obj_t vfs_fs_rename(mp_obj_t self_in, mp_obj_t old_path_in, mp_obj_t n
     strcpy(fs_buffer_ptr(new_path_buffer), new_path);
 
     struct fs_completion completion;
-    fs_command_blocking(&completion, FS_CMD_RENAME, old_path, old_path_len, new_path, new_path_len);
+    fs_command_blocking(&completion, FS_CMD_RENAME, old_path_buffer, old_path_len, new_path_buffer, new_path_len);
 
     fs_buffer_free(old_path_buffer);
     fs_buffer_free(new_path_buffer);
