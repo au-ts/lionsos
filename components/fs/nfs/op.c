@@ -47,7 +47,7 @@ void handle_initialise(fs_cmd_t cmd);
 void handle_deinitialise(fs_cmd_t cmd);
 void handle_open(fs_cmd_t cmd);
 void handle_stat(fs_cmd_t cmd);
-void handle_fstat(fs_cmd_t cmd);
+void handle_fsize(fs_cmd_t cmd);
 void handle_close(fs_cmd_t cmd);
 void handle_read(fs_cmd_t cmd);
 void handle_write(fs_cmd_t cmd);
@@ -70,9 +70,9 @@ static const void (*cmd_handler[FS_NUM_COMMANDS])(fs_cmd_t cmd) = {
     [FS_CMD_OPEN] = handle_open,
     [FS_CMD_CLOSE] = handle_close,
     [FS_CMD_STAT] = handle_stat,
-    [FS_CMD_FSTAT] = handle_fstat,
     [FS_CMD_READ] = handle_read,
     [FS_CMD_WRITE] = handle_write,
+    [FS_CMD_FSIZE] = handle_fsize,
     [FS_CMD_RENAME] = handle_rename,
     [FS_CMD_UNLINK] = handle_unlink,
     [FS_CMD_TRUNCATE] = handle_truncate,
@@ -265,34 +265,28 @@ fail_buffer:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status });
 }
 
-void fstat_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void fsize_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS };
     fd_t fd = cont->data[0];
-    void *buf = (void *)cont->data[1];
 
-    if (status == 0) {
-        memcpy(buf, data, sizeof (struct nfs_stat_64));
-        cmpl.status = FS_STATUS_SUCCESS;
-    } else {
-        dlog("failed to stat file (fd=%lu) (%d): %s", fd, status, data);
+    if (status != 0) {
+        dlog("failed to fstat file (fd=%lu) (%d): %s", fd, status, data);
         cmpl.status = FS_STATUS_ERROR;
+        goto fail;
     }
+
+    struct nfs_stat_64 *stat_buf = data;
+    cmpl.data.fsize.size = stat_buf->nfs_size;
+fail:
     fd_end_op(fd);
     continuation_free(cont);
     reply(cmpl);
 }
 
-void handle_fstat(fs_cmd_t cmd) {
+void handle_fsize(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
-    fs_cmd_params_fstat_t params = cmd.params.fstat;
-
-    void *buf = get_buffer(params.buf);
-    if (buf == NULL || params.buf.size < sizeof (fs_stat_t)) {
-        dlog("invalid output buffer provided");
-        status = FS_STATUS_INVALID_BUFFER;
-        goto fail_buffer;
-    }
+    fs_cmd_params_fsize_t params = cmd.params.fsize;
 
     struct nfsfh *file_handle = NULL;
     int err = fd_begin_op_file(params.fd, &file_handle);
@@ -306,9 +300,8 @@ void handle_fstat(fs_cmd_t cmd) {
     assert(cont != NULL);
     cont->request_id = cmd.id;
     cont->data[0] = params.fd;
-    cont->data[1] = (uint64_t) buf;
 
-    err = nfs_fstat64_async(nfs, file_handle, fstat_cb, cont);
+    err = nfs_fstat64_async(nfs, file_handle, fsize_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -320,7 +313,6 @@ fail_enqueue:
     continuation_free(cont);
     fd_end_op(params.fd);
 fail_begin:
-fail_buffer:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status });
 }
 
