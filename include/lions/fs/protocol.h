@@ -67,6 +67,8 @@ enum {
 
 // these constants each represent a type of command that may be issued by the client to the server
 enum {
+    FS_CMD_INITIALISE,
+    FS_CMD_DEINITIALISE,
     FS_CMD_OPEN,
     FS_CMD_CLOSE,
     FS_CMD_STAT,
@@ -88,7 +90,7 @@ enum {
 };
 
 // the number of different types of command
-#define FS_NUM_COMMANDS 18
+#define FS_NUM_COMMANDS 20
 
 typedef struct fs_stat {
 	uint64_t dev;
