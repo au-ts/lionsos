@@ -72,10 +72,6 @@ void notified(microkit_channel ch) {
     case TIMER_CHANNEL: {
         tcp_process_rx();
         tcp_update();
-        if (tcp_ready() && nfs == NULL) {
-            dlog("network ready, initing nfs");
-            nfs_init();
-        }
         if (nfs != NULL) {
             int nfs_fd = nfs_get_fd(nfs);
             int socket_index = socket_index_of_fd(nfs_fd);
@@ -121,7 +117,7 @@ void notified(microkit_channel ch) {
     // If we leave any commands in the queue, we can't rely on another client
     // notification to cause us to try to reprocess those commands, hence we
     // try to process commands unconditionally on any notification
-    if (nfs_connected) {
+    if (tcp_ready()) {
         process_commands();
     }
     tcp_maybe_notify();
