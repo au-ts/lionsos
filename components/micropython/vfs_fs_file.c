@@ -301,6 +301,13 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
     fs_buffer_free(buffer);
 
     if (truncate) {
+        fs_command_blocking(&completion, (fs_cmd_t){
+            .type = FS_CMD_TRUNCATE,
+            .params.truncate = {
+                .fd = o->fd,
+                .length = 0,
+            }
+        });
         if (completion.status != FS_STATUS_SUCCESS) {
             fs_command_blocking(&completion, (fs_cmd_t){
                 .type = FS_CMD_CLOSE,
