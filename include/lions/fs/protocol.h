@@ -72,9 +72,9 @@ enum {
     FS_CMD_OPEN,
     FS_CMD_CLOSE,
     FS_CMD_STAT,
-    FS_CMD_FSTAT,
     FS_CMD_READ,
     FS_CMD_WRITE,
+    FS_CMD_FSIZE,
     FS_CMD_RENAME,
     FS_CMD_UNLINK,
     FS_CMD_TRUNCATE,
@@ -131,11 +131,6 @@ typedef struct fs_cmd_params_stat {
     fs_buffer_t buf;
 } fs_cmd_params_stat_t;
 
-typedef struct fs_cmd_params_fstat {
-    uint64_t fd;
-    fs_buffer_t buf;
-} fs_cmd_params_fstat_t;
-
 typedef struct fs_cmd_params_read {
     uint64_t fd;
     uint64_t offset;
@@ -147,6 +142,10 @@ typedef struct fs_cmd_params_write {
     uint64_t offset;
     fs_buffer_t buf;
 } fs_cmd_params_write_t;
+
+typedef struct fs_cmd_params_fsize {
+    uint64_t fd;
+} fs_cmd_params_fsize_t;
 
 typedef struct fs_cmd_params_rename {
     fs_buffer_t old_path;
@@ -204,9 +203,9 @@ typedef union fs_cmd_params {
     fs_cmd_params_open_t open;
     fs_cmd_params_close_t close;
     fs_cmd_params_stat_t stat;
-    fs_cmd_params_fstat_t fstat;
     fs_cmd_params_read_t read;
     fs_cmd_params_write_t write;
+    fs_cmd_params_fsize_t fsize;
     fs_cmd_params_rename_t rename;
     fs_cmd_params_unlink_t unlink;
     fs_cmd_params_truncate_t truncate;
@@ -241,6 +240,10 @@ typedef struct fs_cmpl_data_write {
     uint64_t len_written;
 } fs_cmpl_data_write_t;
 
+typedef struct fs_cmpl_data_fsize {
+    uint64_t size;
+} fs_cmpl_data_fsize_t;
+
 typedef struct fs_cmpl_data_opendir {
     uint64_t fd;
 } fs_cmpl_data_opendir_t;
@@ -257,6 +260,7 @@ typedef union fs_cmpl_data {
     fs_cmpl_data_open_t open;
     fs_cmpl_data_read_t read;
     fs_cmpl_data_write_t write;
+    fs_cmpl_data_fsize_t fsize;
     fs_cmpl_data_opendir_t opendir;
     fs_cmpl_data_readdir_t readdir;
     fs_cmpl_data_telldir_t telldir;
