@@ -93,23 +93,23 @@ enum {
 };
 
 typedef struct fs_stat {
-	uint64_t dev;
-	uint64_t ino;
-	uint64_t mode;
-	uint64_t nlink;
-	uint64_t uid;
-	uint64_t gid;
-	uint64_t rdev;
-	uint64_t size;
-	uint64_t blksize;
-	uint64_t blocks;
-	uint64_t atime;
-	uint64_t mtime;
-	uint64_t ctime;
-	uint64_t atime_nsec;
-	uint64_t mtime_nsec;
-	uint64_t ctime_nsec;
-	uint64_t used;
+    uint64_t dev;
+    uint64_t ino;
+    uint64_t mode;
+    uint64_t nlink;
+    uint64_t uid;
+    uint64_t gid;
+    uint64_t rdev;
+    uint64_t size;
+    uint64_t blksize;
+    uint64_t blocks;
+    uint64_t atime;
+    uint64_t mtime;
+    uint64_t ctime;
+    uint64_t atime_nsec;
+    uint64_t mtime_nsec;
+    uint64_t ctime_nsec;
+    uint64_t used;
 } fs_stat_t;
 
 typedef struct fs_buffer {
