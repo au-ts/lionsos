@@ -271,21 +271,16 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
             .flags = flags,
         }
     });
-
+    fs_buffer_free(buffer);
     if (completion.status != FS_STATUS_SUCCESS) {
-        fs_buffer_free(buffer);
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
     o->fd = completion.data.open.fd;
 
     fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_FSTAT,
-        .params.fstat = {
-            .fd = o->fd,
-            .buf.offset = buffer,
-            .buf.size = FS_BUFFER_SIZE,
-        }
+        .type = FS_CMD_FSIZE,
+        .params.fsize.fd = o->fd,
     });
     if (completion.status != FS_STATUS_SUCCESS) {
         fs_command_blocking(&completion, (fs_cmd_t){
@@ -296,9 +291,7 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
-    fs_stat_t *sb = fs_buffer_ptr(buffer);
-    o->size = sb->size;
-    fs_buffer_free(buffer);
+    o->size = completion.data.fsize.size;
 
     if (truncate) {
         fs_command_blocking(&completion, (fs_cmd_t){
