@@ -87,10 +87,10 @@ enum {
     FS_CMD_SEEKDIR,
     FS_CMD_TELLDIR,
     FS_CMD_REWINDDIR,
-};
 
-// the number of different types of command
-#define FS_NUM_COMMANDS 20
+    // the number of different types of command
+    FS_NUM_COMMANDS
+};
 
 typedef struct fs_stat {
 	uint64_t dev;
