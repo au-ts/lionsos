@@ -233,7 +233,7 @@ void process_rx(void) {
                 &custom_pbuf_offset->custom,
                 (void *)(buffer.io_or_offset + rx_buffer_data_region),
                 NET_BUFFER_SIZE
-    	    );
+            );
 
             if (state.netif.input(p, &state.netif) != ERR_OK) {
                 // If it is successfully received, the receiver controls whether or not it gets freed.
