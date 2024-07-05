@@ -304,16 +304,15 @@ long sys_socket(va_list ap)
 {
     long fd = -1;
     for (int i = LWIP_FD_START; i < MAX_SOCKET_FDS; i++) {
-	if (!fd_active[i]) {
-	    fd = i;
-	    break;
-	}
+        if (!fd_active[i]) {
+            fd = i;
+            break;
+        }
     }
     if (fd == -1) {
-	dlog("couldn't find available fd");
-	return -1;
+        dlog("couldn't find available fd");
+        return -1;
     }
-
 
     int socket_handle = tcp_socket_create();
     socket_refcount[socket_handle]++;
@@ -363,7 +362,7 @@ long sys_close(va_list ap)
 
     socket_refcount[socket_handle]--;
     if (socket_refcount[socket_handle] == 0) {
-	return (long)tcp_socket_close(socket_handle);
+        return (long)tcp_socket_close(socket_handle);
     }
 
     return 0;
@@ -385,11 +384,11 @@ long sys_dup3(va_list ap)
     assert(socket_refcount[oldfd_socket_handle] != 0);
 
     if (fd_active[newfd]) {
-	int newfd_socket_handle = fd_socket[newfd];
-	socket_refcount[newfd_socket_handle]--;
-	if (socket_refcount[newfd_socket_handle] == 0) {
-	    tcp_socket_close(newfd_socket_handle);
-	}
+        int newfd_socket_handle = fd_socket[newfd];
+        socket_refcount[newfd_socket_handle]--;
+        if (socket_refcount[newfd_socket_handle] == 0) {
+            tcp_socket_close(newfd_socket_handle);
+        }
     }
 
     fd_active[newfd] = true;
