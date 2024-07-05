@@ -43,6 +43,8 @@ struct continuation {
 struct continuation continuation_pool[MAX_CONCURRENT_OPS];
 struct continuation *first_free_cont;
 
+void handle_initialise(fs_cmd_t cmd);
+void handle_deinitialise(fs_cmd_t cmd);
 void handle_open(fs_cmd_t cmd);
 void handle_stat(fs_cmd_t cmd);
 void handle_fstat(fs_cmd_t cmd);
@@ -63,6 +65,8 @@ void handle_telldir(fs_cmd_t cmd);
 void handle_rewinddir(fs_cmd_t cmd);
 
 static const void (*cmd_handler[FS_NUM_COMMANDS])(fs_cmd_t cmd) = {
+    [FS_CMD_INITIALISE] = handle_initialise,
+    [FS_CMD_DEINITIALISE] = handle_deinitialise,
     [FS_CMD_OPEN] = handle_open,
     [FS_CMD_CLOSE] = handle_close,
     [FS_CMD_STAT] = handle_stat,
@@ -150,6 +154,63 @@ char *copy_path(int slot, fs_buffer_t buf) {
     memcpy(path_buffer[slot], client_buf, buf.size);
     path_buffer[slot][buf.size] = '\0';
     return path_buffer[slot];
+}
+
+static void mount_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+    struct continuation *cont = private_data;
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+
+    if (status != 0) {
+        dlog("failed to connect to nfs server (%d): %s", status, data);
+        cmpl.status = FS_STATUS_ERROR;
+        goto fail;
+    }
+
+    dlog("connected to nfs server");
+
+fail:
+    continuation_free(cont);
+    reply(cmpl);
+}
+
+void handle_initialise(fs_cmd_t cmd) {
+    uint64_t status = FS_STATUS_ERROR;
+
+    dlog("received initialise command");
+
+    if (nfs != NULL) {
+        dlog("duplicate initialise command from client");
+        goto fail_duplicate;
+    }
+
+    nfs = nfs_init_context();
+    if (nfs == NULL) {
+        dlog("failed to init nfs context");
+        goto fail_init;
+    }
+
+    struct continuation *cont = continuation_alloc();
+    assert(cont != NULL);
+    cont->request_id = cmd.id;
+
+    nfs_set_autoreconnect(nfs, -1);
+
+    int err = nfs_mount_async(nfs, NFS_SERVER, NFS_DIRECTORY, mount_cb, cont);
+    if (err) {
+        dlog("failed to enqueue command");
+        goto fail_mount;
+    }
+
+    return;
+
+fail_mount:
+    continuation_free(cont);
+fail_init:
+fail_duplicate:
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+}
+
+void handle_deinitialise(fs_cmd_t cmd) {
 }
 
 static void stat64_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
