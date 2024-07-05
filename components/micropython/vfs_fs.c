@@ -99,13 +99,12 @@ STATIC mp_obj_t vfs_fs_make_new(const mp_obj_type_t *type, size_t n_args, size_t
 }
 
 STATIC mp_obj_t vfs_fs_mount(mp_obj_t self_in, mp_obj_t readonly, mp_obj_t mkfs) {
-    // mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
-    // if (mp_obj_is_true(readonly)) {
-    //     self->readonly = true;
-    // }
-    // if (mp_obj_is_true(mkfs)) {
-    //     mp_raise_OSError(MP_EPERM);
-    // }
+    fs_cmpl_t completion;
+    int err = fs_command_blocking(&completion, (fs_cmd_t){ .type = FS_CMD_INITIALISE });
+    if (err || completion.status != FS_STATUS_SUCCESS) {
+        mp_raise_OSError(1);
+    }
+
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(vfs_fs_mount_obj, vfs_fs_mount);
