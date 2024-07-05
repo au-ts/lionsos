@@ -5,8 +5,8 @@
 
 #define FS_QUEUE_CAPACITY 511
 
-#define FS_MAX_NAME_LENGTH 256
-#define FS_MAX_PATH_LENGTH 4096
+#define FS_MAX_NAME_LENGTH 255
+#define FS_MAX_PATH_LENGTH 4095
 
 // flags to control the behaviour of the open command
 enum {
