@@ -68,33 +68,32 @@ def format_http_date(timestamp):
     return formatted_date
 
 
-async def send_file(path, request_headers):
+async def send_file(relative_path, request_headers):
     if 'X-Real-IP' in request_headers:
-        print(f'GET {path} {request_headers["X-Real-IP"]}')
+        print(f'GET {relative_path} {request_headers["X-Real-IP"]}')
 
-    if '..' in path:
+    if '..' in relative_path:
         # directory traversal is not allowed
         return Response(status_code=404, reason='Not Found')
-    path = f'{base_dir}/{path}'
+    absolute_path = f'{base_dir}/{relative_path}'
+
+    if absolute_path.endswith('/'):
+        absolute_path = f'{absolute_path}index.html'
+
+    try:
+        stat = await fs_async.stat(absolute_path)
+    except:
+        return Response(status_code=404, reason='Not Found')
+
+    if stat[0] & 0o170000 == 0o40000: # directory
+        return Response.redirect(f'/{relative_path}/', status_code=301)
 
     response_headers = {
         'Content-Type': 'application/octet-stream',
         'Cache-Control': 'max-age=31536000'
     }
 
-    try:
-        stat = await fs_async.stat(path)
-    except:
-        return Response(status_code=404, reason='Not Found')
-
-    if stat[0] & 0o170000 == 0o40000: # directory
-        path = f'{path}/index.html'
-        try:
-            stat = await fs_async.stat(path)
-        except:
-            return Response(status_code=404, reason='Not Found')
-
-    ext = path.split('.')[-1]
+    ext = absolute_path.split('.')[-1]
     if ext in content_types_map:
         response_headers['Content-Type'] = content_types_map[ext]
 
@@ -117,7 +116,7 @@ async def send_file(path, request_headers):
 
     response_headers['Last-Modified'] = format_http_date(mtime)
 
-    f = await fs_async.open(path)
+    f = await fs_async.open(absolute_path)
     return Response(body=FileStream(f), headers=response_headers)
 
 
