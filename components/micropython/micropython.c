@@ -24,7 +24,7 @@ static char heap[MICROPY_HEAP_SIZE];
 static char mp_stack[MICROPY_STACK_SIZE];
 static char co_controller_mem[LIBMICROKITCO_CONTROLLER_SIZE];
 
-cothread_t t_event, t_mp;
+microkit_cothread_t mp_cothread_handle;
 
 char *nfs_share;
 
@@ -145,8 +145,7 @@ void init(void) {
         while (true) {}
     }
 
-    microkit_cothread_t _mp_cothread_handle;
-    co_err = microkit_cothread_spawn(t_mp_entrypoint, NULL, &_mp_cothread_handle);
+    co_err = microkit_cothread_spawn(t_mp_entrypoint, NULL, &mp_cothread_handle);
     if (co_err != co_no_err) {
         printf("MP|ERROR: Cannot initialise Micropython cothread, err is: %s", microkit_cothread_pretty_error(co_err));
         while (true) {}
