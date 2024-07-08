@@ -474,7 +474,7 @@ void handle_read(fs_cmd_t cmd) {
         status = FS_STATUS_INVALID_BUFFER;
         goto fail_buffer;
     }
-    
+
     struct nfsfh *file_handle = NULL;
     int err = fd_begin_op_file(params.fd, &file_handle);
     if (err) {
@@ -516,7 +516,7 @@ void write_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
         dlog("failed to write to file: %d (%s)", status, data);
         cmpl.status = FS_STATUS_ERROR;
     }
-    
+
     fd_end_op(fd);
     continuation_free(cont);
     reply(cmpl);
@@ -814,7 +814,7 @@ fail_buffer:
 void opendir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
-    
+
     fd_t fd = cont->data[0];
     struct nfsdir *dir = data;
 
