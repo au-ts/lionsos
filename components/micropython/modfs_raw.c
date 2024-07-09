@@ -36,7 +36,7 @@ STATIC mp_obj_t request_open(mp_obj_t path_in, mp_obj_t flag_in) {
     }
 
     uint64_t path_len = strlen(path);
-    memcpy(fs_buffer_ptr(path_buffer), path, 1);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
     request_flags[request_id] = flag_in;
     fs_command_issue((fs_cmd_t){
