@@ -62,8 +62,8 @@ class KittyDisplay(framebuf.FrameBuffer):
 
 # @alwin: all the vars highlighted are still (especially) dodgy
 ######################################################
-display_width = 1920
-display_height = 1080
+display_width = 1050
+display_height = 500
 display = KittyDisplay(display_width, display_height)
 wri = CWriter(display, font)
 # @krishnan: Is this reset_cb used? It seems to always be None
