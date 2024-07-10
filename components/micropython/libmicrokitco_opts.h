@@ -1,3 +1,4 @@
 #pragma once
 
-#define LIBMICROKITCO_MAX_COTHREADS 1
+// Event + MP cothread.
+#define LIBMICROKITCO_MAX_COTHREADS 2
