@@ -288,11 +288,11 @@ typedef struct fs_queue {
 } fs_queue_t;
 
 static inline uint64_t fs_queue_size_consumer(fs_queue_t *queue) {
-    return queue->tail - __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE);
+    return __atomic_load_n(&queue->tail, __ATOMIC_ACQUIRE) - queue->head;
 }
 
 static inline uint64_t fs_queue_size_producer(fs_queue_t *queue) {
-    return __atomic_load_n(&queue->tail, __ATOMIC_ACQUIRE) - queue->head;
+    return queue->tail - __atomic_load_n(&queue->head, __ATOMIC_ACQUIRE);
 }
 
 static inline fs_msg_t *fs_queue_idx_filled(fs_queue_t *queue, uint64_t index) {
