@@ -22,9 +22,8 @@
 static char heap[MICROPY_HEAP_SIZE];
 
 static char mp_stack[MICROPY_STACK_SIZE];
-static char co_controller_mem[LIBMICROKITCO_CONTROLLER_SIZE];
-
-microkit_cothread_t mp_cothread_handle;
+static co_control_t co_controller_mem;
+static microkit_cothread_t mp_cothread_handle;
 
 char *nfs_share;
 
@@ -139,7 +138,7 @@ void init(void) {
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
 #endif
 
-    co_err_t co_err = microkit_cothread_init((uintptr_t) &co_controller_mem, MICROPY_STACK_SIZE, &mp_stack);
+    co_err_t co_err = microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, mp_stack);
     if (co_err != co_no_err) {
         printf("MP|ERROR: Cannot initialise libmicrokitco, err is: %s", microkit_cothread_pretty_error(co_err));
         while (true) {}
