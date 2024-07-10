@@ -16,14 +16,12 @@
 #include "lwip/init.h"
 #include "mpconfigport.h"
 #include "fs_helpers.h"
-#include <libmicrokitco.h>
 
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
 
 static char mp_stack[MICROPY_STACK_SIZE];
 static co_control_t co_controller_mem;
-static microkit_cothread_ref_t mp_cothread_handle;
 
 char *nfs_share;
 
@@ -48,14 +46,6 @@ uintptr_t i2c_data_region;
 #ifdef ENABLE_FRAMEBUFFER
 uintptr_t framebuffer_data_region;
 #endif
-
-void await(microkit_channel event_ch) {
-    co_err_t err = microkit_cothread_wait_on_channel(event_ch);
-
-    if (err != co_no_err) {
-        printf("MP|ERROR: await(): %s", microkit_cothread_pretty_error(err));
-    }
-}
 
 STATIC bool init_nfs(void) {
     mp_obj_t args[2] = {
@@ -138,15 +128,10 @@ void init(void) {
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
 #endif
 
-    co_err_t co_err = microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, mp_stack);
-    if (co_err != co_no_err) {
-        printf("MP|ERROR: Cannot initialise libmicrokitco, err is: %s", microkit_cothread_pretty_error(co_err));
-        while (true) {}
-    }
+    microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, mp_stack);
 
-    co_err = microkit_cothread_spawn(t_mp_entrypoint, NULL, &mp_cothread_handle);
-    if (co_err != co_no_err) {
-        printf("MP|ERROR: Cannot initialise Micropython cothread, err is: %s", microkit_cothread_pretty_error(co_err));
+    if (microkit_cothread_spawn(t_mp_entrypoint, NULL) == LIBMICROKITCO_NULL_HANDLE) {
+        printf("MP|ERROR: Cannot initialise Micropython cothread\n");
         while (true) {}
     }
 

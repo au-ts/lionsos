@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <microkit.h>
+#include <libmicrokitco.h>
 
 #ifdef ENABLE_FRAMEBUFFER
 #define FRAMEBUFFER_VMM_CH 0
@@ -15,5 +16,3 @@
 #ifdef ENABLE_I2C
 #define I2C_CH 10
 #endif
-
-void await(microkit_channel event_ch);
