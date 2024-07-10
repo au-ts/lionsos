@@ -23,7 +23,7 @@ static char heap[MICROPY_HEAP_SIZE];
 
 static char mp_stack[MICROPY_STACK_SIZE];
 static co_control_t co_controller_mem;
-static microkit_cothread_t mp_cothread_handle;
+static microkit_cothread_ref_t mp_cothread_handle;
 
 char *nfs_share;
 
