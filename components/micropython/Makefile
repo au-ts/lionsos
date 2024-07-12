@@ -52,7 +52,7 @@ TARGET=aarch64-none-elf
 LLVM=1
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LIBMICROKITCO_OPT_PATH := $(LIONSOS)/components/micropython
-LIBMICROKITCO_OBJ := $(BUILD_DIR)/libmicrokitco/libmicrokitco_aarch64-none-elf.a
+LIBMICROKITCO_OBJ := $(BUILD_DIR)/libmicrokitco/libmicrokitco.a
 
 export LIBMICROKITCO_PATH TARGET MICROKIT_SDK BUILD_DIR MICROKIT_BOARD MICROKIT_CONFIG CPU LLVM
 $(LIBMICROKITCO_OBJ):
