@@ -129,14 +129,14 @@
         <map mr="resp_blk_vmm_1" vaddr="0x30400000" perms="rw" cached="false" setvar_vaddr="response" />
         <map mr="data_blk_vmm_1" vaddr="0x30600000" perms="rw" cached="true" setvar_vaddr="fs_metadata"/>
 
-        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="Fatfs_command_queue" />
-        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="Fatfs_completion_queue" />
+        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="fatfs_command_queue" />
+        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="fatfs_completion_queue" />
         <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="client_data_offset"/>
 
-        <map mr="coroutine_stack1" vaddr="0x32000000" perms="rw" cached="true" setvar_vaddr="Coroutine_STACK_ONE" />
-        <map mr="coroutine_stack2" vaddr="0x32050000" perms="rw" cached="true" setvar_vaddr="Coroutine_STACK_TWO" />
-        <map mr="coroutine_stack3" vaddr="0x32100000" perms="rw" cached="true" setvar_vaddr="Coroutine_STACK_THREE" />
-        <map mr="coroutine_stack4" vaddr="0x32150000" perms="rw" cached="true" setvar_vaddr="Coroutine_STACK_FOUR" />
+        <map mr="coroutine_stack1" vaddr="0x32000000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_one" />
+        <map mr="coroutine_stack2" vaddr="0x32050000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_two" />
+        <map mr="coroutine_stack3" vaddr="0x32100000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_three" />
+        <map mr="coroutine_stack4" vaddr="0x32150000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_four" />
     </protection_domain>
     
     <protection_domain name="BLK_VIRT" priority="150" budget="100" period="400">

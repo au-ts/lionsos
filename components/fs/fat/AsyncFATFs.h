@@ -15,6 +15,7 @@ void fat_close();
 void fat_stat();
 void fat_pread();
 void fat_pwrite();
+void fat_fsize();
 void fat_rename();
 void fat_unlink();
 void fat_mkdir();

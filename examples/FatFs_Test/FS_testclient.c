@@ -15,7 +15,7 @@ static uint8_t Registerpart[AArch64_RegsterPart];
 Fiber_t main_thread = (void *)Registerpart;
 Fiber_t event_thread;
 void* Coroutine_STACK;
-#define Coroutine_STACKSIZE 0x200000
+#define COROUTINE_STACKSIZE 0x200000
 struct sddf_fs_queue *request_queue, *response_queue;
 union sddf_fs_message request, response;
 
@@ -86,7 +86,7 @@ void init(void) {
     sddf_fs_init(request_queue);
     sddf_fs_init(response_queue);
     Fiber_init(main_thread);
-    event_thread = Fiber_create(Coroutine_STACK, Coroutine_STACKSIZE, test);
+    event_thread = Fiber_create(Coroutine_STACK, COROUTINE_STACKSIZE, test);
     Fiber_switch(event_thread);
 }
 
