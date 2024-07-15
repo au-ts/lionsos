@@ -24,7 +24,7 @@ mp_uint_t mp_hal_ticks_cpu(void) {
 
 void mp_hal_delay_us(mp_uint_t delay) {
     sddf_timer_set_timeout(TIMER_CH, delay * 1000);
-    await(mp_event_source_timer);
+    microkit_cothread_wait_on_channel(TIMER_CH);
 }
 
 void mp_hal_delay_ms(mp_uint_t delay) {

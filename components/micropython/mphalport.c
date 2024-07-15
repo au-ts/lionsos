@@ -16,7 +16,7 @@ int mp_hal_stdin_rx_chr(void) {
     // This is in a loop because the notification for a particular
     // buffer may only be delivered after we have already consumed it.
     while(serial_queue_empty(serial_rx_queue.active)) {
-        await(mp_event_source_serial);
+        microkit_cothread_wait_on_channel(SERIAL_RX_CH);
     }
 
     // Dequeue buffer and return char

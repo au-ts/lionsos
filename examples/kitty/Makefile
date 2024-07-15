@@ -295,6 +295,7 @@ submodules:
 	git submodule update --init $(LIONSOS)/dep/micropython
 	git submodule update --init $(LIONSOS)/dep/musllibc
 	git submodule update --init $(LIONSOS)/dep/sddf
+	git submodule update --init $(LIONSOS)/dep/libmicrokitco
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
 mpy-cross:
