@@ -69,7 +69,7 @@ state_t state;
 
 LWIP_MEMPOOL_DECLARE(
     RX_POOL,
-    RX_QUEUE_SIZE_CLI0 * 2,
+    NET_RX_QUEUE_SIZE_CLI0 * 2,
     sizeof(pbuf_custom_offset_t),
     "Zero-copy RX pool");
 
@@ -239,13 +239,13 @@ void tcp_update(void)
 
 void tcp_init_0(void)
 {
-    cli_queue_init_sys(microkit_name, &state.rx_queue, rx_free, rx_active, &state.tx_queue, tx_free, tx_active);
+    net_cli_queue_init_sys(microkit_name, &state.rx_queue, rx_free, rx_active, &state.tx_queue, tx_free, tx_active);
     net_buffers_init(&state.tx_queue, 0);
 
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
-    cli_mac_addr_init_sys(microkit_name, state.mac);
+    net_cli_mac_addr_init_sys(microkit_name, state.mac);
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
