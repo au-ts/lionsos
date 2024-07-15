@@ -22,7 +22,8 @@ LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a))
 MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
 MICROKIT_BOARD := odroidc4
-ETHERNET_CONFIG_INCLUDE ?= src/ethernet_config
+CONFIG_INCLUDE ?= src/config
+ETHERNET_CONFIG_INCLUDE := ${CONFIG_INCLUDE}
 CPU := cortex-a55
 
 TOOLCHAIN := clang
@@ -47,6 +48,7 @@ LWIP=$(SDDF)/network/ipstacks/lwip/src
 LIBNFS=$(LIONSOS)/dep/libnfs
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL=$(LIONSOS)/dep/musllibc
+LIBCO:=${LIONSOS}/dep/libmicrokitco
 
 IMAGES := timer.elf vmm.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf i2c_virt.elf i2c_driver.elf
 CFLAGS := \
@@ -59,13 +61,17 @@ CFLAGS := \
 	-Wno-unused-function \
 	-I$(BOARD_DIR)/include \
 	-target $(TARGET) \
-	-I$(LIBVMM)/src/arch/aarch64 \
-	-I$(LIBVMM)/src \
-	-I$(LIBVMM)/src/util \
+	-I${LIBCO} \
+	-I$(LIBVMM)/include/libvmm/arch/aarch64 \
+	-I$(LIBVMM)/include \
+	-I$(LIBVMM)/include/libvmm \
+	-I$(LIBVMM)/include/libvmm/util \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld
+
+ASSERT := ${BUILD_DIR}/assert.o
 
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
@@ -74,7 +80,8 @@ TIMER_OBJS := timer.o sddf_util_printf.o sddf_putchar_debug.o
 VMM_OBJS := vmm.o printf.o virq.o linux.o \
 			guest.o psci.o smc.o fault.o \
 			util.o vgic.o vgic_v2.o \
-			package_guest_images.o tcb.o vcpu.o
+			package_guest_images.o tcb.o vcpu.o \
+			sddf_util_printf.o sddf_putchar_debug.o
 
 TIMER_DRIVER := $(SDDF)/drivers/clock/meson
 
@@ -92,6 +99,9 @@ $(BUILD_DIR)/%.o: src/%.c
 
 $(BUILD_DIR)/%.o: src/vmm/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/assert.o: ${SDDF}/util/assert.c
+	$(CC) -c $(CFLAGS) ${SDDF}/util/assert.c -o $@
 
 $(BUILD_DIR)/sddf_util_printf.o: $(SDDF)/util/printf.c $(SDDF)/include/sddf/util/printf.h
 	$(CC) -c $(CFLAGS) $(SDDF)/util/printf.c -o $@
@@ -148,7 +158,7 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(B
 
 ETHERNET=$(SDDF)/drivers/network/meson
 $(BUILD_DIR)/ethernet.o: $(ETHERNET)/ethernet.c $(ETHERNET)/ethernet.h
-	$(CC) -c $(CFLAGS) $(ETHERNET)/ethernet.c -I$(abspath $(ETHERNET_CONFIG_INCLUDE)) -o $(BUILD_DIR)/ethernet.o
+	$(CC) -c $(CFLAGS) $(ETHERNET)/ethernet.c -I$(abspath $(CONFIG_INCLUDE)) -o $(BUILD_DIR)/ethernet.o
 
 $(BUILD_DIR)/sddf_util_cache.o: $(SDDF)/util/cache.c
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -173,7 +183,7 @@ $(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
 		LIBNFS_INCLUDE=$(abspath $(LIBNFS)/include) \
 		ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
 
-$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a
+$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a 
 	$(LD) \
 		$(LDFLAGS) \
 		$(BUILD_DIR)/nfs/nfs.a \
@@ -182,11 +192,12 @@ $(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/libnfs/lib/libnfs.a $(
 		-L$(LIBGCC) \
 		-lgcc \
 		-lc \
+		 ${ASSERT} \
 		$(LIBS) \
 		-lnfs \
 		-o $(BUILD_DIR)/nfs.elf
 
-$(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/ethernet.o $(BUILD_DIR)/sddf_util_printf.o $(BUILD_DIR)/sddf_putchar_debug.o
+$(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/ethernet.o $(BUILD_DIR)/sddf_util_printf.o $(BUILD_DIR)/sddf_putchar_debug.o ${ASSERT}
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 NETWORK_COMPONENTS := $(SDDF)/network/components
@@ -195,7 +206,7 @@ NETWORK_COMPONENTS_INCLUDE := \
 	-I$(BOARD_DIR)/include \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4 \
-	-Isrc/ethernet_config
+	-Isrc/config
 NETWORK_COMPONENT_CFLAGS := \
 	$(NETWORK_COMPONENTS_INCLUDE) \
 	-mstrict-align \
@@ -210,9 +221,10 @@ NETWORK_COMPONENT_CFLAGS := \
 	-MP
 
 NETWORK_COMPONENTS_LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIBGCC) -L$(LIBC)
-NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc -lgcc $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_printf.o
+NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc -lgcc $(BUILD_DIR)/sddf_util_cache.o ${BUILD_DIR}/assert.o $(BUILD_DIR)/sddf_util_printf.o 
 
 $(BUILD_DIR)/eth_copy.o: $(NETWORK_COMPONENTS)/copy.c
+	aarch64-none-elf-gcc -E $(NETWORK_COMPONENT_CFLAGS) $< -o $*.i
 	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
 
 $(BUILD_DIR)/eth_virt_rx.o: $(NETWORK_COMPONENTS)/virt_rx.c
@@ -233,14 +245,14 @@ $(BUILD_DIR)/eth_virt_tx.elf: $(BUILD_DIR)/eth_virt_tx.o $(BUILD_DIR)/sddf_util_
 # Compiling serial components
 SERIAL_COMPONENTS := $(SDDF)/serial/components
 UART_DRIVER := $(SDDF)/drivers/serial/meson
-UART_DRIVER_OBJS := uart_driver.o sddf_putchar_debug.o sddf_util_printf.o
-SERIAL_VIRT_RX_OBJS := serial_virt_rx.o
-SERIAL_VIRT_TX_OBJS := serial_virt_tx.o
+UART_DRIVER_OBJS := uart_driver.o sddf_putchar_debug.o sddf_util_printf.o assert.o
+SERIAL_VIRT_RX_OBJS := serial_virt_rx.o assert.o sddf_util_printf.o sddf_putchar_serial.o
+SERIAL_VIRT_TX_OBJS := serial_virt_tx.o assert.o sddf_util_printf.o sddf_putchar_serial.o
 
-SERIAL_INCLUDES := -I$(SDDF)/util/include -I$(UART_DRIVER)/include
-SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=1
+SERIAL_INCLUDES := -I$(SDDF)/util/include -I$(UART_DRIVER)/include \
+		   -I${CONFIG_INCLUDE}
 
-$(BUILD_DIR)/uart_driver.o: $(UART_DRIVER)/uart.c
+$(BUILD_DIR)/uart_driver.o: $(UART_DRIVER)/uart.c 
 	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/serial_virt_rx.o: $(SERIAL_COMPONENTS)/virt_rx.c
@@ -262,7 +274,7 @@ $(BUILD_DIR)/serial_virt_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_TX_OBJ
 I2C_QUEUE := $(SDDF)/i2c/queue
 I2C_DRIVER := $(SDDF)/drivers/i2c/meson
 I2C_VIRT := $(SDDF)/i2c/components
-I2C_VIRT_OBJS := i2c_virt.o sddf_util_printf.o sddf_putchar_debug.o
+I2C_VIRT_OBJS := i2c_virt.o assert.o sddf_util_printf.o sddf_putchar_debug.o
 I2C_DRIVER_OBJS := i2c_driver.o sddf_util_printf.o sddf_putchar_debug.o
 
 $(BUILD_DIR)/i2c_driver.o: $(I2C_DRIVER)/i2c.c
