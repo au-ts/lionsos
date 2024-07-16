@@ -68,10 +68,10 @@ LWIP_MEMPOOL_DECLARE(
     sizeof(pbuf_custom_offset_t),
     "Zero-copy RX pool");
 
-uintptr_t rx_free;
-uintptr_t rx_active;
-uintptr_t tx_free;
-uintptr_t tx_active;
+net_queue_t *rx_free;
+net_queue_t *rx_active;
+net_queue_t *tx_free;
+net_queue_t *tx_active;
 uintptr_t rx_buffer_data_region;
 uintptr_t tx_buffer_data_region;
 
