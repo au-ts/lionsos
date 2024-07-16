@@ -7,6 +7,7 @@
 
 #include <stdarg.h>
 #include <bits/syscall.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <errno.h>
 #include <sys/time.h>
@@ -24,7 +25,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
+#include <sddf/serial/queue.h>
 
+#include "nfs.h"
 #include "posix.h"
 #include "tcp.h"
 #include "util.h"
@@ -69,11 +72,20 @@ int socket_refcount[MAX_SOCKETS];
 
 static size_t output(void *data, size_t count)
 {
+    uint32_t n, transferred = 0;
 
-    for (size_t i = 0; i < count; i++) {
-        microkit_dbg_putc(((char *)data)[i]);
+    do {
+        n = serial_enqueue_batch(&serial_tx_queue_handle, count, data);
+        transferred += n;
+        count -= n;
+    } while (n && count);
+
+    if (transferred && serial_require_producer_signal(&serial_tx_queue_handle)) {
+        serial_cancel_producer_signal(&serial_tx_queue_handle);
+        microkit_notify(SERIAL_TX_CH);
     }
-    return count;
+
+    return transferred;
 }
 
 long sys_brk(va_list ap)
@@ -131,10 +143,20 @@ long sys_write(va_list ap)
 
     if (fd == 1 || fd == 2)
     {
-        for (size_t i = 0; i < count; i++) {
-            microkit_dbg_putc(((char *)buf)[i]);
+        uint32_t n, transferred = 0;
+
+        do {
+            n = serial_enqueue_batch(&serial_tx_queue_handle, count, buf);
+            transferred += n;
+            count -= n;
+        } while (n && count);
+
+        if (transferred && serial_require_producer_signal(&serial_tx_queue_handle)) {
+            serial_cancel_producer_signal(&serial_tx_queue_handle);
+            microkit_notify(SERIAL_TX_CH);
         }
-        return count;
+
+        return transferred;
     }
 
     return -1;
