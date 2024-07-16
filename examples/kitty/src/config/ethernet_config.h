@@ -109,9 +109,13 @@ static inline void net_virt_mac_addr_init_sys(char *pd_name, uint8_t *macs)
     }
 }
 
-static inline void net_cli_queue_init_sys(char *pd_name, net_queue_handle_t *rx_queue, net_queue_t *rx_free,
-                                      net_queue_t *rx_active,
-                                      net_queue_handle_t *tx_queue, net_queue_t *tx_free, net_queue_t *tx_active)
+static inline void net_cli_queue_init_sys(char *pd_name,
+                                          net_queue_handle_t *rx_queue,
+                                          net_queue_t *rx_free,
+                                          net_queue_t *rx_active,
+                                          net_queue_handle_t *tx_queue,
+                                          net_queue_t *tx_free,
+                                          net_queue_t *tx_active)
 {
     if (__str_match(pd_name, CLI0_NAME)) {
         net_queue_init(rx_queue, rx_free, rx_active, NET_RX_QUEUE_SIZE_CLI0);
@@ -124,35 +128,44 @@ static inline void net_cli_queue_init_sys(char *pd_name, net_queue_handle_t *rx_
 
 static inline void net_copy_queue_init_sys(char *pd_name,
                                            net_queue_handle_t *cli_queue,
-                                           net_queue_t * cli_free,
-                                           net_queue_t * cli_active,
+                                           net_queue_t *cli_free,
+                                           net_queue_t *cli_active,
                                            net_queue_handle_t *virt_queue,
-                                           net_queue_t * virt_free,
-                                           net_queue_t * virt_active)
+                                           net_queue_t *virt_free,
+                                           net_queue_t *virt_active)
 {
     if (__str_match(pd_name, COPY0_NAME)) {
         net_queue_init(cli_queue, cli_free, cli_active, NET_RX_QUEUE_SIZE_CLI0);
-        net_queue_init(virt_queue, virt_free, virt_active, NET_RX_QUEUE_SIZE_COPY0);
+        net_queue_init(virt_queue, virt_free, virt_active,
+                       NET_RX_QUEUE_SIZE_COPY0);
     } else if (__str_match(pd_name, COPY1_NAME)) {
         net_queue_init(cli_queue, cli_free, cli_active, NET_RX_QUEUE_SIZE_CLI1);
-        net_queue_init(virt_queue, virt_free, virt_active, NET_RX_QUEUE_SIZE_COPY1);
+        net_queue_init(virt_queue, virt_free, virt_active,
+                       NET_RX_QUEUE_SIZE_COPY1);
     }
 }
 
-static inline void net_virt_queue_init_sys(char *pd_name, net_queue_handle_t *cli_queue, net_queue_t *cli_free,
-                                       net_queue_t *cli_active)
+static inline void net_virt_queue_init_sys(char *pd_name,
+                                           net_queue_handle_t *cli_queue,
+                                           net_queue_t *cli_free,
+                                           net_queue_t *cli_active)
 {
     if (__str_match(pd_name, VIRT_RX_NAME)) {
-        net_queue_init(cli_queue, cli_free, cli_active, NET_RX_QUEUE_SIZE_COPY0);
+        net_queue_init(cli_queue, cli_free, cli_active,
+                       NET_RX_QUEUE_SIZE_COPY0);
         net_queue_init(&cli_queue[1],
-                       (net_queue_t *)((uintptr_t)cli_free + 2 * NET_DATA_REGION_SIZE),
-                       (net_queue_t *)((uintptr_t)cli_active + 2 * NET_DATA_REGION_SIZE),
+                       (net_queue_t *)((uintptr_t)cli_free +
+                                       2 * NET_DATA_REGION_SIZE),
+                       (net_queue_t *)((uintptr_t)cli_active +
+                                       2 * NET_DATA_REGION_SIZE),
                        NET_RX_QUEUE_SIZE_COPY1);
     } else if (__str_match(pd_name, VIRT_TX_NAME)) {
         net_queue_init(cli_queue, cli_free, cli_active, NET_TX_QUEUE_SIZE_CLI0);
         net_queue_init(&cli_queue[1],
-                       (net_queue_t *)((uintptr_t)cli_free + 2 * NET_DATA_REGION_SIZE),
-                       (net_queue_t *)((uintptr_t)cli_active + 2 * NET_DATA_REGION_SIZE),
+                       (net_queue_t *)((uintptr_t)cli_free +
+                                       2 * NET_DATA_REGION_SIZE),
+                       (net_queue_t *)((uintptr_t)cli_active +
+                                       2 * NET_DATA_REGION_SIZE),
                        NET_TX_QUEUE_SIZE_CLI1);
     }
 }
