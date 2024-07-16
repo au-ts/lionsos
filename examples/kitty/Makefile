@@ -246,8 +246,8 @@ $(BUILD_DIR)/eth_virt_tx.elf: $(BUILD_DIR)/eth_virt_tx.o $(BUILD_DIR)/sddf_util_
 SERIAL_COMPONENTS := $(SDDF)/serial/components
 UART_DRIVER := $(SDDF)/drivers/serial/meson
 UART_DRIVER_OBJS := uart_driver.o sddf_putchar_debug.o sddf_util_printf.o assert.o
-SERIAL_VIRT_RX_OBJS := serial_virt_rx.o assert.o sddf_util_printf.o sddf_putchar_serial.o
-SERIAL_VIRT_TX_OBJS := serial_virt_tx.o assert.o sddf_util_printf.o sddf_putchar_serial.o
+SERIAL_VIRT_RX_OBJS := serial_virt_rx.o assert.o sddf_util_printf.o sddf_putchar_debug.o
+SERIAL_VIRT_TX_OBJS := serial_virt_tx.o assert.o sddf_util_printf.o sddf_putchar_debug.o
 
 SERIAL_INCLUDES := -I$(SDDF)/util/include -I$(UART_DRIVER)/include \
 		   -I${CONFIG_INCLUDE}
