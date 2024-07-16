@@ -7,28 +7,38 @@
 #ifndef kitty_serial_config_h
 #define kitty_serial_config_h
 #pragma once
-/* Number of clients that can be connected to the serial server. */
-#define SERIAL_NUM_CLIENTS 3
+
+/* Number of clients of the serial subsystem. */
+#define SERIAL_NUM_CLIENTS 2
 
 /* Support full duplex. */
 #define SERIAL_TX_ONLY 0
 
+/* Associate a colour with each client's output. */
+#define SERIAL_WITH_COLOUR 1
+
 /* Default baud rate of the uart device */
 #define UART_DEFAULT_BAUD 115200
 
-/* One read/write client */
+/* One read/write client, one write only client */
 #define SERIAL_CLI0_NAME "micropython"
+#define SERIAL_CLI1_NAME "nfs"
 #define SERIAL_VIRT_RX_NAME "serial_virt_rx"
 #define SERIAL_VIRT_TX_NAME "serial_virt_tx"
+
 #define SERIAL_QUEUE_SIZE                          0x1000
 #define SERIAL_DATA_REGION_SIZE                    0x2000
 
 #define SERIAL_TX_DATA_REGION_SIZE_DRIV            SERIAL_DATA_REGION_SIZE
 #define SERIAL_TX_DATA_REGION_SIZE_CLI0            SERIAL_DATA_REGION_SIZE
+#define SERIAL_TX_DATA_REGION_SIZE_CLI1            SERIAL_DATA_REGION_SIZE
+
 #define SERIAL_RX_DATA_REGION_SIZE_DRIV            SERIAL_DATA_REGION_SIZE
 #define SERIAL_RX_DATA_REGION_SIZE_CLI0            SERIAL_DATA_REGION_SIZE
+
 #define SERIAL_MAX_TX_DATA_SIZE MAX(SERIAL_TX_DATA_REGION_SIZE_DRIV, \
-                                    SERIAL_TX_DATA_REGION_SIZE_CLI0)
+                                    MAX(SERIAL_TX_DATA_REGION_SIZE_CLI0, \
+                                    SERIAL_TX_DATA_REGION_SIZE_CLI1))
 #define SERIAL_MAX_RX_DATA_SIZE MAX(SERIAL_RX_DATA_REGION_SIZE_DRIV, \
                                     SERIAL_RX_DATA_REGION_SIZE_CLI0)
 #define SERIAL_MAX_DATA_SIZE MAX(SERIAL_MAX_TX_DATA_SIZE, \
@@ -52,25 +62,39 @@ static inline void serial_cli_queue_init_sys(const char *pd_name,
                                              serial_queue_t *tx_queue,
                                              char *tx_data)
 {
-    serial_queue_init(rx_queue_handle, rx_queue,
-                      SERIAL_DATA_REGION_SIZE, rx_data);
-    serial_queue_init(tx_queue_handle, tx_queue,
-                      SERIAL_DATA_REGION_SIZE, tx_data);
+    if (!sddf_strcmp(pd_name, SERIAL_CLI0_NAME)) {
+        serial_queue_init(rx_queue_handle, rx_queue,
+                        SERIAL_RX_DATA_REGION_SIZE_CLI0, rx_data);
+        serial_queue_init(tx_queue_handle, tx_queue,
+                        SERIAL_TX_DATA_REGION_SIZE_CLI0, tx_data);
+    } else if (!sddf_strcmp(pd_name, SERIAL_CLI1_NAME)) {
+        serial_queue_init(tx_queue_handle, tx_queue,
+                        SERIAL_TX_DATA_REGION_SIZE_CLI1, tx_data);
+    }
 }
 
 static inline void serial_virt_queue_init_sys(char *pd_name,
                                               serial_queue_handle_t *cli_queue_handle,
-                                              uintptr_t cli_queue,
-                                              uintptr_t cli_data)
+                                              serial_queue_t *cli_queue,
+                                              char *cli_data)
 {
-        serial_queue_init(cli_queue_handle, (serial_queue_t *)cli_queue,
-                          SERIAL_DATA_REGION_SIZE, (char *)cli_data);
-        serial_queue_init(&cli_queue_handle[1],
-                          (serial_queue_t *)(cli_queue + SERIAL_QUEUE_SIZE),
-                          SERIAL_DATA_REGION_SIZE,
-                          (char *)(cli_data + SERIAL_DATA_REGION_SIZE));
-
+    if (!sddf_strcmp(pd_name, SERIAL_VIRT_RX_NAME)) {
+        serial_queue_init(cli_queue_handle, cli_queue, SERIAL_RX_DATA_REGION_SIZE_CLI0, cli_data);
+    } else if (!sddf_strcmp(pd_name, SERIAL_VIRT_TX_NAME)) {
+        serial_queue_init(cli_queue_handle, cli_queue, SERIAL_TX_DATA_REGION_SIZE_CLI0, cli_data);
+        serial_queue_init(&cli_queue_handle[1], (serial_queue_t *)((uintptr_t)cli_queue + SERIAL_QUEUE_SIZE),
+                          SERIAL_TX_DATA_REGION_SIZE_CLI1, cli_data + SERIAL_TX_DATA_REGION_SIZE_CLI0);
+    }
 }
+
+#if SERIAL_WITH_COLOUR
+static inline void serial_channel_names_init(char **client_names)
+{
+    client_names[0] = SERIAL_CLI0_NAME;
+    client_names[1] = SERIAL_CLI1_NAME;
+}
+#endif
+
 /*
  * UNUSED but needed for compilation
  */
