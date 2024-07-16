@@ -80,7 +80,8 @@ static size_t output(void *data, size_t count)
         count -= n;
     } while (n && count);
 
-    if (transferred && serial_require_producer_signal(&serial_tx_queue_handle)) {
+    if (transferred &&
+        serial_require_producer_signal(&serial_tx_queue_handle)) {
         serial_cancel_producer_signal(&serial_tx_queue_handle);
         microkit_notify(SERIAL_TX_CH);
     }
@@ -151,7 +152,8 @@ long sys_write(va_list ap)
             count -= n;
         } while (n && count);
 
-        if (transferred && serial_require_producer_signal(&serial_tx_queue_handle)) {
+        if (transferred &&
+            serial_require_producer_signal(&serial_tx_queue_handle)) {
             serial_cancel_producer_signal(&serial_tx_queue_handle);
             microkit_notify(SERIAL_TX_CH);
         }

@@ -26,6 +26,9 @@ static co_control_t co_controller_mem;
 
 char *nfs_share;
 
+/*
+ * Shared regions for Serial communication
+ */
 char *serial_rx_data;
 char *serial_tx_data;
 serial_queue_t *serial_rx_queue;
@@ -112,8 +115,10 @@ start_repl:
 }
 
 void init(void) {
-    serial_cli_queue_init_sys(microkit_name, &serial_rx_queue_handle, serial_rx_queue, serial_rx_data,
-                                &serial_tx_queue_handle, serial_tx_queue, serial_tx_data);
+    serial_cli_queue_init_sys(microkit_name, &serial_rx_queue_handle,
+                              serial_rx_queue, serial_rx_data,
+                              &serial_tx_queue_handle, serial_tx_queue,
+                              serial_tx_data);
 
 #ifdef ENABLE_I2C
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
