@@ -1,12 +1,10 @@
 #include <microkit.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <assert.h>
 #include "micropython.h"
 #include "py/mpconfig.h"
 #include <sddf/serial/queue.h>
-
-extern serial_queue_handle_t serial_rx_queue;
-extern serial_queue_handle_t serial_tx_queue;
 
 // Receive single character, blocking until one is available.
 int mp_hal_stdin_rx_chr(void) {
@@ -26,25 +24,29 @@ int mp_hal_stdin_rx_chr(void) {
     int ret = serial_dequeue(&serial_rx_queue,  &serial_rx_queue.queue->head,
                              &c);
     if (ret) {
-        microkit_dbg_puts("MP|ERROR: could not dequeue serial RX used buffer\n");
+        dlog("MP|ERROR: could not dequeue serial RX character\n");
         return 0;
     }
+
+    serial_request_producer_signal(&serial_rx_queue);
+
     return c;
 }
 
 
 // Send the string of given length.
 void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
-    int n;
+    uint32_t n;
+    bool transferred = false;
 
     do {
         n = serial_enqueue_batch(&serial_tx_queue, len, str);
+        transferred |= n;
         len -= n;
     } while (n && len);
 
-    if (len) {
-        microkit_dbg_puts("MP|ERROR: could not enqueue active serial TX buffer\n");
+    if (transferred && serial_require_producer_signal(&serial_tx_queue)) {
+        serial_cancel_producer_signal(&serial_tx_queue);
+        microkit_notify(SERIAL_TX_CH);
     }
-
-    microkit_notify(SERIAL_TX_CH);
 }

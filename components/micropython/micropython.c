@@ -26,14 +26,12 @@ static co_control_t co_controller_mem;
 
 char *nfs_share;
 
-/* Shared memory regions for sDDF serial sub-system */
-uintptr_t serial_rx;
-uintptr_t serial_tx;
-uintptr_t serial_rx_data;
-uintptr_t serial_tx_data;
-
-serial_queue_handle_t serial_rx_queue;
-serial_queue_handle_t serial_tx_queue;
+char *serial_rx_data;
+char *serial_tx_data;
+serial_queue_t *serial_rx_queue;
+serial_queue_t *serial_tx_queue;
+serial_queue_handle_t serial_rx_queue_handle;
+serial_queue_handle_t serial_tx_queue_handle;
 
 #ifdef ENABLE_I2C
 i2c_queue_handle_t i2c_queue_handle;
@@ -114,10 +112,8 @@ start_repl:
 }
 
 void init(void) {
-    serial_queue_init(&serial_rx_queue, (serial_queue_t *)serial_rx,
-                      SERIAL_DATA_REGION_SIZE, (char *)serial_rx_data);
-    serial_queue_init(&serial_tx_queue, (serial_queue_t *)serial_tx,
-                      SERIAL_DATA_REGION_SIZE, (char *)serial_tx_data);
+    serial_cli_queue_init_sys(microkit_name, &serial_rx_queue_handle, serial_rx_queue, serial_rx_data,
+                                &serial_tx_queue_handle, serial_tx_queue, serial_tx_data);
 
 #ifdef ENABLE_I2C
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);

@@ -14,6 +14,9 @@
 #include <nfsc/libnfs.h>
 #include <nfsc/libnfs-raw.h>
 
+#include <sddf/serial/queue.h>
+#include <serial_config.h>
+
 #include "nfs.h"
 #include "util.h"
 #include "fd.h"
@@ -29,6 +32,10 @@
 #endif
 
 #define TIMEOUT (1 * NS_IN_MS)
+
+char *serial_tx_data;
+serial_queue_t *serial_tx_queue;
+serial_queue_handle_t serial_tx_queue_handle;
 
 struct nfs_context *nfs;
 static bool nfs_connected;
@@ -115,6 +122,8 @@ void notified(microkit_channel ch) {
 
 void init(void)
 {
+    serial_cli_queue_init_sys(microkit_name, NULL, NULL, NULL, &serial_tx_queue_handle, serial_tx_queue, serial_tx_data);
+
     syscalls_init();
     continuation_pool_init();
     tcp_init_0();
