@@ -1,6 +1,6 @@
 #include "AsyncFATFs.h"
 #include "ff15/source/ff.h"
-#include "FiberPool/FiberPool.h"
+#include "co_helper.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -143,25 +143,25 @@ uint32_t Find_FreeDir() {
 
 // Change here later to support more than one FAT volumes
 void fat_mount() {
-    uint64_t *args = Fiber_GetArgs();
+    co_data_t *args = co_get_args();
     if (fs_status[0] != FREE) {
-        function_fill_response(args, FR_INVALID_PARAMETER, 0, 0);
-        Fiber_kill();
+        args->status = FR_INVALID_PARAMETER;
+        co_kill();
     }
     fs_status[0] = INUSE;
     FRESULT RET = f_mount(&(fatfs[0]), "", 1);
     if (RET != FR_OK) {
         fs_status[0] = FREE;
     }
-    function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    args->status = RET;
+    co_kill();
 }
 
 void fat_unmount() {
-    uint64_t *args = Fiber_GetArgs();
+    co_data_t *args = co_get_args();
     if (fs_status[0] != INUSE) {
-        function_fill_response(args, FR_INVALID_PARAMETER, 0, 0);
-        Fiber_kill();
+        args->status = FR_INVALID_PARAMETER;
+        co_kill();
     }
     fs_status[0] = CLEANUP;
     FRESULT RET = f_unmount("");
@@ -171,16 +171,16 @@ void fat_unmount() {
     else {
         fs_status[0] = INUSE;
     }
-    function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    args->status = RET;
+    co_kill();
 }
 
 void fat_open() {
-    uint64_t *args = Fiber_GetArgs();
+    co_data_t *args = co_get_args();
 
-    uint64_t buffer = args[0];
-    uint64_t size = args[1];
-    uint64_t openflag = args[2];
+    uint64_t buffer = args->params.open.path.offset;
+    uint64_t size = args->params.open.path.size;
+    uint64_t openflag = args->params.open.flags;
     
     // Copy the name to our name buffer
     char filepath[MAX_PATH_LEN];
@@ -189,7 +189,7 @@ void fat_open() {
     FRESULT RET = validate_and_copy_path(buffer, size, filepath);
     if (RET != FR_OK) {
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     // Add open flag checking and mapping here
@@ -201,33 +201,33 @@ void fat_open() {
     uint32_t fd = Find_FreeFile();
     if (fd == MAX_OPENED_FILENUM) {
         function_fill_response(args, FR_TOO_MANY_OPEN_FILES, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     // Set the position to INUSE to indicate this file structure is in use
     file_status[fd] = INUSE;
     FIL* file = &(files[fd]);
 
-    // Micropython seems to always use open flag FA_CREATE_ALWAYS, so a hack here is to always use FA_OPEN_ALWAYS
-    // It should be changed back after Micropython fix this
-    // FRESULT RET = f_open(file, filepath, args[2]);
+    // Micropython openflag still WIP, fixes this once that is completed
     RET = f_open(file, filepath, (FA_OPEN_ALWAYS|FA_READ|FA_WRITE));
     
     // Error handling
     if (RET != FR_OK) {
         file_status[fd] = FREE;
     }
+    
+    args->status = RET;
+    args->result.open.fd = fd;
 
-    function_fill_response(args, RET, fd, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 void fat_pwrite() {
-    uint64_t *args = Fiber_GetArgs();
-    uint64_t fd = args[0];
-    uint64_t buffer = args[1];
-    uint64_t btw = args[2];
-    uint64_t offset = args[3];
+    co_data_t *args = co_get_args();
+    uint64_t fd = args->params.write.fd;
+    uint64_t buffer = args->params.write.buf.offset;
+    uint64_t btw = args->params.write.buf.size;
+    uint64_t offset = args->params.write.offset;
 
     #ifdef FS_DEBUG_PRINT
     sddf_printf("fat_write: bytes to be write: %lu, read offset: %lu\n", btw, offset);
@@ -239,7 +239,7 @@ void fat_pwrite() {
         sddf_printf("fat_write: Trying to write into invalid memory region or invalid fd provided\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     void* data = (void *) (buffer + client_data_offset);
@@ -251,7 +251,7 @@ void fat_pwrite() {
 
     if (RET != FR_OK) {
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
     
     uint32_t bw = 0;
@@ -266,17 +266,19 @@ void fat_pwrite() {
         sddf_printf("fat_write: error");
     }
     #endif
+    
+    args->status = RET;
+    args->result.write.len_written = bw;
 
-    function_fill_response(args, RET, bw, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 void fat_pread() {
-    uint64_t *args = Fiber_GetArgs();
-    uint64_t fd = args[0];
-    uint64_t buffer = args[1];
-    uint64_t btr = args[2];
-    uint64_t offset = args[3];
+    co_data_t *args = co_get_args();
+    uint64_t fd = args->params.read.fd;
+    uint64_t buffer = args->params.read.buf.offset;
+    uint64_t btr = args->params.read.buf.size;
+    uint64_t offset = args->params.read.offset;
     
     FRESULT RET = within_data_region(buffer, btr);
     if (RET != FR_OK || (RET = validate_file_descriptor(fd)) != FR_OK) {
@@ -284,7 +286,7 @@ void fat_pread() {
         sddf_printf("fat_read: Trying to write into invalid memory region or invalid fd provided\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     void* data = (void *) (buffer + client_data_offset);
@@ -300,7 +302,7 @@ void fat_pread() {
 
     if (RET != FR_OK) {
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
     
     uint32_t br = 0;
@@ -316,13 +318,15 @@ void fat_pread() {
     }
     #endif
 
-    function_fill_response(args, RET, br, 0);
-    Fiber_kill();
+    args->status = RET;
+    args->result.read.len_read = br;
+
+    co_kill();
 }
 
 void fat_close() {
-    uint64_t *args = Fiber_GetArgs();
-    uint64_t fd = args[0];
+    co_data_t *args = co_get_args();
+    uint64_t fd = args->params.close.fd;
     
     FRESULT RET = validate_file_descriptor(fd);
     if (RET != FR_OK) {
@@ -330,7 +334,7 @@ void fat_close() {
             sddf_printf("fat_close: Invalid file descriptor\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     file_status[fd] = CLEANUP;
@@ -342,8 +346,9 @@ void fat_close() {
     else {
         file_status[fd] = INUSE;
     }
-    function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+
+    args->status = RET;
+    co_kill();
 }
 
 // Mode attribute
@@ -353,18 +358,18 @@ void fat_close() {
 #define Socket 0140000
 
 void fat_stat() {
-    uint64_t *args = Fiber_GetArgs();
+    co_data_t *args = co_get_args();
 
-    uint64_t buffer = args[0];
-    uint64_t size = args[1];
-    uint64_t output_buffer = args[2];
+    uint64_t buffer = args->params.stat.path.offset;
+    uint64_t size = args->params.stat.buf.size;
+    uint64_t output_buffer = args->params.stat.buf.offset;
 
     char filepath[MAX_PATH_LEN];
 
     FRESULT RET = within_data_region(output_buffer, sizeof(fs_stat_t));
     if (RET != FR_OK || (RET = validate_and_copy_path(buffer, size, filepath)) != FR_OK) {
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
     
     fs_stat_t* file_stat = (void*)(output_buffer + client_data_offset);
@@ -378,7 +383,7 @@ void fat_stat() {
     RET = f_stat(filepath, &fileinfo);
     if (RET != FR_OK) {
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
     
     memset(file_stat, 0, sizeof(fs_stat_t));
@@ -408,9 +413,9 @@ void fat_stat() {
             file_stat->mode &= ~0222; // Remove write permissions
         }
     }
-
-    function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    
+    args->status = RET;
+    co_kill();
 }
 
 void fat_fsize() {
@@ -421,7 +426,7 @@ void fat_fsize() {
     uint64_t size = f_size(&(files[fd]));
 
     function_fill_response(args, FR_OK, size, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 void fat_rename() {
@@ -440,13 +445,13 @@ void fat_rename() {
     FRESULT RET = validate_and_copy_path(oldpath_buffer, oldpath_len, oldpath);
     if (RET != FR_OK || (RET = validate_and_copy_path(newpath_buffer, newpath_len, newpath)) != FR_OK) {
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     RET = f_rename(oldpath, newpath);
    
     function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 void fat_unlink() {
@@ -464,13 +469,13 @@ void fat_unlink() {
         sddf_printf("fat_unlink: Invalid memory region\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     RET = f_unlink(dirpath);
 
     function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 void fat_mkdir() {
@@ -488,13 +493,13 @@ void fat_mkdir() {
         sddf_printf("fat_mkdir: Invalid memory region\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     RET = f_mkdir(dirpath);
 
     function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 // This seems to do the exact same thing as fat_unlink
@@ -513,13 +518,13 @@ void fat_rmdir() {
         sddf_printf("fat_mkdir: Invalid memory region\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     RET = f_rmdir(dirpath);
 
     function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 void fat_opendir() {
@@ -538,13 +543,13 @@ void fat_opendir() {
         sddf_printf("fat_readdir: Invalid dir descriptor or Invalid buffer\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     uint32_t fd = Find_FreeDir();
     if (fd == MAX_OPENED_DIRNUM) {
         function_fill_response(args, FR_TOO_MANY_OPEN_FILES, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
     
     DIR* dir = &(dirs[fd]);
@@ -562,11 +567,11 @@ void fat_opendir() {
         function_fill_response(args, RET, 0, 0);
         // Free this Dir structure
         dir_status[fd] = FREE;
-        Fiber_kill();
+        co_kill();
     }
 
     function_fill_response(args, RET, fd, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 void fat_readdir() {
@@ -590,7 +595,7 @@ void fat_readdir() {
         sddf_printf("fat_readdir: Invalid dir descriptor or Invalid buffer\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     void* name = (void*)(buffer + client_data_offset);
@@ -611,7 +616,7 @@ void fat_readdir() {
     }
 
     function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 // Not sure if this one is implemented correctly
@@ -626,7 +631,7 @@ void fat_telldir(){
         sddf_printf("fat_telldir: Invalid dir descriptor\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     DIR* dp = &(dirs[fd]);
@@ -634,7 +639,7 @@ void fat_telldir(){
     uint32_t offset = f_telldir(dp);
 
     function_fill_response(args, FR_OK, offset, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 void fat_rewinddir() {
@@ -648,13 +653,13 @@ void fat_rewinddir() {
         sddf_printf("fat_telldir: Invalid dir descriptor\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     RET = f_readdir(&dirs[fd], 0);
 
     function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 void fat_sync() {
@@ -669,13 +674,13 @@ void fat_sync() {
         sddf_printf("fat_sync: Invalid file descriptor\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     RET = f_sync(&(files[fd]));
 
     function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 void fat_closedir() {
@@ -689,7 +694,7 @@ void fat_closedir() {
         sddf_printf("fat_closedir: Invalid dir descriptor\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
 
     dir_status[fd] = CLEANUP;
@@ -704,7 +709,7 @@ void fat_closedir() {
     }
 
     function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    co_kill();
 }
 
 // Inefficient implementation of seekdir
@@ -723,7 +728,7 @@ void fat_seekdir() {
         sddf_printf("fat_seekdir: Invalid dir descriptor\n");
         #endif
         function_fill_response(args, RET, 0, 0);
-        Fiber_kill();
+        co_kill();
     }
     
     RET = f_readdir(&dirs[fd], 0);
@@ -732,11 +737,11 @@ void fat_seekdir() {
     for (int64_t i = 0; i < loc; i++) {
         if (RET != FR_OK) {
             function_fill_response(args, RET, 0, 0);
-            Fiber_kill();
+            co_kill();
         }
         RET = f_readdir(&dirs[fd], &fno);
     }
     
     function_fill_response(args, RET, 0, 0);
-    Fiber_kill();
+    co_kill();
 }

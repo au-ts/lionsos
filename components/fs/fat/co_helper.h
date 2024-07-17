@@ -1,3 +1,5 @@
+#pragma once
+
 #include "fatfs_config.h"
 #include <stdbool.h>
 #include <stdint.h>

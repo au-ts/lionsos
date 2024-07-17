@@ -1,3 +1,5 @@
+#pragma once
+
 #define DATA_REGION_SIZE 0x4000000
 
 // The maximum path length, setting this value too large may cause stack overflow

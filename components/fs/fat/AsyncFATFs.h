@@ -1,10 +1,20 @@
+#pragma once
+
 #include "ff15/source/ff.h"
+#include "../../../include/lions/fs/protocol.h"
 
 # define FS_DEBUG_PRINT
 
 #define Status_bit 6
 #define First_data_bit 7
 #define Second_data_bit 8
+
+// Use struct instead of union
+typedef struct {
+    fs_cmd_params_t params;
+    uint64_t status;
+    fs_cmpl_data_t result;
+} co_data_t;
 
 void init_metadata(void* fs_metadata);
 

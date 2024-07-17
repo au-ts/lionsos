@@ -49,13 +49,6 @@ typedef enum {
     INUSE
 } space_status;
 
-// Use struct instead of union
-typedef struct {
-    fs_cmd_params_t params;
-    uint64_t status;
-    fs_cmpl_data_t result;
-} co_data_t;
-
 typedef struct FS_request{
     /* Client side cmd info */
     uint64_t cmd;
@@ -238,11 +231,23 @@ void notified(microkit_channel ch) {
                 completion_queue_size = fs_queue_size_producer(fatfs_completion_queue);
                 queue_size_init = true;
             }
+
             // We only dequeue the request if there is a free slot in the coroutine pool
             if (!co_havefreeslot(&index) || command_queue_size == 0
                   || completion_queue_size == FS_QUEUE_CAPACITY) {
                break;
             }
+
+            // For invalid request, dequeue but do not process
+            if (fs_queue_idx_filled(fatfs_command_queue, fs_request_dequeued)->cmd.type >= FS_NUM_COMMANDS) {
+                #ifdef FS_DEBUG_PRINT
+                sddf_printf("Wrong CMD type: %lu\n", fs_queue_idx_filled(fatfs_command_queue, fs_request_dequeued)->cmd.type);
+                #endif
+                fs_request_dequeued++;
+                command_queue_size--;
+                continue;
+            }
+
             // Get request from the head of the queue
             setup_request(index, fs_queue_idx_filled(fatfs_command_queue, fs_request_dequeued));
             fs_request_dequeued++;
