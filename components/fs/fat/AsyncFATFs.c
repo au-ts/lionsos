@@ -9,8 +9,6 @@
 #include <stdint.h>
 #include <microkit.h>
 
-#define COROUTINE_STACKSIZE 0x40000
-
 #define Client_CH 1
 #define Server_CH 2
 
@@ -29,7 +27,6 @@ struct fs_queue *fatfs_completion_queue;
 blk_req_queue_t *request;
 blk_resp_queue_t *response;
 
-// Compromised code here
 // Config pointed to the SDDF_blk config
 blk_storage_info_t *config;
 
@@ -52,31 +49,23 @@ typedef enum {
     INUSE
 } space_status;
 
-typedef struct co_args{
-    fs_cmd_params_t args;
-    uint64_t ret_status;
-    fs_cmpl_data_t retv;
-    #ifdef FS_USE_MICROLIBCO
-    /* Cothread handle of this job into libmicrokitco */
-    microkit_cothread_t handle;
-    /* SDDF queue semaphore */
-    microkit_cothread_sem_t synch_sem;
-    #endif
-} co_args_t;
+// Use struct instead of union
+typedef struct {
+    fs_cmd_params_t params;
+    uint64_t status;
+    fs_cmpl_data_t result;
+} co_data_t;
 
 typedef struct FS_request{
     /* Client side cmd info */
     uint64_t cmd;
-    // This args array have 9 elements
-    // The first 6 are for 6 input args in file system protocol
-    // The last 3 are for returning operation status and return data
-    uint64_t args[9];
-    fs_cmd_params_t params;
-    
+    /* Used for passing data to coroutine and receive response */
+    co_data_t shared_data;
+    /* Used to track request_id */
     uint64_t request_id;
     /* FiberPool metadata */
     co_handle_t handle;
-    /* self metadata */
+    /* Self metadata */
     space_status stat;
 } fs_request;
 
@@ -103,23 +92,21 @@ void (*operation_functions[])() = {
     fat_rewinddir,
 };
 
-static fs_request RequestPool[MAX_COROUTINE_NUM];
+static fs_request request_pool[WORKER_COROUTINE_NUM];
 
 void fill_client_response(fs_msg_t* message, const fs_request* finished_request) {
-    message->cmpl.status = finished_request->args[Status_bit];
-    message->cmpl.data = finished_request->args[First_data_bit];
-    message->completion.data[0] = finished_request->args[First_data_bit];
-    message->completion.data[1] = finished_request->args[Second_data_bit];
+    message->cmpl.id = finished_request->request_id;
+    message->cmpl.status = finished_request->shared_data.status;
+    message->cmpl.data = finished_request->shared_data.result;
     return;
 }
 
-// Setting up the request in the requestpool and push the request to the FiberPool
-void setup_request(int32_t index, fs_msg_t message) {
-    RequestPool[index].request_id = message.cmd.id;
-    RequestPool[index].cmd = message.cmd.type;
-    memcpy(RequestPool[index].args, &(message.cmd.params), SDDF_ARGS_SIZE * sizeof(uint64_t));
-    FiberPool_push(operation_functions[RequestPool[index].cmd], RequestPool[index].args, 
-      2, &(RequestPool[index].handle));
+// Setting up the request in the request_pool and push the request to the FiberPool
+void setup_request(int32_t index, fs_msg_t* message) {
+    request_pool[index].request_id = message->cmd.id;
+    request_pool[index].cmd = message->cmd.type;
+    request_pool[index].shared_data.params = message->cmd.params;
+    co_submit_task(operation_functions[request_pool[index].cmd], &request_pool[index].shared_data, &(request_pool[index].handle));
     return;
 }
 
@@ -144,17 +131,14 @@ void init(void) {
        This part of the code is for setting up the FiberPool(Coroutine pool) by
        assign stacks and size of the stack to the pool
     */
-    struct stack_mem stackmem[4];
-    stackmem[0].memory = coroutine_stack_one;
-    stackmem[0].size = COROUTINE_STACKSIZE;
-    stackmem[1].memory = coroutine_stack_two;
-    stackmem[1].size = COROUTINE_STACKSIZE;
-    stackmem[2].memory = coroutine_stack_three;
-    stackmem[2].size = COROUTINE_STACKSIZE;
-    stackmem[3].memory = coroutine_stack_four;
-    stackmem[3].size = COROUTINE_STACKSIZE;
+    uint64_t stack[WORKER_COROUTINE_NUM];
+    stack[0] = (uint64_t)coroutine_stack_one;
+    stack[1] = (uint64_t)coroutine_stack_two;
+    stack[2] = (uint64_t)coroutine_stack_three;
+    stack[3] = (uint64_t)coroutine_stack_four;
+
     // Init coroutine pool
-    co_init(stackmem, 4);
+    co_init(stack, 4);
     
     // Init file system metadata
     init_metadata(fs_metadata);
@@ -173,10 +157,11 @@ void notified(microkit_channel ch) {
     #endif
     fs_msg_t message;
     // Compromised code here, polling for server's state until it is ready
+    // Remove it when the server side can correctly queue the notification
     while (!config->ready) {}
 
     switch (ch) {
-        case Client_CH: 
+        case Client_CH:
             break;
         case Server_CH: {
             blk_response_status_t status;
@@ -190,8 +175,8 @@ void notified(microkit_channel ch) {
                 sddf_printf("blk_dequeue_resp: status: %d success_count: %d ID: %d\n", status, success_count, id);
                 #endif
                 
-                co_set_args(RequestPool[id].handle, (void* )(status));
-                co_wakeup(RequestPool[id].handle);
+                co_set_args(request_pool[id].handle, (void* )(status));
+                co_wakeup(request_pool[id].handle);
             }
             break;
         }
@@ -202,21 +187,20 @@ void notified(microkit_channel ch) {
             return;
     }
 
-    // This variable track if the fs should send back reply to the file system client
-    bool Client_have_replies = false;
-
-    blk_request_pushed = false;
-
-    int32_t index = 0;
-    int32_t i;
-
     // This variable track if there are new requests being popped from request queue and pushed into the couroutine pool or not
-    bool New_request_popped = true;
+    bool new_request_popped = true;
+    // Get the number of elements in the queue is costly so we have a flag defined here to only get the number when needed
+    bool queue_size_init = false;
+    uint64_t command_queue_size;
+    uint64_t completion_queue_size;
+
+    uint32_t fs_request_dequeued = 0;
+    uint32_t fs_response_enqueued = 0;
     /**
       I assume this big while loop is the confusing and critical part for dispatching coroutines and send back the results.
     **/
-    while (New_request_popped) {
-        // Performance bug here, should check if the reason being wake up is from notification from the blk device driver
+    while (new_request_popped) {
+        // Performance issue here, should check if the reason being wake up is from notification from the blk device driver
         // Then decide to yield() or not
         // And should only send back notification to blk device driver if at least one coroutine is block waiting
         co_yield();
@@ -230,50 +214,65 @@ void notified(microkit_channel ch) {
         /*
           This for loop check if there are coroutines finished and send the result back
         */
-        New_request_popped = false;
-        for (i = 1; i < MAX_COROUTINE_NUM; i++) {
-            if (co_check_if_finished(RequestPool[i].handle) && RequestPool[i].stat == INUSE) {
-                message.cmpl.id = RequestPool[i].request_id;
-                fill_client_response(fs_queue_idx_empty(fatfs_completion_queue, index), &(RequestPool[i]));
-                index++;
+        new_request_popped = false;
+        for (int32_t i = 1; i < WORKER_COROUTINE_NUM; i++) {
+            if (co_check_if_finished(request_pool[i].handle) && request_pool[i].stat == INUSE) {
+                fill_client_response(fs_queue_idx_empty(fatfs_completion_queue, fs_response_enqueued), &(request_pool[i]));
+                fs_response_enqueued++;
                 #ifdef FS_DEBUG_PRINT
-                sddf_printf("FS enqueue response:status: %lu\n", message.cmpl.status);
+                sddf_printf("FS enqueue response:status: %lu\n", request_pool[i].shared_data.status);
                 #endif
-                RequestPool[i].stat= FREE;
-                Client_have_replies = true;
+                request_pool[i].stat= FREE;
             }
         }
+
         /*
           This should pop the request from the command_queue to the FiberPool to execute, if no new request is 
           popped, we should exit the whole while loop.
         */
-        uint32_t command_queue_size = fs_queue_size_consumer(fatfs_command_queue);
-        uint32_t completion_queue_size = fs_queue_size_producer(fatfs_completion_queue);
         while (true) {
-            if (!co_havefreeslot() || command_queue_size != 0
-                  || completion_queue_size != FS_QUEUE_CAPACITY) {
+            co_handle_t index;
+            // If there is space and we do not know the size of the queue, get it now
+            if (queue_size_init == false && co_havefreeslot(&index)) {
+                command_queue_size = fs_queue_size_consumer(fatfs_command_queue);
+                completion_queue_size = fs_queue_size_producer(fatfs_completion_queue);
+                queue_size_init = true;
+            }
+            // We only dequeue the request if there is a free slot in the coroutine pool
+            if (!co_havefreeslot(&index) || command_queue_size == 0
+                  || completion_queue_size == FS_QUEUE_CAPACITY) {
                break;
             }
-            fs_queue_pop(fatfs_command_queue, &message);
+            // Get request from the head of the queue
+            setup_request(index, fs_queue_idx_filled(fatfs_command_queue, fs_request_dequeued));
+            fs_request_dequeued++;
             #ifdef FS_DEBUG_PRINT
-            sddf_printf("FS dequeue request:CMD type: %lu\n", message.cmd.type);
+            sddf_printf("FS dequeue request:CMD type: %lu\n", request_pool[index].cmd);
             #endif
-            setup_request(index, message);
-            RequestPool[index].stat = INUSE;
-            New_request_popped = true;
+            
+            request_pool[index].stat = INUSE;
+            new_request_popped = true;
+            // Dequeue one request from command queue and reserve a space in completion queue
+            command_queue_size--;
+            completion_queue_size++;
         }
     }
-    // If there are replies to client or server, reply back here
-    if (Client_have_replies == true) {
+    // Publish the changes to the fs_queue, If there are replies to client or server, reply back here
+    if (fs_request_dequeued) {
+        fs_queue_publish_consumption(fatfs_command_queue, fs_request_dequeued);
+    }
+    if (fs_response_enqueued) {
         #ifdef FS_DEBUG_PRINT
         sddf_printf("FS notify client\n");
         #endif
+        fs_queue_publish_production(fatfs_completion_queue, fs_response_enqueued);
         microkit_notify(Client_CH);
     }
-    if (blk_request_pushed == true) {
+    if (blk_request_pushed) {
         #ifdef FS_DEBUG_PRINT
         sddf_printf("FS notify driver\n");
         #endif
         microkit_notify(Server_CH);
+        blk_request_pushed = false;
     }
 }

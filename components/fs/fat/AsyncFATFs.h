@@ -8,25 +8,25 @@
 
 void init_metadata(void* fs_metadata);
 
-void fat_mount();
-void fat_unmount();
-void fat_open();
-void fat_close();
-void fat_stat();
-void fat_pread();
-void fat_pwrite();
-void fat_fsize();
-void fat_rename();
-void fat_unlink();
-void fat_mkdir();
-void fat_rmdir();
-void fat_opendir();
-void fat_closedir();
-void fat_sync();
-void fat_seekdir();
-void fat_readdir();
-void fat_rewinddir();
-void fat_telldir();
+void fat_mount(void);
+void fat_unmount(void);
+void fat_open(void);
+void fat_close(void);
+void fat_stat(void);
+void fat_pread(void);
+void fat_pwrite(void);
+void fat_fsize(void);
+void fat_rename(void);
+void fat_unlink(void);
+void fat_mkdir(void);
+void fat_rmdir(void);
+void fat_opendir(void);
+void fat_closedir(void);
+void fat_sync(void);
+void fat_seekdir(void);
+void fat_readdir(void);
+void fat_rewinddir(void);
+void fat_telldir(void);
 
 // For debug
 #ifdef FS_DEBUG_PRINT
