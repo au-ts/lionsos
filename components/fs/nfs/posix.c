@@ -90,6 +90,7 @@ static size_t output(void *data, size_t count)
             serial_enqueue(&serial_tx_queue_handle, tail, '\r');
             serial_enqueue(&serial_tx_queue_handle, tail, c);
         }
+        sent++;
     }
 
     if (sent && serial_require_producer_signal(&serial_tx_queue_handle)) {
