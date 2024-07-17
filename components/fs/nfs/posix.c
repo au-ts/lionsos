@@ -72,21 +72,32 @@ int socket_refcount[MAX_SOCKETS];
 
 static size_t output(void *data, size_t count)
 {
-    uint32_t n, transferred = 0;
+    uint32_t *tail = &serial_tx_queue_handle.queue->tail;
+    uint32_t sent = 0;
+    char *string = data;
 
-    do {
-        n = serial_enqueue_batch(&serial_tx_queue_handle, count, data);
-        transferred += n;
-        count -= n;
-    } while (n && count);
+    while (!serial_queue_full(&serial_tx_queue_handle, *tail)
+                                && sent < count) {
+        char c = string[sent];
+        if (c != '\n') {
+            serial_enqueue(&serial_tx_queue_handle, tail, c);
+        } else {
+            /* Ensure buffer can fit \r and \n */
+            if (serial_queue_full(&serial_tx_queue_handle,
+                                  *tail + 1)) {
+                break;
+            }
+            serial_enqueue(&serial_tx_queue_handle, tail, '\r');
+            serial_enqueue(&serial_tx_queue_handle, tail, c);
+        }
+    }
 
-    if (transferred &&
-        serial_require_producer_signal(&serial_tx_queue_handle)) {
+    if (sent && serial_require_producer_signal(&serial_tx_queue_handle)) {
         serial_cancel_producer_signal(&serial_tx_queue_handle);
         microkit_notify(SERIAL_TX_CH);
     }
 
-    return transferred;
+    return sent;
 }
 
 long sys_brk(va_list ap)
