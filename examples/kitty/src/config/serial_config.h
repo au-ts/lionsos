@@ -45,8 +45,8 @@
                                  SERIAL_MAX_RX_DATA_SIZE)
 
 /* String to be printed to start console input */
-#define SERIAL_CONSOLE_BEGIN_STRING "Begin input\n"
-#define SERIAL_CONSOLE_BEGIN_STRING_LEN 13
+#define SERIAL_CONSOLE_BEGIN_STRING ""
+#define SERIAL_CONSOLE_BEGIN_STRING_LEN 0
 
 _Static_assert(SERIAL_MAX_DATA_SIZE < UINT32_MAX,
                "Data regions must be smaller than UINT32"
