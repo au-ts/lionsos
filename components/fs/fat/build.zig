@@ -1,5 +1,4 @@
 // Zig build script for building FatFs
-// zig build -Dsdk=../../../../libvmm-blk_benchmark/examples/blk_benchmark/sdk -Dboard=odroidc4
 // zig build -Dsdk=/home/li/Sel4/microkit-sdk-1.2.6 -Dboard=odroidc4
 const std = @import("std");
 
@@ -125,11 +124,11 @@ pub fn build(b: *std.Build) void {
     fs.linkLibrary(FiberPool);
 
     // Add sddf include directory
-    fs.addIncludePath(.{ .path = "../../../dep/sddf/include/" });
+    fs.addIncludePath(.{ .cwd_relative = "../../../dep/sddf/include/" });
 
-    fs.addIncludePath(.{ .path = libmicrokit_include });
+    fs.addIncludePath(.{ .cwd_relative = libmicrokit_include });
 
-    fs.addObjectFile(.{ .path = libmicrokit });
+    fs.addObjectFile(.{ .cwd_relative = libmicrokit });
 
     // Command to compile musl libc
     // const make_command = b.fmt("CONFIG_USER_DEBUG_BUILD=y CONFIG_ARCH_AARCH64=y C_COMPILER=aarch64-none-elf-gcc TOOLPREFIX=aarch64-none-elf- SOURCE_DIR=. STAGE_DIR=../../components/fs/fat/build make");
@@ -143,13 +142,14 @@ pub fn build(b: *std.Build) void {
     // b.default_step = &(make_step.step);
 
     // Include musllibc
-    fs.addIncludePath(.{ .path = "build/include/" });
-    fs.addObjectFile(.{ .path = "build/lib/libc.a" });
+    fs.addIncludePath(.{ .cwd_relative = "build/include/" });
+    fs.addObjectFile(.{ .cwd_relative = "build/lib/libc.a" });
 
     // Add all file system related source files
-    fs.addCSourceFile(.{ .file = b.path("AsyncFATFs.c"), .flags = &.{"-mstrict-align"} });
-    fs.addCSourceFile(.{ .file = b.path("AsyncFATFunc.c"), .flags = &.{"-mstrict-align"} });
-    fs.addCSourceFile(.{ .file = b.path("Asyncdiskio.c"), .flags = &.{"-mstrict-align"} });
+    fs.addCSourceFile(.{ .file = b.path("fatfs_event.c"), .flags = &.{"-mstrict-align"} });
+    fs.addCSourceFile(.{ .file = b.path("fatfs_op.c"), .flags = &.{"-mstrict-align"} });
+    fs.addCSourceFile(.{ .file = b.path("fs_diskio.c"), .flags = &.{"-mstrict-align"} });
+    fs.addCSourceFile(.{ .file = b.path("co_helper.c"), .flags = &.{"-mstrict-align"} });
     fs.addCSourceFile(.{
         .file = b.path("ff15/source/ff.c"),
         .flags = &.{ "-mstrict-align", "-nostdlib" },
@@ -168,7 +168,7 @@ pub fn build(b: *std.Build) void {
     //    },
     // });
 
-    fs.setLinkerScript(.{ .path = libmicrokit_linker_script });
+    fs.setLinkerScript(.{ .cwd_relative = libmicrokit_linker_script });
 
     b.installArtifact(fs);
 }

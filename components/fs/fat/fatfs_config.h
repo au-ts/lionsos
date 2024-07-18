@@ -12,8 +12,8 @@
 #define MAX_OPENED_DIRNUM 128
 
 // Coroutine library that is using
-// #define USE_FIBERPOOL
-#define USE_LIBMICROKITCO
+#define USE_FIBERPOOL
+// #define USE_LIBMICROKITCO
 
 #define WORKER_COROUTINE_NUM 4
 

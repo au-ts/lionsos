@@ -1,3 +1,3 @@
 build/
 docs/book/
-components/fs/fat/zig-cache/
+components/fs/fat/.zig-cache/
