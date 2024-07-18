@@ -1,6 +1,5 @@
 #include "fatfs_config.h"
 #include "co_helper.h"
-#include <cstdint>
 
 #ifdef USE_FIBERPOOL
 void co_init(uint64_t* stack, uint32_t num) {

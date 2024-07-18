@@ -1,4 +1,4 @@
-#include "AsyncFATFs.h"
+#include "fatfs_decl.h"
 #include "ff15/source/ff.h"
 #include "co_helper.h"
 #include <stdbool.h>
@@ -11,7 +11,7 @@
 #include "../../../dep/sddf/include/sddf/util/printf.h"
 #endif
 /*
-This file define a bunch of wrapper functions of FATFs functions so thos functions can be run in the 
+This file define a bunch of wrapper functions of FATFs functions so those functions can be run in the 
 coroutine.
 */
 
@@ -20,14 +20,6 @@ typedef enum : uint8_t {
     INUSE = 1,
     CLEANUP = 2,
 } descriptor_status;
-
-void function_fill_response(void* data, FRESULT result, uint64_t RETDATA, uint64_t RETDATA2) {
-    uint64_t *args = (uint64_t *) data;
-    args[Status_bit] = result;
-    args[First_data_bit] = RETDATA;
-    args[Second_data_bit] = RETDATA2;
-    return;
-}
 
 descriptor_status* fs_status;
 FATFS* fatfs;
