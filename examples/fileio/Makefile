@@ -86,7 +86,8 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(B
 			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
 			BUILD=$(abspath $(BUILD_DIR)) \
 			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
-			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
+			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) \
+			FROZEN_MANIFEST=$(abspath manifest.py) \
 
 # Compiling serial components
 SERIAL_COMPONENTS := $(SDDF)/serial/components

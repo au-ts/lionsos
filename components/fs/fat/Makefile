@@ -15,10 +15,9 @@ MUSL = $(LIONSOS)/dep/musllibc
 
 FatFs_OBJS :=   ff.o \
 				ffunicode.o \
-                AsyncFATFs.o \
-				AsyncFATFunc.o \
-				Asyncdiskio.o \
-				sddf_blk_shared_queue.o \
+                fatfs_event.o \
+				fatfs_op.o \
+				fs_diskio.o \
 				FiberPool.o \
 				FiberFlow.o \
 				printf.o \
@@ -38,13 +37,13 @@ $(BUILD_DIR)/ff.o: $(FF_DIR)/ff15/source/ff.c $(BUILD_DIR)/musllibc/lib/libc.a M
 $(BUILD_DIR)/ffunicode.o: $(FF_DIR)/ff15/source/ffunicode.c $(BUILD_DIR)/musllibc/lib/libc.a Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/AsyncFATFs.o: $(FF_DIR)/AsyncFATFs.c Makefile
+$(BUILD_DIR)/fatfs_event.o: $(FF_DIR)/fatfs_event.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/AsyncFATFunc.o: $(FF_DIR)/AsyncFATFunc.c Makefile
+$(BUILD_DIR)/fatfs_op.o: $(FF_DIR)/fatfs_op.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/Asyncdiskio.o: $(FF_DIR)/Asyncdiskio.c Makefile
+$(BUILD_DIR)/fs_diskio.o: $(FF_DIR)/fs_diskio.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/%.o: $(FF_DIR)/FiberPool/%.c Makefile
@@ -53,6 +52,6 @@ $(BUILD_DIR)/%.o: $(FF_DIR)/FiberPool/%.c Makefile
 $(BUILD_DIR)/%.o: $(FF_DIR)/FiberPool/FiberFlow/%.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/FatFs.elf: $(addprefix $(BUILD_DIR)/, $(FatFs_OBJS))
+$(BUILD_DIR)/fatFs.elf: $(addprefix $(BUILD_DIR)/, $(FatFs_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 # File system building end
