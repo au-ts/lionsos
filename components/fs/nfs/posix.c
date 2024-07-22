@@ -72,25 +72,24 @@ int socket_refcount[MAX_SOCKETS];
 
 static size_t output(void *data, size_t count)
 {
-    uint32_t *tail = &serial_tx_queue_handle.queue->tail;
+    char *src = data;
     uint32_t sent = 0;
-    char *string = data;
-
-    while (!serial_queue_full(&serial_tx_queue_handle, *tail)
-                                && sent < count) {
-        char c = string[sent];
-        if (c != '\n') {
-            serial_enqueue(&serial_tx_queue_handle, tail, c);
-        } else {
-            /* Ensure buffer can fit \r and \n */
-            if (serial_queue_full(&serial_tx_queue_handle,
-                                  *tail + 1)) {
-                break;
-            }
-            serial_enqueue(&serial_tx_queue_handle, tail, '\r');
-            serial_enqueue(&serial_tx_queue_handle, tail, c);
+    while (sent < count)
+    {
+        char *nl = memchr(src, '\n', count - sent);
+        uint32_t stop = (nl == NULL)? count - sent: nl - src;
+        /* Enqueue to the first '\n' character, end of string
+           or until queue is full */
+        uint32_t enq = serial_enqueue_batch(&serial_tx_queue_handle, stop, src);
+        sent += enq;
+        if (sent == count || serial_queue_free(&serial_tx_queue_handle) < 2) {
+            break;
         }
-        sent++;
+
+        /* Append a '\r' character before a '\n' character */
+        serial_enqueue_batch(&serial_tx_queue_handle, 2, "\r\n");
+        sent += 1;
+        src += enq + 1;
     }
 
     if (sent && serial_require_producer_signal(&serial_tx_queue_handle)) {
