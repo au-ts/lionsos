@@ -156,21 +156,14 @@ long sys_write(va_list ap)
 
     if (fd == 1 || fd == 2)
     {
-        uint32_t n, transferred = 0;
+        uint32_t n = serial_enqueue_batch(&serial_tx_queue_handle, count, buf);
 
-        do {
-            n = serial_enqueue_batch(&serial_tx_queue_handle, count, buf);
-            transferred += n;
-            count -= n;
-        } while (n && count);
-
-        if (transferred &&
-            serial_require_producer_signal(&serial_tx_queue_handle)) {
+        if (n && serial_require_producer_signal(&serial_tx_queue_handle)) {
             serial_cancel_producer_signal(&serial_tx_queue_handle);
             microkit_notify(SERIAL_TX_CH);
         }
 
-        return transferred;
+        return n;
     }
 
     return -1;
