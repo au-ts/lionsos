@@ -116,7 +116,7 @@
         <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
     </protection_domain>
 
-    <protection_domain name="eth_virt_rx" priority="108" pp="true" budget="100" period="500" >
+    <protection_domain name="eth_virt_rx" priority="108" budget="100" period="500" >
         <program_image path="eth_virt_rx.elf" />
         <map mr="eth_rx_free_drv" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_drv" />
         <map mr="eth_rx_active_drv" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_drv" />
