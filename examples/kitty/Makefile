@@ -23,7 +23,6 @@ MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
 MICROKIT_BOARD := odroidc4
 CONFIG_INCLUDE ?= src/config
-ETHERNET_CONFIG_INCLUDE := ${CONFIG_INCLUDE}
 CPU := cortex-a55
 
 TOOLCHAIN := clang
@@ -151,7 +150,7 @@ $(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(B
 			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
 			BUILD=$(abspath $(BUILD_DIR)) \
 			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
-			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) \
+			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
 			FROZEN_MANIFEST=$(abspath manifest.py) \
 			ENABLE_I2C=1 \
 			ENABLE_FRAMEBUFFER=1
@@ -181,7 +180,7 @@ $(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
 		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
 		MUSLLIBC_INCLUDE=$(abspath $(BUILD_DIR)/musllibc/include) \
 		LIBNFS_INCLUDE=$(abspath $(LIBNFS)/include) \
-		ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
+		CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE))
 
 $(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a 
 	$(LD) \
