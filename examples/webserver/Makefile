@@ -7,7 +7,7 @@
 ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
-MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
+override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
 ifeq ($(strip $(WEBSITE_DIR)),)
 $(error "WEBSITE_DIR must be specified: this is the filesystem path of the directory containing the website's files")
@@ -23,212 +23,27 @@ endif
 
 LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
 
-MICROKIT_CONFIG ?= debug
+export MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
-MICROKIT_BOARD := odroidc4
-ETHERNET_CONFIG_INCLUDE ?= ethernet_config
-CPU := cortex-a55
+export MICROKIT_BOARD := odroidc4
+export CONFIG_INCLUDE ?= $(abspath config)
+export WEBSERVER_SRC_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+export LIONSOS := $(abspath ../..)
 
-TOOLCHAIN := clang
-CC := clang
-LD := ld.lld
-TARGET := aarch64-none-elf
-MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 
-BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-LIONSOS ?= ../..
-SDDF := $(LIONSOS)/dep/sddf
-
-LWIP=$(SDDF)/network/ipstacks/lwip/src
-LIBNFS=$(LIONSOS)/dep/libnfs
-NFS=$(LIONSOS)/components/fs/nfs
-MUSL=$(LIONSOS)/dep/musllibc
-
-IMAGES := timer.elf ethernet.elf micropython.elf nfs.elf eth_copy.elf eth_virt_rx.elf eth_virt_tx.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf
-CFLAGS := \
-	-mtune=$(CPU) \
-	-mstrict-align \
-	-ffreestanding \
-	-O3 \
-	-Wall \
-	-Wno-unused-function \
-	-I$(BOARD_DIR)/include \
-	-target $(TARGET) \
-	-DBOARD_$(MICROKIT_BOARD) \
-	-I$(SDDF)/include
-LDFLAGS := -L$(BOARD_DIR)/lib
-LIBS := -lmicrokit -Tmicrokit.ld
 
 IMAGE_FILE := $(BUILD_DIR)/webserver.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
+nproc:= $(shell sh -c "if test -f /proc/cpuinfo; then grep processor /proc/cpuinfo | wc -l; else echo 2; fi")
 
-TIMER_OBJS := timer.o sddf_util_printf.o sddf_putchar_debug.o
-TIMER_DRIVER := $(SDDF)/drivers/clock/meson
+all: ${IMAGE_FILE}
 
-.EXTRA_PREREQS := submodules
+${IMAGE_FILE}: ${BUILD_DIR}/Makefile FORCE
+	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK}  $(notdir $@) 
 
-all: $(DIRECTORIES) $(BUILD_DIR) $(IMAGE_FILE)
-
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
-
-$(BUILD_DIR)/libm/libm.a: $(LIBMATH)
-	mkdir -p $(BUILD_DIR)/libm
-	cp $(LIBMATH)/libm.a $(BUILD_DIR)/libm/libm.a
-
-$(BUILD_DIR)/%.o: src/%.c
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/sddf_util_printf.o: $(SDDF)/util/printf.c $(SDDF)/include/sddf/util/printf.h
-	$(CC) -c $(CFLAGS) $(SDDF)/util/printf.c -o $@
-
-$(BUILD_DIR)/sddf_putchar_debug.o: $(SDDF)/util/putchar_debug.c
-	$(CC) -c $(CFLAGS) $(SDDF)/util/putchar_debug.c -o $(BUILD_DIR)/sddf_putchar_debug.o
-
-$(BUILD_DIR)/sddf_putchar_serial.o: $(SDDF)/util/putchar_serial.c
-	$(CC) -c $(CFLAGS) $(SDDF)/util/putchar_serial.c -o $(BUILD_DIR)/sddf_putchar_serial.o
-
-$(BUILD_DIR)/timer.o: $(TIMER_DRIVER)/timer.c
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
-$(BUILD_DIR)/micropython.elf: FORCE mpy-cross $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/libm/libm.a manifest.py
-	echo "base_dir='$(WEBSITE_DIR)'" >$(BUILD_DIR)/config.py
-	cp manifest.py webserver.py $(BUILD_DIR)
-	make -C $(LIONSOS)/components/micropython -j$(nproc) \
-			MICROKIT_SDK=$(MICROKIT_SDK) \
-			MICROKIT_BOARD=$(MICROKIT_BOARD) \
-			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
-			BUILD=$(abspath $(BUILD_DIR)) \
-			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
-			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) \
-			FROZEN_MANIFEST=$(abspath $(BUILD_DIR)/manifest.py) \
-			EXEC_MODULE="webserver.py"
-
-ETHERNET=$(SDDF)/drivers/network/meson/
-$(BUILD_DIR)/ethernet.o: $(ETHERNET)/ethernet.c $(ETHERNET)/ethernet.h
-	$(CC) -c $(CFLAGS) $(ETHERNET)/ethernet.c -I$(abspath $(ETHERNET_CONFIG_INCLUDE)) -o $(BUILD_DIR)/ethernet.o
-
-$(BUILD_DIR)/sddf_util_cache.o: $(SDDF)/util/cache.c
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/musllibc/lib/libc.a:
-	make -C $(MUSL) \
-		C_COMPILER=aarch64-none-elf-gcc \
-		TOOLPREFIX=aarch64-none-elf- \
-		CONFIG_ARCH_AARCH64=y \
-		STAGE_DIR=$(abspath $(BUILD_DIR)/musllibc) \
-		SOURCE_DIR=.
-
-$(BUILD_DIR)/libnfs/lib/libnfs.a: $(BUILD_DIR)/musllibc/lib/libc.a
-	MUSL=$(abspath $(BUILD_DIR)/musllibc) cmake -S $(LIBNFS) -B $(BUILD_DIR)/libnfs
-	cmake --build $(BUILD_DIR)/libnfs
-
-$(BUILD_DIR)/nfs/nfs.a: FORCE $(BUILD_DIR)/musllibc/lib/libc.a
-	make -C $(NFS) \
-		BUILD_DIR=$(abspath $(BUILD_DIR)/nfs) \
-		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
-		MUSLLIBC_INCLUDE=$(abspath $(BUILD_DIR)/musllibc/include) \
-		LIBNFS_INCLUDE=$(abspath $(LIBNFS)/include) \
-		ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
-
-$(BUILD_DIR)/nfs.elf: $(BUILD_DIR)/nfs/nfs.a $(BUILD_DIR)/libnfs/lib/libnfs.a $(BUILD_DIR)/musllibc/lib/libc.a
-	$(LD) \
-		$(LDFLAGS) \
-		$(BUILD_DIR)/nfs/nfs.a \
-		-L$(BUILD_DIR)/libnfs/lib \
-		-L$(BUILD_DIR)/musllibc/lib \
-		-L$(LIBGCC) \
-		-lgcc \
-		-lc \
-		$(LIBS) \
-		-lnfs \
-		-o $(BUILD_DIR)/nfs.elf
-
-$(BUILD_DIR)/ethernet.elf: $(BUILD_DIR)/ethernet.o $(BUILD_DIR)/sddf_util_printf.o $(BUILD_DIR)/sddf_putchar_debug.o
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
-NETWORK_COMPONENTS := $(SDDF)/network/components
-NETWORK_COMPONENTS_INCLUDE := \
-	-I$(SDDF)/include \
-	-I$(BOARD_DIR)/include \
-	-I$(LWIP)/include \
-	-I$(LWIP)/include/ipv4 \
-	-Iethernet_config
-NETWORK_COMPONENT_CFLAGS := \
-	$(NETWORK_COMPONENTS_INCLUDE) \
-	-mstrict-align \
-	-ffreestanding \
-	-g \
-	-O0 \
-	-Wall \
-	-Wno-unused-function \
-	-DNO_ASSERT \
-	-DBOARD_$(MICROKIT_BOARD) \
-	-MD \
-	-MP
-
-NETWORK_COMPONENTS_LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIBC)
-NETWORK_COMPONENTS_LIBS := -lmicrokit -Tmicrokit.ld -lc $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_util_printf.o
-
-$(BUILD_DIR)/eth_copy.o: $(NETWORK_COMPONENTS)/copy.c
-	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
-
-$(BUILD_DIR)/eth_virt_rx.o: $(NETWORK_COMPONENTS)/virt_rx.c
-	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
-
-$(BUILD_DIR)/eth_virt_tx.o: $(NETWORK_COMPONENTS)/virt_tx.c
-	aarch64-none-elf-gcc -c $(NETWORK_COMPONENT_CFLAGS) $< -o $@
-
-$(BUILD_DIR)/eth_copy.elf: $(BUILD_DIR)/eth_copy.o $(BUILD_DIR)/sddf_putchar_debug.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_copy.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/eth_copy.elf
-
-$(BUILD_DIR)/eth_virt_rx.elf: $(BUILD_DIR)/eth_virt_rx.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_virt_rx.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/eth_virt_rx.elf
-
-$(BUILD_DIR)/eth_virt_tx.elf: $(BUILD_DIR)/eth_virt_tx.o $(BUILD_DIR)/sddf_util_cache.o $(BUILD_DIR)/sddf_putchar_debug.o
-	aarch64-none-elf-ld $(NETWORK_COMPONENTS_LDFLAGS) $(BUILD_DIR)/eth_virt_tx.o $(NETWORK_COMPONENTS_LIBS) $(BUILD_DIR)/sddf_putchar_debug.o -o $(BUILD_DIR)/eth_virt_tx.elf
-# Compiling serial components
-SERIAL_COMPONENTS := $(SDDF)/serial/components
-UART_DRIVER := $(SDDF)/drivers/serial/meson
-UART_DRIVER_OBJS := uart_driver.o sddf_putchar_debug.o sddf_util_printf.o
-SERIAL_VIRT_RX_OBJS := serial_virt_rx.o
-SERIAL_VIRT_TX_OBJS := serial_virt_tx.o
-
-SERIAL_INCLUDES := -I$(SDDF)/util/include -I$(UART_DRIVER)/include
-SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=1
-
-$(BUILD_DIR)/uart_driver.o: $(UART_DRIVER)/uart.c
-	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $< -o $@
-
-$(BUILD_DIR)/serial_virt_rx.o: $(SERIAL_COMPONENTS)/virt_rx.c
-	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $(SERIAL_NUM_CLIENTS) $< -o $@
-
-$(BUILD_DIR)/serial_virt_tx.o: $(SERIAL_COMPONENTS)/virt_tx.c
-	$(CC) -c $(SERIAL_INCLUDES) $(CFLAGS) $(SERIAL_NUM_CLIENTS) $< -o $@
-
-$(BUILD_DIR)/uart_driver.elf: $(addprefix $(BUILD_DIR)/, $(UART_DRIVER_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
-$(BUILD_DIR)/serial_virt_rx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_RX_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
-$(BUILD_DIR)/serial_virt_tx.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_VIRT_TX_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
-directories:
-	$(shell mkdir -p $(BUILD_DIR)/lwip/src)
-	$(shell mkdir -p $(BUILD_DIR)/lwip/src/core)
-	$(shell mkdir -p $(BUILD_DIR)/lwip/src/netif)
-	$(shell mkdir -p $(BUILD_DIR)/lwip/src/core/ipv4)
-	$(shell mkdir -p $(BUILD_DIR)/nfs)
-
-$(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) webserver.system
-	$(MICROKIT_TOOL) webserver.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
-
-FORCE: ;
+${BUILD_DIR}/Makefile: webserver.mk
+	mkdir -p ${BUILD_DIR}
+	cp webserver.mk $@
 
 submodules:
 	git submodule update --init $(LIONSOS)/dep/libnfs
@@ -236,10 +51,6 @@ submodules:
 	git submodule update --init $(LIONSOS)/dep/micropython
 	git submodule update --init $(LIONSOS)/dep/musllibc
 	git submodule update --init $(LIONSOS)/dep/sddf
-	git submodule update --init $(LIONSOS)/dep/libmicrokitco
 	(cd $(LIONSOS)/dep/micropython/; git submodule update --init lib/micropython-lib)
 
-mpy-cross:
-	make -C $(LIONSOS)/dep/micropython/mpy-cross
-
-.PHONY: mpy-cross submodules
+FORCE:

@@ -1,5 +1,5 @@
-ifeq ($(strip $(ETHERNET_CONFIG_INCLUDE)),)
-$(error ETHERNET_CONFIG_INCLUDE must be specified)
+ifeq ($(strip $(CONFIG_INCLUDE)),)
+$(error CONFIG_INCLUDE must be specified)
 endif
 LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
 CC := aarch64-none-elf-gcc
@@ -7,7 +7,6 @@ LD := aarch64-none-elf-ld
 
 LIONSOS := $(abspath ../../)
 SDDF := $(LIONSOS)/dep/sddf
-SDDF_UTIL := $(SDDF)/util
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LWIP := $(SDDF)/network/ipstacks/lwip
 # Path to micropython source code
@@ -39,12 +38,12 @@ CFLAGS += \
 	-I$(LIONSOS)/include \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
-	-I$(ETHERNET_CONFIG_INCLUDE) \
+	-I$(CONFIG_INCLUDE) \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU)
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBC) -L$(LIBMATH)
-LIBS += -lm -lmicrokit -Tmicrokit.ld -lc
+LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
 
 # Include libmicrokitco for blocking in Micropython
 BUILD_DIR=$(BUILD)
@@ -94,7 +93,7 @@ NETIFFILES=netif/ethernet.c
 
 # LWIPFILES: All the above.
 LWIPFILES=$(COREFILES) $(CORE4FILES) $(NETIFFILES)
-LWIP_OBJ=$(addprefix $(BUILD)/micropython/lwip/, $(LWIPFILES:.c=.o)) $(BUILD)/newlibc.o
+LWIP_OBJ=$(addprefix $(BUILD)/micropython/lwip/, $(LWIPFILES:.c=.o))
 
 # Define the required source files.
 SRC_C = \
@@ -127,9 +126,7 @@ SRC_C = \
 	shared/libc/printf.c \
 	shared/libc/__errno.c \
 	shared/timeutils/timeutils.c \
-	shared/netutils/netutils.c \
-	$(SDDF_UTIL)/printf.c \
-	$(SDDF_UTIL)/putchar_debug.c
+	shared/netutils/netutils.c
 
 # Define source files containung qstrs.
 SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c vfs_fs_file.c vfs_fs.c modfs_raw.c
@@ -152,12 +149,9 @@ CFLAGS += -DENABLE_FRAMEBUFFER
 endif
 
 # Define the required object files.
-OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ) $(BUILD)/sddf_util_cache.o
+OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ)
 
 all: directories $(BUILD)/micropython.elf
-
-$(BUILD)/newlibc.o: $(SDDF_UTIL)/newlibc.c
-	$(CC) -c $(CFLAGS) $(SDDF_UTIL)/newlibc.c -o $(BUILD)/newlibc.o
 
 $(BUILD)/micropython/lwip/%.o: $(LWIP)/src/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
