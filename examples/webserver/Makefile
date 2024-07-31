@@ -14,14 +14,8 @@ $(error "WEBSITE_DIR must be specified: this is the filesystem path of the direc
 endif
 
 ifeq ($(strip $(LIBGCC)),)
-LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
+export LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
 endif
-
-ifeq ($(strip $(LIBMATH)),)
-LIBMATH:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libm.a)))
-endif
-
-LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
 
 export MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= $(abspath build)
