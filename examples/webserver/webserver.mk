@@ -21,7 +21,6 @@ AR := llvm-ar
 RANLIB := llvm-ranlib
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
-CP := /usr/bin/cp
 
 LWIP=$(SDDF)/network/ipstacks/lwip/src
 LIBNFS=$(LIONSOS)/dep/libnfs
@@ -78,7 +77,7 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 	echo "base_dir='$(WEBSITE_DIR)'" > config.py
 
 %.py: ${WEBSERVER_SRC_DIR}/%.py
-	${CP} $< $@
+	cp $< $@
 
 musllibc/lib/libc.a:
 	make -C $(MUSL) \
