@@ -108,7 +108,7 @@ nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
 		nfs/nfs.a \
 		-Llibnfs/lib \
 		-Lmusllibc/lib \
-		-L$(TOP)/$(LIBGCC) \
+		-L$(LIBGCC) \
 		-lgcc \
 		-lc \
 		$(LIBS) \
