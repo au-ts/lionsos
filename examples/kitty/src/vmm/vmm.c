@@ -6,14 +6,14 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <microkit.h>
-#include "util/util.h"
-#include "arch/aarch64/vgic/vgic.h"
-#include "arch/aarch64/linux.h"
-#include "arch/aarch64/fault.h"
-#include "guest.h"
-#include "virq.h"
-#include "tcb.h"
-#include "vcpu.h"
+#include "libvmm/util/util.h"
+#include "libvmm/arch/aarch64/vgic/vgic.h"
+#include "libvmm/arch/aarch64/linux.h"
+#include "libvmm/arch/aarch64/fault.h"
+#include "libvmm/guest.h"
+#include "libvmm/virq.h"
+#include "libvmm/tcb.h"
+#include "libvmm/vcpu.h"
 /* Specific to the framebuffer example */
 #include "uio.h"
 
