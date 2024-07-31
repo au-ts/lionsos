@@ -324,7 +324,7 @@ void pread_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
     continuation_free(cont);
 }
 
-void handle_pread(uint64_t request_id, fd_t fd, const char *buf, uint64_t nbyte, uint64_t offset) {
+void handle_pread(uint64_t request_id, fd_t fd, char *buf, uint64_t nbyte, uint64_t offset) {
     int err;
 
     struct nfsfh *file_handle = NULL;
@@ -375,7 +375,7 @@ void pwrite_cb(int status, struct nfs_context *nfs, void *data, void *private_da
     continuation_free(cont);
 }
 
-void handle_pwrite(uint64_t request_id, fd_t fd, char *buf, uint64_t nbyte, uint64_t offset) {
+void handle_pwrite(uint64_t request_id, fd_t fd, const char *buf, uint64_t nbyte, uint64_t offset) {
     int err;
 
     struct nfsfh *file_handle = NULL;
@@ -881,7 +881,7 @@ void nfs_notified(void) {
         case FS_CMD_PREAD: {
             fd_t fd = cmd.args[0];
             uint64_t buf_offset = cmd.args[1];
-            const char *buf = client_share + buf_offset;
+            char *buf = client_share + buf_offset;
             uint64_t nbyte = cmd.args[2];
             uint64_t offset = cmd.args[3];
             if (!buffer_valid(buf, nbyte)) {
@@ -895,7 +895,7 @@ void nfs_notified(void) {
         case FS_CMD_PWRITE: {
             fd_t fd = cmd.args[0];
             uint64_t buf_offset = cmd.args[1];
-            char *buf = client_share + buf_offset;
+            const char *buf = client_share + buf_offset;
             uint64_t nbyte = cmd.args[2];
             uint64_t offset = cmd.args[3];
             if (!buffer_valid(buf, nbyte)) {
@@ -1031,3 +1031,4 @@ void nfs_notified(void) {
         }
     }
 }
+
