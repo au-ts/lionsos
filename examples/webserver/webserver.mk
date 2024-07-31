@@ -63,8 +63,6 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-vpath %.py ${WEBSERVER_SRC_DIR}
-
 micropython.elf: mpy-cross ${TOP}/manifest.py ${TOP}/webserver.py config.py
 	make -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
@@ -114,8 +112,6 @@ nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
 		$(LIBS) \
 		-lnfs \
 		-o nfs.elf
-
-vpath .py 
 
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
