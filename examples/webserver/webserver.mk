@@ -62,7 +62,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-micropython.elf: mpy-cross ${TOP}/manifest.py ${TOP}/webserver.py config.py
+micropython.elf: mpy-cross manifest.py webserver.py config.py
 	make -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -70,7 +70,7 @@ micropython.elf: mpy-cross ${TOP}/manifest.py ${TOP}/webserver.py config.py
 			BUILD=$(abspath $(BUILD_DIR)) \
 			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
 			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
-			FROZEN_MANIFEST=$(abspath ${TOP}/manifest.py) \
+			FROZEN_MANIFEST=$(abspath manifest.py) \
 			EXEC_MODULE="webserver.py"
 
 config.py: ${CHECK_FLAGS_BOARD_MD5}
