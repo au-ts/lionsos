@@ -77,9 +77,6 @@ CFLAGS := \
 	-Wno-unused-function \
 	-I$(BOARD_DIR)/include \
 	-target $(TARGET) \
-	-I$(LIBVMM_DIR)/src/arch/aarch64 \
-	-I$(LIBVMM_DIR)/src \
-	-I$(LIBVMM_DIR)/src/util \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include \
 	-I${CONFIG_INCLUDE}
