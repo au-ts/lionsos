@@ -253,7 +253,7 @@ async def main():
     global writer_stream
     reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
 
-    info(f"starting at {}", time.time())
+    info(f"starting at {time.time()}")
     size = 688000
     cat_buf = bytearray(size)
     with open("catwithfish.data", "rb") as f:

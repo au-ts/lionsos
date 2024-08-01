@@ -43,9 +43,8 @@ NFS := $(LIONSOS)/components/fs/nfs
 MUSL := $(LIONSOS)/dep/musllibc
 #
 # Network config
-CONFIG_INCLUDE ?= ${KITTY_DIR}/src/config
+export CONFIG_INCLUDE ?= ${KITTY_DIR}/src/config
 NUM_NETWORK_CLIENTS := -DNUM_NETWORK_CLIENTS=2
-CFLAGS_network := -I${CONFIG_INCLUDE}
 
 # Serial config
 UART_DRIVER := ${SDDF}/drivers/serial/${PLATFORM}
@@ -63,8 +62,8 @@ IMAGES := timer_driver.elf \
 	  network_virt_rx.elf \
 	  network_virt_tx.elf \
 	  uart_driver.elf \
-	  serial_rx_virt.elf \
-	  serial_tx_virt.elf \
+	  serial_virt_rx.elf \
+	  serial_virt_tx.elf \
 	  i2c_virt.elf \
 	  i2c_driver.elf
 
@@ -82,7 +81,8 @@ CFLAGS := \
 	-I$(LIBVMM_DIR)/src \
 	-I$(LIBVMM_DIR)/src/util \
 	-DBOARD_$(MICROKIT_BOARD) \
-	-I$(SDDF)/include
+	-I$(SDDF)/include \
+	-I${CONFIG_INCLUDE}
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
@@ -132,7 +132,7 @@ package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
 vmm.elf: ${VMM_OBJS} libvmm.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-# Build the 
+# Build with two threads in parallel
 nproc=2
 
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a # libm/libm.a 
@@ -144,6 +144,7 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a # libm/libm.a
 			MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
 			BUILD=$(abspath .) \
 			LIBMATH=${LIBMATH} \
+			FROZEN_MANIFEST=${KITTY_DIR}/manifest.py \
 			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) \
 			ENABLE_I2C=1 \
 			ENABLE_FRAMEBUFFER=1 \
