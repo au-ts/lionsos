@@ -38,11 +38,9 @@ serial_queue_t *serial_tx_queue;
 serial_queue_handle_t serial_tx_queue_handle;
 
 struct nfs_context *nfs;
-static bool nfs_connected;
 
 void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *private_data) {
     if (!err) {
-        nfs_connected = true;
         process_commands();
         dlog("connected to nfs server");
     } else {
