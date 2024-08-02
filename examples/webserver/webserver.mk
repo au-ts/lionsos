@@ -26,7 +26,6 @@ LWIP=$(SDDF)/network/ipstacks/lwip/src
 LIBNFS=$(LIONSOS)/dep/libnfs
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL=$(LIONSOS)/dep/musllibc
-BUILD_DIR=$(abspath .)
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  copy.elf network_virt_rx.elf network_virt_tx.elf \
