@@ -18,7 +18,7 @@ export LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name l
 endif
 
 export MICROKIT_CONFIG ?= debug
-BUILD_DIR ?= $(abspath build)
+export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD := odroidc4
 export CONFIG_INCLUDE ?= $(abspath config)
 export WEBSERVER_SRC_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
