@@ -35,5 +35,13 @@ ${BUILD_DIR}/Makefile: kitty.mk
 	cp kitty.mk $@
 
 
+submodules:
+	git submodule update --init $(LIONSOS)/dep/libvmm
+	git submodule update --init $(LIONSOS)/dep/libnfs
+	git submodule update --init $(LIONSOS)/dep/micropython
+	git submodule update --init $(LIONSOS)/dep/musllibc
+	git submodule update --init $(LIONSOS)/dep/sddf
+	git submodule update --init $(LIONSOS)/dep/libmicrokitco
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
 FORCE:
