@@ -4,19 +4,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-ifeq ($(strip $(MICROKIT_SDK)),)
-$(error MICROKIT_SDK must be specified)
-endif
-MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
-
-ifeq ($(strip $(LIBGCC)),)
-LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
-endif
-
-ifeq ($(strip $(LIBMATH)),)
-LIBMATH:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libm.a)))
-endif
-
 TOOLCHAIN := clang
 CC := clang
 LD := ld.lld
