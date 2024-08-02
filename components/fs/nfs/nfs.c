@@ -31,11 +31,9 @@
 #define TIMEOUT (1 * NS_IN_MS)
 
 struct nfs_context *nfs;
-static bool nfs_connected;
 
 void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *private_data) {
     if (!err) {
-        nfs_connected = true;
         process_commands();
         dlog("connected to nfs server");
     } else {
