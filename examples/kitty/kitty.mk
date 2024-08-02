@@ -28,14 +28,6 @@ LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBNFS := $(LIONSOS)/dep/libnfs
 NFS := $(LIONSOS)/components/fs/nfs
 MUSL := $(LIONSOS)/dep/musllibc
-#
-# Network config
-export CONFIG_INCLUDE ?= ${KITTY_DIR}/src/config
-NUM_NETWORK_CLIENTS := -DNUM_NETWORK_CLIENTS=2
-
-# Serial config
-UART_DRIVER := ${SDDF}/drivers/serial/${PLATFORM}
-SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=1
 
 # I2C config
 I2C_BUS_NUM=2
@@ -129,7 +121,7 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a # libm/libm.a
 			BUILD=$(abspath .) \
 			LIBMATH=${LIBMATH} \
 			FROZEN_MANIFEST=${KITTY_DIR}/manifest.py \
-			ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE)) \
+			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
 			ENABLE_I2C=1 \
 			ENABLE_FRAMEBUFFER=1 \
 			V=1
@@ -152,7 +144,7 @@ nfs/nfs.a: musllibc/lib/libc.a FORCE
 		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
 		MUSLLIBC_INCLUDE=$(abspath musllibc/include) \
 		LIBNFS_INCLUDE=$(abspath $(LIBNFS)/include) \
-		ETHERNET_CONFIG_INCLUDE=$(abspath $(ETHERNET_CONFIG_INCLUDE))
+		CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE))
 
 nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
 	$(LD) \
