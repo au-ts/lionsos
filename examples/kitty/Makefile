@@ -14,9 +14,16 @@ endif
 ifeq ($(strip ${NFS_DIRECTORY}),)
 $(error NFS_DIRECTORY needs to be the name of an exported directory)
 endif
+ifeq ($(strip $(LIBGCC)),)
+export LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
+endif
+ifeq ($(strip $(LIBMATH)),)
+export LIBMATH:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libm.a)))
+endif
 
 export LIONSOS ?= $(abspath ../..)
 export KITTY_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+export CONFIG_INCLUDE ?= $(abspath src/config)
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD := odroidc4
