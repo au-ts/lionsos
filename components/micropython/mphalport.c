@@ -36,10 +36,21 @@ int mp_hal_stdin_rx_chr(void) {
 // Send the string of given length.
 void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len)
 {
-    uint32_t n = serial_enqueue_batch(&serial_tx_queue_handle, len, str);
+    while (len != 0) {
+        while (serial_queue_full(&serial_tx_queue_handle, serial_tx_queue_handle.queue->tail)) {
+            serial_request_producer_signal(&serial_tx_queue_handle);
+            if (!serial_queue_full(&serial_tx_queue_handle, serial_tx_queue_handle.queue->tail)) {
+                break;
+            }
+            microkit_cothread_wait_on_channel(SERIAL_TX_CH);
+        }
 
-    if (n && serial_require_producer_signal(&serial_tx_queue_handle)) {
-        serial_cancel_producer_signal(&serial_tx_queue_handle);
-        microkit_notify(SERIAL_TX_CH);
+        uint32_t n = serial_enqueue_batch(&serial_tx_queue_handle, len, str);
+        assert(n);
+        if (serial_require_producer_signal(&serial_tx_queue_handle)) {
+            serial_cancel_producer_signal(&serial_tx_queue_handle);
+            microkit_notify(SERIAL_TX_CH);
+        }
+        len -= n;
     }
 }
