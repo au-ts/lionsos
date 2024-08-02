@@ -45,7 +45,7 @@
     <memory_region name="eth_tx_active_micropython" size="0x200_000" page_size="0x200_000"/>
 
     <!-- serial data regions -->
-    <memory_region name="serial_tx_data_driver" size="0x2_000" />
+    <memory_region name="serial_tx_data_driver" size="0x4_000" />
     <memory_region name="serial_tx_data_micropython" size="0x2_000" />
     <memory_region name="serial_tx_data_nfs" size="0x2_000" />
     <memory_region name="serial_rx_data_driver" size="0x2_000" />
@@ -190,8 +190,8 @@
         <map mr="serial_tx_queue_nfs" vaddr="0x4_002_000" perms="rw" cached="true"/>
 
         <map mr="serial_tx_data_driver" vaddr="0x4_003_000" perms="rw" cached="true" setvar_vaddr="tx_data_drv" />
-        <map mr="serial_tx_data_micropython" vaddr="0x4_005_000" perms="r" cached="true" setvar_vaddr="tx_data_cli0" />
-        <map mr="serial_tx_data_nfs" vaddr="0x4_007_000" perms="r" cached="true"/>
+        <map mr="serial_tx_data_micropython" vaddr="0x4_007_000" perms="r" cached="true" setvar_vaddr="tx_data_cli0" />
+        <map mr="serial_tx_data_nfs" vaddr="0x4_009_000" perms="r" cached="true"/>
     </protection_domain>
 
     <protection_domain name="serial_virt_rx" priority="98">
