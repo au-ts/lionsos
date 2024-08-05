@@ -107,6 +107,9 @@ void notified(microkit_channel ch) {
     case ETHERNET_TX_CHANNEL:
         /* Nothing to do in this case */
         break;
+    case SERIAL_TX_CH:
+        /* Nothing to do in this case */
+        break;
     case CLIENT_CHANNEL:
         if (nfs_connected) {
             nfs_notified();
