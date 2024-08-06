@@ -123,7 +123,6 @@ void notified(microkit_channel ch) {
             break;
         }
         default: {
-            LOG_VMM("passing through 0x%lx\n", ch);
             bool success = virq_handle_passthrough(ch);
             if (!success) {
                 LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", irqs[ch - 10], GUEST_VCPU_ID);
