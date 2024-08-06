@@ -4,8 +4,8 @@
  *  Copyright 2024 UNSW
  *  SPDX-License-Identifier: BSD-2-Clause
  */
-#ifndef kitty_serial_config_h
-#define kitty_serial_config_h
+#ifndef KITTY_SERIAL_CONFIG_H
+#define KITTY_SERIAL_CONFIG_H
 #pragma once
 
 /* Number of clients of the serial subsystem. */
@@ -106,4 +106,4 @@ static inline void serial_channel_names_init(char **client_names)
 #define SERIAL_SWITCH_CHAR '\0'
 #define SERIAL_TERMINATE_NUM (4) /* control-D */
 
-#endif /* kitty_serial_config_h */
+#endif /* KITTY_SERIAL_CONFIG_H */

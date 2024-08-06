@@ -1,6 +1,6 @@
 #pragma once
-#ifndef KITTY_ETHERNET_CONFIG_H
-#define KITTY_ETHERNET_CONFIG_H
+#ifndef WEBSERVER_ETHERNET_CONFIG_H
+#define WEBSERVER_ETHERNET_CONFIG_H
 
 #include <sddf/network/queue.h>
 
@@ -180,4 +180,4 @@ static inline void net_mem_region_init_sys(char *pd_name,
     }
 }
 
-#endif /* KITTY_ETHERNET_CONFIG_H */
+#endif /* WEBSERVER_ETHERNET_CONFIG_H */
