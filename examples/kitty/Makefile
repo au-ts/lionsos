@@ -29,6 +29,9 @@ export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD := odroidc4
 export CPU := cortex-a55
 
+KITTY_GRAPHICS_VM_ROOTFS := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
+KITTY_GRAPHICS_VM_LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
+
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
@@ -41,6 +44,10 @@ ${BUILD_DIR}/Makefile: kitty.mk
 	mkdir -p ${BUILD_DIR}
 	cp kitty.mk $@
 
+images:
+	mkdir -p ${BUILD_DIR}
+	cd ${BUILD_DIR} && curl -L https://lionsos.org/downloads/examples/kitty/$(KITTY_GRAPHICS_VM_ROOTFS) -o rootfs.cpio.gz
+	cd ${BUILD_DIR} && curl -L https://lionsos.org/downloads/examples/kitty/$(KITTY_GRAPHICS_VM_LINUX) -o linux
 
 submodules:
 	git submodule update --init $(LIONSOS)/dep/libvmm
