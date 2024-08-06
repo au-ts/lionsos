@@ -111,7 +111,7 @@ vmm.elf: ${VMM_OBJS} libvmm.a
 # Build with two threads in parallel
 nproc=2
 
-micropython.elf: mpy-cross libsddf_util_debug.a libco.a # libm/libm.a 
+micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
