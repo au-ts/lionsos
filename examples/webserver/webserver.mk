@@ -50,8 +50,6 @@ LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 IMAGE_FILE := webserver.img
 REPORT_FILE := report.txt
 
-#.EXTRA_PREREQS := submodules
-
 all: $(IMAGE_FILE)
 ${IMAGES}: libsddf_util_debug.a
 
