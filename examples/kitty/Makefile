@@ -26,8 +26,22 @@ export KITTY_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 export CONFIG_INCLUDE ?= $(abspath src/config)
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
-export MICROKIT_BOARD := odroidc4
-export CPU := cortex-a55
+
+ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
+	export NET_DRIV_DIR := meson
+	export UART_DRIV_DIR := meson
+	export TIMER_DRIV_DIR := meson
+	export I2C_DRIV_DIR := meson
+	export CPU := cortex-a55
+else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
+	export NET_DRIV_DIR := virtio
+	export UART_DRIV_DIR := arm
+	export TIMER_DRIV_DIR := arm
+	export CPU := cortex-a53
+	export QEMU := qemu-system-aarch64
+else
+$(error Unsupported MICROKIT_BOARD given)
+endif
 
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt

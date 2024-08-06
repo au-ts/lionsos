@@ -14,11 +14,12 @@ MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-PLATFORM := meson
 SDDF := $(LIONSOS)/dep/sddf
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 
-VMM_IMAGE_DIR := ${KITTY_DIR}/src/vmm/images
+# VMM_IMAGE_DIR := ${KITTY_DIR}/src/vmm/images
+VMM_IMAGE_DIR := ${KITTY_DIR}/board/$(MICROKIT_BOARD)/framebuffer_vmm_images
+VMM_SRC_DIR := ${KITTY_DIR}/src/vmm
 LINUX := $(VMM_IMAGE_DIR)/linux
 INITRD := $(VMM_IMAGE_DIR)/rootfs.cpio.gz
 DTS := $(VMM_IMAGE_DIR)/linux.dts
@@ -79,10 +80,15 @@ ${CHECK_FLAGS_BOARD_MD5}:
 
 include ${SDDF}/util/util.mk
 include ${LIBVMM_DIR}/vmm.mk
-include ${SDDF}/drivers/clock/${PLATFORM}/timer_driver.mk
-include ${SDDF}/drivers/network/${PLATFORM}/eth_driver.mk
-include ${SDDF}/drivers/i2c/${PLATFORM}/i2c_driver.mk
-include ${SDDF}/drivers/serial/${PLATFORM}/uart_driver.mk
+include ${SDDF}/drivers/clock/${TIMER_DRIV_DIR}/timer_driver.mk
+include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
+
+# We can build the kitty system without the I2C Driver
+ifneq ($(I2C_DRIV_DIR), )
+include ${SDDF}/drivers/i2c/${I2C_DRIV_DIR}/i2c_driver.mk
+endif
+
+include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk
 include ${SDDF}/network/components/network_components.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/i2c/components/i2c_virt.mk
@@ -90,7 +96,7 @@ include ${SDDF}/libco/libco.mk
 
 # Build the VMM for graphics
 VMM_OBJS := vmm.o package_guest_images.o
-VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}:${VMM_IMAGE_DIR}/..
+VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}:${VMM_SRC_DIR}
 
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $< > $@
@@ -164,8 +170,8 @@ ${IMAGES}: libsddf_util_debug.a
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${KITTY_DIR}/kitty.system
-	$(MICROKIT_TOOL) ${KITTY_DIR}/kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${KITTY_DIR}/board/${MICROKIT_BOARD}/kitty.system
+	$(MICROKIT_TOOL) ${KITTY_DIR}/board/${MICROKIT_BOARD}/kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 FORCE:
 
@@ -174,3 +180,23 @@ FORCE:
 
 mpy-cross: FORCE
 	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
+
+qemu: $(IMAGE_FILE)
+	$(QEMU) -machine virt,virtualization=on \
+			-cpu cortex-a53 \
+			-serial mon:stdio \
+			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
+			-m size=2G \
+			-device virtio-net-device,netdev=netdev0 \
+			-netdev user,id=netdev0 \
+			-global virtio-mmio.force-legacy=false \
+			-d guest_errors \
+			-device virtio-gpu-pci
+
+clean::
+	${RM} -f *.elf .depend* $
+	find . -name \*.[do] |xargs --no-run-if-empty rm
+
+clobber:: clean
+	rm -f *.a
+	rm -f ${IMAGE_FILE} ${REPORT_FILE}
