@@ -270,7 +270,8 @@
     <protection_domain name="framebuffer_vmm" priority="1">
         <program_image path="vmm.elf" />
         <map mr="framebuffer_guest_ram" vaddr="0x20000000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
-        <virtual_machine name="linux" id="0" priority="1">
+        <virtual_machine name="linux" priority="1">
+            <vcpu id="0" />
             <map mr="framebuffer_guest_ram" vaddr="0x20000000" perms="rwx" />
             <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="true" />
             <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
