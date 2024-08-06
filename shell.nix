@@ -3,6 +3,7 @@ let
 in
   pkgs.mkShell {
     buildInputs = with pkgs.buildPackages; [
+        cmake
         curl
         python39
         unzip
