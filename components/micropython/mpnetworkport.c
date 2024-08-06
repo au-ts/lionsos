@@ -196,9 +196,9 @@ void init_networking(void) {
     if (notify_rx && net_require_signal_free(&state.rx_queue)) {
         net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
-        if (!have_signal) {
-            microkit_notify_delayed(ETH_RX_CH);
-        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_RX_CH) {
+        if (!microkit_have_signal) {
+            microkit_deferred_notify(ETH_RX_CH);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_RX_CH) {
             microkit_notify(ETH_RX_CH);
         }
     }
@@ -206,9 +206,9 @@ void init_networking(void) {
     if (notify_tx && net_require_signal_active(&state.tx_queue)) {
         net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
-        if (!have_signal) {
-            microkit_notify_delayed(ETH_TX_CH);
-        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_TX_CH) {
+        if (!microkit_have_signal) {
+            microkit_deferred_notify(ETH_TX_CH);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_TX_CH) {
             microkit_notify(ETH_TX_CH);
         }
     }
@@ -260,9 +260,9 @@ void mpnet_handle_notify(void) {
     if (notify_rx && net_require_signal_free(&state.rx_queue)) {
         net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
-        if (!have_signal) {
-            microkit_notify_delayed(ETH_RX_CH);
-        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_RX_CH) {
+        if (!microkit_have_signal) {
+            microkit_deferred_notify(ETH_RX_CH);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_RX_CH) {
             microkit_notify(ETH_RX_CH);
         }
     }
@@ -270,9 +270,9 @@ void mpnet_handle_notify(void) {
     if (notify_tx && net_require_signal_active(&state.tx_queue)) {
         net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
-        if (!have_signal) {
-            microkit_notify_delayed(ETH_TX_CH);
-        } else if (signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_TX_CH) {
+        if (!microkit_have_signal) {
+            microkit_deferred_notify(ETH_TX_CH);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_TX_CH) {
             microkit_notify(ETH_TX_CH);
         }
     }
