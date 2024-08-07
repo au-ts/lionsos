@@ -19,6 +19,9 @@
 [submodule "microdot"]
 	path = dep/microdot
 	url = https://github.com/miguelgrinberg/microdot.git
+[submodule "FiberPool"]
+	path = components/fs/fat/FiberPool
+	url = https://github.com/Cheng-Li1/FiberPool
 [submodule "libmicrokitco"]
 	path = dep/libmicrokitco
 	url = https://github.com/au-ts/libmicrokitco.git
