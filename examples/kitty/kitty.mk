@@ -20,8 +20,8 @@ LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 # VMM_IMAGE_DIR := ${KITTY_DIR}/src/vmm/images
 VMM_IMAGE_DIR := ${KITTY_DIR}/board/$(MICROKIT_BOARD)/framebuffer_vmm_images
 VMM_SRC_DIR := ${KITTY_DIR}/src/vmm
-LINUX := $(VMM_IMAGE_DIR)/linux
-INITRD := $(VMM_IMAGE_DIR)/rootfs.cpio.gz
+LINUX := $(abspath linux)
+INITRD := $(abspath rootfs.cpio.gz)
 DTS := $(VMM_IMAGE_DIR)/linux.dts
 DTB := linux.dtb
 
