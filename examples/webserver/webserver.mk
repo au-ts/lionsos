@@ -32,8 +32,6 @@ RANLIB := llvm-ranlib
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 
-LWIP=$(SDDF)/network/ipstacks/lwip/src
-LIBNFS=$(LIONSOS)/dep/libnfs
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL=$(LIONSOS)/dep/musllibc
 MICRODOT := ${LIONSOS}/dep/microdot/src
@@ -54,6 +52,7 @@ CFLAGS := \
 	-I$(BOARD_DIR)/include \
 	-target $(TARGET) \
 	-DBOARD_$(MICROKIT_BOARD) \
+	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(CONFIG_INCLUDE)
 
@@ -93,39 +92,6 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 %.py: ${WEBSERVER_SRC_DIR}/%.py
 	cp $< $@
 
-musllibc/lib/libc.a: ${MUSL}/Makefile
-	make -C $(MUSL) \
-		C_COMPILER=aarch64-none-elf-gcc \
-		TOOLPREFIX=aarch64-none-elf- \
-		CONFIG_ARCH_AARCH64=y \
-		STAGE_DIR=$(abspath ./musllibc) \
-		SOURCE_DIR=.
-
-libnfs/lib/libnfs.a: musllibc/lib/libc.a ${LIBNFS}/include
-	MUSL=$(abspath musllibc) cmake -S $(LIBNFS) -B libnfs
-	cmake --build libnfs
-
-nfs/nfs.a: musllibc/lib/libc.a ${LIBNFS}/include FORCE
-	make -C $(NFS) \
-		BUILD_DIR=$(abspath nfs) \
-		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
-		MUSLLIBC_INCLUDE=$(abspath musllibc/include) \
-		LIBNFS_INCLUDE=$(abspath $(LIBNFS)/include) \
-		CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE))
-
-nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
-	$(LD) \
-		$(LDFLAGS) \
-		nfs/nfs.a \
-		-Llibnfs/lib \
-		-Lmusllibc/lib \
-		-L$(LIBGCC) \
-		-lgcc \
-		-lc \
-		$(LIBS) \
-		-lnfs \
-		-o nfs.elf
-
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
@@ -137,6 +103,7 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 		  ${SDDF}/serial/components/serial_components.mk
 
 include ${SDDF_MAKEFILES}
+include $(NFS)/nfs.mk
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
@@ -162,7 +129,7 @@ mpy-cross: FORCE  ${LIONSOS}/dep/micropython/mpy-cross
 ${LIBNFS}/include:
 	cd ${LIONSOS}; git submodule update --init $(LIONSOS)/dep/libnfs
 
-$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:	
+$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
 	cd ${LIONSOS}; git submodule update --init dep/micropython
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 ${LIONSOS}/dep/libmicrokitco/Makefile:
