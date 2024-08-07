@@ -151,7 +151,7 @@
         <map mr="serial_tx_data_nfs" vaddr="0x4_009_000" perms="r" cached="true"/>
     </protection_domain>
 
-    <protection_domain name="nfs" priority="98">
+    <protection_domain name="nfs" priority="98" stack_size="0x10000">
         <program_image path="nfs.elf" />
         <map mr="eth_rx_free_nfs" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
         <map mr="eth_rx_active_nfs" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
