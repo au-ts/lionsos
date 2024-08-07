@@ -72,8 +72,8 @@ class KittyDisplay(framebuf.FrameBuffer):
 
 
 ################## DISPLAY GLOBALS ###################
-display_width = 1050
-display_height = 500
+display_width = 1100
+display_height = 900
 display = None
 wri = None
 ######################################################
@@ -354,4 +354,9 @@ def run(ip = "172.16.0.2", i2c_flag = True, nfs_flag = True, width = 1050, heigh
     IP_ADDRESS = ip
     asyncio.run(main())
 
-print("\033[95m\nWelcome to Kitty!\nUsage: kitty.run(String IP_ADDRESS, bool I2C_ENABLE, bool NFS_ENABLE, int DISPLAY_WIDTH, int DISPLAY_HEIGHT).\033[0m")
+print("\033[95m\nWelcome to Kitty!\nUsage: kitty.run(String IP_ADDRESS, bool I2C_ENABLE, bool NFS_ENABLE, int DISPLAY_WIDTH, int DISPLAY_HEIGHT).\n\
+        IP_ADDRESS: The IP address of the kitty server.\n\
+        I2C_ENABLE: True if I2C device is enabled, False otherwise.\n\
+        NFS_ENABLE: True if NFS is available, False otherwise.\n\
+        DISPLAY_WIDTH: The width of the display.\n\
+        DISPLAY_HEIGHT: The height of the display.\033[0m")

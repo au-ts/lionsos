@@ -25,9 +25,6 @@ STATIC mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t h
     uint64_t width = mp_obj_get_int(width_obj);
     uint64_t height = mp_obj_get_int(height_obj);
 
-    printf("MODFB: width: %lu, height: %lu\n", width, height);
-    printf("MODFB: fb_width: %lu, fb_height: %lu\n", config->xres, config->yres);
-
     mp_buffer_info_t bufinfo;
     mp_get_buffer(buf_obj, &bufinfo, MP_BUFFER_READ);
     uint8_t *buf = (uint8_t *)bufinfo.buf;
@@ -38,8 +35,6 @@ STATIC mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t h
     // Scaling factor
     double scaleX = width / (double) config->xres;
     double scaleY = height / (double) config->yres;
-
-    printf("MODFB: scaleX: %f, scaleY: %f\n", scaleX, scaleY);
 
     for (int dstY = 0; dstY < config->yres; dstY++) {
         for (int dstX = 0; dstX < config->xres; dstX++) {
