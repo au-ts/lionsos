@@ -25,3 +25,4 @@ ssize_t tcp_socket_recv(int index, char *buf, ssize_t len);
 int tcp_socket_readable(int index);
 int tcp_socket_writable(int index);
 int tcp_socket_hup(int index);
+int tcp_socket_err(int index);
