@@ -225,10 +225,15 @@ async def read_from_server():
             continue
 
         info(message)
-        words = message.decode('utf-8').split()
+        words = message.decode('utf-8').split(' ', 3)
         if words[0] == '101':
             token = int(words[1])
             info(f'TOKEN = {token}')
+        elif words[0] == '100':
+            display.rect(500, 275, 1000, 100, 0x0, True)
+            wri.set_textpos(display, 275, 500)
+            wri.printstring(' '.join(words[1:]))
+            display.show()
         elif words[0] == '200':
             info("got response")
             card_id = words[2]
@@ -281,4 +286,5 @@ async def main():
         asyncio.create_task(read_card_main())
     )
 
+time.sleep(10)
 asyncio.run(main())
