@@ -9,8 +9,16 @@ $(error MICROKIT_SDK must be specified)
 endif
 override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
+ifeq ($(strip $(NFS_SERVER)),)
+$(error "NFS_SERVER must be specified: this is the hostname of the NFS server where the webserver will look for the website's files")
+endif
+
+ifeq ($(strip $(NFS_DIRECTORY)),)
+$(error "NFS_DIRECTORY must be specified: this is the path of the NFS export on the NFS server where the webserver will look for the website's files")
+endif
+
 ifeq ($(strip $(WEBSITE_DIR)),)
-$(error "WEBSITE_DIR must be specified: this is the filesystem path of the directory containing the website's files")
+$(error "WEBSITE_DIR must be specified: this is the filesystem path of the directory containing the website's files, relative to the NFS export")
 endif
 
 ifeq ($(strip $(LIBGCC)),)

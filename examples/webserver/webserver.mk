@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 # This makefile will be copied into the Build directory and used from there.
-# 
+#
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
 TOP := $(LIONSOS)/examples/webserver
@@ -22,10 +22,7 @@ RANLIB := llvm-ranlib
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 
-LWIP=$(SDDF)/network/ipstacks/lwip/src
-LIBNFS=$(LIONSOS)/dep/libnfs
 NFS=$(LIONSOS)/components/fs/nfs
-MUSL=$(LIONSOS)/dep/musllibc
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  copy.elf network_virt_rx.elf network_virt_tx.elf \
@@ -41,6 +38,7 @@ CFLAGS := \
 	-I$(BOARD_DIR)/include \
 	-target $(TARGET) \
 	-DBOARD_$(MICROKIT_BOARD) \
+	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(CONFIG_INCLUDE)
 
@@ -76,39 +74,6 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 %.py: ${WEBSERVER_SRC_DIR}/%.py
 	cp $< $@
 
-musllibc/lib/libc.a:
-	make -C $(MUSL) \
-		C_COMPILER=aarch64-none-elf-gcc \
-		TOOLPREFIX=aarch64-none-elf- \
-		CONFIG_ARCH_AARCH64=y \
-		STAGE_DIR=$(abspath ./musllibc) \
-		SOURCE_DIR=.
-
-libnfs/lib/libnfs.a: musllibc/lib/libc.a
-	MUSL=$(abspath musllibc) cmake -S $(LIBNFS) -B libnfs
-	cmake --build libnfs
-
-nfs/nfs.a: musllibc/lib/libc.a FORCE
-	make -C $(NFS) \
-		BUILD_DIR=$(abspath nfs) \
-		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
-		MUSLLIBC_INCLUDE=$(abspath musllibc/include) \
-		LIBNFS_INCLUDE=$(abspath $(LIBNFS)/include) \
-		CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE))
-
-nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
-	$(LD) \
-		$(LDFLAGS) \
-		nfs/nfs.a \
-		-Llibnfs/lib \
-		-Lmusllibc/lib \
-		-L$(LIBGCC) \
-		-lgcc \
-		-lc \
-		$(LIBS) \
-		-lnfs \
-		-o nfs.elf
-
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
@@ -118,6 +83,7 @@ include ${SDDF}/drivers/network/${PLATFORM}/eth_driver.mk
 include ${SDDF}/drivers/serial/${PLATFORM}/uart_driver.mk
 include ${SDDF}/network/components/network_components.mk
 include ${SDDF}/serial/components/serial_components.mk
+include $(NFS)/nfs.mk
 
 $(IMAGE_FILE) $(REPORT_FILE):  $(IMAGES) $(TOP)/webserver.system
 	$(MICROKIT_TOOL) $(TOP)/webserver.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)

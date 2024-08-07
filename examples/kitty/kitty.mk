@@ -57,6 +57,7 @@ CFLAGS := \
 	-I$(BOARD_DIR)/include \
 	-target $(TARGET) \
 	-DBOARD_$(MICROKIT_BOARD) \
+	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I${CONFIG_INCLUDE}
 
@@ -87,6 +88,7 @@ include ${SDDF}/network/components/network_components.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/i2c/components/i2c_virt.mk
 include ${SDDF}/libco/libco.mk
+include ${LIONSOS}/components/fs/nfs/nfs.mk
 
 # Build the VMM for graphics
 VMM_OBJS := vmm.o package_guest_images.o
@@ -128,39 +130,6 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 			ENABLE_I2C=1 \
 			ENABLE_FRAMEBUFFER=1 \
 			V=1
-
-musllibc/lib/libc.a:
-	make -C $(MUSL) \
-		C_COMPILER=aarch64-none-elf-gcc \
-		TOOLPREFIX=aarch64-none-elf- \
-		CONFIG_ARCH_AARCH64=y \
-		STAGE_DIR=$(abspath $(BUILD_DIR)/musllibc) \
-		SOURCE_DIR=.
-
-libnfs/lib/libnfs.a: musllibc/lib/libc.a
-	MUSL=$(abspath musllibc) cmake -S $(LIBNFS) -B libnfs
-	cmake --build libnfs
-
-nfs/nfs.a: musllibc/lib/libc.a FORCE
-	make -C $(NFS) \
-		BUILD_DIR=$(abspath $(BUILD_DIR)/nfs) \
-		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
-		MUSLLIBC_INCLUDE=$(abspath musllibc/include) \
-		LIBNFS_INCLUDE=$(abspath $(LIBNFS)/include) \
-		CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE))
-
-nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
-	$(LD) \
-		$(LDFLAGS) \
-		nfs/nfs.a \
-		-Llibnfs/lib \
-		-Lmusllibc/lib \
-		-L$(LIBGCC) \
-		-lgcc \
-		-lc \
-		$(LIBS) \
-		-lnfs \
-		-o nfs.elf
 
 ${IMAGES}: libsddf_util_debug.a
 
