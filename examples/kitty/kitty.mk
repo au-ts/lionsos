@@ -19,8 +19,8 @@ SDDF := $(LIONSOS)/dep/sddf
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 
 VMM_IMAGE_DIR := ${KITTY_DIR}/src/vmm/images
-LINUX := $(abspath linux)
-INITRD := $(abspath rootfs.cpio.gz)
+LINUX := linux
+INITRD := rootfs.cpio.gz
 DTS := $(VMM_IMAGE_DIR)/linux.dts
 DTB := linux.dtb
 
@@ -73,7 +73,6 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
@@ -124,6 +123,7 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
 			ENABLE_I2C=1 \
 			ENABLE_FRAMEBUFFER=1 \
+			EXEC_MODULE="kitty.py" \
 			V=1
 
 musllibc/lib/libc.a:
@@ -174,3 +174,11 @@ FORCE:
 
 mpy-cross: FORCE
 	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
+
+# If you want to use your own VM for the graphics driver
+# then change these lines
+${LINUX}:
+	curl -L ${LIONSOS_DOWNLOADS}/$(KITTY_GRAPHICS_VM_LINUX) -o $@
+
+${INITRD}:
+	curl -L ${LIONSOS_DOWNLOADS}/$(KITTY_GRAPHICS_VM_ROOTFS) -o $@
