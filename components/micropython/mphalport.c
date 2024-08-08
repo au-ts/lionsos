@@ -21,7 +21,7 @@ int mp_hal_stdin_rx_chr(void) {
     }
 
     // Dequeue buffer and return char
-        
+
     int ret = serial_dequeue(&serial_rx_queue_handle,
                              &serial_rx_queue_handle.queue->head,
                              &c);

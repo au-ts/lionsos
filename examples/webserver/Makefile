@@ -19,12 +19,10 @@ endif
 
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
-export MICROKIT_BOARD := odroidc4
+export MICROKIT_BOARD := $(MICROKIT_BOARD)
 export CONFIG_INCLUDE ?= $(abspath config)
 export WEBSERVER_SRC_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 export LIONSOS := $(abspath ../..)
-
-
 
 IMAGE_FILE := $(BUILD_DIR)/webserver.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
@@ -32,8 +30,8 @@ nproc:= $(shell sh -c "if test -f /proc/cpuinfo; then grep processor /proc/cpuin
 
 all: ${IMAGE_FILE}
 
-${IMAGE_FILE}: ${BUILD_DIR}/Makefile FORCE
-	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK}  $(notdir $@) 
+qemu ${IMAGE_FILE}: ${BUILD_DIR}/Makefile FORCE
+	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK}  $(notdir $@)
 
 ${BUILD_DIR}/Makefile: webserver.mk
 	mkdir -p ${BUILD_DIR}
