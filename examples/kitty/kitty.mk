@@ -19,8 +19,8 @@ SDDF := $(LIONSOS)/dep/sddf
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 
 VMM_IMAGE_DIR := ${KITTY_DIR}/src/vmm/images
-LINUX := $(abspath linux)
-INITRD := $(abspath rootfs.cpio.gz)
+LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
+INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
 DTS := $(VMM_IMAGE_DIR)/linux.dts
 DTB := linux.dtb
 
@@ -91,6 +91,9 @@ include ${SDDF}/libco/libco.mk
 # Build the VMM for graphics
 VMM_OBJS := vmm.o package_guest_images.o
 VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}:${VMM_IMAGE_DIR}/..
+
+$(INITRD) $(LINUX):
+	curl -L https://lionsos.org/downloads/examples/kitty/$@ -o $@
 
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $< > $@
