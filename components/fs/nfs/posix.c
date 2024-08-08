@@ -7,6 +7,7 @@
 
 #include <stdarg.h>
 #include <bits/syscall.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <errno.h>
 #include <sys/time.h>
@@ -24,7 +25,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
+#include <sddf/serial/queue.h>
 
+#include "nfs.h"
 #include "posix.h"
 #include "tcp.h"
 #include "util.h"
@@ -69,11 +72,32 @@ int socket_refcount[MAX_SOCKETS];
 
 static size_t output(void *data, size_t count)
 {
+    char *src = data;
+    uint32_t sent = 0;
+    while (sent < count)
+    {
+        char *nl = memchr(src, '\n', count - sent);
+        uint32_t stop = (nl == NULL)? count - sent: nl - src;
+        /* Enqueue to the first '\n' character, end of string
+           or until queue is full */
+        uint32_t enq = serial_enqueue_batch(&serial_tx_queue_handle, stop, src);
+        sent += enq;
+        if (sent == count || serial_queue_free(&serial_tx_queue_handle) < 2) {
+            break;
+        }
 
-    for (size_t i = 0; i < count; i++) {
-        microkit_dbg_putc(((char *)data)[i]);
+        /* Append a '\r' character before a '\n' character */
+        serial_enqueue_batch(&serial_tx_queue_handle, 2, "\r\n");
+        sent += 1;
+        src += enq + 1;
     }
-    return count;
+
+    if (sent && serial_require_producer_signal(&serial_tx_queue_handle)) {
+        serial_cancel_producer_signal(&serial_tx_queue_handle);
+        microkit_notify(SERIAL_TX_CH);
+    }
+
+    return sent;
 }
 
 long sys_brk(va_list ap)
@@ -131,10 +155,14 @@ long sys_write(va_list ap)
 
     if (fd == 1 || fd == 2)
     {
-        for (size_t i = 0; i < count; i++) {
-            microkit_dbg_putc(((char *)buf)[i]);
+        uint32_t n = serial_enqueue_batch(&serial_tx_queue_handle, count, buf);
+
+        if (n && serial_require_producer_signal(&serial_tx_queue_handle)) {
+            serial_cancel_producer_signal(&serial_tx_queue_handle);
+            microkit_notify(SERIAL_TX_CH);
         }
-        return count;
+
+        return n;
     }
 
     return -1;

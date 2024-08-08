@@ -6,14 +6,12 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <microkit.h>
-#include "util/util.h"
-#include "arch/aarch64/vgic/vgic.h"
-#include "arch/aarch64/linux.h"
-#include "arch/aarch64/fault.h"
-#include "guest.h"
-#include "virq.h"
-#include "tcb.h"
-#include "vcpu.h"
+#include <libvmm/guest.h>
+#include <libvmm/virq.h>
+#include <libvmm/tcb.h>
+#include <libvmm/util/util.h>
+#include <libvmm/arch/aarch64/linux.h>
+#include <libvmm/arch/aarch64/fault.h>
 /* Specific to the framebuffer example */
 #include "uio.h"
 
@@ -126,16 +124,14 @@ void notified(microkit_channel ch) {
     }
 }
 
-/*
- * The primary purpose of the VMM after initialisation is to act as a fault-handler,
- * whenever our guest causes an exception, it gets delivered to this entry point for
- * the VMM to handle.
- */
-void fault(microkit_id id, microkit_msginfo msginfo) {
-    bool success = fault_handle(id, msginfo);
+seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
+    bool success = fault_handle(child, msginfo);
     if (success) {
         /* Now that we have handled the fault successfully, we reply to it so
          * that the guest can resume execution. */
-        microkit_fault_reply(microkit_msginfo_new(0, 0));
+        *reply_msginfo = microkit_msginfo_new(0, 0);
+        return seL4_True;
     }
+
+    return seL4_False;
 }

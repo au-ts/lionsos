@@ -988,3 +988,4 @@ void handle_rewinddir(fs_cmd_t cmd) {
 fail:
     reply(cmpl);
 }
+

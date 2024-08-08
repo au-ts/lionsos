@@ -12,6 +12,7 @@
 #include "vfs_fs.h"
 #include <extmod/vfs.h>
 #include <sddf/serial/queue.h>
+#include <serial_config.h>
 #include <sddf/i2c/queue.h>
 #include "lwip/init.h"
 #include "mpconfigport.h"
@@ -25,16 +26,15 @@ static co_control_t co_controller_mem;
 
 char *nfs_share;
 
-/* Shared memory regions for sDDF serial sub-system */
-uintptr_t serial_rx_free;
-uintptr_t serial_rx_active;
-uintptr_t serial_tx_free;
-uintptr_t serial_tx_active;
-uintptr_t serial_rx_data;
-uintptr_t serial_tx_data;
-
-serial_queue_handle_t serial_rx_queue;
-serial_queue_handle_t serial_tx_queue;
+/*
+ * Shared regions for Serial communication
+ */
+char *serial_rx_data;
+char *serial_tx_data;
+serial_queue_t *serial_rx_queue;
+serial_queue_t *serial_tx_queue;
+serial_queue_handle_t serial_rx_queue_handle;
+serial_queue_handle_t serial_tx_queue_handle;
 
 #ifdef ENABLE_I2C
 i2c_queue_handle_t i2c_queue_handle;
@@ -118,14 +118,10 @@ start_repl:
 }
 
 void init(void) {
-    serial_queue_init(&serial_rx_queue, (serial_queue_t *)serial_rx_free, (serial_queue_t *)serial_rx_active, false, BUFFER_SIZE, BUFFER_SIZE);
-    for (int i = 0; i < NUM_ENTRIES - 1; i++) {
-        serial_enqueue_free(&serial_rx_queue, serial_rx_data + ((i + NUM_ENTRIES) * BUFFER_SIZE), BUFFER_SIZE);
-    }
-    serial_queue_init(&serial_tx_queue, (serial_queue_t *)serial_tx_free, (serial_queue_t *)serial_tx_active, false, BUFFER_SIZE, BUFFER_SIZE);
-    for (int i = 0; i < NUM_ENTRIES - 1; i++) {
-        serial_enqueue_free(&serial_tx_queue, serial_tx_data + ((i + NUM_ENTRIES) * BUFFER_SIZE), BUFFER_SIZE);
-    }
+    serial_cli_queue_init_sys(microkit_name, &serial_rx_queue_handle,
+                              serial_rx_queue, serial_rx_data,
+                              &serial_tx_queue_handle, serial_tx_queue,
+                              serial_tx_data);
 
 #ifdef ENABLE_I2C
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);

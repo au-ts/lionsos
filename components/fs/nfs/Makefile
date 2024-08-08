@@ -16,8 +16,8 @@ ifeq ($(strip $(LIBNFS_INCLUDE)),)
 $(error LIBNFS_INCLUDE must be specified)
 endif
 
-ifeq ($(strip $(ETHERNET_CONFIG_INCLUDE)),)
-$(error ETHERNET_CONFIG_INCLUDE must be specified)
+ifeq ($(strip $(CONFIG_INCLUDE)),)
+$(error CONFIG_INCLUDE must be specified)
 endif
 
 ifeq ($(strip $(NFS_SERVER)),)
@@ -47,7 +47,7 @@ INCLUDE := \
 	-I$(SDDF)/include \
 	-I$(MUSLLIBC_INCLUDE) \
 	-I$(LIBNFS_INCLUDE) \
-	-I$(ETHERNET_CONFIG_INCLUDE) \
+	-I$(CONFIG_INCLUDE) \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
 	-I$(LIONSOS)/include
