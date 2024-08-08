@@ -156,7 +156,7 @@ config.py: ${KITTY_DIR}/board/$(MICROKIT_BOARD)/config.py
 	cp $< $@
 
 manifest.py: ${KITTY_DIR}/manifest.py
-	cp ${KITTY_DIR}/manifest.py $@
+	cp $< $@
 
 %.py: ${KITTY_DIR}/client/%.py
 	cp $< $@
@@ -164,7 +164,7 @@ manifest.py: ${KITTY_DIR}/manifest.py
 %.py: ${KITTY_DIR}/client/font/%.py
 	cp $< $@
 
-musllibc/lib/libc.a:
+musllibc/lib/libc.a: ${MUSL}
 	make -C $(MUSL) \
 		C_COMPILER=aarch64-none-elf-gcc \
 		TOOLPREFIX=aarch64-none-elf- \
