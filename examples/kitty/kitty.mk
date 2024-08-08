@@ -19,8 +19,8 @@ SDDF := $(LIONSOS)/dep/sddf
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 
 VMM_IMAGE_DIR := ${KITTY_DIR}/src/vmm/images
-LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
-INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
+LINUX := linux
+INITRD := rootfs.cpio.gz
 DTS := $(VMM_IMAGE_DIR)/linux.dts
 DTB := linux.dtb
 
@@ -28,7 +28,7 @@ LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBNFS := $(LIONSOS)/dep/libnfs
 NFS := $(LIONSOS)/components/fs/nfs
 MUSL := $(LIONSOS)/dep/musllibc
-
+LIONSOS_DOWNLOADS := https://lionsos.org/downloads/examples/kitty
 # I2C config
 I2C_BUS_NUM=2
 
@@ -77,16 +77,18 @@ ${CHECK_FLAGS_BOARD_MD5}:
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
-include ${SDDF}/util/util.mk
+SDDF_MAKEFILES := ${SDDF}/util/util.mk \
+	${SDDF}/drivers/clock/${PLATFORM}/timer_driver.mk \
+	${SDDF}/drivers/network/${PLATFORM}/eth_driver.mk \
+	${SDDF}/drivers/i2c/${PLATFORM}/i2c_driver.mk \
+	${SDDF}/drivers/serial/${PLATFORM}/uart_driver.mk \
+	${SDDF}/network/components/network_components.mk \
+	${SDDF}/serial/components/serial_components.mk \
+	${SDDF}/i2c/components/i2c_virt.mk \
+	${SDDF}/libco/libco.mk
+
+include ${SDDF_MAKEFILES}
 include ${LIBVMM_DIR}/vmm.mk
-include ${SDDF}/drivers/clock/${PLATFORM}/timer_driver.mk
-include ${SDDF}/drivers/network/${PLATFORM}/eth_driver.mk
-include ${SDDF}/drivers/i2c/${PLATFORM}/i2c_driver.mk
-include ${SDDF}/drivers/serial/${PLATFORM}/uart_driver.mk
-include ${SDDF}/network/components/network_components.mk
-include ${SDDF}/serial/components/serial_components.mk
-include ${SDDF}/i2c/components/i2c_virt.mk
-include ${SDDF}/libco/libco.mk
 
 # Build the VMM for graphics
 VMM_OBJS := vmm.o package_guest_images.o
@@ -110,9 +112,6 @@ package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
 
 vmm.elf: ${VMM_OBJS} libvmm.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
-# Build with two threads in parallel
-nproc=2
 
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
@@ -141,7 +140,7 @@ libnfs/lib/libnfs.a: musllibc/lib/libc.a
 	MUSL=$(abspath musllibc) cmake -S $(LIBNFS) -B libnfs
 	cmake --build libnfs
 
-nfs/nfs.a: musllibc/lib/libc.a FORCE
+nfs/nfs.a: musllibc/lib/libc.a FORCE |${LIBNFS}/nfs
 	make -C $(NFS) \
 		BUILD_DIR=$(abspath $(BUILD_DIR)/nfs) \
 		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
@@ -164,7 +163,7 @@ nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
 
 ${IMAGES}: libsddf_util_debug.a
 
-%.o: %.c
+%.o: %.c ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${KITTY_DIR}/kitty.system
@@ -172,8 +171,34 @@ $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${KITTY_DIR}/kitty.system
 
 FORCE:
 
-%.elf: %.o
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
-
-mpy-cross: FORCE
+mpy-cross: FORCE ${LIONSOS}/dep/micropython/mpy-cross
 	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
+
+# If you want to use your own VM for the graphics driver
+# then change these lines or just make sure you've already put
+# linux and rootfs.cpio.gz into the Build directory
+${LINUX}:
+	curl -L ${LIONSOS_DOWNLOADS}/$(KITTY_GRAPHICS_VM_LINUX) -o $@
+
+${INITRD}:
+	curl -L ${LIONSOS_DOWNLOADS}/$(KITTY_GRAPHICS_VM_ROOTFS) -o $@
+
+# Because we include the *.mk files they are an implicit dependency
+# for the build.  These rules instantiate the submodules that
+# include the makefiles.
+${LIBVMM_DIR}/vmm.mk:
+	git submodule update --init $(LIONSOS)/dep/libvmm
+
+${LIBNFS}/nfs:
+	git submodule update --init $(LIONSOS)/dep/libnfs
+
+$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:	
+	git submodule update --init $(LIONSOS)/dep/micropython
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+
+	git submodule update --init $(LIONSOS)/dep/musllibc
+	git submodule update --init $(LIONSOS)/dep/libmicrokitco
+
+${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &: 
+	git submodule update --init $(LIONSOS)/dep/sddf
+
