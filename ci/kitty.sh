@@ -23,6 +23,5 @@ export MICROKIT_SDK=$MICROKIT_SDK
 export LIONSOS=$LIONSOS
 
 cd $LIONSOS/examples/kitty
-make submodules
 make
 
