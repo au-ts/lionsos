@@ -94,9 +94,6 @@ include ${LIBVMM_DIR}/vmm.mk
 VMM_OBJS := vmm.o package_guest_images.o
 VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}:${VMM_IMAGE_DIR}/..
 
-$(INITRD) $(LINUX):
-	curl -L https://lionsos.org/downloads/examples/kitty/$@ -o $@
-
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $< > $@
 
@@ -128,7 +125,7 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 			ENABLE_FRAMEBUFFER=1 \
 			V=1
 
-musllibc/lib/libc.a:
+musllibc/lib/libc.a: ${MUSL}
 	make -C $(MUSL) \
 		C_COMPILER=aarch64-none-elf-gcc \
 		TOOLPREFIX=aarch64-none-elf- \
@@ -196,8 +193,11 @@ $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
 	git submodule update --init $(LIONSOS)/dep/micropython
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
-	git submodule update --init $(LIONSOS)/dep/musllibc
 	git submodule update --init $(LIONSOS)/dep/libmicrokitco
+
+${MUSL}:
+	git submodule update --init $(LIONSOS)/dep/musllibc
+
 
 ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &: 
 	git submodule update --init $(LIONSOS)/dep/sddf
