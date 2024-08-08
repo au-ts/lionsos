@@ -96,18 +96,19 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
-	${SDDF}/drivers/clock/${PLATFORM}/timer_driver.mk \
-	${SDDF}/drivers/network/${PLATFORM}/eth_driver.mk \
-	${SDDF}/drivers/i2c/${PLATFORM}/i2c_driver.mk \
-	${SDDF}/drivers/serial/${PLATFORM}/uart_driver.mk \
+	${SDDF}/drivers/clock/${TIMER_DRIV_DIR}/timer_driver.mk \
+	${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
+	${SDDF}/drivers/serial/${UART_DRIVER_DIR}/uart_driver.mk \
 	${SDDF}/network/components/network_components.mk \
 	${SDDF}/serial/components/serial_components.mk \
+	${SDDF}/i2c/components/i2c_virt.mk \
 	${SDDF}/libco/libco.mk
 
 # We can build the kitty system without the I2C Driver
 ifneq ($(I2C_DRIV_DIR), )
 SDDF_MAKFILES += ${SDDF}/drivers/i2c/${I2C_DRIV_DIR}/i2c_driver.mk
 endif
+
 include ${SDDF_MAKEFILES}
 include ${LIBVMM_DIR}/vmm.mk
 
