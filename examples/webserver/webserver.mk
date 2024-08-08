@@ -47,6 +47,8 @@ CFLAGS := \
 	-mstrict-align \
 	-ffreestanding \
 	-O3 \
+	-MD \
+	-MP \
 	-Wall \
 	-Wno-unused-function \
 	-I$(BOARD_DIR)/include \
