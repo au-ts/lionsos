@@ -12,8 +12,8 @@ struct fs_queue *nfs_completion_queue;
 
 #define REQUEST_ID_MAXIMUM (FS_QUEUE_CAPACITY - 1)
 struct request_metadata {
-    struct fs_command command;
-    struct fs_completion completion;
+    fs_cmd_t command;
+    fs_cmpl_t completion;
     bool used;
     bool complete;
 } request_metadata[FS_QUEUE_CAPACITY];
@@ -59,49 +59,41 @@ void fs_buffer_free(ptrdiff_t buffer) {
     buffer_metadata[i].used = false;
 }
 
-char *fs_buffer_ptr(ptrdiff_t buffer) {
+void *fs_buffer_ptr(ptrdiff_t buffer) {
     return nfs_share + buffer;
 }
 
 void fs_process_completions(void) {
-    union fs_message message;
-    while (fs_queue_pop(nfs_completion_queue, &message)) {
-        struct fs_completion completion = message.completion;
+    fs_msg_t message;
+    uint64_t to_consume = fs_queue_size_consumer(nfs_completion_queue);
+    for (uint64_t i = 0; i < to_consume; i++) {
+        fs_cmpl_t completion = fs_queue_idx_filled(nfs_completion_queue, i)->cmpl;
 
-        if (completion.request_id > REQUEST_ID_MAXIMUM) {
-            printf("received bad fs completion: invalid request id: %lu\n", completion.request_id);
+        if (completion.id > REQUEST_ID_MAXIMUM) {
+            printf("received bad fs completion: invalid request id: %lu\n", completion.id);
             continue;
         }
 
-        request_metadata[completion.request_id].completion = completion;
-        request_metadata[completion.request_id].complete = true;
-        fs_request_flag_set(completion.request_id);
+        request_metadata[completion.id].completion = completion;
+        request_metadata[completion.id].complete = true;
+        fs_request_flag_set(completion.id);
     }
+    fs_queue_publish_consumption(nfs_completion_queue, to_consume);
 }
 
-void fs_command_issue(uint64_t request_id, uint32_t cmd_type, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3) {
-    assert(request_id <= REQUEST_ID_MAXIMUM);
-    assert(request_metadata[request_id].used);
+void fs_command_issue(fs_cmd_t cmd) {
+    assert(cmd.id <= REQUEST_ID_MAXIMUM);
+    assert(request_metadata[cmd.id].used);
 
-    union fs_message message;
-    message.command = (struct fs_command) {
-        .request_id = request_id,
-        .cmd_type = cmd_type,
-        .args = {
-            [0] = arg0,
-            [1] = arg1,
-            [2] = arg2,
-            [3] = arg3,
-        }
-    };
-    bool success = fs_queue_push(nfs_command_queue, message);
-    assert(success);
+    fs_msg_t message = { .cmd = cmd };
+    assert(fs_queue_size_producer(nfs_command_queue) != FS_QUEUE_CAPACITY);
+    *fs_queue_idx_empty(nfs_command_queue, 0) = message;
+    fs_queue_publish_production(nfs_command_queue, 1);
     microkit_notify(NFS_CH);
-
-    request_metadata[request_id].command = message.command;
+    request_metadata[cmd.id].command = cmd;
 }
 
-void fs_command_complete(uint64_t request_id, struct fs_command *command, struct fs_completion *completion) {
+void fs_command_complete(uint64_t request_id, fs_cmd_t *command, fs_cmpl_t *completion) {
     assert(request_metadata[request_id].complete);
     if (command != NULL) {
         *command = request_metadata[request_id].command;
@@ -111,15 +103,15 @@ void fs_command_complete(uint64_t request_id, struct fs_command *command, struct
     }
 }
 
-int fs_command_blocking(struct fs_completion *completion, uint32_t cmd_type, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3) {
+int fs_command_blocking(fs_cmpl_t *completion, fs_cmd_t cmd) {
     uint64_t request_id;
     int err = fs_request_allocate(&request_id);
     if (err) {
         return -1;
     }
+    cmd.id = request_id;
 
-    fs_command_issue(request_id, cmd_type, arg0, arg1, arg2, arg3);
-
+    fs_command_issue(cmd);
     while (!request_metadata[request_id].complete) {
         microkit_cothread_wait_on_channel(NFS_CH);
     }

@@ -92,8 +92,11 @@ start_repl:
     gc_init(heap, heap + sizeof(heap));
     mp_init();
 
-    init_nfs();
     init_networking();
+    // initialisation of the filesystem utilises the event loop and the event
+    // loop unconditionally tries to process incoming network buffers; therefore
+    // the networking needs to be initialised before initialising the fs
+    init_nfs();
 
     // Start a normal REPL; will exit when ctrl-D is entered on a blank line.
 #ifndef EXEC_MODULE
