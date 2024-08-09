@@ -164,7 +164,7 @@ manifest.py: ${KITTY_DIR}/manifest.py
 %.py: ${KITTY_DIR}/client/font/%.py
 	cp $< $@
 
-musllibc/lib/libc.a: ${MUSL}
+musllibc/lib/libc.a: ${MUSL}/Makefile
 	make -C $(MUSL) \
 		C_COMPILER=aarch64-none-elf-gcc \
 		TOOLPREFIX=aarch64-none-elf- \
