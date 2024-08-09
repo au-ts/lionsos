@@ -37,6 +37,7 @@ LWIP=$(SDDF)/network/ipstacks/lwip/src
 LIBNFS=$(LIONSOS)/dep/libnfs
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL=$(LIONSOS)/dep/musllibc
+MICRODOT := ${LIONSOS}/dep/microdot/src
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  copy.elf network_virt_rx.elf network_virt_tx.elf \
@@ -72,7 +73,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-micropython.elf: mpy-cross manifest.py webserver.py config.py
+micropython.elf: mpy-cross manifest.py webserver.py config.py ${MICRODOT}
 	make -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -89,7 +90,7 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 %.py: ${WEBSERVER_SRC_DIR}/%.py
 	cp $< $@
 
-musllibc/lib/libc.a:
+musllibc/lib/libc.a: ${MUSL}/Makefile
 	make -C $(MUSL) \
 		C_COMPILER=aarch64-none-elf-gcc \
 		TOOLPREFIX=aarch64-none-elf- \
@@ -97,7 +98,7 @@ musllibc/lib/libc.a:
 		STAGE_DIR=$(abspath ./musllibc) \
 		SOURCE_DIR=.
 
-libnfs/lib/libnfs.a: musllibc/lib/libc.a
+libnfs/lib/libnfs.a: musllibc/lib/libc.a ${LIBNFS}
 	MUSL=$(abspath musllibc) cmake -S $(LIBNFS) -B libnfs
 	cmake --build libnfs
 
@@ -125,12 +126,14 @@ nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-include ${SDDF}/util/util.mk
-include ${SDDF}/drivers/clock/${TIMER_DRIVER_DIR}/timer_driver.mk
-include ${SDDF}/drivers/network/${ETHERNET_DRIVER_DIR}/eth_driver.mk
-include ${SDDF}/drivers/serial/${UART_DRIVER_DIR}/uart_driver.mk
-include ${SDDF}/network/components/network_components.mk
-include ${SDDF}/serial/components/serial_components.mk
+SDDF_MAKEFILES := ${SDDF}/util/util.mk \
+		  ${SDDF}/drivers/clock/${PLATFORM}/timer_driver.mk \
+		  ${SDDF}/drivers/network/${PLATFORM}/eth_driver.mk \
+		  ${SDDF}/drivers/serial/${PLATFORM}/uart_driver.mk \
+		  ${SDDF}/network/components/network_components.mk \
+		  ${SDDF}/serial/components/serial_components.mk
+
+include ${SDDF_MAKEFILES}
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
@@ -148,7 +151,25 @@ qemu: ${IMAGE_FILE}
 
 FORCE: ;
 
-mpy-cross: FORCE
+mpy-cross: FORCE  ${LIONSOS}/dep/micropython/mpy-cross
 	make -C $(LIONSOS)/dep/micropython/mpy-cross
 
-.PHONY: mpy-cross submodules
+.PHONY: mpy-cross
+
+${LIBNFS}:
+	git submodule update --init $(LIONSOS)/dep/libnfs
+
+$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:	
+	git submodule update --init $(LIONSOS)/dep/micropython
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+	git submodule update --init $(LIONSOS)/dep/libmicrokitco
+
+${MICRODOT}:
+	git submodule update --init $(LIONSOS)/dep/microdot
+
+${MUSL}/Makefile:
+	git submodule update --init $(LIONSOS)/dep/musllibc
+
+${SDDF_MAKEFILES} &:
+	git submodule update --init $(LIONSOS)/dep/sddf
+

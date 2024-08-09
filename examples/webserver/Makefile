@@ -31,19 +31,10 @@ nproc:= $(shell sh -c "if test -f /proc/cpuinfo; then grep processor /proc/cpuin
 all: ${IMAGE_FILE}
 
 qemu ${IMAGE_FILE}: ${BUILD_DIR}/Makefile FORCE
-	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK}  $(notdir $@)
+	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} $(notdir $@)
 
 ${BUILD_DIR}/Makefile: webserver.mk
 	mkdir -p ${BUILD_DIR}
 	cp webserver.mk $@
-
-submodules:
-	git submodule update --init $(LIONSOS)/dep/libnfs
-	git submodule update --init $(LIONSOS)/dep/microdot
-	git submodule update --init $(LIONSOS)/dep/micropython
-	git submodule update --init $(LIONSOS)/dep/musllibc
-	git submodule update --init $(LIONSOS)/dep/sddf
-	git submodule update --init $(LIONSOS)/dep/libmicrokitco
-	(cd $(LIONSOS)/dep/micropython/; git submodule update --init lib/micropython-lib)
 
 FORCE:
