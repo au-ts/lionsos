@@ -125,7 +125,7 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 			ENABLE_FRAMEBUFFER=1 \
 			V=1
 
-musllibc/lib/libc.a: ${MUSL}
+musllibc/lib/libc.a: ${MUSL}/Makefile
 	make -C $(MUSL) \
 		C_COMPILER=aarch64-none-elf-gcc \
 		TOOLPREFIX=aarch64-none-elf- \
@@ -195,8 +195,8 @@ $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
 
 	git submodule update --init $(LIONSOS)/dep/libmicrokitco
 
-${MUSL}:
-	git submodule update --init $(LIONSOS)/dep/musllibc
+${MUSL}/Makefile:
+	git submodule update --init ${MUSL}
 
 
 ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &: 
