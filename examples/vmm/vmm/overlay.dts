@@ -1,3 +1,9 @@
+/*
+ * Copyright 2024, UNSW
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 /{
 #include "vmm_ram.h"
 	// VMM puts 256Mb RAM at 0x2000000

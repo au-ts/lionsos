@@ -1,3 +1,8 @@
+/*
+ * Copyright 2024, UNSW
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 #pragma once
 
 #define UIO_INIT_ADDRESS 0x300000

@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright 2024, UNSW
+    SPDX-License-Identifier: BSD-2-Clause
+-->
 <system>
     <memory_region name="uart" size="0x1_000" phys_addr="0x9000000" />
     <memory_region name="eth" size="0x10_000" phys_addr="0xa003000" />

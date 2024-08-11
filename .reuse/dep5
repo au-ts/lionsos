@@ -1,0 +1,36 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: seL4 Device Driver Framework
+Source: https://github.com/au-ts/sddf
+
+Files:
+    CHANGES.md
+    .gitignore
+    .gitmodules
+Copyright: UNSW
+License: BSD-2-Clause
+
+Files:
+    examples/kitty/client/catwithfish.data
+    examples/kitty/client/catwithfish.png
+Copyright: UNSW
+License: CC-BY-SA-4.0
+
+# We use the Inter font which has the SIL Open Font License
+Files:
+    examples/kitty/client/font/font.py
+Copyright: The Inter Project Authors (https://github.com/rsms/inter)
+License: OFL-1.1
+
+Files:
+    examples/vmm/vmm/meson-sm1-odroid-c4.dtb
+    examples/kitty/board/odroidc4/framebuffer_vmm_images/linux_config
+    examples/kitty/board/qemu_virt_aarch64/framebuffer_vmm_images/linux_config
+    */linux.dts
+Copyright: Linux
+License: GPL-2.0-or-later
+
+Files:
+    examples/kitty/board/odroidc4/framebuffer_vmm_images/buildroot_config
+    examples/kitty/board/qemu_virt_aarch64/framebuffer_vmm_images/buildroot_config
+Copyright: Buildroot
+License: GPL-2.0-or-later

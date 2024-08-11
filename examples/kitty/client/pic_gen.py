@@ -1,3 +1,6 @@
+# Copyright 2024, UNSW
+# SPDX-License-Identifier: BSD-2-Clause
+
 import png
 
 data = list(png.Reader("catwithfish.png").read()[2])

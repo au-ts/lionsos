@@ -1,3 +1,5 @@
+# Copyright 2024, UNSW
+# SPDX-License-Identifier: BSD-2-Clause
 #
 # The purpose of this script is to do all the client side
 # 'business logic' for the Kitty system. This includes:

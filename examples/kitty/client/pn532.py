@@ -1,3 +1,5 @@
+# Copyright 2024, UNSW
+# SPDX-License-Identifier: BSD-2-Clause
 
 # We must ignore these imports since they are not available in a normal Python
 # environment where we do the type checking

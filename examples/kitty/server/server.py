@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# Copyright 2024, UNSW
+# SPDX-License-Identifier: BSD-2-Clause
+
 # This Python script acts as a demo server to test simple
 # client to server interactions for the Kitty system.
 # It is a stripped down version of the real Kitty server that
