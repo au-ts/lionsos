@@ -1,4 +1,10 @@
+/*
+ * Copyright 2024, UNSW
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 #pragma once
+
 #ifndef KITTY_ETHERNET_CONFIG_H
 #define KITTY_ETHERNET_CONFIG_H
 

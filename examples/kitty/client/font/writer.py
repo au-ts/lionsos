@@ -10,6 +10,7 @@
 
 # Released under the MIT License (MIT). See LICENSE.
 # Copyright (c) 2019-2021 Peter Hinch
+# SPDX-License-Identifier: MIT
 
 # A Writer supports rendering text to a Display instance in a given font.
 # Multiple Writer instances may be created, each rendering a font to the

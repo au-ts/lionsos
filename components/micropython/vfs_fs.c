@@ -1,3 +1,8 @@
+/*
+ * Copyright 2024, UNSW
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 #include "py/runtime.h"
 #include "py/mperrno.h"
 #include "py/mphal.h"

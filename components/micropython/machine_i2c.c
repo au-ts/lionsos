@@ -1,3 +1,8 @@
+/*
+ * Copyright 2024, UNSW
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 #include <microkit.h>
 #include <sddf/i2c/queue.h>
 #include <sddf/i2c/client.h>

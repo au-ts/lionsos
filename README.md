@@ -1,3 +1,8 @@
+<!--
+     Copyright 2024, UNSW
+     SPDX-License-Identifier: CC-BY-SA-4.0
+-->
+
 # The Lions Operating System
 
 This is the source code for LionsOS, an operating system based on the
