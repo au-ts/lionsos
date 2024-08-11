@@ -72,7 +72,7 @@
     <memory_region name="i2c_micropython_data_region" size="0x1_000" />
 
     <!-- shared memory for micropython/nfs queue -->
-    <memory_region name="shared_nfs_micropython" size="0x4000000" />
+    <memory_region name="shared_nfs_micropython" size="0x4000000" page_size="0x200_000" />
     <memory_region name="nfs_command_queue" size="0x8_000" />
     <memory_region name="nfs_completion_queue" size="0x8_000" />
 
@@ -221,7 +221,7 @@
 
         <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="command_queue" />
         <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="completion_queue" />
-        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="client_share" />
+        <map mr="shared_nfs_micropython" vaddr="0x8_000_000" perms="rw" cached="true" setvar_vaddr="client_share" />
     </protection_domain>
 
     <protection_domain name="micropython" priority="1">
@@ -230,7 +230,7 @@
 
         <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="nfs_command_queue" />
         <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="nfs_completion_queue" />
-        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="nfs_share" />
+        <map mr="shared_nfs_micropython" vaddr="0x8_000_000" perms="rw" cached="true" setvar_vaddr="nfs_share" />
 
         <map mr="serial_tx_queue_micropython" vaddr="0x60_000_000" perms="rw" cached="true" setvar_vaddr="serial_tx_queue" />
         <map mr="serial_rx_queue_micropython" vaddr="0x60_001_000" perms="rw" cached="true" setvar_vaddr="serial_rx_queue" />
