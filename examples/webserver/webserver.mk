@@ -102,7 +102,7 @@ libnfs/lib/libnfs.a: musllibc/lib/libc.a ${LIBNFS}
 	MUSL=$(abspath musllibc) cmake -S $(LIBNFS) -B libnfs
 	cmake --build libnfs
 
-nfs/nfs.a: musllibc/lib/libc.a FORCE
+nfs/nfs.a: musllibc/lib/libc.a ${LIBNFS} FORCE
 	make -C $(NFS) \
 		BUILD_DIR=$(abspath nfs) \
 		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
