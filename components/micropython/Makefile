@@ -99,7 +99,6 @@ LWIP_OBJ=$(addprefix $(BUILD)/micropython/lwip/, $(LWIPFILES:.c=.o))
 SRC_C = \
 	micropython.c \
 	mphalport.c \
-	modmyport.c \
 	modtime.c \
 	mpnetworkport.c \
 	modfs_raw.c \
@@ -129,7 +128,7 @@ SRC_C = \
 	shared/netutils/netutils.c
 
 # Define source files containung qstrs.
-SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c modmyport.c vfs_fs_file.c vfs_fs.c modfs_raw.c
+SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c vfs_fs_file.c vfs_fs.c modfs_raw.c
 
 # Frozen module to execute; otherwise run REPL
 ifdef EXEC_MODULE
