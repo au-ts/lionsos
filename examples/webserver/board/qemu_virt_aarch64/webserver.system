@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <memory_region name="uart" size="0x1_000" phys_addr="0x9000000" />
+    <memory_region name="eth" size="0x10_000" phys_addr="0xa003000" />
+
+    <!-- eth driver/device ring buffer mechanism -->
+    <memory_region name="hw_ring_buffer" size="0x10_000" />
+
+    <!-- eth DMA and virtualised DMA regions -->
+    <memory_region name="eth_rx_buffer_data_region" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth_tx_buffer_data_region_nfs" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth_rx_buffer_data_region_nfs" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth_tx_buffer_data_region_micropython" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth_rx_buffer_data_region_micropython" size="0x200_000" page_size="0x200_000" />
+
+    <!-- shared memory for eth driver/eth virt queue mechanism -->
+    <memory_region name="eth_rx_free_drv" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_rx_active_drv" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_tx_free_drv" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_tx_active_drv" size="0x200_000" page_size="0x200_000"/>
+
+    <!-- shared memory for eth virt_rx/eth copy queue mechanism -->
+    <memory_region name="eth_rx_free_copy_nfs" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_rx_active_copy_nfs" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_rx_free_copy_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_rx_active_copy_micropython" size="0x200_000" page_size="0x200_000"/>
+
+    <!-- shared memory for eth copy/client queue mechanism -->
+    <memory_region name="eth_rx_free_nfs" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_rx_active_nfs" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_rx_free_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_rx_active_micropython" size="0x200_000" page_size="0x200_000"/>
+
+    <!-- shared memory for client/virt_tx queue mechanism -->
+    <memory_region name="eth_tx_free_nfs" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_tx_active_nfs" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_tx_free_micropython" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="eth_tx_active_micropython" size="0x200_000" page_size="0x200_000"/>
+
+    <!-- serial data regions -->
+    <memory_region name="serial_tx_data_driver" size="0x4_000" />
+    <memory_region name="serial_tx_data_micropython" size="0x2_000" />
+    <memory_region name="serial_tx_data_nfs" size="0x2_000" />
+
+    <!-- shared memory for serial driver/serial virt queue mechanism -->
+    <memory_region name="serial_tx_queue_driver" size="0x1_000" />
+
+    <!-- shared memory for serial virt/client queue mechanism -->
+    <memory_region name="serial_tx_queue_micropython" size="0x1_000" />
+    <memory_region name="serial_tx_queue_nfs" size="0x1_000" />
+
+    <!-- shared memory for micropython/nfs queue -->
+    <memory_region name="shared_nfs_micropython" size="0x4000000" />
+    <memory_region name="nfs_command_queue" size="0x8_000" />
+    <memory_region name="nfs_completion_queue" size="0x8_000" />
+
+    <protection_domain name="timer_driver" priority="150" pp="true" passive="true">
+        <program_image path="timer_driver.elf" />
+        <irq irq="30" id="0" /> <!-- timer interrupt -->
+    </protection_domain>
+
+    <protection_domain name="eth" priority="110" budget="100" period="400">
+        <program_image path="eth_driver.elf" />
+        <map mr="eth" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth_regs" />
+        <map mr="hw_ring_buffer" vaddr="0x2_200_000" perms="rw" cached="false" setvar_vaddr="hw_ring_buffer_vaddr" />
+
+        <map mr="eth_rx_free_drv" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
+        <map mr="eth_rx_active_drv" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
+        <map mr="eth_tx_free_drv" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
+        <map mr="eth_tx_active_drv" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
+
+        <irq irq="79" id="0" trigger="edge" /> <!--> ethernet interrupt -->
+
+        <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
+    </protection_domain>
+
+    <protection_domain name="eth_virt_rx" priority="108" budget="100" period="500" >
+        <program_image path="network_virt_rx.elf" />
+        <map mr="eth_rx_free_drv" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_drv" />
+        <map mr="eth_rx_active_drv" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_drv" />
+
+        <map mr="eth_rx_free_copy_nfs" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli0" />
+        <map mr="eth_rx_active_copy_nfs" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli0" />
+        <map mr="eth_rx_free_copy_micropython" vaddr="0x2_c00_000" perms="rw" cached="true" />
+        <map mr="eth_rx_active_copy_micropython" vaddr="0x2_e00_000" perms="rw" cached="true" />
+
+        <map mr="eth_rx_buffer_data_region" vaddr="0x3_000_000" perms="rw" cached="true" setvar_vaddr="buffer_data_vaddr" />
+        <setvar symbol="buffer_data_paddr" region_paddr="eth_rx_buffer_data_region" />
+    </protection_domain>
+
+    <protection_domain name="eth_copy_nfs" priority="99" budget="100" period="500" >
+        <program_image path="copy.elf" />
+        <map mr="eth_rx_free_copy_nfs" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_virt" />
+        <map mr="eth_rx_active_copy_nfs" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_virt" />
+
+        <map mr="eth_rx_free_nfs" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli" />
+        <map mr="eth_rx_active_nfs" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli" />
+
+        <map mr="eth_rx_buffer_data_region" vaddr="0x2_800_000" perms="r" cached="true" setvar_vaddr="virt_buffer_data_region" />
+        <map mr="eth_rx_buffer_data_region_nfs" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="cli_buffer_data_region" />
+    </protection_domain>
+
+    <protection_domain name="eth_copy_mp" priority="97" budget="20000" >
+        <program_image path="copy.elf" />
+        <map mr="eth_rx_free_copy_micropython" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_virt" />
+        <map mr="eth_rx_active_copy_micropython" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_virt" />
+
+        <map mr="eth_rx_free_micropython" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli" />
+        <map mr="eth_rx_active_micropython" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli" />
+
+        <map mr="eth_rx_buffer_data_region" vaddr="0x2_800_000" perms="r" cached="true" setvar_vaddr="virt_buffer_data_region" />
+        <map mr="eth_rx_buffer_data_region_micropython" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="cli_buffer_data_region" />
+    </protection_domain>
+
+    <protection_domain name="eth_virt_tx" priority="109" budget="100" period="500" >
+        <program_image path="network_virt_tx.elf" />
+        <map mr="eth_tx_free_drv" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="tx_free_drv" />
+        <map mr="eth_tx_active_drv" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="tx_active_drv" />
+
+        <map mr="eth_tx_free_nfs" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="tx_free_cli0" />
+        <map mr="eth_tx_active_nfs" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="tx_active_cli0" />
+        <map mr="eth_tx_free_micropython" vaddr="0x2_c00_000" perms="rw" cached="true" />
+        <map mr="eth_tx_active_micropython" vaddr="0x2_e00_000" perms="rw" cached="true" />
+
+        <map mr="eth_tx_buffer_data_region_nfs" vaddr="0x3_200_000" perms="rw" cached="true" setvar_vaddr="buffer_data_region_cli0_vaddr" />
+        <map mr="eth_tx_buffer_data_region_micropython" vaddr="0x3_400_000" perms="rw" cached="true" />
+        <setvar symbol="buffer_data_region_cli0_paddr" region_paddr="eth_tx_buffer_data_region_nfs" />
+        <setvar symbol="buffer_data_region_cli1_paddr" region_paddr="eth_tx_buffer_data_region_micropython" />
+    </protection_domain>
+
+    <protection_domain name="uart_driver" priority="100">
+        <program_image path="uart_driver.elf" />
+        <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+
+        <map mr="serial_tx_queue_driver" vaddr="0x4_001_000" perms="rw" cached="true" setvar_vaddr="tx_queue" />
+        <map mr="serial_tx_data_driver" vaddr="0x4_004_000" perms="rw" cached="true" setvar_vaddr="tx_data" />
+
+        <irq irq="33" id="0" /> <!-- UART interrupt -->
+    </protection_domain>
+
+    <protection_domain name="serial_virt_tx" priority="99">
+        <program_image path="serial_virt_tx.elf" />
+        <map mr="serial_tx_queue_driver" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="tx_queue_drv" />
+        <map mr="serial_tx_queue_micropython" vaddr="0x4_001_000" perms="rw" cached="true" setvar_vaddr="tx_queue_cli0" />
+        <map mr="serial_tx_queue_nfs" vaddr="0x4_002_000" perms="rw" cached="true"/>
+
+        <map mr="serial_tx_data_driver" vaddr="0x4_003_000" perms="rw" cached="true" setvar_vaddr="tx_data_drv" />
+        <map mr="serial_tx_data_micropython" vaddr="0x4_007_000" perms="r" cached="true" setvar_vaddr="tx_data_cli0" />
+        <map mr="serial_tx_data_nfs" vaddr="0x4_009_000" perms="r" cached="true"/>
+    </protection_domain>
+
+    <protection_domain name="nfs" priority="98" stack_size="0x10000">
+        <program_image path="nfs.elf" />
+        <map mr="eth_rx_free_nfs" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
+        <map mr="eth_rx_active_nfs" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
+        <map mr="eth_tx_free_nfs" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
+        <map mr="eth_tx_active_nfs" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
+        <map mr="eth_rx_buffer_data_region_nfs" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="rx_buffer_data_region" />
+        <map mr="eth_tx_buffer_data_region_nfs" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="tx_buffer_data_region" />
+
+        <map mr="serial_tx_queue_nfs" vaddr="0x3_000_000" perms="rw" cached="true" setvar_vaddr="serial_tx_queue" />
+        <map mr="serial_tx_data_nfs" vaddr="0x3_001_000" perms="rw" cached="true" setvar_vaddr="serial_tx_data" />
+
+        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="command_queue" />
+        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="completion_queue" />
+        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="client_share" />
+    </protection_domain>
+
+    <protection_domain name="micropython" priority="1">
+        <program_image path="micropython.elf" />
+
+        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="nfs_command_queue" />
+        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="nfs_completion_queue" />
+        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="nfs_share" />
+
+        <map mr="serial_tx_queue_micropython" vaddr="0x60_000_000" perms="rw" cached="true" setvar_vaddr="serial_tx_queue" />
+        <map mr="serial_tx_data_micropython" vaddr="0x60_002_000" perms="rw" cached="true" setvar_vaddr="serial_tx_data" />
+
+        <map mr="eth_rx_free_micropython" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
+        <map mr="eth_rx_active_micropython" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
+        <map mr="eth_tx_free_micropython" vaddr="0x3_400_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
+        <map mr="eth_tx_active_micropython" vaddr="0x3_600_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
+
+        <map mr="eth_rx_buffer_data_region_micropython" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_buffer_data_region" />
+        <map mr="eth_tx_buffer_data_region_micropython" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="tx_buffer_data_region" />
+    </protection_domain>
+
+    <channel>
+        <end pd="eth" id="2" />
+        <end pd="eth_virt_rx" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="eth" id="1" />
+        <end pd="eth_virt_tx" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="eth_virt_rx" id="1" />
+        <end pd="eth_copy_nfs" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="eth_virt_rx" id="2" />
+        <end pd="eth_copy_mp" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="eth_virt_tx" id="1" />
+        <end pd="nfs" id="3" />
+    </channel>
+
+    <channel>
+        <end pd="eth_virt_tx" id="2" />
+        <end pd="micropython" id="3" />
+    </channel>
+
+    <channel>
+        <end pd="eth_copy_nfs" id="1" />
+        <end pd="nfs" id="2" />
+    </channel>
+
+    <channel>
+        <end pd="eth_copy_mp" id="1" />
+        <end pd="micropython" id="2" />
+    </channel>
+
+    <channel>
+        <end pd="uart_driver" id="1"/>
+        <end pd="serial_virt_tx" id="0"/>
+    </channel>
+
+    <channel>
+        <end pd="serial_virt_tx" id="1"/>
+        <end pd="micropython" id="9"/>
+    </channel>
+
+    <channel>
+        <end pd="serial_virt_tx" id="2"/>
+        <end pd="nfs" id="0"/>
+    </channel>
+
+    <channel>
+        <end pd="timer_driver" id="1" />
+        <end pd="micropython" id="1" />
+    </channel>
+
+    <channel>
+        <end pd="timer_driver" id="3" />
+        <end pd="nfs" id="9" />
+    </channel>
+
+    <channel>
+        <end pd="micropython" id="7" />
+        <end pd="nfs" id="7" />
+    </channel>
+
+</system>

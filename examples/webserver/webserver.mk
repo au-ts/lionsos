@@ -5,13 +5,24 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 # This makefile will be copied into the Build directory and used from there.
-# 
+#
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
 TOP := $(LIONSOS)/examples/webserver
+
 ifeq (${MICROKIT_BOARD},odroidc4)
-PLATFORM := meson
-CPU := cortex-a55
+	TIMER_DRIVER_DIR := meson
+	ETHERNET_DRIVER_DIR := meson
+	UART_DRIVER_DIR := meson
+	CPU := cortex-a55
+else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
+	TIMER_DRIVER_DIR := arm
+	ETHERNET_DRIVER_DIR := virtio
+	UART_DRIVER_DIR := arm
+	CPU := cortex-a53
+	QEMU := qemu-system-aarch64
+else
+$(error Unsupported MICROKIT_BOARD given)
 endif
 
 TOOLCHAIN := clang
@@ -30,6 +41,8 @@ MUSL=$(LIONSOS)/dep/musllibc
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  copy.elf network_virt_rx.elf network_virt_tx.elf \
 	  uart_driver.elf serial_virt_tx.elf
+
+SYSTEM_FILE := $(TOP)/board/$(MICROKIT_BOARD)/webserver.system
 
 CFLAGS := \
 	-mtune=$(CPU) \
@@ -113,14 +126,25 @@ nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
 	${CC} ${CFLAGS} -c -o $@ $<
 
 include ${SDDF}/util/util.mk
-include ${SDDF}/drivers/clock/${PLATFORM}/timer_driver.mk
-include ${SDDF}/drivers/network/${PLATFORM}/eth_driver.mk
-include ${SDDF}/drivers/serial/${PLATFORM}/uart_driver.mk
+include ${SDDF}/drivers/clock/${TIMER_DRIVER_DIR}/timer_driver.mk
+include ${SDDF}/drivers/network/${ETHERNET_DRIVER_DIR}/eth_driver.mk
+include ${SDDF}/drivers/serial/${UART_DRIVER_DIR}/uart_driver.mk
 include ${SDDF}/network/components/network_components.mk
 include ${SDDF}/serial/components/serial_components.mk
 
-$(IMAGE_FILE) $(REPORT_FILE):  $(IMAGES) $(TOP)/webserver.system
-	$(MICROKIT_TOOL) $(TOP)/webserver.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
+	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+
+qemu: ${IMAGE_FILE}
+	$(QEMU) -machine virt,virtualization=on \
+			-cpu cortex-a53 \
+			-serial mon:stdio \
+			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
+			-m size=2G \
+			-nographic \
+			-device virtio-net-device,netdev=netdev0 \
+			-netdev user,id=netdev0,hostfwd=tcp::5555-10.0.2.16:80 \
+			-global virtio-mmio.force-legacy=false
 
 FORCE: ;
 

@@ -2,6 +2,7 @@
 #ifndef WEBSERVER_ETHERNET_CONFIG_H
 #define WEBSERVER_ETHERNET_CONFIG_H
 
+#include <microkit.h>
 #include <sddf/network/queue.h>
 
 #define NUM_NETWORK_CLIENTS 2
@@ -17,8 +18,15 @@
 #define NET_DATA_REGION_SIZE                    0x200000
 #define NET_HW_REGION_SIZE                      0x10000
 
+#if defined(CONFIG_PLAT_ODROIDC4)
 #define MAC_ADDR_CLI0                       0x525401000010
 #define MAC_ADDR_CLI1                       0x525401000011
+#elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
+#define MAC_ADDR_CLI0                       0x525401000012
+#define MAC_ADDR_CLI1                       0x525401000013
+#else
+#error "Invalid ethernet config platform"
+#endif
 
 #define NET_TX_QUEUE_SIZE_CLI0                   512
 #define NET_TX_QUEUE_SIZE_CLI1                   512
