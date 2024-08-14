@@ -3,28 +3,18 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <microkit.h>
-#include "util/util.h"
-#include "arch/aarch64/vgic/vgic.h"
-#include "arch/aarch64/linux.h"
-#include "arch/aarch64/fault.h"
-#include "guest.h"
-#include "virq.h"
-#include "tcb.h"
-#include "vcpu.h"
+#include <libvmm/guest.h>
+#include <libvmm/virq.h>
+#include <libvmm/util/util.h>
+#include <libvmm/arch/aarch64/linux.h>
+#include <libvmm/arch/aarch64/fault.h>
 
 #include "vmm_ram.h"
 #define GUEST_DTB_VADDR 0x8f000000
-
-// @ivanv: need a more systematic way of choosing this IRQ number?
-/*
- * This is a virtual IRQ, meaning it does not correspond to any hardware.
- * The IRQ number is chosen because it does not overlap with any other
- * IRQs delivered by the VMM into the guest.
- */
-#define UIO_GPU_IRQ 50
 
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
@@ -37,28 +27,6 @@ extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
 /* Microkit will set this variable to the start of the guest RAM memory region. */
 uintptr_t guest_ram_vaddr;
-
-// @ivanv: should be part of libvmm
-#define MAX_IRQ_CH 63
-int passthrough_irq_map[MAX_IRQ_CH];
-
-static void passthrough_device_ack(size_t vcpu_id, int irq, void *cookie) {
-    microkit_channel irq_ch = (microkit_channel)(int64_t)cookie;
-    microkit_irq_ack(irq_ch);
-}
-
-static void register_passthrough_irq(int irq, microkit_channel irq_ch) {
-    LOG_VMM("Register passthrough IRQ %d (channel: 0x%lx)\n", irq, irq_ch);
-    assert(irq_ch < MAX_IRQ_CH);
-    passthrough_irq_map[irq_ch] = irq;
-
-    int err = virq_register(GUEST_VCPU_ID, irq, &passthrough_device_ack, (void *)(int64_t)irq_ch);
-    if (!err) {
-        LOG_VMM_ERR("Failed to register IRQ %d\n", irq);
-        return;
-    }
-}
-
 
 void init(void) {
     int i;
@@ -91,39 +59,39 @@ void init(void) {
         return;
     }
 
-    // // @ivanv minimise
     /* Ethernet */
-    register_passthrough_irq(40, 21);
+    virq_register_passthrough(GUEST_VCPU_ID, 40, 21);
     /* Ethernet PHY */
-    register_passthrough_irq(41, 22);
+    virq_register_passthrough(GUEST_VCPU_ID, 41, 22);
     /* panfrost-gpu */
-    register_passthrough_irq(192, 7);
+    virq_register_passthrough(GUEST_VCPU_ID, 192, 7);
     /* panfrost-mmu */
-    register_passthrough_irq(193, 8);
+    virq_register_passthrough(GUEST_VCPU_ID, 193, 8);
     /* panfrost-job */
-    register_passthrough_irq(194, 9);
+    virq_register_passthrough(GUEST_VCPU_ID, 194, 9);
     /* I2C */
-    register_passthrough_irq(53, 10);
+    virq_register_passthrough(GUEST_VCPU_ID, 53, 10);
     /* USB */
-    register_passthrough_irq(63, 12);
+    virq_register_passthrough(GUEST_VCPU_ID, 63, 12);
     /* USB */
-    register_passthrough_irq(62, 13);
+    virq_register_passthrough(GUEST_VCPU_ID, 62, 13);
     /* HDMI */
-    register_passthrough_irq(89, 14);
+    virq_register_passthrough(GUEST_VCPU_ID, 89, 14);
     /* VPU */
-    register_passthrough_irq(35, 15);
+    virq_register_passthrough(GUEST_VCPU_ID, 35, 15);
     /* USB */
-    register_passthrough_irq(48, 16);
-    register_passthrough_irq(5, 17);
+    virq_register_passthrough(GUEST_VCPU_ID, 48, 16);
+    virq_register_passthrough(GUEST_VCPU_ID, 5, 17);
     /* eMMCB */
-    register_passthrough_irq(222, 18);
+    virq_register_passthrough(GUEST_VCPU_ID, 222, 18);
     /* eMMCC */
-    register_passthrough_irq(223, 19);
+    virq_register_passthrough(GUEST_VCPU_ID, 223, 19);
     /* serial */
-    register_passthrough_irq(225, 20);
+    virq_register_passthrough(GUEST_VCPU_ID, 225, 20);
     /* GPIO IRQs */
-    for (i = 96, j = 23; i < 104; i++, j++)
-        register_passthrough_irq(i, j);
+    for (i = 96, j = 23; i < 104; i++, j++) {
+        virq_register_passthrough(GUEST_VCPU_ID, i, j);
+    }
 
     /* Finally start the guest */
     guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
@@ -131,28 +99,26 @@ void init(void) {
 
 void notified(microkit_channel ch) {
     switch (ch) {
-        default:
-            if (passthrough_irq_map[ch]) {
-                bool success = vgic_inject_irq(GUEST_VCPU_ID, passthrough_irq_map[ch]);
-                if (!success) {
-                    LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", passthrough_irq_map[ch], GUEST_VCPU_ID);
-                }
-                break;
+        default: {
+            bool success = virq_handle_passthrough(ch);
+            if (!success) {
+                LOG_VMM_ERR("IRQ corresponding to channel %d dropped on vCPU %d\n", ch, GUEST_VCPU_ID);
             }
-            printf("Unexpected channel, ch: 0x%lx\n", ch);
+            break;
+        }
     }
 }
 
-/*
- * The primary purpose of the VMM after initialisation is to act as a fault-handler,
- * whenever our guest causes an exception, it gets delivered to this entry point for
- * the VMM to handle.
- */
-void fault(microkit_id id, microkit_msginfo msginfo) {
-    bool success = fault_handle(id, msginfo);
+
+seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
+    bool success = fault_handle(child, msginfo);
     if (success) {
         /* Now that we have handled the fault successfully, we reply to it so
          * that the guest can resume execution. */
-        microkit_fault_reply(microkit_msginfo_new(0, 0));
+        *reply_msginfo = microkit_msginfo_new(0, 0);
+        return seL4_True;
     }
+
+    return seL4_False;
 }
+
