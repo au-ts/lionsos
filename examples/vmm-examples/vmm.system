@@ -27,7 +27,9 @@
     <protection_domain name="VMM" priority="254">
         <program_image path="vmm.elf" />
         <map mr="guest_ram" vaddr=GUESTRAMADDR perms="rw" setvar_vaddr="guest_ram_vaddr" />
-        <virtual_machine name="linux" id="0" priority="1">
+        <virtual_machine name="linux" priority="1">
+            <vcpu id="0" />
+
             <map mr="guest_ram" vaddr=GUESTRAMADDR perms="rwx" />
             <map mr="eMMCB" vaddr="0xffe05000" perms="rw"
 		 cached="false" />
