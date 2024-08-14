@@ -8,15 +8,11 @@ ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
 
-ifeq ($(strip $(LIBGCC)),)
-LIBGCC := $(shell dirname $$(aarch64-none-elf-gcc --print-file-name libgcc.a))
-endif
-
 export EXAMPLE_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-LionsOS ?= ../../
+LIONSOS ?= ../../
 export MICROKIT_SDK := $(realpath ${MICROKIT_SDK})
-export LionsOS := $(realpath ${LionsOS})
-export SDDF := ${LionsOS}/dep/sddf
+export LIONSOS := $(realpath ${LIONSOS})
+export SDDF := ${LIONSOS}/dep/sddf
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD := odroidc4
@@ -46,6 +42,9 @@ ${REPORT_FILE} ${IMAGE_FILE}: ${BUILD_DIR}/Makefile ${SYSTEM_FILE} ${OVERLAY} FO
 ${BUILD_DIR}/Makefile: ${VAR_MAKEFILE} FORCE
 	mkdir -p ${BUILD_DIR}
 	[ cmp $@ ${VAR_MAKEFILE} > /dev/null 2>&1 ] || cp $< $@
+
+submodules:
+	git submodule update --init $(LIONSOS)/dep/libvmm
 
 clean:
 	${MAKE} -C ${BUILD_DIR} $@

@@ -10,12 +10,8 @@ ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
 
-ifeq ($(strip $(LIBGCC)),)
-LIBGCC := $(shell dirname $$(aarch64-none-elf-gcc --print-file-name libgcc.a))
-endif
-
-ifeq ($(strip $(LionsOS)),)
-$(error LionsOS should point to the root of the LionOS source tree)
+ifeq ($(strip $(LIONSOS)),)
+$(error LIONSOS should point to the root of the LionOS source tree)
 endif
 
 ifeq ($(strip $(EXAMPLE_DIR)),)
@@ -43,11 +39,11 @@ MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-LIBVMM_DIR ?= ${LionsOS}/dep/libvmm
+LIBVMM ?= ${LIONSOS}/dep/libvmm
 
 VMM_IMAGE_DIR := ${EXAMPLE_DIR}/vmm
-LINUX := $(VMM_IMAGE_DIR)/Linux
-INITRD := $(VMM_IMAGE_DIR)/initrd.img
+LINUX := 1e6f245cabe25aabf179448e41dea5fe5550c98d-linux
+INITRD := 1ef035ae59438f6df6c596a6de7cc36d6a3368ac-initrd.img
 
 IMAGES := vmm.elf
 CFLAGS := \
@@ -61,15 +57,12 @@ CFLAGS := \
 	-I. \
 	-I$(BOARD_DIR)/include \
 	-target $(TARGET) \
-	-I$(LIBVMM_DIR)/src/arch/aarch64 \
-	-I$(LIBVMM_DIR)/src \
-	-I$(LIBVMM_DIR)/src/util \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include \
-	-MD \
-	-DMAC_BASE_ADDRESS=$(MAC_BASE_ADDRESS)
+	-I$(LIBVMM)/include \
+	-MD
 
-VPATH:=${LIBVMM_DIR}:${VMM_IMAGE_DIR}
+VPATH:=${LIBVMM}:${VMM_IMAGE_DIR}
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld
@@ -88,11 +81,14 @@ all: $(IMAGE_FILE)
 ${notdir $(ORIGINAL_DTB:.dtb=.dts)}: ${ORIGINAL_DTB} ${MAKEFILE}
 	$(DTC) -q -I dtb -O dts $< > $@ || rm -f $@
 
+$(INITRD) $(LINUX):
+	curl -L https://lionsos.org/downloads/examples/vmm/$@ -o $@
+
 dtb.dts: ${notdir $(ORIGINAL_DTB:.dtb=.dts)} ${DT_OVERLAYS} vmm_ram.h ${CHECK_VARIANT}
-	${LIBVMM_DIR}/tools/dtscat ${notdir $(ORIGINAL_DTB:.dtb=.dts)} ${DT_OVERLAYS} | cpp -nostdinc -undef -x assembler-with-cpp -P - > $@ || rm -f $@
+	${LIBVMM}/tools/dtscat ${notdir $(ORIGINAL_DTB:.dtb=.dts)} ${DT_OVERLAYS} | cpp -nostdinc -undef -x assembler-with-cpp -P - > $@ || rm -f $@
 
 vmm.o: vmm_ram.h
-package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S  $(LINUX) $(INITRD) dtb.dtb
+package_guest_images.o: $(LIBVMM)/tools/package_guest_images.S  $(LINUX) $(INITRD) dtb.dtb
 	$(CC) -c -g3 -x assembler-with-cpp \
 					-DGUEST_KERNEL_IMAGE_PATH=\"$(LINUX)\" \
 					-DGUEST_DTB_IMAGE_PATH=\"dtb.dtb\" \
@@ -100,7 +96,7 @@ package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S  $(LINUX) $(I
 					-target $(TARGET) \
 					$< -o $@
 
-vmm_ram.h: ${INITRD} ${VMM_IMAGE_DIR}/vmm_ram_input.h ${MAKEFILE}
+vmm_ram.h: ${INITRD} ${LINUX} ${VMM_IMAGE_DIR}/vmm_ram_input.h ${MAKEFILE}
 	size=$$(( (($$(stat -c '%s'  ${INITRD}) + 4095 ) / 4096 ) * 4096 )) ;\
 	echo $$size ; \
 	start=$$(sed -n 's/.*GUEST_INIT_RAM_DISK_VADDR.*\(0x[0-9a-fA-F]*\).*/\1/p' ${VMM_IMAGE_DIR}/vmm_ram_input.h ) ;\
@@ -127,4 +123,4 @@ clobber:: clean
 	rm -f vmm.elf vmm.system libvmm.a *.d dtb.dtb dtb.ds ${REPORT} ${IMAGE}
 
 # How to build libvmm.a
-include ${LIBVMM_DIR}/vmm.mk
+include ${LIBVMM}/vmm.mk
