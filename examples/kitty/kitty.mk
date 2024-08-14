@@ -45,7 +45,8 @@ DTB := linux.dtb
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBNFS := $(LIONSOS)/dep/libnfs
 NFS := $(LIONSOS)/components/fs/nfs
-MUSL := $(LIONSOS)/dep/musllibc
+MUSL_SRC := $(LIONSOS)/dep/musllibc
+MUSL := musllibc
 LIONSOS_DOWNLOADS := https://lionsos.org/downloads/examples/kitty
 # I2C config
 I2C_BUS_NUM=2
@@ -113,6 +114,14 @@ endif
 include ${SDDF_MAKEFILES}
 include ${LIBVMM_DIR}/vmm.mk
 include ${NFS}/nfs.mk
+
+$(MUSL)/lib/libc.a $(MUSL)/include:
+	make -C $(MUSL_SRC) \
+		C_COMPILER=aarch64-none-elf-gcc \
+		TOOLPREFIX=aarch64-none-elf- \
+		CONFIG_ARCH_AARCH64=y \
+		STAGE_DIR=$(abspath $(MUSL)) \
+		SOURCE_DIR=.
 
 # Build the VMM for graphics
 VMM_OBJS := vmm.o package_guest_images.o

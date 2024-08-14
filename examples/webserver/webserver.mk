@@ -33,7 +33,8 @@ TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 
 NFS=$(LIONSOS)/components/fs/nfs
-MUSL=$(LIONSOS)/dep/musllibc
+MUSL_SRC := $(LIONSOS)/dep/musllibc
+MUSL := musllibc
 MICRODOT := ${LIONSOS}/dep/microdot/src
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
@@ -93,6 +94,14 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 
 %.py: ${WEBSERVER_SRC_DIR}/%.py
 	cp $< $@
+
+$(MUSL)/lib/libc.a $(MUSL)/include:
+	make -C $(MUSL_SRC) \
+		C_COMPILER=aarch64-none-elf-gcc \
+		TOOLPREFIX=aarch64-none-elf- \
+		CONFIG_ARCH_AARCH64=y \
+		STAGE_DIR=$(abspath $(MUSL)) \
+		SOURCE_DIR=.
 
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<

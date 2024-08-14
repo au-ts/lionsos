@@ -13,13 +13,12 @@
 
 NFS_DIR := $(LIONSOS)/components/fs/nfs
 LWIP := $(SDDF)/network/ipstacks/lwip/src
-MUSL := $(LIONSOS)/dep/musllibc
 LIBNFS := $(LIONSOS)/dep/libnfs
 
 CFLAGS_nfs := \
 	-DNFS_SERVER="\"$(NFS_SERVER)\"" \
 	-DNFS_DIRECTORY="\"$(NFS_DIRECTORY)\"" \
-	-Imusllibc/include \
+	-I$(MUSL)/include \
 	-I$(NFS_DIR)/lwip_include \
 	-I$(LIBNFS)/include \
 	-I$(LWIP)/include \
@@ -41,28 +40,20 @@ $(CHECK_NFS_FLAGS_MD5):
 	-rm -f .nfs_cflags-*
 	touch $@
 
-musllibc/lib/libc.a:
-	make -C $(MUSL) \
-		C_COMPILER=aarch64-none-elf-gcc \
-		TOOLPREFIX=aarch64-none-elf- \
-		CONFIG_ARCH_AARCH64=y \
-		STAGE_DIR=$(abspath ./musllibc) \
-		SOURCE_DIR=.
-
-libnfs/lib/libnfs.a: musllibc/lib/libc.a
-	MUSL=$(abspath musllibc) cmake -S $(LIBNFS) -B libnfs
+libnfs/lib/libnfs.a:
+	MUSL=$(abspath $(MUSL)) cmake -S $(LIBNFS) -B libnfs
 	cmake --build libnfs
 
 nfs.elf: LDFLAGS += -L$(LIBGCC)
 nfs.elf: LIBS += -lgcc
-nfs.elf: $(NFS_OBJ) musllibc/lib/libc.a libnfs/lib/libnfs.a
+nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a
 	$(LD) $(LDFLAGS) -o $@ $(LIBS) $^
 
 $(NFS_DIRS):
 	mkdir -p $@
 
 $(NFS_OBJ): $(CHECK_NFS_FLAGS_MD5)
-$(NFS_OBJ): musllibc/lib/libc.a
+$(NFS_OBJ): $(MUSL)/lib/libc.a
 $(NFS_OBJ): |$(NFS_DIRS)
 $(NFS_OBJ): CFLAGS += $(CFLAGS_nfs)
 
