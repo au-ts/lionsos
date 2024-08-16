@@ -14,8 +14,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Download Microkit SDK
         run: |
-          wget https://github.com/seL4/microkit/releases/download/1.4.0/microkit-sdk-1.4.0-linux-x86-64.tar.gz
-          tar xf microkit-sdk-1.4.0-linux-x86-64.tar.gz
+          wget https://github.com/seL4/microkit/releases/download/1.4.1/microkit-sdk-1.4.1-linux-x86-64.tar.gz
+          tar xf microkit-sdk-1.4.1-linux-x86-64.tar.gz
       - name: Download and install AArch64 GCC toolchain
         run: |
           wget -O aarch64-toolchain.tar.gz https://trustworthy.systems/Downloads/microkit/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf.tar.xz
@@ -26,7 +26,7 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Run examples script
-        run: nix-shell --run "./ci/examples.sh $(pwd) $(pwd)/microkit-sdk-1.4.0"
+        run: nix-shell --run "./ci/examples.sh $(pwd) $(pwd)/microkit-sdk-1.4.1"
   build_examples_macos_aarch64:
     name: Build example systems (macOS ARM64)
     runs-on: [self-hosted, macos, ARM64]
@@ -35,12 +35,12 @@ jobs:
         uses: actions/checkout@v4
       - name: Download Microkit SDK
         run: |
-          wget https://github.com/seL4/microkit/releases/download/1.4.0/microkit-sdk-1.4.0-macos-aarch64.tar.gz
-          tar xf microkit-sdk-1.4.0-macos-aarch64.tar.gz
+          wget https://github.com/seL4/microkit/releases/download/1.4.1/microkit-sdk-1.4.1-macos-aarch64.tar.gz
+          tar xf microkit-sdk-1.4.1-macos-aarch64.tar.gz
       - name: Download and install AArch64 GCC toolchain
         run: |
           wget -O aarch64-toolchain.tar.gz https://trustworthy.systems/Downloads/microkit/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf.tar.xz
           tar xf aarch64-toolchain.tar.gz
           echo "$(pwd)/arm-gnu-toolchain-12.3.rel1-darwin-arm64-aarch64-none-elf/bin" >> $GITHUB_PATH
       - name: Run examples script
-        run: nix-shell --run "./ci/examples.sh $(pwd) $(pwd)/microkit-sdk-1.4.0"
+        run: nix-shell --run "./ci/examples.sh $(pwd) $(pwd)/microkit-sdk-1.4.1"
