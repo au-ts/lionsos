@@ -87,7 +87,7 @@ $(INITRD) $(LINUX):
 dtb.dts: ${notdir $(ORIGINAL_DTB:.dtb=.dts)} ${DT_OVERLAYS} vmm_ram.h ${CHECK_VARIANT}
 	${LIBVMM}/tools/dtscat ${notdir $(ORIGINAL_DTB:.dtb=.dts)} ${DT_OVERLAYS} | cpp -nostdinc -undef -x assembler-with-cpp -P - > $@ || rm -f $@
 
-vmm.o: vmm_ram.h
+vmm.o: vmm_ram.h ${SDDF}
 package_guest_images.o: $(LIBVMM)/tools/package_guest_images.S  $(LINUX) $(INITRD) dtb.dtb
 	$(CC) -c -g3 -x assembler-with-cpp \
 					-DGUEST_KERNEL_IMAGE_PATH=\"$(LINUX)\" \
@@ -124,3 +124,8 @@ clobber:: clean
 
 # How to build libvmm.a
 include ${LIBVMM}/vmm.mk
+${LIBVMM}/vmm.mk: ${LIBVMM}
+
+${SDDF} ${LIBVMM}:
+	git submodule update --init $@
+
