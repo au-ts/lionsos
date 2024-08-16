@@ -192,13 +192,12 @@ ${LIBNFS}/nfs:
 $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:	
 	git submodule update --init $(LIONSOS)/dep/micropython
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+
 $(LIONSOS)/dep/libmicrokitco:
 	git submodule update --init $(LIONSOS)/dep/libmicrokitco
 
 ${MUSL}/Makefile:
 	git submodule update --init ${MUSL}
 
-
 ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &: 
 	git submodule update --init $(LIONSOS)/dep/sddf
-
