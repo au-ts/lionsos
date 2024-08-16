@@ -137,7 +137,7 @@ nproc=2
 
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a config.py manifest.py \
 		kitty.py pn532.py font.py writer.py \
-		$(LIONSOS)/dep/libmicrokitco
+		$(LIONSOS)/dep/libmicrokitco/Makefile
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -232,7 +232,7 @@ $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
 	cd ${LIONSOS}; git submodule update --init dep/micropython
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
-${LIONSOS}/dep/libmicrokitco:
+${LIONSOS}/dep/libmicrokitco/Makefile:
 	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
 
 ${MUSL}/Makefile:
