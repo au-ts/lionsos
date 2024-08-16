@@ -110,7 +110,7 @@ package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
 vmm.elf: ${VMM_OBJS} libvmm.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-micropython.elf: mpy-cross libsddf_util_debug.a libco.a
+micropython.elf: mpy-cross libsddf_util_debug.a libco.a $(LIONSOS)/dep/libmicrokitco
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -192,7 +192,7 @@ ${LIBNFS}/nfs:
 $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:	
 	git submodule update --init $(LIONSOS)/dep/micropython
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
-
+$(LIONSOS)/dep/libmicrokitco:
 	git submodule update --init $(LIONSOS)/dep/libmicrokitco
 
 ${MUSL}/Makefile:
