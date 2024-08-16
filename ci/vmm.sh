@@ -21,5 +21,4 @@ export MICROKIT_SDK=$MICROKIT_SDK
 export LIONSOS=$LIONSOS
 
 cd $LIONSOS/examples/vmm
-make submodules
 make
