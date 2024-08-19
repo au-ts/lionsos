@@ -144,9 +144,6 @@ void fat_mount(void) {
     #endif
     co_data_t *args = co_get_args();
     if (fs_status[0] != FREE) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("We does not get the slot!\n");
-        #endif
         args->status = FR_INVALID_PARAMETER;
         co_kill();
     }

@@ -2,6 +2,9 @@
 
 #include <sddf/network/queue.h>
 
+#ifndef FILEIO_ETHERNET_CONFIG_H
+#define FILEIO_ETHERNET_CONFIG_H
+
 #define NUM_NETWORK_CLIENTS 1
 
 #define CLI0_NAME "micropython"
@@ -111,3 +114,5 @@ static inline void mem_region_init_sys(char *pd_name, uintptr_t *mem_regions, ui
         mem_regions[0] = start_region;
     }
 }
+
+#endif /* FILEIO_ETHERNET_CONFIG_H */
