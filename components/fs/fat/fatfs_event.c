@@ -156,10 +156,10 @@ void notified(microkit_channel ch) {
         case Client_CH:
             break;
         case Server_CH: {
-            blk_response_status_t status;
+            blk_resp_status_t status;
             uint16_t success_count;
             uint32_t id;
-            while (!blk_resp_queue_empty(blk_queue_handle)) {
+            while (!blk_queue_empty_resp(blk_queue_handle)) {
                 // This id should be the index to the request pool
                 blk_dequeue_resp(blk_queue_handle, &status, &success_count, &id);
                 

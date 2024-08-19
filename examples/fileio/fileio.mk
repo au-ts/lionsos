@@ -56,7 +56,7 @@ CFLAGS := \
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 
-IMAGE_FILE := file.img
+IMAGE_FILE := fileio.img
 REPORT_FILE := report.txt
 
 all: cache.o
@@ -102,7 +102,7 @@ vmm.elf: ${VMM_OBJS} libvmm.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 # Build with two threads in parallel
-nproc=2
+# nproc=2
 
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
@@ -117,7 +117,7 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 			V=1
 
 fatfs.elf: musllibc/lib/libc.a
-	make -C $(LIONSOS)/components/fs/fatfs \
+	make -C $(LIONSOS)/components/fs/fat \
 	       CC=$(CC) \
 		   LD=$(LD) \
 		   CPU=$(CPU) \
@@ -127,7 +127,7 @@ fatfs.elf: musllibc/lib/libc.a
 		   MICROKIT_BOARD=$(MICROKIT_BOARD) \
 		   LIBC_DIR=$(abspath $(BUILD_DIR)/musllibc) \
 		   BUILD_DIR=$(abspath .) \
-		   TARGET=$(target) \
+		   TARGET=$(TARGET) \
 		   USE_LIBMICROKITCO=1
 		   
 musllibc/lib/libc.a:
