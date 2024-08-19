@@ -59,7 +59,7 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
 			#ifdef FS_DEBUG_PRINT
 			sddf_printf("blk_enqueue_syncreq\n");
 			#endif
-			blk_enqueue_req(blk_queue_handle, FLUSH, 0, 0, 0, co_get_handle());
+			blk_enqueue_req(blk_queue_handle, BLK_REQ_FLUSH, 0, 0, 0, co_get_handle());
 			blk_request_pushed = true;
 			co_block();
 			res = (DRESULT)(uintptr_t)co_get_args();
@@ -80,7 +80,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 			#ifdef FS_DEBUG_PRINT
 			sddf_printf("blk_enqueue_read: addr: 0x%lx sector: %u, count: %u ID: %d\n", (uintptr_t)buff, sector, count, co_get_handle());
 			#endif
-			blk_enqueue_req(blk_queue_handle, READ_BLOCKS, (uintptr_t)buff, sector, count,co_get_handle());
+			blk_enqueue_req(blk_queue_handle, BLK_REQ_READ, (uintptr_t)buff, sector, count,co_get_handle());
 			blk_request_pushed = true;
 			co_block();
 			res = (DRESULT)(uintptr_t)co_get_args();
@@ -100,7 +100,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 			#ifdef FS_DEBUG_PRINT
 			sddf_printf("blk_enqueue_write: addr: 0x%lx sector: %u, count: %u ID: %d\n", (uintptr_t)buff, sector, count, co_get_handle());
 			#endif
-			blk_enqueue_req(blk_queue_handle, WRITE_BLOCKS, (uintptr_t)buff, sector, count,co_get_handle());
+			blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, (uintptr_t)buff, sector, count,co_get_handle());
 			blk_request_pushed = true;
 			co_block();
 			res = (DRESULT)(uintptr_t)co_get_args();

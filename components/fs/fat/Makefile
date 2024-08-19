@@ -5,16 +5,14 @@ FS_DIR := ./
 
 LIONSOS := ../../..
 
-BOARD_DIR := $(MICROKIT_SDK)/board/$(BOARD)/$(CONFIG)
+BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(CONFIG)
 
-EXEC := fatfs.elf
+EXEC := $(BUILD_DIR)/fatfs.elf
 
 all: $(EXEC)
 
-BOARD_DIR := $(MICROKIT_SDK)/board/$(BOARD)/$(CONFIG)
-
 # Compiler flags
-CFLAGS ?= -Wall \
+CFLAGS := -Wall \
           -Wextra \
 		  -target $(TARGET) \
 		  -ffreestanding \
@@ -27,7 +25,7 @@ CFLAGS ?= -Wall \
 		  -I$(BOARD_DIR)/include \
 		  -I$(FS_DIR)
 
-LDFLAGS := -L./libc/lib -lc
+LDFLAGS := -L$(LIBC_DIR)/lib -lc
 
 LIBS := -lmicrokit -Tmicrokit.ld -L$(BOARD_DIR)/lib
 
@@ -95,6 +93,6 @@ $(BUILD_DIR)/printf.o: $(LIONSOS)/dep/sddf/util/printf.c Makefile
 $(BUILD_DIR)/putchar_debug.o: $(LIONSOS)/dep/sddf/util/putchar_debug.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-fatfs.elf: $(addprefix $(BUILD_DIR)/, $(FATFS_OBJS))
+$(BUILD_DIR)/fatfs.elf: $(addprefix $(BUILD_DIR)/, $(FATFS_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 # File system building end
