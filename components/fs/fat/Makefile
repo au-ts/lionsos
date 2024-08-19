@@ -1,28 +1,17 @@
-# make MICROKIT_SDK=/home/li/Sel4/microkit-sdk-1.2.6 BOARD=odroidc4 USE_LIBMICROKITCO=1
-# make MICROKIT_SDK=/home/li/Sel4/microkit-sdk-1.2.6 BOARD=odroidc4 USE_FIBERPOOL=1
+# make MICROKIT_SDK=/home/li/Sel4/microkit-sdk-1.4.1 BOARD=odroidc4 USE_LIBMICROKITCO=1
+# make MICROKIT_SDK=/home/li/Sel4/microkit-sdk-1.4.1 BOARD=odroidc4 USE_FIBERPOOL=1
 # File system makefile
 FS_DIR := ./
-
-BUILD_DIR ?= ./build
-
-CC = clang
-LD := ld.lld
-CONFIG := debug
-CPU := cortex-a55
 
 LIONSOS := ../../..
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(BOARD)/$(CONFIG)
-
-TARGET := aarch64-none-elf
 
 EXEC := fatfs.elf
 
 all: $(EXEC)
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(BOARD)/$(CONFIG)
-
-LIBC_DIR ?= ./libc
 
 # Compiler flags
 CFLAGS ?= -Wall \
@@ -42,7 +31,7 @@ LDFLAGS := -L./libc/lib -lc
 
 LIBS := -lmicrokit -Tmicrokit.ld -L$(BOARD_DIR)/lib
 
-FatFs_OBJS :=   ff.o \
+FATFS_OBJS :=   ff.o \
 				ffunicode.o \
                 fatfs_event.o \
 				fatfs_op.o \
@@ -106,6 +95,6 @@ $(BUILD_DIR)/printf.o: $(LIONSOS)/dep/sddf/util/printf.c Makefile
 $(BUILD_DIR)/putchar_debug.o: $(LIONSOS)/dep/sddf/util/putchar_debug.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-fatfs.elf: $(addprefix $(BUILD_DIR)/, $(FatFs_OBJS))
+fatfs.elf: $(addprefix $(BUILD_DIR)/, $(FATFS_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 # File system building end
