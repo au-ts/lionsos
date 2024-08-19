@@ -10,6 +10,7 @@
 #include "py/mphal.h"
 #include "shared/netutils/netutils.h"
 #include "extmod/modnetwork.h"
+#include "modtime_impl.h"
 
 #include <sddf/timer/client.h>
 #include <sddf/network/queue.h>
@@ -84,7 +85,7 @@ static bool notify_rx = false;
 
 u32_t sys_now(void) {
     /* LWIP expects the current time in milliseconds */
-    return mp_time_time_get();
+    return mp_obj_get_int(mp_time_time_get());
 }
 
 static void interface_free_buffer(struct pbuf *buf) {

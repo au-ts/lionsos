@@ -3,6 +3,7 @@
 #include "micropython.h"
 #include "py/obj.h"
 #include "py/mphal.h"
+#include "py/runtime.h"
 #include "modtime_impl.h"
 
 uint64_t mp_hal_time_ns(void) {
