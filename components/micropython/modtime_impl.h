@@ -17,3 +17,5 @@ void mp_hal_delay_us(mp_uint_t delay);
 void mp_hal_delay_ms(mp_uint_t delay);
 
 mp_obj_t mp_time_time_get(void);
+
+mp_obj_t mp_time_localtime_get(void);
