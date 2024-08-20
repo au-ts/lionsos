@@ -223,7 +223,6 @@ qemu: $(IMAGE_FILE)
 			-device virtio-net-device,netdev=netdev0 \
 			-netdev user,id=netdev0 \
 			-global virtio-mmio.force-legacy=false \
-			-d guest_errors \
 			-device virtio-gpu-pci
 
 clean::
