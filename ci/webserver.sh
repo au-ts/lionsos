@@ -32,7 +32,6 @@ build() {
     export LIONSOS=$LIONSOS
 
     cd $LIONSOS/examples/webserver
-    make submodules
     make
 }
 

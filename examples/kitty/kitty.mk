@@ -46,7 +46,7 @@ LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBNFS := $(LIONSOS)/dep/libnfs
 NFS := $(LIONSOS)/components/fs/nfs
 MUSL := $(LIONSOS)/dep/musllibc
-
+LIONSOS_DOWNLOADS := https://lionsos.org/downloads/examples/kitty
 # I2C config
 I2C_BUS_NUM=2
 
@@ -95,28 +95,26 @@ ${CHECK_FLAGS_BOARD_MD5}:
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
-include ${SDDF}/util/util.mk
-include ${LIBVMM_DIR}/vmm.mk
-include ${SDDF}/drivers/clock/${TIMER_DRIV_DIR}/timer_driver.mk
-include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
+SDDF_MAKEFILES := ${SDDF}/util/util.mk \
+	${SDDF}/drivers/clock/${TIMER_DRIV_DIR}/timer_driver.mk \
+	${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
+	${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk \
+	${SDDF}/network/components/network_components.mk \
+	${SDDF}/serial/components/serial_components.mk \
+	${SDDF}/i2c/components/i2c_virt.mk \
+	${SDDF}/libco/libco.mk
 
 # We can build the kitty system without the I2C Driver
 ifneq ($(I2C_DRIV_DIR), )
-include ${SDDF}/drivers/i2c/${I2C_DRIV_DIR}/i2c_driver.mk
+SDDF_MAKEFILES += ${SDDF}/drivers/i2c/${I2C_DRIV_DIR}/i2c_driver.mk
 endif
 
-include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk
-include ${SDDF}/network/components/network_components.mk
-include ${SDDF}/serial/components/serial_components.mk
-include ${SDDF}/i2c/components/i2c_virt.mk
-include ${SDDF}/libco/libco.mk
+include ${SDDF_MAKEFILES}
+include ${LIBVMM_DIR}/vmm.mk
 
 # Build the VMM for graphics
 VMM_OBJS := vmm.o package_guest_images.o
 VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}:${VMM_SRC_DIR}
-
-$(INITRD) $(LINUX):
-	curl -L https://lionsos.org/downloads/examples/kitty/$@ -o $@
 
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $< > $@
@@ -138,7 +136,8 @@ vmm.elf: ${VMM_OBJS} libvmm.a
 nproc=2
 
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a config.py manifest.py \
-				client/kitty.py client/pn532.py font/font.py font/writer.py
+		kitty.py pn532.py font.py writer.py \
+		$(LIONSOS)/dep/libmicrokitco/Makefile
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -154,18 +153,18 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a config.py manifest.py \
 			V=1
 
 config.py: ${KITTY_DIR}/board/$(MICROKIT_BOARD)/config.py
-	cp $< .
+	cp $< $@
 
 manifest.py: ${KITTY_DIR}/manifest.py
-	cp ${KITTY_DIR}/manifest.py .
+	cp $< $@
 
-client/%.py: ${KITTY_DIR}/client/%.py
-	cp $< .
+%.py: ${KITTY_DIR}/client/%.py
+	cp $< $@
 
-font/%.py: ${KITTY_DIR}/client/font/%.py
-	cp $< .
+%.py: ${KITTY_DIR}/client/font/%.py
+	cp $< $@
 
-musllibc/lib/libc.a:
+musllibc/lib/libc.a: ${MUSL}/Makefile
 	make -C $(MUSL) \
 		C_COMPILER=aarch64-none-elf-gcc \
 		TOOLPREFIX=aarch64-none-elf- \
@@ -177,7 +176,7 @@ libnfs/lib/libnfs.a: musllibc/lib/libc.a
 	MUSL=$(abspath musllibc) cmake -S $(LIBNFS) -B libnfs
 	cmake --build libnfs
 
-nfs/nfs.a: musllibc/lib/libc.a FORCE
+nfs/nfs.a: musllibc/lib/libc.a FORCE |${LIBNFS}/nfs
 	make -C $(NFS) \
 		BUILD_DIR=$(abspath $(BUILD_DIR)/nfs) \
 		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
@@ -200,7 +199,7 @@ nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
 
 ${IMAGES}: libsddf_util_debug.a
 
-%.o: %.c
+%.o: %.c ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${KITTY_DIR}/board/${MICROKIT_BOARD}/kitty.system
@@ -208,11 +207,39 @@ $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${KITTY_DIR}/board/${MICROKIT_BOARD}/kit
 
 FORCE:
 
-%.elf: %.o
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
-
-mpy-cross: FORCE
+mpy-cross: FORCE ${LIONSOS}/dep/micropython/mpy-cross
 	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
+
+# If you want to use your own VM for the graphics driver
+# then change these lines or just make sure you've already put
+# linux and rootfs.cpio.gz into the Build directory
+${LINUX}:
+	curl -L ${LIONSOS_DOWNLOADS}/$(KITTY_GRAPHICS_VM_LINUX) -o $@
+
+${INITRD}:
+	curl -L ${LIONSOS_DOWNLOADS}/$(KITTY_GRAPHICS_VM_ROOTFS) -o $@
+
+# Because we include the *.mk files they are an implicit dependency
+# for the build.  These rules instantiate the submodules that
+# include the makefiles.
+${LIBVMM_DIR}/vmm.mk:
+	cd ${LIONSOS}; git submodule update --init dep/libvmm
+
+${LIBNFS}/nfs:
+	cd ${LIONSOS}; git submodule update --init dep/libnfs
+
+$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:	
+	cd ${LIONSOS}; git submodule update --init dep/micropython
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+
+${LIONSOS}/dep/libmicrokitco/Makefile:
+	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
+
+${MUSL}/Makefile:
+	cd ${LIONSOS}; git submodule update --init ${MUSL}
+
+${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &: 
+	cd ${LIONSOS}; git submodule update --init dep/sddf
 
 qemu: $(IMAGE_FILE)
 	$(QEMU) -machine virt,virtualization=on \

@@ -31,7 +31,6 @@ build() {
     export LIONSOS=$LIONSOS
 
     cd $LIONSOS/examples/kitty
-    make submodules
     make
 }
 
