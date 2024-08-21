@@ -3,6 +3,21 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
+ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
+    NET_DRIV_DIR := meson
+    UART_DRIV_DIR := meson
+    TIMER_DRIV_DIR := meson
+    CPU := cortex-a55
+else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
+    NET_DRIV_DIR := virtio
+    BLK_DRIV_DIR := virtio
+    UART_DRIV_DIR := arm
+    TIMER_DRIV_DIR := arm
+    CPU := cortex-a53
+    QEMU := qemu-system-aarch64
+else
+$(error Unsupported MICROKIT_BOARD given)
+endif
 
 TOOLCHAIN := clang
 CC := clang
@@ -39,7 +54,7 @@ IMAGES := timer_driver.elf \
 	  serial_virt_rx.elf \
 	  serial_virt_tx.elf \
 	  blk_virt.elf \
-	  blk_driver_vmm.elf
+	  blk_driver.elf
 
 CFLAGS := \
 	-mtune=$(CPU) \
@@ -53,7 +68,9 @@ CFLAGS := \
 	-target $(TARGET) \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include \
-	-I${CONFIG_INCLUDE}
+	-I${CONFIG_INCLUDE} \
+	-DVIRTIO_MMIO_NET_OFFSET=0x1000
+
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
@@ -72,14 +89,19 @@ ${CHECK_FLAGS_BOARD_MD5}:
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
+BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
+BLK_COMPONENTS := $(SDDF)/blk/components
+
 include ${SDDF}/util/util.mk
 include ${LIBVMM_DIR}/vmm.mk
-include ${SDDF}/drivers/clock/${PLATFORM}/timer_driver.mk
-include ${SDDF}/drivers/network/${PLATFORM}/eth_driver.mk
-include ${SDDF}/drivers/serial/${PLATFORM}/uart_driver.mk
+include ${SDDF}/drivers/clock/${TIMER_DRIV_DIR}/timer_driver.mk
+include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
+include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk
 include ${SDDF}/network/components/network_components.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/libco/libco.mk
+include ${BLK_DRIVER}/blk_driver.mk
+include ${BLK_COMPONENTS}/blk_components.mk
 
 # Build with two threads in parallel
 # nproc=2
@@ -118,14 +140,6 @@ musllibc/lib/libc.a:
 		STAGE_DIR=$(abspath $(BUILD_DIR)/musllibc) \
 		SOURCE_DIR=.
 
-blk_virt.elf blk_driver_vmm.elf:
-	make -C $(LIBVMM_DIR)/examples/virtio \
-			MICROKIT_SDK=$(MICROKIT_SDK) \
-			MICROKIT_BOARD=$(MICROKIT_BOARD) \
-			BUILD_DIR=$(abspath $(BUILD_DIR)/blk)
-	cp $(BUILD_DIR)/blk/blk_virt.elf $(BUILD_DIR)
-	cp $(BUILD_DIR)/blk/blk_driver_vmm.elf $(BUILD_DIR)
-
 ${IMAGES}: libsddf_util_debug.a
 
 %.o: %.c
@@ -141,3 +155,20 @@ FORCE:
 
 mpy-cross: FORCE
 	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
+
+qemu_disk:
+	$(LIONSOS)/dep/sddf/examples/blk/mkvirtdisk mydisk 1 512 16777216
+
+qemu: ${IMAGE_FILE} qemu_disk
+	$(QEMU) -machine virt,virtualization=on \
+			-cpu cortex-a53 \
+			-serial mon:stdio \
+            -device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
+            -m size=2G \
+            -nographic \
+            -global virtio-mmio.force-legacy=false \
+            -d guest_errors \
+            -drive file=mydisk,if=none,format=raw,id=hd \
+            -device virtio-blk-device,drive=hd \
+			-device virtio-net-device,netdev=netdev0 \
+            -netdev user,id=netdev0

@@ -9,7 +9,7 @@
 #pragma once
 
 /* Number of clients of the serial subsystem. */
-#define SERIAL_NUM_CLIENTS 2
+#define SERIAL_NUM_CLIENTS 1
 
 /* Support full duplex. */
 #define SERIAL_TX_ONLY 0
@@ -67,9 +67,6 @@ static inline void serial_cli_queue_init_sys(const char *pd_name,
                         SERIAL_RX_DATA_REGION_SIZE_CLI0, rx_data);
         serial_queue_init(tx_queue_handle, tx_queue,
                         SERIAL_TX_DATA_REGION_SIZE_CLI0, tx_data);
-    } else if (!sddf_strcmp(pd_name, SERIAL_CLI1_NAME)) {
-        serial_queue_init(tx_queue_handle, tx_queue,
-                        SERIAL_TX_DATA_REGION_SIZE_CLI1, tx_data);
     }
 }
 
@@ -84,11 +81,6 @@ static inline void serial_virt_queue_init_sys(char *pd_name,
     } else if (!sddf_strcmp(pd_name, SERIAL_VIRT_TX_NAME)) {
         serial_queue_init(cli_queue_handle, cli_queue,
                           SERIAL_TX_DATA_REGION_SIZE_CLI0, cli_data);
-        serial_queue_init(&cli_queue_handle[1],
-                          (serial_queue_t *)((uintptr_t)cli_queue +
-                                             SERIAL_QUEUE_SIZE),
-                          SERIAL_TX_DATA_REGION_SIZE_CLI1,
-                          cli_data + SERIAL_TX_DATA_REGION_SIZE_CLI0);
     }
 }
 
@@ -96,7 +88,6 @@ static inline void serial_virt_queue_init_sys(char *pd_name,
 static inline void serial_channel_names_init(char **client_names)
 {
     client_names[0] = SERIAL_CLI0_NAME;
-    client_names[1] = SERIAL_CLI1_NAME;
 }
 #endif
 
