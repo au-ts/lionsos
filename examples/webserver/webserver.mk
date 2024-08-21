@@ -72,7 +72,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-micropython.elf: mpy-cross manifest.py webserver.py config.py ${MICRODOT} ${LIONSOS}/dep/libmicrokitco
+micropython.elf: mpy-cross manifest.py webserver.py config.py ${MICRODOT} ${LIONSOS}/dep/libmicrokitco/Makefile
 	make -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -99,11 +99,11 @@ musllibc/lib/libc.a: ${MUSL}/Makefile
 		STAGE_DIR=$(abspath ./musllibc) \
 		SOURCE_DIR=.
 
-libnfs/lib/libnfs.a: musllibc/lib/libc.a ${LIBNFS}
+libnfs/lib/libnfs.a: musllibc/lib/libc.a ${LIBNFS}/include
 	MUSL=$(abspath musllibc) cmake -S $(LIBNFS) -B libnfs
 	cmake --build libnfs
 
-nfs/nfs.a: musllibc/lib/libc.a ${LIBNFS} FORCE
+nfs/nfs.a: musllibc/lib/libc.a ${LIBNFS}/include FORCE
 	make -C $(NFS) \
 		BUILD_DIR=$(abspath nfs) \
 		MICROKIT_INCLUDE=$(BOARD_DIR)/include \
@@ -157,13 +157,13 @@ mpy-cross: FORCE  ${LIONSOS}/dep/micropython/mpy-cross
 
 .PHONY: mpy-cross
 
-${LIBNFS}:
+${LIBNFS}/include:
 	cd ${LIONSOS}; git submodule update --init $(LIONSOS)/dep/libnfs
 
 $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:	
 	cd ${LIONSOS}; git submodule update --init dep/micropython
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
-${LIONSOS}/dep/libmicrokitco:
+${LIONSOS}/dep/libmicrokitco/Makefile:
 	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
 
 ${MICRODOT}:

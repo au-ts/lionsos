@@ -18,6 +18,10 @@ ifeq ($(strip $(EXAMPLE_DIR)),)
 $(error EXAMPLE_DIR should contain the name of the directory containing the VMM example)
 endif
 
+ifeq ($(strip $(SDDF)),)
+$(error SDDF should contain the name of the directory with the SDDF source)
+endif
+
 MICROKIT_CONFIG ?= debug
 MICROKIT_BOARD := odroidc4
 CPU := cortex-a55
@@ -124,8 +128,11 @@ clobber:: clean
 
 # How to build libvmm.a
 include ${LIBVMM}/vmm.mk
-${LIBVMM}/vmm.mk: ${LIBVMM}
 
-${SDDF} ${LIBVMM}:
-	cd ${LIONSOS}; git submodule update --init $@
+# Add an extra dependency for libvmm.a
+# Note: this should be in ${LIBVMM}/vmm.mk
+libvmm/virtio/block.o: ${SDDF}/include
+
+${SDDF}/include ${LIBVMM}/vmm.mk:
+	cd ${LIONSOS}; git submodule update --init $(dir $@)
 
