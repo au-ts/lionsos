@@ -127,5 +127,5 @@ include ${LIBVMM}/vmm.mk
 ${LIBVMM}/vmm.mk: ${LIBVMM}
 
 ${SDDF} ${LIBVMM}:
-	git submodule update --init $@
+	cd ${LIONSOS}; git submodule update --init $@
 

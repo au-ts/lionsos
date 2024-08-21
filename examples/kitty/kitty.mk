@@ -184,20 +184,20 @@ ${INITRD}:
 # for the build.  These rules instantiate the submodules that
 # include the makefiles.
 ${LIBVMM_DIR}/vmm.mk:
-	git submodule update --init $(LIONSOS)/dep/libvmm
+	cd ${LIONSOS}; git submodule update --init dep/libvmm
 
 ${LIBNFS}/nfs:
-	git submodule update --init $(LIONSOS)/dep/libnfs
+	cd ${LIONSOS}; git submodule update --init dep/libnfs
 
 $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:	
-	git submodule update --init $(LIONSOS)/dep/micropython
+	cd ${LIONSOS}; git submodule update --init dep/micropython
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
-$(LIONSOS)/dep/libmicrokitco:
-	git submodule update --init $(LIONSOS)/dep/libmicrokitco
+${LIONSOS}/dep/libmicrokitco:
+	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
 
 ${MUSL}/Makefile:
-	git submodule update --init ${MUSL}
+	cd ${LIONSOS}; git submodule update --init ${MUSL}
 
 ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &: 
-	git submodule update --init $(LIONSOS)/dep/sddf
+	cd ${LIONSOS}; git submodule update --init dep/sddf

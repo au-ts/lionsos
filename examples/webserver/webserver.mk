@@ -8,7 +8,6 @@
 #
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
-TOP := $(LIONSOS)/examples/webserver
 
 ifeq (${MICROKIT_BOARD},odroidc4)
 	TIMER_DRIVER_DIR := meson
@@ -43,7 +42,7 @@ IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  copy.elf network_virt_rx.elf network_virt_tx.elf \
 	  uart_driver.elf serial_virt_tx.elf
 
-SYSTEM_FILE := $(TOP)/board/$(MICROKIT_BOARD)/webserver.system
+SYSTEM_FILE := $(WEBSERVER_SRC_DIR)/board/$(MICROKIT_BOARD)/webserver.system
 
 CFLAGS := \
 	-mtune=$(CPU) \
@@ -73,16 +72,18 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-micropython.elf: mpy-cross manifest.py webserver.py config.py ${MICRODOT}
+micropython.elf: mpy-cross manifest.py webserver.py config.py ${MICRODOT} ${LIONSOS}/dep/libmicrokitco
 	make -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
 			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
-			BUILD=$(abspath $(BUILD_DIR)) \
-			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
+			MICROPY_MPYCROSS=$(abspath mpy_cross/mpy-cross) \
+			MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
+			BUILD=$(abspath .) \
+			LIBMATH=$(LIBMATH) \
 			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
-			FROZEN_MANIFEST=$(abspath manifest.py) \
-			EXEC_MODULE="webserver.py"
+			FROZEN_MANIFEST=$(abspath ./manifest.py) \
+			EXEC_MODULE=$(abspath ./webserver.py)
 
 config.py: ${CHECK_FLAGS_BOARD_MD5}
 	echo "base_dir='$(WEBSITE_DIR)'" > config.py
@@ -127,9 +128,9 @@ nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
 	${CC} ${CFLAGS} -c -o $@ $<
 
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
-		  ${SDDF}/drivers/clock/${PLATFORM}/timer_driver.mk \
-		  ${SDDF}/drivers/network/${PLATFORM}/eth_driver.mk \
-		  ${SDDF}/drivers/serial/${PLATFORM}/uart_driver.mk \
+		  ${SDDF}/drivers/clock/${TIMER_DRIVER_DIR}/timer_driver.mk \
+		  ${SDDF}/drivers/network/${ETHERNET_DRIVER_DIR}/eth_driver.mk \
+		  ${SDDF}/drivers/serial/${UART_DRIVER_DIR}/uart_driver.mk \
 		  ${SDDF}/network/components/network_components.mk \
 		  ${SDDF}/serial/components/serial_components.mk
 
@@ -152,24 +153,24 @@ qemu: ${IMAGE_FILE}
 FORCE: ;
 
 mpy-cross: FORCE  ${LIONSOS}/dep/micropython/mpy-cross
-	make -C $(LIONSOS)/dep/micropython/mpy-cross
+	make -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 .PHONY: mpy-cross
 
 ${LIBNFS}:
-	git submodule update --init $(LIONSOS)/dep/libnfs
+	cd ${LIONSOS}; git submodule update --init $(LIONSOS)/dep/libnfs
 
 $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:	
-	git submodule update --init $(LIONSOS)/dep/micropython
+	cd ${LIONSOS}; git submodule update --init dep/micropython
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
-	git submodule update --init $(LIONSOS)/dep/libmicrokitco
+${LIONSOS}/dep/libmicrokitco:
+	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
 
 ${MICRODOT}:
-	git submodule update --init $(LIONSOS)/dep/microdot
+	cd ${LIONSOS}; git submodule update --init dep/microdot
 
 ${MUSL}/Makefile:
-	git submodule update --init $(LIONSOS)/dep/musllibc
+	cd ${LIONSOS}; git submodule update --init dep/musllibc
 
 ${SDDF_MAKEFILES} &:
-	git submodule update --init $(LIONSOS)/dep/sddf
-
+	cd ${LIONSOS}; git submodule update --init dep/sddf
