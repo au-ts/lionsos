@@ -37,7 +37,9 @@ IMAGES := timer_driver.elf \
 	  network_virt_tx.elf \
 	  uart_driver.elf \
 	  serial_virt_rx.elf \
-	  serial_virt_tx.elf
+	  serial_virt_tx.elf \
+	  blk_virt.elf \
+	  blk_driver_vmm.elf
 
 CFLAGS := \
 	-mtune=$(CPU) \
@@ -79,28 +81,6 @@ include ${SDDF}/network/components/network_components.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/libco/libco.mk
 
-# Build the VMM for graphics
-VMM_OBJS := vmm.o package_guest_images.o
-VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}:${VMM_IMAGE_DIR}/..
-
-$(INITRD) $(LINUX):
-	curl -L https://lionsos.org/downloads/examples/kitty/$@ -o $@
-
-$(DTB): $(DTS)
-	$(DTC) -q -I dts -O dtb $< > $@
-
-package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
-			$(VMM_IMAGE_DIR) $(LINUX) $(INITRD) $(DTB)
-	$(CC) -c -g3 -x assembler-with-cpp \
-					-DGUEST_KERNEL_IMAGE_PATH=\"$(LINUX)\" \
-					-DGUEST_DTB_IMAGE_PATH=\"$(DTB)\" \
-					-DGUEST_INITRD_IMAGE_PATH=\"$(INITRD)\" \
-					-target $(TARGET) \
-					$< -o $@
-
-vmm.elf: ${VMM_OBJS} libvmm.a
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
 # Build with two threads in parallel
 # nproc=2
 
@@ -137,6 +117,14 @@ musllibc/lib/libc.a:
 		CONFIG_ARCH_AARCH64=y \
 		STAGE_DIR=$(abspath $(BUILD_DIR)/musllibc) \
 		SOURCE_DIR=.
+
+blk_virt.elf blk_driver_vmm.elf:
+	make -C $(LIBVMM_DIR)/examples/virtio \
+			MICROKIT_SDK=$(MICROKIT_SDK) \
+			MICROKIT_BOARD=$(MICROKIT_BOARD) \
+			BUILD_DIR=$(abspath $(BUILD_DIR)/blk)
+	cp $(BUILD_DIR)/blk/blk_virt.elf $(BUILD_DIR)
+	cp $(BUILD_DIR)/blk/blk_driver_vmm.elf $(BUILD_DIR)
 
 ${IMAGES}: libsddf_util_debug.a
 
