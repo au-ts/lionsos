@@ -9,6 +9,8 @@ BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(CONFIG)
 
 EXEC := $(BUILD_DIR)/fatfs.elf
 
+FATFS_OBJECT_DIR := $(BUILD_DIR)/fatfs
+
 all: $(EXEC)
 
 # Compiler flags
@@ -19,7 +21,6 @@ CFLAGS := -Wall \
 		  -g \
 		  -O0 \
 		  -mstrict-align \
-		  -I./FiberPool \
 		  -I$(LIBC_DIR)/include \
 		  -I../../../dep/sddf/include/ \
 		  -I$(BOARD_DIR)/include \
@@ -52,47 +53,50 @@ LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LIBMICROKITCO_OPT_PATH := $(LIONSOS)/components/fs/fat
 
 ifdef USE_LIBMICROKITCO
-LDFLAGS += -L$(BUILD_DIR)/libmicrokitco -lmicrokitco
-COROUTINE_OBJS := $(BUILD_DIR)/$(LIBMICROKITCO_OBJ)
+LDFLAGS += -L$(FATFS_OBJECT_DIR)/libmicrokitco -lmicrokitco
+COROUTINE_OBJS := $(FATFS_OBJECT_DIR)/$(LIBMICROKITCO_OBJ)
 CPPFLAGS := -DUSE_LIBMICROKITCO
 endif
 
-$(BUILD_DIR)/$(LIBMICROKITCO_OBJ):
+$(FATFS_OBJECT_DIR)/$(LIBMICROKITCO_OBJ):
 	make -f $(LIBMICROKITCO_PATH)/Makefile \
 			LIBMICROKITCO_PATH=$(LIBMICROKITCO_PATH) \
 			TARGET=$(TARGET) \
 			MICROKIT_SDK:=$(MICROKIT_SDK) \
-			BUILD_DIR:=$(BUILD_DIR) \
-			MICROKIT_BOARD:=$(BOARD) \
+			BUILD_DIR:=$(FATFS_OBJECT_DIR) \
+			MICROKIT_BOARD:=$(MICROKIT_BOARD) \
 			MICROKIT_CONFIG:=$(CONFIG) \
 			CPU:=$(CPU) \
 			LLVM:=1 \
 			LIBMICROKITCO_OPT_PATH=$(LIBMICROKITCO_OPT_PATH)
 
-$(BUILD_DIR)/ff.o: $(FS_DIR)/ff15/source/ff.c Makefile
+$(FATFS_OBJECT_DIR):
+	mkdir -p $(FATFS_OBJECT_DIR)
+
+$(FATFS_OBJECT_DIR)/ff.o: $(FS_DIR)/ff15/source/ff.c Makefile | $(FATFS_OBJECT_DIR)
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(BUILD_DIR)/ffunicode.o: $(FS_DIR)/ff15/source/ffunicode.c Makefile
+$(FATFS_OBJECT_DIR)/ffunicode.o: $(FS_DIR)/ff15/source/ffunicode.c Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(BUILD_DIR)/fatfs_event.o: $(FS_DIR)/fatfs_event.c $(COROUTINE_OBJS) Makefile
+$(FATFS_OBJECT_DIR)/fatfs_event.o: $(FS_DIR)/fatfs_event.c $(COROUTINE_OBJS) Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(BUILD_DIR)/fatfs_op.o: $(FS_DIR)/fatfs_op.c Makefile
+$(FATFS_OBJECT_DIR)/fatfs_op.o: $(FS_DIR)/fatfs_op.c Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(BUILD_DIR)/fs_diskio.o: $(FS_DIR)/fs_diskio.c Makefile
+$(FATFS_OBJECT_DIR)/fs_diskio.o: $(FS_DIR)/fs_diskio.c Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(BUILD_DIR)/co_helper.o: $(FS_DIR)/co_helper.c Makefile
+$(FATFS_OBJECT_DIR)/co_helper.o: $(FS_DIR)/co_helper.c Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(BUILD_DIR)/printf.o: $(LIONSOS)/dep/sddf/util/printf.c Makefile
+$(FATFS_OBJECT_DIR)/printf.o: $(LIONSOS)/dep/sddf/util/printf.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/putchar_debug.o: $(LIONSOS)/dep/sddf/util/putchar_debug.c Makefile
+$(FATFS_OBJECT_DIR)/putchar_debug.o: $(LIONSOS)/dep/sddf/util/putchar_debug.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/fatfs.elf: $(addprefix $(BUILD_DIR)/, $(FATFS_OBJS))
+$(BUILD_DIR)/fatfs.elf: $(addprefix $(FATFS_OBJECT_DIR)/, $(FATFS_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 # File system building end
