@@ -18,6 +18,10 @@ ifeq ($(strip $(EXAMPLE_DIR)),)
 $(error EXAMPLE_DIR should contain the name of the directory containing the VMM example)
 endif
 
+ifeq ($(strip $(SDDF)),)
+$(error SDDF should contain the name of the directory with the SDDF source)
+endif
+
 MICROKIT_CONFIG ?= debug
 MICROKIT_BOARD := odroidc4
 CPU := cortex-a55
@@ -87,7 +91,7 @@ $(INITRD) $(LINUX):
 dtb.dts: ${notdir $(ORIGINAL_DTB:.dtb=.dts)} ${DT_OVERLAYS} vmm_ram.h ${CHECK_VARIANT}
 	${LIBVMM}/tools/dtscat ${notdir $(ORIGINAL_DTB:.dtb=.dts)} ${DT_OVERLAYS} | cpp -nostdinc -undef -x assembler-with-cpp -P - > $@ || rm -f $@
 
-vmm.o: vmm_ram.h
+vmm.o: vmm_ram.h ${SDDF}
 package_guest_images.o: $(LIBVMM)/tools/package_guest_images.S  $(LINUX) $(INITRD) dtb.dtb
 	$(CC) -c -g3 -x assembler-with-cpp \
 					-DGUEST_KERNEL_IMAGE_PATH=\"$(LINUX)\" \
@@ -124,3 +128,11 @@ clobber:: clean
 
 # How to build libvmm.a
 include ${LIBVMM}/vmm.mk
+
+# Add an extra dependency for libvmm.a
+# Note: this should be in ${LIBVMM}/vmm.mk
+libvmm/virtio/block.o: ${SDDF}/include
+
+${SDDF}/include ${LIBVMM}/vmm.mk:
+	cd ${LIONSOS}; git submodule update --init $(dir $@)
+

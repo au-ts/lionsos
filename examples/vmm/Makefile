@@ -7,11 +7,10 @@
 ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
-
+export override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 export EXAMPLE_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 LIONSOS ?= ../../
-export MICROKIT_SDK := $(realpath ${MICROKIT_SDK})
-export LIONSOS := $(realpath ${LIONSOS})
+export LIONSOS := $(abspath ${LIONSOS})
 export SDDF := ${LIONSOS}/dep/sddf
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
@@ -36,15 +35,12 @@ REPORT_FILE := $(BUILD_DIR)/report.txt
 all: $(IMAGE_FILE)
 
 ${REPORT_FILE} ${IMAGE_FILE}: ${BUILD_DIR}/Makefile ${SYSTEM_FILE} ${OVERLAY} FORCE
-	${MAKE} -C ${BUILD_DIR}
+	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK}
 
 
 ${BUILD_DIR}/Makefile: ${VAR_MAKEFILE} FORCE
 	mkdir -p ${BUILD_DIR}
 	[ cmp $@ ${VAR_MAKEFILE} > /dev/null 2>&1 ] || cp $< $@
-
-submodules:
-	git submodule update --init $(LIONSOS)/dep/libvmm
 
 clean:
 	${MAKE} -C ${BUILD_DIR} $@
