@@ -22,7 +22,6 @@
 
 /* One read/write client, one write only client */
 #define SERIAL_CLI0_NAME "micropython"
-#define SERIAL_CLI1_NAME "BLK_DRIVER_VMM"
 #define SERIAL_VIRT_RX_NAME "serial_virt_rx"
 #define SERIAL_VIRT_TX_NAME "serial_virt_tx"
 
@@ -31,14 +30,12 @@
 
 #define SERIAL_TX_DATA_REGION_SIZE_DRIV            (2 * SERIAL_DATA_REGION_SIZE)
 #define SERIAL_TX_DATA_REGION_SIZE_CLI0            SERIAL_DATA_REGION_SIZE
-#define SERIAL_TX_DATA_REGION_SIZE_CLI1            SERIAL_DATA_REGION_SIZE
 
 #define SERIAL_RX_DATA_REGION_SIZE_DRIV            SERIAL_DATA_REGION_SIZE
 #define SERIAL_RX_DATA_REGION_SIZE_CLI0            SERIAL_DATA_REGION_SIZE
 
 #define SERIAL_MAX_TX_DATA_SIZE MAX(SERIAL_TX_DATA_REGION_SIZE_DRIV, \
-                                    MAX(SERIAL_TX_DATA_REGION_SIZE_CLI0, \
-                                    SERIAL_TX_DATA_REGION_SIZE_CLI1))
+                                    SERIAL_TX_DATA_REGION_SIZE_CLI0)
 #define SERIAL_MAX_RX_DATA_SIZE MAX(SERIAL_RX_DATA_REGION_SIZE_DRIV, \
                                     SERIAL_RX_DATA_REGION_SIZE_CLI0)
 #define SERIAL_MAX_DATA_SIZE MAX(SERIAL_MAX_TX_DATA_SIZE, \

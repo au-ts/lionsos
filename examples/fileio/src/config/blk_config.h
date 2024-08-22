@@ -10,7 +10,7 @@
 
 #define BLK_NUM_CLIENTS 1
 
-#define BLK_NAME_CLI0                      "client"
+#define BLK_NAME_CLI0                      "fatfs"
 
 #define BLK_QUEUE_SIZE_CLI0                 1024
 #define BLK_QUEUE_SIZE_DRIV                 BLK_QUEUE_SIZE_CLI0
