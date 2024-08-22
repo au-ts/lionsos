@@ -145,8 +145,8 @@ ${IMAGES}: libsddf_util_debug.a
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${FILEIO_DIR}/fileio.system
-	$(MICROKIT_TOOL) ${FILEIO_DIR}/fileio.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${FILEIO_DIR}/board/$(MICROKIT_BOARD)/fileio.system
+	$(MICROKIT_TOOL) ${FILEIO_DIR}/board/$(MICROKIT_BOARD)/fileio.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 FORCE:
 
