@@ -254,13 +254,13 @@
     </channel>
 
     <channel>
-        <end pd="uart_driver" id="8"/>
-        <end pd="serial_virt_tx" id="9"/>
+        <end pd="uart_driver" id="1"/>
+        <end pd="serial_virt_tx" id="0"/>
     </channel>
 
     <channel>
-        <end pd="uart_driver" id="10"/>
-        <end pd="serial_virt_rx" id="11"/>
+        <end pd="uart_driver" id="2"/>
+        <end pd="serial_virt_rx" id="0"/>
     </channel>
 
     <channel>
