@@ -1,7 +1,7 @@
 # make MICROKIT_SDK=/home/li/Sel4/microkit-sdk-1.4.1 BOARD=odroidc4 USE_LIBMICROKITCO=1
 # make MICROKIT_SDK=/home/li/Sel4/microkit-sdk-1.4.1 BOARD=odroidc4 USE_FIBERPOOL=1
 # File system makefile
-FS_DIR := ./
+FS_DIR := .
 
 LIONSOS := ../../..
 
@@ -40,11 +40,11 @@ FATFS_OBJS :=   ff.o \
 				putchar_debug.o
 
 FIBERPOOL_OBJ := fiberpool/libfiberpool.a
-FIBERPOOL_PATH := $(LIONSOS)/dep/libmicrokitco
+FIBERPOOL_PATH := $(FS_DIR)/FiberPool
 
 ifdef USE_FIBERPOOL
-LDFLAGS += -L$(BUILD_DIR)/fiberpool -lfiberpool
-COROUTINE_OBJS := $(BUILD_DIR)/$(FIBERPOOL_OBJ)
+LDFLAGS += -L$(FATFS_OBJECT_DIR) -lfiberpool
+COROUTINE_OBJS := $(FATFS_OBJECT_DIR)/$(FIBERPOOL_OBJ)
 CPPFLAGS := -DUSE_FIBERPOOL
 endif
 
@@ -57,6 +57,11 @@ LDFLAGS += -L$(FATFS_OBJECT_DIR)/libmicrokitco -lmicrokitco
 COROUTINE_OBJS := $(FATFS_OBJECT_DIR)/$(LIBMICROKITCO_OBJ)
 CPPFLAGS := -DUSE_LIBMICROKITCO
 endif
+
+$(FATFS_OBJECT_DIR)/$(FIBERPOOL_OBJ):
+	make -f $(FIBERPOOL_PATH)/Makefile \
+			BUILD_DIR=$(FATFS_OBJECT_DIR) \
+			FIBERPOOL_PATH=$(FIBERPOOL_PATH)
 
 $(FATFS_OBJECT_DIR)/$(LIBMICROKITCO_OBJ):
 	make -f $(LIBMICROKITCO_PATH)/Makefile \
