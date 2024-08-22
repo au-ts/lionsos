@@ -10,7 +10,7 @@ typedef struct {
     fs_cmpl_data_t result;
 } co_data_t;
 
-void init_metadata(void* fs_metadata);
+void init_metadata(uint64_t fs_metadata);
 
 void fat_mount(void);
 void fat_unmount(void);

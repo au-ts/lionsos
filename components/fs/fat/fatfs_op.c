@@ -80,8 +80,8 @@ static FRESULT validate_and_copy_path(uint64_t path, uint64_t len, char* memory)
 
 // Init the structure without using malloc
 // Could this have potential alignment issue?
-void init_metadata(void* fs_metadata) {
-    uint64_t base = (uint64_t)fs_metadata;
+void init_metadata(uint64_t fs_metadata) {
+    uint64_t base = fs_metadata;
     
     // Allocate memory for fs_status
     fs_status = (descriptor_status*)base;

@@ -17,6 +17,9 @@ extern blk_queue_handle_t *blk_queue_handle;
 
 extern bool blk_request_pushed;
 
+// This is the offset of the data buffer shared between file system and blk device driver
+extern uint64_t fs_metadata;
+
 DSTATUS disk_initialize (
 	BYTE pdrv				/* Physical drive number to identify the drive */
 )
@@ -77,10 +80,11 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     DRESULT res;
 	switch (pdrv) {
 		default: {
+			uint64_t read_data_offset = (uint64_t)buff - fs_metadata;
 			#ifdef FS_DEBUG_PRINT
-			sddf_printf("blk_enqueue_read: addr: 0x%lx sector: %u, count: %u ID: %d\n", (uintptr_t)buff, sector, count, co_get_handle());
+			sddf_printf("blk_enqueue_read: addr: 0x%lx sector: %u, count: %u ID: %d\n", read_data_offset, sector, count, co_get_handle());
 			#endif
-			blk_enqueue_req(blk_queue_handle, BLK_REQ_READ, (uintptr_t)buff, sector, count,co_get_handle());
+			blk_enqueue_req(blk_queue_handle, BLK_REQ_READ, read_data_offset, sector, count,co_get_handle());
 			blk_request_pushed = true;
 			co_block();
 			res = (DRESULT)(uintptr_t)co_get_args();
@@ -97,10 +101,11 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
     DRESULT res;
 	switch (pdrv) {
 		default: {
+			uint64_t write_data_offset = (uint64_t)buff - fs_metadata;
 			#ifdef FS_DEBUG_PRINT
-			sddf_printf("blk_enqueue_write: addr: 0x%lx sector: %u, count: %u ID: %d\n", (uintptr_t)buff, sector, count, co_get_handle());
+			sddf_printf("blk_enqueue_write: addr: 0x%lx sector: %u, count: %u ID: %d\n", write_data_offset, sector, count, co_get_handle());
 			#endif
-			blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, (uintptr_t)buff, sector, count,co_get_handle());
+			blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sector, count,co_get_handle());
 			blk_request_pushed = true;
 			co_block();
 			res = (DRESULT)(uintptr_t)co_get_args();
