@@ -20,6 +20,8 @@ extern bool blk_request_pushed;
 // This is the offset of the data buffer shared between file system and blk device driver
 extern uint64_t fs_metadata;
 
+extern blk_storage_info_t *config;
+
 DSTATUS disk_initialize (
 	BYTE pdrv				/* Physical drive number to identify the drive */
 )
@@ -54,7 +56,11 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
     default:
         if (cmd == GET_SECTOR_SIZE) {
             WORD *size = buff;
+			// Hardcode for now
             *size = 512;
+			#ifdef FS_DEBUG_PRINT
+			sddf_printf("file system sector size: %d\n", config->sector_size);
+			#endif
             res = RES_OK;
         }
         if (cmd == CTRL_SYNC) {

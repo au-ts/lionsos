@@ -22,3 +22,6 @@
 [submodule "libmicrokitco"]
 	path = dep/libmicrokitco
 	url = https://github.com/au-ts/libmicrokitco.git
+[submodule "dep/fiberpool"]
+	path = dep/fiberpool
+	url = https://github.com/Cheng-Li1/FiberPool.git

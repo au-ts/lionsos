@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #ifdef USE_FIBERPOOL
-#include "FiberPool/FiberPool.h"
+#include "../../../dep/fiberpool/FiberPool.h"
 
 typedef co_handle co_handle_t;
 

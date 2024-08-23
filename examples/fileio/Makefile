@@ -42,6 +42,7 @@ submodules:
 	git submodule update --init $(LIONSOS)/dep/musllibc
 	git submodule update --init $(LIONSOS)/dep/sddf
 	git submodule update --init $(LIONSOS)/dep/libmicrokitco
+	git submodule update --init --recursive $(LIONSOS)/dep/fiberpool
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
 FORCE:
