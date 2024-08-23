@@ -40,7 +40,7 @@ FATFS_OBJS :=   ff.o \
 				putchar_debug.o
 
 FIBERPOOL_OBJ := fiberpool/libfiberpool.a
-FIBERPOOL_PATH := $(FS_DIR)/FiberPool
+FIBERPOOL_PATH := $(LIONSOS)/dep/fiberpool
 
 ifdef USE_FIBERPOOL
 LDFLAGS += -L$(FATFS_OBJECT_DIR) -lfiberpool
