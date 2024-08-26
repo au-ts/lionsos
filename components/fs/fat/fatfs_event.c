@@ -9,8 +9,8 @@
 #include <stdint.h>
 #include <microkit.h>
 
-#define Client_CH 1
-#define Server_CH 2
+#define CLIENT_CH 1
+#define SERVER_CH 2
 
 #ifdef FS_DEBUG_PRINT
 #include "../../../dep/sddf/include/sddf/util/printf.h"
@@ -33,7 +33,7 @@ void* coroutine_stack_two;
 void* coroutine_stack_three;
 void* coroutine_stack_four;
 
-uintptr_t client_data_offset;
+uintptr_t client_data_addr;
 
 // File system metadata region
 uint64_t fs_metadata;
@@ -153,9 +153,9 @@ void notified(microkit_channel ch) {
     while (!config->ready) {}
 
     switch (ch) {
-        case Client_CH:
+        case CLIENT_CH:
             break;
-        case Server_CH: {
+        case SERVER_CH: {
             blk_resp_status_t status;
             uint16_t success_count;
             uint32_t id;
@@ -270,13 +270,13 @@ void notified(microkit_channel ch) {
         sddf_printf("FS notify client\n");
         #endif
         fs_queue_publish_production(fatfs_completion_queue, fs_response_enqueued);
-        microkit_notify(Client_CH);
+        microkit_notify(CLIENT_CH);
     }
     if (blk_request_pushed) {
         #ifdef FS_DEBUG_PRINT
         sddf_printf("FS notify driver\n");
         #endif
-        microkit_notify(Server_CH);
+        microkit_notify(SERVER_CH);
         blk_request_pushed = false;
     }
 }

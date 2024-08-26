@@ -29,7 +29,7 @@ descriptor_status* dir_status;
 DIR* dirs;
 
 // Data buffer offset
-extern uintptr_t client_data_offset;
+extern uintptr_t client_data_addr;
 
 // Sanity check functions
 // Checking if the memory region that provided by request is within valid memory region
@@ -71,7 +71,7 @@ static FRESULT validate_and_copy_path(uint64_t path, uint64_t len, char* memory)
         return FR_INVALID_PARAMETER;
     }
     // Copy the string to our private memory
-    memcpy(memory, (void*)(path + client_data_offset), len);
+    memcpy(memory, (void*)(path + client_data_addr), len);
     // Return error if the string is not NULL terminated
     memory[len] = '\0';
 
@@ -107,7 +107,7 @@ void init_metadata(uint64_t fs_metadata) {
     dirs = (DIR*)base;
 }
 
-uint32_t Find_FreeFs(void) {
+uint32_t find_free_fs_obj(void) {
     uint32_t i;
     for (i = 0; i < MAX_FATFS; i++) {
         if (fs_status[i] == FREE) {
@@ -117,7 +117,7 @@ uint32_t Find_FreeFs(void) {
     return i;
 }
 
-uint32_t Find_FreeFile(void) {
+uint32_t find_free_file_obj(void) {
     uint32_t i;
     for (i = 0; i < MAX_OPENED_FILENUM; i++) {
         if (file_status[i] == FREE) {
@@ -127,7 +127,7 @@ uint32_t Find_FreeFile(void) {
     return i;
 }
 
-uint32_t Find_FreeDir(void) {
+uint32_t find_free_dir_object(void) {
     uint32_t i;
     for (i = 0; i < MAX_OPENED_DIRNUM; i++) {
         if (dir_status[i] == FREE) {
@@ -200,7 +200,7 @@ void fat_open(void) {
     sddf_printf("fat_open: open flag: %lu\n", openflag);
     #endif
 
-    uint32_t fd = Find_FreeFile();
+    uint32_t fd = find_free_file_obj();
     if (fd == MAX_OPENED_FILENUM) {
         args->status = FR_TOO_MANY_OPEN_FILES;
         co_kill();
@@ -245,7 +245,7 @@ void fat_pwrite(void) {
         co_kill();
     }
 
-    void* data = (void *) (buffer + client_data_offset);
+    void* data = (void *) (buffer + client_data_addr);
 
     // Maybe add validation check of file descriptor here
     FIL* file = &(files[fd]);
@@ -294,7 +294,7 @@ void fat_pread(void) {
         co_kill();
     }
 
-    void* data = (void *) (buffer + client_data_offset);
+    void* data = (void *) (buffer + client_data_addr);
 
     // Maybe add validation check of file descriptor here
     FIL* file = &(files[fd]);
@@ -379,7 +379,7 @@ void fat_stat(void) {
         co_kill();
     }
     
-    fs_stat_t* file_stat = (void*)(output_buffer + client_data_offset);
+    fs_stat_t* file_stat = (void*)(output_buffer + client_data_addr);
 
     #ifdef FS_DEBUG_PRINT
     sddf_printf("fat_stat:asking for filename: %s\n", filepath);
@@ -588,7 +588,7 @@ void fat_opendir(void) {
         co_kill();
     }
 
-    uint32_t fd = Find_FreeDir();
+    uint32_t fd = find_free_dir_object();
     if (fd == MAX_OPENED_DIRNUM) {
         args->status = FR_TOO_MANY_OPEN_FILES;
         co_kill();
@@ -639,7 +639,7 @@ void fat_readdir(void) {
         co_kill();
     }
 
-    void* name = (void*)(buffer + client_data_offset);
+    void* name = (void*)(buffer + client_data_addr);
     
     FILINFO fno;
     RET = f_readdir(&dirs[fd], &fno);
