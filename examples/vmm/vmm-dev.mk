@@ -129,10 +129,6 @@ clobber:: clean
 # How to build libvmm.a
 include ${LIBVMM}/vmm.mk
 
-# Add an extra dependency for libvmm.a
-# Note: this should be in ${LIBVMM}/vmm.mk
-libvmm/virtio/block.o: ${SDDF}/include
-
 ${SDDF}/include ${LIBVMM}/vmm.mk:
 	cd ${LIONSOS}; git submodule update --init $(dir $@)
 
