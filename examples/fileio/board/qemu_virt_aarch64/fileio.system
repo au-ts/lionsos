@@ -44,7 +44,7 @@
     <memory_region name="serial_rx_queue_micropython" size="0x1_000" />
 
     <!-- shared memory for micropython/fs queue -->
-    <memory_region name="shared_nfs_micropython" size="0x4000000" />
+    <memory_region name="shared_fs_micropython" size="0x4000000" />
     <memory_region name="nfs_command_queue" size="0x8_000" />
     <memory_region name="nfs_completion_queue" size="0x8_000" />
 
@@ -146,7 +146,7 @@
         <program_image path="micropython.elf" />
         <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="nfs_command_queue" />
         <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="nfs_completion_queue" />
-        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="nfs_share" />
+        <map mr="shared_fs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="nfs_share" />
 
         <map mr="eth_rx_free_micropython" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
         <map mr="eth_rx_active_micropython" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
@@ -220,7 +220,7 @@
 
         <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="fatfs_command_queue" />
         <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="fatfs_completion_queue" />
-        <map mr="shared_nfs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="client_data_offset"/>
+        <map mr="shared_fs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="client_data_addr"/>
 
         <map mr="coroutine_stack1" vaddr="0xA0_000_000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_one" />
         <map mr="coroutine_stack2" vaddr="0xB0_000_000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_two" />
