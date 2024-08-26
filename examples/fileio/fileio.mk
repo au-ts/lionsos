@@ -130,7 +130,7 @@ fatfs.elf: musllibc/lib/libc.a
 		   LIBC_DIR=$(abspath $(BUILD_DIR)/musllibc) \
 		   BUILD_DIR=$(abspath .) \
 		   TARGET=$(TARGET) \
-		   USE_FIBERPOOL=1
+		   USE_LIBMICROKITCO=1
 		   
 musllibc/lib/libc.a:
 	make -C $(MUSL) \

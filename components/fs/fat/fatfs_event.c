@@ -84,7 +84,7 @@ void (*operation_functions[])() = {
     fat_rewinddir,
 };
 
-static fs_request request_pool[LIBMICROKITCO_MAX_COTHREADS];
+static fs_request request_pool[COROUTINE_NUM];
 
 void fill_client_response(fs_msg_t* message, const fs_request* finished_request) {
     message->cmpl.id = finished_request->request_id;
@@ -130,7 +130,7 @@ void init(void) {
     stack[3] = (uint64_t)coroutine_stack_four;
 
     // Init coroutine pool
-    co_init(stack, 4);
+    co_init(stack, WORKER_COROUTINE_NUM);
     
     // Init file system metadata
     init_metadata(fs_metadata);
@@ -207,7 +207,7 @@ void notified(microkit_channel ch) {
           This for loop check if there are coroutines finished and send the result back
         */
         new_request_popped = false;
-        for (int32_t i = 1; i < LIBMICROKITCO_MAX_COTHREADS; i++) {
+        for (uint16_t i = 1; i < COROUTINE_NUM; i++) {
             if (co_check_if_finished(request_pool[i].handle) && request_pool[i].stat == INUSE) {
                 fill_client_response(fs_queue_idx_empty(fatfs_completion_queue, fs_response_enqueued), &(request_pool[i]));
                 fs_response_enqueued++;
