@@ -4,11 +4,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include "../../../include/lions/fs/protocol.h"
+#include <fs/protocol.h>
 #include "fatfs_config.h"
 
 #ifdef FS_DEBUG_PRINT
-#include "../../../dep/sddf/include/sddf/util/printf.h"
+#include <sddf/util/printf.h>
 #endif
 /*
 This file define a bunch of wrapper functions of FATFs functions so those functions can be run in the 

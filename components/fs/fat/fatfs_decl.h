@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ff15/source/ff.h"
-#include "../../../include/lions/fs/protocol.h"
+#include <fs/protocol.h>
 
 // Use struct instead of union
 typedef struct {

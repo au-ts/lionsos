@@ -3,12 +3,12 @@
 #include "fatfs_decl.h"
 #include <stdbool.h>
 #include <stdint.h>
-#include "../../../dep/sddf/include/sddf/blk/queue.h"
+#include <sddf/blk/queue.h>
 #include "co_helper.h"
 #include "fatfs_config.h"
 
 #ifdef FS_DEBUG_PRINT
-#include "../../../dep/sddf/include/sddf/util/printf.h"
+#include <sddf/util/printf.h>
 #endif
 
 #define SD 0 /* Map SD card to physical drive 0 */
