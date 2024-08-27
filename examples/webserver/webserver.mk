@@ -85,7 +85,7 @@ micropython.elf: mpy-cross manifest.py webserver.py config.py \
 			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
 			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
 			FROZEN_MANIFEST=$(abspath ./manifest.py) \
-			EXEC_MODULE=$(abspath ./webserver.py)
+			EXEC_MODULE=webserver.py
 
 config.py: ${CHECK_FLAGS_BOARD_MD5}
 	echo "base_dir='$(WEBSITE_DIR)'" > config.py
