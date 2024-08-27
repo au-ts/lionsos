@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #ifdef USE_FIBERPOOL
-#include "../../../dep/fiberpool/FiberPool.h"
+#include <fiberpool/FiberPool.h>
 
 typedef co_handle co_handle_t;
 
@@ -18,7 +18,7 @@ typedef co_handle co_handle_t;
 #endif
 
 #ifdef USE_LIBMICROKITCO
-#include "../../../dep/libmicrokitco/libmicrokitco.h"
+#include <libmicrokitco/libmicrokitco.h>
 typedef microkit_cothread_ref_t co_handle_t;
 
 #define co_get_args() microkit_cothread_my_arg()

@@ -1,9 +1,9 @@
 #include "fatfs_decl.h"
 #include "ff15/source/ff.h"
 #include "ff15/source/diskio.h"
-#include "../../../dep/sddf/include/sddf/blk/queue.h"
+#include <sddf/blk/queue.h>
 #include "co_helper.h"
-#include "../../../include/lions/fs/protocol.h"
+#include <fs/protocol.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -13,7 +13,7 @@
 #define SERVER_CH 2
 
 #ifdef FS_DEBUG_PRINT
-#include "../../../dep/sddf/include/sddf/util/printf.h"
+#include <sddf/util/printf.h>
 #endif
 
 blk_queue_handle_t blk_queue_handle_memory;

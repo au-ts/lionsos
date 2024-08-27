@@ -22,8 +22,10 @@ CFLAGS := -Wall \
 		  -O0 \
 		  -mstrict-align \
 		  -I$(LIBC_DIR)/include \
-		  -I../../../dep/sddf/include/ \
 		  -I$(BOARD_DIR)/include \
+		  -I$(LIONSOS)/dep \
+		  -I$(LIONSOS)/include/lions \
+          -I$(LIONSOS)/dep/sddf/include \
 		  -I$(FS_DIR)
 
 LDFLAGS := -L$(LIBC_DIR)/lib -lc
