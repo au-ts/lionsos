@@ -4,6 +4,18 @@ import os
 success_count = 0
 fail_count = 0
 
+def path_join(*paths):
+    """Join one or more path components intelligently."""
+    return '/'.join(paths).replace('//', '/')
+
+def path_exists(path):
+    """Check if a path exists."""
+    try:
+        os.stat(path)
+        return True
+    except OSError:
+        return False
+
 def test_environment(path):
     """Set up the environment for testing by ensuring each part of the path exists.
     If the final directory exists, the test fails. Otherwise, it is created."""
@@ -14,16 +26,16 @@ def test_environment(path):
     current_path = "/"
 
     for component in path_components[:-1]:
-        current_path = os.path.join(current_path, component)
+        current_path = path_join(current_path, component)
 
-        if not os.path.exists(current_path):
+        if not path_exists(current_path):
             os.mkdir(current_path)
             # print(f"Directory '{current_path}' does not exist. Created directory.")
 
     # The final directory should not exist
-    final_dir = os.path.join(current_path, path_components[-1])
+    final_dir = path_join(current_path, path_components[-1])
 
-    if os.path.exists(final_dir):
+    if path_exists(final_dir):
         raise AssertionError(f"Test failed: Directory '{final_dir}' already exists.")
     else:
         os.mkdir(final_dir)
@@ -35,7 +47,7 @@ def simple_write_and_read_back_test(directory):
     """Test writing to a file and reading it back to verify contents."""
     global success_count, fail_count
 
-    test_file = os.path.join(directory, "test_file.txt")
+    test_file = path_join(directory, "test_file.txt")
     test_content = "Hello, this is a test file."
 
     try:
@@ -61,7 +73,7 @@ def simple_write_and_read_back_test(directory):
 
     finally:
         # Cleanup
-        if os.path.exists(test_file):
+        if path_exists(test_file):
             os.remove(test_file)
             # print(f"File '{test_file}' removed after test.")
 
@@ -69,7 +81,7 @@ def test_write_and_read_back_complex(directory):
     """Test writing a poem line by line to a file and reading it back to verify contents."""
     global success_count, fail_count
 
-    test_file = os.path.join(directory, "test_poem.txt")
+    test_file = path_join(directory, "test_poem.txt")
     poem_lines = [
         "Two roads diverged in a yellow wood,",
         "And sorry I could not travel both",
@@ -122,7 +134,7 @@ def test_write_and_read_back_complex(directory):
 
     finally:
         # Cleanup
-        if os.path.exists(test_file):
+        if path_exists(test_file):
             os.remove(test_file)
 
 def test_mkdir_and_remove(directory):
@@ -146,19 +158,19 @@ def test_mkdir_and_remove(directory):
     try:
         # Create directories and verify creation
         for dir_name in dir_names:
-            test_dir = os.path.join(directory, dir_name)
+            test_dir = path_join(directory, dir_name)
             os.mkdir(test_dir)
 
             # Verify the directory was created
-            assert os.path.exists(test_dir), f"Test failed: Directory '{test_dir}' was not created."
+            assert path_exists(test_dir), f"Test failed: Directory '{test_dir}' was not created."
 
         # Remove directories and verify removal
         for dir_name in dir_names:
-            test_dir = os.path.join(directory, dir_name)
+            test_dir = path_join(directory, dir_name)
             os.rmdir(test_dir)
 
             # Verify the directory was removed
-            assert not os.path.exists(test_dir), f"Test failed: Directory '{test_dir}' was not removed."
+            assert not path_exists(test_dir), f"Test failed: Directory '{test_dir}' was not removed."
 
         # Increment success count if all directories are verified
         success_count += 1
@@ -177,7 +189,7 @@ def test_big_file_write_and_read(directory):
     """Test writing and reading a large file to verify the content."""
     global success_count, fail_count
 
-    test_file = os.path.join(directory, "test_big_file.txt")
+    test_file = path_join(directory, "test_big_file.txt")
     large_content = generate_large_content(size_in_mb=1)  # Generate 1 MB of content
 
     try:
@@ -201,7 +213,7 @@ def test_big_file_write_and_read(directory):
 
     finally:
         # Cleanup
-        if os.path.exists(test_file):
+        if path_exists(test_file):
             os.remove(test_file)
 
 def test_rename_files_and_dirs(directory):
@@ -216,33 +228,33 @@ def test_rename_files_and_dirs(directory):
 
     try:
         # Create the original directory
-        original_dir_path = os.path.join(directory, original_dir_name)
+        original_dir_path = path_join(directory, original_dir_name)
         os.mkdir(original_dir_path)
 
         # Create a file in the original directory and write content to it
-        original_file_path = os.path.join(original_dir_path, original_file_name)
+        original_file_path = path_join(original_dir_path, original_file_name)
         file_content = "This is a test file for renaming."
 
         with open(original_file_path, "w") as f:
             f.write(file_content)
 
         # Rename the file
-        renamed_file_path = os.path.join(original_dir_path, renamed_file_name)
+        renamed_file_path = path_join(original_dir_path, renamed_file_name)
         os.rename(original_file_path, renamed_file_path)
 
         # Verify the renamed file exists and contains the correct content
-        assert os.path.exists(renamed_file_path), f"Test failed: Renamed file '{renamed_file_path}' does not exist."
+        assert path_exists(renamed_file_path), f"Test failed: Renamed file '{renamed_file_path}' does not exist."
         with open(renamed_file_path, "r") as f:
             read_content = f.read()
         assert read_content == file_content, "Test failed: Renamed file content does not match."
 
         # Rename the directory
-        renamed_dir_path = os.path.join(directory, renamed_dir_name)
+        renamed_dir_path = path_join(directory, renamed_dir_name)
         os.rename(original_dir_path, renamed_dir_path)
 
         # Verify the renamed directory exists and contains the renamed file
-        assert os.path.exists(renamed_dir_path), f"Test failed: Renamed directory '{renamed_dir_path}' does not exist."
-        assert os.path.exists(os.path.join(renamed_dir_path, renamed_file_name)), (
+        assert path_exists(renamed_dir_path), f"Test failed: Renamed directory '{renamed_dir_path}' does not exist."
+        assert path_exists(path_join(renamed_dir_path, renamed_file_name)), (
             f"Test failed: File '{renamed_file_name}' does not exist in renamed directory '{renamed_dir_path}'."
         )
 
@@ -255,17 +267,17 @@ def test_rename_files_and_dirs(directory):
 
     finally:
         # Cleanup: Remove the renamed file and directory
-        renamed_file_path = os.path.join(renamed_dir_path, renamed_file_name)
-        if os.path.exists(renamed_file_path):
+        renamed_file_path = path_join(renamed_dir_path, renamed_file_name)
+        if path_exists(renamed_file_path):
             os.remove(renamed_file_path)
-        if os.path.exists(renamed_dir_path):
+        if path_exists(renamed_dir_path):
             os.rmdir(renamed_dir_path)
 
 def test_truncate_file(directory):
     """Test truncating a file and verifying the truncated content."""
     global success_count, fail_count
 
-    test_file = os.path.join(directory, "test_truncate.txt")
+    test_file = path_join(directory, "test_truncate.txt")
     poem = (
         "I met a traveler from an antique land\n"
         "Who said: Two vast and trunkless legs of stone\n"
@@ -312,10 +324,10 @@ def test_truncate_file(directory):
 
     finally:
         # Cleanup: Remove the test file
-        if os.path.exists(test_file):
+        if path_exists(test_file):
             os.remove(test_file)
 
-if __name__ == "__main__":
+def run_tests():
     test_dir_path = "/home/li/test_dir"
 
     # Run the test environment setup
@@ -356,5 +368,5 @@ if __name__ == "__main__":
     print(f"\nTests completed. Success: {success_count}, Fail: {fail_count}")
 
     # Cleanup: Remove the test dir
-    if os.path.exists(test_dir_path):
+    if path_exists(test_dir_path):
         os.rmdir(test_dir_path)
