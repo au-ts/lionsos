@@ -18,7 +18,7 @@ def test_environment(path):
         
         if not os.path.exists(current_path):
             os.mkdir(current_path)
-            print(f"Directory '{current_path}' does not exist. Created directory.")
+            # print(f"Directory '{current_path}' does not exist. Created directory.")
     
     # The final directory should not exist
     final_dir = os.path.join(current_path, path_components[-1])
@@ -42,7 +42,7 @@ def simple_write_and_read_back_test(directory):
         # Write content to the file
         with open(test_file, "w") as f:
             f.write(test_content)
-        print(f"File '{test_file}' written successfully.")
+        # print(f"File '{test_file}' written successfully.")
         
         # Read the content back
         with open(test_file, "r") as f:
@@ -50,7 +50,7 @@ def simple_write_and_read_back_test(directory):
         
         # Verify the content
         assert read_content == test_content, f"Test failed: Content mismatch. Expected: '{test_content}', Got: '{read_content}'"
-        print(f"File '{test_file}' read successfully, and content verified.")
+        # print(f"File '{test_file}' read successfully, and content verified.")
         
         # Increment success count
         success_count += 1
@@ -63,7 +63,7 @@ def simple_write_and_read_back_test(directory):
         # Cleanup
         if os.path.exists(test_file):
             os.remove(test_file)
-            print(f"File '{test_file}' removed after test.")
+            # print(f"File '{test_file}' removed after test.")
 
 def test_write_and_read_back_complex(directory):
     """Test writing a poem line by line to a file and reading it back to verify contents."""
@@ -101,7 +101,7 @@ def test_write_and_read_back_complex(directory):
         with open(test_file, "w") as f:
             for index, line in enumerate(poem_lines):
                 f.write(line + "\n")
-                print(f"Line {index + 1} written to file.")
+                # print(f"Line {index + 1} written to file.")
                 
                 # Read the line back immediately to verify
                 f.flush()  # Ensure the content is written to the file
@@ -255,6 +255,7 @@ def test_rename_files_and_dirs(directory):
         
     finally:
         # Cleanup: Remove the renamed file and directory
+        renamed_file_path = os.path.join(renamed_dir_path, renamed_file_name)
         if os.path.exists(renamed_file_path):
             os.remove(renamed_file_path)
         if os.path.exists(renamed_dir_path):
@@ -314,9 +315,8 @@ def test_truncate_file(directory):
         if os.path.exists(test_file):
             os.remove(test_file)
 
-# Example usage:
 if __name__ == "__main__":
-    test_dir_path = "/home/test_dir"
+    test_dir_path = "/home/li/test_dir"
     
     # Run the test environment setup
     test_environment(test_dir_path)
@@ -354,3 +354,7 @@ if __name__ == "__main__":
 
     # Print the results
     print(f"\nTests completed. Success: {success_count}, Fail: {fail_count}")
+
+    # Cleanup: Remove the test dir
+    if os.path.exists(test_dir_path):
+        os.rmdir(test_dir_path)
