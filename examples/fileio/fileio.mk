@@ -107,6 +107,8 @@ include ${BLK_COMPONENTS}/blk_components.mk
 # nproc=2
 
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a
+	cp $(LIONSOS)/components/fs/fat/fs_test.py .
+	cp $(LIONSOS)/examples/fileio/manifest.py .
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
 			MICROKIT_BOARD=$(MICROKIT_BOARD) \
@@ -116,6 +118,7 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 			BUILD=$(abspath .) \
 			LIBMATH=${LIBMATH} \
 			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
+			FROZEN_MANIFEST=$(abspath ./manifest.py) \
 			V=1
 
 fatfs.elf: musllibc/lib/libc.a
@@ -131,7 +134,7 @@ fatfs.elf: musllibc/lib/libc.a
 		   BUILD_DIR=$(abspath .) \
 		   TARGET=$(TARGET) \
 		   USE_LIBMICROKITCO=1
-		   
+
 musllibc/lib/libc.a:
 	make -C $(MUSL) \
 		C_COMPILER=aarch64-none-elf-gcc \
