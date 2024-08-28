@@ -39,7 +39,7 @@ MICRODOT := ${LIONSOS}/dep/microdot/src
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  copy.elf network_virt_rx.elf network_virt_tx.elf \
-	  uart_driver.elf serial_virt_tx.elf
+	  uart_driver.elf serial_virt_tx.elf serial_virt_rx.elf
 
 SYSTEM_FILE := $(WEBSERVER_SRC_DIR)/board/$(MICROKIT_BOARD)/webserver.system
 
