@@ -185,10 +185,11 @@ STATIC mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
         // make 3-tuple with info about this entry
         mp_obj_tuple_t *t = MP_OBJ_TO_PTR(mp_obj_new_tuple(3, NULL));
 
+        uint64_t path_len = completion.data.readdir.path_len;
         if (self->is_str) {
-            t->items[0] = mp_obj_new_str(fn, strlen(fn));
+            t->items[0] = mp_obj_new_str(fn, path_len);
         } else {
-            t->items[0] = mp_obj_new_bytes((const byte *)fn, strlen(fn));
+            t->items[0] = mp_obj_new_bytes((const byte *)fn, path_len);
         }
         t->items[1] = MP_OBJ_NEW_SMALL_INT(0);
         t->items[2] = MP_OBJ_NEW_SMALL_INT(0);
