@@ -94,7 +94,7 @@ BLK_COMPONENTS := $(SDDF)/blk/components
 
 include ${SDDF}/util/util.mk
 include ${LIBVMM_DIR}/vmm.mk
-include ${SDDF}/drivers/clock/${TIMER_DRIV_DIR}/timer_driver.mk
+include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
 include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
 include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk
 include ${SDDF}/network/components/network_components.mk

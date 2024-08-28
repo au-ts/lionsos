@@ -232,7 +232,7 @@ void fat_pwrite(void) {
     uint64_t offset = args->params.write.offset;
 
     #ifdef FS_DEBUG_PRINT
-    sddf_printf("fat_write: bytes to be write: %lu, read offset: %lu\n", btw, offset);
+    sddf_printf("fat_write: bytes to be write: %lu, write offset: %lu\n", btw, offset);
     #endif
 
     FRESULT RET = within_data_region(buffer, btw);
@@ -247,7 +247,6 @@ void fat_pwrite(void) {
 
     void* data = (void *) (buffer + client_data_addr);
 
-    // Maybe add validation check of file descriptor here
     FIL* file = &(files[fd]);
 
     RET = f_lseek(file, offset);
