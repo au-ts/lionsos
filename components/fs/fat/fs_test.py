@@ -260,6 +260,59 @@ def test_rename_files_and_dirs(directory):
         if os.path.exists(renamed_dir_path):
             os.rmdir(renamed_dir_path)
 
+def test_truncate_file(directory):
+    """Test truncating a file and verifying the truncated content."""
+    global success_count, fail_count
+    
+    test_file = os.path.join(directory, "test_truncate.txt")
+    poem = (
+        "I met a traveler from an antique land\n"
+        "Who said: Two vast and trunkless legs of stone\n"
+        "Stand in the desert. Near them, on the sand,\n"
+        "Half sunk, a shattered visage lies, whose frown,\n"
+        "And wrinkled lip, and sneer of cold command,\n"
+        "Tell that its sculptor well those passions read\n"
+        "Which yet survive, stamped on these lifeless things,\n"
+        "The hand that mocked them and the heart that fed.\n"
+        "And on the pedestal, these words appear:\n"
+        "My name is Ozymandias, King of Kings;\n"
+        "Look on my Works, ye Mighty, and despair!\n"
+        "Nothing beside remains. Round the decay\n"
+        "Of that colossal Wreck, boundless and bare\n"
+        "The lone and level sands stretch far away."
+    )
+    
+    try:
+        # Write the poem to the file
+        with open(test_file, "w") as f:
+            f.write(poem)
+        
+        # Truncate the file in steps and verify the content
+        truncation_lengths = [200, 150, 100, 50, 0]  # Example truncation lengths
+        
+        for length in truncation_lengths:
+            with open(test_file, "r+") as f:
+                f.truncate(length)
+                f.seek(0)
+                truncated_content = f.read()
+            
+            expected_content = poem[:length]
+            assert truncated_content == expected_content, (
+                f"Test failed: Truncated content does not match expected at length {length}. "
+                f"Expected: {repr(expected_content)}, Got: {repr(truncated_content)}"
+            )
+        
+        # Increment success count if all truncations are verified
+        success_count += 1
+        
+    except AssertionError as e:
+        print(e)
+        fail_count += 1
+        
+    finally:
+        # Cleanup: Remove the test file
+        if os.path.exists(test_file):
+            os.remove(test_file)
 
 # Example usage:
 if __name__ == "__main__":
@@ -294,9 +347,10 @@ if __name__ == "__main__":
 
     test_rename_files_and_dirs(test_dir_path)
 
+    # Indicate the start of the sixth test
+    print("\nTest 6: Running test_truncate_file")
+
+    test_truncate_file(test_dir_path)
+
     # Print the results
     print(f"\nTests completed. Success: {success_count}, Fail: {fail_count}")
-
-
-
-    
