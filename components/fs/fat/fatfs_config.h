@@ -15,7 +15,7 @@
 #define MAX_OPENED_DIRNUM 128
 
 // Actually this value should be like 4
-#define BLK_QUEUE_SIZE 2
+#define BLK_QUEUE_SIZE 16
 
 // Coroutine library that is using
 #ifndef USE_FIBERPOOL

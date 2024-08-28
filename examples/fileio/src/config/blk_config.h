@@ -12,8 +12,8 @@
 
 #define BLK_NAME_CLI0                      "fatfs"
 
-#define BLK_QUEUE_SIZE_CLI0                 1024
-#define BLK_QUEUE_SIZE_DRIV                 BLK_QUEUE_SIZE_CLI0
+#define BLK_QUEUE_SIZE_CLI0                 16
+#define BLK_QUEUE_SIZE_DRIV                 1024
 
 #define BLK_REGION_SIZE                     0x200000
 #define BLK_CONFIG_REGION_SIZE_CLI0         BLK_REGION_SIZE
