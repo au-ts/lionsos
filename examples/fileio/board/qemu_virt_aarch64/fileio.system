@@ -165,7 +165,7 @@
     <!-- <memory_region name="blk_regs" size="0x10_000" phys_addr="0xa003000" /> -->
     <!-- Needed specifically for the virtIO block driver -->
     <!-- TODO: make this one region -->
-    <memory_region name="blk_virtio_headers" size="0x2000" />
+    <memory_region name="blk_virtio_headers" size="0x10000" />
     <memory_region name="blk_driver_metadata" size="0x200000" />
 
     <memory_region name="blk_driver_config" size="0x1000" page_size="0x1000" />
@@ -207,20 +207,23 @@
         <map mr="blk_client_request" vaddr="0x30200000" perms="rw" cached="false" setvar_vaddr="blk_req_queue"  />
         <map mr="blk_client_response" vaddr="0x30400000" perms="rw" cached="false" setvar_vaddr="blk_resp_queue" />
         <map mr="blk_client_data" vaddr="0x30600000" perms="rw" cached="false" setvar_vaddr="blk_client_data_start" />
+        <!-- Share the data region between fs and micropython with blk_virt as well -->
+        <map mr="shared_fs_micropython" vaddr="0x30800000" perms="rw" cached="true" />
     </protection_domain>
 
     <!-- FAT File system -->
     <protection_domain name="fatfs" priority="100" pp="true">
         <program_image path="fatfs.elf" />
+        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="fatfs_command_queue" />
+        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="fatfs_completion_queue" />
+
         <map mr="blk_client_config" vaddr="0x40_000_000" perms="r" cached="true" setvar_vaddr="config" />
 
         <map mr="blk_client_request" vaddr="0x40_200_000" perms="rw" cached="true" setvar_vaddr="request" />
         <map mr="blk_client_response" vaddr="0x40_400_000" perms="rw" cached="true" setvar_vaddr="response" />
         <map mr="blk_client_data" vaddr="0x40_800_000" perms="rw" cached="true" setvar_vaddr="fs_metadata" />
 
-        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="fatfs_command_queue" />
-        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="fatfs_completion_queue" />
-        <map mr="shared_fs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="client_data_addr"/>
+        <map mr="shared_fs_micropython" vaddr="0x40_a00_000" perms="rw" cached="true" setvar_vaddr="client_data_addr"/>
 
         <map mr="coroutine_stack1" vaddr="0xA0_000_000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_one" />
         <map mr="coroutine_stack2" vaddr="0xB0_000_000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_two" />

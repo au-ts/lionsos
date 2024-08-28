@@ -109,7 +109,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 		default: {
 			uint64_t write_data_offset = (uint64_t)buff - fs_metadata;
 			#ifdef FS_DEBUG_PRINT
-			sddf_printf("blk_enqueue_write: addr: 0x%lx sector: %u, count: %u ID: %d\n", write_data_offset, sector, count, co_get_handle());
+			sddf_printf("blk_enqueue_write: addr: 0x%lx sector: %u, count: %u ID: %d buffer_addr_in_fs: 0x%p\n", write_data_offset, sector, count, co_get_handle(), buff);
 			#endif
 			blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sector, count,co_get_handle());
 			blk_request_pushed = true;

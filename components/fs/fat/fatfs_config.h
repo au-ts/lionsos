@@ -1,7 +1,7 @@
 #pragma once
 
 // Flag to control whether enable debug print for fatfs
-// #define FS_DEBUG_PRINT
+#define FS_DEBUG_PRINT
 
 #define DATA_REGION_SIZE 0x4000000
 
@@ -15,7 +15,7 @@
 #define MAX_OPENED_DIRNUM 128
 
 // Actually this value should be like 4
-#define BLK_QUEUE_SIZE 512
+#define BLK_QUEUE_SIZE 2
 
 // Coroutine library that is using
 #ifndef USE_FIBERPOOL
