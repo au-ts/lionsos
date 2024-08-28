@@ -7,58 +7,58 @@ fail_count = 0
 def test_environment(path):
     """Set up the environment for testing by ensuring each part of the path exists.
     If the final directory exists, the test fails. Otherwise, it is created."""
-    
+
     # Split the path into components
     path_components = path.strip("/").split("/")
-    
+
     current_path = "/"
-    
+
     for component in path_components[:-1]:
         current_path = os.path.join(current_path, component)
-        
+
         if not os.path.exists(current_path):
             os.mkdir(current_path)
             # print(f"Directory '{current_path}' does not exist. Created directory.")
-    
+
     # The final directory should not exist
     final_dir = os.path.join(current_path, path_components[-1])
-    
+
     if os.path.exists(final_dir):
         raise AssertionError(f"Test failed: Directory '{final_dir}' already exists.")
     else:
         os.mkdir(final_dir)
         print(f"Test environment set up: '{final_dir}' created successfully.")
-    
+
     return final_dir
 
 def simple_write_and_read_back_test(directory):
     """Test writing to a file and reading it back to verify contents."""
     global success_count, fail_count
-    
+
     test_file = os.path.join(directory, "test_file.txt")
     test_content = "Hello, this is a test file."
-    
+
     try:
         # Write content to the file
         with open(test_file, "w") as f:
             f.write(test_content)
         # print(f"File '{test_file}' written successfully.")
-        
+
         # Read the content back
         with open(test_file, "r") as f:
             read_content = f.read()
-        
+
         # Verify the content
         assert read_content == test_content, f"Test failed: Content mismatch. Expected: '{test_content}', Got: '{read_content}'"
         # print(f"File '{test_file}' read successfully, and content verified.")
-        
+
         # Increment success count
         success_count += 1
-        
+
     except AssertionError as e:
         print(e)
         fail_count += 1
-        
+
     finally:
         # Cleanup
         if os.path.exists(test_file):
@@ -68,7 +68,7 @@ def simple_write_and_read_back_test(directory):
 def test_write_and_read_back_complex(directory):
     """Test writing a poem line by line to a file and reading it back to verify contents."""
     global success_count, fail_count
-    
+
     test_file = os.path.join(directory, "test_poem.txt")
     poem_lines = [
         "Two roads diverged in a yellow wood,",
@@ -95,31 +95,31 @@ def test_write_and_read_back_complex(directory):
         "I took the one less traveled by,",
         "And that has made all the difference."
     ]
-    
+
     try:
         # Write the poem to the file line by line and read back each line to verify
         with open(test_file, "w") as f:
             for index, line in enumerate(poem_lines):
                 f.write(line + "\n")
                 # print(f"Line {index + 1} written to file.")
-                
+
                 # Read the line back immediately to verify
                 f.flush()  # Ensure the content is written to the file
                 with open(test_file, "r") as fr:
                     lines = fr.readlines()
                     read_back_line = lines[-1].strip()  # Read the last line written
-                    
+
                     assert read_back_line == line, (
                         f"Test failed at line {index + 1}: Expected: '{line}', Got: '{read_back_line}'"
                     )
-        
+
         # Increment success count if all lines are verified
         success_count += 1
-        
+
     except AssertionError as e:
         print(e)
         fail_count += 1
-        
+
     finally:
         # Cleanup
         if os.path.exists(test_file):
@@ -142,27 +142,27 @@ def test_mkdir_and_remove(directory):
         "unicode_测试_目录",
         "mixedCASE_TestDir"
     ]
-    
+
     try:
         # Create directories and verify creation
         for dir_name in dir_names:
             test_dir = os.path.join(directory, dir_name)
             os.mkdir(test_dir)
-            
+
             # Verify the directory was created
             assert os.path.exists(test_dir), f"Test failed: Directory '{test_dir}' was not created."
-        
+
         # Remove directories and verify removal
         for dir_name in dir_names:
             test_dir = os.path.join(directory, dir_name)
             os.rmdir(test_dir)
-            
+
             # Verify the directory was removed
             assert not os.path.exists(test_dir), f"Test failed: Directory '{test_dir}' was not removed."
-        
+
         # Increment success count if all directories are verified
         success_count += 1
-        
+
     except AssertionError as e:
         print(e)
         fail_count += 1
@@ -176,29 +176,29 @@ def generate_large_content(size_in_mb=1):
 def test_big_file_write_and_read(directory):
     """Test writing and reading a large file to verify the content."""
     global success_count, fail_count
-    
+
     test_file = os.path.join(directory, "test_big_file.txt")
     large_content = generate_large_content(size_in_mb=1)  # Generate 1 MB of content
-    
+
     try:
         # Write the large content to the file
         with open(test_file, "w") as f:
             f.write(large_content)
-        
+
         # Read the content back
         with open(test_file, "r") as f:
             read_content = f.read()
-        
+
         # Verify the content
         assert read_content == large_content, "Test failed: The content of the large file does not match."
-        
+
         # Increment success count
         success_count += 1
-        
+
     except AssertionError as e:
         print(e)
         fail_count += 1
-        
+
     finally:
         # Cleanup
         if os.path.exists(test_file):
@@ -207,52 +207,52 @@ def test_big_file_write_and_read(directory):
 def test_rename_files_and_dirs(directory):
     """Test renaming directories and files after creating and writing content to them."""
     global success_count, fail_count
-    
+
     # Names for directories and files
     original_dir_name = "original_dir"
     renamed_dir_name = "renamed_dir"
     original_file_name = "original_file.txt"
     renamed_file_name = "renamed_file.txt"
-    
+
     try:
         # Create the original directory
         original_dir_path = os.path.join(directory, original_dir_name)
         os.mkdir(original_dir_path)
-        
+
         # Create a file in the original directory and write content to it
         original_file_path = os.path.join(original_dir_path, original_file_name)
         file_content = "This is a test file for renaming."
-        
+
         with open(original_file_path, "w") as f:
             f.write(file_content)
-        
+
         # Rename the file
         renamed_file_path = os.path.join(original_dir_path, renamed_file_name)
         os.rename(original_file_path, renamed_file_path)
-        
+
         # Verify the renamed file exists and contains the correct content
         assert os.path.exists(renamed_file_path), f"Test failed: Renamed file '{renamed_file_path}' does not exist."
         with open(renamed_file_path, "r") as f:
             read_content = f.read()
         assert read_content == file_content, "Test failed: Renamed file content does not match."
-        
+
         # Rename the directory
         renamed_dir_path = os.path.join(directory, renamed_dir_name)
         os.rename(original_dir_path, renamed_dir_path)
-        
+
         # Verify the renamed directory exists and contains the renamed file
         assert os.path.exists(renamed_dir_path), f"Test failed: Renamed directory '{renamed_dir_path}' does not exist."
         assert os.path.exists(os.path.join(renamed_dir_path, renamed_file_name)), (
             f"Test failed: File '{renamed_file_name}' does not exist in renamed directory '{renamed_dir_path}'."
         )
-        
+
         # Increment success count
         success_count += 1
-        
+
     except AssertionError as e:
         print(e)
         fail_count += 1
-        
+
     finally:
         # Cleanup: Remove the renamed file and directory
         renamed_file_path = os.path.join(renamed_dir_path, renamed_file_name)
@@ -264,7 +264,7 @@ def test_rename_files_and_dirs(directory):
 def test_truncate_file(directory):
     """Test truncating a file and verifying the truncated content."""
     global success_count, fail_count
-    
+
     test_file = os.path.join(directory, "test_truncate.txt")
     poem = (
         "I met a traveler from an antique land\n"
@@ -282,34 +282,34 @@ def test_truncate_file(directory):
         "Of that colossal Wreck, boundless and bare\n"
         "The lone and level sands stretch far away."
     )
-    
+
     try:
         # Write the poem to the file
         with open(test_file, "w") as f:
             f.write(poem)
-        
+
         # Truncate the file in steps and verify the content
         truncation_lengths = [200, 150, 100, 50, 0]  # Example truncation lengths
-        
+
         for length in truncation_lengths:
             with open(test_file, "r+") as f:
                 f.truncate(length)
                 f.seek(0)
                 truncated_content = f.read()
-            
+
             expected_content = poem[:length]
             assert truncated_content == expected_content, (
-                f"Test failed: Truncated content does not match expected at length {length}. "
+                f"Test failed: Truncated content does not match expected at length {length}. ",
                 f"Expected: {repr(expected_content)}, Got: {repr(truncated_content)}"
             )
-        
+
         # Increment success count if all truncations are verified
         success_count += 1
-        
+
     except AssertionError as e:
         print(e)
         fail_count += 1
-        
+
     finally:
         # Cleanup: Remove the test file
         if os.path.exists(test_file):
@@ -317,7 +317,7 @@ def test_truncate_file(directory):
 
 if __name__ == "__main__":
     test_dir_path = "/home/li/test_dir"
-    
+
     # Run the test environment setup
     test_environment(test_dir_path)
 
@@ -341,7 +341,7 @@ if __name__ == "__main__":
     print("\nTest 4: Running test_big_file_write_and_read")
 
     test_big_file_write_and_read(test_dir_path)
-    
+
     # Indicate the start of the fifth test
     print("\nTest 5: Running test_rename_files_and_dirs")
 
