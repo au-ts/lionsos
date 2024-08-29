@@ -876,8 +876,8 @@ void nfs_notified(void) {
             handle_close(request_id, params->fd);
             break;
         }
-        case FS_CMD_PREAD: {
-            struct fs_cmd_params_pread *params = &cmd.params.pread;
+        case FS_CMD_READ: {
+            struct fs_cmd_params_read *params = &cmd.params.read;
             char *buf = get_buffer(params->buf);
             if (buf == NULL) {
                 dlog("bad buffer provided");
@@ -887,8 +887,8 @@ void nfs_notified(void) {
             handle_pread(request_id, params->fd, buf, params->buf.size, params->offset);
             break;
         }
-        case FS_CMD_PWRITE: {
-            struct fs_cmd_params_pwrite *params = &cmd.params.pwrite;
+        case FS_CMD_WRITE: {
+            struct fs_cmd_params_write *params = &cmd.params.write;
             char *buf = get_buffer(params->buf);
             if (buf == NULL) {
                 dlog("bad buffer provided");
