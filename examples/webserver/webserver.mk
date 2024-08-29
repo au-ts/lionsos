@@ -130,7 +130,7 @@ nfs.elf: nfs/nfs.a libnfs/lib/libnfs.a musllibc/lib/libc.a
 	${CC} ${CFLAGS} -c -o $@ $<
 
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
-		  ${SDDF}/drivers/clock/${TIMER_DRIVER_DIR}/timer_driver.mk \
+		  ${SDDF}/drivers/timer/${TIMER_DRIVER_DIR}/timer_driver.mk \
 		  ${SDDF}/drivers/network/${ETHERNET_DRIVER_DIR}/eth_driver.mk \
 		  ${SDDF}/drivers/serial/${UART_DRIVER_DIR}/uart_driver.mk \
 		  ${SDDF}/network/components/network_components.mk \
