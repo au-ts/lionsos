@@ -1,7 +1,7 @@
 #pragma once
 
 // Flag to control whether enable debug print for fatfs
-#define FS_DEBUG_PRINT
+// #define FS_DEBUG_PRINT
 
 #define DATA_REGION_SIZE 0x4000000
 

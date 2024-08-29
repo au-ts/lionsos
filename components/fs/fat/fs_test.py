@@ -191,7 +191,7 @@ def test_big_file_write_and_read(directory):
 
     test_file = path_join(directory, "test_big_file.txt")
     # It seems that the size_in_mb being set to too high could break the qemu blk_driver
-    large_content = generate_large_content(size_in_mb=1)  # Generate 1 MB of content
+    large_content = generate_large_content(size_in_mb=4)  # Generate 1 MB of content
 
     try:
         # Write the large content to the file
