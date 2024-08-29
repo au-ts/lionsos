@@ -137,6 +137,35 @@ uint32_t find_free_dir_object(void) {
     return i;
 }
 
+// Function to convert the open flag from fs_protocol 
+unsigned char map_fs_flags_to_fat_flags(uint64_t fs_flags) {
+    unsigned char fat_flags = 0;
+
+    // Map read/write flags
+    switch (fs_flags & 0x3) {  // Mask to consider only the read/write bits
+        case FS_OPEN_FLAGS_READ_ONLY:
+            fat_flags |= FA_READ;
+            break;
+        case FS_OPEN_FLAGS_WRITE_ONLY:
+            fat_flags |= FA_WRITE;
+            break;
+        case FS_OPEN_FLAGS_READ_WRITE:
+            fat_flags |= (FA_READ | FA_WRITE);
+            break;
+    }
+
+    // Map create flags
+    // What is the intended behavior if FS_OPEN_FLAGS_CREATE is set but the file already exists?
+    if (fs_flags & FS_OPEN_FLAGS_CREATE) {
+        // Depend on the intended behavior, change this flag. Use the most privileged one for now
+        fat_flags |= FA_OPEN_ALWAYS;
+    } else {
+        fat_flags |= FA_OPEN_EXISTING;
+    }
+
+    return fat_flags;
+}
+
 // Change here later to support more than one FAT volumes
 void fat_mount(void) {
     #ifdef FS_DEBUG_PRINT
@@ -197,7 +226,6 @@ void fat_open(void) {
     // Add open flag checking and mapping here
     #ifdef FS_DEBUG_PRINT
     sddf_printf("fat_open: file path: %s\n", filepath);
-    sddf_printf("fat_open: open flag: %lu\n", openflag);
     #endif
 
     uint32_t fd = find_free_file_obj();
@@ -209,9 +237,16 @@ void fat_open(void) {
     // Set the position to INUSE to indicate this file structure is in use
     file_status[fd] = INUSE;
     FIL* file = &(files[fd]);
+    
+    unsigned char fat_flag = map_fs_flags_to_fat_flags(openflag);
+
+    #ifdef FS_DEBUG_PRINT
+    sddf_printf("fat_open: fs_protocol open flag: %lu\n", openflag);
+    sddf_printf("fat_open: fat open flag: %hhu\n", fat_flag);
+    #endif
 
     // Micropython openflag still WIP, fixes this once that is completed
-    RET = f_open(file, filepath, (FA_OPEN_ALWAYS|FA_READ|FA_WRITE));
+    RET = f_open(file, filepath, fat_flag);
     
     // Error handling
     if (RET != FR_OK) {
