@@ -96,7 +96,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
-	${SDDF}/drivers/clock/${TIMER_DRIV_DIR}/timer_driver.mk \
+	${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
 	${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
 	${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk \
 	${SDDF}/network/components/network_components.mk \
