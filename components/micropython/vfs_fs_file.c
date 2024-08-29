@@ -48,8 +48,16 @@ STATIC mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int 
         return MP_STREAM_ERROR;
     } 
 
-    struct fs_completion completion;
-    err = fs_command_blocking(&completion, FS_CMD_PREAD, o->fd, read_buffer, size, o->pos);
+    fs_cmpl_t completion;
+    err = fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_PREAD,
+        .params.pread = {
+            .fd = o->fd,
+            .offset = o->pos,
+            .buf.offset = read_buffer,
+            .buf.size = size,
+        }
+    });
     if (err || completion.status != 0) {
         fs_buffer_free(read_buffer);
         return MP_STREAM_ERROR;
@@ -74,8 +82,16 @@ STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t siz
 
     memcpy(fs_buffer_ptr(write_buffer), buf, size);
 
-    struct fs_completion completion;
-    err = fs_command_blocking(&completion, FS_CMD_PWRITE, o->fd, write_buffer, size, o->pos);
+    fs_cmpl_t completion;
+    err = fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_PWRITE,
+        .params.pwrite = {
+            .fd = o->fd,
+            .offset = o->pos,
+            .buf.offset = write_buffer,
+            .buf.size = size,
+        }
+    });
     fs_buffer_free(write_buffer);
 
     if (completion.status != 0) {
@@ -114,8 +130,11 @@ STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t a
             return 0;
         }
         case MP_STREAM_CLOSE: {
-            struct fs_completion completion;
-            fs_command_blocking(&completion, FS_CMD_CLOSE, o->fd, 0, 0, 0);
+            fs_cmpl_t completion;
+            fs_command_blocking(&completion, (fs_cmd_t){
+                .type = FS_CMD_CLOSE,
+                .params.close.fd = o->fd,
+            });
             return 0;
         }
         case MP_STREAM_GET_FILENO:
@@ -243,8 +262,15 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
     uint64_t path_len = strlen(fname) + 1;
     strcpy(fs_buffer_ptr(buffer), fname);
 
-    struct fs_completion completion;
-    fs_command_blocking(&completion, FS_CMD_OPEN, buffer, path_len, flags, 0);
+    fs_cmpl_t completion;
+    fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_OPEN,
+        .params.open = {
+            .path.offset = buffer,
+            .path.size = path_len,
+            .flags = flags,
+        }
+    });
 
     if (completion.status != 0) {
         fs_buffer_free(buffer);
@@ -253,21 +279,33 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
     }
     o->fd = completion.data[0];
 
-    fs_command_blocking(&completion, FS_CMD_FSTAT, o->fd, buffer, 0, 0);
+    fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_FSTAT,
+        .params.fstat = {
+            .fd = o->fd,
+            .buf.offset = buffer,
+            .buf.size = FS_BUFFER_SIZE,
+        }
+    });
     if (completion.status != 0) {
-        fs_command_blocking(&completion, FS_CMD_CLOSE, o->fd, 0, 0, 0);
+        fs_command_blocking(&completion, (fs_cmd_t){
+            .type = FS_CMD_CLOSE,
+            .params.close.fd = o->fd,
+        });
         fs_buffer_free(buffer);
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
-    struct fs_stat_64 *sb = fs_buffer_ptr(buffer);
+    fs_stat_t *sb = fs_buffer_ptr(buffer);
     o->size = sb->size;
     fs_buffer_free(buffer);
 
     if (truncate) {
-        fs_command_blocking(&completion, FS_CMD_TRUNCATE, o->fd, 0, 0, 0);
         if (completion.status != 0) {
-            fs_command_blocking(&completion, FS_CMD_CLOSE, o->fd, 0, 0, 0);
+            fs_command_blocking(&completion, (fs_cmd_t){
+                .type = FS_CMD_CLOSE,
+                .params.close.fd = o->fd,
+            });
             mp_raise_OSError(completion.status);
             return mp_const_none;
         }

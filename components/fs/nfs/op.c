@@ -66,9 +66,9 @@ void continuation_free(struct continuation *cont) {
 }
 
 void reply(uint64_t request_id, uint64_t status, uint64_t data0, uint64_t data1) {
-    union fs_message message = {
-        .completion = {
-            .request_id = request_id,
+    fs_msg_t message = {
+        .cmpl = {
+            .id = request_id,
             .status = status,
             .data = {
                 [0] = data0,
@@ -88,8 +88,11 @@ void reply_err(uint64_t request_id) {
     reply(request_id, 1, 0, 0);
 }
 
-bool buffer_valid(const char *buf, uint64_t len) {
-    return buf >= client_share && (buf + len) <= (client_share + CLIENT_SHARE_SIZE);
+void *get_buffer(fs_buffer_t buf) {
+    if (buf.offset + buf.size > CLIENT_SHARE_SIZE) {
+        return NULL;
+    }
+    return (void *)(client_share + buf.offset);
 }
 
 static void stat64_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -822,39 +825,35 @@ fail:
 }
 
 void nfs_notified(void) {
-    union fs_message message;
+    fs_msg_t message;
     while (fs_queue_pop(command_queue, &message)) {
-        struct fs_command cmd = message.command;
-        uint64_t request_id = cmd.request_id;
-        switch (cmd.cmd_type) {
+        fs_cmd_t cmd = message.cmd;
+        uint64_t request_id = cmd.id;
+        switch (cmd.type) {
         case FS_CMD_OPEN: {
-            uint64_t path_offset = cmd.args[0];
-            char *path = client_share + path_offset;
-            uint64_t path_len = cmd.args[1];
-            uint64_t flags = cmd.args[2];
-            if (!buffer_valid(path, path_len)) {
+            struct fs_cmd_params_open *params = &cmd.params.open;
+            char *path = get_buffer(params->path);
+            if (path == NULL) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
             }
-            path[path_len - 1] = '\0';
-            handle_open(request_id, path, flags);
+            path[params->path.size - 1] = '\0';
+            handle_open(request_id, path, params->flags);
             break;
         }
         case FS_CMD_STAT: {
-            uint64_t path_offset = cmd.args[0];
-            char *path = client_share + path_offset;
-            uint64_t path_len = cmd.args[1];
-            if (!buffer_valid(path, path_len)) {
-                dlog("bad buffer provided");
+            struct fs_cmd_params_stat *params = &cmd.params.stat;
+            char *path = get_buffer(params->path);
+            if (path == NULL) {
+                dlog("bad path buffer provided");
                 reply_err(request_id);
                 break;
             }
-            path[path_len - 1] = '\0';
-            uint64_t buf_offset = cmd.args[2];
-            char *buf = client_share + buf_offset;
-            if (!buffer_valid(buf, sizeof (struct fs_stat_64))) {
-                dlog("bad buffer provided");
+            path[params->path.size - 1] = '\0';
+            void *buf = get_buffer(params->buf);
+            if (buf == NULL) {
+                dlog("bad stat buffer provided");
                 reply_err(request_id);
                 break;
             }
@@ -862,167 +861,144 @@ void nfs_notified(void) {
             break;
         }
         case FS_CMD_FSTAT: {
-            uint64_t fd = cmd.args[0];
-            uint64_t buf_offset = cmd.args[1];
-            char *buf = client_share + buf_offset;
-            if (!buffer_valid(buf, sizeof (struct fs_stat_64))) {
+            struct fs_cmd_params_fstat *params = &cmd.params.fstat;
+            void *buf = get_buffer(params->buf);
+            if (buf == NULL || params->buf.size < sizeof (fs_stat_t)) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
             }
-            handle_fstat(request_id, fd, buf);
+            handle_fstat(request_id, params->fd, buf);
             break;
         }
         case FS_CMD_CLOSE: {
-            fd_t fd = cmd.args[0];
-            handle_close(request_id, fd);
+            struct fs_cmd_params_close *params = &cmd.params.close;
+            handle_close(request_id, params->fd);
             break;
         }
         case FS_CMD_PREAD: {
-            fd_t fd = cmd.args[0];
-            uint64_t buf_offset = cmd.args[1];
-            char *buf = client_share + buf_offset;
-            uint64_t nbyte = cmd.args[2];
-            uint64_t offset = cmd.args[3];
-            if (!buffer_valid(buf, nbyte)) {
+            struct fs_cmd_params_pread *params = &cmd.params.pread;
+            char *buf = get_buffer(params->buf);
+            if (buf == NULL) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
             }
-            handle_pread(request_id, fd, buf, nbyte, offset);
+            handle_pread(request_id, params->fd, buf, params->buf.size, params->offset);
             break;
         }
         case FS_CMD_PWRITE: {
-            fd_t fd = cmd.args[0];
-            uint64_t buf_offset = cmd.args[1];
-            const char *buf = client_share + buf_offset;
-            uint64_t nbyte = cmd.args[2];
-            uint64_t offset = cmd.args[3];
-            if (!buffer_valid(buf, nbyte)) {
+            struct fs_cmd_params_pwrite *params = &cmd.params.pwrite;
+            char *buf = get_buffer(params->buf);
+            if (buf == NULL) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
             }
-            handle_pwrite(request_id, fd, buf, nbyte, offset);
+            handle_pwrite(request_id, params->fd, buf, params->buf.size, params->offset);
             break;
         }
         case FS_CMD_RENAME: {
-            uint64_t oldpath_offset = cmd.args[0];
-            uint64_t oldpath_len = cmd.args[1];
-            char *oldpath = client_share + oldpath_offset;
-            uint64_t newpath_offset = cmd.args[2];
-            uint64_t newpath_len = cmd.args[3];
-            char *newpath = client_share + newpath_offset;
-            if (!buffer_valid(oldpath, oldpath_len) || !buffer_valid(newpath, newpath_len)) {
+            struct fs_cmd_params_rename *params = &cmd.params.rename;
+            char *old_path = get_buffer(params->old_path);
+            char *new_path = get_buffer(params->new_path);
+            if (old_path == NULL || new_path == NULL) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
             }
-            oldpath[oldpath_len - 1] = '\0';
-            newpath[newpath_len - 1] = '\0';
-
-            handle_rename(request_id, oldpath, newpath);
+            old_path[params->old_path.size - 1] = '\0';
+            new_path[params->new_path.size - 1] = '\0';
+            handle_rename(request_id, old_path, new_path);
             break;
         }
         case FS_CMD_UNLINK: {
-            uint64_t path_offset = cmd.args[0];
-            uint64_t path_len = cmd.args[1];
-            char *path = client_share + path_offset;
-            if (!buffer_valid(path, path_len)) {
+            struct fs_cmd_params_unlink *params = &cmd.params.unlink;
+            char *path = get_buffer(params->path);
+            if (path == NULL) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
             }
-            path[path_len - 1] = '\0';
-
+            path[params->path.size - 1] = '\0';
             handle_unlink(request_id, path);
             break;
         }
         case FS_CMD_TRUNCATE: {
-            uint64_t fd = cmd.args[0];
-            uint64_t length = cmd.args[1];
-            handle_truncate(request_id, fd, length);
+            struct fs_cmd_params_truncate *params = &cmd.params.truncate;
+            handle_truncate(request_id, params->fd, params->length);
             break;
         }
         case FS_CMD_MKDIR: {
-            uint64_t path_offset = cmd.args[0];
-            uint64_t path_len = cmd.args[1];
-            char *path = client_share + path_offset;
-            if (!buffer_valid(path, path_len)) {
+            struct fs_cmd_params_mkdir *params = &cmd.params.mkdir;
+            char *path = get_buffer(params->path);
+            if (path == NULL) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
             }
-            path[path_len - 1] = '\0';
-
+            path[params->path.size - 1] = '\0';
             handle_mkdir(request_id, path);
             break;
         }
         case FS_CMD_RMDIR: {
-            uint64_t path_offset = cmd.args[0];
-            uint64_t path_len = cmd.args[1];
-            char *path = client_share + path_offset;
-            if (!buffer_valid(path, path_len)) {
+            struct fs_cmd_params_rmdir *params = &cmd.params.rmdir;
+            char *path = get_buffer(params->path);
+            if (path == NULL) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
             }
-            path[path_len - 1] = '\0';
-
+            path[params->path.size - 1] = '\0';
             handle_rmdir(request_id, path);
             break;
         }
         case FS_CMD_OPENDIR: {
-            uint64_t path_offset = cmd.args[0];
-            uint64_t path_len = cmd.args[1];
-            char *path = client_share + path_offset;
-            if (!buffer_valid(path, path_len)) {
+            struct fs_cmd_params_opendir *params = &cmd.params.opendir;
+            char *path = get_buffer(params->path);
+            if (path == NULL) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
             }
-            path[path_len - 1] = '\0';
-
+            path[params->path.size - 1] = '\0';
             handle_opendir(request_id, path);
             break;
         }
         case FS_CMD_CLOSEDIR: {
-            fd_t fd = cmd.args[0];
-            handle_closedir(request_id, fd);
+            struct fs_cmd_params_closedir *params = &cmd.params.closedir;
+            handle_closedir(request_id, params->fd);
             break;
         }
         case FS_CMD_READDIR: {
-            fd_t fd = cmd.args[0];
-            uint64_t buf_offset = cmd.args[1];
-            uint64_t buf_size = cmd.args[2];
-            char *buf = client_share + buf_offset;
-            if (!buffer_valid(buf, buf_size)) {
+            struct fs_cmd_params_readdir *params = &cmd.params.readdir;
+            char *buf = get_buffer(params->buf);
+            if (buf == NULL) {
                 dlog("bad buffer provided");
                 reply_err(request_id);
                 break;
             }
-            handle_readdir(request_id, fd, buf, buf_size);
+            handle_readdir(request_id, params->fd, buf, params->buf.size);
             break;
         }
         case FS_CMD_FSYNC: {
-            fd_t fd = cmd.args[0];
-            handle_fsync(request_id, fd);
+            struct fs_cmd_params_fsync *params = &cmd.params.fsync;
+            handle_fsync(request_id, params->fd);
             break;
         }
         case FS_CMD_SEEKDIR: {
-            fd_t fd = cmd.args[0];
-            int64_t loc = cmd.args[1];
-            handle_seekdir(request_id, fd, loc);
+            struct fs_cmd_params_seekdir *params = &cmd.params.seekdir;
+            handle_seekdir(request_id, params->fd, params->loc);
             break;
         }
         case FS_CMD_TELLDIR: {
-            fd_t fd = cmd.args[0];
-            handle_telldir(request_id, fd);
+            struct fs_cmd_params_telldir *params = &cmd.params.telldir;
+            handle_telldir(request_id, params->fd);
             break;
         }
         case FS_CMD_REWINDDIR: {
-            fd_t fd = cmd.args[0];
-            handle_rewinddir(request_id, fd);
+            struct fs_cmd_params_rewinddir *params = &cmd.params.rewinddir;
+            handle_rewinddir(request_id, params->fd);
             break;
         }
         default:
