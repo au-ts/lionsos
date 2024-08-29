@@ -43,7 +43,7 @@ static bool nfs_connected;
 void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *private_data) {
     if (!err) {
         nfs_connected = true;
-        nfs_notified();
+        process_commands();
         dlog("connected to nfs server");
     } else {
         dlog("failed to connect to nfs server (%d): %s", err, data);
@@ -111,15 +111,19 @@ void notified(microkit_channel ch) {
         /* Nothing to do in this case */
         break;
     case CLIENT_CHANNEL:
-        if (nfs_connected) {
-            nfs_notified();
-        }
+        /* Handled outside of switch */
         break;
     default:
         dlog("got notification from unknown channel %llu", ch);
         break;
     }
 
+    // If we leave any commands in the queue, we can't rely on another client
+    // notification to cause us to try to reprocess those commands, hence we
+    // try to process commands unconditionally on any notification
+    if (nfs_connected) {
+        process_commands();
+    }
     tcp_maybe_notify();
 }
 
