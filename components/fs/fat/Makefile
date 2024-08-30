@@ -1,5 +1,3 @@
-# make MICROKIT_SDK=/home/li/Sel4/microkit-sdk-1.4.1 BOARD=odroidc4 USE_LIBMICROKITCO=1
-# make MICROKIT_SDK=/home/li/Sel4/microkit-sdk-1.4.1 BOARD=odroidc4 USE_FIBERPOOL=1
 # File system makefile
 FS_DIR := .
 

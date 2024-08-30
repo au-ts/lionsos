@@ -1,5 +1,4 @@
 // Zig build script for building FatFs
-// zig build -Dsdk=/home/li/Sel4/microkit-sdk-1.2.6 -Dboard=odroidc4
 const std = @import("std");
 
 const MicrokitBoard = enum { qemu_arm_virt, odroidc4, maaxboard };
