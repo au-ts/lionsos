@@ -1,4 +1,6 @@
 build/
 docs/book/
 .DS_Store
-
+TAGS
+examples/vmm/vmm/initrd.img
+examples/vmm/vmm/linux
