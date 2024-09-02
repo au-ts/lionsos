@@ -28,9 +28,9 @@
 #define MAX_CONCURRENT_OPS FS_QUEUE_CAPACITY
 #define CLIENT_SHARE_SIZE 0x4000000
 
-struct fs_queue *command_queue;
-struct fs_queue *completion_queue;
-char *client_share;
+struct fs_queue *fs_command_queue;
+struct fs_queue *fs_completion_queue;
+char *fs_data;
 
 char path_buffer[4096][2];
 
@@ -88,19 +88,19 @@ static const void (*cmd_handler[FS_NUM_COMMANDS])(fs_cmd_t cmd) = {
 };
 
 void process_commands(void) {
-    uint64_t command_count = fs_queue_size_consumer(command_queue);
-    uint64_t completion_space = FS_QUEUE_CAPACITY - fs_queue_size_producer(completion_queue);
+    uint64_t command_count = fs_queue_size_consumer(fs_command_queue);
+    uint64_t completion_space = FS_QUEUE_CAPACITY - fs_queue_size_producer(fs_completion_queue);
     // don't dequeue a command if we have no space to enqueue its completion
     uint64_t to_consume = MIN(command_count, completion_space);
     for (uint64_t i = 0; i < to_consume; i++) {
-        fs_cmd_t cmd = fs_queue_idx_filled(command_queue, i)->cmd;
+        fs_cmd_t cmd = fs_queue_idx_filled(fs_command_queue, i)->cmd;
         if (cmd.type >= FS_NUM_COMMANDS) {
             reply((fs_cmpl_t){ .id = cmd.id, .status = FS_STATUS_INVALID_COMMAND, 0 });
             continue;
         }
         cmd_handler[cmd.type](cmd);
     }
-    fs_queue_publish_consumption(command_queue, to_consume);
+    fs_queue_publish_consumption(fs_command_queue, to_consume);
 }
 
 void continuation_pool_init(void) {
@@ -128,9 +128,9 @@ void continuation_free(struct continuation *cont) {
 }
 
 void reply(fs_cmpl_t cmpl) {
-    assert(fs_queue_size_producer(completion_queue) != FS_QUEUE_CAPACITY);
-    fs_queue_idx_empty(completion_queue, 0)->cmpl = cmpl;
-    fs_queue_publish_production(completion_queue, 1);
+    assert(fs_queue_size_producer(fs_completion_queue) != FS_QUEUE_CAPACITY);
+    fs_queue_idx_empty(fs_completion_queue, 0)->cmpl = cmpl;
+    fs_queue_publish_production(fs_completion_queue, 1);
     microkit_notify(CLIENT_CHANNEL);
 }
 
@@ -140,7 +140,7 @@ void *get_buffer(fs_buffer_t buf) {
         || buf.size == 0) {
         return NULL;
     }
-    return (void *)(client_share + buf.offset);
+    return (void *)(fs_data + buf.offset);
 }
 
 char *copy_path(int slot, fs_buffer_t buf) {

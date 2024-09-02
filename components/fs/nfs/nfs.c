@@ -101,7 +101,7 @@ void notified(microkit_channel ch) {
     case ETHERNET_TX_CHANNEL:
         /* Nothing to do in this case */
         break;
-    case SERIAL_TX_CH:
+    case SERIAL_TX_CHANNEL:
         /* Nothing to do in this case */
         break;
     case CLIENT_CHANNEL:

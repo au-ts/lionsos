@@ -94,7 +94,7 @@ static size_t output(void *data, size_t count)
 
     if (sent && serial_require_producer_signal(&serial_tx_queue_handle)) {
         serial_cancel_producer_signal(&serial_tx_queue_handle);
-        microkit_notify(SERIAL_TX_CH);
+        microkit_notify(SERIAL_TX_CHANNEL);
     }
 
     return sent;
@@ -159,7 +159,7 @@ long sys_write(va_list ap)
 
         if (n && serial_require_producer_signal(&serial_tx_queue_handle)) {
             serial_cancel_producer_signal(&serial_tx_queue_handle);
-            microkit_notify(SERIAL_TX_CH);
+            microkit_notify(SERIAL_TX_CHANNEL);
         }
 
         return n;

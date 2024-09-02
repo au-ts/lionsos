@@ -4,7 +4,6 @@
  */
 #include <sddf/serial/queue.h>
 
-#define SERIAL_TX_CH 0
 extern serial_queue_handle_t serial_tx_queue_handle;
 
 extern struct nfs_context *nfs;

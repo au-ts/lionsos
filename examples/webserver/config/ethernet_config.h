@@ -7,10 +7,10 @@
 
 #define NUM_NETWORK_CLIENTS 2
 
-#define CLI0_NAME "nfs"
-#define CLI1_NAME "micropython"
-#define COPY0_NAME "eth_copy_nfs"
-#define COPY1_NAME "eth_copy_mp"
+#define CLI0_NAME "micropython"
+#define CLI1_NAME "nfs"
+#define COPY0_NAME "eth_copy_mp"
+#define COPY1_NAME "eth_copy_nfs"
 #define VIRT_RX_NAME "eth_virt_rx"
 #define VIRT_TX_NAME "eth_virt_tx"
 #define DRIVER_NAME "eth"
@@ -171,9 +171,9 @@ static inline void net_virt_queue_init_sys(char *pd_name,
         net_queue_init(cli_queue, cli_free, cli_active, NET_TX_QUEUE_SIZE_CLI0);
         net_queue_init(&cli_queue[1],
                        (net_queue_t *)((uintptr_t)cli_free +
-                                       2 * NET_DATA_REGION_SIZE),
+                                       3 * NET_DATA_REGION_SIZE),
                        (net_queue_t *)((uintptr_t)cli_active +
-                                       2 * NET_DATA_REGION_SIZE),
+                                       3 * NET_DATA_REGION_SIZE),
                        NET_TX_QUEUE_SIZE_CLI1);
     }
 }

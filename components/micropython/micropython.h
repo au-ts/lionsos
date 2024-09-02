@@ -8,12 +8,12 @@
 #ifdef ENABLE_FRAMEBUFFER
 #define FRAMEBUFFER_VMM_CH 0
 #endif
-#define TIMER_CH 1
-#define ETH_RX_CH 2
-#define ETH_TX_CH 3
-#define NFS_CH 7
+#define TIMER_CH 2
+#define ETH_RX_CH 0
+#define ETH_TX_CH 1
+#define NFS_CH 4
 #define SERIAL_RX_CH 8
-#define SERIAL_TX_CH 9
+#define SERIAL_TX_CH 3
 #ifdef ENABLE_I2C
 #define I2C_CH 10
 #endif
