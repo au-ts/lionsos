@@ -11,6 +11,7 @@
 #   users and responses from the server.
 #
 
+
 import framebuf
 import fb
 import time
@@ -18,9 +19,10 @@ import sys
 import asyncio
 import errno
 from pn532 import PN532
-import font
+import font_height50
+import font_height35
 from writer import CWriter
-from config import enable_i2c, enable_nfs, display_width, display_height
+from config import enable_i2c, enable_nfs, display_width, display_height, TRUE_DISPLAY_WIDTH
 
 current_uid = []
 current_equal_count = 0
@@ -33,22 +35,25 @@ reader_stream = None
 writer_stream = None
 stdin_ready = True
 
-IP_ADDRESS = ""
-PORT = 3738
+HOST = ""
+PORT = 3737
 
 """ Globals for dealing with UI """
 # KittyDisplay instance
 display = None
-# Display text writer
-wri = None
+# Display text writers. The way we use fonts right now is with
+# a fixed display height. We use two heights in the UI so we have
+# two separate writers, one for each font height,
+wri50 = None
+wri35 = None
 
 
 def info(s):
-    print("CLIENT|INFO: " + str(s))
+    print("KITTY|INFO: " + str(s))
 
 
 def error(s):
-    print("CLIENT|ERROR: " + str(s))
+    print("KITTY|ERROR: " + str(s))
 
 
 class BoolPalette(framebuf.FrameBuffer):
@@ -86,7 +91,7 @@ def heartbeat():
         except OSError as e:
             if e.errno == errno.ECONNRESET:
                 error("RESETTING CONNECTION")
-                reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
+                reader_stream, writer_stream = await asyncio.open_connection(HOST, PORT)
 
         await asyncio.sleep(4)
 
@@ -94,12 +99,13 @@ def heartbeat():
 async def on_tap(card_id):
     global writer_stream
     global token
-    display.rect(200, 400, 1000, 1000, 0x0, True)
-    wri.set_textpos(display, 430, 370)
-    wri.printstring("Processing...")
+    display.rect(0, 400, 2000, 2000, 0x0, True)
+    wri50.set_textpos(display, 430, 370)
+    wri50.printstring("Processing...")
     display.show()
     while True:
         try:
+            info(f'card id: {card_id}')
             writer_stream.write(
                 bytes(f'100 {token} {''.join('{:02x}'.format(x) for x in card_id)} 1.0' + '\n', 'utf-8')
             )
@@ -108,7 +114,7 @@ async def on_tap(card_id):
         except OSError as e:
             if e.errno == errno.ECONNRESET:
                 error("RESETTING CONNECTION")
-                reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
+                reader_stream, writer_stream = await asyncio.open_connection(HOST, PORT)
 
     token = (token + 1) % 1000000
 
@@ -201,9 +207,9 @@ def set_pixel(display, x, y, rgba):
 
 def reset_status():
     global stdin_ready
-    display.rect(200, 400, 1000, 1000, 0x0, True)
-    wri.set_textpos(display, 430, 330)
-    wri.printstring("Waiting for taps...")
+    display.rect(0, 400, 2000, 2000, 0x0, True)
+    wri50.set_textpos(display, 430, 330)
+    wri50.printstring("Waiting for taps...")
     display.show()
     # Now we are ready to accept new taps
     stdin_ready = True
@@ -231,7 +237,6 @@ async def wait_seconds_and_call(seconds, fn):
     await asyncio.sleep(seconds)
     fn()
 
-
 # Coroutine responsible for listening to the server
 async def read_from_server():
     global reader_stream
@@ -243,10 +248,14 @@ async def read_from_server():
         except OSError:
             # This usually happens when the server does not recieve a heartbeat
             # in time and resets the connection
-            error("CONNECTION RESET")
+
+            # Error message was originally "connection reset", but there are some cases where
+            # this exception can trigger that aren't connection-based
+
+            error("OSERROR, resetting connection")
             reader_stream.close()
             writer_stream.close()
-            reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
+            reader_stream, writer_stream = await asyncio.open_connection(HOST, PORT)
             continue
         except asyncio.TimeoutError:
             continue
@@ -255,20 +264,44 @@ async def read_from_server():
             continue
 
         info(message)
-        words = message.decode('utf-8').split()
+
+        words = message.decode('utf-8').split(" ", 1)
         if words[0] == '101':
             token = int(words[1])
             info(f'TOKEN = {token}')
-        elif words[0] == '200':
-            card_id = words[2]
-            display.rect(200, 400, 1000, 1000, 0x0, True)
-            wri.set_textpos(display, 400, 260)
-            wri.printstring("Thanks for your purchase!")
-            wri.set_textpos(display, 470, 235)
-            wri.printstring(f"Card UID: {card_id}")
-            display.show()
-            asyncio.create_task(wait_seconds_and_call(3, reset_status))
 
+        # Print server time in smaller font
+        elif words[0] == '100':
+            display.rect(500, 250, 1000, 100, 0x0, True)
+            wri35.set_textpos(display, 250, 500)
+            wri35.printstring(words[1])
+            display.show()
+
+
+        else:
+            # Print server response
+            display.rect(0, 400, 2000, 2000, 0x0, True)
+            # Position text in middle of row
+            wri50.set_textpos(display, 430, (TRUE_DISPLAY_WIDTH - wri50.stringlen(words[1]))//2)
+            wri50.printstring(f"{words[1]}")
+
+            # Display "new card" message for longer, so person has enough time to see number
+            if words[0] == '400':
+                message_display_time = 5
+            else:
+                message_display_time = 3
+
+            # Printing "-$1" if there has been a purchase
+            if words[0] == '200':
+                display.rect(0, 500, 2000, 2000, 0x0, True)
+                charged_str = "Charged $1"
+                wri50.set_textpos(display, 500, (TRUE_DISPLAY_WIDTH - wri50.stringlen(charged_str))//2)
+
+                wri50.printstring(charged_str)
+
+            display.show()
+
+            asyncio.create_task(wait_seconds_and_call(message_display_time, reset_status))
 
 # Coroutine responsible for reading the card
 async def read_card_main():
@@ -292,7 +325,7 @@ async def main():
     global reader_stream
     global writer_stream
     info(f"starting at {time.time()}")
-    reader_stream, writer_stream = await asyncio.open_connection(IP_ADDRESS, PORT)
+    reader_stream, writer_stream = await asyncio.open_connection(HOST, PORT)
 
     # The cat picture is stored on the NFS directory, do not load it if we do not
     # have access to it.
@@ -307,15 +340,16 @@ async def main():
             draw_image(display, 50, -70, pic[0:])
         display.show()
 
-    wri.setcolor(0xffff, 0x0000)
-    wri.set_textpos(display, 100, 500)
-    wri.printstring("Welcome to Kitty v5")
-    wri.set_textpos(display, 200, 500)
-    wri.setcolor(0x8e27, 0x0000)
-    wri.printstring("Running on LionsOS!")
-    wri.setcolor(0xffff, 0x0000)
-    wri.set_textpos(display, 430, 330)
-    wri.printstring("Waiting for taps...")
+    wri50.setcolor(0xffff, 0x0000)
+    wri50.set_textpos(display, 100, 500)
+    wri50.printstring("Welcome to Kitty v5")
+    wri50.set_textpos(display, 175, 500)
+    wri50.setcolor(0x8e27, 0x0000)
+    wri50.printstring("Running on LionsOS!")
+    wri50.setcolor(0xffff, 0x0000)
+    wri50.set_textpos(display, 430, 330)
+    wri50.printstring("Waiting for taps...")
+    wri35.setcolor(0xffff, 0x0000)
 
     display.show()
 
@@ -327,22 +361,28 @@ async def main():
 
 
 def help_prompt():
-    print("\nWelcome to Kitty!\nUsage: kitty.run(String IP_ADDRESS).\n\
-            IP_ADDRESS: The IP address of the kitty server.")
+    print("\nWelcome to Kitty!\nUsage: kitty.run(String HOST).\n\
+            HOST: The host name / IP address of the kitty server.")
 
 
-def run(ip="172.16.0.2"):
+def run(host: str):
     global display
-    global wri
-    global IP_ADDRESS
+    global wri50
+    global wri35
+    global HOST
 
-    if not isinstance(ip, str):
-        print("KITTY: IP address should be of type string")
+    if host is None:
+        error("host address is None")
+        return
+
+    if not isinstance(host, str):
+        error("host address should be of type string")
         return
 
     display = KittyDisplay(display_width, display_height)
-    wri = CWriter(display, font)
-    IP_ADDRESS = ip
+    wri50 = CWriter(display, font_height50)
+    wri35 = CWriter(display, font_height35)
+    HOST = host
     asyncio.run(main())
 
 

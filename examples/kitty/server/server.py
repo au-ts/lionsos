@@ -23,8 +23,16 @@ import threading
 display_delay = 5
 client_timeout = 5
 
-PORT = 3738
-
+PORT = 3737
+RESPONSES = [
+    "400 Protocol/checksum error!\n",
+    "400 Transaction error!\n",
+    "new",
+    "good",
+    "410 Bad exception occurred!\n",
+    "420 ACCOUNT DISABLED   Credit: ${}\n".format(12345)
+]
+CURR_RESP_INDEX = 0
 
 class MessageThread(threading.Thread):
     def __init__(self, conn: socket.socket):
@@ -138,6 +146,9 @@ def handle_connection(conn: socket.socket, uber: socket.socket) -> None:
     # set an initial message
     set_display_msg(conn)
 
+    # Random balance to start with
+    balance = 10000.50
+
     # Now wait for stuff
     while True:
         # wait for a request
@@ -174,7 +185,19 @@ def handle_connection(conn: socket.socket, uber: socket.socket) -> None:
 
                 # Make the magic numbers
                 card_id = int(b"0x%s" % cardno, 16)
-                conn.sendall(f"200 Thanks {card_id}\n".encode())
+
+                global RESPONSES, CURR_RESP_INDEX
+                resp = RESPONSES[CURR_RESP_INDEX]
+                if resp == "good":
+                    balance -= 1
+                    conn.sendall("200 Thanks {}   Credit: ${:.2f}\n".format(card_id, balance).encode())
+                elif resp == "new":
+                    conn.sendall("400 New card, quote {} to the Kitty admins\n".format(card_id % 1000).encode())
+                else:
+                    conn.sendall(resp.encode())
+
+                CURR_RESP_INDEX  = (CURR_RESP_INDEX + 1) % len(RESPONSES)
+
 
 
 class ConnectionThread(threading.Thread):

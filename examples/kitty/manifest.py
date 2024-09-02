@@ -6,6 +6,7 @@ include("$(MPY_DIR)/extmod/asyncio/manifest.py")
 # Include our client scripts
 module("kitty.py")
 module("pn532.py")
-module("font.py")
+module("font_height35.py")
+module("font_height50.py")
 module("writer.py")
 module("config.py")
