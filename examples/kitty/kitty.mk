@@ -145,8 +145,9 @@ vmm.elf: ${VMM_OBJS} libvmm.a
 # Build with two threads in parallel
 nproc=2
 
+
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a config.py manifest.py \
-		kitty.py pn532.py font.py writer.py \
+		kitty.py pn532.py font_height50.py font_height35.py writer.py \
 		$(LIONSOS)/dep/libmicrokitco/Makefile
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \

@@ -17,7 +17,8 @@ License: CC-BY-SA-4.0
 
 # We use the Inter font which has the SIL Open Font License
 Files:
-    examples/kitty/client/font/font.py
+    examples/kitty/client/font/font_height35.py
+    examples/kitty/client/font/font_height50.py
 Copyright: The Inter Project Authors (https://github.com/rsms/inter)
 License: OFL-1.1
 
