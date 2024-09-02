@@ -24,7 +24,7 @@ static char heap[MICROPY_HEAP_SIZE];
 static char mp_stack[MICROPY_STACK_SIZE];
 static co_control_t co_controller_mem;
 
-char *nfs_share;
+char *fs_share;
 
 /*
  * Shared regions for Serial communication
@@ -47,7 +47,7 @@ uintptr_t i2c_data_region;
 uintptr_t framebuffer_data_region;
 #endif
 
-STATIC bool init_nfs(void) {
+STATIC bool init_vfs(void) {
     mp_obj_t args[2] = {
         MP_OBJ_TYPE_GET_SLOT(&mp_type_vfs_fs, make_new)(&mp_type_vfs_fs, 0, 0, NULL),
         MP_OBJ_NEW_QSTR(MP_QSTR__slash_),
@@ -96,7 +96,7 @@ start_repl:
     // initialisation of the filesystem utilises the event loop and the event
     // loop unconditionally tries to process incoming network buffers; therefore
     // the networking needs to be initialised before initialising the fs
-    init_nfs();
+    init_vfs();
 
     // Start a normal REPL; will exit when ctrl-D is entered on a blank line.
 #ifndef EXEC_MODULE
