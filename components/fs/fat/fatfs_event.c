@@ -33,10 +33,12 @@ void* coroutine_stack_two;
 void* coroutine_stack_three;
 void* coroutine_stack_four;
 
-uintptr_t client_data_addr;
+uint64_t client_data_addr;
 
 // File system metadata region
 uint64_t fs_metadata;
+
+uint64_t blk_data_region;
 
 // Flag for determine if there are blk_requests pushed by the file system
 // It is used to determine whether to notify the blk device driver

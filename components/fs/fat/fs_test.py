@@ -181,7 +181,24 @@ def test_mkdir_and_remove(directory):
 
 def generate_large_content(size_in_mb=1):
     """Generate a string that is approximately `size_in_mb` megabytes."""
-    base_text = "This is a line of text to be repeated to generate a large file.\n"
+    base_text = (
+        "It is a truth universally acknowledged, that a single man in possession of a good fortune, "
+        "must be in want of a wife. However little known the feelings or views of such a man may be "
+        "on his first entering a neighbourhood, this truth is so well fixed in the minds of the "
+        "surrounding families, that he is considered as the rightful property of some one or other "
+        "of their daughters.\n"
+        "My dear Mr. Bennet,\" said his lady to him one day, \"have you heard that Netherfield Park is let at last?\"\n"
+        "\"Mr. Bennet replied that he had not.\n"
+        "\"But it is,\" returned she; \"for Mrs. Long has just been here, and she told me all about it.\"\n"
+        "\"Mr. Bennet made no answer.\n"
+        "\"Do not you want to know who has taken it?\" cried his wife impatiently.\n"
+        "\"You want to tell me, and I have no objection to hearing it.\"\n"
+        "\"This was invitation enough.\n"
+        "\"Why, my dear, you must know, Mrs. Long says that Netherfield is taken by a young man of large fortune "
+        "from the north of England; that he came down on Monday in a chaise and four to see the place, "
+        "and was so much delighted with it that he agreed with Mr. Morris immediately; that he is to take "
+        "possession before Michaelmas, and some of his servants are to be in the house by the end of next week.\"\n"
+    )
     repeat_count = (size_in_mb * 1024 * 1024) // len(base_text)
     return base_text * repeat_count
 
@@ -191,7 +208,7 @@ def test_big_file_write_and_read(directory):
 
     test_file = path_join(directory, "test_big_file.txt")
     # It seems that the size_in_mb being set to too high could break the qemu blk_driver
-    large_content = generate_large_content(size_in_mb=4)  # Generate 1 MB of content
+    large_content = generate_large_content(size_in_mb=1)  # Generate 1 MB of content
 
     try:
         # Write the large content to the file

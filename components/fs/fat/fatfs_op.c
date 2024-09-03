@@ -29,7 +29,7 @@ descriptor_status* dir_status;
 DIR* dirs;
 
 // Data buffer offset
-extern uintptr_t client_data_addr;
+extern uint64_t client_data_addr;
 
 // Sanity check functions
 // Checking if the memory region that provided by request is within valid memory region
@@ -753,10 +753,10 @@ void fat_sync(void) {
     // Maybe add validation check of file descriptor here
     uint64_t fd = args->params.fsync.fd;
 
-    FRESULT RET = validate_dir_descriptor(fd);
+    FRESULT RET = validate_file_descriptor(fd);
     if (RET != FR_OK) {
         #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_sync: Invalid file descriptor\n");
+        sddf_printf("fat_sync: Invalid file descriptor %lu\n", fd);
         #endif
         args->status = RET;
         co_kill();
