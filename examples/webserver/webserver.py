@@ -114,6 +114,9 @@ async def send_file(relative_path, request_headers):
     except:
         pass # malformed If-Modified-Since header should be ignored
 
+    length = stat[6]
+    response_headers['Content-Length'] = f'{length}'
+
     response_headers['Last-Modified'] = format_http_date(mtime)
 
     f = await fs_async.open(absolute_path)
