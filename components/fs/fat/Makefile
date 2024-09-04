@@ -24,7 +24,8 @@ CFLAGS := -Wall \
 		  -I$(LIONSOS)/dep \
 		  -I$(LIONSOS)/include/lions \
           -I$(LIONSOS)/dep/sddf/include \
-		  -I$(FS_DIR)
+		  -I$(FS_DIR) \
+		  -I$(EXAMPLE_SRC_DIR)
 
 LDFLAGS := -L$(LIBC_DIR)/lib -lc -L$(FATFS_OBJECT_DIR)/libmicrokitco -lmicrokitco
 

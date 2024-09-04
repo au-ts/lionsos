@@ -7,6 +7,7 @@
 #include <string.h>
 #include "co_helper.h"
 #include "fatfs_config.h"
+#include <config/blk_config.h>
 
 #ifdef FS_DEBUG_PRINT
 #include <sddf/util/printf.h>
@@ -26,6 +27,15 @@ extern blk_storage_info_t *config;
 extern uint64_t blk_data_region;
 
 #ifdef MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE
+
+/*
+ *  This def restrict the maximum cluster size that the fatfs can have if MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE is enabled. 
+ *  This restriction should not cause any problem as long as the BLK_REGION_SIZE between file system and blk virt is not
+ *  too small. For example, 32GB - 256TB disks are recommended to have a sector size of 128KB, and if you have 4 worker coroutines, 
+ *  BLK_REGION_SIZE should be bigger than 512KB. In fileio example, BLK_REGION_SIZE is set to 2 MB.
+ */
+#define MAX_CLUSTER_SIZE (BLK_REGION_SIZE / WORKER_COROUTINE_NUM)
+
 uint64_t coroutine_blk_addr[WORKER_COROUTINE_NUM];
 #endif
 

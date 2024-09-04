@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <config/blk_config.h>
 #include <microkit.h>
 
 #define CLIENT_CH 1
@@ -120,7 +121,7 @@ void print_sector_data(uint8_t *buffer, unsigned long size) {
 void init(void) {
     // Init the block device queue
     // Have to make sure who initialize this SDDF queue
-    blk_queue_init(blk_queue_handle, request, response, BLK_QUEUE_SIZE);
+    blk_queue_init(blk_queue_handle, request, response, BLK_QUEUE_SIZE_CLI_FATFS);
     /*
        This part of the code is for setting up the FiberPool(Coroutine pool) by
        assign stacks and size of the stack to the pool
@@ -150,7 +151,8 @@ void notified(microkit_channel ch) {
     sddf_printf("FS IRQ received::%d\n", ch);
     #endif
     fs_msg_t message;
-    // Compromised code here, polling for server's state until it is ready
+
+    // Polling for server's state until it is ready
     // Remove it when the server side can correctly queue the notification
     while (!config->ready) {}
 
@@ -162,7 +164,7 @@ void notified(microkit_channel ch) {
             uint16_t success_count;
             uint32_t id;
             while (!blk_queue_empty_resp(blk_queue_handle)) {
-                // This id should be the index to the request pool
+                // This id is the index to the request pool
                 blk_dequeue_resp(blk_queue_handle, &status, &success_count, &id);
                 
                 #ifdef FS_DEBUG_PRINT

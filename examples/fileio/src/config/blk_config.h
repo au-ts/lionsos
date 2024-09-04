@@ -12,13 +12,13 @@
 
 #define BLK_NAME_CLI0                      "fatfs"
 
-#define BLK_QUEUE_SIZE_CLI0                 16
+#define BLK_QUEUE_SIZE_CLI_FATFS            16
+#define BLK_QUEUE_SIZE_CLI0                 BLK_QUEUE_SIZE_CLI_FATFS
 #define BLK_QUEUE_SIZE_DRIV                 1024
 
 #define BLK_REGION_SIZE                     0x200000
 #define BLK_CONFIG_REGION_SIZE_CLI0         BLK_REGION_SIZE
 
-#define FS_MICROPYTHON_DATA_REGION_SIZE     0x4000000
 #define BLK_DATA_REGION_SIZE_CLI0           BLK_REGION_SIZE
 #define BLK_DATA_REGION_SIZE_DRIV           BLK_REGION_SIZE
 

@@ -14,9 +14,6 @@
 // Maximum opened directories
 #define MAX_OPENED_DIRNUM 16
 
-// This value need to match with the queue size defined in blk_config.h
-#define BLK_QUEUE_SIZE 16
-
 // The number of worker coroutine, if changes are needed, the co_init() defined in co_helper.c needs to be changed as well
 #define WORKER_COROUTINE_NUM 4
 
@@ -25,8 +22,6 @@
 #define LIBMICROKITCO_MAX_COTHREADS COROUTINE_NUM
 
 #define COROUTINE_STACKSIZE 0x40000
-
-#define BLK_DATA_ERGION_SIZE 0x200000
 
 /*
  *  This def control whether the memory address passed to the blk device driver should be strict aligned to the 
@@ -39,11 +34,3 @@
  *  size.
  */
 #define MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE
-
-/*
- *  This def restrict the maximum cluster size that the fatfs can have if MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE is enabled. 
- *  This restriction should not cause any problem as long as the BLK_DATA_ERGION_SIZE between file system and blk virt is not
- *  too small. For example, 32GB - 256TB disks are recommended to have a sector size of 128KB, and if you have 4 worker coroutines, 
- *  BLK_DATA_ERGION_SIZE should be bigger than 512KB. In fileio example, BLK_DATA_ERGION_SIZE is set to 2 MB.
- */
-#define MAX_CLUSTER_SIZE (BLK_DATA_ERGION_SIZE / WORKER_COROUTINE_NUM)

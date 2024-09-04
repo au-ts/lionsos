@@ -132,6 +132,7 @@ fatfs.elf: musllibc/lib/libc.a
 		   MICROKIT_BOARD=$(MICROKIT_BOARD) \
 		   LIBC_DIR=$(abspath $(BUILD_DIR)/musllibc) \
 		   BUILD_DIR=$(abspath .) \
+		   EXAMPLE_SRC_DIR=$(abspath $(LIONSOS)/examples/fileio/src) \
 		   TARGET=$(TARGET)
 
 musllibc/lib/libc.a:
