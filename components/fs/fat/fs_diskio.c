@@ -89,6 +89,8 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
 	default:
 		if (cmd == GET_SECTOR_SIZE) {
 			WORD *size = buff;
+			// The sector size should be a mutiple of 512, BLK_TRANSFER_SIZE % SECTOR_SIZE should be 0
+			// BLK_TRANSFER_SIZE % SECTOR_SIZE should be a power of 2
 			*size = config->sector_size;
 			res = RES_OK;
 		}
@@ -107,6 +109,10 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
 }
 
 #ifdef MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE
+
+#define MOD_POWER_OF_2(a, b) ((a) & ((b) - 1))
+#define DIV_POWER_OF_2(a, b) ((a) >> (__builtin_ctz(b)))
+
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 	DRESULT res;
 	switch (pdrv) {
@@ -116,20 +122,22 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 			// Substract the handle with one as the work coroutine ID starts at 1, not 0
 			uint64_t read_data_offset = coroutine_blk_addr[handle - 1];
 			uint16_t sector_size = config->sector_size;
-			uint32_t sddf_sector = sector / (BLK_TRANSFER_SIZE / sector_size);
+			// This is the same as BLK_TRANSFER_SIZE / sector_size
+			uint16_t sector_per_transfer = DIV_POWER_OF_2(BLK_TRANSFER_SIZE, sector_size);
+			uint32_t sddf_sector = DIV_POWER_OF_2(sector, sector_per_transfer);
 			// The final sddf_count is always positive, however in the process of calculating it may be added with a negative value, so use signed integer here
 			int32_t sddf_count = 0;
-			uint32_t unaligned_head_sector = ((BLK_TRANSFER_SIZE / sector_size) - (sector % (BLK_TRANSFER_SIZE / sector_size))) % (BLK_TRANSFER_SIZE / sector_size);
-			uint32_t unaligned_tail_sector = (sector + count) % (BLK_TRANSFER_SIZE / sector_size);
+			uint32_t unaligned_head_sector = MOD_POWER_OF_2(sector_per_transfer - MOD_POWER_OF_2(sector, sector_per_transfer), sector_per_transfer);
+			uint32_t unaligned_tail_sector = MOD_POWER_OF_2(sector + count, sector_per_transfer);
 			if (unaligned_head_sector) {
 				sddf_count += 1;
 			}
 			if (unaligned_tail_sector) {
 				sddf_count += 1;
 			}
-			// If the sector to read is in one sddf logical sector, this still works as the sddf_count will -1 here
+			// DIV_POWER_OF_2(aligned_sector, sector_per_transfer) maybe -1 if the sector to read is in one transfer block and not aligned to both side, but should still works
 			int32_t aligned_sector = count - unaligned_head_sector - unaligned_tail_sector;
-			sddf_count += aligned_sector/(BLK_TRANSFER_SIZE / sector_size);
+			sddf_count += DIV_POWER_OF_2(aligned_sector, sector_per_transfer);
 
 			#ifdef FS_DEBUG_PRINT
 			sddf_printf("blk_enqueue_read pre adjust: addr: 0x%lx sector: %u, count: %u ID: %d\n", read_data_offset, sector, count, handle);
@@ -141,7 +149,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 			co_block();
 
 			res = (DRESULT)(uintptr_t)co_get_args();
-			memcpy(buff, (void*)(read_data_offset + blk_data_region + sector_size * (sector % (BLK_TRANSFER_SIZE / sector_size))), sector_size * count);
+			memcpy(buff, (void*)(read_data_offset + blk_data_region + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer)), sector_size * count);
 			#ifdef FS_DEBUG_PRINT
 			// print_sector_data(buff, 512);
 			#endif
@@ -164,10 +172,11 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 				blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sector, count,handle);
 			}
 			else {
-				uint32_t sddf_sector = sector / (BLK_TRANSFER_SIZE / sector_size);
+				uint16_t sector_per_transfer = DIV_POWER_OF_2(BLK_TRANSFER_SIZE, sector_size);
+				uint32_t sddf_sector = DIV_POWER_OF_2(sector, sector_per_transfer);
 				int32_t sddf_count = 0;
-				uint32_t unaligned_head_sector = ((BLK_TRANSFER_SIZE / sector_size) - (sector % (BLK_TRANSFER_SIZE / sector_size))) % (BLK_TRANSFER_SIZE / sector_size);
-				uint32_t unaligned_tail_sector = (sector + count) % (BLK_TRANSFER_SIZE / sector_size);
+				uint32_t unaligned_head_sector = MOD_POWER_OF_2(sector_per_transfer - MOD_POWER_OF_2(sector, sector_per_transfer), sector_per_transfer);
+				uint32_t unaligned_tail_sector = MOD_POWER_OF_2(sector + count, sector_per_transfer);
 				if (unaligned_head_sector) {
 					sddf_count += 1;
 				}
@@ -176,7 +185,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 				}
 
 				int32_t aligned_sector = count - unaligned_head_sector - unaligned_tail_sector;
-				sddf_count += aligned_sector/(BLK_TRANSFER_SIZE / sector_size);
+				sddf_count += DIV_POWER_OF_2(aligned_sector, sector_per_transfer);
 
 				#ifdef FS_DEBUG_PRINT
 				sddf_printf("blk_enqueue_write pre adjust: addr: 0x%lx sector: %u, count: %u ID: %d buffer_addr_in_fs: 0x%p\n", write_data_offset, sector, count, handle, buff);
@@ -196,7 +205,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 					if (res != RES_OK) {
 						break;
 					}
-					memcpy((void*)(write_data_offset + blk_data_region + sector_size * (sector % (BLK_TRANSFER_SIZE / sector_size))), buff, sector_size * count);
+					memcpy((void*)(write_data_offset + blk_data_region + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer)), buff, sector_size * count);
 					blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sddf_sector, sddf_count,handle);
 				}
 			}
