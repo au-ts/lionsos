@@ -193,6 +193,7 @@ void handle_initialise(fs_cmd_t cmd) {
     assert(cont != NULL);
     cont->request_id = cmd.id;
 
+    /* Infinite retries */
     nfs_set_autoreconnect(nfs, -1);
 
     int err = nfs_mount_async(nfs, NFS_SERVER, NFS_DIRECTORY, mount_cb, cont);
@@ -219,7 +220,7 @@ static void stat64_cb(int status, struct nfs_context *nfs, void *data, void *pri
     void *buf = (void *)cont->data[0];
 
     if (status == 0) {
-        memcpy(buf, data, sizeof (struct nfs_stat_64));
+        memcpy(buf, data, sizeof (fs_stat_t));
     } else {
         dlogp(status != -ENOENT, "failed to stat file (%d): %s", status, data);
         cmpl.status = FS_STATUS_ERROR;
@@ -240,7 +241,7 @@ void handle_stat(fs_cmd_t cmd) {
     }
 
     void *buf = get_buffer(params.buf);
-    if (buf == NULL || params.buf.size < sizeof (struct nfs_stat_64)) {
+    if (buf == NULL || params.buf.size < sizeof (fs_stat_t)) {
         dlog("invalid output buffer provided");
         status = FS_STATUS_INVALID_BUFFER;
         goto fail_buffer;
