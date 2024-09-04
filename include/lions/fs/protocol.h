@@ -227,7 +227,7 @@ typedef struct fs_cmd {
     uint64_t type;
     fs_cmd_params_t params;
 } fs_cmd_t;
-_Static_assert(sizeof (fs_cmd_t) == 64);
+_Static_assert(sizeof (fs_cmd_t) == 64, "fs_cmd_t must be exactly 64 bytes");
 
 typedef struct fs_cmpl_data_open {
     uint64_t fd;
@@ -277,8 +277,7 @@ typedef union fs_msg {
     fs_cmd_t cmd;
     fs_cmpl_t cmpl;
 } fs_msg_t;
-
-_Static_assert(sizeof (fs_msg_t) == 64);
+_Static_assert(sizeof (fs_msg_t) == 64, "fs_msg_t must be exactly 64 bytes");
 
 typedef struct fs_queue {
     uint64_t head;
