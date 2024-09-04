@@ -965,7 +965,7 @@ void handle_telldir(fs_cmd_t cmd) {
         cmpl.status = FS_STATUS_INVALID_FD;
         goto fail;
     }
-    int64_t loc = nfs_telldir(nfs, dir_handle);
+    cmpl.data.telldir.location = nfs_telldir(nfs, dir_handle);
     fd_end_op(params.fd);
 
 fail:
