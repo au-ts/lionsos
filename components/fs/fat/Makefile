@@ -26,7 +26,7 @@ CFLAGS := -Wall \
           -I$(LIONSOS)/dep/sddf/include \
 		  -I$(FS_DIR)
 
-LDFLAGS := -L$(LIBC_DIR)/lib -lc
+LDFLAGS := -L$(LIBC_DIR)/lib -lc -L$(FATFS_OBJECT_DIR)/libmicrokitco -lmicrokitco
 
 LIBS := -lmicrokit -Tmicrokit.ld -L$(BOARD_DIR)/lib
 
@@ -39,29 +39,12 @@ FATFS_OBJS :=   ff.o \
 				printf.o \
 				putchar_debug.o
 
-FIBERPOOL_OBJ := fiberpool/libfiberpool.a
-FIBERPOOL_PATH := $(LIONSOS)/dep/fiberpool
-
-ifdef USE_FIBERPOOL
-LDFLAGS += -L$(FATFS_OBJECT_DIR) -lfiberpool
-COROUTINE_OBJS := $(FATFS_OBJECT_DIR)/$(FIBERPOOL_OBJ)
-CPPFLAGS := -DUSE_FIBERPOOL
-endif
-
 LIBMICROKITCO_OBJ := libmicrokitco/libmicrokitco.a
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LIBMICROKITCO_OPT_PATH := $(LIONSOS)/components/fs/fat
 
-ifdef USE_LIBMICROKITCO
-LDFLAGS += -L$(FATFS_OBJECT_DIR)/libmicrokitco -lmicrokitco
 COROUTINE_OBJS := $(FATFS_OBJECT_DIR)/$(LIBMICROKITCO_OBJ)
 CPPFLAGS := -DUSE_LIBMICROKITCO
-endif
-
-$(FATFS_OBJECT_DIR)/$(FIBERPOOL_OBJ):
-	make -f $(FIBERPOOL_PATH)/Makefile \
-			BUILD_DIR=$(FATFS_OBJECT_DIR) \
-			FIBERPOOL_PATH=$(FIBERPOOL_PATH)
 
 $(FATFS_OBJECT_DIR)/$(LIBMICROKITCO_OBJ):
 	make -f $(LIBMICROKITCO_PATH)/Makefile \

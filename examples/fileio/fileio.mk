@@ -132,8 +132,7 @@ fatfs.elf: musllibc/lib/libc.a
 		   MICROKIT_BOARD=$(MICROKIT_BOARD) \
 		   LIBC_DIR=$(abspath $(BUILD_DIR)/musllibc) \
 		   BUILD_DIR=$(abspath .) \
-		   TARGET=$(TARGET) \
-		   USE_LIBMICROKITCO=1
+		   TARGET=$(TARGET)
 
 musllibc/lib/libc.a:
 	make -C $(MUSL) \
