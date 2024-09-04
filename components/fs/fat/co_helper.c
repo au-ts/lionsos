@@ -1,40 +1,5 @@
 #include "fatfs_config.h"
 #include "co_helper.h"
-
-#ifdef USE_FIBERPOOL
-void co_init(uint64_t* stack, uint32_t num) {
-    struct stack_mem stackmem[4];
-    stackmem[0].memory = (void*)stack[0];
-    stackmem[0].size = COROUTINE_STACKSIZE;
-    stackmem[1].memory = (void*)stack[1];
-    stackmem[1].size = COROUTINE_STACKSIZE;
-    stackmem[2].memory = (void*)stack[2];
-    stackmem[2].size = COROUTINE_STACKSIZE;
-    stackmem[3].memory = (void*)stack[3];
-    stackmem[3].size = COROUTINE_STACKSIZE;
-    FiberPool_init(stackmem, num, 1);
-}
-
-void co_submit_task(void (*func)(void), void *args, co_handle_t *handle) {
-    FiberPool_push(func, args, 2, handle);
-}
-
-void co_wakeup(co_handle_t handle) {
-    Fiber_wake(handle);
-}
-
-bool co_havefreeslot(co_handle_t* index) {
-    *index = FiberPool_FindFree();
-    return *index != INVALID_COHANDLE;
-}
-
-bool co_check_if_finished(co_handle_t handle) {
-    return handle == INVALID_COHANDLE;
-}
-
-#endif
-
-#ifdef USE_LIBMICROKITCO
 #include <stdint.h>
 
 static co_control_t co_controller_mem;
@@ -75,5 +40,3 @@ bool co_check_if_finished(co_handle_t handle) {
     co_state_t co_state = microkit_cothread_query_state(handle);
     return co_state == cothread_not_active;
 }
-
-#endif

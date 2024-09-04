@@ -17,13 +17,6 @@
 // Actually this value should be like 4
 #define BLK_QUEUE_SIZE 16
 
-// Coroutine library that is using
-#ifndef USE_FIBERPOOL
-#ifndef USE_LIBMICROKITCO
-#define USE_LIBMICROKITCO
-#endif
-#endif
-
 #define WORKER_COROUTINE_NUM 4
 
 #define COROUTINE_NUM (WORKER_COROUTINE_NUM + 1)

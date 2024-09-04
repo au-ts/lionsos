@@ -4,20 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifdef USE_FIBERPOOL
-#include <fiberpool/FiberPool.h>
-
-typedef co_handle co_handle_t;
-
-#define co_yield() Fiber_yield()
-#define co_kill() Fiber_kill()
-#define co_get_args() Fiber_GetArgs()
-#define co_set_args(handle, data) FiberPool_SetArgs(handle, data)
-#define co_block() Fiber_block()
-#define co_get_handle() Get_Cohandle()
-#endif
-
-#ifdef USE_LIBMICROKITCO
 #include <libmicrokitco/libmicrokitco.h>
 typedef microkit_cothread_ref_t co_handle_t;
 
@@ -26,7 +12,6 @@ typedef microkit_cothread_ref_t co_handle_t;
 #define co_set_args(handle, data) microkit_cothread_set_arg(handle, data)
 #define co_havefreeslot(ptr) microkit_cothread_free_handle_available(ptr)
 #define co_get_handle() microkit_cothread_my_handle()
-#endif
 
 void co_init(uint64_t* stack, uint32_t num);
 // The handle memory is provided by the user not coroutine pool, is this the right design?
