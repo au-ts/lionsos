@@ -233,8 +233,8 @@ void notified(microkit_channel ch) {
             co_handle_t index;
             // If there is space and we do not know the size of the queue, get it now
             if (queue_size_init == false && co_havefreeslot(&index)) {
-                command_queue_size = fs_queue_size_consumer(fatfs_command_queue);
-                completion_queue_size = fs_queue_size_producer(fatfs_completion_queue);
+                command_queue_size = fs_queue_length_consumer(fatfs_command_queue);
+                completion_queue_size = fs_queue_length_producer(fatfs_completion_queue);
                 queue_size_init = true;
             }
 

@@ -145,9 +145,9 @@
 
     <protection_domain name="micropython" priority="1">
         <program_image path="micropython.elf" />
-        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="nfs_command_queue" />
-        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="nfs_completion_queue" />
-        <map mr="shared_fs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="nfs_share" />
+        <map mr="nfs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="fs_command_queue" />
+        <map mr="nfs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="fs_completion_queue" />
+        <map mr="shared_fs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="fs_share" />
 
         <map mr="eth_rx_free_micropython" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
         <map mr="eth_rx_active_micropython" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
