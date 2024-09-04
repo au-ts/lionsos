@@ -64,7 +64,7 @@ void handle_seekdir(fs_cmd_t cmd);
 void handle_telldir(fs_cmd_t cmd);
 void handle_rewinddir(fs_cmd_t cmd);
 
-static const void (*cmd_handler[FS_NUM_COMMANDS])(fs_cmd_t cmd) = {
+static void (*const cmd_handler[FS_NUM_COMMANDS])(fs_cmd_t cmd) = {
     [FS_CMD_INITIALISE] = handle_initialise,
     [FS_CMD_DEINITIALISE] = handle_deinitialise,
     [FS_CMD_OPEN] = handle_open,
@@ -87,6 +87,13 @@ static const void (*cmd_handler[FS_NUM_COMMANDS])(fs_cmd_t cmd) = {
     [FS_CMD_REWINDDIR] = handle_rewinddir,
 };
 
+void reply(fs_cmpl_t cmpl) {
+    assert(fs_queue_length_producer(completion_queue) != FS_QUEUE_CAPACITY);
+    fs_queue_idx_empty(completion_queue, 0)->cmpl = cmpl;
+    fs_queue_publish_production(completion_queue, 1);
+    microkit_notify(CLIENT_CHANNEL);
+}
+
 void process_commands(void) {
     uint64_t command_count = fs_queue_length_consumer(command_queue);
     uint64_t completion_space = FS_QUEUE_CAPACITY - fs_queue_length_producer(completion_queue);
@@ -95,7 +102,7 @@ void process_commands(void) {
     for (uint64_t i = 0; i < to_consume; i++) {
         fs_cmd_t cmd = fs_queue_idx_filled(command_queue, i)->cmd;
         if (cmd.type >= FS_NUM_COMMANDS) {
-            reply((fs_cmpl_t){ .id = cmd.id, .status = FS_STATUS_INVALID_COMMAND, 0 });
+            reply((fs_cmpl_t){ .id = cmd.id, .status = FS_STATUS_INVALID_COMMAND, .data = {0} });
             continue;
         }
         cmd_handler[cmd.type](cmd);
@@ -127,13 +134,6 @@ void continuation_free(struct continuation *cont) {
     first_free_cont = cont;
 }
 
-void reply(fs_cmpl_t cmpl) {
-    assert(fs_queue_length_producer(completion_queue) != FS_QUEUE_CAPACITY);
-    fs_queue_idx_empty(completion_queue, 0)->cmpl = cmpl;
-    fs_queue_publish_production(completion_queue, 1);
-    microkit_notify(CLIENT_CHANNEL);
-}
-
 void *get_buffer(fs_buffer_t buf) {
     if (buf.offset >= CLIENT_SHARE_SIZE
         || buf.size > CLIENT_SHARE_SIZE - buf.offset
@@ -158,7 +158,7 @@ char *copy_path(int slot, fs_buffer_t buf) {
 
 static void mount_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     if (status != 0) {
         dlog("failed to connect to nfs server (%d): %s", status, data);
@@ -208,7 +208,7 @@ fail_mount:
     continuation_free(cont);
 fail_init:
 fail_duplicate:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void handle_deinitialise(fs_cmd_t cmd) {
@@ -216,7 +216,7 @@ void handle_deinitialise(fs_cmd_t cmd) {
 
 static void stat64_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     void *buf = (void *)cont->data[0];
 
     if (status == 0) {
@@ -263,12 +263,12 @@ void handle_stat(fs_cmd_t cmd) {
 fail_enqueue:
     continuation_free(cont);
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void fsize_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
 
     if (status != 0) {
@@ -314,12 +314,12 @@ fail_enqueue:
     continuation_free(cont);
     fd_end_op(params.fd);
 fail_begin:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     struct nfsfh *file = data;
     fd_t fd = cont->data[0];
 
@@ -386,12 +386,12 @@ fail_enqueue:
     fd_free(fd);
 fail_alloc:
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void close_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
     struct nfsfh *fh = (struct nfsfh *)cont->data[1];
 
@@ -445,12 +445,12 @@ fail_enqueue:
     fd_set_file(params.fd, file_handle);
 fail_unset:
 fail_begin:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void read_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
 
     if (status >= 0) {
@@ -503,12 +503,12 @@ fail_enqueue:
     fd_end_op(params.fd);
 fail_begin:
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void write_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
 
     if (status >= 0) {
@@ -560,12 +560,12 @@ fail_enqueue:
     fd_end_op(params.fd);
 fail_begin:
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void rename_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     if (status != 0) {
         dlog("failed to write to file: %d (%s)", status, data);
         cmpl.status = FS_STATUS_ERROR;
@@ -600,12 +600,12 @@ void handle_rename(fs_cmd_t cmd) {
 fail_enqueue:
     continuation_free(cont);
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void unlink_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     if (status != 0) {
         dlog("failed to unlink file");
         cmpl.status = FS_STATUS_ERROR;
@@ -639,12 +639,12 @@ void handle_unlink(fs_cmd_t cmd) {
 fail_enqueue:
     continuation_free(cont);
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void fsync_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
     if (status != 0) {
         dlog("fsync failed: %d (%s)", status, data);
@@ -684,12 +684,12 @@ fail_enqueue:
     continuation_free(cont);
     fd_end_op(params.fd);
 fail_begin:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void truncate_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
     if (status != 0) {
         dlog("ftruncate failed: %d (%s)", status, data);
@@ -729,12 +729,12 @@ fail_enqueue:
     continuation_free(cont);
     fd_end_op(params.fd);
 fail_begin:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void mkdir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     if (status != 0) {
         dlog("failed to write to file: %d (%s)", status, data);
         cmpl.status = FS_STATUS_ERROR;
@@ -769,12 +769,12 @@ void handle_mkdir(fs_cmd_t cmd) {
 fail_enqueue:
     continuation_free(cont);
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void rmdir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = continuation_alloc();
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     if (status != 0) {
         dlog("failed to write to file: %d (%s)", status, data);
         cmpl.status = FS_STATUS_ERROR;
@@ -809,12 +809,12 @@ void handle_rmdir(fs_cmd_t cmd) {
 fail_enqueue:
     continuation_free(cont);
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
 void opendir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     fd_t fd = cont->data[0];
     struct nfsdir *dir = data;
@@ -834,7 +834,7 @@ void opendir_cb(int status, struct nfs_context *nfs, void *data, void *private_d
 
 void handle_opendir(fs_cmd_t cmd) {
     fs_cmd_params_opendir_t params = cmd.params.opendir;
-    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_ERROR, 0 };
+    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_ERROR, .data = {0} };
 
     char *path = copy_path(0, params.path);
     if (path == NULL) {
@@ -875,7 +875,7 @@ fail_buffer:
 
 void handle_closedir(fs_cmd_t cmd) {
     fs_cmd_params_closedir_t params = cmd.params.closedir;
-    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
     int err = fd_begin_op_dir(params.fd, &dir_handle);
@@ -901,7 +901,7 @@ fail:
 
 void handle_readdir(fs_cmd_t cmd) {
     fs_cmd_params_readdir_t params = cmd.params.readdir;
-    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     char *buf = get_buffer(params.buf);
     if (buf == NULL || params.buf.size < FS_MAX_NAME_LENGTH) {
@@ -938,7 +938,7 @@ fail_buffer:
 
 void handle_seekdir(fs_cmd_t cmd) {
     fs_cmd_params_seekdir_t params = cmd.params.seekdir;
-    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
     int err = fd_begin_op_dir(params.fd, &dir_handle);
@@ -956,7 +956,7 @@ fail:
 
 void handle_telldir(fs_cmd_t cmd) {
     fs_cmd_params_telldir_t params = cmd.params.telldir;
-    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
     int err = fd_begin_op_dir(params.fd, &dir_handle);
@@ -974,7 +974,7 @@ fail:
 
 void handle_rewinddir(fs_cmd_t cmd) {
     fs_cmd_params_rewinddir_t params = cmd.params.rewinddir;
-    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
     int err = fd_begin_op_dir(params.fd, &dir_handle);
