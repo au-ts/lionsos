@@ -208,7 +208,7 @@ fail_mount:
     continuation_free(cont);
 fail_init:
 fail_duplicate:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void handle_deinitialise(fs_cmd_t cmd) {
@@ -216,7 +216,7 @@ void handle_deinitialise(fs_cmd_t cmd) {
 
 static void stat64_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, FS_STATUS_SUCCESS, 0 };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
     void *buf = (void *)cont->data[0];
 
     if (status == 0) {
@@ -263,12 +263,12 @@ void handle_stat(fs_cmd_t cmd) {
 fail_enqueue:
     continuation_free(cont);
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void fsize_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
-    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS };
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, 0 };
     fd_t fd = cont->data[0];
 
     if (status != 0) {
@@ -314,7 +314,7 @@ fail_enqueue:
     continuation_free(cont);
     fd_end_op(params.fd);
 fail_begin:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -386,7 +386,7 @@ fail_enqueue:
     fd_free(fd);
 fail_alloc:
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void close_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -445,7 +445,7 @@ fail_enqueue:
     fd_set_file(params.fd, file_handle);
 fail_unset:
 fail_begin:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void read_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -503,7 +503,7 @@ fail_enqueue:
     fd_end_op(params.fd);
 fail_begin:
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void write_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -560,7 +560,7 @@ fail_enqueue:
     fd_end_op(params.fd);
 fail_begin:
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void rename_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -600,7 +600,7 @@ void handle_rename(fs_cmd_t cmd) {
 fail_enqueue:
     continuation_free(cont);
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void unlink_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -639,7 +639,7 @@ void handle_unlink(fs_cmd_t cmd) {
 fail_enqueue:
     continuation_free(cont);
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void fsync_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -684,7 +684,7 @@ fail_enqueue:
     continuation_free(cont);
     fd_end_op(params.fd);
 fail_begin:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void truncate_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -729,7 +729,7 @@ fail_enqueue:
     continuation_free(cont);
     fd_end_op(params.fd);
 fail_begin:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void mkdir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -769,7 +769,7 @@ void handle_mkdir(fs_cmd_t cmd) {
 fail_enqueue:
     continuation_free(cont);
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void rmdir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -809,7 +809,7 @@ void handle_rmdir(fs_cmd_t cmd) {
 fail_enqueue:
     continuation_free(cont);
 fail_buffer:
-    reply((fs_cmpl_t){ .id = cmd.id, .status = status });
+    reply((fs_cmpl_t){ .id = cmd.id, .status = status, 0 });
 }
 
 void opendir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
