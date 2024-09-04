@@ -227,6 +227,7 @@ typedef struct fs_cmd {
     uint64_t type;
     fs_cmd_params_t params;
 } fs_cmd_t;
+_Static_assert(sizeof (fs_cmd_t) == 64);
 
 typedef struct fs_cmpl_data_open {
     uint64_t fd;
