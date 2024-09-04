@@ -118,6 +118,9 @@ void print_sector_data(uint8_t *buffer, unsigned long size) {
 }
 #endif
 
+_Static_assert(BLK_QUEUE_SIZE_CLI_FATFS >= WORKER_COROUTINE_NUM, 
+    "The size of queue between fs and blk should be at least the size of WORKER_COROUTINE_NUM");
+
 void init(void) {
     // Init the block device queue
     // Have to make sure who initialize this SDDF queue
