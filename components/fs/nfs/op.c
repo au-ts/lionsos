@@ -88,8 +88,8 @@ static const void (*cmd_handler[FS_NUM_COMMANDS])(fs_cmd_t cmd) = {
 };
 
 void process_commands(void) {
-    uint64_t command_count = fs_queue_size_consumer(command_queue);
-    uint64_t completion_space = FS_QUEUE_CAPACITY - fs_queue_size_producer(completion_queue);
+    uint64_t command_count = fs_queue_length_consumer(command_queue);
+    uint64_t completion_space = FS_QUEUE_CAPACITY - fs_queue_length_producer(completion_queue);
     // don't dequeue a command if we have no space to enqueue its completion
     uint64_t to_consume = MIN(command_count, completion_space);
     for (uint64_t i = 0; i < to_consume; i++) {
@@ -128,7 +128,7 @@ void continuation_free(struct continuation *cont) {
 }
 
 void reply(fs_cmpl_t cmpl) {
-    assert(fs_queue_size_producer(completion_queue) != FS_QUEUE_CAPACITY);
+    assert(fs_queue_length_producer(completion_queue) != FS_QUEUE_CAPACITY);
     fs_queue_idx_empty(completion_queue, 0)->cmpl = cmpl;
     fs_queue_publish_production(completion_queue, 1);
     microkit_notify(CLIENT_CHANNEL);
