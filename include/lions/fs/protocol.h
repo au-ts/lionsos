@@ -18,6 +18,7 @@ enum {
     FS_OPEN_FLAGS_READ_ONLY = 0,
     FS_OPEN_FLAGS_WRITE_ONLY = 1,
     FS_OPEN_FLAGS_READ_WRITE = 2,
+// If the FS_OPEN_FLAGS_CREATE flag is set but the file already exists, open the existing file instead of create a new one
     FS_OPEN_FLAGS_CREATE = 4,
 };
 

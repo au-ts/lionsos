@@ -155,9 +155,8 @@ unsigned char map_fs_flags_to_fat_flags(uint64_t fs_flags) {
     }
 
     // Map create flags
-    // What is the intended behavior if FS_OPEN_FLAGS_CREATE is set but the file already exists?
     if (fs_flags & FS_OPEN_FLAGS_CREATE) {
-        // Depend on the intended behavior, change this flag. Use the most privileged one for now
+        // If the file exists, open the existing file. If not, create a new file.
         fat_flags |= FA_OPEN_ALWAYS;
     } else {
         fat_flags |= FA_OPEN_EXISTING;
