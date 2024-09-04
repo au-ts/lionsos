@@ -65,7 +65,7 @@ void *fs_buffer_ptr(ptrdiff_t buffer) {
 
 void fs_process_completions(void) {
     fs_msg_t message;
-    uint64_t to_consume = fs_queue_size_consumer(fs_completion_queue);
+    uint64_t to_consume = fs_queue_length_consumer(fs_completion_queue);
     for (uint64_t i = 0; i < to_consume; i++) {
         fs_cmpl_t completion = fs_queue_idx_filled(fs_completion_queue, i)->cmpl;
 
@@ -86,7 +86,7 @@ void fs_command_issue(fs_cmd_t cmd) {
     assert(request_metadata[cmd.id].used);
 
     fs_msg_t message = { .cmd = cmd };
-    assert(fs_queue_size_producer(fs_command_queue) != FS_QUEUE_CAPACITY);
+    assert(fs_queue_length_producer(fs_command_queue) != FS_QUEUE_CAPACITY);
     *fs_queue_idx_empty(fs_command_queue, 0) = message;
     fs_queue_publish_production(fs_command_queue, 1);
     microkit_notify(FS_CH);
