@@ -32,7 +32,7 @@ struct fs_queue *command_queue;
 struct fs_queue *completion_queue;
 char *client_share;
 
-char path_buffer[4096][2];
+char path_buffer[2][FS_MAX_PATH_LENGTH + 1];
 
 struct continuation {
     uint64_t request_id;
