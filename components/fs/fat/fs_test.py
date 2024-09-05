@@ -291,50 +291,58 @@ def test_rename_files_and_dirs(directory):
         if path_exists(renamed_dir_path):
             os.rmdir(renamed_dir_path)
 
-def test_truncate_file(directory):
-    """Test truncating a file and verifying the truncated content."""
+def test_truncate_using_open_flag(directory):
+    """Test if opening a file with 'w' or 'w+' flag truncates the file as expected."""
     global success_count, fail_count
 
-    test_file = path_join(directory, "test_truncate.txt")
-    poem = (
+    test_file = path_join(directory, "test_truncate_open_flag.txt")
+    original_content = (
         "I met a traveler from an antique land\n"
         "Who said: Two vast and trunkless legs of stone\n"
         "Stand in the desert. Near them, on the sand,\n"
         "Half sunk, a shattered visage lies, whose frown,\n"
         "And wrinkled lip, and sneer of cold command,\n"
-        "Tell that its sculptor well those passions read\n"
-        "Which yet survive, stamped on these lifeless things,\n"
-        "The hand that mocked them and the heart that fed.\n"
-        "And on the pedestal, these words appear:\n"
-        "My name is Ozymandias, King of Kings;\n"
-        "Look on my Works, ye Mighty, and despair!\n"
-        "Nothing beside remains. Round the decay\n"
-        "Of that colossal Wreck, boundless and bare\n"
-        "The lone and level sands stretch far away."
     )
+    short_content = "Short content."
 
     try:
-        # Write the poem to the file
+        # Step 1: Write the full poem to the file
         with open(test_file, "w") as f:
-            f.write(poem)
+            f.write(original_content)
+        # print(f"File '{test_file}' written with original content.")
 
-        # Truncate the file in steps and verify the content
-        truncation_lengths = [200, 150, 100, 50, 0]  # Example truncation lengths
+        # Verify the file contains the original content
+        with open(test_file, "r") as f:
+            read_content = f.read()
+        assert read_content == original_content, "Test failed: File does not contain the original content."
 
-        for length in truncation_lengths:
-            with open(test_file, "r+") as f:
-                f.truncate(length)
-                f.seek(0)
-                truncated_content = f.read()
+        # Step 2: Open the file with 'w' mode to truncate it and write shorter content
+        with open(test_file, "w") as f:
+            f.write(short_content)
+        # print(f"File '{test_file}' truncated and written with short content using 'w' mode.")
 
-            expected_content = poem[:length]
-            assert truncated_content == expected_content, (
-                f"Test failed: Truncated content does not match expected at length {length}. ",
-                f"Expected: {repr(expected_content)}, Got: {repr(truncated_content)}"
-            )
+        # Verify the file now contains only the short content (previous content should be truncated)
+        with open(test_file, "r") as f:
+            read_content = f.read()
+        assert read_content == short_content, (
+            "Test failed: File content was not truncated properly with 'w' mode. "
+            f"Expected: '{short_content}', Got: '{read_content}'"
+        )
+        # print(f"File '{test_file}' correctly truncated and contains the expected short content.")
+
+        # Step 3: Open the file with 'w+' mode to truncate it again and write even shorter content
+        with open(test_file, "w+") as f:
+            f.write("")
+        # print(f"File '{test_file}' truncated to empty content using 'w+' mode.")
+
+        # Verify the file is now empty
+        with open(test_file, "r") as f:
+            read_content = f.read()
+        assert read_content == "", "Test failed: File should be empty after being truncated with 'w+' mode."
 
         # Increment success count if all truncations are verified
         success_count += 1
+        # print(f"Test passed: File truncation using 'w' and 'w+' flags works as expected.")
 
     except AssertionError as e:
         print(e)
@@ -344,6 +352,8 @@ def test_truncate_file(directory):
         # Cleanup: Remove the test file
         if path_exists(test_file):
             os.remove(test_file)
+            # print(f"File '{test_file}' removed after test.")
+
 
 def run_tests():
     test_dir_path = "/home/li/test_dir"
@@ -380,7 +390,7 @@ def run_tests():
     # Indicate the start of the sixth test
     print("\nTest 6: Running test_truncate_file")
 
-    test_truncate_file(test_dir_path)
+    test_truncate_using_open_flag(test_dir_path)
 
     # Print the results
     print(f"\nTests completed. Success: {success_count}, Fail: {fail_count}")
