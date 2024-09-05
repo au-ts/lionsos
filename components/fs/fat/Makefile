@@ -38,7 +38,8 @@ FATFS_OBJS :=   ff.o \
 				co_helper.o \
 				fs_diskio.o \
 				printf.o \
-				putchar_debug.o
+				putchar_debug.o \
+				assert.o
 
 LIBMICROKITCO_OBJ := libmicrokitco/libmicrokitco.a
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
@@ -84,6 +85,9 @@ $(FATFS_OBJECT_DIR)/printf.o: $(LIONSOS)/dep/sddf/util/printf.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(FATFS_OBJECT_DIR)/putchar_debug.o: $(LIONSOS)/dep/sddf/util/putchar_debug.c Makefile
+	$(CC) -c $(CFLAGS) $< -o $@
+
+$(FATFS_OBJECT_DIR)/assert.o: $(LIONSOS)/dep/sddf/util/assert.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/fatfs.elf: $(addprefix $(FATFS_OBJECT_DIR)/, $(FATFS_OBJS))

@@ -8,6 +8,7 @@
 #include "co_helper.h"
 #include "fatfs_config.h"
 #include <config/blk_config.h>
+#include <sddf/util/util.h>
 
 #ifdef FS_DEBUG_PRINT
 #include <sddf/util/printf.h>
@@ -37,6 +38,9 @@ extern uint64_t blk_data_region;
 #define MAX_CLUSTER_SIZE (BLK_REGION_SIZE / WORKER_COROUTINE_NUM)
 
 uint64_t coroutine_blk_addr[WORKER_COROUTINE_NUM];
+
+#define IS_POWER_OF_2(x) ((x) && !((x) & ((x) - 1)))
+
 #endif
 
 DSTATUS disk_initialize (
@@ -52,6 +56,12 @@ DSTATUS disk_initialize (
 		coroutine_blk_addr[i] = i * MAX_CLUSTER_SIZE;
 	}
 	#endif
+
+	// The sector size should be a mutiple of 512, BLK_TRANSFER_SIZE % SECTOR_SIZE should be 0
+	// BLK_TRANSFER_SIZE % SECTOR_SIZE should be a power of 2
+	assert(config->sector_size % 512 == 0 && "Sector size must be a multiple of 512");
+	assert(config->sector_size <= BLK_TRANSFER_SIZE && "BLK_TRANSFER_SIZE must be the same or larger than sector size");
+	assert(IS_POWER_OF_2(BLK_TRANSFER_SIZE / config->sector_size) && "BLK_TRANSFER_SIZE / SECTOR_SIZE must be a power of 2");
 
 	switch (pdrv) {
 	default:
@@ -99,8 +109,6 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
 	default:
 		if (cmd == GET_SECTOR_SIZE) {
 			WORD *size = buff;
-			// The sector size should be a mutiple of 512, BLK_TRANSFER_SIZE % SECTOR_SIZE should be 0
-			// BLK_TRANSFER_SIZE % SECTOR_SIZE should be a power of 2
 			*size = config->sector_size;
 			res = RES_OK;
 		}
@@ -122,6 +130,7 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
 
 #define MOD_POWER_OF_2(a, b) ((a) & ((b) - 1))
 #define DIV_POWER_OF_2(a, b) ((a) >> (__builtin_ctz(b)))
+#define MUL_POWER_OF_2(a, b) ((a) << (__builtin_ctz(b)))
 
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 	DRESULT res;
@@ -148,6 +157,8 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 			// DIV_POWER_OF_2(aligned_sector, sector_per_transfer) maybe -1 if the sector to read is in one transfer block and not aligned to both side, but should still works
 			int32_t aligned_sector = count - unaligned_head_sector - unaligned_tail_sector;
 			sddf_count += DIV_POWER_OF_2(aligned_sector, sector_per_transfer);
+			
+			assert(MUL_POWER_OF_2(sddf_count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
 
 			#ifdef FS_DEBUG_PRINT
 			sddf_printf("blk_enqueue_read pre adjust: addr: 0x%lx sector: %u, count: %u ID: %d\n", read_data_offset, sector, count, handle);
@@ -178,6 +189,8 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 			uint64_t write_data_offset = coroutine_blk_addr[handle - 1];
 			uint16_t sector_size = config->sector_size;
 			if (sector_size == BLK_TRANSFER_SIZE) {
+				assert(MUL_POWER_OF_2(count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
+
 				memcpy((void*)(write_data_offset + blk_data_region), buff, sector_size * count);
 				blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sector, count,handle);
 			}
@@ -196,6 +209,8 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 
 				int32_t aligned_sector = count - unaligned_head_sector - unaligned_tail_sector;
 				sddf_count += DIV_POWER_OF_2(aligned_sector, sector_per_transfer);
+
+				assert(MUL_POWER_OF_2(sddf_count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
 
 				#ifdef FS_DEBUG_PRINT
 				sddf_printf("blk_enqueue_write pre adjust: addr: 0x%lx sector: %u, count: %u ID: %d buffer_addr_in_fs: 0x%p\n", write_data_offset, sector, count, handle, buff);
