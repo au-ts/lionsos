@@ -95,7 +95,7 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 %.py: ${WEBSERVER_SRC_DIR}/%.py
 	cp $< $@
 
-$(MUSL)/lib/libc.a $(MUSL)/include:
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL}/Makefile
 	make -C $(MUSL_SRC) \
 		C_COMPILER=aarch64-none-elf-gcc \
 		TOOLPREFIX=aarch64-none-elf- \
@@ -136,9 +136,6 @@ mpy-cross: FORCE  ${LIONSOS}/dep/micropython/mpy-cross
 	make -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 .PHONY: mpy-cross
-
-${LIBNFS}/include:
-	cd ${LIONSOS}; git submodule update --init $(LIONSOS)/dep/libnfs
 
 $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
 	cd ${LIONSOS}; git submodule update --init dep/micropython

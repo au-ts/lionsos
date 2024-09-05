@@ -25,6 +25,9 @@ CFLAGS_nfs := \
 	-I$(LWIP)/include/ipv4 \
 
 include $(LWIP)/Filelists.mk
+$(LWIP)/Filelists.mk:
+	cd $(LIONSOS); git submodule update --init $(SDDF)
+
 NFS_NETIFFILES := $(LWIPDIR)/netif/ethernet.c
 NFS_LWIPFILES := $(COREFILES) $(CORE4FILES) $(NFS_NETIFFILES)
 NFS_LWIP_OBJ := $(addprefix nfs/lwip/, $(NFS_LWIPFILES:.c=.o))
@@ -40,7 +43,12 @@ $(CHECK_NFS_FLAGS_MD5):
 	-rm -f .nfs_cflags-*
 	touch $@
 
-libnfs/lib/libnfs.a:
+$(LIBNFS)/CMakeLists.txt $(LIBNFS)/include:
+	cd $(LIONSOS); git submodule update --init dep/libnfs
+
+$(LIBNFS)/CMakeLists.txt:
+	cd ${LIONSOS}; git submodule update --init dep/libnfs
+libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt $(MUSL)/lib/libc.a
 	MUSL=$(abspath $(MUSL)) cmake -S $(LIBNFS) -B libnfs
 	cmake --build libnfs
 
@@ -54,6 +62,7 @@ $(NFS_DIRS):
 
 $(NFS_OBJ): $(CHECK_NFS_FLAGS_MD5)
 $(NFS_OBJ): $(MUSL)/lib/libc.a
+$(NFS_OBJ): $(LIBNFS)/include
 $(NFS_OBJ): |$(NFS_DIRS)
 $(NFS_OBJ): CFLAGS += $(CFLAGS_nfs)
 

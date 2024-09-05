@@ -43,7 +43,6 @@ DTS := $(VMM_IMAGE_DIR)/linux.dts
 DTB := linux.dtb
 
 LWIP := $(SDDF)/network/ipstacks/lwip/src
-LIBNFS := $(LIONSOS)/dep/libnfs
 NFS := $(LIONSOS)/components/fs/nfs
 MUSL_SRC := $(LIONSOS)/dep/musllibc
 MUSL := musllibc
@@ -115,7 +114,7 @@ include ${SDDF_MAKEFILES}
 include ${LIBVMM_DIR}/vmm.mk
 include ${NFS}/nfs.mk
 
-$(MUSL)/lib/libc.a $(MUSL)/include:
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL}/Makefile
 	make -C $(MUSL_SRC) \
 		C_COMPILER=aarch64-none-elf-gcc \
 		TOOLPREFIX=aarch64-none-elf- \
@@ -203,9 +202,6 @@ ${INITRD}:
 ${LIBVMM_DIR}/vmm.mk:
 	cd ${LIONSOS}; git submodule update --init dep/libvmm
 
-${LIBNFS}/nfs:
-	cd ${LIONSOS}; git submodule update --init dep/libnfs
-
 $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
 	cd ${LIONSOS}; git submodule update --init dep/micropython
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
@@ -214,7 +210,7 @@ ${LIONSOS}/dep/libmicrokitco/Makefile:
 	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
 
 ${MUSL}/Makefile:
-	cd ${LIONSOS}; git submodule update --init ${MUSL}
+	cd ${LIONSOS}; git submodule update --init dep/musllibc
 
 ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
 	cd ${LIONSOS}; git submodule update --init dep/sddf
