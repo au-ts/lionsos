@@ -112,9 +112,10 @@ start_repl:
     gc_init(heap, heap + sizeof(heap));
     mp_init();
 
-    net_cli_queue_init_sys(microkit_name, &net_rx_queue, net_rx_free,
-                           net_rx_active, &net_tx_queue, net_tx_free,
-                           net_tx_active);
+    size_t rx_size, tx_size;
+    net_cli_queue_size(microkit_name, &rx_size, &tx_size);
+    net_queue_init(&net_rx_queue, net_rx_free, net_rx_active, rx_size);
+    net_queue_init(&net_tx_queue, net_tx_free, net_tx_active, tx_size);
     net_buffers_init(&net_tx_queue, 0);
 
     sddf_lwip_init(net_rx_queue, net_tx_queue, ETH_RX_CH, ETH_TX_CH,

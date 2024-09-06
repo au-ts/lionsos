@@ -75,7 +75,10 @@ static void netif_status_callback(char *ip_addr) {
 
 void tcp_init_0(void)
 {
-    net_cli_queue_init_sys(microkit_name, &rx_queue, rx_free, rx_active, &tx_queue, tx_free, tx_active);
+    size_t rx_size, tx_size;
+    net_cli_queue_size(microkit_name, &rx_size, &tx_size);
+    net_queue_init(&rx_queue, rx_free, rx_active, rx_size);
+    net_queue_init(&tx_queue, tx_free, tx_active, tx_size);
     net_buffers_init(&tx_queue, 0);
 
     sddf_lwip_init(rx_queue, tx_queue, ETHERNET_RX_CHANNEL, ETHERNET_TX_CHANNEL, rx_buffer_data_region,
