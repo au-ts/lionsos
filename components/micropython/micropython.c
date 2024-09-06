@@ -14,7 +14,9 @@
 #include <sddf/serial/queue.h>
 #include <serial_config.h>
 #include <sddf/i2c/queue.h>
-#include "lwip/init.h"
+#include <sddf/network/lib_sddf_lwip.h>
+#include <sddf/network/queue.h>
+#include <ethernet_config.h>
 #include "mpconfigport.h"
 #include "fs_helpers.h"
 
@@ -27,7 +29,7 @@ static co_control_t co_controller_mem;
 char *fs_share;
 
 /*
- * Shared regions for Serial communication
+ * Shared regions for serial communication
  */
 char *serial_rx_data;
 char *serial_tx_data;
@@ -35,6 +37,19 @@ serial_queue_t *serial_rx_queue;
 serial_queue_t *serial_tx_queue;
 serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
+
+/*
+ * Shared regions for network communication
+ */
+net_queue_t *net_rx_free;
+net_queue_t *net_rx_active;
+net_queue_t *net_tx_free;
+net_queue_t *net_tx_active;
+uintptr_t net_rx_buffer_data_region;
+uintptr_t net_tx_buffer_data_region;
+
+net_queue_handle_t net_rx_queue;
+net_queue_handle_t net_tx_queue;
 
 #ifdef ENABLE_I2C
 i2c_queue_handle_t i2c_queue_handle;
@@ -81,6 +96,11 @@ static void exec_str(const char *src, mp_parse_input_kind_t input_kind) {
     }
 }
 
+static void netif_status_callback(char *ip_addr) {
+    printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n",
+           microkit_name, __FILE__, __LINE__, __func__, microkit_name, ip_addr);
+}
+
 void t_mp_entrypoint(void) {
     printf("MP|INFO: initialising!\n");
 
@@ -92,7 +112,19 @@ start_repl:
     gc_init(heap, heap + sizeof(heap));
     mp_init();
 
-    init_networking();
+    size_t rx_size, tx_size;
+    net_cli_queue_size(microkit_name, &rx_size, &tx_size);
+    net_queue_init(&net_rx_queue, net_rx_free, net_rx_active, rx_size);
+    net_queue_init(&net_tx_queue, net_tx_free, net_tx_active, tx_size);
+    net_buffers_init(&net_tx_queue, 0);
+
+    sddf_lwip_init(net_rx_queue, net_tx_queue, ETH_RX_CH, ETH_TX_CH,
+                   net_rx_buffer_data_region, net_tx_buffer_data_region,
+                   TIMER_CH, MAC_ADDR_CLI1,
+                   NULL, netif_status_callback, NULL);
+
+    sddf_lwip_maybe_notify();
+
     // initialisation of the filesystem utilises the event loop and the event
     // loop unconditionally tries to process incoming network buffers; therefore
     // the networking needs to be initialised before initialising the fs
@@ -138,19 +170,17 @@ void init(void) {
     microkit_cothread_yield();
 }
 
-void pyb_lwip_poll(void);
-void process_rx(void);
 void mpnet_handle_notify(void);
 
 void notified(microkit_channel ch) {
-    process_rx();
-    pyb_lwip_poll();
+    sddf_lwip_process_rx();
+    sddf_lwip_process_timeout();
     fs_process_completions();
 
     // We ignore errors because notified can be invoked without the MP cothread awaiting in cases such as an async I/O completing.
     microkit_cothread_recv_ntfn(ch);
 
-    mpnet_handle_notify();
+    sddf_lwip_maybe_notify();
 }
 
 // Handle uncaught exceptions (should never be reached in a correct C implementation).

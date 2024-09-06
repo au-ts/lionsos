@@ -58,7 +58,8 @@ DEFINE := \
 	-DETHERNET_TX_CHANNEL=3 \
 	-DETHERNET_RX_CHANNEL=2 \
 	-DTIMER_CHANNEL=9 \
-	-DCLIENT_CHANNEL=7
+	-DCLIENT_CHANNEL=7 \
+	-DSDDF_LWIP_NUM_BUFFS=512
 
 CFLAGS := $(INCLUDE) $(DEFINE) \
 	-mstrict-align \
@@ -110,6 +111,7 @@ OBJ=\
 	$(BUILD_DIR)/tcp.o \
 	$(BUILD_DIR)/printf.o \
 	$(BUILD_DIR)/putchar_debug.o \
+	$(BUILD_DIR)/lib_sddf_lwip.o \
 	$(LWIP_OBJ)
 
 all: directories $(BUILD_DIR)/nfs.a
@@ -124,6 +126,9 @@ $(BUILD_DIR)/printf.o: $(SDDF_UTIL)/printf.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/putchar_debug.o: $(SDDF_UTIL)/putchar_debug.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/lib_sddf_lwip.o: $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/lwip/%.o: $(LWIP)/src/%.c
@@ -141,4 +146,5 @@ directories:
 	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/)) \
 	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/core)) \
 	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/netif)) \
-	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/core/ipv4))
+	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/core/ipv4)) \
+	$(info $(shell mkdir -p $(BUILD_DIR)/lib_sddf_lwip))
