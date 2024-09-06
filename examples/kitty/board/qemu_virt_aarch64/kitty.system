@@ -203,13 +203,13 @@
         <map mr="serial_tx_data_micropython" vaddr="0x60_002_000" perms="rw" cached="true" setvar_vaddr="serial_tx_data" />
         <map mr="serial_rx_data_micropython" vaddr="0x60_004_000" perms="rw" cached="true" setvar_vaddr="serial_rx_data" />
 
-        <map mr="eth_rx_free_micropython" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
-        <map mr="eth_rx_active_micropython" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
-        <map mr="eth_tx_free_micropython" vaddr="0x3_400_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
-        <map mr="eth_tx_active_micropython" vaddr="0x3_600_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
+        <map mr="eth_rx_free_micropython" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="net_rx_free" />
+        <map mr="eth_rx_active_micropython" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="net_rx_active" />
+        <map mr="eth_tx_free_micropython" vaddr="0x3_400_000" perms="rw" cached="true" setvar_vaddr="net_tx_free" />
+        <map mr="eth_tx_active_micropython" vaddr="0x3_600_000" perms="rw" cached="true" setvar_vaddr="net_tx_active" />
 
-        <map mr="eth_rx_buffer_data_region_micropython" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_buffer_data_region" />
-        <map mr="eth_tx_buffer_data_region_micropython" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="tx_buffer_data_region" />
+        <map mr="eth_rx_buffer_data_region_micropython" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="net_rx_buffer_data_region" />
+        <map mr="eth_tx_buffer_data_region_micropython" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="net_tx_buffer_data_region" />
     </protection_domain>
 
     <memory_region name="framebuffer_guest_ram" size="0x10000000" page_size="0x200_000" phys_addr="0x40000000" />

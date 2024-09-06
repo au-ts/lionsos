@@ -104,7 +104,6 @@ SRC_C = \
 	micropython.c \
 	mphalport.c \
 	modtime.c \
-	mpnetworkport.c \
 	modfs_raw.c \
 	vfs_fs_file.c \
 	vfs_fs.c \
@@ -169,7 +168,7 @@ all: directories $(BUILD)/micropython.elf
 $(BUILD)/micropython/lwip/%.o: $(LWIP)/src/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ)
+$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ) $(BUILD)/lib_sddf_lwip_mp.a
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
