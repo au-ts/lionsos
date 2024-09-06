@@ -10,6 +10,7 @@
 
 #include <sddf/timer/client.h>
 #include <sddf/network/queue.h>
+#include <sddf/network/lib_sddf_lwip.h>
 
 #include <nfsc/libnfs.h>
 #include <nfsc/libnfs-raw.h>
@@ -42,8 +43,8 @@ struct nfs_context *nfs;
 void notified(microkit_channel ch) {
     switch (ch) {
     case TIMER_CHANNEL: {
-        tcp_process_rx();
-        tcp_update();
+        sddf_lwip_process_rx();
+        sddf_lwip_process_timeout();
         if (nfs != NULL) {
             int nfs_fd = nfs_get_fd(nfs);
             int socket_index = socket_index_of_fd(nfs_fd);
@@ -70,7 +71,7 @@ void notified(microkit_channel ch) {
         break;
     }
     case ETHERNET_RX_CHANNEL:
-        tcp_process_rx();
+        sddf_lwip_process_rx();
         break;
     case ETHERNET_TX_CHANNEL:
         /* Nothing to do in this case */
@@ -92,7 +93,7 @@ void notified(microkit_channel ch) {
     if (tcp_ready()) {
         process_commands();
     }
-    tcp_maybe_notify();
+    sddf_lwip_maybe_notify();
 }
 
 void init(void)

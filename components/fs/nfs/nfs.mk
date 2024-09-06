@@ -28,6 +28,10 @@ include $(LWIP)/Filelists.mk
 $(LWIP)/Filelists.mk:
 	cd $(LIONSOS); git submodule update --init $(SDDF)
 
+SDDF_LWIP_CFLAGS_nfs := ${CFLAGS_nfs}
+SDDF_LWIP_NUM_BUFS_nfs := 512
+include $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.mk
+
 NFS_NETIFFILES := $(LWIPDIR)/netif/ethernet.c
 NFS_LWIPFILES := $(COREFILES) $(CORE4FILES) $(NFS_NETIFFILES)
 NFS_LWIP_OBJ := $(addprefix nfs/lwip/, $(NFS_LWIPFILES:.c=.o))
@@ -54,7 +58,7 @@ libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt $(MUSL)/lib/libc.a
 
 nfs.elf: LDFLAGS += -L$(LIBGCC)
 nfs.elf: LIBS += -lgcc
-nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a
+nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_sddf_lwip_nfs.a
 	$(LD) $(LDFLAGS) -o $@ $(LIBS) $^
 
 $(NFS_DIRS):
