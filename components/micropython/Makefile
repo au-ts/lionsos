@@ -42,7 +42,7 @@ CFLAGS += \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU) \
-	-DMAX_NUM_BUFFS=512
+	-DSDDF_LWIP_NUM_BUFFS=512
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBC) -L$(LIBMATH)
 LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
 
@@ -162,7 +162,7 @@ OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ)
 
 all: directories $(BUILD)/micropython.elf
 
-$(BUILD)/micropython/lib_sddf_lwip/%.o: $(SDDF)/network/lib_sddf_lwip/%.c
+$(BUILD)/micropython/lib_sddf_lwip/lib_sddf_lwip.o: $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD)/micropython/lwip/%.o: $(LWIP)/src/%.c
