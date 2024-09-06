@@ -71,10 +71,6 @@ void notified(microkit_channel ch) {
     case TIMER_CHANNEL: {
         sddf_lwip_process_rx();
         sddf_lwip_process_timeout();
-        if (tcp_ready() && nfs == NULL) {
-            dlog("network ready, initing nfs");
-            nfs_init();
-        }
         if (nfs != NULL) {
             int nfs_fd = nfs_get_fd(nfs);
             int socket_index = socket_index_of_fd(nfs_fd);
