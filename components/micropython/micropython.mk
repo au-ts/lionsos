@@ -20,8 +20,17 @@
 
 MICROPYTHON_DIR := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 
-micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE)
-	$(MAKE) -C $(MICROPYTHON_DIR) \
+MICROPYTHON_GCC_LIBC_INCLUDE :=  $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))/../include
+
+SDDF_LWIP_CFLAGS_mp := \
+	-I$(MICROPYTHON_GCC_LIBC_INCLUDE) \
+	-I$(MICROPYTHON_DIR)/lwip_include \
+	-I$(SDDF)/network/ipstacks/lwip/src/include
+SDDF_LWIP_NUM_BUFS_mp := 512
+include $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.mk
+
+micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE) lib_sddf_lwip_mp.a
+	make -C $(MICROPYTHON_DIR) \
 		-j$(nproc) \
 		MICROKIT_SDK=$(MICROKIT_SDK) \
 		MICROKIT_BOARD=$(MICROKIT_BOARD) \

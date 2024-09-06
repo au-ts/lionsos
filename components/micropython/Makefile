@@ -66,7 +66,6 @@ SRC_C = \
 	micropython.c \
 	mphalport.c \
 	modtime.c \
-	mpnetworkport.c \
 	modfs_raw.c \
 	vfs_fs_file.c \
 	vfs_fs.c \
@@ -128,7 +127,7 @@ OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
 all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ)
+$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ) $(BUILD)/lib_sddf_lwip_mp.a
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
