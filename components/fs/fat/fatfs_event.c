@@ -57,7 +57,7 @@ typedef struct FS_request{
     co_data_t shared_data;
     /* Used to track request_id */
     uint64_t request_id;
-    /* FiberPool metadata */
+    /* Coroutine handle */
     co_handle_t handle;
     /* Self metadata */
     space_status stat;
@@ -96,7 +96,7 @@ void fill_client_response(fs_msg_t* message, const fs_request* finished_request)
     return;
 }
 
-// Setting up the request in the request_pool and push the request to the FiberPool
+// Setting up the request in the request_pool and push the request to the coroutine pool
 void setup_request(int32_t index, fs_msg_t* message) {
     request_pool[index].request_id = message->cmd.id;
     request_pool[index].cmd = message->cmd.type;
@@ -126,7 +126,7 @@ void init(void) {
     // Have to make sure who initialize this SDDF queue
     blk_queue_init(blk_queue_handle, request, response, BLK_QUEUE_SIZE_CLI_FATFS);
     /*
-       This part of the code is for setting up the FiberPool(Coroutine pool) by
+       This part of the code is for setting up the coroutine pool by
        assign stacks and size of the stack to the pool
     */
     uint64_t stack[WORKER_COROUTINE_NUM];
@@ -226,7 +226,7 @@ void notified(microkit_channel ch) {
         }
 
         /*
-          This should pop the request from the command_queue to the FiberPool to execute, if no new request is 
+          This should pop the request from the command_queue to the coroutine pool to execute, if no new request is 
           popped, we should exit the whole while loop.
         */
         while (true) {
