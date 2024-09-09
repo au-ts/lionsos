@@ -35,7 +35,7 @@ fs_diskio.c
 Contains disk I/O functions, which are called by the file system operations. For instance, if the file system needs to read a specific sector from the disk, it calls disk_read. Disk operations are queued as requests to the sddf queue between the file system and the block device (blk virt), where worker coroutines may block until responses are received.
 
 co_helper.c
-Provides an abstraction layer that simplifies the interfaces libmicrokitco provides.
+Provides an abstraction layer that simplifies and restricts the interfaces libmicrokitco provides.
 
 # Lifecycle of a File System Operation
 The lifecycle of a file system operation in ASYNCFATFS follows these steps:

@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <system>
-    <memory_region name="uart" size="0x1_000" phys_addr="0x9000000" />
-    <memory_region name="virtio_regs" size="0x10_000" phys_addr="0xa003000" />
+    <memory_region name="timer" size="0x10_000" phys_addr="0x302d0000" />
+    <memory_region name="uart" size="0x10_000" phys_addr="0x30860000" />
+    <memory_region name="eth0" size="0x10_000" phys_addr="0x30be0000" />
+    <memory_region name="usdhc" size="0x10_000" phys_addr="0x30b40000" />
 
     <!-- eth driver/device ring buffer mechanism -->
     <memory_region name="hw_ring_buffer" size="0x10_000" />
@@ -57,7 +59,7 @@
 
     <protection_domain name="eth" priority="101" budget="100" period="400">
         <program_image path="eth_driver.elf" />
-        <map mr="virtio_regs" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth_regs"/>
+        <map mr="eth0" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth"/>
 
         <map mr="hw_ring_buffer" vaddr="0x2_200_000" perms="rw" cached="false" setvar_vaddr="hw_ring_buffer_vaddr" />
 
@@ -66,7 +68,7 @@
         <map mr="eth_tx_free_drv" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
         <map mr="eth_tx_active_drv" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
 
-        <irq irq="78" id="0" trigger="edge" /> <!--> ethernet interrupt -->
+        <irq irq="152" id="0" /> <!--> ethernet interrupt -->
 
         <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
     </protection_domain>
@@ -117,12 +119,13 @@
         <map mr="serial_rx_data_driver" vaddr="0x4_002_000" perms="rw" cached="true" setvar_vaddr="rx_data" />
         <map mr="serial_tx_data_driver" vaddr="0x4_004_000" perms="rw" cached="true" setvar_vaddr="tx_data" />
 
-        <irq irq="33" id="0"/> <!-- IRQ for UART -->
+        <irq irq="58" id="0"/> <!-- IRQ for UART -->
     </protection_domain>
     
     <protection_domain name="timer_driver" priority="150" pp="true" passive="true">
         <program_image path="timer_driver.elf" />
-        <irq irq="30" id="0"/> <!-- timer interrupt -->
+        <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" />
+        <irq irq="87" id="0"/> <!-- timer interrupt -->
     </protection_domain>
 
     <protection_domain name="serial_virt_tx" priority="99" >
@@ -180,19 +183,14 @@
     <memory_region name="blk_client_data" size="0x200_000" page_size="0x200_000" />
 
     <protection_domain name="BLK_DRIVER" priority="110">
-        <program_image path="blk_driver.elf" />
-        <map mr="virtio_regs" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="blk_regs"/>
-        <setvar symbol="virtio_headers_paddr" region_paddr="blk_virtio_headers" />
-        <setvar symbol="requests_paddr" region_paddr="blk_driver_metadata" />
+        <program_image path="mmc_driver.elf" />
+        <map mr="usdhc" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="usdhc_regs" />
+        <irq irq="54" id="1" />
 
-        <map mr="blk_driver_config" vaddr="0x40_000_000" perms="rw" cached="true" setvar_vaddr="blk_config" />
-        <map mr="blk_driver_request" vaddr="0x40_200_000" perms="rw" cached="true" setvar_vaddr="blk_request" />
-        <map mr="blk_driver_response" vaddr="0x40_400_000" perms="rw" cached="true" setvar_vaddr="blk_response" />
-
-        <map mr="blk_virtio_headers" vaddr="0x50_000_000" perms="rw" cached="false" setvar_vaddr="virtio_headers_vaddr" />
-        <map mr="blk_driver_metadata" vaddr="0x60_000_000" perms="rw" cached="false" setvar_vaddr="requests_vaddr" />
-
-        <irq irq="79" id="0" trigger="edge" />
+        <!-- sDDF block -->
+        <map mr="blk_driver_config" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="blk_config"     />
+        <map mr="blk_driver_request"    vaddr="0x40200000" perms="rw" cached="false" setvar_vaddr="blk_req_queue"  />
+        <map mr="blk_driver_response"   vaddr="0x40400000" perms="rw" cached="false" setvar_vaddr="blk_resp_queue" />
     </protection_domain>
 
     <protection_domain name="BLK_VIRT" priority="101">
@@ -293,6 +291,11 @@
 
     <channel>
         <end pd="BLK_VIRT" id="0"/>
-        <end pd="BLK_DRIVER" id="1"/>
+        <end pd="BLK_DRIVER" id="0"/>
+    </channel>
+
+    <channel>
+        <end pd="timer_driver" id="2" />
+        <end pd="BLK_DRIVER" id="2" />
     </channel>
 </system>
