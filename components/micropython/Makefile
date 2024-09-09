@@ -42,7 +42,7 @@ CFLAGS += \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU) \
-	-DSDDF_LWIP_NUM_BUFFS=512
+	-DSDDF_LWIP_NUM_BUFS=512
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBC) -L$(LIBMATH)
 LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
 
