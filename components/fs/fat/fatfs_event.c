@@ -153,12 +153,6 @@ void notified(microkit_channel ch) {
     #ifdef FS_DEBUG_PRINT
     sddf_printf("FS IRQ received::%d\n", ch);
     #endif
-    fs_msg_t message;
-
-    // Polling for server's state until it is ready
-    // Remove it when the server side can correctly queue the notification
-    while (!config->ready) {}
-
     switch (ch) {
         case CLIENT_CH:
             break;

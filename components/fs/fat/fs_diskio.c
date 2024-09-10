@@ -57,6 +57,11 @@ DSTATUS disk_initialize (
 	}
 	#endif
 
+    // Check whether the block device is ready or not
+	if (!config->ready) {
+		return RES_NOTRDY;
+	}
+
 	// The sector size should be a mutiple of 512, BLK_TRANSFER_SIZE % SECTOR_SIZE should be 0
 	// BLK_TRANSFER_SIZE % SECTOR_SIZE should be a power of 2
 	assert(config->sector_size % 512 == 0 && "Sector size must be a multiple of 512");
