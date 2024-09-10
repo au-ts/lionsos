@@ -202,6 +202,8 @@ void notified(microkit_channel ch) {
         // Performance issue here, should check if the reason being wake up is from notification from the blk device driver
         // Then decide to yield() or not
         // And should only send back notification to blk device driver if at least one coroutine is block waiting
+
+        // Move checking if the blk queue has items here
         co_yield();
         
         /** 
@@ -244,19 +246,22 @@ void notified(microkit_channel ch) {
                break;
             }
 
+            // Copy the request to local buffer first to avoid modification from client side
+            fs_msg_t client_req = *fs_queue_idx_filled(fatfs_command_queue, fs_request_dequeued);
+
+            fs_request_dequeued++;
+            command_queue_size--;
+
             // For invalid request, dequeue but do not process
-            if (fs_queue_idx_filled(fatfs_command_queue, fs_request_dequeued)->cmd.type >= FS_NUM_COMMANDS) {
+            if (client_req.cmd.type >= FS_NUM_COMMANDS) {
                 #ifdef FS_DEBUG_PRINT
-                sddf_printf("Wrong CMD type: %lu\n", fs_queue_idx_filled(fatfs_command_queue, fs_request_dequeued)->cmd.type);
+                sddf_printf("Wrong CMD type: %lu\n", client_req.cmd.type);
                 #endif
-                fs_request_dequeued++;
-                command_queue_size--;
                 continue;
             }
 
             // Get request from the head of the queue
-            setup_request(index, fs_queue_idx_filled(fatfs_command_queue, fs_request_dequeued));
-            fs_request_dequeued++;
+            setup_request(index, &client_req);
             #ifdef FS_DEBUG_PRINT
             sddf_printf("FS dequeue request:CMD type: %lu\n", request_pool[index].cmd);
             #endif
@@ -264,7 +269,6 @@ void notified(microkit_channel ch) {
             request_pool[index].stat = INUSE;
             new_request_popped = true;
             // Dequeue one request from command queue and reserve a space in completion queue
-            command_queue_size--;
             completion_queue_size++;
         }
     }
