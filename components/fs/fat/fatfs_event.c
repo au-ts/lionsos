@@ -153,14 +153,36 @@ void notified(microkit_channel ch) {
     #ifdef FS_DEBUG_PRINT
     sddf_printf("FS IRQ received::%d\n", ch);
     #endif
-    switch (ch) {
-        case CLIENT_CH:
-            break;
-        case SERVER_CH: {
+    if (ch != CLIENT_CH && ch != SERVER_CH) {
+        #ifdef FS_DEBUG_PRINT
+        sddf_printf("Unknown channel:%d\n", ch);
+        #endif
+        return;
+    }
+
+    // This variable track if there are new requests being popped from client request queue and pushed into the couroutine pool or not
+    bool new_request_popped = true;
+    // Get the number of elements in the queue is costly so we have a flag defined here to only get the number when needed
+    bool queue_size_init = false;
+
+    uint64_t command_queue_size;
+    uint64_t completion_queue_size;
+
+    uint32_t fs_request_dequeued = 0;
+    uint32_t fs_response_enqueued = 0;
+
+    /**
+      I assume this big while loop is the confusing and critical part for dispatching coroutines and send back the results.
+    **/
+    while (new_request_popped) {
+        {
             blk_resp_status_t status;
             uint16_t success_count;
             uint32_t id;
-            while (!blk_queue_empty_resp(blk_queue_handle)) {
+            // Get current element numbers in blk response queue
+            uint32_t len = blk_queue_length_resp(blk_queue_handle);
+
+            while (len > 0) {
                 // This id is the index to the request pool
                 blk_dequeue_resp(blk_queue_handle, &status, &success_count, &id);
                 
@@ -170,36 +192,14 @@ void notified(microkit_channel ch) {
                 
                 co_set_args(request_pool[id].handle, (void* )(status));
                 co_wakeup(request_pool[id].handle);
+
+                len--;
             }
-            break;
         }
-        default:
-            #ifdef FS_DEBUG_PRINT
-            sddf_printf("Unknown channel:%d\n", ch);
-            #endif
-            return;
-    }
 
-    // This variable track if there are new requests being popped from request queue and pushed into the couroutine pool or not
-    bool new_request_popped = true;
-    // Get the number of elements in the queue is costly so we have a flag defined here to only get the number when needed
-    bool queue_size_init = false;
-    uint64_t command_queue_size;
-    uint64_t completion_queue_size;
-
-    uint32_t fs_request_dequeued = 0;
-    uint32_t fs_response_enqueued = 0;
-    /**
-      I assume this big while loop is the confusing and critical part for dispatching coroutines and send back the results.
-    **/
-    while (new_request_popped) {
-        // Performance issue here, should check if the reason being wake up is from notification from the blk device driver
-        // Then decide to yield() or not
-        // And should only send back notification to blk device driver if at least one coroutine is block waiting
-
-        // Move checking if the blk queue has items here
+        // Give worker coroutine a chance to run
         co_yield();
-        
+
         /** 
         If the code below get executed, then all the working coroutines are either blocked or finished.
         So the code below would send the result back to client through SDDF and do the cleanup for finished 
@@ -209,7 +209,6 @@ void notified(microkit_channel ch) {
         /*
           This for loop check if there are coroutines finished and send the result back
         */
-        new_request_popped = false;
         for (uint16_t i = 1; i < COROUTINE_NUM; i++) {
             if (co_check_if_finished(request_pool[i].handle) && request_pool[i].stat == INUSE) {
                 fill_client_response(fs_queue_idx_empty(fatfs_completion_queue, fs_response_enqueued), &(request_pool[i]));
@@ -225,6 +224,7 @@ void notified(microkit_channel ch) {
           This should pop the request from the command_queue to the coroutine pool to execute, if no new request is 
           popped, we should exit the whole while loop.
         */
+        new_request_popped = false;
         while (true) {
             co_handle_t index;
             // If there is space and we do not know the size of the queue, get it now
