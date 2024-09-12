@@ -11,51 +11,51 @@ To initiate a request to the file system, the client must enqueue one or more re
 # How FATFS Is Modified to Be Asynchronous
 The asynchronous design of ASYNCFATFS is very similar to Linux’s io_uring, which efficiently handles non-blocking I/O operations using an event-driven model. The system follows a coroutine-based event-worker design, where requests are processed without blocking, and I/O operations are handled asynchronously.
 
-Event-Worker Coroutine Model
-Event Coroutine
+### Event-Worker Coroutine Model
+### Event Coroutine
 The event coroutine in ASYNCFATFS is responsible for managing and dispatching file system tasks. Much like the submission queue in io_uring, this coroutine monitors for new requests and assigns them to worker coroutines when available. The event coroutine operates non-blockingly.
 
-Worker Coroutine
+### Worker Coroutine
 When a request is detected, the event coroutine assigns it to a worker coroutine. The worker coroutine handles the actual file system operation, such as reading or writing files, by interacting with the disk subsystem. Once the disk I/O is initiated, the worker coroutine sleeps until the operation completes, minimizing resource consumption.
 
 When the disk I/O operation completes, the event coroutine is notified (akin to the completion queue in io_uring), and it wakes up the corresponding worker coroutine. This coroutine then completes its task and sends the result back to the client, ensuring that no operation blocks the event thread.
 
 # Structure of ASYNCFATFS
-Core Files and Directories
-ff15 Folder
+### Core Files and Directories
+- **ff15 folder**:
 Contains the implementation of Elm-Chan's FatFs (version 0.15 with patch 3).
 
-fatfs_event.c
+- **fatfs_event.c**:
 This file manages the initialization process, event handling, and request assignment. It handles enqueuing requests, waking up worker coroutines, and overall event management.
 
-fatfs_op.c
+- **fatfs_op.c**:
 Defines wrapper functions executed by worker coroutines. These functions perform input validation, prepare arguments, and call the actual file system operations defined in ff15/source/ff.h. The interaction between fatfs_event.c and fatfs_op.c is facilitated by an array of operation functions, which fatfs_event.c assigns to the worker coroutines.
 
-fs_diskio.c
+- **fs_diskio.c**:
 Contains disk I/O functions, which are called by the file system operations. For instance, if the file system needs to read a specific sector from the disk, it calls disk_read. Disk operations are queued as requests to the sddf queue between the file system and the block device (blk virt), where worker coroutines may block until responses are received.
 
-co_helper.c
+- **co_helper.c**:
 Provides an abstraction layer that simplifies and restricts the interfaces libmicrokitco provides.
 
 # Lifecycle of a File System Operation
 The lifecycle of a file system operation in ASYNCFATFS follows these steps:
 
-Request Submission
+- **Request Submission**:
 A client submits a file operation request to the file system. The request is enqueued in a request queue shared between the client and the file system.
 
-Event Coroutine
+- **Event Coroutine**:
 The event coroutine is notified of the new request. If a worker coroutine is available and the response queue between the client and the file system is not full, the event coroutine dequeues the request and checks its validity.
 
-Worker Coroutine Assignment
+- **Worker Coroutine Assignment**:
 Once validated, the event coroutine assigns the corresponding function (from the operation function array) to a worker coroutine. The assigned function includes validation of input arguments and calls the appropriate file system operations defined in the FatFs library.
 
-Disk Operations
-During execution, the file system function may initiate one or more disk operations, such as reading or writing data. These operations are enqueued as block read/write requests in the queue between the file system and the block subsystem (blk virt).
+- **Disk Operations**:
+During execution, the file system function may initiate one or more disk operations, such as reading or writing data. These operations are enqueued as block read/write requests in the queue between the file system and the block subsystem (blk virtualizer).
 
-Worker Coroutine Blocking and Wake-Up
+- **Worker Coroutine Blocking and Wake-Up**:
 After enqueuing the disk request, the worker coroutine goes to sleep, awaiting the response from the block subsystem. Once fatfs_event.c receives the response, it wakes up the worker coroutine, which then continues processing.
 
-Completion
+- **Completion**:
 The operation is completed, and the result is sent back to the client via the response queue.
 
 # Limitation and Possible Solution
@@ -78,7 +78,7 @@ int map_blocks(struct file* f, int logical_sector);
 
 Calling this function with logical sectors 0, 1, and 2 would return 34, 435, and 656, respectively.
 
-Current Implementation in FATFS
+### Current Implementation in FATFS
 Let’s look at how a simplified read operation is implemented in FATFS today:
 ```c
 // A simplified f_read implementation
@@ -91,7 +91,7 @@ FRESULT f_read (
         // Get the logical sector of the file by calculating the offset/sector_size
         int logical_sector = fp->offset / sector_size;
         // Get the physical sector number
-        int physical_sector_num = fat_map_blocks(fp, fp->offset);
+        int physical_sector_num = fat_map_blocks(fp, logical_sector);
         // Read the block
         char block_buffer[sector_size];
         block_read_async(physical_sector_num, block_buffer);
@@ -106,8 +106,8 @@ FRESULT f_read (
     return success;
 }
 ```
-In this implementation, the system enqueues asynchronous block requests but waits for each request to complete before issuing the next one. This design is due to Elm-Chan's FatFs assuming synchronous block interfaces.
-Proposed Solution
+In this implementation, the system enqueues asynchronous block requests but waits for each request to complete before issuing the next one, even when the block requests sent are independent to each other and could be issued to block device driver together. This design is due to Elm-Chan's FatFs assuming synchronous block interfaces.
+### Proposed Solution
 To improve performance, the implementation could be modified as follows:
 ```c
 FRESULT f_read_but_more_efficient (
@@ -122,7 +122,7 @@ FRESULT f_read_but_more_efficient (
         // Get the logical sector of the file by calculating the offset/sector_size
         int logical_sector = fp->offset / sector_size;
         // Get the physical sector number
-        physical_sectors_to_read[number_of_sectors] = fat_map_blocks(fp, fp->offset);
+        physical_sectors_to_read[number_of_sectors] = fat_map_blocks(fp, logical_sector);
         number_of_sectors++;
         decrease_btr(&btr);
         increase_offset(&fp->offset);
@@ -142,7 +142,7 @@ FRESULT f_read_but_more_efficient (
     return success;
 }
 ```
-In this more efficient implementation, we determine all the physical sectors to be read first and then issue all the block read requests to the block device driver at once. This design reduces the number of message-passing events and allows the block device driver to combine smaller reads into larger, more efficient read operations, which improves overall performance.
+In this more efficient implementation, we determine all the physical sectors to be read first and then issue all the block read requests to the block device driver at once, which fully takes advantage of the asynchronous block device driver interfaces we have. This design reduces the number of message-passing events and allows the block device driver to combine smaller reads into larger, more efficient read operations, which improves overall performance.
 
 ### Key Improvements of proposed method:
 - **Efficient Message Passing**: By determining all the necessary physical sectors in advance and issuing the requests in bulk, we reduce the overhead of individual block requests.
