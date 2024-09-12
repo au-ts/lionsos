@@ -13,10 +13,6 @@
 #define CLIENT_CH 1
 #define SERVER_CH 2
 
-#ifdef FS_DEBUG_PRINT
-#include <sddf/util/printf.h>
-#endif
-
 blk_queue_handle_t blk_queue_handle_memory;
 blk_queue_handle_t *blk_queue_handle = &blk_queue_handle_memory;
 
@@ -110,11 +106,11 @@ void setup_request(int32_t index, fs_msg_t* message) {
 void print_sector_data(uint8_t *buffer, unsigned long size) {
     for (unsigned long i = 0; i < size; i++) {
         if (i % 16 == 0) {
-            sddf_printf("\n%04lx  ", i); // Print the offset at the start of each line
+            LOG_FATFS("\n%04lx  ", i); // Print the offset at the start of each line
         }
-        sddf_printf("%02x ", buffer[i]); // Print each byte in hexadecimal
+        LOG_FATFS("%02x ", buffer[i]); // Print each byte in hexadecimal
     }
-    sddf_printf("\n");
+    LOG_FATFS("\n");
 }
 #endif
 
@@ -150,13 +146,9 @@ void init(void) {
   must also be empty.
 */
 void notified(microkit_channel ch) {
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("FS IRQ received::%d\n", ch);
-    #endif
+    LOG_FATFS("FS IRQ received::%d\n", ch);
     if (ch != CLIENT_CH && ch != SERVER_CH) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("Unknown channel:%d\n", ch);
-        #endif
+        LOG_FATFS("Unknown channel:%d\n", ch);
         return;
     }
 
@@ -186,9 +178,7 @@ void notified(microkit_channel ch) {
                 // This id is the index to the request pool
                 blk_dequeue_resp(blk_queue_handle, &status, &success_count, &id);
                 
-                #ifdef FS_DEBUG_PRINT
-                sddf_printf("blk_dequeue_resp: status: %d success_count: %d ID: %d\n", status, success_count, id);
-                #endif
+                LOG_FATFS("blk_dequeue_resp: status: %d success_count: %d ID: %d\n", status, success_count, id);
                 
                 co_set_args(request_pool[id].handle, (void* )(status));
                 co_wakeup(request_pool[id].handle);
@@ -213,9 +203,7 @@ void notified(microkit_channel ch) {
             if (co_check_if_finished(request_pool[i].handle) && request_pool[i].stat == INUSE) {
                 fill_client_response(fs_queue_idx_empty(fatfs_completion_queue, fs_response_enqueued), &(request_pool[i]));
                 fs_response_enqueued++;
-                #ifdef FS_DEBUG_PRINT
-                sddf_printf("FS enqueue response:status: %lu\n", request_pool[i].shared_data.status);
-                #endif
+                LOG_FATFS("FS enqueue response:status: %lu\n", request_pool[i].shared_data.status);
                 request_pool[i].stat= FREE;
             }
         }
@@ -248,17 +236,13 @@ void notified(microkit_channel ch) {
 
             // For invalid request, dequeue but do not process
             if (client_req.cmd.type >= FS_NUM_COMMANDS) {
-                #ifdef FS_DEBUG_PRINT
-                sddf_printf("Wrong CMD type: %lu\n", client_req.cmd.type);
-                #endif
+                LOG_FATFS("Wrong CMD type: %lu\n", client_req.cmd.type);
                 continue;
             }
 
             // Get request from the head of the queue
             setup_request(index, &client_req);
-            #ifdef FS_DEBUG_PRINT
-            sddf_printf("FS dequeue request:CMD type: %lu\n", request_pool[index].cmd);
-            #endif
+            LOG_FATFS("FS dequeue request:CMD type: %lu\n", request_pool[index].cmd);
             
             request_pool[index].stat = INUSE;
             new_request_popped = true;
@@ -271,16 +255,12 @@ void notified(microkit_channel ch) {
         fs_queue_publish_consumption(fatfs_command_queue, fs_request_dequeued);
     }
     if (fs_response_enqueued) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("FS notify client\n");
-        #endif
+        LOG_FATFS("FS notify client\n");
         fs_queue_publish_production(fatfs_completion_queue, fs_response_enqueued);
         microkit_notify(CLIENT_CH);
     }
     if (blk_request_pushed) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("FS notify driver\n");
-        #endif
+        LOG_FATFS("FS notify driver\n");
         microkit_notify(SERVER_CH);
         blk_request_pushed = false;
     }

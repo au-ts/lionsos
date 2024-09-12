@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fatfs_config.h"
 #include "ff15/source/ff.h"
 #include <fs/protocol.h>
 
@@ -35,5 +36,8 @@ void fat_telldir(void);
 
 // For debug
 #ifdef FS_DEBUG_PRINT
-void print_sector_data(uint8_t *buffer, unsigned long size);
+#include <sddf/util/printf.h>
+#define LOG_FATFS(...) do{ sddf_dprintf("FATFS|INFO: "); sddf_dprintf( __VA_ARGS__); } while(0)
+#else
+#define LOG_FATFS(...) do{}while(0)
 #endif

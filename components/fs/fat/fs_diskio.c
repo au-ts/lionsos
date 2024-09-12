@@ -10,10 +10,6 @@
 #include <config/blk_config.h>
 #include <sddf/util/util.h>
 
-#ifdef FS_DEBUG_PRINT
-#include <sddf/util/printf.h>
-#endif
-
 #define SD 0 /* Map SD card to physical drive 0 */
 
 extern blk_queue_handle_t *blk_queue_handle;
@@ -70,25 +66,23 @@ DSTATUS disk_initialize (
 
 	switch (pdrv) {
 	default:
-		#ifdef FS_DEBUG_PRINT
-		sddf_printf("Block Storage Information:\n");
-		sddf_printf("--------------------------\n");
-		sddf_printf("Serial Number: %s\n", config->serial_number);
-		sddf_printf("Read-Only: %s\n", config->read_only ? "Yes" : "No");
-		sddf_printf("Ready: %s\n", config->ready ? "Yes" : "No");
-		sddf_printf("Sector Size: %u bytes\n", config->sector_size);
-		sddf_printf("Optimal Block Size: %u units (%u bytes)\n", 
+		LOG_FATFS("Block Storage Information:\n");
+		LOG_FATFS("--------------------------\n");
+		LOG_FATFS("Serial Number: %s\n", config->serial_number);
+		LOG_FATFS("Read-Only: %s\n", config->read_only ? "Yes" : "No");
+		LOG_FATFS("Ready: %s\n", config->ready ? "Yes" : "No");
+		LOG_FATFS("Sector Size: %u bytes\n", config->sector_size);
+		LOG_FATFS("Optimal Block Size: %u units (%u bytes)\n", 
 			config->block_size, config->block_size * BLK_TRANSFER_SIZE);
-		sddf_printf("Queue Depth: %u\n", config->queue_depth);
-		sddf_printf("Geometry:\n");
-		sddf_printf("  Cylinders: %u\n", config->cylinders);
-		sddf_printf("  Heads: %u\n", config->heads);
-		sddf_printf("  Blocks: %u\n", config->blocks);
-		sddf_printf("Total Capacity: %llu units (%llu bytes)\n", 
+		LOG_FATFS("Queue Depth: %u\n", config->queue_depth);
+		LOG_FATFS("Geometry:\n");
+		LOG_FATFS("  Cylinders: %u\n", config->cylinders);
+		LOG_FATFS("  Heads: %u\n", config->heads);
+		LOG_FATFS("  Blocks: %u\n", config->blocks);
+		LOG_FATFS("Total Capacity: %llu units (%llu bytes)\n", 
 			(unsigned long long)config->capacity, 
 			(unsigned long long)(config->capacity * BLK_TRANSFER_SIZE));
-		sddf_printf("--------------------------\n");
-		#endif
+		LOG_FATFS("--------------------------\n");
 		return RES_OK;
 	}
 	return STA_NOINIT;
@@ -119,9 +113,7 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
 		}
 		if (cmd == CTRL_SYNC) {
 			res = RES_OK;
-			#ifdef FS_DEBUG_PRINT
-			sddf_printf("blk_enqueue_syncreq\n");
-			#endif
+			LOG_FATFS("blk_enqueue_syncreq\n");
 			blk_enqueue_req(blk_queue_handle, BLK_REQ_FLUSH, 0, 0, 0, co_get_handle());
 			blk_request_pushed = true;
 			co_block();
@@ -165,10 +157,9 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 			
 			assert(MUL_POWER_OF_2(sddf_count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
 
-			#ifdef FS_DEBUG_PRINT
-			sddf_printf("blk_enqueue_read pre adjust: addr: 0x%lx sector: %u, count: %u ID: %d\n", read_data_offset, sector, count, handle);
-			sddf_printf("blk_enqueue_read after adjust: addr: 0x%lx sector: %u, count: %d ID: %d\n", read_data_offset, sddf_sector, sddf_count, handle);
-			#endif
+			LOG_FATFS("blk_enqueue_read pre adjust: addr: 0x%lx sector: %u, count: %u ID: %d\n", read_data_offset, sector, count, handle);
+			LOG_FATFS("blk_enqueue_read after adjust: addr: 0x%lx sector: %u, count: %d ID: %d\n", read_data_offset, sddf_sector, sddf_count, handle);
+
 			blk_enqueue_req(blk_queue_handle, BLK_REQ_READ, read_data_offset, sddf_sector, sddf_count, handle);
 
 			blk_request_pushed = true;
@@ -176,9 +167,9 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 
 			res = (DRESULT)(uintptr_t)co_get_args();
 			memcpy(buff, (void*)(read_data_offset + blk_data_region + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer)), sector_size * count);
-			#ifdef FS_DEBUG_PRINT
+#ifdef FS_DEBUG_PRINT
 			// print_sector_data(buff, 512);
-			#endif
+#endif
 			break;
 		}
 	}
@@ -217,10 +208,9 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 
 				assert(MUL_POWER_OF_2(sddf_count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
 
-				#ifdef FS_DEBUG_PRINT
-				sddf_printf("blk_enqueue_write pre adjust: addr: 0x%lx sector: %u, count: %u ID: %d buffer_addr_in_fs: 0x%p\n", write_data_offset, sector, count, handle, buff);
-				sddf_printf("blk_enqueue_write after adjust: addr: 0x%lx sector: %u, count: %d ID: %d\n", write_data_offset, sddf_sector, sddf_count, handle);
-				#endif
+				LOG_FATFS("blk_enqueue_write pre adjust: addr: 0x%lx sector: %u, count: %u ID: %d buffer_addr_in_fs: 0x%p\n", write_data_offset, sector, count, handle, buff);
+				LOG_FATFS("blk_enqueue_write after adjust: addr: 0x%lx sector: %u, count: %d ID: %d\n", write_data_offset, sddf_sector, sddf_count, handle);
+
 				// When there is no unaligned sector, we do not need to send a read request
 				if (unaligned_head_sector == 0 && unaligned_tail_sector == 0) {
 					memcpy((void*)(write_data_offset + blk_data_region), buff, sector_size * count);
@@ -254,16 +244,14 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 	switch (pdrv) {
 		default: {
 			uint64_t read_data_offset = (uint64_t)buff - fs_metadata;
-			#ifdef FS_DEBUG_PRINT
-			sddf_printf("blk_enqueue_read: addr: 0x%lx sector: %u, count: %u ID: %d\n", read_data_offset, sector, count, co_get_handle());
-			#endif
+			LOG_FATFS("blk_enqueue_read: addr: 0x%lx sector: %u, count: %u ID: %d\n", read_data_offset, sector, count, co_get_handle());
 			blk_enqueue_req(blk_queue_handle, BLK_REQ_READ, read_data_offset, sector, count,co_get_handle());
 			blk_request_pushed = true;
 			co_block();
 			res = (DRESULT)(uintptr_t)co_get_args();
-			#ifdef FS_DEBUG_PRINT
+#ifdef FS_DEBUG_PRINT
 			// print_sector_data(buff, 512);
-			#endif
+#endif
 			break;
 		}
 	}
@@ -275,9 +263,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 	switch (pdrv) {
 		default: {
 			uint64_t write_data_offset = (uint64_t)buff - fs_metadata;
-			#ifdef FS_DEBUG_PRINT
-			sddf_printf("blk_enqueue_write: addr: 0x%lx sector: %u, count: %u ID: %d buffer_addr_in_fs: 0x%p\n", write_data_offset, sector, count, co_get_handle(), buff);
-			#endif
+			LOG_FATFS("blk_enqueue_write: addr: 0x%lx sector: %u, count: %u ID: %d buffer_addr_in_fs: 0x%p\n", write_data_offset, sector, count, co_get_handle(), buff);
 			blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sector, count,co_get_handle());
 			blk_request_pushed = true;
 			co_block();

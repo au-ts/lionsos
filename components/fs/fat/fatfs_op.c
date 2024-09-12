@@ -7,9 +7,6 @@
 #include <fs/protocol.h>
 #include "fatfs_config.h"
 
-#ifdef FS_DEBUG_PRINT
-#include <sddf/util/printf.h>
-#endif
 /*
 This file define a bunch of wrapper functions of FATFs functions so those functions can be run in the 
 coroutine.
@@ -34,9 +31,7 @@ extern uint64_t client_data_addr;
 // Sanity check functions
 // Checking if the memory region that provided by request is within valid memory region
 static inline FRESULT within_data_region(uint64_t offset, uint64_t buffer_size) {
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("with_data_region check, input args: offset: %ld, buffer size: %ld\n", offset, buffer_size);
-    #endif
+    LOG_FATFS("with_data_region check, input args: offset: %ld, buffer size: %ld\n", offset, buffer_size);
     if ((offset < DATA_REGION_SIZE) && (buffer_size <= DATA_REGION_SIZE - offset)) {
         return FR_OK;
     }
@@ -167,9 +162,7 @@ unsigned char map_fs_flags_to_fat_flags(uint64_t fs_flags) {
 
 // Change here later to support more than one FAT volumes
 void fat_mount(void) {
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("Mounting file system!\n");
-    #endif
+    LOG_FATFS("Mounting file system!\n");
     co_data_t *args = co_get_args();
     if (fs_status[0] != FREE) {
         args->status = FR_INVALID_PARAMETER;
@@ -180,9 +173,7 @@ void fat_mount(void) {
     if (RET != FR_OK) {
         fs_status[0] = FREE;
     }
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("Mounting file system result: %d\n", RET);
-    #endif
+    LOG_FATFS("Mounting file system result: %d\n", RET);
     args->status = RET;
     co_kill();
 }
@@ -223,9 +214,7 @@ void fat_open(void) {
     }
 
     // Add open flag checking and mapping here
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("fat_open: file path: %s\n", filepath);
-    #endif
+    LOG_FATFS("fat_open: file path: %s\n", filepath);
 
     uint32_t fd = find_free_file_obj();
     if (fd == MAX_OPENED_FILENUM) {
@@ -239,10 +228,8 @@ void fat_open(void) {
     
     unsigned char fat_flag = map_fs_flags_to_fat_flags(openflag);
 
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("fat_open: fs_protocol open flag: %lu\n", openflag);
-    sddf_printf("fat_open: fat open flag: %hhu\n", fat_flag);
-    #endif
+    LOG_FATFS("fat_open: fs_protocol open flag: %lu\n", openflag);
+    LOG_FATFS("fat_open: fat open flag: %hhu\n", fat_flag);
 
     // Micropython openflag still WIP, fixes this once that is completed
     RET = f_open(file, filepath, fat_flag);
@@ -265,15 +252,11 @@ void fat_pwrite(void) {
     uint64_t btw = args->params.write.buf.size;
     uint64_t offset = args->params.write.offset;
 
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("fat_write: bytes to be write: %lu, write offset: %lu\n", btw, offset);
-    #endif
+    LOG_FATFS("fat_write: bytes to be write: %lu, write offset: %lu\n", btw, offset);
 
     FRESULT RET = within_data_region(buffer, btw);
     if (RET != FR_OK || (RET = validate_file_descriptor(fd)) != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_write: Trying to write into invalid memory region or invalid fd provided\n");
-        #endif
+        LOG_FATFS("fat_write: Trying to write into invalid memory region or invalid fd provided\n");
         args->result.write.len_written = 0;
         args->status = RET;
         co_kill();
@@ -295,15 +278,15 @@ void fat_pwrite(void) {
 
     RET = f_write(file, data, btw, &bw);
 
-    #ifdef FS_DEBUG_PRINT
+#ifdef FS_DEBUG_PRINT
     if (RET == FR_OK) {
-        sddf_printf("fat_write: byte written: %u, content written: \n%.*s\n", bw, bw, (char *)data);
+        LOG_FATFS("fat_write: byte written: %u, content written: \n%.*s\n", bw, bw, (char *)data);
     }
     else {
-        sddf_printf("fat_write: error");
+        LOG_FATFS("fat_write: error");
     }
-    #endif
-    
+#endif
+
     args->status = RET;
     args->result.write.len_written = bw;
 
@@ -319,9 +302,7 @@ void fat_pread(void) {
     
     FRESULT RET = within_data_region(buffer, btr);
     if (RET != FR_OK || (RET = validate_file_descriptor(fd)) != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_read: Trying to write into invalid memory region or invalid fd provided\n");
-        #endif
+        LOG_FATFS("fat_read: Trying to write into invalid memory region or invalid fd provided\n");
         args->status = RET;
         args->result.read.len_read = 0;
         co_kill();
@@ -332,9 +313,7 @@ void fat_pread(void) {
     // Maybe add validation check of file descriptor here
     FIL* file = &(files[fd]);
 
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("fat_read: bytes to be read: %lu, read offset: %lu\n", btr, offset);
-    #endif
+    LOG_FATFS("fat_read: bytes to be read: %lu, read offset: %lu\n", btr, offset);
 
     RET = f_lseek(file, offset);
 
@@ -348,14 +327,14 @@ void fat_pread(void) {
 
     RET = f_read(file, data, btr, &br);
 
-    #ifdef FS_DEBUG_PRINT
+#ifdef FS_DEBUG_PRINT
     if (RET == FR_OK) {
-        sddf_printf("fat_read: byte read: %u, content read: \n%.*s\n", br, br, (char *)data);
+        LOG_FATFS("fat_read: byte read: %u, content read: \n%.*s\n", br, br, (char *)data);
     }
     else {
-        sddf_printf("fat_read: error");
+        LOG_FATFS("fat_read: error");
     }
-    #endif
+#endif
 
     args->status = RET;
     args->result.read.len_read = br;
@@ -369,9 +348,7 @@ void fat_close(void) {
     
     FRESULT RET = validate_file_descriptor(fd);
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-            sddf_printf("fat_close: Invalid file descriptor\n");
-        #endif
+        LOG_FATFS("fat_close: Invalid file descriptor\n");
         args->status = RET;
         co_kill();
     }
@@ -414,9 +391,7 @@ void fat_stat(void) {
     
     fs_stat_t* file_stat = (void*)(output_buffer + client_data_addr);
 
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("fat_stat:asking for filename: %s\n", filepath);
-    #endif
+    LOG_FATFS("fat_stat:asking for filename: %s\n", filepath);
     
     FILINFO fileinfo;
     RET = f_stat(filepath, &fileinfo);
@@ -506,9 +481,7 @@ void fat_unlink(void) {
 
     // Buffer validation check
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_unlink: Invalid memory region\n");
-        #endif
+        LOG_FATFS("fat_unlink: Invalid memory region\n");
         args->status = RET;
         co_kill();
     }
@@ -530,9 +503,7 @@ void fat_truncate(void) {
 
     // FD validation check
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_mkdir: Invalid memory region\n");
-        #endif
+        LOG_FATFS("fat_mkdir: Invalid memory region\n");
         args->status = RET;
         co_kill();
     }
@@ -540,9 +511,7 @@ void fat_truncate(void) {
     RET = f_lseek(&files[fd], len);
 
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_truncate: Invalid file offset\n");
-        #endif
+        LOG_FATFS("fat_truncate: Invalid file offset\n");
         args->status = RET;
         co_kill();
     }
@@ -564,9 +533,7 @@ void fat_mkdir(void) {
 
     // Buffer validation check
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_mkdir: Invalid memory region\n");
-        #endif
+        LOG_FATFS("fat_mkdir: Invalid memory region\n");
         args->status = RET;
         co_kill();
     }
@@ -589,9 +556,7 @@ void fat_rmdir(void) {
     // Buffer validation check
     FRESULT RET = validate_and_copy_path(buffer, size, dirpath);
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_mkdir: Invalid memory region\n");
-        #endif
+        LOG_FATFS("fat_mkdir: Invalid memory region\n");
         args->status = RET;
         co_kill();
     }
@@ -614,9 +579,7 @@ void fat_opendir(void) {
 
     // Sanity check
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_readdir: Invalid buffer\n");
-        #endif
+        LOG_FATFS("fat_readdir: Invalid buffer\n");
         args->status = RET;
         co_kill();
     }
@@ -631,9 +594,7 @@ void fat_opendir(void) {
     // Set the position to INUSE to indicate this file structure is in use
     dir_status[fd] = INUSE;
 
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("FAT opendir directory path: %s\n", dirpath);
-    #endif
+    LOG_FATFS("FAT opendir directory path: %s\n", dirpath);
 
     RET = f_opendir(dir, dirpath);
     
@@ -658,16 +619,12 @@ void fat_readdir(void) {
     uint64_t buffer = args->params.readdir.buf.offset;
     uint64_t size = args->params.readdir.buf.size;
 
-    #ifdef FS_DEBUG_PRINT
-    sddf_printf("FAT readdir file descriptor: %lu\n", fd);
-    #endif
+    LOG_FATFS("FAT readdir file descriptor: %lu\n", fd);
 
     FRESULT RET = within_data_region(buffer, size);
     // Sanity check
     if (RET != FR_OK || (RET = validate_dir_descriptor(fd)) != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_readdir: Invalid dir descriptor or Invalid buffer\n");
-        #endif
+        LOG_FATFS("fat_readdir: Invalid dir descriptor or Invalid buffer\n");
         args->status = RET;
         co_kill();
     }
@@ -687,9 +644,7 @@ void fat_readdir(void) {
     if (RET == FR_OK) {
         args->result.readdir.path_len = len;
         memcpy(name, fno.fname, len);
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("FAT readdir file name: %.*s\n", (uint32_t)len, (char*)name);
-        #endif
+        LOG_FATFS("FAT readdir file name: %.*s\n", (uint32_t)len, (char*)name);
         // Hacky change the ret value to FS_STATUS_END_OF_DIRECTORY when nothing is in the directory
         if (fno.fname[0] == 0) {
             RET = FS_STATUS_END_OF_DIRECTORY;
@@ -709,9 +664,7 @@ void fat_telldir(void){
 
     FRESULT RET = validate_dir_descriptor(fd);
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_telldir: Invalid dir descriptor\n");
-        #endif
+        LOG_FATFS("fat_telldir: Invalid dir descriptor\n");
         args->status = RET;
         co_kill();
     }
@@ -733,9 +686,7 @@ void fat_rewinddir(void) {
     
     FRESULT RET = validate_dir_descriptor(fd);
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_telldir: Invalid dir descriptor\n");
-        #endif
+        LOG_FATFS("fat_telldir: Invalid dir descriptor\n");
         args->status = RET;
         co_kill();
     }
@@ -754,9 +705,7 @@ void fat_sync(void) {
 
     FRESULT RET = validate_file_descriptor(fd);
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_sync: Invalid file descriptor %lu\n", fd);
-        #endif
+        LOG_FATFS("fat_sync: Invalid file descriptor %lu\n", fd);
         args->status = RET;
         co_kill();
     }
@@ -774,9 +723,7 @@ void fat_closedir(void) {
 
     FRESULT RET = validate_dir_descriptor(fd);
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_closedir: Invalid dir descriptor\n");
-        #endif
+        LOG_FATFS("fat_closedir: Invalid dir descriptor\n");
         args->status = RET;
         co_kill();
     }
@@ -808,9 +755,7 @@ void fat_seekdir(void) {
 
     FRESULT RET = validate_dir_descriptor(fd);
     if (RET != FR_OK) {
-        #ifdef FS_DEBUG_PRINT
-        sddf_printf("fat_seekdir: Invalid dir descriptor\n");
-        #endif
+        LOG_FATFS("fat_seekdir: Invalid dir descriptor\n");
         args->status = RET;
         co_kill();
     }
