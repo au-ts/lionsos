@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <!-- eth0 is IMX driver -->
+    <memory_region name="eth0" size="0x10_000" phys_addr="0x30be0000" />
+    <!-- eth1 is starfive driver -->
+    <memory_region name="eth1" size="0x10_000" phys_addr="0x30bf0000" />
+
+    <!-- driver/device queue mechanism -->
+    <memory_region name="eth0_hw_ring_buffer" size="0x10_000" />
+    <memory_region name="eth1_hw_ring_buffer" size="0x10_000" />
+
+    <!-- data region for eth0 receive buffers -->
+    <memory_region name="eth0_rx_buffer_data_region" size="0x200_000" page_size="0x200_000" />
+    <!-- data region for eth0 transmit buffers -->
+    <memory_region name="eth0_tx_buffer_data_region" size="0x200_000" page_size="0x200_000" />
+    
+    <!-- data region for eth1 receive buffers -->
+    <memory_region name="eth1_rx_buffer_data_region" size="0x200_000" page_size="0x200_000" />
+    <!-- data region for eth1 transmit buffers -->
+    <memory_region name="eth1_tx_buffer_data_region" size="0x200_000" page_size="0x200_000" />
+
+    <!-- meta data region between eth0 driver and eth0 Tx -->
+    <memory_region name="eth0_driver_tx_free" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth0_driver_tx_active" size="0x200_000" page_size="0x200_000" />
+
+    <!-- meta data region between eth1 driver and eth1 Rx -->
+    <memory_region name="eth0_driver_rx_free size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth0_driver_rx_active size="0x200_000" page_size="0x200_000" />
+
+    <!-- meta data region between eth1 driver and eth1 Tx -->
+    <memory_region name="eth1_driver_tx_free" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth1_driver_tx_active" size="0x200_000" page_size="0x200_000" />
+
+    <!-- meta data region between eth1 driver and eth1 Rx --> 
+    <memory_region name="eth1_driver_rx_free" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth1_driver_rx_active" size="0x200_000" page_size="0x200_000" />
+
+    <!-- meta data region between eth0 copy and eth0 Rx -->
+    <memory_region name="eth0_copy_rx_free" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth0_copy_rx_active" size="0x200_000" page_size="0x200_000" />
+
+    <!-- meta data region between eth1 copy and eth1 Rx -->
+    <memory_region name="eth1_copy_rx_free" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth1_copy_rx_active" size="0x200_000" page_size="0x200_000" />
+
+    <!-- meta data region between eth0 copy and eth1 Tx -->
+    <memory_region name="eth0_eth1_tx_free" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth0_eth1_tx_active" size="0x200_000" page_size="0x200_000" />
+
+    <!-- meta data region between eth1 copy and eth0 Tx -->
+    <memory_region name="eth1_eth0_tx_free" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth1_eth0_tx_active" size="0x200_000" page_size="0x200_000" />
+
+    <!-- driver for eth0 -->
+    <protection_domain name="eth0" priority="101" id="1" budget="100" period="400">
+        <program_image path="eth_driver_0.elf" />
+        <map mr="eth0" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth"/>
+
+        <map mr="eth0_hw_ring_buffer" vaddr="0x2_200_000" perms="rw" cached="false" setvar_vaddr="hw_ring_buffer_vaddr" />
+
+        <map mr="eth0_driver_rx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
+        <map mr="eth0_driver_rx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
+        <map mr="eth0_driver_tx_free" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
+        <map mr="eth0_driver_rx_active" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
+
+        <irq irq="152" id="0" />
+
+        <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
+    </protection_domain>
+
+    <!-- driver for eth1 -->
+    <protection_domain name="eth1" priority="101" id="2" budget="100" period="400">
+        <program_image path="eth_driver_1.elf" />
+        <map mr="eth1" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth_regs"/>
+
+        <map mr="eth1_hw_ring_buffer" vaddr="0x2_200_000" perms="rw" cached="false" setvar_vaddr="hw_ring_buffer_vaddr" />
+
+        <map mr="eth1_driver_rx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
+        <map mr="eth1_driver_rx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
+        <map mr="eth1_driver_tx_free" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
+        <map mr="eth1_driver_tx_active" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
+
+        <irq irq="167" id="0" />
+
+        <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
+    </protection_domain> 
+
+    <protection_domain name="eth0_virt_rx" priority="99" id="3">
+        <program_image path="network_virt_rx.elf" />
+        <map mr="eth0_driver_rx_free" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_drv" />
+        <map mr="eth0_driver_rx_active" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_drv" />
+
+        <map mr="net_rx_free_copy0" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli0" />
+        <map mr="net_rx_active_copy0" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli0" />
+
+        <map mr="eth0_rx_buffer_data_region" vaddr="0x2_c00_000" perms="r" cached="true" setvar_vaddr="buffer_data_vaddr" />
+        <setvar symbol="buffer_data_paddr" region_paddr="eth0_rx_buffer_data_region" />
+    </protection_domain>
+
+    <protection_domain name="eth1_virt_rx" priority="99" id="4">
+        <program_image path="network_virt_rx.elf" />
+        <map mr="eth1_driver_rx_free" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_drv" />
+        <map mr="eth1_driver_rx_active" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_drv" />
+
+        <map mr="net_rx_free_copy0" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli0" />
+        <map mr="net_rx_active_copy0" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli0" />
+
+        <map mr="eth1_rx_buffer_data_region" vaddr="0x2_c00_000" perms="r" cached="true" setvar_vaddr="buffer_data_vaddr" />
+        <setvar symbol="buffer_data_paddr" region_paddr="eth1_rx_buffer_data_region" />
+    </protection_domain>
+
+    <protection_domain name="eth0_virt_tx" priority="100" budget="20000" id="5">
+        <program_image path="network_virt_tx.elf" />
+        <map mr="eth0_driver_tx_free" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="tx_free_drv" />
+        <map mr="eth0_driver_rx_active" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="tx_active_drv" />
+
+        <map mr="eth0_eth1_tx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="tx_free_cli0" />
+        <map mr="eth1_eth0_tx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="tx_active_cli0" />
+
+        <map mr="eth0_tx_buffer_data_region" vaddr="0x2_c00_000" perms="r" cached="true" setvar_vaddr="buffer_data_region_cli0_vaddr" />
+        <setvar symbol="buffer_data_region_cli0_paddr" region_paddr="eth0_tx_buffer_data_region" />
+    </protection_domain>
+
+    <protection_domain name="eth1_virt_tx" priority="100" budget="20000" id="6">
+        <program_image path="network_virt_tx.elf" />
+        <map mr="eth1_driver_tx_free" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="tx_free_drv" />
+        <map mr="eth1_driver_rx_active" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="tx_active_drv" />
+
+        <map mr="eth1_eth0_tx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="tx_free_cli0" />
+        <map mr="eth1_eth0_tx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="tx_active_cli0" />
+
+        <map mr="eth1_tx_buffer_data_region" vaddr="0x2_c00_000" perms="r" cached="true" setvar_vaddr="buffer_data_region_cli0_vaddr" />
+        <setvar symbol="buffer_data_region_cli0_paddr" region_paddr="eth1_tx_buffer_data_region" />
+    </protection_domain>
+
+    <!-- copier component which copies buffers received in eth0 receive data region into eth1 transmit data region -->
+    <protection_domain name="eth0_copy" priority="98" budget="20000" id="7">
+        <program_image path="copy.elf" />
+        <map mr="eth0_copy_rx_active" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_virt" />
+        <map mr="eth0_copy_rx_free" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_virt" />
+
+        <map mr="eth0_eth1_tx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli" />
+        <map mr="eth0_eth1_tx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli" />
+
+        <map mr="eth0_rx_buffer_data_region" vaddr="0x2_800_000" perms="r" cached="true" setvar_vaddr="virt_buffer_data_region" />
+        <map mr="eth1_tx_buffer_data_region" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="cli_buffer_data_region" />
+    </protection_domain>
+
+    <!-- copier component which copies buffers received in eth1 receive data region into eth0 transmit data region -->
+    <protection_domain name="eth1_copy" priority="96" budget="20000" id="8">
+        <program_image path="copy.elf" />
+        <map mr="eth1_copy_rx_active" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_virt" />
+        <map mr="eth1_copy_rx_free" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_virt" />
+
+        <map mr="eth1_eth0_tx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli" />
+        <map mr="eth1_eth0_tx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli" />
+
+        <map mr="eth1_rx_buffer_data_region" vaddr="0x2_800_000" perms="r" cached="true" setvar_vaddr="virt_buffer_data_region" />
+        <map mr="eth0_tx_buffer_data_region" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="cli_buffer_data_region" />
+    </protection_domain>
+
+    <channel>
+        <end pd="eth0" id="1" />
+        <end pd="eth0_virt_tx" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="eth0" id="2" />
+        <end pd="eth0_virt_rx" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="eth1" id="1" />
+        <end pd="eth1_virt_tx" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="eth1" id="2" />
+        <end pd="eth1_virt_rx" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="eth0_virt_rx" id="1" />
+        <end pd="eth0_copy" id="0" />
+    </channel>
+
+    <channel>
+        <end pd=eth1_virt_rx" id="1" />
+        <end pd="eth1_copy" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="eth0_copy" id="1" />
+        <end pd="eth1_virt_tx" id="2" />
+    </channel>
+
+    <channel>
+        <end pd="eth1_copy" id="1" />
+        <end pd="eth0_virt_tx" id="2" />
+    </channel>
+</system>
