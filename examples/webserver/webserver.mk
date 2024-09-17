@@ -47,7 +47,7 @@ CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
 	-ffreestanding \
-	-O3 \
+	-O2 \
 	-MD \
 	-MP \
 	-Wall \
