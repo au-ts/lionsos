@@ -314,7 +314,6 @@ long sys_socket(va_list ap)
 	return -1;
     }
 
-
     int socket_handle = tcp_socket_create();
     if (socket_handle != -1) {
         socket_refcount[socket_handle]++;
@@ -354,7 +353,7 @@ long sys_close(va_list ap)
     long fd = va_arg(ap, int);
 
     assert(fd_active[fd]);
-    
+
     int socket_handle = fd_socket[fd];
 
     assert(socket_handle >= 0);
@@ -380,7 +379,6 @@ long sys_dup3(va_list ap)
     (void)flags;
 
     assert(fd_active[oldfd]);
-    
     int oldfd_socket_handle = fd_socket[oldfd];
 
     assert(oldfd_socket_handle >= 0);
@@ -388,11 +386,11 @@ long sys_dup3(va_list ap)
     assert(socket_refcount[oldfd_socket_handle] != 0);
 
     if (fd_active[newfd]) {
-	int newfd_socket_handle = fd_socket[newfd];
-	socket_refcount[newfd_socket_handle]--;
-	if (socket_refcount[newfd_socket_handle] == 0) {
-	    tcp_socket_close(newfd_socket_handle);
-	}
+        int newfd_socket_handle = fd_socket[newfd];
+        socket_refcount[newfd_socket_handle]--;
+        if (socket_refcount[newfd_socket_handle] == 0) {
+            tcp_socket_close(newfd_socket_handle);
+        }
     }
 
     fd_active[newfd] = true;
@@ -451,7 +449,7 @@ long sys_recvfrom(va_list ap)
     if (read == -1) {
         return -ENOTCONN;
     }
-    
+
     return (long)read;
 }
 
