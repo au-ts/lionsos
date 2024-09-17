@@ -61,7 +61,7 @@ CFLAGS := \
 	-mstrict-align \
 	-ffreestanding \
 	-g \
-	-O0 \
+	-O2 \
 	-Wall \
 	-Wno-unused-function \
 	-I. \
