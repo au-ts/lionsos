@@ -316,12 +316,15 @@ long sys_socket(va_list ap)
 
 
     int socket_handle = tcp_socket_create();
-    socket_refcount[socket_handle]++;
-    
-    fd_active[fd] = true;
-    fd_socket[fd] = socket_handle;
-
-    return fd;
+    if (socket_handle != -1) {
+        socket_refcount[socket_handle]++;
+        fd_active[fd] = true;
+        fd_socket[fd] = socket_handle;
+        return fd;
+    } else {
+        dlog("sys_socket could not create socket!\n");
+        return -1;
+    }
 }
 
 long sys_bind(va_list ap)
