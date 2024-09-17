@@ -353,7 +353,7 @@ long sys_close(va_list ap)
     long fd = va_arg(ap, int);
 
     assert(fd_active[fd]);
-    
+
     int socket_handle = fd_socket[fd];
 
     assert(socket_handle >= 0);
@@ -379,7 +379,6 @@ long sys_dup3(va_list ap)
     (void)flags;
 
     assert(fd_active[oldfd]);
-    
     int oldfd_socket_handle = fd_socket[oldfd];
 
     assert(oldfd_socket_handle >= 0);
@@ -450,7 +449,7 @@ long sys_recvfrom(va_list ap)
     if (read == -1) {
         return -ENOTCONN;
     }
-    
+
     return (long)read;
 }
 
