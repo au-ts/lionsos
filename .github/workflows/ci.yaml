@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
+        with:
+          submodules: 'true'
       - name: Download Microkit SDK
         run: |
           wget https://github.com/seL4/microkit/releases/download/1.4.1/microkit-sdk-1.4.1-linux-x86-64.tar.gz
@@ -32,6 +34,8 @@ jobs:
     steps:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
+        with:
+          submodules: 'true'
       - name: Download Microkit SDK
         run: |
           wget https://github.com/seL4/microkit/releases/download/1.4.1/microkit-sdk-1.4.1-linux-x86-64.tar.gz
@@ -53,6 +57,8 @@ jobs:
     steps:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
+        with:
+          submodules: 'true'
       - name: Download Microkit SDK
         run: |
           wget https://github.com/seL4/microkit/releases/download/1.4.1/microkit-sdk-1.4.1-macos-aarch64.tar.gz
