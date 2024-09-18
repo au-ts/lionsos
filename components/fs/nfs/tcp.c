@@ -284,11 +284,19 @@ void tcp_init_0(void)
     }
 }
 
+int socket_id(socket_t *socket) {
+    return (int)(socket - sockets);
+}
+
 void socket_err_func(void *arg, err_t err)
 {
     socket_t *socket = arg;
-    socket->state = socket_state_error;
-    dlog("error %d with socket", err);
+    if (socket == NULL) {
+        dlog("error %d with closed socket", err);
+    } else {
+        dlog("error %d with socket %d which is in state %d", err, socket_id(socket), socket->state);
+        socket->state = socket_state_error;
+    }
 }
 
 static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
@@ -297,7 +305,8 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
 
     socket_t *socket = arg;
     assert(socket != NULL);
-    int socket_index = (int)(socket - sockets);
+    int socket_index = socket_id(socket);
+    dlogp(err, "error %d with socket %d", err, socket_index);
 
     switch (socket->state) {
 
@@ -321,6 +330,7 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
         } else {
             socket->state = socket_state_closed_by_peer;
             tcp_close(tpcb);
+            tcp_arg(socket->sock_tpcb, NULL);
         }
         return ERR_OK;
     }
@@ -329,6 +339,7 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
         if (p != NULL) {
             pbuf_free(p);
         } else {
+            tcp_arg(socket->sock_tpcb, NULL);
             socket->state = socket_state_unallocated;
             socket->sock_tpcb = NULL;
             socket->rx_head = 0;
