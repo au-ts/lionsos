@@ -33,11 +33,13 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, b
     uint8_t *i2c_data = (uint8_t *) i2c_data_region;
     i2c_data[0] = I2C_TOKEN_START;
     i2c_data[1] = I2C_TOKEN_ADDR_READ;
+    i2c_data[2] = len;
     for (int i = 0; i < len; i++) {
-        i2c_data[i + 2] = I2C_TOKEN_DATA;
+        /* We have to pad out the request in order to have a response of correct length. */
+        /* This is a limitation with the sDDF I2C protocol that we intend to fix. */
+        i2c_data[i + 3] = 0;
     }
-    size_t request_data_end = len + 2;
-    i2c_data[request_data_end++] = I2C_TOKEN_DATA_END;
+    size_t request_data_end = len + 3;
     /* The MicroPython API allows the caller to decide whether to add a STOP token to the request. */
     if (stop) {
         i2c_data[request_data_end++] = I2C_TOKEN_STOP;
@@ -80,18 +82,19 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, b
 }
 
 int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
+    // TODO: check that len < 256
     uint8_t *i2c_data = (uint8_t *) i2c_data_region;
     i2c_data[0] = I2C_TOKEN_START;
     i2c_data[1] = I2C_TOKEN_ADDR_WRITE;
-    int i, j;
-    for (i = 0, j = 2; i < len; i++, j += 2) {
-        i2c_data[j] = I2C_TOKEN_DATA;
-        i2c_data[j+1] = buf[i];
+    i2c_data[2] = len;
+    for (int i = 0; i < len; i++) {
+        i2c_data[i + 3] = buf[i];
     }
-    i2c_data[j++] = I2C_TOKEN_STOP;
-    i2c_data[j++] = I2C_TOKEN_END;
+    size_t request_data_end = len + 3;
+    i2c_data[request_data_end++] = I2C_TOKEN_STOP;
+    i2c_data[request_data_end++] = I2C_TOKEN_END;
 
-    int ret = i2c_enqueue_request(i2c_queue_handle, addr, 0, j);
+    int ret = i2c_enqueue_request(i2c_queue_handle, addr, 0, request_data_end);
     if (ret) {
         mp_raise_msg_varg(&mp_type_RuntimeError,
                           MP_ERROR_TEXT("i2c_write: I2C(%d)'s request queue is full"), self->port);

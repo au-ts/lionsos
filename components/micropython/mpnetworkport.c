@@ -14,6 +14,7 @@
 
 #include <sddf/timer/client.h>
 #include <sddf/network/queue.h>
+#include <sddf/network/util.h>
 #include <sddf/util/cache.h>
 #include <sddf/network/constants.h>
 #include <ethernet_config.h>
@@ -164,14 +165,17 @@ static err_t ethernet_init(struct netif *netif)
 
 void init_networking(void) {
     /* Set up shared memory regions */
-    net_cli_queue_init_sys(microkit_name, &state.rx_queue, rx_free,
-                           rx_active, &state.tx_queue, tx_free, tx_active);
+    size_t rx_size, tx_size;
+    net_cli_queue_size(microkit_name, &rx_size, &tx_size);
+    net_queue_init(&state.rx_queue, rx_free, rx_active, rx_size);
+    net_queue_init(&state.tx_queue, tx_free, tx_active, tx_size);
     net_buffers_init(&state.tx_queue, 0);
 
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
-    net_cli_mac_addr_init_sys(microkit_name, state.mac);
+    uint64_t mac_addr = net_cli_mac_addr(microkit_name);
+    net_set_mac_addr(state.mac, mac_addr);
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
