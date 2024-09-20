@@ -329,7 +329,7 @@
 
     <channel>
         <end pd="i2c_driver" id="0" />
-        <end pd="i2c_virt" id="1" />
+        <end pd="i2c_virt" id="2" />
     </channel>
 
     <channel>
