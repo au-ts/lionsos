@@ -191,11 +191,11 @@
 
     <channel>
         <end pd="eth0_copy" id="1" />
-        <end pd="eth1_virt_tx" id="2" />
+        <end pd="eth1_virt_tx" id="1" />
     </channel>
 
     <channel>
         <end pd="eth1_copy" id="1" />
-        <end pd="eth0_virt_tx" id="2" />
+        <end pd="eth0_virt_tx" id="1" />
     </channel>
 </system>
