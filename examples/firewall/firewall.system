@@ -112,7 +112,7 @@
     <protection_domain name="eth0_virt_tx" priority="100" budget="20000">
         <program_image path="network_virt_tx_0.elf" />
         <map mr="eth0_driver_tx_free" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="tx_free_drv" />
-        <map mr="eth0_driver_rx_active" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="tx_active_drv" />
+        <map mr="eth0_driver_tx_active" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="tx_active_drv" />
 
         <map mr="eth1_eth0_tx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="tx_free_cli0" />
         <map mr="eth1_eth0_tx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="tx_active_cli0" />
@@ -124,7 +124,7 @@
     <protection_domain name="eth1_virt_tx" priority="100" budget="20000">
         <program_image path="network_virt_tx_1.elf" />
         <map mr="eth1_driver_tx_free" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="tx_free_drv" />
-        <map mr="eth1_driver_rx_active" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="tx_active_drv" />
+        <map mr="eth1_driver_tx_active" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="tx_active_drv" />
 
         <map mr="eth0_eth1_tx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="tx_free_cli0" />
         <map mr="eth0_eth1_tx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="tx_active_cli0" />
