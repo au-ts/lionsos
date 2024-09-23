@@ -53,6 +53,12 @@ jobs:
     steps:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
+      # Because we use self-hosted actions and the checkout action does not clean submodules
+      # we need to manually clean the submodules of the repo.
+      - name: Clean submodules
+        run: |
+          git submodule foreach --recursive git clean -ffdx
+          git submodule foreach --recursive git reset --hard
       - name: Download Microkit SDK
         run: |
           wget https://github.com/seL4/microkit/releases/download/1.4.1/microkit-sdk-1.4.1-macos-aarch64.tar.gz
