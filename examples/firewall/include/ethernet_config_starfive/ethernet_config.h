@@ -21,8 +21,10 @@
 #define NET_DATA_REGION_SIZE                    0x200000
 #define NET_HW_REGION_SIZE                      0x10000
 
+#define DEFAULT_RxV_CHANNEL 0
+
 #if defined(CONFIG_PLAT_IMX8MP_EVK)
-#define MAC_ADDR_CLI0                       0x52540100000A
+#define MAC_ADDR_CLI0                           0x000000000000
 #else
 #error "Must define MAC addresses for clients in ethernet config"
 #endif
@@ -40,8 +42,8 @@ _Static_assert(NET_TX_DATA_REGION_SIZE_CLI0 >= NET_TX_QUEUE_SIZE_CLI0 *NET_BUFFE
 #define NET_MAX_CLIENT_QUEUE_SIZE                NET_RX_QUEUE_SIZE_CLI0
 #define NET_RX_QUEUE_SIZE_COPY0                  NET_RX_QUEUE_SIZE_DRIV
 
-#define NET_RX_DATA_REGION_SIZE_DRIV            NET_DATA_REGION_SIZE
-#define NET_RX_DATA_REGION_SIZE_CLI0            NET_DATA_REGION_SIZE
+#define NET_RX_DATA_REGION_SIZE_DRIV             NET_DATA_REGION_SIZE
+#define NET_RX_DATA_REGION_SIZE_CLI0             NET_DATA_REGION_SIZE
 
 _Static_assert(NET_RX_DATA_REGION_SIZE_DRIV >= NET_RX_QUEUE_SIZE_DRIV *NET_BUFFER_SIZE,
                "Driver RX data region size must fit Driver RX buffers");
