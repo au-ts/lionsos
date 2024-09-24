@@ -4,7 +4,7 @@ UTIL:=$(SDDF)/util
 ETHERNET_DRIVER_0:=$(SDDF)/drivers/network/$(DRIV_DIR_0)
 ETHERNET_DRIVER_1:=$(SDDF)/drivers/network/$(DRIV_DIR_1)
 ETHERNET_CONFIG_INCLUDE_0:=${FIREWALL}/include/ethernet_config_imx
-ETHERNET_CONFIG_INCLUDE_1:=${FIREWALL}/include/ethernet_config_starfive
+ETHERNET_CONFIG_INCLUDE_1:=${FIREWALL}/include/ethernet_config_dwmac-5.10a
 NETWORK_COMPONENTS:=$(SDDF)/network/components
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
@@ -109,11 +109,11 @@ eth_driver_0.elf: imx/ethernet.o
 	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
 
 # generate eth1 driver 
-starfive/ethernet.o: ${ETHERNET_DRIVER_1}/ethernet.c ${CHECK_NETDRV_FLAGS}
-	mkdir -p starfive
+dwmac-5.10a/ethernet.o: ${ETHERNET_DRIVER_1}/ethernet.c ${CHECK_NETDRV_FLAGS}
+	mkdir -p dwmac-5.10a
 	${CC} -c ${CFLAGS} ${CFLAGS_network} -I${ETHERNET_CONFIG_INCLUDE_1} -I ${ETHERNET_DRIVER_1} -o $@ $<
 
-eth_driver_1.elf: starfive/ethernet.o
+eth_driver_1.elf: dwmac-5.10a/ethernet.o
 	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
 
 clean::

@@ -21,7 +21,7 @@ endif
 
 ifeq ($(strip $(MICROKIT_BOARD)), imx8mp_evk)
 	export DRIV_DIR_0 := imx
-	export DRIV_DIR_1 := starfive
+	export DRIV_DIR_1 := dwmac-5.10a
 	export UART_DRIV_DIR := imx
 	export TIMER_DRV_DIR := imx
 	export CPU := cortex-a53
