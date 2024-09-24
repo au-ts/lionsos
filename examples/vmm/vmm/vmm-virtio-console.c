@@ -6,18 +6,18 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <microkit.h>
-#include "util/util.h"
-#include "arch/aarch64/vgic/vgic.h"
-#include "arch/aarch64/linux.h"
-#include "arch/aarch64/fault.h"
-#include "guest.h"
-#include "virq.h"
-#include "tcb.h"
-#include "vcpu.h"
-#include "virtio/virtio.h"
-#include "virtio/console.h"
+#include "libvmm/util/util.h"
+#include "libvmm/arch/aarch64/vgic/vgic.h"
+#include "libvmm/arch/aarch64/linux.h"
+#include "libvmm/arch/aarch64/fault.h"
+#include "libvmm/guest.h"
+#include "libvmm/virq.h"
+//#include "tcb.h"
+//#include "vcpu.h"
+#include "libvmm/virtio/virtio.h"
+#include "libvmm/virtio/console.h"
 #include <sddf/serial/queue.h>
-
+#include <serial_config.h>
 
 #include "vmm_ram.h"
 #define GUEST_DTB_VADDR 0x8f000000
@@ -49,22 +49,18 @@ int passthrough_irq_map[MAX_IRQ_CH];
 /*
  * For the virtual console
  */
-uintptr_t serial_rx_free;
-uintptr_t serial_rx_active;
-uintptr_t serial_tx_free;
-uintptr_t serial_tx_active;
-
-uintptr_t serial_rx_data;
-uintptr_t serial_tx_data;
-
-serial_queue_handle_t serial_rx_serial_queue;
-serial_queue_handle_t serial_tx_serial_queue;
-
+/* Virtio Console */
 #define SERIAL_TX_VIRTUALISER_CH 1
-#define SERIAL_RX_VIRTUALISER_CH 2
+#define SERIAL_RX_VIRTUALISER_CH 1
 
 
-static struct virtio_device virtio_console;
+serial_queue_t *serial_rx_queue;
+serial_queue_t *serial_tx_queue;
+
+char *serial_rx_data;
+char *serial_tx_data;
+
+static struct virtio_console_device virtio_console;
 
 
 static void passthrough_device_ack(size_t vcpu_id, int irq, void *cookie) {
@@ -88,6 +84,7 @@ static void register_passthrough_irq(int irq, microkit_channel irq_ch) {
 void init(void) {
     int i;
     int j;
+    serial_queue_handle_t serial_rxq, serial_txq;
 
     /* Initialise the VMM, the VCPU(s), and start the guest */
     LOG_VMM("starting \"%s\"\n", microkit_name);
@@ -154,39 +151,16 @@ void init(void) {
      * Set up queues for virtual serial
      */
     /* Initialise our sDDF queue buffers for the serial device */
-    serial_queue_init(&serial_rx_serial_queue, (serial_queue_t *)serial_rx_free,
-                      (serial_queue_t *)serial_rx_active, true, NUM_ENTRIES, NUM_ENTRIES);
-    for (int i = 0; i < NUM_ENTRIES - 1; i++) {
-        int ret = serial_enqueue_free(&serial_rx_serial_queue, serial_rx_data + (i * BUFFER_SIZE), BUFFER_SIZE);
-        if (ret != 0) {
-            microkit_dbg_puts(microkit_name);
-            microkit_dbg_puts(": server rx buffer population, unable to enqueue buffer\n");
-        }
-    }
-    serial_queue_init(&serial_tx_serial_queue, (serial_queue_t *)serial_tx_free,
-                      (serial_queue_t *)serial_tx_active, true, NUM_ENTRIES, NUM_ENTRIES);
-    for (int i = 0; i < NUM_ENTRIES - 1; i++) {
-        int ret = serial_enqueue_free(&serial_tx_serial_queue, serial_tx_data + (i * BUFFER_SIZE), BUFFER_SIZE);
-        assert(ret == 0);
-        if (ret != 0) {
-            microkit_dbg_puts(microkit_name);
-            microkit_dbg_puts(": server tx buffer population, unable to enqueue buffer\n");
-        }
-    }
-    /*
-     * Neither queue should be plugged and hence all buffers we send
-     * should actually end up at the driver.
-     */
-    assert(!serial_queue_plugged(serial_tx_serial_queue.free));
-    assert(!serial_queue_plugged(serial_tx_serial_queue.active));
+    serial_cli_queue_init_sys(microkit_name, &serial_rxq, serial_rx_queue, serial_rx_data, &serial_txq, serial_tx_queue, serial_tx_data);
 
     /* Initialise virtIO console device */
-    success = virtio_mmio_device_init(&virtio_console, CONSOLE,
-                                      VIRTIO_CONSOLE_BASE, VIRTIO_CONSOLE_SIZE,
-                                      VIRTIO_CONSOLE_IRQ,
-                                      &serial_rx_serial_queue, &serial_tx_serial_queue,
-                                      SERIAL_TX_VIRTUALISER_CH
-        );
+    success = virtio_mmio_console_init(&virtio_console,
+                                  VIRTIO_CONSOLE_BASE,
+                                  VIRTIO_CONSOLE_SIZE,
+                                  VIRTIO_CONSOLE_IRQ,
+                                  &serial_rxq, &serial_txq,
+                                  SERIAL_TX_VIRTUALISER_CH);
+
     assert(success);
 
 
@@ -217,13 +191,18 @@ void notified(microkit_channel ch) {
  * fault-handler. Whenever our guest causes an exception, it gets
  * delivered to this entry point for the VMM to handle.
  */
-void fault(microkit_id id, microkit_msginfo msginfo) {
+seL4_Bool fault(microkit_child id,
+                microkit_msginfo msginfo,
+                microkit_msginfo *reply_msginfo
+    ) {
     bool success = fault_handle(id, msginfo);
     if (success) {
         /*
          * Now that we have handled the fault successfully, we reply to it so
          * that the guest can resume execution.
          */
-        microkit_fault_reply(microkit_msginfo_new(0, 0));
+        *reply_msginfo = microkit_msginfo_new(0, 0);
+        return seL4_True;
     }
+    return seL4_False;
 }

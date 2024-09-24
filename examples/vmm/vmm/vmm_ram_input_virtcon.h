@@ -36,27 +36,19 @@
  * Shared data regions need to be at the same address in every PD
  * where they're mapped.
  * Use #defines here to say where they go.
+ * Queue regions are 1 page; data regions 2 pages
  */
-
-#define SERIAL_TX_FREE_VMM "0x6_000_000"
-#define SERIAL_TX_ACTIVE_VMM "0x6_200_000"
-#define SERIAL_TX_DATA_VMM "0x6_400_000"
-#define SERIAL_RX_FREE_VMM "0x6_600_000"
-#define SERIAL_RX_ACTIVE_VMM "0x6_800_000"
-#define SERIAL_RX_DATA_VMM "0x6_a00_000"
-#define SERIAL_TX_ACTIVE_DRIVER "0x40_000_000"
-#define SERIAL_TX_FREE_DRIVER "0x40_200_000"
-#define SERIAL_TX_DATA_DRIVER "0x40_400_000"
-#define SERIAL_RX_ACTIVE_DRIVER "0x40_600_000"
-#define SERIAL_RX_FREE_DRIVER "0x40_800_000"
-#define SERIAL_RX_DATA_DRIVER "0x40_A00_000"
+#define SERIAL_TX_QUEUE_VMM "0x6_000_000"
+#define SERIAL_TX_DATA_VMM "0x6_002_000"
+#define SERIAL_RX_QUEUE_VMM "0x6_001_000"
+#define SERIAL_RX_DATA_VMM "0x6_004_000"
+#define SERIAL_TX_QUEUE_DRIVER "0x4_000_000"
+#define SERIAL_TX_DATA_DRIVER "0x4_002_000"
+#define SERIAL_RX_QUEUE_DRIVER "0x4_001_000"
+#define SERIAL_RX_DATA_DRIVER "0x4_004_000"
 
 
 #define MMIO_CONSOLE_IRQ 42
 #define VIRTIO_CONSOLE_IRQ (32 + MMIO_CONSOLE_IRQ)
 #define VIRTIO_CONSOLE_BASE (VIRTIO_SERIAL_ADDR)
 #define VIRTIO_CONSOLE_SIZE 0x1000
-
-
-
-

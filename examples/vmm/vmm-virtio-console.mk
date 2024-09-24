@@ -14,8 +14,8 @@ ifeq ($(strip $(LIBGCC)),)
 LIBGCC := $(shell dirname $$(aarch64-none-elf-gcc --print-file-name libgcc.a))
 endif
 
-ifeq ($(strip $(LionsOS)),)
-$(error LionsOS should point to the root of the LionOS source tree)
+ifeq ($(strip $(LIONSOS)),)
+$(error LIONSOS should point to the root of the LionOS source tree)
 endif
 
 ifeq ($(strip $(SDDF)),)
@@ -33,6 +33,8 @@ CPU := cortex-a55
 TOOLCHAIN := clang
 CC := clang
 LD := ld.lld
+RANLIB := llvm-ranlib
+
 TARGET := aarch64-none-elf
 
 CHECK_VARIANT:=.variant.$(shell md5sum ${SYSTEM})
@@ -48,14 +50,19 @@ MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-LIBVMM_DIR ?= ${LionsOS}/dep/libvmm
+LIBVMM_DIR ?= ${LIONSOS}/dep/libvmm
 
 VMM_IMAGE_DIR := ${EXAMPLE_DIR}/vmm
-LINUX := $(VMM_IMAGE_DIR)/Linux
+LINUX := ${VMM_IMAGE_DIR}/linux
+INITRD :=${VMM_IMAGE_DIR}/initrd.img
+
+SAMPLE_LINUX := 1e6f245cabe25aabf179448e41dea5fe5550c98d-linux
+SAMPLE_INITRD := 1ef035ae59438f6df6c596a6de7cc36d6a3368ac-initrd.img
+
 INITRD := $(VMM_IMAGE_DIR)/initrd.img
 DT_OVERLAYS := ${VMM_IMAGE_DIR}/overlay-virtcon.dts
 
-IMAGES := vmm.elf uart_driver.elf serial_rx_virt.elf serial_tx_virt.elf 
+IMAGES := vmm.elf uart_driver.elf serial_virt_rx.elf serial_virt_tx.elf 
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
@@ -64,13 +71,12 @@ CFLAGS := \
 	-O2 \
 	-Wall \
 	-Wno-unused-function \
+	-DBOARD_$(MICROKIT_BOARD) \
 	-I. \
 	-I$(BOARD_DIR)/include \
 	-target $(TARGET) \
-	-I$(LIBVMM_DIR)/src/arch/aarch64 \
-	-I$(LIBVMM_DIR)/src \
-	-I$(LIBVMM_DIR)/src/util \
-	-DBOARD_$(MICROKIT_BOARD) \
+	-I$(LIBVMM_DIR)/include \
+	-I${EXAMPLE_DIR}/include \
 	-I$(SDDF)/include \
 	-MD \
 	-DMAC_BASE_ADDRESS=$(MAC_BASE_ADDRESS)
@@ -98,6 +104,13 @@ ${notdir $(ORIGINAL_DTB:.dtb=.dts)}: ${ORIGINAL_DTB} ${MAKEFILE}
 
 dtb.dts: ${notdir $(ORIGINAL_DTB:.dtb=.dts)} ${DT_OVERLAYS} vmm_ram.h
 	${LIBVMM_DIR}/tools/dtscat ${notdir $(ORIGINAL_DTB:.dtb=.dts)} ${DT_OVERLAYS} | cpp -nostdinc -undef -x assembler-with-cpp -P - > $@ || rm -f $@
+
+$(INITRD):
+	curl -L https://lionsos.org/downloads/examples/vmm/${SAMPLE_INITRD} -o $@
+$(LINUX):
+	curl -L https://lionsos.org/downloads/examples/vmm/${SAMPLE_LINUX} -o $@
+
+vmm-virtio-console.o: vmm_ram.h
 
 package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S  $(LINUX) $(INITRD) dtb.dtb
 	$(CC) -c -g3 -x assembler-with-cpp \
@@ -136,6 +149,8 @@ clobber:: clean
 # How to build libvmm.a
 include ${LIBVMM_DIR}/vmm.mk
 # the UART driver
-include ${SDDF}/drivers/serial/meson/uart.mk
+include ${SDDF}/drivers/serial/meson/uart_driver.mk
 # the multiplexers
 include ${SDDF}/serial/components/serial_components.mk
+# and the util library needed by the uart driver and serial components
+include ${SDDF}/util/util.mk

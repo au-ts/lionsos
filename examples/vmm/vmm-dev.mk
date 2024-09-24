@@ -46,8 +46,10 @@ BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 LIBVMM ?= ${LIONSOS}/dep/libvmm
 
 VMM_IMAGE_DIR := ${EXAMPLE_DIR}/vmm
-LINUX := 1e6f245cabe25aabf179448e41dea5fe5550c98d-linux
-INITRD := 1ef035ae59438f6df6c596a6de7cc36d6a3368ac-initrd.img
+LINUX := ${VMM_IMAGE_DIR}/linux
+INITRD :=${VMM_IMAGE_DIR}/initrd.img
+SAMPLE_LINUX := 1e6f245cabe25aabf179448e41dea5fe5550c98d-linux
+SAMPLE_INITRD := 1ef035ae59438f6df6c596a6de7cc36d6a3368ac-initrd.img
 
 IMAGES := vmm.elf
 CFLAGS := \
@@ -85,8 +87,10 @@ all: $(IMAGE_FILE)
 ${notdir $(ORIGINAL_DTB:.dtb=.dts)}: ${ORIGINAL_DTB} ${MAKEFILE}
 	$(DTC) -q -I dtb -O dts $< > $@ || rm -f $@
 
-$(INITRD) $(LINUX):
-	curl -L https://lionsos.org/downloads/examples/vmm/$@ -o $@
+$(INITRD):
+	curl -L https://lionsos.org/downloads/examples/vmm/${SAMPLE_INITRD} -o $@
+$(LINUX):
+	curl -L https://lionsos.org/downloads/examples/vmm/${SAMPLE_LINUX} -o $@
 
 dtb.dts: ${notdir $(ORIGINAL_DTB:.dtb=.dts)} ${DT_OVERLAYS} vmm_ram.h ${CHECK_VARIANT}
 	${LIBVMM}/tools/dtscat ${notdir $(ORIGINAL_DTB:.dtb=.dts)} ${DT_OVERLAYS} | cpp -nostdinc -undef -x assembler-with-cpp -P - > $@ || rm -f $@
