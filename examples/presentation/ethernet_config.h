@@ -10,6 +10,8 @@
 #include <sddf/network/queue.h>
 #include <sddf/util/util.h>
 
+#define VIRTIO_MMIO_NET_OFFSET (0xc00)
+
 #define NUM_NETWORK_CLIENTS 1
 
 #define NET_CLI0_NAME "vmm"
