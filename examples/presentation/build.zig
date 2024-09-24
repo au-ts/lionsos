@@ -186,14 +186,18 @@ pub fn build(b: *std.Build) !void {
 
     const sddf_artifacts = &.{
         "driver_uart_arm.elf",
+        "driver_uart_imx.elf",
         "serial_virt_rx.elf",
         "serial_virt_tx.elf",
         "driver_blk_virtio.elf",
+        "driver_blk_mmc_imx.elf",
         "blk_virt.elf",
         "driver_net_virtio.elf",
+        "driver_net_imx.elf",
         "net_virt_rx.elf",
         "net_virt_tx.elf",
-        "net_copy.elf"
+        "net_copy.elf",
+        "driver_timer_imx.elf",
     };
 
     inline for (sddf_artifacts) |artifact| {
@@ -212,17 +216,17 @@ pub fn build(b: *std.Build) !void {
 
     sdf.root_module.addImport("sdf", sdf_dep.module("sdf"));
 
+    const main_dts = b.path(b.fmt("dtbs/{s}.dts", .{ microkit_board }));
     const main_dtb_cmd = b.addSystemCommand(&[_][]const u8{
         "dtc", "-q", "-I", "dts", "-O", "dtb"
     });
-    main_dtb_cmd.addFileArg(b.path("dtbs/qemu_virt_aarch64.dts"));
-    main_dtb_cmd.addFileInput(b.path("dtbs/qemu_virt_aarch64.dts"));
+    main_dtb_cmd.addFileArg(main_dts);
+    main_dtb_cmd.addFileInput(main_dts);
     const main_dtb = main_dtb_cmd.captureStdOut();
 
     const sdf_step = b.addRunArtifact(sdf);
     sdf_step.addArg("--sddf");
-    // TODO: fix
-    sdf_step.addArg("../../dep/sddf");
+    sdf_step.addDirectoryArg(b.path("../../dep/sddf"));
     sdf_step.addArg("--dtbs");
     sdf_step.addArg(b.install_path);
     sdf_step.addArg("--board");
@@ -254,7 +258,7 @@ pub fn build(b: *std.Build) !void {
     b.default_step = microkit_step;
 
     const loader_arg = b.fmt("loader,file={s},addr=0x70000000,cpu-num=0", .{ final_image_dest });
-    if (std.mem.eql(u8, microkit_board, "qemu_virt_aarch64")) {
+    if (microkit_board_option == .qemu_virt_aarch64) {
 
         const qemu_cmd = b.addSystemCommand(&[_][]const u8{
             "qemu-system-aarch64",

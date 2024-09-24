@@ -1,0 +1,92 @@
+/*
+ * Copyright 2024, UNSW
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+/ {
+    memory@40000000 {
+        device_type = "memory";
+        reg = <0x00 0x40000000 0x00 0x20000000>;
+    };
+
+    soc@0 {
+        bus@30800000 {
+            spi@30820000 {
+                status = "disabled";
+            };
+
+            spi@30830000 {
+                status = "disabled";
+            };
+
+            spi@30840000 {
+                status = "disabled";
+            };
+
+            ethernet@30be0000 {
+                status = "disabled";
+            };
+
+            mailbox@30aa0000 {
+                status = "disabled";
+            };
+
+            mmc@30b40000 {
+                status = "disabled";
+            };
+
+            mmc@30b50000 {
+                status = "disabled";
+            };
+
+            spi@30bb0000 {
+                status = "disabled";
+            };
+
+            i2c@30a20000 {
+                status = "disabled";
+            };
+        };
+
+        bus@30000000 {
+            gpio@30210000 {
+                status = "disabled";
+            };
+
+            gpio@30220000 {
+                status = "disabled";
+            };
+
+            gpio@30230000 {
+                status = "disabled";
+            };
+
+            gpio@30240000 {
+                status = "disabled";
+            };
+
+            watchdog@30280000 {
+                status = "disabled";
+            };
+
+            efuse@30350000 {
+                status = "disabled";
+            };
+        };
+
+        usb@38200000 {
+            status = "disabled";
+        };
+
+        usb-phy@382f0040 {
+            status = "disabled";
+        };
+    };
+
+    chosen {
+        stdout-path = "/soc@0/bus@30800000/serial@30860000";
+        linux,initrd-start = <0x00000000 0x4c000000>;
+        linux,initrd-end = <0x00000000 0x4e000000>;
+        bootargs = "console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200 nosmp rw debug ignore_loglevel initcall_blacklist=imx8_soc_init pci=nomsi earlyprintk=serial maxcpus=1";
+    };
+};

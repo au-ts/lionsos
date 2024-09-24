@@ -15,10 +15,13 @@ DONE: 2. Reproduce SDF with sdfgen
 3. Add virtIO to VM
     DONE: 3.1: virtIO console instead of passthrough UART
     DONE: 3.2: virtIO block
-    3.3: virtIO networking
+    DONE: 3.3: virtIO networking
 
 ### Getting it working on MaaXBoard
 
-1. Native Linux with the Ubuntu/Debian image
+DONE: 1. Native Linux with the Ubuntu/Debian image
 2. Full passthrough with the Linux VM
 3. Move to part native, part Linux VM
+
+## Microkit sdfgen improvements
+* Remove 'shared_resources' and 'page_size' from config.json

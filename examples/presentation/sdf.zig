@@ -21,6 +21,7 @@ const VirtualMachineSystem = mod_sdf.vmm.VirtualMachineSystem;
 
 const MicrokitBoard = enum {
     qemu_virt_aarch64,
+    maaxboard,
 
     pub fn fromStr(str: []const u8) !MicrokitBoard {
         inline for (std.meta.fields(MicrokitBoard)) |field| {
@@ -34,7 +35,7 @@ const MicrokitBoard = enum {
 
     pub fn arch(b: MicrokitBoard) SystemDescription.Arch {
         return switch (b) {
-            .qemu_virt_aarch64 => .aarch64,
+            .qemu_virt_aarch64, .maaxboard => .aarch64,
         };
     }
 
@@ -45,55 +46,8 @@ const MicrokitBoard = enum {
             std.debug.print("{s}\n", .{fields[i].name});
         }
     }
-
-    /// Get the Device Tree node for the UART we want to use for
-    /// each board
-    pub fn uartNode(b: MicrokitBoard) []const u8 {
-        return switch (b) {
-            .qemu_virt_aarch64 => "pl011@9000000",
-            .odroidc4 => "serial@3000",
-        };
-    }
 };
 
-// In the future, this functionality regarding the UART
-// can just be replaced by looking at the device tree for
-// the particular board.
-const Uart = struct {
-    fn paddr(b: MicrokitBoard) usize {
-        return switch (b) {
-            .qemu_virt_aarch64 => 0x9000000,
-            .odroidc4 => 0xff803000,
-        };
-    }
-
-    fn size(b: MicrokitBoard) usize {
-        return switch (b) {
-            .qemu_virt_aarch64, .odroidc4 => 0x1000,
-        };
-    }
-
-    fn irq(b: MicrokitBoard) usize {
-        return switch (b) {
-            .qemu_virt_aarch64 => 33,
-            .odroidc4 => 225,
-        };
-    }
-
-    fn trigger(b: MicrokitBoard) Irq.Trigger {
-        return switch (b) {
-            .qemu_virt_aarch64 => .level,
-            .odroidc4 => .edge,
-        };
-    }
-};
-
-fn guestRamVaddr(b: MicrokitBoard) usize {
-    return switch (b) {
-        .qemu_virt_aarch64 => 0x40000000,
-        .odroidc4 => 0x20000000,
-    };
-}
 
 var xml_out_path: []const u8 = undefined;
 var sddf_path: []const u8 = "sddf";
@@ -254,21 +208,47 @@ pub fn main() !void {
 
     var sdf = try SystemDescription.create(allocator, board.arch());
 
+    const uart_node = switch (board) {
+        .qemu_virt_aarch64 => blob.child("pl011@9000000").?,
+        .maaxboard => blob.child("soc@0").?.child("bus@30800000").?.child("serial@30860000").?,
+    };
+    const blk_node = switch (board) {
+        .qemu_virt_aarch64 => blob.child("virtio_mmio@a003e00").?,
+        .maaxboard => blob.child("soc@0").?.child("bus@30800000").?.child("mmc@30b40000").?,
+    };
+    const net_node = switch (board) {
+        .qemu_virt_aarch64 => blob.child("virtio_mmio@a003c00").?,
+        .maaxboard => blob.child("soc@0").?.child("bus@30800000").?.child("ethernet@30be0000").?,
+    };
+    const uart_driver_elf = switch (board) {
+        .qemu_virt_aarch64 => "driver_uart_arm.elf",
+        .maaxboard => "driver_uart_imx.elf",
+    };
+    const blk_driver_elf = switch (board) {
+        .qemu_virt_aarch64 => "driver_blk_virtio.elf",
+        .maaxboard => "driver_blk_mmc_imx.elf",
+    };
+    const net_driver_elf = switch (board) {
+        .qemu_virt_aarch64 => "driver_net_virtio.elf",
+        .maaxboard => "driver_net_imx.elf",
+    };
+
     var vmm = Pd.create(&sdf, "vmm", "vmm.elf");
     var vm = Vm.create(&sdf, "linux", &.{ .{ .id = 0, .cpu = 0 }});
 
-    var uart_driver = Pd.create(&sdf, "uart", "driver_uart_arm.elf");
+    var uart_driver = Pd.create(&sdf, "uart", uart_driver_elf);
     var serial_virt_tx = Pd.create(&sdf, "serial_virt_tx", "serial_virt_tx.elf");
     var serial_virt_rx = Pd.create(&sdf, "serial_virt_rx", "serial_virt_rx.elf");
 
-    var net_driver = Pd.create(&sdf, "net_driver", "driver_net_virtio.elf");
+    var net_driver = Pd.create(&sdf, "net_driver", net_driver_elf);
     var net_virt_tx = Pd.create(&sdf, "net_virt_tx", "net_virt_tx.elf");
     var net_virt_rx = Pd.create(&sdf, "net_virt_rx", "net_virt_rx.elf");
     var vmm_net_copy = Pd.create(&sdf, "vmm_net_copy", "net_copy.elf");
 
-    var blk_driver = Pd.create(&sdf, "blk_driver", "driver_blk_virtio.elf");
+    var blk_driver = Pd.create(&sdf, "blk_driver", blk_driver_elf);
     var blk_virt = Pd.create(&sdf, "blk_virt", "blk_virt.elf");
 
+    // TODO: fix path
     const guest_dtb_file = try std.fs.cwd().openFile("zig-out/linux.dtb", .{});
     const guest_dtb_size = (try guest_dtb_file.stat()).size;
     const guest_blob_bytes = try guest_dtb_file.reader().readAllAlloc(allocator, guest_dtb_size);
@@ -278,14 +258,27 @@ pub fn main() !void {
 
     var vmm_system = VirtualMachineSystem.init(allocator, &sdf, &vmm, &vm, guest_dtb_blob);
 
-    var serial_system = try sddf.SerialSystem.init(allocator, &sdf, blob.child("pl011@9000000").?, &uart_driver, &serial_virt_tx, &serial_virt_rx, .{});
+    var serial_system = try sddf.SerialSystem.init(allocator, &sdf, uart_node, &uart_driver, &serial_virt_tx, &serial_virt_rx, .{});
     serial_system.addClient(&vmm);
 
-    var blk_system = sddf.BlockSystem.init(allocator, &sdf, blob.child("virtio_mmio@a003e00").?, &blk_driver, &blk_virt, .{});
+    var blk_system = sddf.BlockSystem.init(allocator, &sdf, blk_node, &blk_driver, &blk_virt, .{});
     blk_system.addClient(&vmm);
 
-    var net_system = sddf.NetworkSystem.init(allocator, &sdf, blob.child("virtio_mmio@a003c00").?, &net_driver, &net_virt_rx, &net_virt_tx, .{});
+    var net_system = sddf.NetworkSystem.init(allocator, &sdf, net_node, &net_driver, &net_virt_rx, &net_virt_tx, .{});
     net_system.addClientWithCopier(&vmm, &vmm_net_copy);
+
+    var timer_system: sddf.TimerSystem = undefined;
+    if (board == .maaxboard) {
+        // The MaaXBoard driver requires access to a timer, right now we do not
+        // track dependencies of drivers on other drivers so we manually create a TimerSystem
+        // and give the driver access.
+        var timer_driver = Pd.create(&sdf, "timer_driver", "driver_timer_imx.elf");
+        const timer_node = blob.child("soc@0").?.child("bus@30000000").?.child("gpt@302d0000").?;
+        timer_system = sddf.TimerSystem.init(allocator, &sdf, &timer_driver, timer_node);
+
+        timer_system.addClient(&blk_driver);
+        sdf.addProtectionDomain(&timer_driver);
+    }
 
     sdf.addProtectionDomain(&vmm);
     sdf.addProtectionDomain(&uart_driver);
@@ -325,6 +318,13 @@ pub fn main() !void {
     try serial_system.connect();
     try blk_system.connect();
     try net_system.connect();
+    // TODO: we have a problem with ID allocation of PDs.
+    // If we call timer_system.connect too early, the block driver's
+    // channel ID of zero will be allocated but we need channel zero
+    // for the block device IRQ.
+    if (board == .maaxboard) {
+        try timer_system.connect();
+    }
     const xml = try sdf.toXml();
 
     var xml_file = try std.fs.cwd().createFile(xml_out_path, .{});

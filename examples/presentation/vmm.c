@@ -176,7 +176,7 @@ void init(void) {
     net_set_mac_addr(mac, mac_addr);
 
     size_t rx_size, tx_size;
-    net_cli_queue_size(microkit_name, &rx_size, &tx_size);
+    net_cli_queue_capacity(microkit_name, &rx_size, &tx_size);
     net_queue_init(&rx_queue, rx_free, rx_active, rx_size);
     net_queue_init(&tx_queue, tx_free, tx_active, tx_size);
     net_buffers_init(&tx_queue, 0);
