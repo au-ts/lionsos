@@ -1,0 +1,20 @@
+.{
+    .name = "presentation",
+    .version = "1.0.0",
+
+    .dependencies = .{
+        .libvmm = .{
+            .path = "../../dep/libvmm"
+        },
+        .sddf = .{
+            .path = "../../dep/sddf"
+        },
+        .sdfgen = .{
+            .path = "../../../microkit_sdf_gen"
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+    }
+}

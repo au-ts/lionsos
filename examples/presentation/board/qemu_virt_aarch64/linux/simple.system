@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright 2023, UNSW
+
+ SPDX-License-Identifier: BSD-2-Clause
+-->
+<system>
+    <!--
+     Here we give the guest 256MiB to use as RAM. Note that we use 2MiB page
+     sizes for efficiency, it does not have any functional effect.
+    -->
+    <memory_region name="guest_ram" size="0x10_000_000" page_size="0x200_000" />
+
+    <!--
+     We intend to map in this UART into the guest's virtual address space so
+     we define the memory region here.
+    -->
+    <memory_region name="serial" size="0x1_000" phys_addr="0x9000000" />
+
+    <!--
+     We need to map in the interrupt controller's (GIC) virtual CPU interface.
+     This is then mapped into the guest's virtual address space as if it was
+     the actual interrupt controller. On ARM GICv2, not all of the interrupt
+     controller is hardware virtualised, so we also have a virtual driver in
+     the VMM code.
+    -->
+    <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0x8040000" />
+
+    <protection_domain name="VMM" priority="254">
+        <program_image path="vmm.elf" />
+        <!--
+            Currently the VMM is expecting the address set to the variable
+            "guest_ram_vaddr" to be the same as the address of where the guest
+            sees RAM from its perspective. In this case the guest physical
+            starting address of RAM is 0x40000000, so we map in the guest RAM
+            at the same address in the VMMs virutal address space.
+        -->
+        <map mr="guest_ram" vaddr="0x40000000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
+        <virtual_machine name="linux" >
+            <vcpu id="0" />
+            <!--
+             The device tree given to Linux specifies that RAM will start
+             at 0x40000000.
+            -->
+            <map mr="guest_ram" vaddr="0x40000000" perms="rwx" />
+            <!--
+             For simplicity we give the guest direct access to the platform's UART.
+             This is the same UART used by seL4 and the VMM for debug printing. The
+             consequence of this is that the guest can just use the serial without
+             trapping into the VMM and hence we do not have to emulate access.
+            -->
+            <map mr="serial" vaddr="0x9000000" perms="rw" cached="false" />
+            <!--
+             As stated above, we need to map in the virtual CPU interface into
+             the guest's virtual address space. Any access to the GIC from
+             0x8010000 - 0x8011000 will access the VCPU interface. All other
+             accesses will result in virtual memory faults, routed to the VMM.
+            -->
+            <map mr="gic_vcpu" vaddr="0x8010000" perms="rw" cached="false" />
+        </virtual_machine>
+        <!--
+            When the serial that is mapped into the guest receives input, we
+            want to receive an interrupt from the device. This interrupt is
+            delivered to the VMM, which will then deliver the IRQ to the guest,
+            so that it can handle it appropriately. The IRQ is for the
+            platform's PL011 UART the VMM is expecting the ID of the IRQ to be 1.
+         -->
+        <irq irq="33" id="1" />
+    </protection_domain>
+</system>

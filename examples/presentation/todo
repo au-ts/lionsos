@@ -1,0 +1,24 @@
+## Presentation demo
+
+On the MaaXBoard, I need to have:
+* Debian or some kind of other distro booting that has
+  console, network, and block access.
+* Therefore, I also need a block driver, network driver,
+  and serial driver all hooked up to the VMM that manages
+  the distro.
+
+The great thing is, we can do the exact same stuff with
+QEMU.
+
+DONE: 1. Reproduce simple VMM system in LionsOS
+DONE: 2. Reproduce SDF with sdfgen
+3. Add virtIO to VM
+    DONE: 3.1: virtIO console instead of passthrough UART
+    DONE: 3.2: virtIO block
+    3.3: virtIO networking
+
+### Getting it working on MaaXBoard
+
+1. Native Linux with the Ubuntu/Debian image
+2. Full passthrough with the Linux VM
+3. Move to part native, part Linux VM
