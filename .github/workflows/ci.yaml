@@ -53,6 +53,8 @@ jobs:
     steps:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
+        with:
+          submodules: true
       # Because we use self-hosted actions and the checkout action does not clean submodules
       # we need to manually clean the submodules of the repo.
       - name: Clean submodules
