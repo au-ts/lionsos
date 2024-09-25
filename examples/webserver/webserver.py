@@ -75,7 +75,7 @@ async def send_file(relative_path, request_headers):
     if 'X-Real-IP' in request_headers:
         print(f'GET {relative_path} {request_headers["X-Real-IP"]}')
 
-    if '..' in relative_path:
+    if '..' in relative_path.split('/'):
         # directory traversal is not allowed
         return Response(status_code=404, reason='Not Found')
     absolute_path = f'{base_dir}/{relative_path}'
