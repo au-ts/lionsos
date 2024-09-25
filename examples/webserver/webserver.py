@@ -71,6 +71,67 @@ def format_http_date(timestamp):
     return formatted_date
 
 
+async def resolve(relative_path):
+    # Standard html file extensions to try suffixing to the requested
+    # file if the file does not exist.
+    html_extensions = ['.html', '.htm', '.xhtml']
+
+    def is_dir(stat):
+        return stat[0] & 0o170000 == 0o40000
+
+    async def try_stat(path):
+        try:
+            return await fs_async.stat(path)
+        except:
+            return None
+
+    async def try_suffices(path, suffices):
+        # TODO: maybe stat these concurrently
+        for suffix in suffices:
+            suffixed_path = path + suffix
+            stat = await try_stat(suffixed_path)
+            if stat is not None and not is_dir(stat):
+                return 0, suffixed_path, stat
+        return 404, None, None
+
+    path = f'{base_dir}/{relative_path}'
+
+    # If the requested path has a trailing slash, then it is intended
+    # to refer to a directory. We look for an index file inside the
+    # directory with the standard extensions, as well as 'index'
+    # itself. The extended forms are prioritised before the
+    # non-extended form to save a redundant stat in the common case.
+    if relative_path.endswith('/'):
+        return await try_suffices(f'{path}index', html_extensions + [''])
+
+    # If 'name' refers to a directory but the URL has no trailing
+    # slash, then we want to redirect to the form with the trailing
+    # slash, ie 'name/', but we want to do this only if there does not
+    # exist a file with the correct name suffixed by a standard
+    # extension, eg 'name.html'.
+    redirect = False
+
+    stat = await try_stat(path)
+    if stat is not None:
+        if not is_dir(stat):
+            return 0, path, stat
+        # 'name' exists but is a directory. Record this for later.
+        redirect = True
+
+    err, path, stat = await try_suffices(path, html_extensions)
+    if err == 0:
+        return err, path, stat
+
+    if redirect:
+        # The requested file name referred to a directory which
+        # exists, and we did not find any files with the name suffixed
+        # by a standard extension, so redirect the client to the form
+        # with appropriate trailing slash.
+        return 301, f'{relative_path}/', None
+
+    return 404, None, None
+
+
 async def send_file(relative_path, request_headers):
     if 'X-Real-IP' in request_headers:
         print(f'GET {relative_path} {request_headers["X-Real-IP"]}')
@@ -78,25 +139,19 @@ async def send_file(relative_path, request_headers):
     if '..' in relative_path.split('/'):
         # directory traversal is not allowed
         return Response(status_code=404, reason='Not Found')
-    absolute_path = f'{base_dir}/{relative_path}'
 
-    if absolute_path.endswith('/'):
-        absolute_path = f'{absolute_path}index.html'
-
-    try:
-        stat = await fs_async.stat(absolute_path)
-    except:
+    err, path, stat = await resolve(relative_path)
+    if err == 404:
         return Response(status_code=404, reason='Not Found')
-
-    if stat[0] & 0o170000 == 0o40000: # directory
-        return Response.redirect(f'/{relative_path}/', status_code=301)
+    if err == 301:
+        return Response.redirect(path, status_code=301)
 
     response_headers = {
         'Content-Type': 'application/octet-stream',
         'Cache-Control': 'max-age=31536000'
     }
 
-    ext = absolute_path.split('.')[-1]
+    ext = path.split('.')[-1]
     if ext in content_types_map:
         response_headers['Content-Type'] = content_types_map[ext]
 
@@ -122,7 +177,7 @@ async def send_file(relative_path, request_headers):
 
     response_headers['Last-Modified'] = format_http_date(mtime)
 
-    f = await fs_async.open(absolute_path)
+    f = await fs_async.open(path)
     return Response(body=FileStream(f), headers=response_headers)
 
 
