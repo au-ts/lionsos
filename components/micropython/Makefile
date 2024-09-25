@@ -27,11 +27,11 @@ BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 
 # Set CFLAGS and libraries.
 CFLAGS += \
+	-O2 \
 	-I. \
 	-Ilwip_include \
 	-I$(BUILD) \
 	-I$(TOP) \
-	-I$(SDDF) \
 	-I$(SDDF)/include \
 	-I$(BOARD_DIR)/include \
 	-I$(LIBMICROKITCO_PATH) \

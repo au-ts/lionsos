@@ -70,8 +70,7 @@ class KittyDisplay(framebuf.FrameBuffer):
 
     def show(self):
         fb.wait()
-        fb.machine_fb_send(self.buf, self.width, self.height)
-
+        fb.machine_fb_send(memoryview(self.buf), self.width, self.height)
 
 # Heartbeat to let the server know we still exist
 def heartbeat():
