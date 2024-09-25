@@ -177,75 +177,6 @@ bool emulate_memory(uintptr_t vaddr, size_t fsr, seL4_UserContext *regs) {
     return true;
 }
 
-// When the driver VM guest faulted at an offset within the pinmux chip(s), talk to the pinmux driver to see
-// what the register value is. Since the pinmux devices are mapped read-only, we will only get write faults.
-// If the guest wants to write different things compared to us, simply print a warning instead of stopping the g
-bool emulate_pinmux(uintptr_t void_addr, uintptr_t offset, sddf_pinctrl_chip_idx_t chip, size_t fsr, seL4_UserContext *regs) {
-    // uint32_t regval = 0;
-    // sddf_pinctrl_response_t err = sddf_pinctrl_read_mux(PINCTRL_DRIVER_CH, offset, chip, &regval);
-
-    // if (err == SDDF_PINCTRL_SUCCESS) {
-    //     if (fault_is_read(fsr)) {
-    //         // // The MRs are mapped read only into the guest, we should not get the faults here
-    //         // LOG_VMM("emulate_pinmux(): unexpected read fault on pinmux chip %d, read at offset %x with value %x from driver\n", chip, offset, regval);
-    //         // return false;
-
-    //         uint64_t mask = fault_get_data_mask(offset, fsr);
-    //         fault_emulate_write(regs, offset, fsr, regval & mask);
-    //         LOG_VMM("emulate_pinmux(): successfully emulated pinmux chip %d read at offset %x with value %x new write by guest\n", chip, offset, regval);
-    //         return true;
-
-    //     } else {
-    //         uint64_t mask = fault_get_data_mask(offset, fsr);
-    //         uint64_t data = fault_get_data(regs, fsr) & mask;
-
-
-    //         emulate_memory(addr + offset, fsr, regs);
-    //         if (data == regval) {
-    //             LOG_VMM("emulate_pinmux(): successfully emulated pinmux chip %d write at offset %x with value %x\n", chip, offset, regval);
-    //             return true;
-    //         } else {
-    //             // Not a fatal error, guest might have a different DTS than the driver
-    //             LOG_VMM("emulate_pinmux(): WARNING: guest wants to write a different pinmux register of chip %d at offset %x, curr is %x, they want %x. The mask is 0x%x\n", chip, offset, regval, data, mask);
-    //             return true;
-    //         }
-    //         // We don't actually modify the pinmux registers.
-    //     }
-    // } else {
-    //     LOG_VMM_ERR("emulate_pinmux(): pinctrl driver returned err %d\n", err);
-    //     return true;
-    // }
-}
-
-bool bus2_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data) {
-    // LOG_VMM("bus2_vmfault_handler(): addr %x, is write %d ... ", addr, fault_is_write(fsr));
-    return emulate_memory(0xff800000 + addr, fsr, regs);
-
-
-    // uintptr_t offset = addr;
-    // if (offset >= AO_BASE_PAD && offset < 0xa8) {
-    //     return emulate_memory(bus2_void_vaddr + addr, fsr, regs);
-    // } else {
-    //     return emulate_memory(0xff800000 + addr, fsr, regs);
-    // }
-}
-
-bool pinctrl_periphs_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data) {
-    // LOG_VMM("pinctrl_periphs_vmfault_handler(): addr %x, is write %d ... ", addr, fault_is_write(fsr));
-    return emulate_memory(0xff634000 + addr, fsr, regs);
-
-
-    // uintptr_t offset = addr;
-    // if (offset >= PERIPHS_PINCTRL_PHYS_ADDR_PAGE_BOUNDARY_OFFSET + PERIPHS_BASE_PAD && offset <= PERIPHS_PINCTRL_PHYS_ADDR_PAGE_BOUNDARY_OFFSET + PERIPHS_LAST_REGISTER_OFFSET) {
-    //     return emulate_memory(gpio_void_vaddr + addr, fsr, regs);
-    // } else {
-    //     return emulate_memory(0xff634000 + addr, fsr, regs);
-    // }
-}
-
-
-
-
 bool bus_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data) {
     // Data is the base guest address for the fault.
     // If the fault is in the pinmux region, redirect to the void region
@@ -264,8 +195,6 @@ bool bus_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserCo
         return emulate_memory(((uintptr_t) data) + addr, fsr, regs);
     }
 }
-
-
 
 #endif
 
@@ -317,13 +246,13 @@ void init(void) {
     fault_register_vm_exception_handler(UIO_INIT_ADDRESS, sizeof(size_t), &uio_init_handler, NULL);
 
 #if defined(CONFIG_PLAT_ODROIDC4)
-    bool bus2_fault_reg_ok = fault_register_vm_exception_handler(0xff800000, BUS2_MR_SIZE, &bus_vmfault_handler, (void *) 0xff800000);
+    bool bus2_fault_reg_ok = fault_register_vm_exception_handler(bus2_vaddr, BUS2_MR_SIZE, &bus_vmfault_handler, (void *) bus2_vaddr);
     if (!bus2_fault_reg_ok) {
         LOG_VMM_ERR("Failed to register the VM fault handler for bus2\n");
         return;
     }
 
-    bool periphs_fault_reg_ok = fault_register_vm_exception_handler(0xff634000, GPIO_MR_SIZE, &bus_vmfault_handler, (void *) 0xff634000);
+    bool periphs_fault_reg_ok = fault_register_vm_exception_handler(gpio_vaddr, GPIO_MR_SIZE, &bus_vmfault_handler, (void *) gpio_vaddr);
     if (!periphs_fault_reg_ok) {
         LOG_VMM_ERR("Failed to register the VM fault handler for peripherals pinmux\n");
         return;
