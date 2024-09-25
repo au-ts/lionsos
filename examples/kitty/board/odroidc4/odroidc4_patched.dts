@@ -369,6 +369,7 @@
 					};
 
 					cec_ao_b_h {
+						phandle = <0xfb>;
 
 						mux {
 							groups = "cec_ao_b_h";
@@ -2387,9 +2388,12 @@
 				compatible = "amlogic,meson-sm1-ao-cec";
 				reg = <0x00 0x280 0x00 0x1c>;
 				interrupts = <0x00 0xcb 0x01>;
-				clocks = <0x23 0x13>;
+				clocks = <0x19 0x13>;
 				clock-names = "oscin";
-				status = "disabled";
+				status = "okay";
+				pinctrl-0 = <0xfb>;
+				pinctrl-names = "default";
+				hdmi-phandle = <0x1b>;
 			};
 
 			pwm@2000 {

@@ -306,6 +306,7 @@
             <map mr="bus5" vaddr="0xff638000" perms="rw" cached="false" />
             <map mr="bus6" vaddr="0xff640000" perms="rw" cached="false" />
             <map mr="bus2" vaddr="0xff801000" perms="rw" cached="false" />
+            <map mr="uart" vaddr="0xff803000" perms="rw" cached="false" />
             <map mr="bus3" vaddr="0xffd13000" perms="rw" cached="false" />
             <map mr="bus4" vaddr="0xffd00000" perms="rw" cached="false" />
             <map mr="usb" vaddr="0xffe09000" perms="rw" cached="false" />

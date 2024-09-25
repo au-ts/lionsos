@@ -19,11 +19,11 @@
 		#address-cells = <0x02>;
 		#size-cells = <0x02>;
 		ranges;
-		linux,stdout-path = "/soc/bus@ff800000/serial@3000";
+        linux,stdout-path = "/soc/bus@ff800000/serial@3000";
         stdout-path = "/soc/bus@ff800000/serial@3000";
 		linux,initrd-end = <0x00000000 0x2f000000>;
         linux,initrd-start = <0x00000000 0x2c000000>;
-        bootargs = "console=ttynull root=/dev/ram0 nosmp rw loglevel=8 pci=nomsi maxcpus=1 clk_ignore_unused uio_pdrv_genirq.of_id=generic-uio earlyprintk=serial vt.global_cursor_default=0 logo.nologo";
+        bootargs = "console=ttyAML0,115200n8 root=/dev/ram0 nosmp rw debug loglevel=8 pci=nomsi maxcpus=1 clk_ignore_unused uio_pdrv_genirq.of_id=generic-uio earlyprintk=serial vt.global_cursor_default=0 logo.nologo";
 
 		framebuffer-cvbs {
 			compatible = "amlogic,simple-framebuffer\0simple-framebuffer";
@@ -2234,7 +2234,7 @@
 					};
 
 					uart-a-ao {
-						phandle = <0x1e>;
+						phandle = <0xfc>;
 
 						mux {
 							groups = "uart_ao_a_tx\0uart_ao_a_rx";
@@ -2410,6 +2410,17 @@
 				clocks = <0x11>;
 				clock-names = "clkin1";
 				phandle = <0x41>;
+			};
+
+			serial@3000 {
+				compatible = "amlogic,meson-gx-uart\0amlogic,meson-ao-uart";
+				reg = <0x00 0x3000 0x00 0x18>;
+				interrupts = <0x00 0xc1 0x01>;
+				clocks = <0x1b 0x23 0x04 0x1b>;
+				clock-names = "xtal\0pclk\0baud";
+				status = "okay";
+				pinctrl-0 = <0xfc>;
+				pinctrl-names = "default";
 			};
 
 			serial@4000 {
