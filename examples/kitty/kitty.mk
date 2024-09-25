@@ -12,6 +12,8 @@ AR := llvm-ar
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
+AS := clang
+PYTHON := python3
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
@@ -22,6 +24,7 @@ ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
 	UART_DRIV_DIR := meson
 	TIMER_DRIV_DIR := meson
 	I2C_DRIV_DIR := meson
+	PINCTRL_DRIV_DIR := meson
 	CPU := cortex-a55
 	INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
 	LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
@@ -62,14 +65,13 @@ IMAGES := timer_driver.elf \
 	  serial_virt_rx.elf \
 	  serial_virt_tx.elf \
 	  i2c_virt.elf \
-	  i2c_driver.elf
+	  i2c_driver.elf \
 
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
 	-ffreestanding \
 	-g \
-	-O2 \
 	-Wall \
 	-Wno-unused-function \
 	-I$(BOARD_DIR)/include \
@@ -110,9 +112,21 @@ ifneq ($(I2C_DRIV_DIR), )
 SDDF_MAKEFILES += ${SDDF}/drivers/i2c/${I2C_DRIV_DIR}/i2c_driver.mk
 endif
 
+ifneq ($(PINCTRL_DRIV_DIR), )
+SDDF_MAKEFILES += ${SDDF}/drivers/pinctrl/${PINCTRL_DRIV_DIR}/pinctrl_driver.mk
+ASFLAGS := -c -target ${TARGET}
+DTS_FILE := ${KITTY_DIR}/board/$(MICROKIT_BOARD)/odroidc4_patched.dts
+IMAGES += pinctrl_driver.elf 
+SOC := hardkernel,odroid-c4
+endif
+
 include ${SDDF_MAKEFILES}
 include ${LIBVMM_DIR}/vmm.mk
 include ${NFS}/nfs.mk
+
+ifneq ($(PINCTRL_DRIV_DIR), )
+CFLAGS += ${CHIP_HEADER_INC}
+endif
 
 $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL}/Makefile
 	make -C $(MUSL_SRC) \

@@ -4,7 +4,7 @@
     <memory_region name="eth" size="0x10_000" phys_addr="0xff3f0000" />
     <memory_region name="timer" size="0x1_000" phys_addr="0xffd0f000" />
     <memory_region name="i2c_bus" size="0x1000" phys_addr="0xffd1d000"/>
-    <memory_region name="gpio" size="0x4000" phys_addr="0xff634000"/>
+    <memory_region name="gpio" size="0x1000" phys_addr="0xff634000"/>
     <memory_region name="clk" size="0x1000" phys_addr="0xff63c000"/>
 
     <!-- UIO framebuffer-->
@@ -76,10 +76,16 @@
     <memory_region name="nfs_command_queue" size="0x8_000" />
     <memory_region name="nfs_completion_queue" size="0x8_000" />
 
-    <protection_domain name="i2c_driver" priority="254">
+    <protection_domain name="pinctrl_driver" priority="254" pp="true" passive="true">
+        <program_image path="pinctrl_driver.elf" />
+
+        <map mr="pinctrl_ao" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="pinctrl_ao_base" />
+        <map mr="gpio" vaddr="0x2_010_000" perms="rw" cached="false" setvar_vaddr="pinctrl_periphs_base" />
+    </protection_domain>
+
+    <protection_domain name="i2c_driver" priority="253">
         <program_image path="i2c_driver.elf"/>
         <map mr="i2c_bus" vaddr="0x3_000_000" perms="rw" setvar_vaddr="i2c_regs" cached="false" />
-        <map mr="gpio" vaddr="0x3_100_000" perms="rw" setvar_vaddr="gpio_regs" cached="false" />
         <map mr="clk" vaddr="0x3_200_000" perms="rw" setvar_vaddr="clk_regs" cached="false" />
 
         <map mr="i2c_driver_request_region" vaddr="0x4_000_000" perms="rw" setvar_vaddr="request_region" />
@@ -254,7 +260,9 @@
     <memory_region name="framebuffer_guest_ram" size="0x10_000_000" page_size="0x200_000" phys_addr="0x20_000_000" />
 
     <memory_region name="bus1" size="0x34000" phys_addr="0xff600000" />
-    <memory_region name="bus2" size="0x3000" phys_addr="0xff800000" />
+    <memory_region name="bus1_continued" size="0x3000" phys_addr="0xff635000" />
+    <memory_region name="pinctrl_ao" size="0x1000" phys_addr="0xff800000" />
+    <memory_region name="bus2" size="0x2000" phys_addr="0xff801000" />
     <memory_region name="bus3" size="0xa000" phys_addr="0xffd13000" />
     <memory_region name="bus4" size="0xf000" phys_addr="0xffd00000" />
     <memory_region name="bus5" size="0x4000" phys_addr="0xff638000" />
@@ -271,19 +279,38 @@
     <memory_region name="vpu" size="0x100000" phys_addr="0xff900000" />
     <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0xffc06000" />
 
+    <memory_region name="pinctrl_periphs_void" size="0x1000" />
+    <memory_region name="pinctrl_ao_void" size="0x1000" />
+
     <protection_domain name="framebuffer_vmm" priority="1">
         <program_image path="vmm.elf" />
+
         <map mr="framebuffer_guest_ram" vaddr="0x20000000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
+
+        <map mr="pinctrl_ao" vaddr="0xff800000" perms="rw" setvar_vaddr="bus2_vaddr" />
+        <map mr="gpio" vaddr="0xff634000" perms="rw" setvar_vaddr="gpio_vaddr" />
+
+        <map mr="pinctrl_periphs_void" vaddr="0xAAA_900_000" perms="rw" cached="false" setvar_vaddr="pinctrl_periphs_void"  />
+        <map mr="pinctrl_ao_void" vaddr="0xAAA_903_000" perms="rw" cached="false" setvar_vaddr="pinctrl_ao_void" />
+
         <virtual_machine name="linux" priority="1">
             <vcpu id="0" />
             <map mr="framebuffer_guest_ram" vaddr="0x20000000" perms="rwx" />
             <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="true" />
             <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
-            <map mr="gpio" vaddr="0xff634000" perms="rw" cached="false" />
+            <map mr="bus1_continued" vaddr="0xff635000" perms="rw" cached="false" />
+
+            <!-- <map mr="gpio" vaddr="0xff634000" perms="rw" cached="false" /> -->
+            <!-- <map mr="gpio_void" vaddr="0xff634000" perms="rw" cached="false" /> -->
+
             <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" />
             <map mr="bus5" vaddr="0xff638000" perms="rw" cached="false" />
             <map mr="bus6" vaddr="0xff640000" perms="rw" cached="false" />
-            <map mr="bus2" vaddr="0xff800000" perms="rw" cached="false" />
+
+            <!-- <map mr="pinctrl_ao" vaddr="0xff800000" perms="rw" cached="false" /> -->
+            <!-- <map mr="pinctrl_ao_void" vaddr="0xff800000" perms="rw" cached="false" /> -->
+
+            <map mr="bus2" vaddr="0xff801000" perms="rw" cached="false" />
             <map mr="bus3" vaddr="0xffd13000" perms="rw" cached="false" />
             <map mr="bus4" vaddr="0xffd00000" perms="rw" cached="false" />
             <map mr="usb" vaddr="0xffe09000" perms="rw" cached="false" />
@@ -420,5 +447,10 @@
     <channel>
         <end pd="micropython" id="0" />
         <end pd="framebuffer_vmm" id="1" />
+    </channel>
+
+    <channel>
+        <end pd="pinctrl_driver" id="2" />
+        <end pd="framebuffer_vmm" id="2" />
     </channel>
 </system>
