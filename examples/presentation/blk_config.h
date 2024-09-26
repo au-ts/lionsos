@@ -11,7 +11,7 @@
 
 #define BLK_NUM_CLIENTS                         1
 
-#define BLK_NAME_CLI0                           "client"
+#define BLK_NAME_CLI0                           "vmm"
 
 #define BLK_QUEUE_CAPACITY_CLI0                 1024
 #define BLK_QUEUE_CAPACITY_DRIV                 BLK_QUEUE_CAPACITY_CLI0

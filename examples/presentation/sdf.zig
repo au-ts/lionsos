@@ -258,6 +258,21 @@ pub fn main() !void {
 
     var vmm_system = VirtualMachineSystem.init(allocator, &sdf, &vmm, &vm, guest_dtb_blob);
 
+    if (board == .maaxboard) {
+        const passthrough_devices = .{
+            .{ "gpc", blob.child("soc@0").?.child("bus@30000000").?.child("gpc@303a0000").? },
+            .{ "clock_controller", blob.child("soc@0").?.child("bus@30000000").?.child("clock-controller@30380000").? },
+            .{ "pinctrl", blob.child("soc@0").?.child("bus@30000000").?.child("pinctrl@30330000").? },
+            .{ "syscon", blob.child("soc@0").?.child("bus@30000000").?.child("syscon@30360000").? },
+            .{ "timer", blob.child("soc@0").?.child("bus@30400000").?.child("timer@306a0000").? },
+            .{ "gpio0", blob.child("soc@0").?.child("bus@30000000").?.child("gpio@30200000").? },
+            .{ "irqsteer", blob.child("soc@0").?.child("bus@32c00000").?.child("interrupt-controller@32e2d000").? },
+        };
+        inline for (passthrough_devices) |device| {
+            try vmm_system.addPassthrough(device[0], device[1], false);
+        }
+    }
+
     var serial_system = try sddf.SerialSystem.init(allocator, &sdf, uart_node, &uart_driver, &serial_virt_tx, &serial_virt_rx, .{});
     serial_system.addClient(&vmm);
 
@@ -278,6 +293,8 @@ pub fn main() !void {
 
         timer_system.addClient(&blk_driver);
         sdf.addProtectionDomain(&timer_driver);
+
+        timer_driver.priority = 250;
     }
 
     sdf.addProtectionDomain(&vmm);
@@ -291,9 +308,11 @@ pub fn main() !void {
     sdf.addProtectionDomain(&net_virt_rx);
     sdf.addProtectionDomain(&vmm_net_copy);
 
+    blk_driver.stack_size = 0x2000;
+
     uart_driver.priority = 200;
-    blk_driver.priority = 100;
-    net_driver.priority = 100;
+    blk_driver.priority = 200;
+    net_driver.priority = 200;
     net_driver.budget = 100;
     net_driver.period = 400;
 
@@ -305,14 +324,15 @@ pub fn main() !void {
 
     serial_virt_rx.priority = 199;
     serial_virt_tx.priority = 199;
-    blk_virt.priority = 99;
+    blk_virt.priority = 199;
     net_virt_rx.priority = 98;
     net_virt_tx.priority = 99;
 
     vmm_net_copy.priority = 2;
     vmm_net_copy.budget = 20000;
 
-    vmm.priority = 1;
+    vmm.priority = 2;
+    vm.priority = 1;
 
     try vmm_system.connect();
     try serial_system.connect();

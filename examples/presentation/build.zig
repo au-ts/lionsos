@@ -122,6 +122,8 @@ pub fn build(b: *std.Build) !void {
     dts_cat_cmd.addFileArg(libvmm_dep.path("tools/dtscat"));
     dts_cat_cmd.addFileArg(b.path(base_dts_path));
     dts_cat_cmd.addFileArg(b.path(overlay));
+    dts_cat_cmd.addFileInput(b.path(base_dts_path));
+    dts_cat_cmd.addFileInput(b.path(overlay));
     const final_dts = dts_cat_cmd.captureStdOut();
 
     // For actually compiling the DTS into a DTB
@@ -232,6 +234,7 @@ pub fn build(b: *std.Build) !void {
     sdf_step.addArg("--board");
     sdf_step.addArg(microkit_board);
     sdf_step.addArg("--sdf");
+    sdf_step.addFileInput(dtb);
     const sdf_file = sdf_step.addOutputFileArg("presentation.system");
 
     sdf_step.step.dependOn(&b.addInstallFileWithDir(main_dtb, .prefix, b.fmt("{s}.dtb", .{ microkit_board })).step);

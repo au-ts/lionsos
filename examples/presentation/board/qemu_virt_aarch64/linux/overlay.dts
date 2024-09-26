@@ -24,20 +24,20 @@
         interrupts = <0x00 42 0x04>;
     };
 
-    virtio-console@0131000 {
+    virtio-blk@0131000 {
         compatible = "virtio,mmio";
         reg = <0x00 0x131000 0x00 0x200>;
         interrupts = <0x00 43 0x04>;
     };
 
-    virtio-console@0132000 {
+    virtio-net@0132000 {
         compatible = "virtio,mmio";
         reg = <0x00 0x132000 0x00 0x200>;
         interrupts = <0x00 44 0x04>;
     };
 
     chosen {
-        bootargs = "console=hvc0 earlycon=hvc0 earlyprintk=serial debug loglevel=8";
+        bootargs = "console=hvc0 earlycon=hvc0 initcall_debug earlyprintk=serial debug loglevel=8";
         linux,initrd-start = <0x4d700000>;
         linux,initrd-end = <0x4d800000>;
     };

@@ -24,4 +24,5 @@ DONE: 1. Native Linux with the Ubuntu/Debian image
 3. Move to part native, part Linux VM
 
 ## Microkit sdfgen improvements
-* Remove 'shared_resources' and 'page_size' from config.json
+* Need to handle unused memory regions
+* Need to handle `<0x302d0000 0x10000>;` vs `<0x0 0x302d0000 0x0 0x10000>;`

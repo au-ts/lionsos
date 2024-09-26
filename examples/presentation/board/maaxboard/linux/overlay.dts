@@ -6,7 +6,7 @@
 / {
     memory@40000000 {
         device_type = "memory";
-        reg = <0x00 0x40000000 0x00 0x20000000>;
+        reg = <0x00 0x40000000 0x00 0x10000000>;
     };
 
     soc@0 {
@@ -20,6 +20,10 @@
             };
 
             spi@30840000 {
+                status = "disabled";
+            };
+
+            serial@30860000 {
                 status = "disabled";
             };
 
@@ -83,10 +87,29 @@
         };
     };
 
+    virtio-console@0130000 {
+        compatible = "virtio,mmio";
+        reg = <0x00 0x130000 0x00 0x200>;
+        interrupts = <0x00 42 0x04>;
+    };
+
+    virtio-blk@0131000 {
+        compatible = "virtio,mmio";
+        reg = <0x00 0x131000 0x00 0x200>;
+        interrupts = <0x00 43 0x04>;
+    };
+
+    virtio-net@0132000 {
+        compatible = "virtio,mmio";
+        reg = <0x00 0x132000 0x00 0x200>;
+        interrupts = <0x00 44 0x04>;
+    };
+
+
     chosen {
         stdout-path = "/soc@0/bus@30800000/serial@30860000";
         linux,initrd-start = <0x00000000 0x4c000000>;
         linux,initrd-end = <0x00000000 0x4e000000>;
-        bootargs = "console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200 nosmp rw debug ignore_loglevel initcall_blacklist=imx8_soc_init pci=nomsi earlyprintk=serial maxcpus=1";
+        bootargs = "console=hvc0 earlycon=hvc0 nosmp rw debug ignore_loglevel initcall_blacklist=imx8_soc_init pci=nomsi earlyprintk=serial maxcpus=1";
     };
 };

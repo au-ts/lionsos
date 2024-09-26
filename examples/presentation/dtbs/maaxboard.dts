@@ -509,7 +509,7 @@
 
 			gpt@302d0000 {
 				compatible = "fsl,imx8mq-gpt\0fsl,imx7d-gpt";
-				reg = < 0x00 0x302d0000 0x00 0x10000 >;
+				reg = <0x302d0000 0x10000>;
 				interrupts = < 0x00 0x37 0x04 >;
 			};
 
@@ -751,6 +751,7 @@
 				interrupt-controller;
 				#interrupt-cells = <0x03>;
 				phandle = <0x01>;
+				status = "disabled";
 
 				pgc {
 					#address-cells = <0x01>;
@@ -1431,7 +1432,7 @@
 				interrupts = <0x00 0x6b 0x04>;
 				clocks = <0x02 0xc3 0x02 0xc3>;
 				clock-names = "qspi_en\0qspi";
-				status = "okay";
+				status = "disabled";
 				pinctrl-names = "default";
 				pinctrl-0 = <0x42>;
 

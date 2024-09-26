@@ -18,13 +18,6 @@
 #include "serial_config.h"
 #include "ethernet_config.h"
 
-// @ivanv: ideally we would have none of these hardcoded values
-// initrd, ram size come from the DTB
-// We can probably add a node for the DTB addr and then use that.
-// Part of the problem is that we might need multiple DTBs for the same example
-// e.g one DTB for VMM one, one DTB for VMM two. we should be able to hide all
-// of this in the build system to avoid doing any run-time DTB stuff.
-
 /*
  * As this is just an example, for simplicity we just make the size of the
  * guest's "RAM" the same for all platforms. For just booting Linux with a
