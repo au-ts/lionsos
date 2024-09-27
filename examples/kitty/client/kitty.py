@@ -27,6 +27,7 @@ current_equal_count = 0
 current_not_equal_count = 0
 TICKS_TO_CONFIRM = 2
 TICKS_TO_RESET = 3
+TICKS_DELAY_MS = 50
 token = 0
 reader_stream = None
 writer_stream = None
@@ -145,13 +146,14 @@ async def read_card(p):
     global TICKS_TO_RESET
     global TICKS_TO_CONFIRM
     global token
+    global TICKS_DELAY_MS
     while True:
         uid = p.read_uid()
         # Case where:
         #   - We are not waiting on a specific card
         #   - p.read_uid() did not return a card ID
         if uid == [] and current_uid == []:
-            await asyncio.sleep_ms(100)
+            await asyncio.sleep_ms(TICKS_DELAY_MS)
             continue
 
         if current_uid == []:
@@ -179,15 +181,14 @@ async def read_card(p):
                 info("Registering tap")
                 await on_tap(current_uid)
 
-        # Read the uid again, this one should always fail
-        # We do this to consume the empty UID packet so it doesn't
-        # mess with our matching. This only applies for MiFare
-        # ultralight cards, which have len(uid) > 4.
         if len(uid) > 4:
+            # On MiFare ultralight cards, which have a UID of length greater
+            # than 4, we have noticed that the PN532 card reader device can
+            # return an empty UID when the physical card is still near the device.
+            # To avoid this messing with our logic, we do an extra UID read here.
             uid = p.read_uid()
-            assert uid == []
 
-        await asyncio.sleep_ms(100)
+        await asyncio.sleep_ms(TICKS_DELAY_MS)
 
 
 def set_pixel(display, x, y, rgba):
