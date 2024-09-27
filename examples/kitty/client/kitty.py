@@ -18,11 +18,18 @@ import time
 import sys
 import asyncio
 import errno
+import os
 from pn532 import PN532
 import font_height50
 import font_height35
 from writer import CWriter
 from config import enable_i2c, enable_nfs, display_width, display_height, TRUE_DISPLAY_WIDTH
+
+# Expect this to be on the file system by the time we start, if we are
+# configured to load from NFS
+LOGO_PATH = "lionsos_logo.data"
+LOGO_WIDTH = 356
+LOGO_HEIGHT = 335
 
 current_uid = []
 current_equal_count = 0
@@ -216,9 +223,8 @@ def reset_status():
 
 
 def draw_image(display, x0, y0, data):
-    # w, h = len(data[0]) // 4, len(data)
-    w = 400
-    h = 430
+    w = LOGO_WIDTH
+    h = LOGO_HEIGHT
     for y in range(h):
         for x in range(w):
             pixel = data[(y * w * 4 + (x * 4)):(y * w * 4 + (x * 4))+4]
@@ -291,7 +297,7 @@ async def read_from_server():
             else:
                 message_display_time = 3
 
-            # Printing "-$1" if there has been a purchase
+            # Success, print message that the user's account has been charged
             if words[0] == '200':
                 display.rect(0, 500, 2000, 2000, 0x0, True)
                 charged_str = "Charged $1"
@@ -327,17 +333,18 @@ async def main():
     info(f"starting at {time.time()}")
     reader_stream, writer_stream = await asyncio.open_connection(HOST, PORT)
 
-    # The cat picture is stored on the NFS directory, do not load it if we do not
+    # The logo is stored on the NFS directory, do not load it if we do not
     # have access to it.
     if enable_nfs:
-        size = 688000
-        cat_buf = bytearray(size)
-        with open("catwithfish.data", "rb") as f:
-            nbytes = f.readinto(cat_buf)
+        logo_stat = os.stat(LOGO_PATH)
+        logo_size = logo_stat[6]
+        logo_buf = bytearray(logo_size)
+        with open(LOGO_PATH, "rb") as f:
+            nbytes = f.readinto(logo_buf)
             info(f"read {nbytes} bytes")
-            pic = memoryview(cat_buf)
+            logo = memoryview(logo_buf)
             info("read image, starting to draw")
-            draw_image(display, 50, -70, pic[0:])
+            draw_image(display, 50, 20, logo)
         display.show()
 
     wri50.setcolor(0xffff, 0x0000)
