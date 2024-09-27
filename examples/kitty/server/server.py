@@ -34,6 +34,7 @@ RESPONSES = [
 ]
 CURR_RESP_INDEX = 0
 
+
 class MessageThread(threading.Thread):
     def __init__(self, conn: socket.socket):
         super(MessageThread, self).__init__()
@@ -99,7 +100,9 @@ def set_display_msg(conn: socket.socket) -> None:
 
 
 # Wait for a request or an error
-def wait_for_req(conn: socket.socket, uber: socket.socket, heartbeat_received: datetime) -> Literal[0, 1]:
+def wait_for_req(conn: socket.socket,
+                 uber: socket.socket,
+                 heartbeat_received: datetime) -> Literal[0, 1]:
     while True:
         # Find if we have a new connection
         log_msg("select")
@@ -196,8 +199,7 @@ def handle_connection(conn: socket.socket, uber: socket.socket) -> None:
                 else:
                     conn.sendall(resp.encode())
 
-                CURR_RESP_INDEX  = (CURR_RESP_INDEX + 1) % len(RESPONSES)
-
+                CURR_RESP_INDEX = (CURR_RESP_INDEX + 1) % len(RESPONSES)
 
 
 class ConnectionThread(threading.Thread):
