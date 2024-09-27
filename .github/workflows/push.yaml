@@ -1,0 +1,20 @@
+# Copyright 2024, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+# Actions to run on Push and Pull Request
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  check:
+    name: License Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: seL4/ci-actions/license-check@master
+
