@@ -22,8 +22,8 @@ import os
 from pn532 import PN532
 import font_height50
 import font_height35
+import config
 from writer import CWriter
-from config import enable_i2c, enable_nfs, display_width, display_height, TRUE_DISPLAY_WIDTH
 
 # Expect this to be on the file system by the time we start, if we are
 # configured to load from NFS
@@ -86,6 +86,7 @@ class KittyDisplay(framebuf.FrameBuffer):
     def show(self):
         fb.wait()
         fb.machine_fb_send(memoryview(self.buf), self.width, self.height)
+
 
 # Heartbeat to let the server know we still exist
 def heartbeat():
@@ -243,6 +244,7 @@ async def wait_seconds_and_call(seconds, fn):
     await asyncio.sleep(seconds)
     fn()
 
+
 # Coroutine responsible for listening to the server
 async def read_from_server():
     global reader_stream
@@ -283,12 +285,11 @@ async def read_from_server():
             wri35.printstring(words[1])
             display.show()
 
-
         else:
             # Print server response
             display.rect(0, 400, 2000, 2000, 0x0, True)
             # Position text in middle of row
-            wri50.set_textpos(display, 430, (TRUE_DISPLAY_WIDTH - wri50.stringlen(words[1]))//2)
+            wri50.set_textpos(display, 430, (config.TRUE_DISPLAY_WIDTH - wri50.stringlen(words[1]))//2)
             wri50.printstring(f"{words[1]}")
 
             # Display "new card" message for longer, so person has enough time to see number
@@ -301,7 +302,7 @@ async def read_from_server():
             if words[0] == '200':
                 display.rect(0, 500, 2000, 2000, 0x0, True)
                 charged_str = "Charged $1"
-                wri50.set_textpos(display, 500, (TRUE_DISPLAY_WIDTH - wri50.stringlen(charged_str))//2)
+                wri50.set_textpos(display, 500, (config.TRUE_DISPLAY_WIDTH - wri50.stringlen(charged_str))//2)
 
                 wri50.printstring(charged_str)
 
@@ -309,13 +310,14 @@ async def read_from_server():
 
             asyncio.create_task(wait_seconds_and_call(message_display_time, reset_status))
 
+
 # Coroutine responsible for reading the card
 async def read_card_main():
     global stdin_ready
     # While we are processing a tap, we cannot accept other taps.
     # We consider to be finished processing after the server has
     # responded, and after we have then called reset_status()
-    if enable_i2c:
+    if config.enable_i2c:
         p = PN532(1)
         p.rf_configure()
         p.sam_configure()
@@ -335,7 +337,7 @@ async def main():
 
     # The logo is stored on the NFS directory, do not load it if we do not
     # have access to it.
-    if enable_nfs:
+    if config.enable_nfs:
         logo_stat = os.stat(LOGO_PATH)
         logo_size = logo_stat[6]
         logo_buf = bytearray(logo_size)
@@ -386,7 +388,7 @@ def run(host: str):
         error("host address should be of type string")
         return
 
-    display = KittyDisplay(display_width, display_height)
+    display = KittyDisplay(config.display_width, config.display_height)
     wri50 = CWriter(display, font_height50)
     wri35 = CWriter(display, font_height35)
     HOST = host
