@@ -290,14 +290,18 @@
         <map mr="framebuffer_guest_ram" vaddr="0x20000000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
 
         <!-- The VMM will only touch non pinmux devices on these pages -->
-        <map mr="pinctrl_ao" vaddr="0xff800000" perms="rw" setvar_vaddr="bus2_vaddr" />
-        <map mr="gpio" vaddr="0xff634000" perms="rw" setvar_vaddr="gpio_vaddr" />
+        <map mr="pinctrl_ao" vaddr="0xff800000" perms="rw" setvar_vaddr="bus2_vaddr" cached="false" />
+        <map mr="gpio" vaddr="0xff634000" perms="rw" setvar_vaddr="gpio_vaddr" cached="false" />
 
         <map mr="pinctrl_periphs_void" vaddr="0xAAA_900_000" perms="rw" cached="false" setvar_vaddr="pinctrl_periphs_void"  />
         <map mr="pinctrl_ao_void" vaddr="0xAAA_903_000" perms="rw" cached="false" setvar_vaddr="pinctrl_ao_void" />
 
         <virtual_machine name="linux" priority="1">
             <vcpu id="0" />
+
+            <!-- <map mr="pinctrl_ao" vaddr="0xff800000" perms="rw" cached="false" /> -->
+            <!-- <map mr="gpio" vaddr="0xff634000" perms="rw" cached="false" /> -->
+
             <map mr="framebuffer_guest_ram" vaddr="0x20000000" perms="rwx" />
             <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="true" />
             <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />

@@ -192,7 +192,8 @@ bool bus_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserCo
         uintptr_t page_offset = guest_fault_vaddr & 0xFFF;
         return emulate_memory(((uintptr_t) pinctrl_ao_void) + page_offset, fsr, regs);
     } else {
-        return emulate_memory(((uintptr_t) data) + addr, fsr, regs);
+        // LOG_VMM("emulating memory at guest vaddr 0x%x\n", guest_fault_vaddr);
+        return emulate_memory(guest_fault_vaddr, fsr, regs);
     }
 }
 

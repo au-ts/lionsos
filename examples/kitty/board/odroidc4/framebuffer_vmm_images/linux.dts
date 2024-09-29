@@ -2234,7 +2234,7 @@
 					};
 
 					uart-a-ao {
-						phandle = <0xfc>;
+						phandle = <0x1e>;
 
 						mux {
 							groups = "uart_ao_a_tx\0uart_ao_a_rx";
@@ -2416,10 +2416,10 @@
 				compatible = "amlogic,meson-gx-uart\0amlogic,meson-ao-uart";
 				reg = <0x00 0x3000 0x00 0x18>;
 				interrupts = <0x00 0xc1 0x01>;
-				clocks = <0x1b 0x23 0x04 0x1b>;
+				clocks = <0x11 0x19 0x04 0x11>;
 				clock-names = "xtal\0pclk\0baud";
 				status = "okay";
-				pinctrl-0 = <0xfc>;
+				pinctrl-0 = <0x1e>;
 				pinctrl-names = "default";
 			};
 
@@ -2738,7 +2738,7 @@
 		};
 
 		usb@ffe09000 {
-			status = "okay";
+			status = "disabled";
 			compatible = "amlogic,meson-g12a-usb-ctrl";
 			reg = <0x00 0xffe09000 0x00 0xa0>;
 			interrupts = <0x00 0x10 0x04>;

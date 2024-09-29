@@ -358,6 +358,7 @@
 						};
 					};
 
+
 					cec_ao_a_h {
 						phandle = <0xfa>;
 
@@ -521,7 +522,7 @@
 					};
 
 					i2c1-sda-x {
-
+						phandle = <0xfc>;
 						mux {
 							groups = "i2c1_sda_x";
 							function = "i2c1";
@@ -531,7 +532,7 @@
 					};
 
 					i2c1-sck-x {
-
+						phandle = <0xfd>;
 						mux {
 							groups = "i2c1_sck_x";
 							function = "i2c1";
@@ -2618,12 +2619,13 @@
 
 			i2c@1e000 {
 				compatible = "amlogic,meson-axg-i2c";
-				status = "disabled";
+				status = "okay";
 				reg = <0x00 0x1e000 0x00 0x20>;
 				interrupts = <0x00 0xd6 0x01>;
 				#address-cells = <0x01>;
 				#size-cells = <0x00>;
 				clocks = <0x02 0x18>;
+				pinctrl-0 = <0xfc 0xfd>;
 			};
 
 			i2c@1f000 {
