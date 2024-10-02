@@ -1,4 +1,3 @@
-# File system makefile
 FS_DIR := .
 
 LIONSOS := ../../..
@@ -14,35 +13,44 @@ FF15_SRC := $(LIONSOS)/dep/ff15
 all: $(EXEC)
 
 # Compiler flags
-CFLAGS := -Wall \
-          -Wextra \
-		  -target $(TARGET) \
-		  -ffreestanding \
-		  -g \
-		  -O0 \
-		  -mstrict-align \
-		  -I$(LIBC_DIR)/include \
-		  -I$(BOARD_DIR)/include \
-		  -I$(LIONSOS)/dep \
-		  -I$(LIONSOS)/include/lions \
-          -I$(LIONSOS)/dep/sddf/include \
-		  -I$(FS_DIR) \
-		  -I$(FF15_SRC) \
-		  -I$(EXAMPLE_SRC_DIR)
+CFLAGS := \
+	-Wall \
+	-Wextra \
+	-target $(TARGET) \
+	-ffreestanding \
+	-g \
+	-O0 \
+	-mstrict-align \
+	-I$(LIBC_DIR)/include \
+	-I$(BOARD_DIR)/include \
+	-I$(LIONSOS)/dep \
+	-I$(LIONSOS)/include/lions \
+	-I$(LIONSOS)/dep/sddf/include \
+	-I$(FS_DIR) \
+	-I$(FF15_SRC) \
+	-I$(EXAMPLE_SRC_DIR)
 
-LDFLAGS := -L$(LIBC_DIR)/lib -lc -L$(FATFS_OBJECT_DIR)/libmicrokitco -lmicrokitco
+LDFLAGS := \
+	-L$(LIBC_DIR)/lib \
+	-L$(FATFS_OBJECT_DIR)/libmicrokitco \
+	-L$(BOARD_DIR)/lib \
 
-LIBS := -lmicrokit -Tmicrokit.ld -L$(BOARD_DIR)/lib
+LIBS := \
+	-lmicrokit \
+	-Tmicrokit.ld \
+	-lc \
+	-lmicrokitco
 
-FATFS_OBJS :=   ff.o \
-				ffunicode.o \
-                fatfs_event.o \
-				fatfs_op.o \
-				co_helper.o \
-				fs_diskio.o \
-				printf.o \
-				putchar_debug.o \
-				assert.o
+FATFS_OBJS := \
+	ff.o \
+	ffunicode.o \
+	fatfs_event.o \
+	fatfs_op.o \
+	co_helper.o \
+	fs_diskio.o \
+	printf.o \
+	putchar_debug.o \
+	assert.o
 
 LIBMICROKITCO_OBJ := libmicrokitco/libmicrokitco.a
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
@@ -95,4 +103,3 @@ $(FATFS_OBJECT_DIR)/assert.o: $(LIONSOS)/dep/sddf/util/assert.c Makefile
 
 $(BUILD_DIR)/fatfs.elf: $(addprefix $(FATFS_OBJECT_DIR)/, $(FATFS_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-# File system building end
