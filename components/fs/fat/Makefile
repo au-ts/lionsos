@@ -9,6 +9,8 @@ EXEC := $(BUILD_DIR)/fatfs.elf
 
 FATFS_OBJECT_DIR := $(BUILD_DIR)/fatfs
 
+FF15_SRC := $(LIONSOS)/dep/ff15
+
 all: $(EXEC)
 
 # Compiler flags
@@ -25,6 +27,7 @@ CFLAGS := -Wall \
 		  -I$(LIONSOS)/include/lions \
           -I$(LIONSOS)/dep/sddf/include \
 		  -I$(FS_DIR) \
+		  -I$(FF15_SRC) \
 		  -I$(EXAMPLE_SRC_DIR)
 
 LDFLAGS := -L$(LIBC_DIR)/lib -lc -L$(FATFS_OBJECT_DIR)/libmicrokitco -lmicrokitco
@@ -63,10 +66,10 @@ $(FATFS_OBJECT_DIR)/$(LIBMICROKITCO_OBJ):
 $(FATFS_OBJECT_DIR):
 	mkdir -p $(FATFS_OBJECT_DIR)
 
-$(FATFS_OBJECT_DIR)/ff.o: $(FS_DIR)/ff15/source/ff.c Makefile | $(FATFS_OBJECT_DIR)
+$(FATFS_OBJECT_DIR)/ff.o: $(FF15_SRC)/source/ff.c Makefile | $(FATFS_OBJECT_DIR)
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(FATFS_OBJECT_DIR)/ffunicode.o: $(FS_DIR)/ff15/source/ffunicode.c Makefile
+$(FATFS_OBJECT_DIR)/ffunicode.o: $(FF15_SRC)/source/ffunicode.c Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 $(FATFS_OBJECT_DIR)/fatfs_event.o: $(FS_DIR)/fatfs_event.c $(COROUTINE_OBJS) Makefile
