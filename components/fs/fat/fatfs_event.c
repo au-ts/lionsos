@@ -16,8 +16,8 @@
 blk_queue_handle_t blk_queue_handle_memory;
 blk_queue_handle_t *blk_queue_handle = &blk_queue_handle_memory;
 
-struct fs_queue *fatfs_command_queue;
-struct fs_queue *fatfs_completion_queue;
+fs_queue_t *fatfs_command_queue;
+fs_queue_t *fatfs_completion_queue;
 
 blk_req_queue_t *request;
 blk_resp_queue_t *response;
