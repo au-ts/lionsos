@@ -278,14 +278,12 @@ void fat_pwrite(void) {
 
     RET = f_write(file, data, btw, &bw);
 
-#ifdef FS_DEBUG_PRINT
     if (RET == FR_OK) {
         LOG_FATFS("fat_write: byte written: %u, content written: \n%.*s\n", bw, bw, (char *)data);
     }
     else {
         LOG_FATFS("fat_write: error");
     }
-#endif
 
     args->status = RET;
     args->result.write.len_written = bw;
@@ -327,14 +325,12 @@ void fat_pread(void) {
 
     RET = f_read(file, data, btr, &br);
 
-#ifdef FS_DEBUG_PRINT
     if (RET == FR_OK) {
         LOG_FATFS("fat_read: byte read: %u, content read: \n%.*s\n", br, br, (char *)data);
     }
     else {
         LOG_FATFS("fat_read: error");
     }
-#endif
 
     args->status = RET;
     args->result.read.len_read = br;

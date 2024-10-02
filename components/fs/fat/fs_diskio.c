@@ -167,9 +167,6 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 
 			res = (DRESULT)(uintptr_t)co_get_args();
 			memcpy(buff, (void*)(read_data_offset + blk_data_region + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer)), sector_size * count);
-#ifdef FS_DEBUG_PRINT
-			// print_sector_data(buff, 512);
-#endif
 			break;
 		}
 	}
@@ -249,9 +246,6 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 			blk_request_pushed = true;
 			co_block();
 			res = (DRESULT)(uintptr_t)co_get_args();
-#ifdef FS_DEBUG_PRINT
-			// print_sector_data(buff, 512);
-#endif
 			break;
 		}
 	}

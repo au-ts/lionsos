@@ -102,7 +102,6 @@ void setup_request(int32_t index, fs_msg_t* message) {
 }
 
 // For debug
-#ifdef FS_DEBUG_PRINT
 void print_sector_data(uint8_t *buffer, unsigned long size) {
     for (unsigned long i = 0; i < size; i++) {
         if (i % 16 == 0) {
@@ -112,7 +111,6 @@ void print_sector_data(uint8_t *buffer, unsigned long size) {
     }
     LOG_FATFS("\n");
 }
-#endif
 
 _Static_assert(BLK_QUEUE_SIZE_CLI_FATFS >= WORKER_COROUTINE_NUM, 
     "The size of queue between fs and blk should be at least the size of WORKER_COROUTINE_NUM");
