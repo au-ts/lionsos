@@ -19,11 +19,11 @@ blk_queue_handle_t *blk_queue_handle = &blk_queue_handle_memory;
 fs_queue_t *fatfs_command_queue;
 fs_queue_t *fatfs_completion_queue;
 
-blk_req_queue_t *request;
-blk_resp_queue_t *response;
+blk_req_queue_t *blk_request;
+blk_resp_queue_t *blk_response;
 
 // Config pointed to the SDDF_blk config
-blk_storage_info_t *config;
+blk_storage_info_t *blk_config;
 
 uint64_t coroutine_stack_one;
 uint64_t coroutine_stack_two;
@@ -118,7 +118,7 @@ _Static_assert(BLK_QUEUE_SIZE_CLI_FATFS >= WORKER_COROUTINE_NUM,
 void init(void) {
     // Init the block device queue
     // Have to make sure who initialize this SDDF queue
-    blk_queue_init(blk_queue_handle, request, response, BLK_QUEUE_SIZE_CLI_FATFS);
+    blk_queue_init(blk_queue_handle, blk_request, blk_response, BLK_QUEUE_SIZE_CLI_FATFS);
     /*
        This part of the code is for setting up the coroutine pool by
        assign stacks and size of the stack to the pool

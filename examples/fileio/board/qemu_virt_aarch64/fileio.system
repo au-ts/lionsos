@@ -216,10 +216,10 @@
         <map mr="fs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="fatfs_command_queue" />
         <map mr="fs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="fatfs_completion_queue" />
 
-        <map mr="blk_client_config" vaddr="0x40_000_000" perms="r" cached="false" setvar_vaddr="config" />
+        <map mr="blk_client_config" vaddr="0x40_000_000" perms="r" cached="false" setvar_vaddr="blk_config" />
 
-        <map mr="blk_client_request" vaddr="0x40_200_000" perms="rw" cached="false" setvar_vaddr="request" />
-        <map mr="blk_client_response" vaddr="0x40_400_000" perms="rw" cached="false" setvar_vaddr="response" />
+        <map mr="blk_client_request" vaddr="0x40_200_000" perms="rw" cached="false" setvar_vaddr="blk_request" />
+        <map mr="blk_client_response" vaddr="0x40_400_000" perms="rw" cached="false" setvar_vaddr="blk_response" />
         <map mr="blk_client_data" vaddr="0x40_800_000" perms="rw" cached="true" setvar_vaddr="blk_data_region" />
 
         <map mr="fs_metadata" vaddr="0x42_000_000" perms="rw" cached="true" setvar_vaddr="fs_metadata" />

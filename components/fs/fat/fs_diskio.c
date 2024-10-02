@@ -19,7 +19,7 @@ extern bool blk_request_pushed;
 // This is the offset of the data buffer shared between file system and blk device driver
 extern uint64_t fs_metadata;
 
-extern blk_storage_info_t *config;
+extern blk_storage_info_t *blk_config;
 
 extern char *blk_data_region;
 
@@ -54,34 +54,34 @@ DSTATUS disk_initialize (
 	#endif
 
     // Check whether the block device is ready or not
-	if (!config->ready) {
+	if (!blk_config->ready) {
 		return RES_NOTRDY;
 	}
 
 	// The sector size should be a mutiple of 512, BLK_TRANSFER_SIZE % SECTOR_SIZE should be 0
 	// BLK_TRANSFER_SIZE % SECTOR_SIZE should be a power of 2
-	assert(config->sector_size % 512 == 0 && "Sector size must be a multiple of 512");
-	assert(config->sector_size <= BLK_TRANSFER_SIZE && "BLK_TRANSFER_SIZE must be the same or larger than sector size");
-	assert(IS_POWER_OF_2(BLK_TRANSFER_SIZE / config->sector_size) && "BLK_TRANSFER_SIZE / SECTOR_SIZE must be a power of 2");
+	assert(blk_config->sector_size % 512 == 0 && "Sector size must be a multiple of 512");
+	assert(blk_config->sector_size <= BLK_TRANSFER_SIZE && "BLK_TRANSFER_SIZE must be the same or larger than sector size");
+	assert(IS_POWER_OF_2(BLK_TRANSFER_SIZE / blk_config->sector_size) && "BLK_TRANSFER_SIZE / SECTOR_SIZE must be a power of 2");
 
 	switch (pdrv) {
 	default:
 		LOG_FATFS("Block Storage Information:\n");
 		LOG_FATFS("--------------------------\n");
-		LOG_FATFS("Serial Number: %s\n", config->serial_number);
-		LOG_FATFS("Read-Only: %s\n", config->read_only ? "Yes" : "No");
-		LOG_FATFS("Ready: %s\n", config->ready ? "Yes" : "No");
-		LOG_FATFS("Sector Size: %u bytes\n", config->sector_size);
-		LOG_FATFS("Optimal Block Size: %u units (%u bytes)\n", 
-			config->block_size, config->block_size * BLK_TRANSFER_SIZE);
-		LOG_FATFS("Queue Depth: %u\n", config->queue_depth);
+		LOG_FATFS("Serial Number: %s\n", blk_config->serial_number);
+		LOG_FATFS("Read-Only: %s\n", blk_config->read_only ? "Yes" : "No");
+		LOG_FATFS("Ready: %s\n", blk_config->ready ? "Yes" : "No");
+		LOG_FATFS("Sector Size: %u bytes\n", blk_config->sector_size);
+		LOG_FATFS("Optimal Block Size: %u units (%u bytes)\n",
+			blk_config->block_size, blk_config->block_size * BLK_TRANSFER_SIZE);
+		LOG_FATFS("Queue Depth: %u\n", blk_config->queue_depth);
 		LOG_FATFS("Geometry:\n");
-		LOG_FATFS("  Cylinders: %u\n", config->cylinders);
-		LOG_FATFS("  Heads: %u\n", config->heads);
-		LOG_FATFS("  Blocks: %u\n", config->blocks);
-		LOG_FATFS("Total Capacity: %llu units (%llu bytes)\n", 
-			(unsigned long long)config->capacity, 
-			(unsigned long long)(config->capacity * BLK_TRANSFER_SIZE));
+		LOG_FATFS("  Cylinders: %u\n", blk_config->cylinders);
+		LOG_FATFS("  Heads: %u\n", blk_config->heads);
+		LOG_FATFS("  Blocks: %u\n", blk_config->blocks);
+		LOG_FATFS("Total Capacity: %llu units (%llu bytes)\n",
+			(unsigned long long)blk_config->capacity,
+			(unsigned long long)(blk_config->capacity * BLK_TRANSFER_SIZE));
 		LOG_FATFS("--------------------------\n");
 		return RES_OK;
 	}
@@ -108,7 +108,7 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
 	default:
 		if (cmd == GET_SECTOR_SIZE) {
 			WORD *size = buff;
-			*size = config->sector_size;
+			*size = blk_config->sector_size;
 			res = RES_OK;
 		}
 		if (cmd == CTRL_SYNC) {
@@ -137,7 +137,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 			// Accroding the protocol, all the read/write addr passed to the blk_virt should be page aligned
 			// Substract the handle with one as the work coroutine ID starts at 1, not 0
 			uint64_t read_data_offset = coroutine_blk_addr[handle - 1];
-			uint16_t sector_size = config->sector_size;
+			uint16_t sector_size = blk_config->sector_size;
 			// This is the same as BLK_TRANSFER_SIZE / sector_size
 			uint16_t sector_per_transfer = DIV_POWER_OF_2(BLK_TRANSFER_SIZE, sector_size);
 			uint32_t sddf_sector = DIV_POWER_OF_2(sector, sector_per_transfer);
@@ -180,7 +180,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 			int handle = co_get_handle();
 			// Substract the handle with one as the work coroutine ID starts at 1, not 0
 			uint64_t write_data_offset = coroutine_blk_addr[handle - 1];
-			uint16_t sector_size = config->sector_size;
+			uint16_t sector_size = blk_config->sector_size;
 			if (sector_size == BLK_TRANSFER_SIZE) {
 				assert(MUL_POWER_OF_2(count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
 
