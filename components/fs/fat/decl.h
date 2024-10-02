@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fatfs_config.h"
+#include "config.h"
 #include "ff15/source/ff.h"
 #include <fs/protocol.h>
 

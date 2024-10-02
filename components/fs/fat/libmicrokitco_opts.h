@@ -1,3 +1,3 @@
-#include "fatfs_config.h"
+#include "config.h"
 
 #define LIBMICROKITCO_MAX_COTHREADS THREAD_NUM

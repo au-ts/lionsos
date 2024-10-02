@@ -44,9 +44,9 @@ LIBS := \
 FATFS_OBJS := \
 	ff.o \
 	ffunicode.o \
-	fatfs_event.o \
-	fatfs_op.o \
-	fs_diskio.o \
+	event.o \
+	op.o \
+	io.o \
 	printf.o \
 	putchar_debug.o \
 	assert.o
@@ -79,13 +79,13 @@ $(FATFS_OBJECT_DIR)/ff.o: $(FF15_SRC)/source/ff.c Makefile | $(FATFS_OBJECT_DIR)
 $(FATFS_OBJECT_DIR)/ffunicode.o: $(FF15_SRC)/source/ffunicode.c Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(FATFS_OBJECT_DIR)/fatfs_event.o: $(FS_DIR)/fatfs_event.c $(LIBMICROKITCO_OBJS) Makefile
+$(FATFS_OBJECT_DIR)/event.o: $(FS_DIR)/event.c $(LIBMICROKITCO_OBJS) Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(FATFS_OBJECT_DIR)/fatfs_op.o: $(FS_DIR)/fatfs_op.c Makefile
+$(FATFS_OBJECT_DIR)/op.o: $(FS_DIR)/op.c Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(FATFS_OBJECT_DIR)/fs_diskio.o: $(FS_DIR)/fs_diskio.c Makefile
+$(FATFS_OBJECT_DIR)/io.o: $(FS_DIR)/io.c Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 $(FATFS_OBJECT_DIR)/printf.o: $(LIONSOS)/dep/sddf/util/printf.c Makefile

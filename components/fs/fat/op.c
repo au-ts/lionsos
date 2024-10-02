@@ -1,11 +1,11 @@
-#include "fatfs_decl.h"
+#include "decl.h"
 #include "ff15/source/ff.h"
 #include <libmicrokitco/libmicrokitco.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <fs/protocol.h>
-#include "fatfs_config.h"
+#include "config.h"
 
 /*
 This file define a bunch of wrapper functions of FATFs functions so those functions can be run in the 

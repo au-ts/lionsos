@@ -25,13 +25,13 @@ When the disk I/O operation completes, the event thread is notified (akin to the
 - **ff15 folder**:
 Contains the implementation of Elm-Chan's FatFs (version 0.15 with patch 3).
 
-- **fatfs_event.c**:
+- **event.c**:
 This file manages the initialization process, event handling, and request assignment. It handles enqueuing requests, waking up worker threads, and overall event management.
 
-- **fatfs_op.c**:
-Defines wrapper functions executed by worker threads. These functions perform input validation, prepare arguments, and call the actual file system operations defined in ff15/source/ff.h. The interaction between fatfs_event.c and fatfs_op.c is facilitated by an array of operation functions, which fatfs_event.c assigns to the worker threads.
+- **op.c**:
+Defines wrapper functions executed by worker threads. These functions perform input validation, prepare arguments, and call the actual file system operations defined in ff15/source/ff.h. The interaction between event.c and op.c is facilitated by an array of operation functions, which event.c assigns to the worker threads.
 
-- **fs_diskio.c**:
+- **io.c**:
 Contains disk I/O functions, which are called by the file system operations. For instance, if the file system needs to read a specific sector from the disk, it calls disk_read. Disk operations are queued as requests to the sddf queue between the file system and the block device (blk virt), where worker threads may block until responses are received.
 
 # Lifecycle of a File System Operation
@@ -50,7 +50,7 @@ Once validated, the event thread assigns the corresponding function (from the op
 During execution, the file system function may initiate one or more disk operations, such as reading or writing data. These operations are enqueued as block read/write requests in the queue between the file system and the block subsystem (blk virtualizer).
 
 - **Worker Thread Blocking and Wake-Up**:
-After enqueuing the disk request, the worker thread goes to sleep, awaiting the response from the block subsystem. Once fatfs_event.c receives the response, it wakes up the worker thread, which then continues processing.
+After enqueuing the disk request, the worker thread goes to sleep, awaiting the response from the block subsystem. Once event.c receives the response, it wakes up the worker thread, which then continues processing.
 
 - **Completion**:
 The operation is completed, and the result is sent back to the client via the response queue.

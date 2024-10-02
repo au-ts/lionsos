@@ -1,4 +1,4 @@
-#include "fatfs_decl.h"
+#include "decl.h"
 #include "ff15/source/ff.h"
 #include "ff15/source/diskio.h"
 #include <sddf/blk/queue.h>

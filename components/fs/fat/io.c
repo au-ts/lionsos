@@ -1,6 +1,6 @@
 #include "ff15/source/ff.h"
 #include "ff15/source/diskio.h"
-#include "fatfs_decl.h"
+#include "decl.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <sddf/blk/queue.h>
