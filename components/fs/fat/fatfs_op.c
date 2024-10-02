@@ -164,7 +164,7 @@ void fat_mount(void) {
     co_data_t *args = co_get_args();
     if (fs_status[0] != FREE) {
         args->status = FR_INVALID_PARAMETER;
-        co_kill();
+        return;
     }
     fs_status[0] = INUSE;
     FRESULT RET = f_mount(&(fatfs[0]), "", 1);
@@ -173,14 +173,13 @@ void fat_mount(void) {
     }
     LOG_FATFS("Mounting file system result: %d\n", RET);
     args->status = RET;
-    co_kill();
 }
 
 void fat_unmount(void) {
     co_data_t *args = co_get_args();
     if (fs_status[0] != INUSE) {
         args->status = FR_INVALID_PARAMETER;
-        co_kill();
+        return;
     }
     fs_status[0] = CLEANUP;
     FRESULT RET = f_unmount("");
@@ -191,7 +190,6 @@ void fat_unmount(void) {
         fs_status[0] = INUSE;
     }
     args->status = RET;
-    co_kill();
 }
 
 void fat_open(void) {
@@ -208,7 +206,7 @@ void fat_open(void) {
     FRESULT RET = validate_and_copy_path(buffer, size, filepath);
     if (RET != FR_OK) {
         args->status = RET;
-        co_kill();
+        return;
     }
 
     // Add open flag checking and mapping here
@@ -217,7 +215,7 @@ void fat_open(void) {
     uint32_t fd = find_free_file_obj();
     if (fd == MAX_OPENED_FILENUM) {
         args->status = FR_TOO_MANY_OPEN_FILES;
-        co_kill();
+        return;
     }
 
     // Set the position to INUSE to indicate this file structure is in use
@@ -239,8 +237,6 @@ void fat_open(void) {
     
     args->status = RET;
     args->result.open.fd = fd;
-
-    co_kill();
 }
 
 void fat_pwrite(void) {
@@ -257,7 +253,7 @@ void fat_pwrite(void) {
         LOG_FATFS("fat_write: Trying to write into invalid memory region or invalid fd provided\n");
         args->result.write.len_written = 0;
         args->status = RET;
-        co_kill();
+        return;
     }
 
     void* data = client_data_addr + buffer;
@@ -269,7 +265,7 @@ void fat_pwrite(void) {
     if (RET != FR_OK) {
         args->result.write.len_written = 0;
         args->status = RET;
-        co_kill();
+        return;
     }
     
     uint32_t bw = 0;
@@ -285,8 +281,6 @@ void fat_pwrite(void) {
 
     args->status = RET;
     args->result.write.len_written = bw;
-
-    co_kill();
 }
 
 void fat_pread(void) {
@@ -301,7 +295,7 @@ void fat_pread(void) {
         LOG_FATFS("fat_read: Trying to write into invalid memory region or invalid fd provided\n");
         args->status = RET;
         args->result.read.len_read = 0;
-        co_kill();
+        return;
     }
 
     void* data = client_data_addr + buffer;
@@ -316,7 +310,7 @@ void fat_pread(void) {
     if (RET != FR_OK) {
         args->status = RET;
         args->result.read.len_read = 0;
-        co_kill();
+        return;
     }
     
     uint32_t br = 0;
@@ -332,8 +326,6 @@ void fat_pread(void) {
 
     args->status = RET;
     args->result.read.len_read = br;
-
-    co_kill();
 }
 
 void fat_close(void) {
@@ -344,7 +336,7 @@ void fat_close(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_close: Invalid file descriptor\n");
         args->status = RET;
-        co_kill();
+        return;
     }
 
     file_status[fd] = CLEANUP;
@@ -358,7 +350,6 @@ void fat_close(void) {
     }
 
     args->status = RET;
-    co_kill();
 }
 
 // Mode attribute
@@ -380,7 +371,7 @@ void fat_stat(void) {
     FRESULT RET = within_data_region(output_buffer, sizeof(fs_stat_t));
     if (RET != FR_OK || (RET = validate_and_copy_path(path, path_len, filepath)) != FR_OK || size < sizeof(fs_stat_t)) {
         args->status = RET;
-        co_kill();
+        return;
     }
 
     fs_stat_t* file_stat = (fs_stat_t *)(client_data_addr + output_buffer);
@@ -391,7 +382,7 @@ void fat_stat(void) {
     RET = f_stat(filepath, &fileinfo);
     if (RET != FR_OK) {
         args->status = RET;
-        co_kill();
+        return;
     }
     
     memset(file_stat, 0, sizeof(fs_stat_t));
@@ -423,7 +414,6 @@ void fat_stat(void) {
     }
     
     args->status = RET;
-    co_kill();
 }
 
 void fat_fsize(void) {
@@ -435,8 +425,6 @@ void fat_fsize(void) {
 
     args->status = FR_OK;
     args->result.fsize.size = size;
-
-    co_kill();
 }
 
 void fat_rename(void) {
@@ -455,13 +443,12 @@ void fat_rename(void) {
     FRESULT RET = validate_and_copy_path(oldpath_buffer, oldpath_len, oldpath);
     if (RET != FR_OK || (RET = validate_and_copy_path(newpath_buffer, newpath_len, newpath)) != FR_OK) {
         args->status = RET;
-        co_kill();
+        return;
     }
 
     RET = f_rename(oldpath, newpath);
     
     args->status = RET;
-    co_kill();
 }
 
 void fat_unlink(void) {
@@ -477,14 +464,13 @@ void fat_unlink(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_unlink: Invalid memory region\n");
         args->status = RET;
-        co_kill();
+        return;
     }
 
     RET = f_unlink(dirpath);
     
 
     args->status = RET;
-    co_kill();
 }
 
 void fat_truncate(void) {
@@ -499,7 +485,7 @@ void fat_truncate(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_mkdir: Invalid memory region\n");
         args->status = RET;
-        co_kill();
+        return;
     }
 
     RET = f_lseek(&files[fd], len);
@@ -507,13 +493,12 @@ void fat_truncate(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_truncate: Invalid file offset\n");
         args->status = RET;
-        co_kill();
+        return;
     }
 
     RET = f_truncate(&files[fd]);
 
     args->status = RET;
-    co_kill();
 }
 
 void fat_mkdir(void) {
@@ -529,13 +514,12 @@ void fat_mkdir(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_mkdir: Invalid memory region\n");
         args->status = RET;
-        co_kill();
+        return;
     }
 
     RET = f_mkdir(dirpath);
 
     args->status = RET;
-    co_kill();
 }
 
 // This seems to do the exact same thing as fat_unlink
@@ -552,13 +536,12 @@ void fat_rmdir(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_mkdir: Invalid memory region\n");
         args->status = RET;
-        co_kill();
+        return;
     }
 
     RET = f_rmdir(dirpath);
 
     args->status = RET;
-    co_kill();
 }
 
 void fat_opendir(void) {
@@ -575,13 +558,13 @@ void fat_opendir(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_readdir: Invalid buffer\n");
         args->status = RET;
-        co_kill();
+        return;
     }
 
     uint32_t fd = find_free_dir_object();
     if (fd == MAX_OPENED_DIRNUM) {
         args->status = FR_TOO_MANY_OPEN_FILES;
-        co_kill();
+        return;
     }
     
     DIR* dir = &(dirs[fd]);
@@ -597,12 +580,11 @@ void fat_opendir(void) {
         args->status = RET;
         // Free this Dir structure
         dir_status[fd] = FREE;
-        co_kill();
+        return;
     }
 
     args->status = RET;
     args->result.opendir.fd = fd;
-    co_kill();
 }
 
 void fat_readdir(void) {
@@ -620,7 +602,7 @@ void fat_readdir(void) {
     if (RET != FR_OK || (RET = validate_dir_descriptor(fd)) != FR_OK) {
         LOG_FATFS("fat_readdir: Invalid dir descriptor or Invalid buffer\n");
         args->status = RET;
-        co_kill();
+        return;
     }
 
     void* name = client_data_addr + buffer;
@@ -646,8 +628,6 @@ void fat_readdir(void) {
     }
 
     args->status = RET;
-
-    co_kill();
 }
 
 // Not sure if this one is implemented correctly
@@ -660,7 +640,7 @@ void fat_telldir(void){
     if (RET != FR_OK) {
         LOG_FATFS("fat_telldir: Invalid dir descriptor\n");
         args->status = RET;
-        co_kill();
+        return;
     }
 
     DIR* dp = &(dirs[fd]);
@@ -669,8 +649,6 @@ void fat_telldir(void){
 
     args->status = RET;
     args->result.telldir.location = offset;
-
-    co_kill();
 }
 
 void fat_rewinddir(void) {
@@ -682,13 +660,12 @@ void fat_rewinddir(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_telldir: Invalid dir descriptor\n");
         args->status = RET;
-        co_kill();
+        return;
     }
 
     RET = f_readdir(&dirs[fd], 0);
 
     args->status = RET;
-    co_kill();
 }
 
 void fat_sync(void) {
@@ -701,13 +678,12 @@ void fat_sync(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_sync: Invalid file descriptor %lu\n", fd);
         args->status = RET;
-        co_kill();
+        return;
     }
 
     RET = f_sync(&(files[fd]));
 
     args->status = RET;
-    co_kill();
 }
 
 void fat_closedir(void) {
@@ -719,7 +695,7 @@ void fat_closedir(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_closedir: Invalid dir descriptor\n");
         args->status = RET;
-        co_kill();
+        return;
     }
 
     dir_status[fd] = CLEANUP;
@@ -734,7 +710,6 @@ void fat_closedir(void) {
     }
 
     args->status = RET;
-    co_kill();
 }
 
 // Inefficient implementation of seekdir
@@ -751,7 +726,7 @@ void fat_seekdir(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_seekdir: Invalid dir descriptor\n");
         args->status = RET;
-        co_kill();
+        return;
     }
     
     RET = f_readdir(&dirs[fd], 0);
@@ -760,11 +735,10 @@ void fat_seekdir(void) {
     for (int64_t i = 0; i < loc; i++) {
         if (RET != FR_OK) {
             args->status = RET;
-            co_kill();
+            return;
         }
         RET = f_readdir(&dirs[fd], &fno);
     }
 
     args->status = RET;
-    co_kill();
 }

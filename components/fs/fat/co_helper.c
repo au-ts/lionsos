@@ -27,11 +27,6 @@ void co_block() {
     microkit_cothread_semaphore_wait(&sem[handle]);
 }
 
-void co_kill() {
-    microkit_cothread_ref_t handle = microkit_cothread_my_handle();
-    microkit_cothread_destroy(handle);
-}
-
 void co_wakeup(co_handle_t handle) {
     microkit_cothread_semaphore_signal(&sem[handle]);
 }
