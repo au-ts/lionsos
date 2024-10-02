@@ -356,7 +356,7 @@ def test_truncate_using_open_flag(directory):
 
 
 def run_tests():
-    test_dir_path = "/home/li/test_dir"
+    test_dir_path = "/test_dir"
 
     # Run the test environment setup
     test_environment(test_dir_path)
