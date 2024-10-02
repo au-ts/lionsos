@@ -35,9 +35,7 @@ static inline FRESULT within_data_region(uint64_t offset, uint64_t buffer_size) 
     if ((offset < DATA_REGION_SIZE) && (buffer_size <= DATA_REGION_SIZE - offset)) {
         return FR_OK;
     }
-    else {
-        return FR_INVALID_PARAMETER;
-    }
+    return FR_INVALID_PARAMETER;
 }
 
 // Checking if the descriptor is mapped to a valid object
@@ -45,7 +43,7 @@ static inline FRESULT validate_file_descriptor(uint64_t fd) {
     if ((fd < MAX_OPENED_FILENUM) && file_status[fd] == INUSE) {
         return FR_OK;
     }
-    else return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER;
 }
 
 // Checking if the descriptor is mapped to a valid object
@@ -53,7 +51,7 @@ static inline FRESULT validate_dir_descriptor(uint64_t fd) {
     if ((fd < MAX_OPENED_DIRNUM) && dir_status[fd] == INUSE) {
         return FR_OK;
     }
-    else return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER;
 }
 
 static FRESULT validate_and_copy_path(uint64_t path, uint64_t len, char* memory) {
