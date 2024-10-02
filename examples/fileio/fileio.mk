@@ -111,7 +111,7 @@ include ${BLK_COMPONENTS}/blk_components.mk
 # nproc=2
 
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a
-	cp $(LIONSOS)/components/fs/fat/fs_test.py .
+	cp $(LIONSOS)/examples/fileio/fs_test.py .
 	cp $(LIONSOS)/examples/fileio/manifest.py .
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
