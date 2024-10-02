@@ -25,19 +25,19 @@ extern char *blk_data_region;
 /*
  *  This def restrict the maximum cluster size that the fatfs can have if MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE is enabled.
  *  This restriction should not cause any problem as long as the BLK_REGION_SIZE between file system and blk virt is not
- *  too small. For example, 32GB - 256TB disks are recommended to have a sector size of 128KB, and if you have 4 worker coroutines,
+ *  too small. For example, 32GB - 256TB disks are recommended to have a sector size of 128KB, and if you have 4 worker threads,
  *  BLK_REGION_SIZE should be bigger than 512KB. In fileio example, BLK_REGION_SIZE is set to 2 MB.
  */
-#define MAX_CLUSTER_SIZE (BLK_REGION_SIZE / WORKER_COROUTINE_NUM)
+#define MAX_CLUSTER_SIZE (BLK_REGION_SIZE / WORKER_THREAD_NUM)
 
-uint64_t coroutine_blk_addr[WORKER_COROUTINE_NUM];
+uint64_t thread_blk_addr[WORKER_THREAD_NUM];
 
 #define IS_POWER_OF_2(x) ((x) && !((x) & ((x) - 1)))
 
 #endif
 
 void block() {
-    extern microkit_cothread_sem_t sem[WORKER_COROUTINE_NUM + 1];
+    extern microkit_cothread_sem_t sem[WORKER_THREAD_NUM + 1];
     microkit_cothread_ref_t handle = microkit_cothread_my_handle();
     microkit_cothread_semaphore_wait(&sem[handle]);
 }
@@ -50,9 +50,9 @@ DSTATUS disk_initialize (
     int result;
 
     #ifdef MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE
-    // coroutine_blk_addr[0] is not initialized as that is the slot for event coroutine
-    for (uint16_t i = 0; i < WORKER_COROUTINE_NUM; i++) {
-        coroutine_blk_addr[i] = i * MAX_CLUSTER_SIZE;
+    // thread_blk_addr[0] is not initialized as that is the slot for event thread
+    for (uint16_t i = 0; i < WORKER_THREAD_NUM; i++) {
+        thread_blk_addr[i] = i * MAX_CLUSTER_SIZE;
     }
     #endif
 
@@ -125,8 +125,8 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     DRESULT res;
     int handle = microkit_cothread_my_handle();
     // Accroding the protocol, all the read/write addr passed to the blk_virt should be page aligned
-    // Substract the handle with one as the work coroutine ID starts at 1, not 0
-    uint64_t read_data_offset = coroutine_blk_addr[handle - 1];
+    // Substract the handle with one as the worker thread ID starts at 1, not 0
+    uint64_t read_data_offset = thread_blk_addr[handle - 1];
     uint16_t sector_size = blk_config->sector_size;
     // This is the same as BLK_TRANSFER_SIZE / sector_size
     uint16_t sector_per_transfer = DIV_POWER_OF_2(BLK_TRANSFER_SIZE, sector_size);
@@ -163,8 +163,8 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
     DRESULT res;
     int handle = microkit_cothread_my_handle();
-    // Substract the handle with one as the work coroutine ID starts at 1, not 0
-    uint64_t write_data_offset = coroutine_blk_addr[handle - 1];
+    // Substract the handle with one as the worker thread ID starts at 1, not 0
+    uint64_t write_data_offset = thread_blk_addr[handle - 1];
     uint16_t sector_size = blk_config->sector_size;
     if (sector_size == BLK_TRANSFER_SIZE) {
         assert(MUL_POWER_OF_2(count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);

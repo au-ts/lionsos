@@ -14,7 +14,7 @@
 #define SERVER_CH 2
 
 co_control_t co_controller_mem;
-microkit_cothread_sem_t sem[WORKER_COROUTINE_NUM + 1];
+microkit_cothread_sem_t sem[WORKER_THREAD_NUM + 1];
 
 blk_queue_handle_t blk_queue_handle_memory;
 blk_queue_handle_t *blk_queue_handle = &blk_queue_handle_memory;
@@ -28,10 +28,10 @@ blk_resp_queue_t *blk_response;
 // Config pointed to the SDDF_blk config
 blk_storage_info_t *blk_config;
 
-uint64_t coroutine_stack_one;
-uint64_t coroutine_stack_two;
-uint64_t coroutine_stack_three;
-uint64_t coroutine_stack_four;
+uint64_t worker_thread_stack_one;
+uint64_t worker_thread_stack_two;
+uint64_t worker_thread_stack_three;
+uint64_t worker_thread_stack_four;
 
 char *client_data_addr;
 
@@ -52,11 +52,11 @@ typedef enum {
 typedef struct FS_request{
     /* Client side cmd info */
     uint64_t cmd;
-    /* Used for passing data to coroutine and receive response */
+    /* Used for passing data to worker threads and receiving responses */
     co_data_t shared_data;
     /* Used to track request_id */
     uint64_t request_id;
-    /* Coroutine handle */
+    /* Thread handle */
     microkit_cothread_ref_t handle;
     /* Self metadata */
     space_status stat;
@@ -86,7 +86,7 @@ void (*operation_functions[])() = {
     fat_rewinddir,
 };
 
-static fs_request request_pool[COROUTINE_NUM];
+static fs_request request_pool[THREAD_NUM];
 
 void fill_client_response(fs_msg_t* message, const fs_request* finished_request) {
     message->cmpl.id = finished_request->request_id;
@@ -94,7 +94,7 @@ void fill_client_response(fs_msg_t* message, const fs_request* finished_request)
     message->cmpl.data = finished_request->shared_data.result;
 }
 
-// Setting up the request in the request_pool and push the request to the coroutine pool
+// Setting up the request in the request_pool and push the request to the thread pool
 void setup_request(int32_t index, fs_msg_t* message) {
     request_pool[index].request_id = message->cmd.id;
     request_pool[index].cmd = message->cmd.type;
@@ -115,31 +115,31 @@ void print_sector_data(uint8_t *buffer, unsigned long size) {
     LOG_FATFS("\n");
 }
 
-_Static_assert(BLK_QUEUE_SIZE_CLI_FATFS >= WORKER_COROUTINE_NUM, 
-    "The size of queue between fs and blk should be at least the size of WORKER_COROUTINE_NUM");
+_Static_assert(BLK_QUEUE_SIZE_CLI_FATFS >= WORKER_THREAD_NUM, 
+    "The size of queue between fs and blk should be at least the size of WORKER_THREAD_NUM");
 
 void init(void) {
     // Init the block device queue
     // Have to make sure who initialize this SDDF queue
     blk_queue_init(blk_queue_handle, blk_request, blk_response, BLK_QUEUE_SIZE_CLI_FATFS);
     /*
-       This part of the code is for setting up the coroutine pool by
+       This part of the code is for setting up the thread pool by
        assign stacks and size of the stack to the pool
     */
-    uint64_t stack[WORKER_COROUTINE_NUM];
-    stack[0] = coroutine_stack_one;
-    stack[1] = coroutine_stack_two;
-    stack[2] = coroutine_stack_three;
-    stack[3] = coroutine_stack_four;
+    uint64_t stack[WORKER_THREAD_NUM];
+    stack[0] = worker_thread_stack_one;
+    stack[1] = worker_thread_stack_two;
+    stack[2] = worker_thread_stack_three;
+    stack[3] = worker_thread_stack_four;
 
-    // Init coroutine pool
+    // Init thread pool
     microkit_cothread_init(&co_controller_mem,
-                            COROUTINE_STACKSIZE,
+                            WORKER_THREAD_STACKSIZE,
                             stack[0],
                             stack[1],
                             stack[2],
                             stack[3]);
-    for (uint32_t i = 0; i < (WORKER_COROUTINE_NUM + 1); i++) {
+    for (uint32_t i = 0; i < (WORKER_THREAD_NUM + 1); i++) {
         microkit_cothread_semaphore_init(&sem[i]);
     }
     
@@ -150,8 +150,8 @@ void init(void) {
 // The notified function requires careful management of the state of the file system
 /*
   The filesystems should be blockwait for new message if and only if all of working
-  coroutines are either free(no tasks assigned to them, no pending replies) or blocked in diskio.
-  If the filesystem is blocked here and any working coroutines are free, then the fatfs_command_queue 
+  threads are either free(no tasks assigned to them, no pending replies) or blocked in diskio.
+  If the filesystem is blocked here and any working threads are free, then the fatfs_command_queue 
   must also be empty.
 */
 void notified(microkit_channel ch) {
@@ -173,7 +173,7 @@ void notified(microkit_channel ch) {
     uint32_t fs_response_enqueued = 0;
 
     /**
-      I assume this big while loop is the confusing and critical part for dispatching coroutines and send back the results.
+      I assume this big while loop is the confusing and critical part for dispatching threads and send back the results.
     **/
     while (new_request_popped) {
         {
@@ -196,19 +196,18 @@ void notified(microkit_channel ch) {
             }
         }
 
-        // Give worker coroutine a chance to run
+        // Give worker threads a chance to run
         microkit_cothread_yield();
 
         /** 
-        If the code below get executed, then all the working coroutines are either blocked or finished.
+        If the code below get executed, then all the working threads are either blocked or finished.
         So the code below would send the result back to client through SDDF and do the cleanup for finished 
-        coroutines. After that, the main coroutine coroutine would block wait on new requests or server sending
-        responses.
+        threads. After that, the main thread would block wait on new requests or server sending responses.
         **/
         /*
-          This for loop check if there are coroutines finished and send the result back
+          This for loop check if there are threads finished and send the result back
         */
-        for (uint16_t i = 1; i < COROUTINE_NUM; i++) {
+        for (uint16_t i = 1; i < THREAD_NUM; i++) {
             co_state_t state = microkit_cothread_query_state(request_pool[i].handle);
             if (state == cothread_not_active && request_pool[i].stat == INUSE) {
                 fill_client_response(fs_queue_idx_empty(fatfs_completion_queue, fs_response_enqueued), &(request_pool[i]));
@@ -219,7 +218,7 @@ void notified(microkit_channel ch) {
         }
 
         /*
-          This should pop the request from the command_queue to the coroutine pool to execute, if no new request is 
+          This should pop the request from the command_queue to the thread pool to execute, if no new request is 
           popped, we should exit the whole while loop.
         */
         new_request_popped = false;
@@ -232,7 +231,7 @@ void notified(microkit_channel ch) {
                 queue_size_init = true;
             }
 
-            // We only dequeue the request if there is a free slot in the coroutine pool
+            // We only dequeue the request if there is a free slot in the thread pool
             if (!microkit_cothread_free_handle_available(&index) || command_queue_size == 0
                   || completion_queue_size == FS_QUEUE_CAPACITY) {
                break;

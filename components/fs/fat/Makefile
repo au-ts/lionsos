@@ -55,7 +55,7 @@ LIBMICROKITCO_OBJ := libmicrokitco/libmicrokitco.a
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LIBMICROKITCO_OPT_PATH := $(LIONSOS)/components/fs/fat
 
-COROUTINE_OBJS := $(FATFS_OBJECT_DIR)/$(LIBMICROKITCO_OBJ)
+LIBMICROKITCO_OBJS := $(FATFS_OBJECT_DIR)/$(LIBMICROKITCO_OBJ)
 CPPFLAGS := -DUSE_LIBMICROKITCO
 
 $(FATFS_OBJECT_DIR)/$(LIBMICROKITCO_OBJ):
@@ -79,7 +79,7 @@ $(FATFS_OBJECT_DIR)/ff.o: $(FF15_SRC)/source/ff.c Makefile | $(FATFS_OBJECT_DIR)
 $(FATFS_OBJECT_DIR)/ffunicode.o: $(FF15_SRC)/source/ffunicode.c Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(FATFS_OBJECT_DIR)/fatfs_event.o: $(FS_DIR)/fatfs_event.c $(COROUTINE_OBJS) Makefile
+$(FATFS_OBJECT_DIR)/fatfs_event.o: $(FS_DIR)/fatfs_event.c $(LIBMICROKITCO_OBJS) Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 $(FATFS_OBJECT_DIR)/fatfs_op.o: $(FS_DIR)/fatfs_op.c Makefile

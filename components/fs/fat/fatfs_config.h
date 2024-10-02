@@ -14,12 +14,12 @@
 // Maximum opened directories
 #define MAX_OPENED_DIRNUM 16
 
-// The number of worker coroutine, if changes are needed, initialisation of the coroutine pool must be changes as well
-#define WORKER_COROUTINE_NUM 4
+// The number of worker thread, if changes are needed, initialisation of the thread pool must be changes as well
+#define WORKER_THREAD_NUM 4
 
-#define COROUTINE_NUM (WORKER_COROUTINE_NUM + 1)
+#define THREAD_NUM (WORKER_THREAD_NUM + 1)
 
-#define COROUTINE_STACKSIZE 0x40000
+#define WORKER_THREAD_STACKSIZE 0x40000
 
 /*
  *  This def control whether the memory address passed to the blk device driver should be strict aligned to the 

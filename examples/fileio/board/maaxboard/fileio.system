@@ -52,10 +52,10 @@
 
     <!-- Fat file system memory region -->
     <memory_region name="fs_metadata" size="0x200_000" page_size="0x1000"/>
-    <memory_region name="coroutine_stack1" size="0x40_000" page_size="0x1000"/>
-    <memory_region name="coroutine_stack2" size="0x40_000" page_size="0x1000"/>
-    <memory_region name="coroutine_stack3" size="0x40_000" page_size="0x1000"/>
-    <memory_region name="coroutine_stack4" size="0x40_000" page_size="0x1000"/>
+    <memory_region name="fat_thread_stack1" size="0x40_000" page_size="0x1000"/>
+    <memory_region name="fat_thread_stack2" size="0x40_000" page_size="0x1000"/>
+    <memory_region name="fat_thread_stack3" size="0x40_000" page_size="0x1000"/>
+    <memory_region name="fat_thread_stack4" size="0x40_000" page_size="0x1000"/>
 
     <protection_domain name="eth" priority="101" budget="100" period="400">
         <program_image path="eth_driver.elf" />
@@ -223,10 +223,10 @@
         <map mr="fs_metadata" vaddr="0x42_000_000" perms="rw" cached="true" setvar_vaddr="fs_metadata" />
         <map mr="shared_fs_micropython" vaddr="0x43_000_000" perms="rw" cached="true" setvar_vaddr="client_data_addr"/>
 
-        <map mr="coroutine_stack1" vaddr="0xA0_000_000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_one" />
-        <map mr="coroutine_stack2" vaddr="0xB0_000_000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_two" />
-        <map mr="coroutine_stack3" vaddr="0xC0_000_000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_three" />
-        <map mr="coroutine_stack4" vaddr="0xD0_000_000" perms="rw" cached="true" setvar_vaddr="coroutine_stack_four" />
+        <map mr="fat_thread_stack1" vaddr="0xA0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_one" />
+        <map mr="fat_thread_stack2" vaddr="0xB0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_two" />
+        <map mr="fat_thread_stack3" vaddr="0xC0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_three" />
+        <map mr="fat_thread_stack4" vaddr="0xD0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_four" />
     </protection_domain>
 
     <channel>

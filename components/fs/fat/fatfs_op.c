@@ -9,7 +9,7 @@
 
 /*
 This file define a bunch of wrapper functions of FATFs functions so those functions can be run in the 
-coroutine.
+worker thread.
 */
 
 typedef enum : uint8_t {
