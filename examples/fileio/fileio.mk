@@ -3,37 +3,38 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
-IMAGES := timer_driver.elf \
-	  eth_driver.elf \
-	  micropython.elf \
-	  fatfs.elf \
-	  copy.elf \
-	  network_virt_rx.elf \
-	  network_virt_tx.elf \
-	  uart_driver.elf \
-	  serial_virt_rx.elf \
-	  serial_virt_tx.elf \
-	  blk_virt.elf
+IMAGES := \
+	timer_driver.elf \
+	eth_driver.elf \
+	micropython.elf \
+	fatfs.elf \
+	copy.elf \
+	network_virt_rx.elf \
+	network_virt_tx.elf \
+	uart_driver.elf \
+	serial_virt_rx.elf \
+	serial_virt_tx.elf \
+	blk_virt.elf
 
 ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
-    NET_DRIV_DIR := imx
-    BLK_DRIV_DIR := mmc/imx
-    UART_DRIV_DIR := imx
-    TIMER_DRIV_DIR := imx
-    IMAGES += mmc_driver.elf
-    BLK_MK := mmc_driver.mk
-    CPU := cortex-a53
+	NET_DRIV_DIR := imx
+	BLK_DRIV_DIR := mmc/imx
+	UART_DRIV_DIR := imx
+	TIMER_DRIV_DIR := imx
+	IMAGES += mmc_driver.elf
+	BLK_MK := mmc_driver.mk
+	CPU := cortex-a53
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
-    NET_DRIV_DIR := virtio
-    BLK_DRIV_DIR := virtio
-    UART_DRIV_DIR := arm
-    TIMER_DRIV_DIR := arm
-    IMAGES += blk_driver.elf
-    BLK_MK := blk_driver.mk
-    CPU := cortex-a53
-    QEMU := qemu-system-aarch64
+	NET_DRIV_DIR := virtio
+	BLK_DRIV_DIR := virtio
+	UART_DRIV_DIR := arm
+	TIMER_DRIV_DIR := arm
+	IMAGES += blk_driver.elf
+	BLK_MK := blk_driver.mk
+	CPU := cortex-a53
+	QEMU := qemu-system-aarch64
 else
-$(error Unsupported MICROKIT_BOARD given)
+	$(error Unsupported MICROKIT_BOARD given)
 endif
 
 TOOLCHAIN := clang
@@ -107,37 +108,34 @@ include ${SDDF}/libco/libco.mk
 include ${BLK_DRIVER}/${BLK_MK}
 include ${BLK_COMPONENTS}/blk_components.mk
 
-# Build with two threads in parallel
-# nproc=2
-
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 	cp $(LIONSOS)/examples/fileio/fs_test.py .
 	cp $(LIONSOS)/examples/fileio/manifest.py .
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
-			MICROKIT_SDK=$(MICROKIT_SDK) \
-			MICROKIT_BOARD=$(MICROKIT_BOARD) \
-			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
-			MICROPY_MPYCROSS=$(abspath mpy_cross/mpy-cross) \
-			MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
-			BUILD=$(abspath .) \
-			LIBMATH=${LIBMATH} \
-			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
-			FROZEN_MANIFEST=$(abspath ./manifest.py) \
-			V=1
+		MICROKIT_SDK=$(MICROKIT_SDK) \
+		MICROKIT_BOARD=$(MICROKIT_BOARD) \
+		MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
+		MICROPY_MPYCROSS=$(abspath mpy_cross/mpy-cross) \
+		MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
+		BUILD=$(abspath .) \
+		LIBMATH=${LIBMATH} \
+		CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
+		FROZEN_MANIFEST=$(abspath ./manifest.py) \
+		V=1
 
 fatfs.elf: musllibc/lib/libc.a
 	make -C $(LIONSOS)/components/fs/fat \
-	       CC=$(CC) \
-		   LD=$(LD) \
-		   CPU=$(CPU) \
-		   BUILD_DIR=$(abspath .) \
-		   CONFIG=$(MICROKIT_CONFIG) \
-	       MICROKIT_SDK=$(MICROKIT_SDK) \
-		   MICROKIT_BOARD=$(MICROKIT_BOARD) \
-		   LIBC_DIR=$(abspath $(BUILD_DIR)/musllibc) \
-		   BUILD_DIR=$(abspath .) \
-		   EXAMPLE_SRC_DIR=$(abspath $(LIONSOS)/examples/fileio/src) \
-		   TARGET=$(TARGET)
+		CC=$(CC) \
+		LD=$(LD) \
+		CPU=$(CPU) \
+		BUILD_DIR=$(abspath .) \
+		CONFIG=$(MICROKIT_CONFIG) \
+		MICROKIT_SDK=$(MICROKIT_SDK) \
+		MICROKIT_BOARD=$(MICROKIT_BOARD) \
+		LIBC_DIR=$(abspath $(BUILD_DIR)/musllibc) \
+		BUILD_DIR=$(abspath .) \
+		EXAMPLE_SRC_DIR=$(abspath $(LIONSOS)/examples/fileio/src) \
+		TARGET=$(TARGET)
 
 musllibc/lib/libc.a:
 	make -C $(MUSL) \
@@ -153,7 +151,12 @@ ${IMAGES}: libsddf_util_debug.a
 	${CC} ${CFLAGS} -c -o $@ $<
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${FILEIO_DIR}/board/$(MICROKIT_BOARD)/fileio.system
-	$(MICROKIT_TOOL) ${FILEIO_DIR}/board/$(MICROKIT_BOARD)/fileio.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+	$(MICROKIT_TOOL) ${FILEIO_DIR}/board/$(MICROKIT_BOARD)/fileio.system \
+		--search-path $(BUILD_DIR) \
+		--board $(MICROKIT_BOARD) \
+		--config $(MICROKIT_CONFIG) \
+		-o $(IMAGE_FILE) \
+		-r $(REPORT_FILE)
 
 FORCE:
 
@@ -163,21 +166,19 @@ FORCE:
 mpy-cross: FORCE
 	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
-qemu_disk: mydisk
-
-mydisk:
-	$(LIONSOS)/dep/sddf/examples/blk/mkvirtdisk mydisk 1 512 16777216
+qemu_disk:
+	$(LIONSOS)/dep/sddf/examples/blk/mkvirtdisk $@ 1 512 16777216
 
 qemu: ${IMAGE_FILE} qemu_disk
 	$(QEMU) -machine virt,virtualization=on \
-			-cpu cortex-a53 \
-			-serial mon:stdio \
-            -device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
-            -m size=2G \
-            -nographic \
-            -global virtio-mmio.force-legacy=false \
-            -d guest_errors \
-            -drive file=mydisk,if=none,format=raw,id=hd \
-            -device virtio-blk-device,drive=hd \
-			-device virtio-net-device,netdev=netdev0 \
-            -netdev user,id=netdev0
+		-cpu cortex-a53 \
+		-serial mon:stdio \
+		-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
+		-m size=2G \
+		-nographic \
+		-global virtio-mmio.force-legacy=false \
+		-d guest_errors \
+		-drive file=qemu_disk,if=none,format=raw,id=hd \
+		-device virtio-blk-device,drive=hd \
+		-device virtio-net-device,netdev=netdev0 \
+		-netdev user,id=netdev0
