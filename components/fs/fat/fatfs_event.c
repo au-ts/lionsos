@@ -89,7 +89,6 @@ void fill_client_response(fs_msg_t* message, const fs_request* finished_request)
     message->cmpl.id = finished_request->request_id;
     message->cmpl.status = finished_request->shared_data.status;
     message->cmpl.data = finished_request->shared_data.result;
-    return;
 }
 
 // Setting up the request in the request_pool and push the request to the coroutine pool
@@ -98,7 +97,6 @@ void setup_request(int32_t index, fs_msg_t* message) {
     request_pool[index].cmd = message->cmd.type;
     request_pool[index].shared_data.params = message->cmd.params;
     co_submit_task(operation_functions[request_pool[index].cmd], &request_pool[index].shared_data, &(request_pool[index].handle));
-    return;
 }
 
 // For debug
