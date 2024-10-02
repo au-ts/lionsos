@@ -25,17 +25,17 @@ blk_resp_queue_t *response;
 // Config pointed to the SDDF_blk config
 blk_storage_info_t *config;
 
-void* coroutine_stack_one;
-void* coroutine_stack_two;
-void* coroutine_stack_three;
-void* coroutine_stack_four;
+uint64_t coroutine_stack_one;
+uint64_t coroutine_stack_two;
+uint64_t coroutine_stack_three;
+uint64_t coroutine_stack_four;
 
-uint64_t client_data_addr;
+char *client_data_addr;
 
 // File system metadata region
-uint64_t fs_metadata;
+uintptr_t fs_metadata;
 
-uint64_t blk_data_region;
+char *blk_data_region;
 
 // Flag for determine if there are blk_requests pushed by the file system
 // It is used to determine whether to notify the blk device driver
@@ -124,10 +124,10 @@ void init(void) {
        assign stacks and size of the stack to the pool
     */
     uint64_t stack[WORKER_COROUTINE_NUM];
-    stack[0] = (uint64_t)coroutine_stack_one;
-    stack[1] = (uint64_t)coroutine_stack_two;
-    stack[2] = (uint64_t)coroutine_stack_three;
-    stack[3] = (uint64_t)coroutine_stack_four;
+    stack[0] = coroutine_stack_one;
+    stack[1] = coroutine_stack_two;
+    stack[2] = coroutine_stack_three;
+    stack[3] = coroutine_stack_four;
 
     // Init coroutine pool
     co_init(stack, WORKER_COROUTINE_NUM);

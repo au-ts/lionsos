@@ -21,7 +21,7 @@ extern uint64_t fs_metadata;
 
 extern blk_storage_info_t *config;
 
-extern uint64_t blk_data_region;
+extern char *blk_data_region;
 
 #ifdef MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE
 
@@ -166,7 +166,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 			co_block();
 
 			res = (DRESULT)(uintptr_t)co_get_args();
-			memcpy(buff, (void*)(read_data_offset + blk_data_region + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer)), sector_size * count);
+			memcpy(buff, blk_data_region + read_data_offset + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer), sector_size * count);
 			break;
 		}
 	}
@@ -184,7 +184,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 			if (sector_size == BLK_TRANSFER_SIZE) {
 				assert(MUL_POWER_OF_2(count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
 
-				memcpy((void*)(write_data_offset + blk_data_region), buff, sector_size * count);
+				memcpy(blk_data_region + write_data_offset, buff, sector_size * count);
 				blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sector, count,handle);
 			}
 			else {
@@ -210,7 +210,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 
 				// When there is no unaligned sector, we do not need to send a read request
 				if (unaligned_head_sector == 0 && unaligned_tail_sector == 0) {
-					memcpy((void*)(write_data_offset + blk_data_region), buff, sector_size * count);
+					memcpy(blk_data_region + write_data_offset, buff, sector_size * count);
 					blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sddf_sector, sddf_count,handle);
 				}
 				else {
@@ -222,7 +222,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 					if (res != RES_OK) {
 						break;
 					}
-					memcpy((void*)(write_data_offset + blk_data_region + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer)), buff, sector_size * count);
+					memcpy(blk_data_region + write_data_offset + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer), buff, sector_size * count);
 					blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sddf_sector, sddf_count,handle);
 				}
 			}
