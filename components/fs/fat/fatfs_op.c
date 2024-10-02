@@ -1,6 +1,6 @@
 #include "fatfs_decl.h"
 #include "ff15/source/ff.h"
-#include "co_helper.h"
+#include <libmicrokitco/libmicrokitco.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -161,7 +161,7 @@ unsigned char map_fs_flags_to_fat_flags(uint64_t fs_flags) {
 // Change here later to support more than one FAT volumes
 void fat_mount(void) {
     LOG_FATFS("Mounting file system!\n");
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
     if (fs_status[0] != FREE) {
         args->status = FR_INVALID_PARAMETER;
         return;
@@ -176,7 +176,7 @@ void fat_mount(void) {
 }
 
 void fat_unmount(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
     if (fs_status[0] != INUSE) {
         args->status = FR_INVALID_PARAMETER;
         return;
@@ -193,7 +193,7 @@ void fat_unmount(void) {
 }
 
 void fat_open(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     uint64_t buffer = args->params.open.path.offset;
     uint64_t size = args->params.open.path.size;
@@ -240,7 +240,7 @@ void fat_open(void) {
 }
 
 void fat_pwrite(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
     uint64_t fd = args->params.write.fd;
     uint64_t buffer = args->params.write.buf.offset;
     uint64_t btw = args->params.write.buf.size;
@@ -284,7 +284,7 @@ void fat_pwrite(void) {
 }
 
 void fat_pread(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
     uint64_t fd = args->params.read.fd;
     uint64_t buffer = args->params.read.buf.offset;
     uint64_t btr = args->params.read.buf.size;
@@ -329,7 +329,7 @@ void fat_pread(void) {
 }
 
 void fat_close(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
     uint64_t fd = args->params.close.fd;
     
     FRESULT RET = validate_file_descriptor(fd);
@@ -359,7 +359,7 @@ void fat_close(void) {
 #define Socket 0140000
 
 void fat_stat(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     uint64_t path = args->params.stat.path.offset;
     uint64_t path_len = args->params.stat.path.size;
@@ -417,7 +417,7 @@ void fat_stat(void) {
 }
 
 void fat_fsize(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     uint64_t fd = args->params.fsize.fd;
 
@@ -428,7 +428,7 @@ void fat_fsize(void) {
 }
 
 void fat_rename(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     uint64_t oldpath_buffer = args->params.rename.old_path.offset;
     uint64_t oldpath_len = args->params.rename.old_path.size;
@@ -452,7 +452,7 @@ void fat_rename(void) {
 }
 
 void fat_unlink(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     uint64_t buffer = args->params.unlink.path.offset;
     uint64_t size = args->params.unlink.path.size;
@@ -474,7 +474,7 @@ void fat_unlink(void) {
 }
 
 void fat_truncate(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     uint64_t fd = args->params.truncate.fd;
     uint64_t len = args->params.truncate.length;
@@ -502,7 +502,7 @@ void fat_truncate(void) {
 }
 
 void fat_mkdir(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     uint64_t buffer = args->params.mkdir.path.offset;
     uint64_t size = args->params.mkdir.path.size;
@@ -524,7 +524,7 @@ void fat_mkdir(void) {
 
 // This seems to do the exact same thing as fat_unlink
 void fat_rmdir(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
     
     uint64_t buffer = args->params.rmdir.path.offset;
     uint64_t size = args->params.rmdir.path.size;
@@ -545,7 +545,7 @@ void fat_rmdir(void) {
 }
 
 void fat_opendir(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     uint64_t buffer = args->params.opendir.path.offset;
     uint64_t size = args->params.opendir.path.size;
@@ -588,7 +588,7 @@ void fat_opendir(void) {
 }
 
 void fat_readdir(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
     
     // Dir descriptor
     uint64_t fd = args->params.readdir.fd;
@@ -632,7 +632,7 @@ void fat_readdir(void) {
 
 // Not sure if this one is implemented correctly
 void fat_telldir(void){
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     uint64_t fd = args->params.telldir.fd;
 
@@ -652,7 +652,7 @@ void fat_telldir(void){
 }
 
 void fat_rewinddir(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
     
     uint64_t fd = args->params.rewinddir.fd;
     
@@ -669,7 +669,7 @@ void fat_rewinddir(void) {
 }
 
 void fat_sync(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     // Maybe add validation check of file descriptor here
     uint64_t fd = args->params.fsync.fd;
@@ -687,7 +687,7 @@ void fat_sync(void) {
 }
 
 void fat_closedir(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     uint64_t fd = args->params.closedir.fd;
 
@@ -717,7 +717,7 @@ void fat_closedir(void) {
 // I can add one to the library but I do not want to add another layer of instability
 // So just use this inefficient one for now
 void fat_seekdir(void) {
-    co_data_t *args = co_get_args();
+    co_data_t *args = microkit_cothread_my_arg();
 
     uint64_t fd = args->params.seekdir.fd;
     int64_t loc = args->params.seekdir.loc;

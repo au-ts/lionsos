@@ -2,7 +2,7 @@
 #include "ff15/source/ff.h"
 #include "ff15/source/diskio.h"
 #include <sddf/blk/queue.h>
-#include "co_helper.h"
+#include <libmicrokitco/libmicrokitco.h>
 #include <fs/protocol.h>
 #include <string.h>
 #include <stdbool.h>
@@ -12,6 +12,9 @@
 
 #define CLIENT_CH 1
 #define SERVER_CH 2
+
+co_control_t co_controller_mem;
+microkit_cothread_sem_t sem[WORKER_COROUTINE_NUM + 1];
 
 blk_queue_handle_t blk_queue_handle_memory;
 blk_queue_handle_t *blk_queue_handle = &blk_queue_handle_memory;
@@ -54,7 +57,7 @@ typedef struct FS_request{
     /* Used to track request_id */
     uint64_t request_id;
     /* Coroutine handle */
-    co_handle_t handle;
+    microkit_cothread_ref_t handle;
     /* Self metadata */
     space_status stat;
 } fs_request;
@@ -96,7 +99,9 @@ void setup_request(int32_t index, fs_msg_t* message) {
     request_pool[index].request_id = message->cmd.id;
     request_pool[index].cmd = message->cmd.type;
     request_pool[index].shared_data.params = message->cmd.params;
-    co_submit_task(operation_functions[request_pool[index].cmd], &request_pool[index].shared_data, &(request_pool[index].handle));
+    void (*func)(void) = operation_functions[request_pool[index].cmd];
+    void *shared_data = &request_pool[index].shared_data;
+    request_pool[index].handle = microkit_cothread_spawn(func, shared_data);
 }
 
 // For debug
@@ -128,7 +133,15 @@ void init(void) {
     stack[3] = coroutine_stack_four;
 
     // Init coroutine pool
-    co_init(stack, WORKER_COROUTINE_NUM);
+    microkit_cothread_init(&co_controller_mem,
+                            COROUTINE_STACKSIZE,
+                            stack[0],
+                            stack[1],
+                            stack[2],
+                            stack[3]);
+    for (uint32_t i = 0; i < (WORKER_COROUTINE_NUM + 1); i++) {
+        microkit_cothread_semaphore_init(&sem[i]);
+    }
     
     // Init file system metadata
     init_metadata(fs_metadata);
@@ -176,15 +189,15 @@ void notified(microkit_channel ch) {
                 
                 LOG_FATFS("blk_dequeue_resp: status: %d success_count: %d ID: %d\n", status, success_count, id);
                 
-                co_set_args(request_pool[id].handle, (void* )(status));
-                co_wakeup(request_pool[id].handle);
+                microkit_cothread_set_arg(request_pool[id].handle, (void *)status);
+                microkit_cothread_semaphore_signal(&sem[request_pool[id].handle]);
 
                 len--;
             }
         }
 
         // Give worker coroutine a chance to run
-        co_yield();
+        microkit_cothread_yield();
 
         /** 
         If the code below get executed, then all the working coroutines are either blocked or finished.
@@ -196,7 +209,8 @@ void notified(microkit_channel ch) {
           This for loop check if there are coroutines finished and send the result back
         */
         for (uint16_t i = 1; i < COROUTINE_NUM; i++) {
-            if (co_check_if_finished(request_pool[i].handle) && request_pool[i].stat == INUSE) {
+            co_state_t state = microkit_cothread_query_state(request_pool[i].handle);
+            if (state == cothread_not_active && request_pool[i].stat == INUSE) {
                 fill_client_response(fs_queue_idx_empty(fatfs_completion_queue, fs_response_enqueued), &(request_pool[i]));
                 fs_response_enqueued++;
                 LOG_FATFS("FS enqueue response:status: %lu\n", request_pool[i].shared_data.status);
@@ -210,16 +224,16 @@ void notified(microkit_channel ch) {
         */
         new_request_popped = false;
         while (true) {
-            co_handle_t index;
+            microkit_cothread_ref_t index;
             // If there is space and we do not know the size of the queue, get it now
-            if (queue_size_init == false && co_havefreeslot(&index)) {
+            if (queue_size_init == false && microkit_cothread_free_handle_available(&index)) {
                 command_queue_size = fs_queue_length_consumer(fatfs_command_queue);
                 completion_queue_size = fs_queue_length_producer(fatfs_completion_queue);
                 queue_size_init = true;
             }
 
             // We only dequeue the request if there is a free slot in the coroutine pool
-            if (!co_havefreeslot(&index) || command_queue_size == 0
+            if (!microkit_cothread_free_handle_available(&index) || command_queue_size == 0
                   || completion_queue_size == FS_QUEUE_CAPACITY) {
                break;
             }

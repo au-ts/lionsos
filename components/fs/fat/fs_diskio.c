@@ -5,8 +5,7 @@
 #include <stdint.h>
 #include <sddf/blk/queue.h>
 #include <string.h>
-#include "co_helper.h"
-#include "fatfs_config.h"
+#include <libmicrokitco/libmicrokitco.h>
 #include <config/blk_config.h>
 #include <sddf/util/util.h>
 
@@ -36,6 +35,12 @@ uint64_t coroutine_blk_addr[WORKER_COROUTINE_NUM];
 #define IS_POWER_OF_2(x) ((x) && !((x) & ((x) - 1)))
 
 #endif
+
+void block() {
+    extern microkit_cothread_sem_t sem[WORKER_COROUTINE_NUM + 1];
+    microkit_cothread_ref_t handle = microkit_cothread_my_handle();
+    microkit_cothread_semaphore_wait(&sem[handle]);
+}
 
 DSTATUS disk_initialize (
     BYTE pdrv                /* Physical drive number to identify the drive */
@@ -102,10 +107,10 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
     if (cmd == CTRL_SYNC) {
         res = RES_OK;
         LOG_FATFS("blk_enqueue_syncreq\n");
-        blk_enqueue_req(blk_queue_handle, BLK_REQ_FLUSH, 0, 0, 0, co_get_handle());
+        blk_enqueue_req(blk_queue_handle, BLK_REQ_FLUSH, 0, 0, 0, microkit_cothread_my_handle());
         blk_request_pushed = true;
-        co_block();
-        res = (DRESULT)(uintptr_t)co_get_args();
+        block();
+        res = (DRESULT)(uintptr_t)microkit_cothread_my_arg();
     }
     return res;
 }
@@ -118,7 +123,7 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
 
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     DRESULT res;
-    int handle = co_get_handle();
+    int handle = microkit_cothread_my_handle();
     // Accroding the protocol, all the read/write addr passed to the blk_virt should be page aligned
     // Substract the handle with one as the work coroutine ID starts at 1, not 0
     uint64_t read_data_offset = coroutine_blk_addr[handle - 1];
@@ -148,16 +153,16 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     blk_enqueue_req(blk_queue_handle, BLK_REQ_READ, read_data_offset, sddf_sector, sddf_count, handle);
 
     blk_request_pushed = true;
-    co_block();
+    block();
 
-    res = (DRESULT)(uintptr_t)co_get_args();
+    res = (DRESULT)(uintptr_t)microkit_cothread_my_arg();
     memcpy(buff, blk_data_region + read_data_offset + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer), sector_size * count);
     return res;
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
     DRESULT res;
-    int handle = co_get_handle();
+    int handle = microkit_cothread_my_handle();
     // Substract the handle with one as the work coroutine ID starts at 1, not 0
     uint64_t write_data_offset = coroutine_blk_addr[handle - 1];
     uint16_t sector_size = blk_config->sector_size;
@@ -196,8 +201,8 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
         else {
             blk_enqueue_req(blk_queue_handle, BLK_REQ_READ, write_data_offset, sddf_sector, sddf_count,handle);
             blk_request_pushed = true;
-            co_block();
-            res = (DRESULT)(uintptr_t)co_get_args();
+            block();
+            res = (DRESULT)(uintptr_t)microkit_cothread_my_arg();
             // If the disk operation is not successful, stop here.
             if (res != RES_OK) {
                 return res;
@@ -207,8 +212,8 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
         }
     }
     blk_request_pushed = true;
-    co_block();
-    res = (DRESULT)(uintptr_t)co_get_args();
+    block();
+    res = (DRESULT)(uintptr_t)microkit_cothread_my_arg();
     return res;
 }
 
@@ -216,22 +221,22 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     DRESULT res;
     uint64_t read_data_offset = (uint64_t)buff - fs_metadata;
-    LOG_FATFS("blk_enqueue_read: addr: 0x%lx sector: %u, count: %u ID: %d\n", read_data_offset, sector, count, co_get_handle());
-    blk_enqueue_req(blk_queue_handle, BLK_REQ_READ, read_data_offset, sector, count,co_get_handle());
+    LOG_FATFS("blk_enqueue_read: addr: 0x%lx sector: %u, count: %u ID: %d\n", read_data_offset, sector, count, microkit_cothread_my_handle());
+    blk_enqueue_req(blk_queue_handle, BLK_REQ_READ, read_data_offset, sector, count, microkit_cothread_my_handle());
     blk_request_pushed = true;
-    co_block();
-    res = (DRESULT)(uintptr_t)co_get_args();
+    block();
+    res = (DRESULT)(uintptr_t)microkit_cothread_my_arg();
     return res;
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
     DRESULT res;
     uint64_t write_data_offset = (uint64_t)buff - fs_metadata;
-    LOG_FATFS("blk_enqueue_write: addr: 0x%lx sector: %u, count: %u ID: %d buffer_addr_in_fs: 0x%p\n", write_data_offset, sector, count, co_get_handle(), buff);
-    blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sector, count,co_get_handle());
+    LOG_FATFS("blk_enqueue_write: addr: 0x%lx sector: %u, count: %u ID: %d buffer_addr_in_fs: 0x%p\n", write_data_offset, sector, count, microkit_cothread_my_handle(), buff);
+    blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sector, count, microkit_cothread_my_handle());
     blk_request_pushed = true;
-    co_block();
-    res = (DRESULT)(uintptr_t)co_get_args();
+    block();
+    res = (DRESULT)(uintptr_t)microkit_cothread_my_arg();
     return res;
 }
 #endif

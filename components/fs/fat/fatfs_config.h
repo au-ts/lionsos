@@ -14,7 +14,7 @@
 // Maximum opened directories
 #define MAX_OPENED_DIRNUM 16
 
-// The number of worker coroutine, if changes are needed, the co_init() defined in co_helper.c needs to be changed as well
+// The number of worker coroutine, if changes are needed, initialisation of the coroutine pool must be changes as well
 #define WORKER_COROUTINE_NUM 4
 
 #define COROUTINE_NUM (WORKER_COROUTINE_NUM + 1)

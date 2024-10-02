@@ -46,7 +46,6 @@ FATFS_OBJS := \
 	ffunicode.o \
 	fatfs_event.o \
 	fatfs_op.o \
-	co_helper.o \
 	fs_diskio.o \
 	printf.o \
 	putchar_debug.o \
@@ -87,9 +86,6 @@ $(FATFS_OBJECT_DIR)/fatfs_op.o: $(FS_DIR)/fatfs_op.c Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 $(FATFS_OBJECT_DIR)/fs_diskio.o: $(FS_DIR)/fs_diskio.c Makefile
-	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
-
-$(FATFS_OBJECT_DIR)/co_helper.o: $(FS_DIR)/co_helper.c Makefile
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 $(FATFS_OBJECT_DIR)/printf.o: $(LIONSOS)/dep/sddf/util/printf.c Makefile
