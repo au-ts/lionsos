@@ -26,9 +26,9 @@ extern char *blk_data_region;
 #ifdef MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE
 
 /*
- *  This def restrict the maximum cluster size that the fatfs can have if MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE is enabled. 
+ *  This def restrict the maximum cluster size that the fatfs can have if MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE is enabled.
  *  This restriction should not cause any problem as long as the BLK_REGION_SIZE between file system and blk virt is not
- *  too small. For example, 32GB - 256TB disks are recommended to have a sector size of 128KB, and if you have 4 worker coroutines, 
+ *  too small. For example, 32GB - 256TB disks are recommended to have a sector size of 128KB, and if you have 4 worker coroutines,
  *  BLK_REGION_SIZE should be bigger than 512KB. In fileio example, BLK_REGION_SIZE is set to 2 MB.
  */
 #define MAX_CLUSTER_SIZE (BLK_REGION_SIZE / WORKER_COROUTINE_NUM)
@@ -40,29 +40,29 @@ uint64_t coroutine_blk_addr[WORKER_COROUTINE_NUM];
 #endif
 
 DSTATUS disk_initialize (
-	BYTE pdrv				/* Physical drive number to identify the drive */
+    BYTE pdrv                /* Physical drive number to identify the drive */
 )
 {
-	DSTATUS stat;
-	int result;
+    DSTATUS stat;
+    int result;
 
-	#ifdef MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE
-	// coroutine_blk_addr[0] is not initialized as that is the slot for event coroutine
-	for (uint16_t i = 0; i < WORKER_COROUTINE_NUM; i++) {
-		coroutine_blk_addr[i] = i * MAX_CLUSTER_SIZE;
-	}
-	#endif
+    #ifdef MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE
+    // coroutine_blk_addr[0] is not initialized as that is the slot for event coroutine
+    for (uint16_t i = 0; i < WORKER_COROUTINE_NUM; i++) {
+        coroutine_blk_addr[i] = i * MAX_CLUSTER_SIZE;
+    }
+    #endif
 
     // Check whether the block device is ready or not
-	if (!blk_config->ready) {
-		return RES_NOTRDY;
-	}
+    if (!blk_config->ready) {
+        return RES_NOTRDY;
+    }
 
-	// The sector size should be a mutiple of 512, BLK_TRANSFER_SIZE % SECTOR_SIZE should be 0
-	// BLK_TRANSFER_SIZE % SECTOR_SIZE should be a power of 2
-	assert(blk_config->sector_size % 512 == 0 && "Sector size must be a multiple of 512");
-	assert(blk_config->sector_size <= BLK_TRANSFER_SIZE && "BLK_TRANSFER_SIZE must be the same or larger than sector size");
-	assert(IS_POWER_OF_2(BLK_TRANSFER_SIZE / blk_config->sector_size) && "BLK_TRANSFER_SIZE / SECTOR_SIZE must be a power of 2");
+    // The sector size should be a mutiple of 512, BLK_TRANSFER_SIZE % SECTOR_SIZE should be 0
+    // BLK_TRANSFER_SIZE % SECTOR_SIZE should be a power of 2
+    assert(blk_config->sector_size % 512 == 0 && "Sector size must be a multiple of 512");
+    assert(blk_config->sector_size <= BLK_TRANSFER_SIZE && "BLK_TRANSFER_SIZE must be the same or larger than sector size");
+    assert(IS_POWER_OF_2(BLK_TRANSFER_SIZE / blk_config->sector_size) && "BLK_TRANSFER_SIZE / SECTOR_SIZE must be a power of 2");
 
     LOG_FATFS("Block Storage Information:\n");
     LOG_FATFS("--------------------------\n");
@@ -85,17 +85,17 @@ DSTATUS disk_initialize (
 }
 
 DSTATUS disk_status (
-	BYTE pdrv		/* Physical drive nmuber to identify the drive */
+    BYTE pdrv        /* Physical drive nmuber to identify the drive */
 )
 {
-	DSTATUS stat;
-	int result;
+    DSTATUS stat;
+    int result;
 
     return RES_OK;
 }
 
 DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
-	DRESULT res;
+    DRESULT res;
     if (cmd == GET_SECTOR_SIZE) {
         WORD *size = buff;
         *size = blk_config->sector_size;
@@ -109,7 +109,7 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
         co_block();
         res = (DRESULT)(uintptr_t)co_get_args();
     }
-	return res;
+    return res;
 }
 
 #ifdef MEMBUF_STRICT_ALIGN_TO_BLK_TRANSFER_SIZE
@@ -119,7 +119,7 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
 #define MUL_POWER_OF_2(a, b) ((a) << (__builtin_ctz(b)))
 
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
-	DRESULT res;
+    DRESULT res;
     int handle = co_get_handle();
     // Accroding the protocol, all the read/write addr passed to the blk_virt should be page aligned
     // Substract the handle with one as the work coroutine ID starts at 1, not 0
@@ -141,7 +141,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     // DIV_POWER_OF_2(aligned_sector, sector_per_transfer) maybe -1 if the sector to read is in one transfer block and not aligned to both side, but should still works
     int32_t aligned_sector = count - unaligned_head_sector - unaligned_tail_sector;
     sddf_count += DIV_POWER_OF_2(aligned_sector, sector_per_transfer);
-			
+
     assert(MUL_POWER_OF_2(sddf_count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
 
     LOG_FATFS("blk_enqueue_read pre adjust: addr: 0x%lx sector: %u, count: %u ID: %d\n", read_data_offset, sector, count, handle);
