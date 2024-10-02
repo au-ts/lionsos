@@ -10,8 +10,6 @@
 #include <config/blk_config.h>
 #include <sddf/util/util.h>
 
-#define SD 0 /* Map SD card to physical drive 0 */
-
 extern blk_queue_handle_t *blk_queue_handle;
 
 extern bool blk_request_pushed;
