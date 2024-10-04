@@ -33,6 +33,14 @@ else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
 	BLK_MK := blk_driver.mk
 	CPU := cortex-a53
 	QEMU := qemu-system-aarch64
+else ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
+	NET_DRIV_DIR := meson
+	UART_DRIV_DIR := meson
+	TIMER_DRIV_DIR := meson
+	BLK_DRIV_DIR := sdmmc
+	IMAGES += sdmmc_driver.elf
+	BLK_MK := sdmmc_driver.mk
+	CPU := cortex-a55
 else
 	$(error Unsupported MICROKIT_BOARD given)
 endif
