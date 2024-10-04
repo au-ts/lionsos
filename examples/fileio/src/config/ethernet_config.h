@@ -2,22 +2,32 @@
 #ifndef FILEIO_ETHERNET_CONFIG_H
 #define FILEIO_ETHERNET_CONFIG_H
 
+#include <microkit.h>
 #include <sddf/network/queue.h>
+#include <sddf/util/string.h>
 
 #define NUM_NETWORK_CLIENTS 1
 
-#define CLI0_NAME "micropython"
-#define COPY0_NAME "eth_copy_mp"
-#define VIRT_RX_NAME "eth_virt_rx"
-#define VIRT_TX_NAME "eth_virt_tx"
-#define DRIVER_NAME "eth"
+#define NET_CLI0_NAME "micropython"
+#define NET_COPY0_NAME "eth_copy_mp"
+#define NET_VIRT_RX_NAME "eth_virt_rx"
+#define NET_VIRT_TX_NAME "eth_virt_tx"
+#define NET_DRIVER_NAME "eth"
 
 #define NET_DATA_REGION_SIZE                    0x200000
 #define NET_HW_REGION_SIZE                      0x10000
 
-#define MAC_ADDR_CLI0                           0x525401000010
+#if defined(CONFIG_PLAT_ODROIDC4)
+#define MAC_ADDR_CLI0                       0x525401000003
+#elif defined(CONFIG_PLAT_MAAXBOARD)
+#define MAC_ADDR_CLI0                       0x525401000005
+#elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
+#define MAC_ADDR_CLI0                       0x525401000007
+#else
+#error "Must define MAC addresses for clients in ethernet config"
+#endif
 
-#define NET_TX_QUEUE_SIZE_CLI0                  512
+#define NET_TX_QUEUE_SIZE_CLI0                   512
 #define NET_TX_QUEUE_SIZE_DRIV                  (NET_TX_QUEUE_SIZE_CLI0)
 
 #define NET_TX_DATA_REGION_SIZE_CLI0            NET_DATA_REGION_SIZE
@@ -56,85 +66,62 @@ _Static_assert(NET_RX_QUEUE_SIZE_COPY0 >= NET_RX_QUEUE_SIZE_DRIV,
 _Static_assert(sizeof(net_queue_t) <= NET_DATA_REGION_SIZE,
                "Netowkr Queue must fit into a single data region.");
 
-static bool __str_match(const char *s0, const char *s1)
+static inline uint64_t net_cli_mac_addr(char *pd_name)
 {
-    while (*s0 != '\0' && *s1 != '\0' && *s0 == *s1) {
-        s0++, s1++;
+    if (!sddf_strcmp(pd_name, NET_CLI0_NAME)) {
+        return MAC_ADDR_CLI0;
     }
-    return *s0 == *s1;
+
+    return 0;
 }
 
-static void __set_mac_addr(uint8_t *mac, uint64_t val)
+static inline void net_virt_mac_addrs(char *pd_name, uint64_t macs[NUM_NETWORK_CLIENTS])
 {
-    mac[0] = val >> 40 & 0xff;
-    mac[1] = val >> 32 & 0xff;
-    mac[2] = val >> 24 & 0xff;
-    mac[3] = val >> 16 & 0xff;
-    mac[4] = val >> 8 & 0xff;
-    mac[5] = val & 0xff;
-}
-
-static inline void net_cli_mac_addr_init_sys(char *pd_name, uint8_t *macs)
-{
-    if (__str_match(pd_name, CLI0_NAME)) {
-        __set_mac_addr(macs, MAC_ADDR_CLI0);
+    if (!sddf_strcmp(pd_name, NET_VIRT_RX_NAME)) {
+        macs[0] = MAC_ADDR_CLI0;
     }
 }
 
-static inline void net_virt_mac_addr_init_sys(char *pd_name, uint8_t *macs)
+static inline void net_cli_queue_size(char *pd_name, size_t *rx_queue_size, size_t *tx_queue_size)
 {
-    if (__str_match(pd_name, VIRT_RX_NAME)) {
-        __set_mac_addr(macs, MAC_ADDR_CLI0);
+    if (!sddf_strcmp(pd_name, NET_CLI0_NAME)) {
+        *rx_queue_size = NET_RX_QUEUE_SIZE_CLI0;
+        *tx_queue_size = NET_TX_QUEUE_SIZE_CLI0;
     }
 }
 
-static inline void net_cli_queue_init_sys(char *pd_name,
-                                          net_queue_handle_t *rx_queue,
-                                          net_queue_t *rx_free,
-                                          net_queue_t *rx_active,
-                                          net_queue_handle_t *tx_queue,
-                                          net_queue_t *tx_free,
-                                          net_queue_t *tx_active)
+static inline void net_copy_queue_size(char *pd_name, size_t *cli_queue_size, size_t *virt_queue_size)
 {
-    if (__str_match(pd_name, CLI0_NAME)) {
-        net_queue_init(rx_queue, rx_free, rx_active, NET_RX_QUEUE_SIZE_CLI0);
-        net_queue_init(tx_queue, tx_free, tx_active, NET_TX_QUEUE_SIZE_CLI0);
+    if (!sddf_strcmp(pd_name, NET_COPY0_NAME)) {
+        *cli_queue_size = NET_RX_QUEUE_SIZE_CLI0;
+        *virt_queue_size = NET_RX_QUEUE_SIZE_COPY0;
     }
 }
 
-static inline void net_copy_queue_init_sys(char *pd_name,
-                                           net_queue_handle_t *cli_queue,
-                                           net_queue_t *cli_free,
-                                           net_queue_t *cli_active,
-                                           net_queue_handle_t *virt_queue,
-                                           net_queue_t *virt_free,
-                                           net_queue_t *virt_active)
+typedef struct net_queue_info {
+    net_queue_t *free;
+    net_queue_t *active;
+    size_t size;
+} net_queue_info_t;
+
+static inline void net_virt_queue_info(char *pd_name, net_queue_t *cli0_free, net_queue_t *cli0_active,
+                                       net_queue_info_t ret[NUM_NETWORK_CLIENTS])
 {
-    if (__str_match(pd_name, COPY0_NAME)) {
-        net_queue_init(cli_queue, cli_free, cli_active, NET_RX_QUEUE_SIZE_CLI0);
-        net_queue_init(virt_queue, virt_free, virt_active,
-                       NET_RX_QUEUE_SIZE_COPY0);
+    if (!sddf_strcmp(pd_name, NET_VIRT_RX_NAME)) {
+        ret[0] = (net_queue_info_t) {
+            .free = cli0_free, .active = cli0_active, .size = NET_RX_QUEUE_SIZE_COPY0
+        };
+    } else if (!sddf_strcmp(pd_name, NET_VIRT_TX_NAME)) {
+        ret[0] = (net_queue_info_t) {
+            .free = cli0_free, .active = cli0_active, .size = NET_TX_QUEUE_SIZE_CLI0
+        };
     }
 }
 
-static inline void net_virt_queue_init_sys(char *pd_name,
-                                           net_queue_handle_t *cli_queue,
-                                           net_queue_t *cli_free,
-                                           net_queue_t *cli_active)
+static inline void net_mem_region_vaddr(char *pd_name, uintptr_t mem_regions[NUM_NETWORK_CLIENTS],
+                                        uintptr_t start_region)
 {
-    if (__str_match(pd_name, VIRT_RX_NAME)) {
-        net_queue_init(cli_queue, cli_free, cli_active,
-                       NET_RX_QUEUE_SIZE_COPY0);
-    } else if (__str_match(pd_name, VIRT_TX_NAME)) {
-        net_queue_init(cli_queue, cli_free, cli_active, NET_TX_QUEUE_SIZE_CLI0);
-    }
-}
-
-static inline void net_mem_region_init_sys(char *pd_name,
-                                       uintptr_t *mem_regions,
-                                       uintptr_t start_region)
-{
-    if (__str_match(pd_name, VIRT_TX_NAME)) {
+    if (!sddf_strcmp(pd_name, NET_VIRT_TX_NAME)) {
         mem_regions[0] = start_region;
     }
 }
