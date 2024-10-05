@@ -46,12 +46,16 @@
     <memory_region name="serial_tx_data_driver" size="0x4_000" />
     <memory_region name="serial_tx_data_micropython" size="0x2_000" />
     <memory_region name="serial_tx_data_nfs" size="0x2_000" />
+    <memory_region name="serial_rx_data_driver" size="0x2_000" />
+    <memory_region name="serial_rx_data_micropython" size="0x2_000" />
 
     <!-- shared memory for serial driver/serial virt queue mechanism -->
     <memory_region name="serial_tx_queue_driver" size="0x1_000" />
+    <memory_region name="serial_rx_queue_driver" size="0x1_000" />
 
     <!-- shared memory for serial virt/client queue mechanism -->
     <memory_region name="serial_tx_queue_micropython" size="0x1_000" />
+    <memory_region name="serial_rx_queue_micropython" size="0x1_000" />
     <memory_region name="serial_tx_queue_nfs" size="0x1_000" />
 
     <!-- shared memory for micropython/nfs queue -->
@@ -139,7 +143,9 @@
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
 
         <map mr="serial_tx_queue_driver" vaddr="0x4_001_000" perms="rw" cached="true" setvar_vaddr="tx_queue" />
+        <map mr="serial_rx_queue_driver" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_queue" />
         <map mr="serial_tx_data_driver" vaddr="0x4_004_000" perms="rw" cached="true" setvar_vaddr="tx_data" />
+        <map mr="serial_rx_data_driver" vaddr="0x4_002_000" perms="rw" cached="true" setvar_vaddr="rx_data" />
 
         <irq irq="225" id="0" trigger="edge" /> <!-- UART interrupt -->
     </protection_domain>
@@ -153,6 +159,15 @@
         <map mr="serial_tx_data_driver" vaddr="0x4_003_000" perms="rw" cached="true" setvar_vaddr="tx_data_drv" />
         <map mr="serial_tx_data_micropython" vaddr="0x4_007_000" perms="r" cached="true" setvar_vaddr="tx_data_cli0" />
         <map mr="serial_tx_data_nfs" vaddr="0x4_009_000" perms="r" cached="true"/>
+    </protection_domain>
+
+    <protection_domain name="serial_virt_rx" priority="98">
+        <program_image path="serial_virt_rx.elf" />
+        <map mr="serial_rx_queue_driver" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_queue_drv" />
+        <map mr="serial_rx_queue_micropython" vaddr="0x4_001_000" perms="rw" cached="true" setvar_vaddr="rx_queue_cli0" />
+
+        <map mr="serial_rx_data_driver" vaddr="0x4_002_000" perms="r" cached="true" setvar_vaddr="rx_data_drv" />
+        <map mr="serial_rx_data_micropython" vaddr="0x4_004_000" perms="rw" cached="true" setvar_vaddr="rx_data_cli0" />
     </protection_domain>
 
     <protection_domain name="nfs" priority="98" stack_size="0x10000">
@@ -180,7 +195,9 @@
         <map mr="shared_nfs_micropython" vaddr="0x8_000_000" perms="rw" cached="true" setvar_vaddr="fs_share" />
 
         <map mr="serial_tx_queue_micropython" vaddr="0x60_000_000" perms="rw" cached="true" setvar_vaddr="serial_tx_queue" />
+	<map mr="serial_rx_queue_micropython" vaddr="0x60_001_000" perms="rw" cached="true" setvar_vaddr="serial_rx_queue" />
         <map mr="serial_tx_data_micropython" vaddr="0x60_002_000" perms="rw" cached="true" setvar_vaddr="serial_tx_data" />
+	<map mr="serial_rx_data_micropython" vaddr="0x60_004_000" perms="rw" cached="true" setvar_vaddr="serial_rx_data" />
 
         <map mr="eth_rx_free_micropython" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
         <map mr="eth_rx_active_micropython" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
@@ -237,6 +254,11 @@
     </channel>
 
     <channel>
+        <end pd="serial_virt_rx" id="1"/>
+        <end pd="micropython" id="8"/>
+    </channel>
+
+    <channel>
         <end pd="serial_virt_tx" id="1"/>
         <end pd="micropython" id="9"/>
     </channel>
@@ -244,6 +266,11 @@
     <channel>
         <end pd="serial_virt_tx" id="2"/>
         <end pd="nfs" id="0"/>
+    </channel>
+
+    <channel>
+        <end pd="uart_driver" id="2"/>
+        <end pd="serial_virt_rx" id="0"/>
     </channel>
 
     <channel>
