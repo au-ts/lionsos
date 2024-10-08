@@ -136,7 +136,7 @@ void init(void) {
 
     if (microkit_cothread_spawn(t_mp_entrypoint, NULL) == LIBMICROKITCO_NULL_HANDLE) {
         printf("MP|ERROR: Cannot initialise Micropython cothread\n");
-        while (true) {}
+        assert(false);
     }
 
     // Run the Micropython cothread
