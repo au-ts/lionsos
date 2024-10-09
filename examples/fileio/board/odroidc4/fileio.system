@@ -190,6 +190,7 @@
         <map mr="blk_driver_config" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="blk_config"     />
         <map mr="blk_driver_request"    vaddr="0x40200000" perms="rw" cached="false" setvar_vaddr="blk_req_queue"  />
         <map mr="blk_driver_response"   vaddr="0x40400000" perms="rw" cached="false" setvar_vaddr="blk_resp_queue" />
+        <irq irq="222" id="1"/>
     </protection_domain>
 
     <protection_domain name="BLK_VIRT" priority="101">
