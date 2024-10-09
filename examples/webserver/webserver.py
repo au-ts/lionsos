@@ -127,7 +127,7 @@ async def resolve(relative_path):
         # exists, and we did not find any files with the name suffixed
         # by a standard extension, so redirect the client to the form
         # with appropriate trailing slash.
-        return 301, f'{relative_path}/', None
+        return 301, f'/{relative_path}/', None
 
     return 404, None, None
 
