@@ -22,9 +22,9 @@ extern bool blk_request_pushed;
 // This is the offset of the data buffer shared between file system and blk device driver
 extern uint64_t fs_metadata;
 
-extern blk_storage_info_t *blk_config;
+extern blk_storage_info_t *blk_storage_info;
 
-extern char *blk_data_region;
+extern char *blk_data;
 
 /*
  *  This def restrict the maximum cluster size that the fatfs can have
@@ -54,32 +54,32 @@ DSTATUS disk_initialize (
     }
 
     // Check whether the block device is ready or not
-    if (!blk_config->ready) {
+    if (!blk_storage_is_ready(blk_storage_info)) {
         return RES_NOTRDY;
     }
 
     // The sector size should be a mutiple of 512, BLK_TRANSFER_SIZE % SECTOR_SIZE should be 0
     // BLK_TRANSFER_SIZE % SECTOR_SIZE should be a power of 2
-    assert(blk_config->sector_size % 512 == 0 && "Sector size must be a multiple of 512");
-    assert(blk_config->sector_size <= BLK_TRANSFER_SIZE && "BLK_TRANSFER_SIZE must be the same or larger than sector size");
-    assert(IS_POWER_OF_2(BLK_TRANSFER_SIZE / blk_config->sector_size) && "BLK_TRANSFER_SIZE / SECTOR_SIZE must be a power of 2");
+    assert(blk_storage_info->sector_size % 512 == 0 && "Sector size must be a multiple of 512");
+    assert(blk_storage_info->sector_size <= BLK_TRANSFER_SIZE && "BLK_TRANSFER_SIZE must be the same or larger than sector size");
+    assert(IS_POWER_OF_2(BLK_TRANSFER_SIZE / blk_storage_info->sector_size) && "BLK_TRANSFER_SIZE / SECTOR_SIZE must be a power of 2");
 
     LOG_FATFS("Block Storage Information:\n");
     LOG_FATFS("--------------------------\n");
-    LOG_FATFS("Serial Number: %s\n", blk_config->serial_number);
-    LOG_FATFS("Read-Only: %s\n", blk_config->read_only ? "Yes" : "No");
-    LOG_FATFS("Ready: %s\n", blk_config->ready ? "Yes" : "No");
-    LOG_FATFS("Sector Size: %u bytes\n", blk_config->sector_size);
+    LOG_FATFS("Serial Number: %s\n", blk_storage_info->serial_number);
+    LOG_FATFS("Read-Only: %s\n", blk_storage_info->read_only ? "Yes" : "No");
+    LOG_FATFS("Ready: %s\n", blk_storage_info->ready ? "Yes" : "No");
+    LOG_FATFS("Sector Size: %u bytes\n", blk_storage_info->sector_size);
     LOG_FATFS("Optimal Block Size: %u units (%u bytes)\n",
-              blk_config->block_size, blk_config->block_size * BLK_TRANSFER_SIZE);
-    LOG_FATFS("Queue Depth: %u\n", blk_config->queue_depth);
+              blk_storage_info->block_size, blk_storage_info->block_size * BLK_TRANSFER_SIZE);
+    LOG_FATFS("Queue Depth: %u\n", blk_storage_info->queue_depth);
     LOG_FATFS("Geometry:\n");
-    LOG_FATFS("  Cylinders: %u\n", blk_config->cylinders);
-    LOG_FATFS("  Heads: %u\n", blk_config->heads);
-    LOG_FATFS("  Blocks: %u\n", blk_config->blocks);
+    LOG_FATFS("  Cylinders: %u\n", blk_storage_info->cylinders);
+    LOG_FATFS("  Heads: %u\n", blk_storage_info->heads);
+    LOG_FATFS("  Blocks: %u\n", blk_storage_info->blocks);
     LOG_FATFS("Total Capacity: %llu units (%llu bytes)\n",
-              (unsigned long long)blk_config->capacity,
-              (unsigned long long)(blk_config->capacity * BLK_TRANSFER_SIZE));
+              (unsigned long long)blk_storage_info->capacity,
+              (unsigned long long)(blk_storage_info->capacity * BLK_TRANSFER_SIZE));
     LOG_FATFS("--------------------------\n");
     return RES_OK;
 }
@@ -95,7 +95,7 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
     DRESULT res;
     if (cmd == GET_SECTOR_SIZE) {
         WORD *size = buff;
-        *size = blk_config->sector_size;
+        *size = blk_storage_info->sector_size;
         res = RES_OK;
     }
     if (cmd == CTRL_SYNC) {
@@ -120,7 +120,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     // Accroding the protocol, all the read/write addr passed to the blk_virt should be page aligned
     // Substract the handle with one as the worker thread ID starts at 1, not 0
     uint64_t read_data_offset = thread_blk_addr[handle - 1];
-    uint16_t sector_size = blk_config->sector_size;
+    uint16_t sector_size = blk_storage_info->sector_size;
     // This is the same as BLK_TRANSFER_SIZE / sector_size
     uint16_t sector_per_transfer = DIV_POWER_OF_2(BLK_TRANSFER_SIZE, sector_size);
     uint32_t sddf_sector = DIV_POWER_OF_2(sector, sector_per_transfer);
@@ -150,7 +150,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     wait_for_blk_resp();
 
     res = (DRESULT)(uintptr_t)microkit_cothread_my_arg();
-    memcpy(buff, blk_data_region + read_data_offset + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer), sector_size * count);
+    memcpy(buff, blk_data + read_data_offset + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer), sector_size * count);
     return res;
 }
 
@@ -159,11 +159,11 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
     int handle = microkit_cothread_my_handle();
     // Substract the handle with one as the worker thread ID starts at 1, not 0
     uint64_t write_data_offset = thread_blk_addr[handle - 1];
-    uint16_t sector_size = blk_config->sector_size;
+    uint16_t sector_size = blk_storage_info->sector_size;
     if (sector_size == BLK_TRANSFER_SIZE) {
         assert(MUL_POWER_OF_2(count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
 
-        memcpy(blk_data_region + write_data_offset, buff, sector_size * count);
+        memcpy(blk_data + write_data_offset, buff, sector_size * count);
         int err = blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sector, count,handle);
         assert(!err);
     }
@@ -190,7 +190,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
 
         // When there is no unaligned sector, we do not need to send a read request
         if (unaligned_head_sector == 0 && unaligned_tail_sector == 0) {
-            memcpy(blk_data_region + write_data_offset, buff, sector_size * count);
+            memcpy(blk_data + write_data_offset, buff, sector_size * count);
             int err = blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sddf_sector, sddf_count,handle);
             assert(!err);
         }
@@ -204,7 +204,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
             if (res != RES_OK) {
                 return res;
             }
-            memcpy(blk_data_region + write_data_offset + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer), buff, sector_size * count);
+            memcpy(blk_data + write_data_offset + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer), buff, sector_size * count);
             err = blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sddf_sector, sddf_count,handle);
             assert(!err);
         }

@@ -28,11 +28,11 @@ blk_queue_handle_t *blk_queue_handle = &blk_queue_handle_memory;
 fs_queue_t *fs_command_queue;
 fs_queue_t *fs_completion_queue;
 
-blk_req_queue_t *blk_request;
-blk_resp_queue_t *blk_response;
+blk_req_queue_t *blk_req_queue;
+blk_resp_queue_t *blk_resp_queue;
 
 // Config pointed to the SDDF_blk config
-blk_storage_info_t *blk_config;
+blk_storage_info_t *blk_storage_info;
 
 uint64_t worker_thread_stack_one;
 uint64_t worker_thread_stack_two;
@@ -41,7 +41,7 @@ uint64_t worker_thread_stack_four;
 
 char *fs_share;
 
-char *blk_data_region;
+char *blk_data;
 
 // Flag for determine if there are blk_requests pushed by the file system
 // It is used to determine whether to notify the blk device driver
@@ -124,7 +124,7 @@ _Static_assert(BLK_QUEUE_CAPACITY_CLI_FAT >= FAT_WORKER_THREAD_NUM,
 void init(void) {
     // Init the block device queue
     // Have to make sure who initialize this SDDF queue
-    blk_queue_init(blk_queue_handle, blk_request, blk_response, BLK_QUEUE_CAPACITY_CLI_FAT);
+    blk_queue_init(blk_queue_handle, blk_req_queue, blk_resp_queue, BLK_QUEUE_CAPACITY_CLI_FAT);
     /*
        This part of the code is for setting up the thread pool by
        assign stacks and size of the stack to the pool
