@@ -30,8 +30,8 @@ FIL* files;
 descriptor_status* dir_status;
 DIR* dirs;
 
-// Data buffer offset
-extern char *client_data_addr;
+/* Data shared with client */
+extern char *fs_share;
 
 // Sanity check functions
 // Checking if the memory region that provided by request is within valid memory region
@@ -69,7 +69,7 @@ static FRESULT validate_and_copy_path(uint64_t path, uint64_t len, char* memory)
         return FR_INVALID_PARAMETER;
     }
     // Copy the string to our private memory
-    memcpy(memory, client_data_addr + path, len);
+    memcpy(memory, fs_share + path, len);
     // Return error if the string is not NULL terminated
     memory[len] = '\0';
 
@@ -256,7 +256,7 @@ void fat_pwrite(void) {
         args->status = FS_STATUS_INVALID_FD;
         return;
     }
-    void* data = client_data_addr + buffer;
+    void* data = fs_share + buffer;
 
     FIL* file = &(files[fd]);
 
@@ -304,7 +304,7 @@ void fat_pread(void) {
         return;
     }
 
-    void* data = client_data_addr + buffer;
+    void* data = fs_share + buffer;
 
     // Maybe add validation check of file descriptor here
     FIL* file = &(files[fd]);
@@ -378,7 +378,7 @@ void fat_stat(void) {
         return;
     }
 
-    fs_stat_t* file_stat = (fs_stat_t *)(client_data_addr + output_buffer);
+    fs_stat_t* file_stat = (fs_stat_t *)(fs_share + output_buffer);
 
     LOG_FATFS("fat_stat:asking for filename: %s\n", filepath);
 
@@ -613,7 +613,7 @@ void fat_readdir(void) {
         return;
     }
 
-    void* name = client_data_addr + buffer;
+    void* name = fs_share + buffer;
 
     FILINFO fno;
     RET = f_readdir(&dirs[fd], &fno);
