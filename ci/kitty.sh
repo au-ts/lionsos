@@ -35,7 +35,7 @@ build() {
     export LIONSOS=$LIONSOS
 
     cd $LIONSOS/examples/kitty
-    make
+    make -j$(nproc)
 }
 
 BOARDS=("odroidc4" "qemu_virt_aarch64")
