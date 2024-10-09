@@ -53,7 +53,7 @@
     <memory_region name="fs_completion_queue" size="0x8_000" />
 
     <!-- Fat file system memory region -->
-    <memory_region name="fs_metadata" size="0x200_000" page_size="0x1000"/>
+    <memory_region name="fs_metadata" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="fat_thread_stack1" size="0x40_000" page_size="0x1000"/>
     <memory_region name="fat_thread_stack2" size="0x40_000" page_size="0x1000"/>
     <memory_region name="fat_thread_stack3" size="0x40_000" page_size="0x1000"/>
