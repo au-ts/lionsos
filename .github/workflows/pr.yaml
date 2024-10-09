@@ -1,0 +1,16 @@
+# Copyright 2024, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+# Actions to *only* run on GitHub pull requests
+
+name: PR
+
+on: [pull_request]
+
+jobs:
+  whitespace:
+    name: 'Trailing Whitespace'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: seL4/ci-actions/git-diff-check@master
