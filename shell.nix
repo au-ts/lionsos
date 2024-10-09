@@ -16,6 +16,7 @@ in
         llvmPackages_16.clang
         llvmPackages_16.lld
         llvmPackages_16.llvm
+        dosfstools
         qemu
     ];
     hardeningDisable = [ "all" ];
