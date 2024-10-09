@@ -69,7 +69,7 @@ typedef struct FS_request{
 } fs_request;
 
 // This operations list must be consistent with the file system protocol enum
-void (*operation_functions[])() = {
+void (*operation_functions[])(void) = {
     fat_mount,
     fat_unmount,
     fat_open,
