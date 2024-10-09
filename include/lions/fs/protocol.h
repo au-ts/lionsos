@@ -74,24 +74,24 @@ enum {
 enum {
     FS_CMD_INITIALISE,
     FS_CMD_DEINITIALISE,
-    FS_CMD_OPEN,
-    FS_CMD_CLOSE,
+    FS_CMD_FILE_OPEN,
+    FS_CMD_FILE_CLOSE,
     FS_CMD_STAT,
-    FS_CMD_READ,
-    FS_CMD_WRITE,
-    FS_CMD_FSIZE,
+    FS_CMD_FILE_READ,
+    FS_CMD_FILE_WRITE,
+    FS_CMD_FILE_SIZE,
     FS_CMD_RENAME,
-    FS_CMD_UNLINK,
-    FS_CMD_TRUNCATE,
-    FS_CMD_MKDIR,
-    FS_CMD_RMDIR,
-    FS_CMD_OPENDIR,
-    FS_CMD_CLOSEDIR,
-    FS_CMD_FSYNC,
-    FS_CMD_READDIR,
-    FS_CMD_SEEKDIR,
-    FS_CMD_TELLDIR,
-    FS_CMD_REWINDDIR,
+    FS_CMD_FILE_REMOVE,
+    FS_CMD_FILE_TRUNCATE,
+    FS_CMD_DIR_CREATE,
+    FS_CMD_DIR_REMOVE,
+    FS_CMD_DIR_OPEN,
+    FS_CMD_DIR_CLOSE,
+    FS_CMD_FILE_SYNC,
+    FS_CMD_DIR_READ,
+    FS_CMD_DIR_SEEK,
+    FS_CMD_DIR_TELL,
+    FS_CMD_DIR_REWIND,
 
     // the number of different types of command
     FS_NUM_COMMANDS
@@ -122,107 +122,107 @@ typedef struct fs_buffer {
     uint64_t size;
 } fs_buffer_t;
 
-typedef struct fs_cmd_params_open {
+typedef struct fs_cmd_params_file_open {
     fs_buffer_t path;
     uint64_t flags;
-} fs_cmd_params_open_t;
+} fs_cmd_params_file_open_t;
 
-typedef struct fs_cmd_params_close {
+typedef struct fs_cmd_params_file_close {
     uint64_t fd;
-} fs_cmd_params_close_t;
+} fs_cmd_params_file_close_t;
 
 typedef struct fs_cmd_params_stat {
     fs_buffer_t path;
     fs_buffer_t buf;
 } fs_cmd_params_stat_t;
 
-typedef struct fs_cmd_params_read {
+typedef struct fs_cmd_params_file_read {
     uint64_t fd;
     uint64_t offset;
     fs_buffer_t buf;
-} fs_cmd_params_read_t;
+} fs_cmd_params_file_read_t;
 
-typedef struct fs_cmd_params_write {
+typedef struct fs_cmd_params_file_write {
     uint64_t fd;
     uint64_t offset;
     fs_buffer_t buf;
-} fs_cmd_params_write_t;
+} fs_cmd_params_file_write_t;
 
-typedef struct fs_cmd_params_fsize {
+typedef struct fs_cmd_params_file_size {
     uint64_t fd;
-} fs_cmd_params_fsize_t;
+} fs_cmd_params_file_size_t;
 
 typedef struct fs_cmd_params_rename {
     fs_buffer_t old_path;
     fs_buffer_t new_path;
 } fs_cmd_params_rename_t;
 
-typedef struct fs_cmd_params_unlink {
+typedef struct fs_cmd_params_file_remove {
     fs_buffer_t path;
-} fs_cmd_params_unlink_t;
+} fs_cmd_params_file_remove_t;
 
-typedef struct fs_cmd_params_truncate {
+typedef struct fs_cmd_params_file_truncate {
     uint64_t fd;
     uint64_t length;
-} fs_cmd_params_truncate_t;
+} fs_cmd_params_file_truncate_t;
 
-typedef struct fs_cmd_params_mkdir {
+typedef struct fs_cmd_params_dir_create {
     fs_buffer_t path;
-} fs_cmd_params_mkdir_t;
+} fs_cmd_params_dir_create_t;
 
-typedef struct fs_cmd_params_rmdir {
+typedef struct fs_cmd_params_dir_remove {
     fs_buffer_t path;
-} fs_cmd_params_rmdir_t;
+} fs_cmd_params_dir_remove_t;
 
-typedef struct fs_cmd_params_opendir {
+typedef struct fs_cmd_params_dir_ope {
     fs_buffer_t path;
-} fs_cmd_params_opendir_t;
+} fs_cmd_params_dir_open_t;
 
-typedef struct fs_cmd_params_closedir {
+typedef struct fs_cmd_params_dir_close {
     uint64_t fd;
-} fs_cmd_params_closedir_t;
+} fs_cmd_params_dir_close_t;
 
-typedef struct fs_cmd_params_readdir {
+typedef struct fs_cmd_params_dir_read {
     uint64_t fd;
     fs_buffer_t buf;
-} fs_cmd_params_readdir_t;
+} fs_cmd_params_dir_read_t;
 
-typedef struct fs_cmd_params_fsync {
+typedef struct fs_cmd_params_file_sync {
     uint64_t fd;
-} fs_cmd_params_fsync_t;
+} fs_cmd_params_file_sync_t;
 
-typedef struct fs_cmd_params_seekdir {
+typedef struct fs_cmd_params_dir_seek {
     uint64_t fd;
     int64_t loc;
-} fs_cmd_params_seekdir_t;
+} fs_cmd_params_dir_seek_t;
 
-typedef struct fs_cmd_params_telldir {
+typedef struct fs_cmd_params_dir_tell {
     uint64_t fd;
-} fs_cmd_params_telldir_t;
+} fs_cmd_params_dir_tell_t;
 
-typedef struct fs_cmd_params_rewinddir {
+typedef struct fs_cmd_params_dir_rewind {
     uint64_t fd;
-} fs_cmd_params_rewinddir_t;
+} fs_cmd_params_dir_rewind_t;
 
 typedef union fs_cmd_params {
-    fs_cmd_params_open_t open;
-    fs_cmd_params_close_t close;
+    fs_cmd_params_file_open_t file_open;
+    fs_cmd_params_file_close_t file_close;
     fs_cmd_params_stat_t stat;
-    fs_cmd_params_read_t read;
-    fs_cmd_params_write_t write;
-    fs_cmd_params_fsize_t fsize;
+    fs_cmd_params_file_read_t file_read;
+    fs_cmd_params_file_write_t file_write;
+    fs_cmd_params_file_size_t file_size;
     fs_cmd_params_rename_t rename;
-    fs_cmd_params_unlink_t unlink;
-    fs_cmd_params_truncate_t truncate;
-    fs_cmd_params_mkdir_t mkdir;
-    fs_cmd_params_rmdir_t rmdir;
-    fs_cmd_params_opendir_t opendir;
-    fs_cmd_params_closedir_t closedir;
-    fs_cmd_params_readdir_t readdir;
-    fs_cmd_params_fsync_t fsync;
-    fs_cmd_params_seekdir_t seekdir;
-    fs_cmd_params_telldir_t telldir;
-    fs_cmd_params_rewinddir_t rewinddir;
+    fs_cmd_params_file_remove_t file_remove;
+    fs_cmd_params_file_truncate_t file_truncate;
+    fs_cmd_params_dir_create_t dir_create;
+    fs_cmd_params_dir_remove_t dir_remove;
+    fs_cmd_params_dir_open_t dir_open;
+    fs_cmd_params_dir_close_t dir_close;
+    fs_cmd_params_dir_read_t dir_read;
+    fs_cmd_params_file_sync_t file_sync;
+    fs_cmd_params_dir_seek_t dir_seek;
+    fs_cmd_params_dir_tell_t dir_tell;
+    fs_cmd_params_dir_rewind_t dir_rewind;
 
     uint8_t min_size[48];
 } fs_cmd_params_t;
@@ -234,42 +234,42 @@ typedef struct fs_cmd {
 } fs_cmd_t;
 _Static_assert(sizeof (fs_cmd_t) == 64, "fs_cmd_t must be exactly 64 bytes");
 
-typedef struct fs_cmpl_data_open {
+typedef struct fs_cmpl_data_file_open {
     uint64_t fd;
-} fs_cmpl_data_open_t;
+} fs_cmpl_data_file_open_t;
 
-typedef struct fs_cmpl_data_read {
+typedef struct fs_cmpl_data_file_read {
     uint64_t len_read;
-} fs_cmpl_data_read_t;
+} fs_cmpl_data_file_read_t;
 
-typedef struct fs_cmpl_data_write {
+typedef struct fs_cmpl_data_file_write {
     uint64_t len_written;
-} fs_cmpl_data_write_t;
+} fs_cmpl_data_file_write_t;
 
-typedef struct fs_cmpl_data_fsize {
+typedef struct fs_cmpl_data_file_size {
     uint64_t size;
-} fs_cmpl_data_fsize_t;
+} fs_cmpl_data_file_size_t;
 
-typedef struct fs_cmpl_data_opendir {
+typedef struct fs_cmpl_data_dir_open {
     uint64_t fd;
-} fs_cmpl_data_opendir_t;
+} fs_cmpl_data_dir_open_t;
 
-typedef struct fs_cmpl_data_readdir {
+typedef struct fs_cmpl_data_dir_read {
     uint64_t path_len;
-} fs_cmpl_data_readdir_t;
+} fs_cmpl_data_dir_read_t;
 
-typedef struct fs_cmpl_data_telldir {
+typedef struct fs_cmpl_data_dir_tell {
     uint64_t location;
-} fs_cmpl_data_telldir_t;
+} fs_cmpl_data_dir_tell_t;
 
 typedef union fs_cmpl_data {
-    fs_cmpl_data_open_t open;
-    fs_cmpl_data_read_t read;
-    fs_cmpl_data_write_t write;
-    fs_cmpl_data_fsize_t fsize;
-    fs_cmpl_data_opendir_t opendir;
-    fs_cmpl_data_readdir_t readdir;
-    fs_cmpl_data_telldir_t telldir;
+    fs_cmpl_data_file_open_t file_open;
+    fs_cmpl_data_file_read_t file_read;
+    fs_cmpl_data_file_write_t file_write;
+    fs_cmpl_data_file_size_t file_size;
+    fs_cmpl_data_dir_open_t dir_open;
+    fs_cmpl_data_dir_read_t dir_read;
+    fs_cmpl_data_dir_tell_t dir_tell;
 } fs_cmpl_data_t;
 
 typedef struct fs_cmpl {

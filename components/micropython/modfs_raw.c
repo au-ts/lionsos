@@ -46,8 +46,8 @@ STATIC mp_obj_t request_open(mp_obj_t path_in, mp_obj_t flag_in) {
     request_flags[request_id] = flag_in;
     fs_command_issue((fs_cmd_t){
         .id = request_id,
-        .type = FS_CMD_OPEN,
-        .params.open = {
+        .type = FS_CMD_FILE_OPEN,
+        .params.file_open = {
             .path.offset = path_buffer,
             .path.size = path_len,
             .flags = FS_OPEN_FLAGS_READ_ONLY,
@@ -65,14 +65,14 @@ STATIC mp_obj_t complete_open(mp_obj_t request_id_in) {
     fs_cmpl_t completion;
     fs_command_complete(request_id, &command, &completion);
 
-    fs_buffer_free(command.params.open.path.offset);
+    fs_buffer_free(command.params.file_open.path.offset);
     fs_request_free(request_id);
 
     if (completion.status != FS_STATUS_SUCCESS) {
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
-    return mp_obj_new_int_from_uint(completion.data.opendir.fd);
+    return mp_obj_new_int_from_uint(completion.data.dir_open.fd);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(complete_open_obj, complete_open);
 
@@ -88,8 +88,8 @@ STATIC mp_obj_t request_close(mp_obj_t fd_in, mp_obj_t flag_in) {
     request_flags[request_id] = flag_in;
     fs_command_issue((fs_cmd_t){
         .id = request_id,
-        .type = FS_CMD_CLOSE,
-        .params.close.fd = fd,
+        .type = FS_CMD_FILE_CLOSE,
+        .params.file_close.fd = fd,
     });
     return mp_obj_new_int_from_uint(request_id);
 }
@@ -119,7 +119,7 @@ STATIC mp_obj_t request_pread(mp_uint_t n_args, const mp_obj_t *args) {
     if (err) {
         mp_raise_OSError(err);
         return mp_const_none;
-    } 
+    }
 
     uint64_t request_id;
     err = fs_request_allocate(&request_id);
@@ -132,8 +132,8 @@ STATIC mp_obj_t request_pread(mp_uint_t n_args, const mp_obj_t *args) {
     request_flags[request_id] = flag;
     fs_command_issue((fs_cmd_t){
         .id = request_id,
-        .type = FS_CMD_READ,
-        .params.read = {
+        .type = FS_CMD_FILE_READ,
+        .params.file_read = {
             .fd = fd,
             .offset = offset,
             .buf.offset = read_buffer,
@@ -152,8 +152,8 @@ STATIC mp_obj_t complete_pread(mp_obj_t request_id_in) {
     fs_command_complete(request_id, &command, &completion);
     fs_request_free(request_id);
 
-    mp_obj_t ret = mp_obj_new_bytes(fs_buffer_ptr(command.params.read.buf.offset), completion.data.read.len_read);
-    fs_buffer_free(command.params.read.buf.offset);
+    mp_obj_t ret = mp_obj_new_bytes(fs_buffer_ptr(command.params.file_read.buf.offset), completion.data.file_read.len_read);
+    fs_buffer_free(command.params.file_read.buf.offset);
     return ret;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(complete_pread_obj, complete_pread);

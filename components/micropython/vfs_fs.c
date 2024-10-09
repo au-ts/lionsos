@@ -161,8 +161,8 @@ STATIC mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
 
         fs_cmpl_t completion;
         fs_command_blocking(&completion, (fs_cmd_t){
-            .type = FS_CMD_READDIR,
-            .params.readdir = {
+            .type = FS_CMD_DIR_READ,
+            .params.dir_read = {
                 .fd = self->dir,
                 .buf.offset = name_buffer,
                 .buf.size = FS_BUFFER_SIZE,
@@ -185,7 +185,7 @@ STATIC mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
         // make 3-tuple with info about this entry
         mp_obj_tuple_t *t = MP_OBJ_TO_PTR(mp_obj_new_tuple(3, NULL));
 
-        uint64_t path_len = completion.data.readdir.path_len;
+        uint64_t path_len = completion.data.dir_read.path_len;
         if (self->is_str) {
             t->items[0] = mp_obj_new_str(fn, path_len);
         } else {
@@ -201,8 +201,8 @@ STATIC mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
 
     fs_cmpl_t completion;
     fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_CLOSEDIR,
-        .params.closedir.fd = self->dir,
+        .type = FS_CMD_DIR_CLOSE,
+        .params.dir_close.fd = self->dir,
     });
     self->dir = 0;
     return MP_OBJ_STOP_ITERATION;
@@ -229,8 +229,8 @@ STATIC mp_obj_t vfs_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
 
     fs_cmpl_t completion;
     err = fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_OPENDIR,
-        .params.opendir = {
+        .type = FS_CMD_DIR_OPEN,
+        .params.dir_open = {
             .path.offset = path_buffer,
             .path.size = path_len,
         }
@@ -245,7 +245,7 @@ STATIC mp_obj_t vfs_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
-    iter->dir = completion.data.opendir.fd;
+    iter->dir = completion.data.dir_open.fd;
     return MP_OBJ_FROM_PTR(iter);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_ilistdir_obj, vfs_fs_ilistdir);
@@ -269,11 +269,11 @@ STATIC mp_obj_t vfs_fs_mkdir(mp_obj_t self_in, mp_obj_t path_in) {
 
     uint64_t path_len = strlen(path);
     memcpy(fs_buffer_ptr(path_buffer), path, path_len);
-    
+
     fs_cmpl_t completion;
     err = fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_MKDIR,
-        .params.mkdir = {
+        .type = FS_CMD_DIR_CREATE,
+        .params.dir_create = {
             .path.offset = path_buffer,
             .path.size = path_len,
         }
@@ -308,8 +308,8 @@ STATIC mp_obj_t vfs_fs_remove(mp_obj_t self_in, mp_obj_t path_in) {
 
     fs_cmpl_t completion;
     err = fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_UNLINK,
-        .params.unlink = {
+        .type = FS_CMD_FILE_REMOVE,
+        .params.file_remove = {
             .path.offset = path_buffer,
             .path.size = path_len,
         }
@@ -372,7 +372,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_3(vfs_fs_rename_obj, vfs_fs_rename);
 STATIC mp_obj_t vfs_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
     mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
     const char *path = vfs_fs_get_path_str(self, path_in);
-    
+
     ptrdiff_t path_buffer;
     int err = fs_buffer_allocate(&path_buffer);
     if (err) {
@@ -385,8 +385,8 @@ STATIC mp_obj_t vfs_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
 
     fs_cmpl_t completion;
     fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_RMDIR,
-        .params.rmdir = {
+        .type = FS_CMD_DIR_REMOVE,
+        .params.dir_remove = {
             .path.offset = path_buffer,
             .path.size = path_len,
         }

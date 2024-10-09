@@ -51,12 +51,12 @@ STATIC mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int 
     int err = fs_buffer_allocate(&read_buffer);
     if (err) {
         return MP_STREAM_ERROR;
-    } 
+    }
 
     fs_cmpl_t completion;
     err = fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_READ,
-        .params.read = {
+        .type = FS_CMD_FILE_READ,
+        .params.file_read = {
             .fd = o->fd,
             .offset = o->pos,
             .buf.offset = read_buffer,
@@ -68,11 +68,11 @@ STATIC mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int 
         return MP_STREAM_ERROR;
     }
 
-    memcpy(buf, fs_buffer_ptr(read_buffer), completion.data.read.len_read);
-    o->pos += completion.data.read.len_read;
+    memcpy(buf, fs_buffer_ptr(read_buffer), completion.data.file_read.len_read);
+    o->pos += completion.data.file_read.len_read;
     fs_buffer_free(read_buffer);
 
-    return (mp_uint_t)completion.data.read.len_read;
+    return (mp_uint_t)completion.data.file_read.len_read;
 }
 
 STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t size, int *errcode) {
@@ -89,8 +89,8 @@ STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t siz
 
     fs_cmpl_t completion;
     err = fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_WRITE,
-        .params.write = {
+        .type = FS_CMD_FILE_WRITE,
+        .params.file_write = {
             .fd = o->fd,
             .offset = o->pos,
             .buf.offset = write_buffer,
@@ -102,11 +102,11 @@ STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t siz
     if (completion.status != FS_STATUS_SUCCESS) {
         return MP_STREAM_ERROR;
     }
-    o->pos += completion.data.write.len_written;
+    o->pos += completion.data.file_write.len_written;
     if (o->pos > o->size) {
         o->size = o->pos;
     }
-    return (mp_uint_t)completion.data.write.len_written;
+    return (mp_uint_t)completion.data.file_write.len_written;
 }
 
 STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, int *errcode) {
@@ -120,8 +120,8 @@ STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t a
         case MP_STREAM_FLUSH: {
             fs_cmpl_t completion;
             int err = fs_command_blocking(&completion, (fs_cmd_t){
-                .type = FS_CMD_FSYNC,
-                .params.fsync.fd = o->fd,
+                .type = FS_CMD_FILE_SYNC,
+                .params.file_sync.fd = o->fd,
             });
             if (err || completion.status != FS_STATUS_SUCCESS) {
                 mp_raise_OSError(completion.status);
@@ -146,8 +146,8 @@ STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t a
         case MP_STREAM_CLOSE: {
             fs_cmpl_t completion;
             fs_command_blocking(&completion, (fs_cmd_t){
-                .type = FS_CMD_CLOSE,
-                .params.close.fd = o->fd,
+                .type = FS_CMD_FILE_CLOSE,
+                .params.file_close.fd = o->fd,
             });
             return 0;
         }
@@ -278,8 +278,8 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
 
     fs_cmpl_t completion;
     fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_OPEN,
-        .params.open = {
+        .type = FS_CMD_FILE_OPEN,
+        .params.file_open = {
             .path.offset = buffer,
             .path.size = path_len,
             .flags = flags,
@@ -290,35 +290,35 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
-    o->fd = completion.data.open.fd;
+    o->fd = completion.data.file_open.fd;
 
     fs_command_blocking(&completion, (fs_cmd_t){
-        .type = FS_CMD_FSIZE,
-        .params.fsize.fd = o->fd,
+        .type = FS_CMD_FILE_SIZE,
+        .params.file_size.fd = o->fd,
     });
     if (completion.status != FS_STATUS_SUCCESS) {
         fs_command_blocking(&completion, (fs_cmd_t){
-            .type = FS_CMD_CLOSE,
-            .params.close.fd = o->fd,
+            .type = FS_CMD_FILE_CLOSE,
+            .params.file_close.fd = o->fd,
         });
         fs_buffer_free(buffer);
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }
-    o->size = completion.data.fsize.size;
+    o->size = completion.data.file_size.size;
 
     if (truncate) {
         fs_command_blocking(&completion, (fs_cmd_t){
-            .type = FS_CMD_TRUNCATE,
-            .params.truncate = {
+            .type = FS_CMD_FILE_TRUNCATE,
+            .params.file_truncate = {
                 .fd = o->fd,
                 .length = 0,
             }
         });
         if (completion.status != FS_STATUS_SUCCESS) {
             fs_command_blocking(&completion, (fs_cmd_t){
-                .type = FS_CMD_CLOSE,
-                .params.close.fd = o->fd,
+                .type = FS_CMD_FILE_CLOSE,
+                .params.file_close.fd = o->fd,
             });
             mp_raise_OSError(completion.status);
             return mp_const_none;

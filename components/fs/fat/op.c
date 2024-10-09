@@ -190,9 +190,9 @@ void fat_unmount(void) {
 void fat_open(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
-    uint64_t buffer = args->params.open.path.offset;
-    uint64_t size = args->params.open.path.size;
-    uint64_t openflag = args->params.open.flags;
+    uint64_t buffer = args->params.file_open.path.offset;
+    uint64_t size = args->params.file_open.path.size;
+    uint64_t openflag = args->params.file_open.flags;
 
     // Copy the name to our name buffer
     char filepath[FS_MAX_NAME_LENGTH];
@@ -231,28 +231,28 @@ void fat_open(void) {
     }
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
-    args->result.open.fd = fd;
+    args->result.file_open.fd = fd;
 }
 
 void fat_pwrite(void) {
     co_data_t *args = microkit_cothread_my_arg();
-    uint64_t fd = args->params.write.fd;
-    uint64_t buffer = args->params.write.buf.offset;
-    uint64_t btw = args->params.write.buf.size;
-    uint64_t offset = args->params.write.offset;
+    uint64_t fd = args->params.file_write.fd;
+    uint64_t buffer = args->params.file_write.buf.offset;
+    uint64_t btw = args->params.file_write.buf.size;
+    uint64_t offset = args->params.file_write.offset;
 
     LOG_FATFS("fat_write: bytes to be write: %lu, write offset: %lu\n", btw, offset);
 
     FRESULT RET = within_data_region(buffer, btw);
     if (RET != FR_OK) {
         LOG_FATFS("fat_write: invalid buffer\n");
-        args->result.write.len_written = 0;
+        args->result.file_write.len_written = 0;
         args->status = FS_STATUS_INVALID_BUFFER;
         return;
     }
     if ((RET = validate_file_descriptor(fd)) != FR_OK) {
         LOG_FATFS("fat_write: invalid fd provided\n");
-        args->result.write.len_written = 0;
+        args->result.file_write.len_written = 0;
         args->status = FS_STATUS_INVALID_FD;
         return;
     }
@@ -263,7 +263,7 @@ void fat_pwrite(void) {
     RET = f_lseek(file, offset);
 
     if (RET != FR_OK) {
-        args->result.write.len_written = 0;
+        args->result.file_write.len_written = 0;
         args->status = FS_STATUS_ERROR;
         return;
     }
@@ -280,27 +280,27 @@ void fat_pwrite(void) {
     }
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
-    args->result.write.len_written = bw;
+    args->result.file_write.len_written = bw;
 }
 
 void fat_pread(void) {
     co_data_t *args = microkit_cothread_my_arg();
-    uint64_t fd = args->params.read.fd;
-    uint64_t buffer = args->params.read.buf.offset;
-    uint64_t btr = args->params.read.buf.size;
-    uint64_t offset = args->params.read.offset;
+    uint64_t fd = args->params.file_read.fd;
+    uint64_t buffer = args->params.file_read.buf.offset;
+    uint64_t btr = args->params.file_read.buf.size;
+    uint64_t offset = args->params.file_read.offset;
 
     FRESULT RET;
     if ((RET = within_data_region(buffer, btr)) != FR_OK) {
         LOG_FATFS("fat_read: invalid buffer provided\n");
         args->status = FS_STATUS_INVALID_BUFFER;
-        args->result.read.len_read = 0;
+        args->result.file_read.len_read = 0;
         return;
     }
     if ((RET = validate_file_descriptor(fd)) != FR_OK) {
         LOG_FATFS("fat_read: invalid fd provided\n");
         args->status = FS_STATUS_INVALID_FD;
-        args->result.read.len_read = 0;
+        args->result.file_read.len_read = 0;
         return;
     }
 
@@ -315,7 +315,7 @@ void fat_pread(void) {
 
     if (RET != FR_OK) {
         args->status = FS_STATUS_ERROR;
-        args->result.read.len_read = 0;
+        args->result.file_read.len_read = 0;
         return;
     }
 
@@ -331,12 +331,12 @@ void fat_pread(void) {
     }
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
-    args->result.read.len_read = br;
+    args->result.file_read.len_read = br;
 }
 
 void fat_close(void) {
     co_data_t *args = microkit_cothread_my_arg();
-    uint64_t fd = args->params.close.fd;
+    uint64_t fd = args->params.file_close.fd;
 
     FRESULT RET = validate_file_descriptor(fd);
     if (RET != FR_OK) {
@@ -423,12 +423,12 @@ void fat_stat(void) {
 void fat_fsize(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
-    uint64_t fd = args->params.fsize.fd;
+    uint64_t fd = args->params.file_size.fd;
 
     uint64_t size = f_size(&(files[fd]));
 
     args->status = FS_STATUS_SUCCESS;
-    args->result.fsize.size = size;
+    args->result.file_size.size = size;
 }
 
 void fat_rename(void) {
@@ -458,8 +458,8 @@ void fat_rename(void) {
 void fat_unlink(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
-    uint64_t buffer = args->params.unlink.path.offset;
-    uint64_t size = args->params.unlink.path.size;
+    uint64_t buffer = args->params.file_remove.path.offset;
+    uint64_t size = args->params.file_remove.path.size;
 
     char dirpath[FS_MAX_PATH_LENGTH + 1];
     FRESULT RET = validate_and_copy_path(buffer, size, dirpath);
@@ -479,8 +479,8 @@ void fat_unlink(void) {
 void fat_truncate(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
-    uint64_t fd = args->params.truncate.fd;
-    uint64_t len = args->params.truncate.length;
+    uint64_t fd = args->params.file_truncate.fd;
+    uint64_t len = args->params.file_truncate.length;
 
     FRESULT RET = validate_file_descriptor(fd);
 
@@ -507,8 +507,8 @@ void fat_truncate(void) {
 void fat_mkdir(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
-    uint64_t buffer = args->params.mkdir.path.offset;
-    uint64_t size = args->params.mkdir.path.size;
+    uint64_t buffer = args->params.dir_create.path.offset;
+    uint64_t size = args->params.dir_create.path.size;
 
     char dirpath[FS_MAX_PATH_LENGTH + 1];
     FRESULT RET = validate_and_copy_path(buffer, size, dirpath);
@@ -529,8 +529,8 @@ void fat_mkdir(void) {
 void fat_rmdir(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
-    uint64_t buffer = args->params.rmdir.path.offset;
-    uint64_t size = args->params.rmdir.path.size;
+    uint64_t buffer = args->params.dir_remove.path.offset;
+    uint64_t size = args->params.dir_remove.path.size;
 
     char dirpath[FS_MAX_PATH_LENGTH + 1];
 
@@ -550,8 +550,8 @@ void fat_rmdir(void) {
 void fat_opendir(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
-    uint64_t buffer = args->params.opendir.path.offset;
-    uint64_t size = args->params.opendir.path.size;
+    uint64_t buffer = args->params.dir_open.path.offset;
+    uint64_t size = args->params.dir_open.path.size;
 
     char dirpath[FS_MAX_PATH_LENGTH + 1];
 
@@ -587,16 +587,16 @@ void fat_opendir(void) {
     }
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
-    args->result.opendir.fd = fd;
+    args->result.dir_open.fd = fd;
 }
 
 void fat_readdir(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
     // Dir descriptor
-    uint64_t fd = args->params.readdir.fd;
-    uint64_t buffer = args->params.readdir.buf.offset;
-    uint64_t size = args->params.readdir.buf.size;
+    uint64_t fd = args->params.dir_read.fd;
+    uint64_t buffer = args->params.dir_read.buf.offset;
+    uint64_t size = args->params.dir_read.buf.size;
 
     LOG_FATFS("FAT readdir file descriptor: %lu\n", fd);
 
@@ -626,7 +626,7 @@ void fat_readdir(void) {
     }
 
     if (RET == FR_OK) {
-        args->result.readdir.path_len = len;
+        args->result.dir_read.path_len = len;
         memcpy(name, fno.fname, len);
         LOG_FATFS("FAT readdir file name: %.*s\n", (uint32_t)len, (char*)name);
         // Hacky change the ret value to FS_STATUS_END_OF_DIRECTORY when nothing is in the directory
@@ -642,7 +642,7 @@ void fat_readdir(void) {
 void fat_telldir(void){
     co_data_t *args = microkit_cothread_my_arg();
 
-    uint64_t fd = args->params.telldir.fd;
+    uint64_t fd = args->params.dir_tell.fd;
 
     FRESULT RET = validate_dir_descriptor(fd);
     if (RET != FR_OK) {
@@ -656,13 +656,13 @@ void fat_telldir(void){
     uint32_t offset = f_telldir(dp);
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
-    args->result.telldir.location = offset;
+    args->result.dir_tell.location = offset;
 }
 
 void fat_rewinddir(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
-    uint64_t fd = args->params.rewinddir.fd;
+    uint64_t fd = args->params.dir_rewind.fd;
 
     FRESULT RET = validate_dir_descriptor(fd);
     if (RET != FR_OK) {
@@ -680,7 +680,7 @@ void fat_sync(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
     // Maybe add validation check of file descriptor here
-    uint64_t fd = args->params.fsync.fd;
+    uint64_t fd = args->params.file_sync.fd;
 
     FRESULT RET = validate_file_descriptor(fd);
     if (RET != FR_OK) {
@@ -697,7 +697,7 @@ void fat_sync(void) {
 void fat_closedir(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
-    uint64_t fd = args->params.closedir.fd;
+    uint64_t fd = args->params.dir_close.fd;
 
     FRESULT RET = validate_dir_descriptor(fd);
     if (RET != FR_OK) {
@@ -727,8 +727,8 @@ void fat_closedir(void) {
 void fat_seekdir(void) {
     co_data_t *args = microkit_cothread_my_arg();
 
-    uint64_t fd = args->params.seekdir.fd;
-    int64_t loc = args->params.seekdir.loc;
+    uint64_t fd = args->params.dir_seek.fd;
+    int64_t loc = args->params.dir_seek.loc;
 
     FRESULT RET = validate_dir_descriptor(fd);
     if (RET != FR_OK) {

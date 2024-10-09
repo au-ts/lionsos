@@ -67,24 +67,24 @@ void handle_rewinddir(fs_cmd_t cmd);
 static void (*const cmd_handler[FS_NUM_COMMANDS])(fs_cmd_t cmd) = {
     [FS_CMD_INITIALISE] = handle_initialise,
     [FS_CMD_DEINITIALISE] = handle_deinitialise,
-    [FS_CMD_OPEN] = handle_open,
-    [FS_CMD_CLOSE] = handle_close,
+    [FS_CMD_FILE_OPEN] = handle_open,
+    [FS_CMD_FILE_CLOSE] = handle_close,
     [FS_CMD_STAT] = handle_stat,
-    [FS_CMD_READ] = handle_read,
-    [FS_CMD_WRITE] = handle_write,
-    [FS_CMD_FSIZE] = handle_fsize,
+    [FS_CMD_FILE_READ] = handle_read,
+    [FS_CMD_FILE_WRITE] = handle_write,
+    [FS_CMD_FILE_SIZE] = handle_fsize,
     [FS_CMD_RENAME] = handle_rename,
-    [FS_CMD_UNLINK] = handle_unlink,
-    [FS_CMD_TRUNCATE] = handle_truncate,
-    [FS_CMD_MKDIR] = handle_mkdir,
-    [FS_CMD_RMDIR] = handle_rmdir,
-    [FS_CMD_OPENDIR] = handle_opendir,
-    [FS_CMD_CLOSEDIR] = handle_closedir,
-    [FS_CMD_FSYNC] = handle_fsync,
-    [FS_CMD_READDIR] = handle_readdir,
-    [FS_CMD_SEEKDIR] = handle_seekdir,
-    [FS_CMD_TELLDIR] = handle_telldir,
-    [FS_CMD_REWINDDIR] = handle_rewinddir,
+    [FS_CMD_FILE_REMOVE] = handle_unlink,
+    [FS_CMD_FILE_TRUNCATE] = handle_truncate,
+    [FS_CMD_DIR_CREATE] = handle_mkdir,
+    [FS_CMD_DIR_REMOVE] = handle_rmdir,
+    [FS_CMD_DIR_OPEN] = handle_opendir,
+    [FS_CMD_DIR_CLOSE] = handle_closedir,
+    [FS_CMD_FILE_SYNC] = handle_fsync,
+    [FS_CMD_DIR_READ] = handle_readdir,
+    [FS_CMD_DIR_SEEK] = handle_seekdir,
+    [FS_CMD_DIR_TELL] = handle_telldir,
+    [FS_CMD_DIR_REWIND] = handle_rewinddir,
 };
 
 void reply(fs_cmpl_t cmpl) {
@@ -278,7 +278,7 @@ void fsize_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
     }
 
     struct nfs_stat_64 *stat_buf = data;
-    cmpl.data.fsize.size = stat_buf->nfs_size;
+    cmpl.data.file_size.size = stat_buf->nfs_size;
 fail:
     fd_end_op(fd);
     continuation_free(cont);
@@ -287,7 +287,7 @@ fail:
 
 void handle_fsize(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
-    fs_cmd_params_fsize_t params = cmd.params.fsize;
+    fs_cmd_params_file_size_t params = cmd.params.file_size;
 
     struct nfsfh *file_handle = NULL;
     int err = fd_begin_op_file(params.fd, &file_handle);
@@ -325,7 +325,7 @@ void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data
 
     if (status == 0) {
         fd_set_file(fd, file);
-        cmpl.data.open.fd = fd;
+        cmpl.data.file_open.fd = fd;
     } else {
         dlog("failed to open file (%d): %s\n", status, data);
         fd_free(fd);
@@ -337,7 +337,7 @@ void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data
 
 void handle_open(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
-    struct fs_cmd_params_open params = cmd.params.open;
+    struct fs_cmd_params_file_open params = cmd.params.file_open;
 
     char *path = copy_path(0, params.path);
     if (path == NULL) {
@@ -408,7 +408,7 @@ void close_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
 
 void handle_close(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
-    fs_cmd_params_close_t params = cmd.params.close;
+    fs_cmd_params_file_close_t params = cmd.params.file_close;
 
     struct nfsfh *file_handle = NULL;
     int err = fd_begin_op_file(params.fd, &file_handle);
@@ -454,7 +454,7 @@ void read_cb(int status, struct nfs_context *nfs, void *data, void *private_data
     fd_t fd = cont->data[0];
 
     if (status >= 0) {
-        cmpl.data.read.len_read = status;
+        cmpl.data.file_read.len_read = status;
     } else {
         dlog("failed to read file: %d (%s)", status, data);
         cmpl.status = FS_STATUS_ERROR;
@@ -467,7 +467,7 @@ void read_cb(int status, struct nfs_context *nfs, void *data, void *private_data
 
 void handle_read(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
-    fs_cmd_params_read_t params = cmd.params.read;
+    fs_cmd_params_file_read_t params = cmd.params.file_read;
 
     char *buf = get_buffer(params.buf);
     if (buf == NULL) {
@@ -512,7 +512,7 @@ void write_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
     fd_t fd = cont->data[0];
 
     if (status >= 0) {
-        cmpl.data.write.len_written = status;
+        cmpl.data.file_write.len_written = status;
     } else {
         dlog("failed to write to file: %d (%s)", status, data);
         cmpl.status = FS_STATUS_ERROR;
@@ -525,7 +525,7 @@ void write_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
 
 void handle_write(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
-    fs_cmd_params_write_t params = cmd.params.write;
+    fs_cmd_params_file_write_t params = cmd.params.file_write;
 
     char *buf = get_buffer(params.buf);
     if (buf == NULL) {
@@ -616,7 +616,7 @@ void unlink_cb(int status, struct nfs_context *nfs, void *data, void *private_da
 
 void handle_unlink(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
-    fs_cmd_params_unlink_t params = cmd.params.unlink;
+    fs_cmd_params_file_remove_t params = cmd.params.file_remove;
 
     char *path = copy_path(0, params.path);
     if (path == NULL) {
@@ -657,7 +657,7 @@ void fsync_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
 
 void handle_fsync(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
-    fs_cmd_params_fsync_t params = cmd.params.fsync;
+    fs_cmd_params_file_sync_t params = cmd.params.file_sync;
 
     struct nfsfh *file_handle = NULL;
     int err = fd_begin_op_file(params.fd, &file_handle);
@@ -702,7 +702,7 @@ void truncate_cb(int status, struct nfs_context *nfs, void *data, void *private_
 
 void handle_truncate(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
-    fs_cmd_params_truncate_t params = cmd.params.truncate;
+    fs_cmd_params_file_truncate_t params = cmd.params.file_truncate;
 
     struct nfsfh *file_handle = NULL;
     int err = fd_begin_op_file(params.fd, &file_handle);
@@ -745,7 +745,7 @@ void mkdir_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
 
 void handle_mkdir(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
-    fs_cmd_params_mkdir_t params = cmd.params.mkdir;
+    fs_cmd_params_dir_create_t params = cmd.params.dir_create;
 
     char *path = copy_path(0, params.path);
     if (path == NULL) {
@@ -785,7 +785,7 @@ void rmdir_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
 
 void handle_rmdir(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
-    fs_cmd_params_rmdir_t params = cmd.params.rmdir;
+    fs_cmd_params_dir_remove_t params = cmd.params.dir_remove;
 
     char *path = copy_path(0, params.path);
     if (path == NULL) {
@@ -821,7 +821,7 @@ void opendir_cb(int status, struct nfs_context *nfs, void *data, void *private_d
 
     if (status == 0) {
         fd_set_dir(fd, dir);
-        cmpl.data.opendir.fd = fd;
+        cmpl.data.dir_open.fd = fd;
     } else {
         dlog("failed to open directory: %d (%s)", status, data);
         cmpl.status = FS_STATUS_ERROR;
@@ -833,7 +833,7 @@ void opendir_cb(int status, struct nfs_context *nfs, void *data, void *private_d
 }
 
 void handle_opendir(fs_cmd_t cmd) {
-    fs_cmd_params_opendir_t params = cmd.params.opendir;
+    fs_cmd_params_dir_open_t params = cmd.params.dir_open;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_ERROR, .data = {0} };
 
     char *path = copy_path(0, params.path);
@@ -874,7 +874,7 @@ fail_buffer:
 }
 
 void handle_closedir(fs_cmd_t cmd) {
-    fs_cmd_params_closedir_t params = cmd.params.closedir;
+    fs_cmd_params_dir_close_t params = cmd.params.dir_close;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
@@ -900,7 +900,7 @@ fail:
 }
 
 void handle_readdir(fs_cmd_t cmd) {
-    fs_cmd_params_readdir_t params = cmd.params.readdir;
+    fs_cmd_params_dir_read_t params = cmd.params.dir_read;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     char *buf = get_buffer(params.buf);
@@ -927,7 +927,7 @@ void handle_readdir(fs_cmd_t cmd) {
     uint64_t name_len = strlen(dirent->name) + 1;
     assert(name_len <= FS_MAX_NAME_LENGTH);
     memcpy(buf, dirent->name, name_len);
-    cmpl.data.readdir.path_len = name_len;
+    cmpl.data.dir_read.path_len = name_len;
 
 end_of_dir:
     fd_end_op(params.fd);
@@ -937,7 +937,7 @@ fail_buffer:
 }
 
 void handle_seekdir(fs_cmd_t cmd) {
-    fs_cmd_params_seekdir_t params = cmd.params.seekdir;
+    fs_cmd_params_dir_seek_t params = cmd.params.dir_seek;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
@@ -955,7 +955,7 @@ fail:
 }
 
 void handle_telldir(fs_cmd_t cmd) {
-    fs_cmd_params_telldir_t params = cmd.params.telldir;
+    fs_cmd_params_dir_tell_t params = cmd.params.dir_tell;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
@@ -965,7 +965,7 @@ void handle_telldir(fs_cmd_t cmd) {
         cmpl.status = FS_STATUS_INVALID_FD;
         goto fail;
     }
-    cmpl.data.telldir.location = nfs_telldir(nfs, dir_handle);
+    cmpl.data.dir_tell.location = nfs_telldir(nfs, dir_handle);
     fd_end_op(params.fd);
 
 fail:
@@ -973,7 +973,7 @@ fail:
 }
 
 void handle_rewinddir(fs_cmd_t cmd) {
-    fs_cmd_params_rewinddir_t params = cmd.params.rewinddir;
+    fs_cmd_params_dir_rewind_t params = cmd.params.dir_rewind;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
