@@ -22,6 +22,7 @@
 #define NET_HW_REGION_SIZE                      0x10000
 
 #define DEFAULT_RxV_CHANNEL 0
+#define ENABLE_IP_CHECKSUM false 
 
 #if defined(CONFIG_PLAT_IMX8MP_EVK)
 #define MAC_ADDR_CLI0                           0x000000000000

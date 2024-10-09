@@ -19,6 +19,7 @@
 #define NET_DRIVER_NAME "eth0"
 
 #define DEFAULT_RxV_CHANNEL 0
+#define ENABLE_IP_CHECKSUM false
 
 #define NET_DATA_REGION_SIZE                    0x200000
 #define NET_HW_REGION_SIZE                      0x10000
