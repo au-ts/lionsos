@@ -15,7 +15,7 @@ VM_ETH_DIR := $(SYSTEM_DIR)/vm_eth
 # vmm2
 VM_SDMMC_DIR := $(SYSTEM_DIR)/vm_sdmmc
 
-SYSTEM_FILE := $(SYSTEM_DIR)/simple.system
+SYSTEM_FILE := $(SYSTEM_DIR)/dual_driver_vms.system
 IMAGE_FILE := loader.img
 REPORT_FILE := report.txt
 
