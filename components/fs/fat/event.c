@@ -39,7 +39,7 @@ uint64_t worker_thread_stack_two;
 uint64_t worker_thread_stack_three;
 uint64_t worker_thread_stack_four;
 
-char *client_data_addr;
+char *fs_share;
 
 // File system metadata region
 uintptr_t fs_metadata;
