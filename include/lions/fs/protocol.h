@@ -174,7 +174,7 @@ typedef struct fs_cmd_params_dir_remove {
     fs_buffer_t path;
 } fs_cmd_params_dir_remove_t;
 
-typedef struct fs_cmd_params_dir_ope {
+typedef struct fs_cmd_params_dir_open {
     fs_buffer_t path;
 } fs_cmd_params_dir_open_t;
 
