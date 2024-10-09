@@ -35,7 +35,6 @@ ${BUILD_DIR}/Makefile: fileio.mk
 	cp fileio.mk $@
 
 submodules:
-	git submodule update --init $(LIONSOS)/dep/libvmm
 	git submodule update --init $(LIONSOS)/dep/libnfs
 	git submodule update --init $(LIONSOS)/dep/micropython
 	git submodule update --init $(LIONSOS)/dep/musllibc
