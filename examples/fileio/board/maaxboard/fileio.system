@@ -224,7 +224,7 @@
         <map mr="blk_client_response" vaddr="0x40_400_000" perms="rw" cached="false" setvar_vaddr="blk_response" />
         <map mr="blk_client_data" vaddr="0x40_800_000" perms="rw" cached="true" setvar_vaddr="blk_data_region" />
 
-        <map mr="shared_fs_micropython" vaddr="0x43_000_000" perms="rw" cached="true" setvar_vaddr="client_data_addr"/>
+        <map mr="shared_fs_micropython" vaddr="0x43_000_000" perms="rw" cached="true" setvar_vaddr="fs_share"/>
 
         <map mr="fat_thread_stack1" vaddr="0xA0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_one" />
         <map mr="fat_thread_stack2" vaddr="0xB0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_two" />
