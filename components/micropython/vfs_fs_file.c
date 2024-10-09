@@ -118,6 +118,15 @@ STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t a
 
     switch (request) {
         case MP_STREAM_FLUSH: {
+            fs_cmpl_t completion;
+            int err = fs_command_blocking(&completion, (fs_cmd_t){
+                .type = FS_CMD_FSYNC,
+                .params.fsync.fd = o->fd,
+            });
+            if (err || completion.status != FS_STATUS_SUCCESS) {
+                mp_raise_OSError(completion.status);
+                return mp_const_none;
+            }
             return 0;
         }
         case MP_STREAM_SEEK: {
