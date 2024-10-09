@@ -49,13 +49,6 @@ DTC := dtc
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 PLATFORM := meson
 SDDF := $(LIONSOS)/dep/sddf
-LIBVMM_DIR := $(LIONSOS)/dep/libvmm
-
-VMM_IMAGE_DIR := ${FILEIO_DIR}/src/vmm/images
-LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
-INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
-DTS := $(VMM_IMAGE_DIR)/linux.dts
-DTB := linux.dtb
 
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 FAT := $(LIONSOS)/components/fs/fat
@@ -98,7 +91,6 @@ BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
 BLK_COMPONENTS := $(SDDF)/blk/components
 
 include ${SDDF}/util/util.mk
-include ${LIBVMM_DIR}/vmm.mk
 include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
 include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
 include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk
