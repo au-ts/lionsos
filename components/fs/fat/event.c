@@ -121,13 +121,13 @@ void print_sector_data(uint8_t *buffer, unsigned long size) {
     LOG_FATFS("\n");
 }
 
-_Static_assert(BLK_QUEUE_SIZE_CLI_FAT >= FAT_WORKER_THREAD_NUM,
+_Static_assert(BLK_QUEUE_CAPACITY_CLI_FAT >= FAT_WORKER_THREAD_NUM,
     "The size of queue between fs and blk should be at least the size of FAT_WORKER_THREAD_NUM");
 
 void init(void) {
     // Init the block device queue
     // Have to make sure who initialize this SDDF queue
-    blk_queue_init(blk_queue_handle, blk_request, blk_response, BLK_QUEUE_SIZE_CLI_FAT);
+    blk_queue_init(blk_queue_handle, blk_request, blk_response, BLK_QUEUE_CAPACITY_CLI_FAT);
     /*
        This part of the code is for setting up the thread pool by
        assign stacks and size of the stack to the pool
