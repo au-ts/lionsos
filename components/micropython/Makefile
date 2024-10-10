@@ -156,6 +156,10 @@ ifdef ENABLE_VFS_STDIO
 CFLAGS += -DENABLE_VFS_STDIO
 endif
 
+ifdef ENABLE_SERIAL
+CFLAGS += -DENABLE_SERIAL
+endif
+
 ifdef ENABLE_SERIAL_STDIO
 SRC_C += shared/runtime/sys_stdio_mphal.c
 CFLAGS += -DENABLE_SERIAL_STDIO

@@ -17,11 +17,13 @@
 #include "vfs_fs.h"
 #include <extmod/vfs.h>
 #include <sddf/serial/queue.h>
-#include <serial_config.h>
 #include <sddf/i2c/queue.h>
 #include "lwip/init.h"
 #include "mpconfigport.h"
 #include "fs_helpers.h"
+#ifdef ENABLE_SERIAL
+#include <serial_config.h>
+#endif
 
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
@@ -34,12 +36,14 @@ char *fs_share;
 /*
  * Shared regions for Serial communication
  */
+#ifdef ENABLE_SERIAL
 char *serial_rx_data;
 char *serial_tx_data;
 serial_queue_t *serial_rx_queue;
 serial_queue_t *serial_tx_queue;
 serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
+#endif
 
 #ifdef ENABLE_I2C
 i2c_queue_handle_t i2c_queue_handle;
@@ -106,10 +110,12 @@ start_repl:
 }
 
 void init(void) {
+#ifdef ENABLE_SERIAL
     serial_cli_queue_init_sys(microkit_name, &serial_rx_queue_handle,
                               serial_rx_queue, serial_rx_data,
                               &serial_tx_queue_handle, serial_tx_queue,
                               serial_tx_data);
+#endif
 
 #ifdef ENABLE_I2C
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);

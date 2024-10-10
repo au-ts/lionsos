@@ -7,16 +7,17 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <sddf/serial/queue.h>
 #include "micropython.h"
 #include "py/mpconfig.h"
-#include <sddf/serial/queue.h>
 #include "py/stream.h"
 
 // Receive single character, blocking until one is available.
 int mp_hal_stdin_rx_chr(void) {
+#ifdef ENABLE_SERIAL
     char c;
 
-    // Wait for a notification from the RX multiplexer if we do not have
+    // Wait for a notification from the RX virtualiser if we do not have
     // any data to process.
 
     // This is in a loop because the notification for a particular
@@ -35,12 +36,16 @@ int mp_hal_stdin_rx_chr(void) {
     serial_request_producer_signal(&serial_rx_queue_handle);
 
     return c;
+#else
+    return -1;
+#endif
 }
 
 
 // Send the string of given length.
 void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len)
 {
+#ifdef ENABLE_SERIAL
     for (;;) {
         uint32_t n = serial_enqueue_batch(&serial_tx_queue_handle, len, str);
         if (n != 0 && serial_require_producer_signal(&serial_tx_queue_handle)) {
@@ -59,9 +64,13 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len)
             serial_cancel_consumer_signal(&serial_tx_queue_handle);
         }
     }
+#else
+    microkit_dbg_puts(str);
+#endif
 }
 
 uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
+#ifdef ENABLE_SERIAL
     uintptr_t ret = 0;
     if ((poll_flags & MP_STREAM_POLL_RD) && !serial_queue_empty(&serial_rx_queue_handle, serial_rx_queue_handle.queue->head)) {
         ret |= MP_STREAM_POLL_RD;
@@ -70,4 +79,5 @@ uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
         ret |= MP_STREAM_POLL_WR;
     }
     return ret;
+#endif
 }
