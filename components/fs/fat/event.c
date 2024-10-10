@@ -148,9 +148,6 @@ void init(void) {
     for (uint32_t i = 0; i < (FAT_WORKER_THREAD_NUM + 1); i++) {
         microkit_cothread_semaphore_init(&sem[i]);
     }
-
-    // Init file system metadata
-    init_metadata(fs_metadata);
 }
 
 // The notified function requires careful management of the state of the file system

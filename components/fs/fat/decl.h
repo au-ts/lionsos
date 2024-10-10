@@ -16,8 +16,6 @@ typedef struct {
     fs_cmpl_data_t result;
 } co_data_t;
 
-void init_metadata(uint64_t fs_metadata);
-
 void handle_initialise(void);
 void handle_deinitialise(void);
 void handle_file_open(void);
