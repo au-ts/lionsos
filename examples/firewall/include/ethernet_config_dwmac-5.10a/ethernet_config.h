@@ -11,7 +11,6 @@
 #include <sddf/util/util.h>
 
 #define NUM_NETWORK_CLIENTS 1
-
 #define NET_CLI0_NAME "eth0_virt_tx"
 #define NET_COPY0_NAME "eth1_copy"
 #define NET_VIRT_RX_NAME "eth1_virt_rx"

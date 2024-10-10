@@ -15,7 +15,7 @@ REPORT_FILE := report.txt
 vpath %.c ${SDDF} ${FIREWALL}
 
 IMAGES := eth_driver_0.elf eth_driver_1.elf network_virt_rx_0.elf network_virt_rx_1.elf \
-	  network_virt_tx_0.elf network_virt_tx_1.elf copy_0.elf copy_1.elf
+	  network_virt_tx_0.elf network_virt_tx_1.elf copy_0.elf copy_1.elf forwarder.elf
 
 CFLAGS := -mcpu=$(CPU) \
 	  -mstrict-align \
@@ -37,9 +37,6 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-# %.elf: %.o
-# 	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
-
 all: loader.img
 
 ${IMAGES}: libsddf_util_debug.a
@@ -59,14 +56,18 @@ network/components:
 	mkdir -p network/components
 
 # generate network components for eth0
-NETWORK_IMAGES_0:= network_virt_rx_0.elf network_virt_tx_0.elf copy_0.elf
+NETWORK_IMAGES_0:= network_virt_rx_0.elf network_virt_tx_0.elf copy_0.elf forwarder_0.elf
 ${NETWORK_IMAGES_0}: LIBS := libsddf_util_debug.a ${LIBS}
 
 network/components/eth0/%.o: ${SDDF}/network/components/%.c
 	mkdir -p network/components/eth0
 	${CC} ${CFLAGS} -I${ETHERNET_CONFIG_INCLUDE_0} -c -o $@ $<
 
-NETWORK_COMPONENT_OBJ_0 := $(addprefix network/components/eth0/, copy.o network_virt_tx.o network_virt_rx.o)
+network/components/eth0/forwarder.o: ${FIREWALL}/forwarder.c
+	mkdir -p network/components/eth0
+	${CC} ${CFLAGS} -I${ETHERNET_CONFIG_INCLUDE_0} -c -o $@ $<
+
+NETWORK_COMPONENT_OBJ_0 := $(addprefix network/components/eth0/, copy.o network_virt_tx.o network_virt_rx.o forwarder.o)
 
 ${NETWORK_COMPONENT_OBJ_0}: |network/components
 ${NETWORK_COMPONENT_OBJ_0}: ${CHECK_NETWORK_FLAGS_MD5}
@@ -76,7 +77,10 @@ network/components/eth0/network_virt_%.o: ${SDDF}/network/components/virt_%.c
 	mkdir -p network/components/eth0
 	${CC} ${CFLAGS} -I${ETHERNET_CONFIG_INCLUDE_0} -c -o $@ $<
 
-%_0.elf: network/components/eth0/%.o
+forwarder_0.elf: network/components/eth0/forwarder.o
+	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
+
+%_0.elf: network/components/eth0/%.o forwarder_0.elf
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 # generate network components for eth1
