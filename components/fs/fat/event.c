@@ -127,10 +127,13 @@ _Static_assert(BLK_QUEUE_CAPACITY_CLI_FATFS >= FAT_WORKER_THREAD_NUM,
 void init(void) {
     LOG_FATFS("starting\n");
     LOG_FATFS("fs_command_queue %p\n", fs_command_queue);
-    // LOG_FATFS("fs_completion_queue %p\n", fs_completion_queue);
+    LOG_FATFS("fs_completion_queue %p\n", fs_completion_queue);
     // Init the block device queue
     // Have to make sure who initialize this SDDF queue
     blk_queue_init(blk_queue_handle, blk_req_queue, blk_resp_queue, BLK_QUEUE_CAPACITY_CLI_FATFS);
+
+    while (!blk_storage_is_ready(blk_storage_info)) {};
+
     /*
        This part of the code is for setting up the thread pool by
        assign stacks and size of the stack to the pool
