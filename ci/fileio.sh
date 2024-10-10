@@ -33,7 +33,7 @@ build() {
     export LIONSOS=$LIONSOS
 
     cd $LIONSOS/examples/fileio
-    make
+    make -j$(nproc)
 }
 
 BOARDS=("maaxboard" "qemu_virt_aarch64")
