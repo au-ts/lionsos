@@ -38,7 +38,7 @@ uint64_t thread_blk_addr[FAT_WORKER_THREAD_NUM];
 
 #define IS_POWER_OF_2(x) ((x) && !((x) & ((x) - 1)))
 
-void wait_for_blk_resp() {
+void wait_for_blk_resp(void) {
     extern microkit_cothread_sem_t sem[FAT_WORKER_THREAD_NUM + 1];
     microkit_cothread_ref_t handle = microkit_cothread_my_handle();
     microkit_cothread_semaphore_wait(&sem[handle]);
