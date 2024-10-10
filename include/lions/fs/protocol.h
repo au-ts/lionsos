@@ -317,3 +317,40 @@ static inline void fs_queue_publish_consumption(fs_queue_t *queue, uint64_t amou
 static inline void fs_queue_publish_production(fs_queue_t *queue, uint64_t amount_produced) {
     __atomic_store_n(&queue->tail, queue->tail + amount_produced, __ATOMIC_RELEASE);
 }
+
+static inline char *fs_status_to_str(uint64_t status) {
+    switch (status) {
+    case FS_STATUS_SUCCESS:
+        return "SUCCESS";
+    case FS_STATUS_ERROR:
+        return "ERROR";
+    case FS_STATUS_INVALID_BUFFER:
+        return "INVALID_BUFER";
+    case FS_STATUS_INVALID_PATH:
+        return "INVALID_PATH";
+    case FS_STATUS_INVALID_FD:
+        return "INVALID_FD";
+    case FS_STATUS_ALLOCATION_ERROR:
+        return "ALLOCATION_ERROR";
+    case FS_STATUS_OUTSTANDING_OPERATIONS:
+        return "OUTSTANDING_OPERATIONS";
+    case FS_STATUS_INVALID_NAME:
+        return "INVALID_NAME";
+    case FS_STATUS_TOO_MANY_OPEN_FILES:
+        return "TOO_MANY_OPEN_FILES";
+    case FS_STATUS_SERVER_WAS_DENIED:
+        return "SERVER_WAS_DENIED";
+    case FS_STATUS_INVALID_WRITE:
+        return "INVALID_WRITE";
+    case FS_STATUS_INVALID_READ:
+        return "INVALID_READ";
+    case FS_STATUS_DIRECTORY_IS_FULL:
+        return "DIRECTORY_IS_FULL";
+    case FS_STATUS_INVALID_COMMAND:
+        return "INVALID_COMMAND";
+    case FS_STATUS_END_OF_DIRECTORY:
+        return "END_OF_DIRECTORY";
+    default:
+        return "UNKNOWN STATUS CODE";
+    }
+}
