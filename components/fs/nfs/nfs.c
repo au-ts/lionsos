@@ -39,32 +39,6 @@ serial_queue_handle_t serial_tx_queue_handle;
 
 struct nfs_context *nfs;
 
-void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *private_data) {
-    if (!err) {
-        process_commands();
-        dlog("connected to nfs server");
-    } else {
-        dlog("failed to connect to nfs server (%d): %s", err, data);
-    }
-}
-
-void nfs_init(void) {
-    nfs = nfs_init_context();
-    if (nfs == NULL) {
-        dlog("failed to init nfs context");
-        return;
-    }
-
-    /*
-     * We want to have the NFS client attempt to re-connect indefinitely when our connection
-     * with the server is closed or dropped.
-     */
-    nfs_set_autoreconnect(nfs, -1);
-
-    int err = nfs_mount_async(nfs, NFS_SERVER, NFS_DIRECTORY, nfs_connect_cb, NULL);
-    dlogp(err, "failed to connect to nfs server");
-}
-
 void notified(microkit_channel ch) {
     switch (ch) {
     case TIMER_CHANNEL: {
