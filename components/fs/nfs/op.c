@@ -45,46 +45,46 @@ struct continuation *first_free_cont;
 
 void handle_initialise(fs_cmd_t cmd);
 void handle_deinitialise(fs_cmd_t cmd);
-void handle_open(fs_cmd_t cmd);
+void handle_file_open(fs_cmd_t cmd);
 void handle_stat(fs_cmd_t cmd);
-void handle_fsize(fs_cmd_t cmd);
-void handle_close(fs_cmd_t cmd);
-void handle_read(fs_cmd_t cmd);
-void handle_write(fs_cmd_t cmd);
+void handle_file_size(fs_cmd_t cmd);
+void handle_file_close(fs_cmd_t cmd);
+void handle_file_read(fs_cmd_t cmd);
+void handle_file_write(fs_cmd_t cmd);
 void handle_rename(fs_cmd_t cmd);
-void handle_unlink(fs_cmd_t cmd);
-void handle_truncate(fs_cmd_t cmd);
-void handle_mkdir(fs_cmd_t cmd);
-void handle_rmdir(fs_cmd_t cmd);
-void handle_opendir(fs_cmd_t cmd);
-void handle_closedir(fs_cmd_t cmd);
-void handle_readdir(fs_cmd_t cmd);
-void handle_fsync(fs_cmd_t cmd);
-void handle_seekdir(fs_cmd_t cmd);
-void handle_telldir(fs_cmd_t cmd);
-void handle_rewinddir(fs_cmd_t cmd);
+void handle_file_remove(fs_cmd_t cmd);
+void handle_file_truncate(fs_cmd_t cmd);
+void handle_dir_create(fs_cmd_t cmd);
+void handle_dir_remove(fs_cmd_t cmd);
+void handle_dir_open(fs_cmd_t cmd);
+void handle_dir_close(fs_cmd_t cmd);
+void handle_dir_read(fs_cmd_t cmd);
+void handle_file_sync(fs_cmd_t cmd);
+void handle_dir_seek(fs_cmd_t cmd);
+void handle_dir_tell(fs_cmd_t cmd);
+void handle_dir_rewind(fs_cmd_t cmd);
 
 static void (*const cmd_handler[FS_NUM_COMMANDS])(fs_cmd_t cmd) = {
     [FS_CMD_INITIALISE] = handle_initialise,
     [FS_CMD_DEINITIALISE] = handle_deinitialise,
-    [FS_CMD_FILE_OPEN] = handle_open,
-    [FS_CMD_FILE_CLOSE] = handle_close,
+    [FS_CMD_FILE_OPEN] = handle_file_open,
+    [FS_CMD_FILE_CLOSE] = handle_file_close,
     [FS_CMD_STAT] = handle_stat,
-    [FS_CMD_FILE_READ] = handle_read,
-    [FS_CMD_FILE_WRITE] = handle_write,
-    [FS_CMD_FILE_SIZE] = handle_fsize,
+    [FS_CMD_FILE_READ] = handle_file_read,
+    [FS_CMD_FILE_WRITE] = handle_file_write,
+    [FS_CMD_FILE_SIZE] = handle_file_size,
     [FS_CMD_RENAME] = handle_rename,
-    [FS_CMD_FILE_REMOVE] = handle_unlink,
-    [FS_CMD_FILE_TRUNCATE] = handle_truncate,
-    [FS_CMD_DIR_CREATE] = handle_mkdir,
-    [FS_CMD_DIR_REMOVE] = handle_rmdir,
-    [FS_CMD_DIR_OPEN] = handle_opendir,
-    [FS_CMD_DIR_CLOSE] = handle_closedir,
-    [FS_CMD_FILE_SYNC] = handle_fsync,
-    [FS_CMD_DIR_READ] = handle_readdir,
-    [FS_CMD_DIR_SEEK] = handle_seekdir,
-    [FS_CMD_DIR_TELL] = handle_telldir,
-    [FS_CMD_DIR_REWIND] = handle_rewinddir,
+    [FS_CMD_FILE_REMOVE] = handle_file_remove,
+    [FS_CMD_FILE_TRUNCATE] = handle_file_truncate,
+    [FS_CMD_DIR_CREATE] = handle_dir_create,
+    [FS_CMD_DIR_REMOVE] = handle_dir_remove,
+    [FS_CMD_DIR_OPEN] = handle_dir_open,
+    [FS_CMD_DIR_CLOSE] = handle_dir_close,
+    [FS_CMD_FILE_SYNC] = handle_file_sync,
+    [FS_CMD_DIR_READ] = handle_dir_read,
+    [FS_CMD_DIR_SEEK] = handle_dir_seek,
+    [FS_CMD_DIR_TELL] = handle_dir_tell,
+    [FS_CMD_DIR_REWIND] = handle_dir_rewind,
 };
 
 void reply(fs_cmpl_t cmpl) {
@@ -156,7 +156,7 @@ char *copy_path(int slot, fs_buffer_t buf) {
     return path_buffer[slot];
 }
 
-static void mount_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+static void initialise_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
@@ -196,7 +196,7 @@ void handle_initialise(fs_cmd_t cmd) {
     /* Infinite retries */
     nfs_set_autoreconnect(nfs, -1);
 
-    int err = nfs_mount_async(nfs, NFS_SERVER, NFS_DIRECTORY, mount_cb, cont);
+    int err = nfs_mount_async(nfs, NFS_SERVER, NFS_DIRECTORY, initialise_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_mount;
@@ -214,7 +214,7 @@ fail_duplicate:
 void handle_deinitialise(fs_cmd_t cmd) {
 }
 
-static void stat64_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+static void stat_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     void *buf = (void *)cont->data[0];
@@ -252,7 +252,7 @@ void handle_stat(fs_cmd_t cmd) {
     cont->request_id = cmd.id;
     cont->data[0] = (uint64_t)buf;
 
-    int err = nfs_stat64_async(nfs, path, stat64_cb, cont);
+    int err = nfs_stat64_async(nfs, path, stat_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -266,7 +266,7 @@ fail_buffer:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
-void fsize_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void file_size_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
@@ -285,7 +285,7 @@ fail:
     reply(cmpl);
 }
 
-void handle_fsize(fs_cmd_t cmd) {
+void handle_file_size(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_file_size_t params = cmd.params.file_size;
 
@@ -302,7 +302,7 @@ void handle_fsize(fs_cmd_t cmd) {
     cont->request_id = cmd.id;
     cont->data[0] = params.fd;
 
-    err = nfs_fstat64_async(nfs, file_handle, fsize_cb, cont);
+    err = nfs_fstat64_async(nfs, file_handle, file_size_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -317,7 +317,7 @@ fail_begin:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
-void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void file_open_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     struct nfsfh *file = data;
@@ -335,7 +335,7 @@ void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data
     reply(cmpl);
 }
 
-void handle_open(fs_cmd_t cmd) {
+void handle_file_open(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     struct fs_cmd_params_file_open params = cmd.params.file_open;
 
@@ -373,7 +373,7 @@ void handle_open(fs_cmd_t cmd) {
         posix_flags |= O_CREAT;
     }
 
-    err = nfs_open2_async(nfs, path, posix_flags, 0644, open_cb, cont);
+    err = nfs_open2_async(nfs, path, posix_flags, 0644, file_open_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -389,7 +389,7 @@ fail_buffer:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
-void close_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void file_close_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
@@ -406,7 +406,7 @@ void close_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
     reply(cmpl);
 }
 
-void handle_close(fs_cmd_t cmd) {
+void handle_file_close(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_file_close_t params = cmd.params.file_close;
 
@@ -432,7 +432,7 @@ void handle_close(fs_cmd_t cmd) {
     cont->data[0] = params.fd;
     cont->data[1] = (uint64_t)file_handle;
 
-    err = nfs_close_async(nfs, file_handle, close_cb, cont);
+    err = nfs_close_async(nfs, file_handle, file_close_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -448,7 +448,7 @@ fail_begin:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
-void read_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void file_read_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
@@ -465,7 +465,7 @@ void read_cb(int status, struct nfs_context *nfs, void *data, void *private_data
     reply(cmpl);
 }
 
-void handle_read(fs_cmd_t cmd) {
+void handle_file_read(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_file_read_t params = cmd.params.file_read;
 
@@ -490,7 +490,7 @@ void handle_read(fs_cmd_t cmd) {
     cont->data[0] = params.fd;
     cont->data[1] = (uint64_t)buf;
 
-    err = nfs_pread_async(nfs, file_handle, buf, params.buf.size, params.offset, read_cb, cont);
+    err = nfs_pread_async(nfs, file_handle, buf, params.buf.size, params.offset, file_read_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -506,7 +506,7 @@ fail_buffer:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
-void write_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void file_write_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
@@ -523,7 +523,7 @@ void write_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
     reply(cmpl);
 }
 
-void handle_write(fs_cmd_t cmd) {
+void handle_file_write(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_file_write_t params = cmd.params.file_write;
 
@@ -547,7 +547,7 @@ void handle_write(fs_cmd_t cmd) {
     cont->request_id = cmd.id;
     cont->data[0] = params.fd;
 
-    err = nfs_pwrite_async(nfs, file_handle, buf, params.buf.size, params.offset, write_cb, cont);
+    err = nfs_pwrite_async(nfs, file_handle, buf, params.buf.size, params.offset, file_write_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -603,7 +603,7 @@ fail_buffer:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
-void unlink_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void file_remove_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     if (status != 0) {
@@ -614,7 +614,7 @@ void unlink_cb(int status, struct nfs_context *nfs, void *data, void *private_da
     reply(cmpl);
 }
 
-void handle_unlink(fs_cmd_t cmd) {
+void handle_file_remove(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_file_remove_t params = cmd.params.file_remove;
 
@@ -628,7 +628,7 @@ void handle_unlink(fs_cmd_t cmd) {
     struct continuation *cont = continuation_alloc();
     assert(cont != NULL);
     cont->request_id = cmd.id;
-    int err = nfs_unlink_async(nfs, path, unlink_cb, cont);
+    int err = nfs_unlink_async(nfs, path, file_remove_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -642,7 +642,7 @@ fail_buffer:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
-void fsync_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void file_sync_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
@@ -655,7 +655,7 @@ void fsync_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
     reply(cmpl);
 }
 
-void handle_fsync(fs_cmd_t cmd) {
+void handle_file_sync(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_file_sync_t params = cmd.params.file_sync;
 
@@ -672,7 +672,7 @@ void handle_fsync(fs_cmd_t cmd) {
     cont->request_id = cmd.id;
     cont->data[0] = params.fd;
 
-    err = nfs_fsync_async(nfs, file_handle, fsync_cb, cont);
+    err = nfs_fsync_async(nfs, file_handle, file_sync_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -687,7 +687,7 @@ fail_begin:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
-void truncate_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void file_truncate_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
@@ -700,7 +700,7 @@ void truncate_cb(int status, struct nfs_context *nfs, void *data, void *private_
     reply(cmpl);
 }
 
-void handle_truncate(fs_cmd_t cmd) {
+void handle_file_truncate(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_file_truncate_t params = cmd.params.file_truncate;
 
@@ -717,7 +717,7 @@ void handle_truncate(fs_cmd_t cmd) {
     cont->request_id = cmd.id;
     cont->data[0] = params.fd;
 
-    err = nfs_ftruncate_async(nfs, file_handle, params.length, truncate_cb, cont);
+    err = nfs_ftruncate_async(nfs, file_handle, params.length, file_truncate_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -732,7 +732,7 @@ fail_begin:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
-void mkdir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void dir_create_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     if (status != 0) {
@@ -743,7 +743,7 @@ void mkdir_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
     reply(cmpl);
 }
 
-void handle_mkdir(fs_cmd_t cmd) {
+void handle_dir_create(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_dir_create_t params = cmd.params.dir_create;
 
@@ -758,7 +758,7 @@ void handle_mkdir(fs_cmd_t cmd) {
     assert(cont != NULL);
     cont->request_id = cmd.id;
 
-    int err = nfs_mkdir_async(nfs, path, mkdir_cb, cont);
+    int err = nfs_mkdir_async(nfs, path, dir_create_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -772,7 +772,7 @@ fail_buffer:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
-void rmdir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void dir_remove_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = continuation_alloc();
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     if (status != 0) {
@@ -783,7 +783,7 @@ void rmdir_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
     reply(cmpl);
 }
 
-void handle_rmdir(fs_cmd_t cmd) {
+void handle_dir_remove(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_dir_remove_t params = cmd.params.dir_remove;
 
@@ -798,7 +798,7 @@ void handle_rmdir(fs_cmd_t cmd) {
     assert(cont != NULL);
     cont->request_id = cmd.id;
 
-    int err = nfs_rmdir_async(nfs, path, rmdir_cb, cont);
+    int err = nfs_rmdir_async(nfs, path, dir_remove_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_enqueue;
@@ -812,7 +812,7 @@ fail_buffer:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
-void opendir_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
+void dir_open_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
@@ -832,7 +832,7 @@ void opendir_cb(int status, struct nfs_context *nfs, void *data, void *private_d
     reply(cmpl);
 }
 
-void handle_opendir(fs_cmd_t cmd) {
+void handle_dir_open(fs_cmd_t cmd) {
     fs_cmd_params_dir_open_t params = cmd.params.dir_open;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_ERROR, .data = {0} };
 
@@ -856,7 +856,7 @@ void handle_opendir(fs_cmd_t cmd) {
     cont->request_id = cmd.id;
     cont->data[0] = fd;
 
-    err = nfs_opendir_async(nfs, path, opendir_cb, cont);
+    err = nfs_opendir_async(nfs, path, dir_open_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         cmpl.status = FS_STATUS_ERROR;
@@ -873,7 +873,7 @@ fail_buffer:
     reply(cmpl);
 }
 
-void handle_closedir(fs_cmd_t cmd) {
+void handle_dir_close(fs_cmd_t cmd) {
     fs_cmd_params_dir_close_t params = cmd.params.dir_close;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
@@ -899,7 +899,7 @@ fail:
     reply(cmpl);
 }
 
-void handle_readdir(fs_cmd_t cmd) {
+void handle_dir_read(fs_cmd_t cmd) {
     fs_cmd_params_dir_read_t params = cmd.params.dir_read;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
@@ -936,7 +936,7 @@ fail_buffer:
     reply(cmpl);
 }
 
-void handle_seekdir(fs_cmd_t cmd) {
+void handle_dir_seek(fs_cmd_t cmd) {
     fs_cmd_params_dir_seek_t params = cmd.params.dir_seek;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
@@ -954,7 +954,7 @@ fail:
     reply(cmpl);
 }
 
-void handle_telldir(fs_cmd_t cmd) {
+void handle_dir_tell(fs_cmd_t cmd) {
     fs_cmd_params_dir_tell_t params = cmd.params.dir_tell;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
@@ -972,7 +972,7 @@ fail:
     reply(cmpl);
 }
 
-void handle_rewinddir(fs_cmd_t cmd) {
+void handle_dir_rewind(fs_cmd_t cmd) {
     fs_cmd_params_dir_rewind_t params = cmd.params.dir_rewind;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
