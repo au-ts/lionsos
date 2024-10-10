@@ -23,12 +23,12 @@ typedef enum : uint8_t {
     CLEANUP = 2,
 } descriptor_status;
 
-descriptor_status* fs_status;
-FATFS* fatfs;
-descriptor_status* file_status;
-FIL* files;
-descriptor_status* dir_status;
-DIR* dirs;
+descriptor_status fs_status;
+FATFS fatfs;
+descriptor_status file_status[FAT_MAX_OPENED_FILENUM];
+FIL files[FAT_MAX_OPENED_FILENUM];
+descriptor_status dir_status[FAT_MAX_OPENED_DIRNUM];
+DIR dirs[FAT_MAX_OPENED_DIRNUM];
 
 // Data buffer offset
 extern char *client_data_addr;
@@ -74,35 +74,6 @@ static FRESULT validate_and_copy_path(uint64_t path, uint64_t len, char* memory)
     memory[len] = '\0';
 
     return FR_OK;
-}
-
-// Init the structure without using malloc
-// Could this have potential alignment issue?
-void init_metadata(uint64_t fs_metadata) {
-    uint64_t base = fs_metadata;
-
-    // Allocate memory for fs_status
-    fs_status = (descriptor_status*)base;
-    base += sizeof(descriptor_status);
-
-    // Allocate memory for FATFS
-    fatfs = (FATFS*)base;
-    base += sizeof(FATFS);
-
-    // Allocate memory for file_status
-    file_status = (descriptor_status*)base;
-    base += sizeof(descriptor_status) * FAT_MAX_OPENED_FILENUM;
-
-    // Allocate memory for files
-    files = (FIL*)base;
-    base += sizeof(FIL) * FAT_MAX_OPENED_FILENUM;
-
-    // Allocate memory for Dir_Status
-    dir_status = (descriptor_status*)base;
-    base += sizeof(descriptor_status) * FAT_MAX_OPENED_DIRNUM;
-
-    // Allocate memory for dirs
-    dirs = (DIR*)base;
 }
 
 uint32_t find_free_file_obj(void) {
@@ -157,14 +128,14 @@ unsigned char map_fs_flags_to_fat_flags(uint64_t fs_flags) {
 void handle_initialise(void) {
     LOG_FATFS("Mounting file system!\n");
     co_data_t *args = microkit_cothread_my_arg();
-    if (*fs_status != FREE) {
+    if (fs_status != FREE) {
         args->status = FS_STATUS_ERROR;
         return;
     }
-    *fs_status = INUSE;
-    FRESULT RET = f_mount(&(fatfs[0]), "", 1);
+    fs_status = INUSE;
+    FRESULT RET = f_mount(&fatfs, "", 1);
     if (RET != FR_OK) {
-        *fs_status = FREE;
+        fs_status = FREE;
     }
     LOG_FATFS("Mounting file system result: %d\n", RET);
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
@@ -172,17 +143,17 @@ void handle_initialise(void) {
 
 void handle_deinitialise(void) {
     co_data_t *args = microkit_cothread_my_arg();
-    if (*fs_status != INUSE) {
+    if (fs_status != INUSE) {
         args->status = FS_STATUS_ERROR;
         return;
     }
-    *fs_status = CLEANUP;
+    fs_status = CLEANUP;
     FRESULT RET = f_unmount("");
     if (RET == FR_OK) {
-        *fs_status = FREE;
+        fs_status = FREE;
     }
     else {
-        *fs_status = INUSE;
+        fs_status = INUSE;
     }
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
@@ -397,7 +368,7 @@ void handle_stat(void) {
     file_stat->size = fileinfo.fsize;
 
 // Now we have only one fat volume, so we can hard code it here
-    file_stat->blksize = fatfs[0].ssize;
+    file_stat->blksize = fatfs.ssize;
 
 // Study how is the structure of the mode, just leave it for now
     file_stat->mode = 0;
