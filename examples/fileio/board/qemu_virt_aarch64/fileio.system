@@ -212,6 +212,7 @@
         <map mr="blk_client_request" vaddr="0x30200000" perms="rw" cached="false" setvar_vaddr="blk_client_req_queue"  />
         <map mr="blk_client_response" vaddr="0x30400000" perms="rw" cached="false" setvar_vaddr="blk_client_resp_queue" />
         <map mr="blk_client_data" vaddr="0x30600000" perms="rw" cached="true" setvar_vaddr="blk_client_data" />
+        <setvar symbol="blk_client0_data_paddr" region_paddr="blk_client_data" />
     </protection_domain>
 
     <!-- FAT File system -->
