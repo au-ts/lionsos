@@ -18,26 +18,26 @@ typedef struct {
 
 void init_metadata(uint64_t fs_metadata);
 
-void fat_mount(void);
-void fat_unmount(void);
-void fat_open(void);
-void fat_close(void);
-void fat_stat(void);
-void fat_pread(void);
-void fat_pwrite(void);
-void fat_fsize(void);
-void fat_rename(void);
-void fat_unlink(void);
-void fat_truncate(void);
-void fat_mkdir(void);
-void fat_rmdir(void);
-void fat_opendir(void);
-void fat_closedir(void);
-void fat_sync(void);
-void fat_seekdir(void);
-void fat_readdir(void);
-void fat_rewinddir(void);
-void fat_telldir(void);
+void handle_initialise(void);
+void handle_deinitialise(void);
+void handle_file_open(void);
+void handle_file_close(void);
+void handle_stat(void);
+void handle_file_read(void);
+void handle_file_write(void);
+void handle_file_size(void);
+void handle_rename(void);
+void handle_file_remove(void);
+void handle_file_truncate(void);
+void handle_dir_create(void);
+void handle_dir_remove(void);
+void handle_dir_open(void);
+void handle_dir_close(void);
+void handle_file_sync(void);
+void handle_dir_seek(void);
+void handle_dir_read(void);
+void handle_dir_rewind(void);
+void handle_dir_tell(void);
 
 // For debug
 #ifdef FAT_DEBUG_PRINT
