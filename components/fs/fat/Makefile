@@ -27,7 +27,6 @@ CFLAGS := \
 	-target $(TARGET) \
 	-ffreestanding \
 	-g \
-	-O0 \
 	-mstrict-align \
 	-I$(LIBC_DIR)/include \
 	-I$(BOARD_DIR)/include \

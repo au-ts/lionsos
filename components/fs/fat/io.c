@@ -13,7 +13,7 @@
 #include <libmicrokitco.h>
 #include <blk_config.h>
 #include <sddf/util/util.h>
-#include <assert.h>
+#include <sddf/util/util.h>
 
 extern blk_queue_handle_t *blk_queue_handle;
 
@@ -38,9 +38,10 @@ uint64_t thread_blk_addr[FAT_WORKER_THREAD_NUM];
 
 #define IS_POWER_OF_2(x) ((x) && !((x) & ((x) - 1)))
 
+extern microkit_cothread_sem_t sem[FAT_WORKER_THREAD_NUM + 1];
 void wait_for_blk_resp() {
-    extern microkit_cothread_sem_t sem[FAT_WORKER_THREAD_NUM + 1];
     microkit_cothread_ref_t handle = microkit_cothread_my_handle();
+    LOG_FATFS("wait\n");
     microkit_cothread_semaphore_wait(&sem[handle]);
 }
 

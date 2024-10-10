@@ -14,10 +14,10 @@
 #include <stdint.h>
 #include <blk_config.h>
 #include <microkit.h>
-#include <assert.h>
+#include <sddf/util/util.h>
 
+#define VIRT_CH 0
 #define CLIENT_CH 1
-#define SERVER_CH 2
 
 co_control_t co_controller_mem;
 microkit_cothread_sem_t sem[FAT_WORKER_THREAD_NUM + 1];
@@ -121,10 +121,13 @@ void print_sector_data(uint8_t *buffer, unsigned long size) {
     LOG_FATFS("\n");
 }
 
-_Static_assert(BLK_QUEUE_SIZE_CLI_FAT >= FAT_WORKER_THREAD_NUM,
-    "The size of queue between fs and blk should be at least the size of FAT_WORKER_THREAD_NUM");
+_Static_assert(BLK_QUEUE_CAPACITY_CLI_FATFS >= FAT_WORKER_THREAD_NUM,
+    "The capacity of queue between fs and blk should be at least the size of FAT_WORKER_THREAD_NUM");
 
 void init(void) {
+    LOG_FATFS("starting\n");
+    LOG_FATFS("fs_command_queue %p\n", fs_command_queue);
+    // LOG_FATFS("fs_completion_queue %p\n", fs_completion_queue);
     // Init the block device queue
     // Have to make sure who initialize this SDDF queue
     blk_queue_init(blk_queue_handle, blk_req_queue, blk_resp_queue, BLK_QUEUE_CAPACITY_CLI_FATFS);
@@ -138,6 +141,11 @@ void init(void) {
     stack[2] = worker_thread_stack_three;
     stack[3] = worker_thread_stack_four;
 
+    for (int i = 0; i < FAT_WORKER_THREAD_NUM; i++) {
+        LOG_FATFS("stack %p\n", stack[i]);
+    }
+
+    // LOG_FATFS("before cothread fs_completion_queue %p\n", fs_completion_queue);
     // Init thread pool
     microkit_cothread_init(&co_controller_mem,
                             FAT_WORKER_THREAD_STACKSIZE,
@@ -148,9 +156,12 @@ void init(void) {
     for (uint32_t i = 0; i < (FAT_WORKER_THREAD_NUM + 1); i++) {
         microkit_cothread_semaphore_init(&sem[i]);
     }
+    // LOG_FATFS("after cothread fs_completion_queue %p\n", fs_completion_queue);
 
     // Init file system metadata
     init_metadata(fs_metadata);
+
+    LOG_FATFS("finished init, fs_completion_queue %p, queue->head 0x%lx, queue->tail 0x%lx\n", fs_completion_queue, &fs_completion_queue->head, &fs_completion_queue->tail);
 }
 
 // The notified function requires careful management of the state of the file system
@@ -161,9 +172,18 @@ void init(void) {
   must also be empty.
 */
 void notified(microkit_channel ch) {
-    LOG_FATFS("Notification received on channel:: %d\n", ch);
-    if (ch != CLIENT_CH && ch != SERVER_CH) {
-        LOG_FATFS("Unknown channel:%d\n", ch);
+    LOG_FATFS("start, fs_command_queue %p, queue->head 0x%lx, queue->tail 0x%lx\n", fs_command_queue, &fs_command_queue->head, &fs_command_queue->tail);
+    LOG_FATFS("start, fs_completion_queue %p, queue->head 0x%lx, queue->tail 0x%lx\n", fs_completion_queue, &fs_completion_queue->head, &fs_completion_queue->tail);
+    switch (ch) {
+    case CLIENT_CH:
+        LOG_FATFS("notified by client\n");
+        break;
+    case VIRT_CH:
+        LOG_FATFS("notified by block virt\n");
+        break;
+    default:
+        LOG_FATFS("notified on unknown channel %d\n", ch);
+        assert(false);
         return;
     }
 
@@ -200,6 +220,9 @@ void notified(microkit_channel ch) {
             }
         }
 
+        LOG_FATFS("before, fs_command_queue %p, queue->head 0x%lx, queue->tail 0x%lx\n", fs_command_queue, &fs_command_queue->head, &fs_command_queue->tail);
+        LOG_FATFS("before, fs_completion_queue %p, queue->head 0x%lx, queue->tail 0x%lx\n", fs_completion_queue, &fs_completion_queue->head, &fs_completion_queue->tail);
+
         // Give worker threads a chance to run
         microkit_cothread_yield();
 
@@ -230,8 +253,12 @@ void notified(microkit_channel ch) {
             microkit_cothread_ref_t index;
             // If there is space and we do not know the size of the queue, get it now
             if (queue_size_init == false && microkit_cothread_free_handle_available(&index)) {
+                LOG_FATFS("here1, fs_command_queue %p, queue->head 0x%lx, queue->tail 0x%lx\n", fs_command_queue, &fs_command_queue->head, &fs_command_queue->tail);
                 command_queue_size = fs_queue_length_consumer(fs_command_queue);
+                LOG_FATFS("here2asjdasjdi\n");
+                LOG_FATFS("fs_completion_queue %p, queue->head 0x%lx, queue->tail 0x%lx\n", fs_completion_queue, &fs_completion_queue->head, &fs_completion_queue->tail);
                 completion_queue_size = fs_queue_length_producer(fs_completion_queue);
+                LOG_FATFS("here3\n");
                 queue_size_init = true;
             }
 
@@ -274,7 +301,7 @@ void notified(microkit_channel ch) {
     }
     if (blk_request_pushed) {
         LOG_FATFS("FS notify driver\n");
-        microkit_notify(SERVER_CH);
+        microkit_notify(VIRT_CH);
         blk_request_pushed = false;
     }
 }

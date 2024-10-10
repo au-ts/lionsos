@@ -6,7 +6,7 @@
 #pragma once
 
 // Flag to control whether enabling debug printing
-// #define FAT_DEBUG_PRINT
+#define FAT_DEBUG_PRINT
 
 #define FAT_FS_DATA_REGION_SIZE 0x4000000
 
