@@ -1,0 +1,53 @@
+/*
+ * Copyright 2024, UNSW
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+/ {
+    memory@0 {
+        device_type = "memory";
+        reg = <0x00 0x20000000 0x00 0x60000000>;
+    };
+
+    secure-monitor {
+        status = "disabled";
+    };
+
+    soc {
+        ethernet@ff3f0000 {
+            status = "disabled";
+        };
+
+        bus@ff800000 {
+            ao-secure@140 {
+                status = "disabled";
+            };
+
+            adc@9000 {
+                status = "disabled";
+            };
+        };
+    };
+
+    chosen {
+        linux,stdout-path = "/soc/bus@ff800000/serial@3000";
+        stdout-path = "/soc/bus@ff800000/serial@3000";
+        linux,initrd-end = <0x00000000 0x2f000000>;
+        linux,initrd-start = <0x00000000 0x2d000000>;
+        bootargs = "console=ttyAML0,115200n8 root=/dev/mmcblk0p1 clk_ignore_unused nosmp rw debug loglevel=8 pci=nomsi earlyprintk=serial maxcpus=1";
+
+        framebuffer-cvbs {
+            compatible = "amlogic,simple-framebuffer\0simple-framebuffer";
+            amlogic,pipeline = "vpu-cvbs";
+            clocks = <0x02 0xa8 0x02 0x35 0x02 0x3a>;
+            power-domains = <0x03 0x00>;
+        };
+
+        framebuffer-hdmi {
+            compatible = "amlogic,simple-framebuffer\0simple-framebuffer";
+            amlogic,pipeline = "vpu-hdmi";
+            clocks = <0x02 0xa8 0x02 0x35 0x02 0x3a>;
+            power-domains = <0x03 0x00>;
+        };
+    };
+};

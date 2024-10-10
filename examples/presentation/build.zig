@@ -6,6 +6,7 @@ const std = @import("std");
 const MicrokitBoard = enum {
     qemu_virt_aarch64,
     maaxboard,
+    odroidc4,
 };
 
 const Target = struct {
@@ -28,6 +29,15 @@ const targets = [_]Target {
         .zig_target = std.Target.Query{
             .cpu_arch = .aarch64,
             .cpu_model = .{ .explicit = &std.Target.arm.cpu.cortex_a53 },
+            .os_tag = .freestanding,
+            .abi = .none,
+        },
+    },
+    .{
+        .board = MicrokitBoard.odroidc4,
+        .zig_target = std.Target.Query{
+            .cpu_arch = .aarch64,
+            .cpu_model = .{ .explicit = &std.Target.arm.cpu.cortex_a55 },
             .os_tag = .freestanding,
             .abi = .none,
         },
@@ -84,7 +94,7 @@ pub fn build(b: *std.Build) !void {
     const libmicrokit_include = b.fmt("{s}/include", .{ microkit_board_dir });
 
     const arm_vgic_version: usize = switch (microkit_board_option.?) {
-        .qemu_virt_aarch64 => 2,
+        .qemu_virt_aarch64, .odroidc4 => 2,
         .maaxboard => 3,
     };
 
@@ -160,7 +170,12 @@ pub fn build(b: *std.Build) !void {
     const linux_image_path = b.fmt("board/{s}/linux/linux", .{ microkit_board });
     const kernel_image_arg = b.fmt("-DGUEST_KERNEL_IMAGE_PATH=\"{s}\"", .{ linux_image_path });
 
-    const initrd_image_path = b.fmt("board/{s}/linux/rootfs.cpio.gz", .{ microkit_board });
+    const initrd_name = switch (microkit_board_option.?) {
+        .odroidc4 => "initrd.img-6.6.47-current-meson64",
+        else => "rootfs.cpio.gz",
+    };
+
+    const initrd_image_path = b.fmt("board/{s}/linux/{s}", .{ microkit_board, initrd_name });
     const initrd_image_arg = b.fmt("-DGUEST_INITRD_IMAGE_PATH=\"{s}\"", .{ initrd_image_path });
     const dtb_image_arg = b.fmt("-DGUEST_DTB_IMAGE_PATH=\"{s}\"", .{ b.getInstallPath(.prefix, "linux.dtb") });
 

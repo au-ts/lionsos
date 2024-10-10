@@ -36,7 +36,7 @@
 #define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
 #elif defined(BOARD_odroidc4)
 #define GUEST_DTB_VADDR 0x2f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
+#define GUEST_INIT_RAM_DISK_VADDR 0x2d000000
 #elif defined(BOARD_maaxboard)
 #define GUEST_DTB_VADDR 0x4f000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x4c000000
@@ -108,7 +108,11 @@ extern char _guest_dtb_image_end[];
 extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
 /* Microkit will set this variable to the start of the guest RAM memory region. */
-uintptr_t guest_ram_vaddr;
+uintptr_t guest_ram_vaddr = 0x20000000;
+
+#define NUM_PASSTHROUGH_IRQS 13
+int passthrough_irqs[NUM_PASSTHROUGH_IRQS] = { 222, 223, 48, 63, 62, 194, 193, 192, 5, 40, 225, 89, 35 };
+// int passthrough_irqs_ch[NUM_PASSTHROUGH_IRQS] = { 0, 1, 2, 3, 4, 5, 6, 7 };
 
 void init(void) {
     /* Initialise the VMM, the VCPU(s), and start the guest */
@@ -142,9 +146,6 @@ void init(void) {
     serial_queue_handle_t serial_rxq, serial_txq;
     serial_cli_queue_init_sys(microkit_name, &serial_rxq, serial_rx_queue, serial_rx_data, &serial_txq, serial_tx_queue, serial_tx_data);
 
-    blk_queue_init(&blk_queue, blk_req_queue, blk_resp_queue, blk_cli_queue_size(microkit_name));
-    while (!blk_storage_is_ready(blk_storage_info));
-
     /* Initialise virtIO console device */
     success = virtio_mmio_console_init(&virtio_console,
                                   VIRTIO_CONSOLE_BASE,
@@ -152,6 +153,10 @@ void init(void) {
                                   VIRTIO_CONSOLE_IRQ,
                                   &serial_rxq, &serial_txq,
                                   SERIAL_TX_CH);
+
+#ifndef CONFIG_PLAT_ODROIDC4
+    blk_queue_init(&blk_queue, blk_req_queue, blk_resp_queue, blk_cli_queue_size(microkit_name));
+    while (!blk_storage_is_ready(blk_storage_info));
 
     /* Initialise virtIO block device */
     success = virtio_mmio_blk_init(&virtio_blk,
@@ -184,6 +189,12 @@ void init(void) {
                                rx_buffer_data_region, tx_buffer_data_region,
                                NET_VIRT_RX_CH,
                                NET_VIRT_TX_CH);
+#endif
+
+    for (int i = 0; i < NUM_PASSTHROUGH_IRQS; i++) {
+        success = virq_register_passthrough(GUEST_VCPU_ID, passthrough_irqs[i], i);
+        assert(success);
+    }
 
     /* Finally start the guest */
     guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
@@ -191,8 +202,9 @@ void init(void) {
 
 void notified(microkit_channel ch) {
     switch (ch) {
+#ifndef CONFIG_PLAT_ODROIDC4
         case SERIAL_TX_CH:
-            /* Nothing to do if we are notified for serial transmit. */
+            // virtio_console_handle_tx(&virtio_console.virtio_device);
             break;
         case SERIAL_RX_CH: {
             /* We have received an event from the serial virtualiser, so we
@@ -212,16 +224,14 @@ void notified(microkit_channel ch) {
             /* Nothing to do here */
             break;
         }
+#endif
         default:
-            LOG_VMM_ERR("Unexpected channel, ch: 0x%lx\n", ch);
+            if (!virq_handle_passthrough(ch)) {
+                LOG_VMM_ERR("Unexpected channel, ch: 0x%lx\n", ch);
+            }
     }
 }
 
-/*
- * The primary purpose of the VMM after initialisation is to act as a fault-handler.
- * Whenever our guest causes an exception, it gets delivered to this entry point for
- * the VMM to handle.
- */
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
     bool success = fault_handle(child, msginfo);
     if (success) {

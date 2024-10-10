@@ -37,7 +37,7 @@
     };
 
     chosen {
-        bootargs = "console=hvc0 earlycon=hvc0 initcall_debug earlyprintk=serial debug loglevel=8";
+        bootargs = "console=hvc0 earlycon=hvc0 earlyprintk=serial debug loglevel=8";
         linux,initrd-start = <0x4d700000>;
         linux,initrd-end = <0x4d800000>;
     };

@@ -19,10 +19,14 @@ DONE: 2. Reproduce SDF with sdfgen
 
 ### Getting it working on MaaXBoard
 
-DONE: 1. Native Linux with the Ubuntu/Debian image
-2. Full passthrough with the Linux VM
-3. Move to part native, part Linux VM
+Now the MaaXboard works with virtIO console, block and networking. Now we
+need to move to using a proper distro.
+
+Need to understand how distros boot. We have some initrd that is on the block
+device I guess? So what we want to do is put the distro image on `/dev/vda`.
 
 ## Microkit sdfgen improvements
 * Need to handle unused memory regions
 * Need to handle `<0x302d0000 0x10000>;` vs `<0x0 0x302d0000 0x0 0x10000>;`
+* Need to be able to do passthrough VM access without manually specicfying and instead by using what
+  is enabled in the DTS with "status = okay"

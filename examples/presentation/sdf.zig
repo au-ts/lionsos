@@ -22,6 +22,7 @@ const VirtualMachineSystem = mod_sdf.vmm.VirtualMachineSystem;
 const MicrokitBoard = enum {
     qemu_virt_aarch64,
     maaxboard,
+    odroidc4,
 
     pub fn fromStr(str: []const u8) !MicrokitBoard {
         inline for (std.meta.fields(MicrokitBoard)) |field| {
@@ -35,7 +36,7 @@ const MicrokitBoard = enum {
 
     pub fn arch(b: MicrokitBoard) SystemDescription.Arch {
         return switch (b) {
-            .qemu_virt_aarch64, .maaxboard => .aarch64,
+            .qemu_virt_aarch64, .maaxboard, .odroidc4 => .aarch64,
         };
     }
 
@@ -141,6 +142,58 @@ fn parseArgs(args: []const []const u8, allocator: Allocator) !void {
     }
 }
 
+fn odroidc4(allocator: Allocator, blob: *dtb.Node) !void {
+    var sdf = SystemDescription.create(allocator, board.arch());
+
+    var vmm = Pd.create(allocator, "vmm", "vmm.elf");
+    var vm = Vm.create(allocator, "linux", &.{ .{ .id = 0, .cpu = 0 }});
+
+    // TODO: fix path
+    const guest_dtb_file = try std.fs.cwd().openFile("zig-out/linux.dtb", .{});
+    const guest_dtb_size = (try guest_dtb_file.stat()).size;
+    const guest_blob_bytes = try guest_dtb_file.reader().readAllAlloc(allocator, guest_dtb_size);
+    // Parse the DTB
+    var guest_dtb_blob = try dtb.parse(allocator, guest_blob_bytes);
+    defer guest_dtb_blob.deinit(allocator);
+
+    var vmm_system = VirtualMachineSystem.init(allocator, &sdf, &vmm, &vm, guest_dtb_blob, .{ .one_to_one_ram = true });
+
+    const passthrough_devices = .{
+        // .{ "uart", blob.child("soc").?.child("bus@ff800000").?.child("serial@3000").? },
+        // .{ "ethernet", blob.child("soc").?.child("ethernet@ff3f0000").?, true },
+        // .{ "vpu", blob.child("soc").?.child("vpu@ff900000").?, false },
+        .{ "bus1", blob.child("soc").?.child("bus@ff800000").?, false },
+        .{ "bus2", blob.child("soc").?.child("bus@ff600000").?, false },
+        .{ "bus3", blob.child("soc").?.child("bus@ffd00000").?, false },
+        .{ "sd", blob.child("soc").?.child("sd@ffe05000").?, true },
+        .{ "mmc", blob.child("soc").?.child("mmc@ffe07000").?, true },
+        .{ "usb", blob.child("soc").?.child("usb@ffe09000").?, true },
+        .{ "usb1", blob.child("soc").?.child("usb@ffe09000").?.child("usb@ff400000").?, true },
+        .{ "usb2", blob.child("soc").?.child("usb@ffe09000").?.child("usb@ff500000").?, true },
+        .{ "gpu", blob.child("soc").?.child("gpu@ffe40000").?, true },
+    };
+    inline for (passthrough_devices) |device| {
+        try vmm_system.addPassthrough(device[0], device[1], device[2]);
+    }
+
+    try vmm_system.addPassthroughRegion("vpu", blob.child("soc").?.child("vpu@ff900000").?, 0);
+
+    sdf.addProtectionDomain(&vmm);
+
+    try vmm.addInterrupt(.create(5, .level, null));
+    try vmm.addInterrupt(.create(40, .level, null));
+    try vmm.addInterrupt(.create(225, .edge, null));
+    try vmm.addInterrupt(.create(0x39 + 32, .edge, null));
+    try vmm.addInterrupt(.create(35, .edge, null));
+
+    try vmm_system.connect();
+    const xml = try sdf.toXml();
+
+    var xml_file = try std.fs.cwd().createFile(xml_out_path, .{});
+    defer xml_file.close();
+    _ = try xml_file.write(xml);
+}
+
 pub fn main() !void {
     // An arena allocator makes much more sense for our purposes, all we're doing is doing a bunch
     // of allocations in a linear fashion and then just tearing everything down. This has better
@@ -206,47 +259,58 @@ pub fn main() !void {
         std.debug.print("   - {s}\n", .{driver});
     }
 
-    var sdf = try SystemDescription.create(allocator, board.arch());
+    if (board == .odroidc4) {
+        try odroidc4(allocator, blob);
+        return;
+    }
+
+    var sdf = SystemDescription.create(allocator, board.arch());
 
     const uart_node = switch (board) {
         .qemu_virt_aarch64 => blob.child("pl011@9000000").?,
         .maaxboard => blob.child("soc@0").?.child("bus@30800000").?.child("serial@30860000").?,
+        .odroidc4 => @panic("odroidc4"),
     };
     const blk_node = switch (board) {
         .qemu_virt_aarch64 => blob.child("virtio_mmio@a003e00").?,
         .maaxboard => blob.child("soc@0").?.child("bus@30800000").?.child("mmc@30b40000").?,
+        .odroidc4 => @panic("odroidc4"),
     };
     const net_node = switch (board) {
         .qemu_virt_aarch64 => blob.child("virtio_mmio@a003c00").?,
         .maaxboard => blob.child("soc@0").?.child("bus@30800000").?.child("ethernet@30be0000").?,
+        .odroidc4 => @panic("odroidc4"),
     };
     const uart_driver_elf = switch (board) {
         .qemu_virt_aarch64 => "driver_uart_arm.elf",
         .maaxboard => "driver_uart_imx.elf",
+        .odroidc4 => @panic("odroidc4"),
     };
     const blk_driver_elf = switch (board) {
         .qemu_virt_aarch64 => "driver_blk_virtio.elf",
         .maaxboard => "driver_blk_mmc_imx.elf",
+        .odroidc4 => @panic("odroidc4"),
     };
     const net_driver_elf = switch (board) {
         .qemu_virt_aarch64 => "driver_net_virtio.elf",
         .maaxboard => "driver_net_imx.elf",
+        .odroidc4 => @panic("odroidc4"),
     };
 
-    var vmm = Pd.create(&sdf, "vmm", "vmm.elf");
-    var vm = Vm.create(&sdf, "linux", &.{ .{ .id = 0, .cpu = 0 }});
+    var vmm = Pd.create(allocator, "vmm", "vmm.elf");
+    var vm = Vm.create(allocator, "linux", &.{ .{ .id = 0, .cpu = 0 }});
 
-    var uart_driver = Pd.create(&sdf, "uart", uart_driver_elf);
-    var serial_virt_tx = Pd.create(&sdf, "serial_virt_tx", "serial_virt_tx.elf");
-    var serial_virt_rx = Pd.create(&sdf, "serial_virt_rx", "serial_virt_rx.elf");
+    var uart_driver = Pd.create(allocator, "uart", uart_driver_elf);
+    var serial_virt_tx = Pd.create(allocator, "serial_virt_tx", "serial_virt_tx.elf");
+    var serial_virt_rx = Pd.create(allocator, "serial_virt_rx", "serial_virt_rx.elf");
 
-    var net_driver = Pd.create(&sdf, "net_driver", net_driver_elf);
-    var net_virt_tx = Pd.create(&sdf, "net_virt_tx", "net_virt_tx.elf");
-    var net_virt_rx = Pd.create(&sdf, "net_virt_rx", "net_virt_rx.elf");
-    var vmm_net_copy = Pd.create(&sdf, "vmm_net_copy", "net_copy.elf");
+    var net_driver = Pd.create(allocator, "net_driver", net_driver_elf);
+    var net_virt_tx = Pd.create(allocator, "net_virt_tx", "net_virt_tx.elf");
+    var net_virt_rx = Pd.create(allocator, "net_virt_rx", "net_virt_rx.elf");
+    var vmm_net_copy = Pd.create(allocator, "vmm_net_copy", "net_copy.elf");
 
-    var blk_driver = Pd.create(&sdf, "blk_driver", blk_driver_elf);
-    var blk_virt = Pd.create(&sdf, "blk_virt", "blk_virt.elf");
+    var blk_driver = Pd.create(allocator, "blk_driver", blk_driver_elf);
+    var blk_virt = Pd.create(allocator, "blk_virt", "blk_virt.elf");
 
     // TODO: fix path
     const guest_dtb_file = try std.fs.cwd().openFile("zig-out/linux.dtb", .{});
@@ -256,7 +320,7 @@ pub fn main() !void {
     var guest_dtb_blob = try dtb.parse(allocator, guest_blob_bytes);
     defer guest_dtb_blob.deinit(allocator);
 
-    var vmm_system = VirtualMachineSystem.init(allocator, &sdf, &vmm, &vm, guest_dtb_blob);
+    var vmm_system = VirtualMachineSystem.init(allocator, &sdf, &vmm, &vm, guest_dtb_blob, .{});
 
     if (board == .maaxboard) {
         const passthrough_devices = .{
@@ -287,7 +351,7 @@ pub fn main() !void {
         // The MaaXBoard driver requires access to a timer, right now we do not
         // track dependencies of drivers on other drivers so we manually create a TimerSystem
         // and give the driver access.
-        var timer_driver = Pd.create(&sdf, "timer_driver", "driver_timer_imx.elf");
+        var timer_driver = Pd.create(, "timer_driver", "driver_timer_imx.elf");
         const timer_node = blob.child("soc@0").?.child("bus@30000000").?.child("gpt@302d0000").?;
         timer_system = sddf.TimerSystem.init(allocator, &sdf, &timer_driver, timer_node);
 
@@ -328,7 +392,7 @@ pub fn main() !void {
     net_virt_rx.priority = 98;
     net_virt_tx.priority = 99;
 
-    vmm_net_copy.priority = 2;
+    vmm_net_copy.priority = 3;
     vmm_net_copy.budget = 20000;
 
     vmm.priority = 2;
