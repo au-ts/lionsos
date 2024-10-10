@@ -11,7 +11,6 @@
 
     <!-- data region for eth0 receive buffers -->
     <memory_region name="eth0_rx_buffer_data_region" size="0x200_000" page_size="0x200_000" />
-    <memory_region name="eth0_tx_buffer_data_region" size="0x200_000" page_size="0x200_000" />
     
     <!-- data region for eth1 receive buffers -->
     <memory_region name="eth1_rx_buffer_data_region" size="0x200_000" page_size="0x200_000" />
@@ -37,8 +36,8 @@
     <memory_region name="eth0_forwader_rx_active" size="0x200_000" page_size="0x200_000" />
 
     <!-- meta data region between eth1 copy and eth1 Rx -->
-    <memory_region name="eth1_copy_rx_free" size="0x200_000" page_size="0x200_000" />
-    <memory_region name="eth1_copy_rx_active" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth1_forwarder_rx_free" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="eth1_forwarder_rx_active" size="0x200_000" page_size="0x200_000" />
 
     <!-- meta data region between eth0 copy and eth1 Tx -->
     <memory_region name="eth0_eth1_tx_free" size="0x200_000" page_size="0x200_000" />
@@ -99,8 +98,8 @@
         <map mr="eth1_driver_rx_free" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_drv" />
         <map mr="eth1_driver_rx_active" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_drv" />
 
-        <map mr="eth1_copy_rx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli0" />
-        <map mr="eth1_copy_rx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli0" />
+        <map mr="eth1_forwarder_rx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli0" />
+        <map mr="eth1_forwarder_rx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli0" />
 
         <map mr="eth1_rx_buffer_data_region" vaddr="0x2_c00_000" perms="r" cached="true" setvar_vaddr="buffer_data_vaddr" />
         <setvar symbol="buffer_data_paddr" region_paddr="eth1_rx_buffer_data_region" />
@@ -114,8 +113,8 @@
         <map mr="eth1_eth0_tx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="tx_free_cli0" />
         <map mr="eth1_eth0_tx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="tx_active_cli0" />
 
-        <map mr="eth0_tx_buffer_data_region" vaddr="0x2_c00_000" perms="r" cached="true" setvar_vaddr="buffer_data_region_cli0_vaddr" />
-        <setvar symbol="buffer_data_region_cli0_paddr" region_paddr="eth0_tx_buffer_data_region" />
+        <map mr="eth1_rx_buffer_data_region" vaddr="0x2_c00_000" perms="r" cached="true" setvar_vaddr="buffer_data_region_cli0_vaddr" />
+        <setvar symbol="buffer_data_region_cli0_paddr" region_paddr="eth1_rx_buffer_data_region" />
     </protection_domain>
 
     <protection_domain name="eth1_virt_tx" priority="100" budget="20000">
@@ -143,16 +142,15 @@
     </protection_domain>
 
     <!-- copier component which copies buffers received in eth1 receive data region into eth0 transmit data region -->
-    <protection_domain name="eth1_copy" priority="98" budget="20000">
-        <program_image path="copy_1.elf" />
-        <map mr="eth1_copy_rx_free" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_virt" />
-        <map mr="eth1_copy_rx_active" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_virt" />
+    <protection_domain name="eth1_forwarder" priority="98" budget="20000">
+        <program_image path="forwarder_1.elf" />
+        <map mr="eth1_forwarder_rx_free" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_virt" />
+        <map mr="eth1_forwarder_rx_active" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_virt" />
 
         <map mr="eth1_eth0_tx_free" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli" />
         <map mr="eth1_eth0_tx_active" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli" />
 
         <map mr="eth1_rx_buffer_data_region" vaddr="0x2_800_000" perms="r" cached="true" setvar_vaddr="virt_buffer_data_region" />
-        <map mr="eth0_tx_buffer_data_region" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="cli_buffer_data_region" />
     </protection_domain>
 
     <channel>
@@ -182,7 +180,7 @@
 
     <channel>
         <end pd="eth1_virt_rx" id="1" />
-        <end pd="eth1_copy" id="0" />
+        <end pd="eth1_forwarder" id="0" />
     </channel>
 
     <channel>
@@ -191,7 +189,7 @@
     </channel>
 
     <channel>
-        <end pd="eth1_copy" id="1" />
+        <end pd="eth1_forwarder" id="1" />
         <end pd="eth0_virt_tx" id="1" />
     </channel>
 </system>

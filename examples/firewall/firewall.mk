@@ -91,7 +91,11 @@ network/components/eth1/%.o: ${SDDF}/network/components/%.c
 	mkdir -p network/components/eth1
 	${CC} ${CFLAGS} -I${ETHERNET_CONFIG_INCLUDE_1} -c -o $@ $<
 
-NETWORK_COMPONENT_OBJ_1 := $(addprefix network/components/eth1/, copy.o network_virt_tx.o network_virt_rx.o)
+network/components/eth1/forwarder.o: ${FIREWALL}/forwarder.c
+	mkdir -p network/components/eth1
+	${CC} ${CFLAGS} -I${ETHERNET_CONFIG_INCLUDE_1} -c -o $@ $<
+
+NETWORK_COMPONENT_OBJ_1 := $(addprefix network/components/eth1/, copy.o network_virt_tx.o network_virt_rx.o forwarder.o)
 
 ${NETWORK_COMPONENT_OBJ_1}: |network/components
 ${NETWORK_COMPONENT_OBJ_1}: ${CHECK_NETWORK_FLAGS_MD5}
@@ -101,7 +105,10 @@ network/components/eth1/network_virt_%.o: ${SDDF}/network/components/virt_%.c
 	mkdir -p network/components/eth1
 	${CC} ${CFLAGS} -I${ETHERNET_CONFIG_INCLUDE_1} -c -o $@ $<
 
-%_1.elf: network/components/eth1/%.o
+forwarder_1.elf: network/components/eth1/forwarder.o
+	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
+
+%_1.elf: network/components/eth1/%.o forwarder_1.elf
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 # generate eth0 driver 

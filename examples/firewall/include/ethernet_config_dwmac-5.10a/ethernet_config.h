@@ -12,7 +12,7 @@
 
 #define NUM_NETWORK_CLIENTS 1
 #define NET_CLI0_NAME "eth0_virt_tx"
-#define NET_COPY0_NAME "eth1_copy"
+#define NET_COPY0_NAME "eth1_forwarder"
 #define NET_VIRT_RX_NAME "eth1_virt_rx"
 #define NET_VIRT_TX_NAME "eth1_virt_tx"
 #define NET_DRIVER_NAME "eth1"
