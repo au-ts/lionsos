@@ -121,6 +121,11 @@ void print_sector_data(uint8_t *buffer, unsigned long size) {
 _Static_assert(BLK_QUEUE_CAPACITY_CLI_FAT >= FAT_WORKER_THREAD_NUM,
     "The size of queue between fs and blk should be at least the size of FAT_WORKER_THREAD_NUM");
 
+// TODO: The FF_FS_LOCK is meant to prevent illegal behavior from the client, e.g. open a file and remove the file before closing it
+// However, the illegal operations can ideatically be sanitized on an upper layer
+_Static_assert(FF_FS_LOCK >= (FAT_MAX_OPENED_DIRNUM + FAT_MAX_OPENED_FILENUM),
+    "FF_FS_LOCK should be equal or larger than max opened dir number and max opened file number combined");
+
 void init(void) {
     // Init the block device queue
     // Have to make sure who initialize this SDDF queue
