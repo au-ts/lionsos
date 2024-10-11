@@ -2444,7 +2444,7 @@
 				compatible = "amlogic,meson-gxbb-ir";
 				reg = <0x00 0x8000 0x00 0x20>;
 				interrupts = <0x00 0xc4 0x01>;
-				status = "okay";
+				status = "disabled";
 				pinctrl-0 = <0x1f>;
 				pinctrl-names = "default";
 				linux,rc-map-name = "rc-odroid";

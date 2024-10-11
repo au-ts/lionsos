@@ -162,7 +162,7 @@ fn odroidc4(allocator: Allocator, blob: *dtb.Node) !void {
         // .{ "uart", blob.child("soc").?.child("bus@ff800000").?.child("serial@3000").? },
         // .{ "ethernet", blob.child("soc").?.child("ethernet@ff3f0000").?, true },
         // .{ "vpu", blob.child("soc").?.child("vpu@ff900000").?, false },
-        .{ "bus1", blob.child("soc").?.child("bus@ff800000").?, false },
+        // .{ "bus1", blob.child("soc").?.child("bus@ff800000").?, false },
         .{ "bus2", blob.child("soc").?.child("bus@ff600000").?, false },
         .{ "bus3", blob.child("soc").?.child("bus@ffd00000").?, false },
         .{ "sd", blob.child("soc").?.child("sd@ffe05000").?, true },
@@ -171,22 +171,53 @@ fn odroidc4(allocator: Allocator, blob: *dtb.Node) !void {
         .{ "usb1", blob.child("soc").?.child("usb@ffe09000").?.child("usb@ff400000").?, true },
         .{ "usb2", blob.child("soc").?.child("usb@ffe09000").?.child("usb@ff500000").?, true },
         .{ "gpu", blob.child("soc").?.child("gpu@ffe40000").?, true },
+        // .{ "virtio-console", blob.child("virtio-console@0130000").?, true },
     };
     inline for (passthrough_devices) |device| {
         try vmm_system.addPassthrough(device[0], device[1], device[2]);
     }
 
+    const bus_mr = Mr.create(allocator, "bus1", 0x3000, 0xff800000, .small);
+    sdf.addMemoryRegion(bus_mr);
+    vm.addMap(.create(bus_mr, 0xff800000, .rw, false, null));
+
     try vmm_system.addPassthroughRegion("vpu", blob.child("soc").?.child("vpu@ff900000").?, 0);
+    try vmm_system.addPassthroughRegion("ethernet", blob.child("soc").?.child("ethernet@ff3f0000").?, 0);
 
     sdf.addProtectionDomain(&vmm);
 
     try vmm.addInterrupt(.create(5, .level, null));
-    try vmm.addInterrupt(.create(40, .level, null));
-    try vmm.addInterrupt(.create(225, .edge, null));
     try vmm.addInterrupt(.create(0x39 + 32, .edge, null));
     try vmm.addInterrupt(.create(35, .edge, null));
 
+    var uart_driver = Pd.create(allocator, "uart", "driver_uart_meson.elf");
+    var serial_virt_tx = Pd.create(allocator, "serial_virt_tx", "serial_virt_tx.elf");
+    var serial_virt_rx = Pd.create(allocator, "serial_virt_rx", "serial_virt_rx.elf");
+    sdf.addProtectionDomain(&uart_driver);
+    sdf.addProtectionDomain(&serial_virt_tx);
+    sdf.addProtectionDomain(&serial_virt_rx);
+
+    const uart_node = blob.child("soc").?.child("bus@ff800000").?.child("serial@3000").?;
+    var serial_system = try sddf.SerialSystem.init(allocator, &sdf, uart_node, &uart_driver, &serial_virt_tx, &serial_virt_rx, .{});
+    serial_system.addClient(&vmm);
+
+    const net_node = blob.child("soc").?.child("ethernet@ff3f0000").?;
+    var net_driver = Pd.create(allocator, "net_driver", "driver_net_meson.elf");
+    var net_virt_tx = Pd.create(allocator, "net_virt_tx", "net_virt_tx.elf");
+    var net_virt_rx = Pd.create(allocator, "net_virt_rx", "net_virt_rx.elf");
+    var vmm_net_copy = Pd.create(allocator, "vmm_net_copy", "net_copy.elf");
+    sdf.addProtectionDomain(&net_driver);
+    sdf.addProtectionDomain(&net_virt_rx);
+    sdf.addProtectionDomain(&net_virt_tx);
+    sdf.addProtectionDomain(&vmm_net_copy);
+
+    var net_system = sddf.NetworkSystem.init(allocator, &sdf, net_node, &net_driver, &net_virt_rx, &net_virt_tx, .{});
+    net_system.addClientWithCopier(&vmm, &vmm_net_copy);
+
     try vmm_system.connect();
+    try serial_system.connect();
+    try net_system.connect();
+
     const xml = try sdf.toXml();
 
     var xml_file = try std.fs.cwd().createFile(xml_out_path, .{});
@@ -351,9 +382,9 @@ pub fn main() !void {
         // The MaaXBoard driver requires access to a timer, right now we do not
         // track dependencies of drivers on other drivers so we manually create a TimerSystem
         // and give the driver access.
-        var timer_driver = Pd.create(, "timer_driver", "driver_timer_imx.elf");
+        var timer_driver = Pd.create(allocator, "timer_driver", "driver_timer_imx.elf");
         const timer_node = blob.child("soc@0").?.child("bus@30000000").?.child("gpt@302d0000").?;
-        timer_system = sddf.TimerSystem.init(allocator, &sdf, &timer_driver, timer_node);
+        timer_system = sddf.TimerSystem.init(allocator, &sdf, timer_node, &timer_driver);
 
         timer_system.addClient(&blk_driver);
         sdf.addProtectionDomain(&timer_driver);

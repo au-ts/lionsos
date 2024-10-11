@@ -204,6 +204,7 @@ pub fn build(b: *std.Build) !void {
     const sddf_artifacts = &.{
         "driver_uart_arm.elf",
         "driver_uart_imx.elf",
+        "driver_uart_meson.elf",
         "serial_virt_rx.elf",
         "serial_virt_tx.elf",
         "driver_blk_virtio.elf",
@@ -211,6 +212,7 @@ pub fn build(b: *std.Build) !void {
         "blk_virt.elf",
         "driver_net_virtio.elf",
         "driver_net_imx.elf",
+        "driver_net_meson.elf",
         "net_virt_rx.elf",
         "net_virt_tx.elf",
         "net_copy.elf",

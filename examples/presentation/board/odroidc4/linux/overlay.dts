@@ -6,11 +6,23 @@
 / {
     memory@0 {
         device_type = "memory";
-        reg = <0x00 0x20000000 0x00 0x60000000>;
+        reg = <0x00 0x20000000 0x00 0x80000000>;
     };
 
     secure-monitor {
         status = "disabled";
+    };
+
+    virtio-console@0130000 {
+        compatible = "virtio,mmio";
+        reg = <0x00 0x130000 0x00 0x200>;
+        interrupts = <0x00 130 0x04>;
+    };
+
+    virtio-net@0132000 {
+        compatible = "virtio,mmio";
+        reg = <0x00 0x132000 0x00 0x200>;
+        interrupts = <0x00 132 0x04>;
     };
 
     soc {
@@ -26,15 +38,17 @@
             adc@9000 {
                 status = "disabled";
             };
+
+            serial@3000 {
+                status = "disabled";
+            };
         };
     };
 
     chosen {
-        linux,stdout-path = "/soc/bus@ff800000/serial@3000";
-        stdout-path = "/soc/bus@ff800000/serial@3000";
         linux,initrd-end = <0x00000000 0x2f000000>;
         linux,initrd-start = <0x00000000 0x2d000000>;
-        bootargs = "console=ttyAML0,115200n8 root=/dev/mmcblk0p1 clk_ignore_unused nosmp rw debug loglevel=8 pci=nomsi earlyprintk=serial maxcpus=1";
+        bootargs = "console=hvc0 earlycon=hvc0 root=/dev/mmcblk0p1 clk_ignore_unused nosmp rw debug loglevel=8 pci=nomsi earlyprintk=serial maxcpus=1";
 
         framebuffer-cvbs {
             compatible = "amlogic,simple-framebuffer\0simple-framebuffer";

@@ -53,10 +53,10 @@ char *serial_tx_data;
 
 struct virtio_console_device virtio_console;
 
-#define SERIAL_TX_CH 0
-#define SERIAL_RX_CH 1
+#define SERIAL_TX_CH 11
+#define SERIAL_RX_CH 12
 
-#define VIRTIO_CONSOLE_IRQ (74)
+#define VIRTIO_CONSOLE_IRQ (162)
 #define VIRTIO_CONSOLE_BASE (0x130000)
 #define VIRTIO_CONSOLE_SIZE (0x1000)
 
@@ -72,7 +72,7 @@ struct virtio_blk_device virtio_blk;
 
 #define BLK_CH 2
 
-#define VIRTIO_BLK_IRQ (75)
+#define VIRTIO_BLK_IRQ (163)
 #define VIRTIO_BLK_BASE (0x131000)
 #define VIRTIO_BLK_SIZE (0x1000)
 
@@ -91,10 +91,10 @@ uintptr_t tx_buffer_data_region;
 
 struct virtio_net_device virtio_net;
 
-#define NET_VIRT_RX_CH 3
-#define NET_VIRT_TX_CH 4
+#define NET_VIRT_RX_CH 13
+#define NET_VIRT_TX_CH 14
 
-#define VIRTIO_NET_IRQ (76)
+#define VIRTIO_NET_IRQ (164)
 #define VIRTIO_NET_BASE (0x132000)
 #define VIRTIO_NET_SIZE (0x1000)
 
@@ -110,8 +110,8 @@ extern char _guest_initrd_image_end[];
 /* Microkit will set this variable to the start of the guest RAM memory region. */
 uintptr_t guest_ram_vaddr = 0x20000000;
 
-#define NUM_PASSTHROUGH_IRQS 13
-int passthrough_irqs[NUM_PASSTHROUGH_IRQS] = { 222, 223, 48, 63, 62, 194, 193, 192, 5, 40, 225, 89, 35 };
+#define NUM_PASSTHROUGH_IRQS 11
+int passthrough_irqs[NUM_PASSTHROUGH_IRQS] = { 222, 223, 48, 63, 62, 194, 193, 192, 5, 89, 35 };
 // int passthrough_irqs_ch[NUM_PASSTHROUGH_IRQS] = { 0, 1, 2, 3, 4, 5, 6, 7 };
 
 void init(void) {
@@ -168,6 +168,7 @@ void init(void) {
                         &blk_queue,
                         BLK_CH);
     assert(success);
+#endif
 
     uint8_t mac[6];
     uint64_t mac_addr = net_cli_mac_addr(microkit_name);
@@ -189,7 +190,6 @@ void init(void) {
                                rx_buffer_data_region, tx_buffer_data_region,
                                NET_VIRT_RX_CH,
                                NET_VIRT_TX_CH);
-#endif
 
     for (int i = 0; i < NUM_PASSTHROUGH_IRQS; i++) {
         success = virq_register_passthrough(GUEST_VCPU_ID, passthrough_irqs[i], i);
@@ -202,7 +202,6 @@ void init(void) {
 
 void notified(microkit_channel ch) {
     switch (ch) {
-#ifndef CONFIG_PLAT_ODROIDC4
         case SERIAL_TX_CH:
             // virtio_console_handle_tx(&virtio_console.virtio_device);
             break;
@@ -210,10 +209,6 @@ void notified(microkit_channel ch) {
             /* We have received an event from the serial virtualiser, so we
              * call the virtIO console handling */
             virtio_console_handle_rx(&virtio_console);
-            break;
-        }
-        case BLK_CH: {
-            virtio_blk_handle_resp(&virtio_blk);
             break;
         }
         case NET_VIRT_RX_CH: {
@@ -224,7 +219,12 @@ void notified(microkit_channel ch) {
             /* Nothing to do here */
             break;
         }
-#endif
+// #ifndef CONFIG_PLAT_ODROIDC4
+//         case BLK_CH: {
+//             virtio_blk_handle_resp(&virtio_blk);
+//             break;
+//         }
+// #endif
         default:
             if (!virq_handle_passthrough(ch)) {
                 LOG_VMM_ERR("Unexpected channel, ch: 0x%lx\n", ch);
