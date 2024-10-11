@@ -321,36 +321,36 @@ static inline void fs_queue_publish_production(fs_queue_t *queue, uint64_t amoun
 static inline char *fs_status_to_str(uint64_t status) {
     switch (status) {
     case FS_STATUS_SUCCESS:
-        return "SUCCESS";
+        return "operation succeeded";
     case FS_STATUS_ERROR:
-        return "ERROR";
+        return "operation failed for unspecified reason";
     case FS_STATUS_INVALID_BUFFER:
-        return "INVALID_BUFER";
+        return "client-provided buffer is invalid";
     case FS_STATUS_INVALID_PATH:
-        return "INVALID_PATH";
+        return "client-provided path or path buffer is invalid";
     case FS_STATUS_INVALID_FD:
-        return "INVALID_FD";
+        return "invalid file descriptor provided by client";
     case FS_STATUS_ALLOCATION_ERROR:
-        return "ALLOCATION_ERROR";
+        return "server failed to allocate";
     case FS_STATUS_OUTSTANDING_OPERATIONS:
-        return "OUTSTANDING_OPERATIONS";
+        return "failed to close file descriptor because it had other unfinished outstanding operations";
     case FS_STATUS_INVALID_NAME:
-        return "INVALID_NAME";
+        return "client-provided file name is invalid";
     case FS_STATUS_TOO_MANY_OPEN_FILES:
-        return "TOO_MANY_OPEN_FILES";
+        return "server has reached its limit of open files";
     case FS_STATUS_SERVER_WAS_DENIED:
-        return "SERVER_WAS_DENIED";
+        return "server was denied by backing device or protocol";
     case FS_STATUS_INVALID_WRITE:
-        return "INVALID_WRITE";
+        return "cannot write to file that is opened without write permissions";
     case FS_STATUS_INVALID_READ:
-        return "INVALID_READ";
+        return "cannot read from file that is opened without read permissions";
     case FS_STATUS_DIRECTORY_IS_FULL:
-        return "DIRECTORY_IS_FULL";
+        return "could not create file as directory is full";
     case FS_STATUS_INVALID_COMMAND:
-        return "INVALID_COMMAND";
+        return "command type is invalid";
     case FS_STATUS_END_OF_DIRECTORY:
-        return "END_OF_DIRECTORY";
+        return "end of directory";
     default:
-        return "UNKNOWN STATUS CODE";
+        return "invalid status code";
     }
 }
