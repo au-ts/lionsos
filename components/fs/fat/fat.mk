@@ -55,6 +55,9 @@ fat/$(FAT_LIBMICROKITCO_OBJ): fat
 			LLVM:=1 \
 			LIBMICROKITCO_OPT_PATH=$(FAT_LIBMICROKITCO_OPT_PATH)
 
+LIB_FS_SERVER_LIBC_INCLUDE := $(FAT_LIBC_INCLUDE)
+include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
+
 fat:
 	mkdir -p fat
 
@@ -69,7 +72,7 @@ fat/%.o: CFLAGS += $(FAT_CFLAGS)
 fat/%.o: $(FAT_SRC_DIR)/%.c $(FAT_LIBC_INCLUDE) $(CHECK_FAT_FLAGS_MD5) |fat
 	$(CC) -c $(CFLAGS) $< -o $@
 
-fat.elf: $(FAT_OBJ) fat/$(FAT_LIBMICROKITCO_OBJ) $(FAT_LIBC_LIB)
+fat.elf: $(FAT_OBJ) fat/$(FAT_LIBMICROKITCO_OBJ) $(FAT_LIBC_LIB) lib_fs_server.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 -include $(FAT_OBJ:.o=.d)

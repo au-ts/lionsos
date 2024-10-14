@@ -7,7 +7,7 @@
 #include <assert.h>
 #include <stddef.h>
 
-#include "fd.h"
+#include <lions/fs/server.h>
 
 struct oftable_slot {
     enum {
@@ -50,24 +50,24 @@ static int of_free(struct oftable_slot *of) {
     }
 }
 
-static int of_set_file(struct oftable_slot *of, struct nfsfh *file) {
+static int of_set_file(struct oftable_slot *of, void *file_handle) {
     assert(of);
     switch (of->state) {
     case state_allocated:
         of->state = state_open_file;
-        of->handle = file;
+        of->handle = file_handle;
         return 0;
     default:
         return -1;
     }
 }
 
-static int of_set_dir(struct oftable_slot *of, struct nfsdir *dir) {
+static int of_set_dir(struct oftable_slot *of, void *dir_handle) {
     assert(of);
     switch (of->state) {
     case state_allocated:
         of->state = state_open_dir;
-        of->handle = dir;
+        of->handle = dir_handle;
         return 0;
     default:
         return -1;
@@ -87,7 +87,7 @@ static int of_unset(struct oftable_slot *of) {
     }
 }
 
-static int of_begin_op_file(struct oftable_slot *of, struct nfsfh **file_handle_p) {
+static int of_begin_op_file(struct oftable_slot *of, void **file_handle_p) {
     assert(of);
     switch (of->state) {
     case state_open_file:
@@ -104,7 +104,7 @@ static int of_begin_op_file(struct oftable_slot *of, struct nfsfh **file_handle_
     }
 }
 
-static int of_begin_op_dir(struct oftable_slot *of, struct nfsdir **dir_handle_p) {
+static int of_begin_op_dir(struct oftable_slot *of, void **dir_handle_p) {
     assert(of);
     switch (of->state) {
     case state_open_dir:
@@ -175,7 +175,7 @@ int fd_free(fd_t fd) {
     return of_free(of);
 }
 
-int fd_set_file(fd_t fd, struct nfsfh *file) {
+int fd_set_file(fd_t fd, void *file) {
     struct oftable_slot *of = fd_to_of(fd);
     if (of == NULL) {
         return -1;
@@ -183,7 +183,7 @@ int fd_set_file(fd_t fd, struct nfsfh *file) {
     return of_set_file(of, file);
 }
 
-int fd_set_dir(fd_t fd, struct nfsdir *dir) {
+int fd_set_dir(fd_t fd, void *dir) {
     struct oftable_slot *of = fd_to_of(fd);
     if (of == NULL) {
         return -1;
@@ -199,7 +199,7 @@ int fd_unset(fd_t fd) {
     return of_unset(of);
 }
 
-int fd_begin_op_file(fd_t fd, struct nfsfh **file) {
+int fd_begin_op_file(fd_t fd, void **file) {
     struct oftable_slot *of = fd_to_of(fd);
     if (of == NULL) {
         return -1;
@@ -207,7 +207,7 @@ int fd_begin_op_file(fd_t fd, struct nfsfh **file) {
     return of_begin_op_file(of, file);
 }
 
-int fd_begin_op_dir(fd_t fd, struct nfsdir **dir) {
+int fd_begin_op_dir(fd_t fd, void **dir) {
     struct oftable_slot *of = fd_to_of(fd);
     if (of == NULL) {
         return -1;

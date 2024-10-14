@@ -34,7 +34,7 @@ NFS_LWIP_OBJ := $(addprefix nfs/lwip/, $(NFS_LWIPFILES:.c=.o))
 
 NFS_DIRS := nfs $(addprefix nfs/lwip/, api core core/ipv4 netif)
 
-NFS_FILES := nfs.c fd.c op.c posix.c tcp.c
+NFS_FILES := nfs.c op.c posix.c tcp.c
 NFS_OBJ := $(addprefix nfs/, $(NFS_FILES:.c=.o)) $(NFS_LWIP_OBJ)
 
 CHECK_NFS_FLAGS_MD5 := .nfs_cflags-$(shell echo -- $(CFLAGS) $(CFLAGS_nfs) | shasum | sed 's/ *-//')
@@ -52,9 +52,12 @@ libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt $(MUSL)/lib/libc.a
 	MUSL=$(abspath $(MUSL)) cmake -S $(LIBNFS) -B libnfs
 	cmake --build libnfs
 
+LIB_FS_SERVER_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
+
 nfs.elf: LDFLAGS += -L$(LIBGCC)
 nfs.elf: LIBS += -lgcc
-nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a
+nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_fs_server.a
 	$(LD) $(LDFLAGS) -o $@ $(LIBS) $^
 
 $(NFS_DIRS):
