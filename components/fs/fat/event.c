@@ -134,19 +134,15 @@ void init(void) {
        This part of the code is for setting up the thread pool by
        assign stacks and size of the stack to the pool
     */
-    uint64_t stack[FAT_WORKER_THREAD_NUM];
-    stack[0] = worker_thread_stack_one;
-    stack[1] = worker_thread_stack_two;
-    stack[2] = worker_thread_stack_three;
-    stack[3] = worker_thread_stack_four;
+    stack_ptrs_arg_array_t costacks = {
+        worker_thread_stack_one,
+        worker_thread_stack_two,
+        worker_thread_stack_three,
+        worker_thread_stack_four
+    };
 
     // Init thread pool
-    microkit_cothread_init(&co_controller_mem,
-                            FAT_WORKER_THREAD_STACKSIZE,
-                            stack[0],
-                            stack[1],
-                            stack[2],
-                            stack[3]);
+    microkit_cothread_init(&co_controller_mem, FAT_WORKER_THREAD_STACKSIZE, costacks);
     for (uint32_t i = 0; i < (FAT_WORKER_THREAD_NUM + 1); i++) {
         microkit_cothread_semaphore_init(&sem[i]);
     }
