@@ -924,7 +924,7 @@ void handle_readdir(fs_cmd_t cmd) {
         goto end_of_dir;
     }
 
-    uint64_t name_len = strlen(dirent->name) + 1;
+    uint64_t name_len = strlen(dirent->name);
     assert(name_len <= FS_MAX_NAME_LENGTH);
     memcpy(buf, dirent->name, name_len);
     cmpl.data.dir_read.path_len = name_len;
