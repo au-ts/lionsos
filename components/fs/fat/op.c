@@ -195,7 +195,7 @@ void fat_open(void) {
     uint64_t openflag = args->params.file_open.flags;
 
     // Copy the name to our name buffer
-    char filepath[FS_MAX_NAME_LENGTH];
+    char filepath[FS_MAX_NAME_LENGTH + 1];
 
     // Validate string
     FRESULT RET = validate_and_copy_path(buffer, size, filepath);
