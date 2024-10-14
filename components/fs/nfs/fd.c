@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 #include <assert.h>
-#include <stdio.h>
+#include <stddef.h>
 
 #include "fd.h"
 
