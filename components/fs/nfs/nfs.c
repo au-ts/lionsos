@@ -17,9 +17,10 @@
 #include <sddf/serial/queue.h>
 #include <serial_config.h>
 
+#include <lions/fs/server.h>
+
 #include "nfs.h"
 #include "util.h"
-#include "fd.h"
 #include "tcp.h"
 #include "posix.h"
 
