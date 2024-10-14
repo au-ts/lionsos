@@ -115,7 +115,8 @@ void init(void) {
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
 #endif
 
-    microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, mp_stack);
+    stack_ptrs_arg_array_t costacks = { mp_stack };
+    microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, costacks);
 
     if (microkit_cothread_spawn(t_mp_entrypoint, NULL) == LIBMICROKITCO_NULL_HANDLE) {
         printf("MP|ERROR: Cannot initialise Micropython cothread\n");
