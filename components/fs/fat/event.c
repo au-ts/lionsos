@@ -132,7 +132,7 @@ void init(void) {
        This part of the code is for setting up the thread pool by
        assign stacks and size of the stack to the pool
     */
-    stack_ptrs_arg_array_t costacks = { 
+    stack_ptrs_arg_array_t costacks = {
         worker_thread_stack_one,
         worker_thread_stack_two,
         worker_thread_stack_three,
