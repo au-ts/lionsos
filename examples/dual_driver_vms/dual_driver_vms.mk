@@ -12,6 +12,10 @@ SYSTEM_DIR := $(EXAMPLE_DIR)/board/$(MICROKIT_BOARD)
 
 # vmm1
 VM_ETH_DIR := $(SYSTEM_DIR)/vm_eth
+
+NET_DRIVER_VM_USERLEVEL := uio_net_driver
+NET_DRIVER_VM_USERLEVEL_INIT := net_driver_init
+
 # vmm2
 VM_SDMMC_DIR := $(SYSTEM_DIR)/vm_sdmmc
 
@@ -36,6 +40,14 @@ CFLAGS := \
 	  -MP \
 	  -target $(TARGET)
 
+CFLAGS_USERLEVEL := \
+		-g3 \
+		-O3 \
+		-Wno-unused-command-line-argument \
+		-Wall -Wno-unused-function -Werror \
+		-D_GNU_SOURCE \
+		-target aarch64-linux-gnu
+
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := --start-group -lmicrokit -Tmicrokit.ld libsddf_util_debug.a libvmm.a --end-group
 
@@ -49,6 +61,11 @@ UART_DRIVER := $(SDDF)/drivers/serial/meson
 SERIAL_COMPONENTS := $(SDDF)/serial/components
 include $(UART_DRIVER)/uart_driver.mk
 include $(SERIAL_COMPONENTS)/serial_components.mk
+include $(LIBVMM)/vmm.mk
+include $(LIBVMM_TOOLS)/linux/uio/uio.mk
+include $(LIBVMM_TOOLS)/linux/net/net_init.mk
+include $(LIBVMM_TOOLS)/linux/uio_drivers/net/uio_net.mk
+
 IMAGES = vmm1.elf vmm2.elf timer_driver.elf clk_driver.elf pinctrl_driver.elf uart_driver.elf $(SERIAL_IMAGES)
 
 all: loader.img
@@ -64,8 +81,10 @@ $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 vmm1.elf: vmm1.o images1.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-rootfs1.cpio.gz: $(VM_ETH_DIR)/rootfs.cpio.gz
-	cp $(VM_ETH_DIR)/rootfs.cpio.gz $(BUILD_DIR)/rootfs1.cpio.gz
+rootfs1.cpio.gz: $(VM_ETH_DIR)/rootfs.cpio.gz $(NET_DRIVER_VM_USERLEVEL) $(NET_DRIVER_VM_USERLEVEL_INIT)
+	$(LIBVMM)/tools/packrootfs $(VM_ETH_DIR)/rootfs.cpio.gz rootfs1 -o $@ \
+		--startup $(NET_DRIVER_VM_USERLEVEL_INIT) \
+		--home $(NET_DRIVER_VM_USERLEVEL)
 
 vm1.dts: $(VM_ETH_DIR)/linux.dts $(VM_ETH_DIR)/overlay.dts
 	$(LIBVMM)/tools/dtscat $^ > $@

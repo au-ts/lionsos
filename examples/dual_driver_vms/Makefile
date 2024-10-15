@@ -22,6 +22,7 @@ export EXAMPLE_DIR:=$(abspath .)
 
 export TARGET := aarch64-none-elf
 export CC := clang
+export CC_USERLEVEL := zig cc
 export LD := ld.lld
 export AS := llvm-as
 export AR := llvm-ar
@@ -30,6 +31,7 @@ export RANLIB := llvm-ranlib
 export MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 export SDDF=$(abspath ../../dep/sddf)
 export LIBVMM=$(abspath ../../dep/libvmm)
+export LIBVMM_TOOLS=$(LIBVMM)/tools
 
 
 IMAGE_FILE := $(BUILD_DIR)/loader.img
