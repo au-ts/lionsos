@@ -160,7 +160,7 @@
         <irq irq="40" id="4" />
         <!-- Ethernet PHY -->
         <irq irq="96" id="5" />
-        <!-- Not sure what this is, but its needed for ethernet on odroid... -->
+        <!-- IRQ work -->
         <irq irq="5" id="6" />
     </protection_domain>
 

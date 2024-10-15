@@ -46,7 +46,10 @@ CFLAGS_USERLEVEL := \
 		-Wno-unused-command-line-argument \
 		-Wall -Wno-unused-function \
 		-D_GNU_SOURCE \
-		-target aarch64-linux-gnu
+		-target aarch64-linux-gnu \
+		-I$(EXAMPLE_DIR) \
+		-I$(BOARD_DIR)/include \
+		-I$(SDDF)/include
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := --start-group -lmicrokit -Tmicrokit.ld libsddf_util_debug.a libvmm.a --end-group

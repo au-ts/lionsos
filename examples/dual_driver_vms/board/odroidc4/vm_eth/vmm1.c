@@ -25,40 +25,19 @@
 // e.g one DTB for VMM one, one DTB for VMM two. we should be able to hide all
 // of this in the build system to avoid doing any run-time DTB stuff.
 
-/*
- * As this is just an example, for simplicity we just make the size of the
- * guest's "RAM" the same for all platforms. For just booting Linux with a
- * simple user-space, 0x10000000 bytes (256MB) is plenty.
- */
 #define GUEST_RAM_SIZE 0x10000000
-
-#if defined(BOARD_qemu_virt_aarch64)
-#define GUEST_DTB_VADDR 0x4f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x4d700000
-#elif defined(BOARD_rpi4b_hyp)
-#define GUEST_DTB_VADDR 0x2e000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
-#elif defined(BOARD_odroidc2_hyp)
 #define GUEST_DTB_VADDR 0x2f000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
-#elif defined(BOARD_odroidc4)
-#define GUEST_DTB_VADDR 0x2f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
-#elif defined(BOARD_maaxboard)
-#define GUEST_DTB_VADDR 0x4f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x4c000000
-#else
-#error Need to define guest kernel image address and DTB address
-#endif
 
-/* For simplicity we just enforce the serial IRQ channel number to be the same
- * across platforms. */
+/* Interrupts */
+#define SERIAL_IRQ 225
 #define SERIAL_IRQ_CH 1
-
-#if defined(BOARD_odroidc4)
 #define ETH_IRQ 40
 #define ETH_IRQ_CH 4
-#define SERIAL_IRQ 225
+#define ETH_PHY_IRQ 96
+#define ETH_PHY_IRQ_CH 5
+#define WORK_IRQ 5
+#define WORK_IRQ_CH 6
 
 /* Virtio Console */
 #define SERIAL_VIRT_TX_CH 1
@@ -76,16 +55,6 @@ char *serial_tx_data;
 
 static struct virtio_console_device virtio_console;
 
-#elif defined(BOARD_rpi4b_hyp)
-#define SERIAL_IRQ 57
-#elif defined(BOARD_imx8mm_evk)
-#define SERIAL_IRQ 59
-#elif defined(BOARD_imx8mq_evk) || defined(BOARD_maaxboard)
-#define SERIAL_IRQ 58
-#else
-#error Need to define serial interrupt
-#endif
-
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
 extern char _guest_kernel_image_end[];
@@ -97,10 +66,6 @@ extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
 /* Microkit will set this variable to the start of the guest RAM memory region. */
 uintptr_t guest_ram_vaddr;
-
-#define BOARD_odroidc4 // @billn remove this
-
-#if defined(BOARD_odroidc4)
 
 /* Where the memory regions are, but there are other devices sharing the same page */
 #define PINCTRL_PERIPHS_MR_PADDR_START 0xff634000
@@ -190,8 +155,6 @@ bool pinmux_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_Use
     }
 }
 
-#endif
-
 void init(void) {
     /* Initialise the VMM, the VCPU(s), and start the guest */
 
@@ -223,16 +186,15 @@ void init(void) {
         LOG_VMM_ERR("Failed to pass thru ETH irq\n");
         return;
     }
-    if (!virq_register_passthrough(GUEST_VCPU_ID, 96, 5)) {
+    if (!virq_register_passthrough(GUEST_VCPU_ID, ETH_PHY_IRQ, ETH_PHY_IRQ_CH)) {
         LOG_VMM_ERR("Failed to pass thru ETH PHY irq\n");
         return;
     }
-    if (!virq_register_passthrough(GUEST_VCPU_ID, 5, 6)) {
+    if (!virq_register_passthrough(GUEST_VCPU_ID, WORK_IRQ, WORK_IRQ_CH)) {
         LOG_VMM_ERR("Failed to pass thru ETH PHY irq\n");
         return;
     }
 
-#if defined(BOARD_odroidc4)
     /* Trap all access to pinmux into the hypervisor for emulation */
     bool bus2_fault_reg_ok = fault_register_vm_exception_handler(PINCTRL_AO_MR_PADDR_START, PINCTRL_AO_MR_SIZE, &pinmux_vmfault_handler, (void *) PINCTRL_AO_MR_PADDR_START);
     if (!bus2_fault_reg_ok) {
@@ -269,7 +231,6 @@ void init(void) {
         LOG_VMM_ERR("Failed to initialise virtio console\n");
         return;
     }
-#endif
 
     LOG_VMM("starting %s at \"%s\"\n", VMM_MACHINE_NAME, microkit_name);
 
