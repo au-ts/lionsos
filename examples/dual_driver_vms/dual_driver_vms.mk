@@ -44,7 +44,7 @@ CFLAGS_USERLEVEL := \
 		-g3 \
 		-O3 \
 		-Wno-unused-command-line-argument \
-		-Wall -Wno-unused-function -Werror \
+		-Wall -Wno-unused-function \
 		-D_GNU_SOURCE \
 		-target aarch64-linux-gnu
 
