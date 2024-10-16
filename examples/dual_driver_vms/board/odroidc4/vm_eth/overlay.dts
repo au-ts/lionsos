@@ -27,11 +27,35 @@
         // IRQ = 74
 	};
 
-	uio {
+	uio@0 {
 		compatible = "generic-uio\0uio";
 		reg = <
-            // These are the 4 net driver regions contiguously
-			0x00 0x40000000 0x00 0x800000
+			0x00 0x40000000 0x00 0x20000
+
+            // 0x40000000 is the current frame being transmitted
+            // 0x40010000 is the current frame being received
+		>;
+		interrupts = <0x00 38 0x04>;
+		// IRQ = 70, but unused
+	};
+
+	uio@1 {
+		compatible = "generic-uio\0uio";
+		reg = <
+            // VM <-> Hypervisor interrupt for TX path. This remains unmapped in SDF, which
+            // generate a fault to hypervisor when VM writes. VM will also poll on this UIO FD,
+            // a vIRQ inject from the hypervisor trigger an event in the net UIO driver
+            0x00 0x50000000 0x00 0x1000
+		>;
+		interrupts = <0x00 39 0x04>;
+		// IRQ = 71
+	};
+
+	uio@2 {
+		compatible = "generic-uio\0uio";
+		reg = <
+            // Same idea as above but for RX
+            0x00 0x60000000 0x00 0x1000
 		>;
 		interrupts = <0x00 40 0x04>;
 		// IRQ = 72

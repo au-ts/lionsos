@@ -29,6 +29,8 @@
 #define GUEST_DTB_VADDR 0x2f000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
 
+#define PAGE_SIZE_4K
+
 /* Interrupts */
 #define SERIAL_IRQ 225
 #define SERIAL_IRQ_CH 1
@@ -42,7 +44,6 @@
 /* Virtio Console */
 #define SERIAL_VIRT_TX_CH 1
 #define SERIAL_VIRT_RX_CH 2
-
 #define VIRTIO_CONSOLE_IRQ (74)
 #define VIRTIO_CONSOLE_BASE (0x130000)
 #define VIRTIO_CONSOLE_SIZE (0x1000)
@@ -54,6 +55,33 @@ char *serial_rx_data;
 char *serial_tx_data;
 
 static struct virtio_console_device virtio_console;
+
+/* Network Virtualiser channels */
+#define VIRT_NET_TX_CH  7
+#define VIRT_NET_RX_CH  8
+
+/* UIO Network Interrupts */
+#define UIO_NET_TX_IRQ 71
+#define UIO_NET_TX_FAULT_ADDR 0x50000000
+#define UIO_NET_RX_IRQ 72
+#define UIO_NET_RX_FAULT_ADDR 0x60000000
+
+/* sDDF Networking queues  */
+#include "../../../config/ethernet_config.h"
+/* Control queues */
+net_queue_t *rx_free;
+net_queue_t *rx_active;
+net_queue_t *tx_free;
+net_queue_t *tx_active;
+
+net_queue_handle_t rx_queue;
+net_queue_handle_t tx_queue;
+/* Data region */
+uintptr_t buffer_data_region_cli0_vaddr;
+uintptr_t buffer_data_region_cli0_paddr;
+uintptr_t buffer_data_region_cli1_vaddr;
+uintptr_t buffer_data_region_cli1_paddr;
+
 
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
@@ -155,6 +183,11 @@ bool pinmux_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_Use
     }
 }
 
+void uio_ack(size_t vcpu_id, int irq, void *cookie)
+{
+    // do nothing
+}
+
 void init(void) {
     /* Initialise the VMM, the VCPU(s), and start the guest */
 
@@ -227,6 +260,16 @@ void init(void) {
                                   &serial_rxq, &serial_txq,
                                   SERIAL_VIRT_TX_CH);
     
+    /* Initialise UIO IRQ for TX and RX path */
+    if (!virq_register(GUEST_VCPU_ID, UIO_NET_TX_IRQ, uio_ack, NULL)) {
+        LOG_VMM_ERR("Failed to register TX interrupt\n");
+        return;
+    }
+    if (!virq_register(GUEST_VCPU_ID, UIO_NET_RX_IRQ, uio_ack, NULL)) {
+        LOG_VMM_ERR("Failed to register RX interrupt\n");
+        return;
+    }
+
     if (!success) {
         LOG_VMM_ERR("Failed to initialise virtio console\n");
         return;
@@ -239,7 +282,6 @@ void init(void) {
 }
 
 void notified(microkit_channel ch) {
-
     bool handled = virq_handle_passthrough(ch);
     switch (ch) {
         case SERIAL_VIRT_RX_CH: {
@@ -248,6 +290,16 @@ void notified(microkit_channel ch) {
             virtio_console_handle_rx(&virtio_console);
             break;
         }
+        case VIRT_NET_TX_CH:
+            if (!virq_inject(GUEST_VCPU_ID, UIO_NET_TX_IRQ)) {
+                LOG_VMM_ERR("failed to inject TX UIO IRQ\n");
+            }
+
+        case VIRT_NET_RX_CH:
+            if (!virq_inject(GUEST_VCPU_ID, UIO_NET_RX_IRQ)) {
+                LOG_VMM_ERR("failed to inject RX UIO IRQ\n");
+            }
+
         default:
             if (handled) {
                 return;
