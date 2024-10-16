@@ -16,9 +16,18 @@ ifeq ($(strip $(MICROKIT_BOARD)),)
 $(error MICROKIT_BOARD must be specified)
 endif
 
+ifeq ($(strip $(LIBMATH)),)
+export LIBMATH:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libm.a)))
+endif
+
+ifeq ($(strip $(LIBGCC)),)
+export LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
+endif
+
 export BUILD_DIR:=$(abspath $(BUILD_DIR))
 export MICROKIT_SDK:=$(abspath $(MICROKIT_SDK))
 export EXAMPLE_DIR:=$(abspath .)
+export LIONSOS := $(abspath ../..)
 
 export TARGET := aarch64-none-elf
 export CC := clang

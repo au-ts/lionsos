@@ -35,7 +35,7 @@ CFLAGS := \
 	  -I$(BOARD_DIR)/include \
 	  -I$(LIBVMM)/include \
 	  -I$(SDDF)/include \
-	  -I$(EXAMPLE_DIR)/include \
+	  -I$(EXAMPLE_DIR)/config \
 	  -MD \
 	  -MP \
 	  -target $(TARGET)
@@ -64,12 +64,14 @@ UART_DRIVER := $(SDDF)/drivers/serial/meson
 SERIAL_COMPONENTS := $(SDDF)/serial/components
 include $(UART_DRIVER)/uart_driver.mk
 include $(SERIAL_COMPONENTS)/serial_components.mk
+include ${SDDF}/network/components/network_components.mk
 include $(LIBVMM)/vmm.mk
 include $(LIBVMM_TOOLS)/linux/uio/uio.mk
 include $(LIBVMM_TOOLS)/linux/net/net_init.mk
 include $(LIBVMM_TOOLS)/linux/uio_drivers/net/uio_net.mk
 
-IMAGES = vmm1.elf vmm2.elf timer_driver.elf clk_driver.elf pinctrl_driver.elf uart_driver.elf $(SERIAL_IMAGES)
+IMAGES = vmm1.elf vmm2.elf timer_driver.elf clk_driver.elf pinctrl_driver.elf uart_driver.elf $(SERIAL_IMAGES) \
+         micropython.elf copy.elf network_virt_rx.elf network_virt_tx.elf
 
 all: loader.img
 
@@ -134,6 +136,36 @@ CLK_DRIVER := $(SDDF)/drivers/clk/meson
 TIMER_DRIVER := $(SDDF)/drivers/timer/meson
 PINCTRL_DRIVER := $(SDDF)/drivers/pinctrl/meson
 
+# Webserver stuff
+MUSL_SRC := $(LIONSOS)/dep/musllibc
+MUSL := musllibc
+MICRODOT := ${LIONSOS}/dep/microdot/src
+export CONFIG_INCLUDE ?= $(abspath ../config)
+
+micropython.elf: mpy-cross \
+		${MICRODOT} ${LIONSOS}/dep/libmicrokitco/Makefile
+	make -C $(LIONSOS)/components/micropython -j$(nproc) \
+			MICROKIT_SDK=$(MICROKIT_SDK) \
+			MICROKIT_BOARD=$(MICROKIT_BOARD) \
+			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
+			MICROPY_MPYCROSS=$(abspath mpy_cross/mpy-cross) \
+			MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
+			BUILD=$(abspath .) \
+			LIBMATH=$(LIBMATH) \
+			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
+			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE))
+			
+# re add exec module and frozen manifest later after everything works
+# remove the VFS disable after block integration
+
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL}/Makefile
+	make -C $(MUSL_SRC) \
+		C_COMPILER=aarch64-none-elf-gcc \
+		TOOLPREFIX=aarch64-none-elf- \
+		CONFIG_ARCH_AARCH64=y \
+		STAGE_DIR=$(abspath $(MUSL)) \
+		SOURCE_DIR=.
+
 export CLK_DRIVER_DIR := ${SDDF}/drivers/clk/meson
 export DTS_FILE := $(EXAMPLE_DIR)/board/$(MICROKIT_BOARD)/odroidc4_patched.dts
 export PYTHON := python3
@@ -155,3 +187,14 @@ clean::
 clobber:: clean
 	rm -f *.a
 	rm -f $(IMAGE_FILE) $(REPORT_FILE)
+
+FORCE: ;
+
+mpy-cross: FORCE  ${LIONSOS}/dep/micropython/mpy-cross
+	make -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
+
+.PHONY: mpy-cross
+
+$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
+	cd ${LIONSOS}; git submodule update --init dep/micropython
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
