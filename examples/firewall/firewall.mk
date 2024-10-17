@@ -5,6 +5,8 @@ ETHERNET_DRIVER_0:=$(SDDF)/drivers/network/$(DRIV_DIR_0)
 ETHERNET_DRIVER_1:=$(SDDF)/drivers/network/$(DRIV_DIR_1)
 ETHERNET_CONFIG_INCLUDE_0:=${FIREWALL}/include/ethernet_config_imx
 ETHERNET_CONFIG_INCLUDE_1:=${FIREWALL}/include/ethernet_config_dwmac-5.10a
+SERIAL_CONFIG_INCLUDE:=${FIREWALL}/include/serial_config
+BENCHMARK:=${FIREWALL}/benchmark
 NETWORK_COMPONENTS:=$(SDDF)/network/components
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
@@ -15,7 +17,8 @@ REPORT_FILE := report.txt
 vpath %.c ${SDDF} ${FIREWALL}
 
 IMAGES := eth_driver_0.elf eth_driver_1.elf network_virt_rx_0.elf network_virt_rx_1.elf \
-	  network_virt_tx_0.elf network_virt_tx_1.elf copy_0.elf copy_1.elf forwarder.elf
+	  network_virt_tx_0.elf network_virt_tx_1.elf copy_0.elf copy_1.elf forwarder.elf \
+	  benchmark.elf idle.elf
 
 CFLAGS := -mcpu=$(CPU) \
 	  -mstrict-align \
@@ -25,6 +28,7 @@ CFLAGS := -mcpu=$(CPU) \
 	  -DMICROKIT_CONFIG_$(MICROKIT_CONFIG) \
 	  -I$(BOARD_DIR)/include \
 	  -I$(SDDF)/include \
+	  -I$(SERIAL_CONFIG_INCLUDE) \
 	  -MD \
 	  -MP
 
@@ -126,6 +130,27 @@ dwmac-5.10a/ethernet.o: ${ETHERNET_DRIVER_1}/ethernet.c ${CHECK_NETDRV_FLAGS}
 
 eth_driver_1.elf: dwmac-5.10a/ethernet.o
 	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
+
+
+BENCH_OBJS := benchmark/benchmark.o
+IDLE_OBJS := benchmark/idle.o
+LIBUTIL_DBG := libsddf_util_debug.a
+LIBUTIL := libsddf_util.a
+
+# benchmark code 
+benchmark/%.o: ${BENCHMARK}/%.c
+	mkdir -p benchmark
+	${CC} -c ${CFLAGS} -c -o $@ $<
+
+${BENCH_OBJS} ${IDLE_OBJS}: ${CHECK_FLAGS_BOARD_MD5} |benchmark
+benchmark:
+	mkdir -p benchmark
+
+benchmark.elf: $(BENCH_OBJS) ${LIBUTIL}
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+idle.elf: $(IDLE_OBJS) ${LIBUTIL_DBG}
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 clean::
 	${RM} -f *.elf .depend* $
