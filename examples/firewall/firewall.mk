@@ -5,6 +5,8 @@ ETHERNET_DRIVER_0:=$(SDDF)/drivers/network/$(DRIV_DIR_0)
 ETHERNET_DRIVER_1:=$(SDDF)/drivers/network/$(DRIV_DIR_1)
 ETHERNET_CONFIG_INCLUDE_0:=${FIREWALL}/include/ethernet_config_imx
 ETHERNET_CONFIG_INCLUDE_1:=${FIREWALL}/include/ethernet_config_dwmac-5.10a
+SERIAL_COMPONENTS := $(SDDF)/serial/components
+UART_DRIVER := $(SDDF)/drivers/serial/$(UART_DRIV_DIR)
 SERIAL_CONFIG_INCLUDE:=${FIREWALL}/include/serial_config
 BENCHMARK:=${FIREWALL}/benchmark
 NETWORK_COMPONENTS:=$(SDDF)/network/components
@@ -18,7 +20,7 @@ vpath %.c ${SDDF} ${FIREWALL}
 
 IMAGES := eth_driver_0.elf eth_driver_1.elf network_virt_rx_0.elf network_virt_rx_1.elf \
 	  network_virt_tx_0.elf network_virt_tx_1.elf copy_0.elf copy_1.elf forwarder.elf \
-	  benchmark.elf idle.elf
+	  benchmark.elf idle.elf serial_virt_tx.elf uart_driver.elf
 
 CFLAGS := -mcpu=$(CPU) \
 	  -mstrict-align \
@@ -49,6 +51,7 @@ ${IMAGE_FILE} $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 include ${SDDF}/util/util.mk
+include ${SERIAL_COMPONENTS}/serial_components.mk
 
 # common settings for eth0 and eth1
 CHECK_NETWORK_FLAGS_MD5:=.network_cflags-$(shell echo -- ${CFLAGS} ${CFLAGS_network} | shasum | sed 's/ *-//')
