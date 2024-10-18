@@ -94,6 +94,11 @@ void reply(fs_cmpl_t cmpl) {
     microkit_notify(CLIENT_CHANNEL);
 }
 
+uint64_t successful_opens;
+uint64_t unsuccessful_opens;
+uint64_t successful_closes;
+uint64_t unsuccessful_closes;
+
 void process_commands(void) {
     uint64_t command_count = fs_queue_length_consumer(command_queue);
     uint64_t completion_space = FS_QUEUE_CAPACITY - fs_queue_length_producer(completion_queue);
@@ -326,10 +331,12 @@ void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data
     if (status == 0) {
         fd_set_file(fd, file);
         cmpl.data.file_open.fd = fd;
+        successful_opens++;
     } else {
         dlog("failed to open file (%d): %s\n", status, data);
         fd_free(fd);
         cmpl.status = FS_STATUS_ERROR;
+        unsuccessful_opens++;
     }
     continuation_free(cont);
     reply(cmpl);
@@ -338,6 +345,8 @@ void open_cb(int status, struct nfs_context *nfs, void *data, void *private_data
 void handle_open(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     struct fs_cmd_params_file_open params = cmd.params.file_open;
+
+    dlog("SO=%lu UO=%lu SC=%lu UC=%lu", successful_opens, unsuccessful_opens, successful_closes, unsuccessful_closes);
 
     char *path = copy_path(0, params.path);
     if (path == NULL) {
@@ -380,7 +389,7 @@ void handle_open(fs_cmd_t cmd) {
     }
 
     return;
-
+    unsuccessful_opens++;
 fail_enqueue:
     continuation_free(cont);
     fd_free(fd);
@@ -397,10 +406,12 @@ void close_cb(int status, struct nfs_context *nfs, void *data, void *private_dat
 
     if (status == 0) {
         fd_free(fd);
+        successful_closes++;
     } else {
         dlog("failed to close file: %d (%s)", status, nfs_get_error(nfs));
         fd_set_file(fd, fh);
         cmpl.status = FS_STATUS_ERROR;
+        unsuccessful_closes++;
     }
     continuation_free(cont);
     reply(cmpl);
@@ -439,7 +450,7 @@ void handle_close(fs_cmd_t cmd) {
     }
 
     return;
-
+    unsuccessful_closes++;
 fail_enqueue:
     continuation_free(cont);
     fd_set_file(params.fd, file_handle);
@@ -822,10 +833,12 @@ void opendir_cb(int status, struct nfs_context *nfs, void *data, void *private_d
     if (status == 0) {
         fd_set_dir(fd, dir);
         cmpl.data.dir_open.fd = fd;
+        successful_opens++;
     } else {
         dlog("failed to open directory: %d (%s)", status, data);
         cmpl.status = FS_STATUS_ERROR;
         fd_free(fd);
+        unsuccessful_opens++;
     }
 
     continuation_free(cont);
@@ -864,7 +877,7 @@ void handle_opendir(fs_cmd_t cmd) {
     }
 
     return;
-
+    unsuccessful_opens++;
 fail_enqueue:
     continuation_free(cont);
     fd_free(fd);
@@ -882,6 +895,7 @@ void handle_closedir(fs_cmd_t cmd) {
     if (err) {
         dlog("invalid fd (%d)", params.fd);
         cmpl.status = FS_STATUS_INVALID_FD;
+        unsuccessful_closes++;
         goto fail;
     }
     fd_end_op(params.fd);
@@ -890,11 +904,13 @@ void handle_closedir(fs_cmd_t cmd) {
     if (err) {
         dlog("trying to close fd with outstanding operations");
         cmpl.status = FS_STATUS_OUTSTANDING_OPERATIONS;
+        unsuccessful_closes++;
         goto fail;
     }
 
     nfs_closedir(nfs, dir_handle);
     fd_free(params.fd);
+    successful_closes++;
 fail:
     reply(cmpl);
 }
