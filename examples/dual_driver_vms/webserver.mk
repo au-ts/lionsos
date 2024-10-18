@@ -106,8 +106,8 @@ include $(LIBVMM_TOOLS)/linux/uio_drivers/blk/uio_blk.mk
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  copy.elf network_virt_rx.elf network_virt_tx.elf \
-	  uart_driver.elf serial_virt_tx.elf $(BLK_IMAGES) \
-	  blk_driver_vmm.elf
+	  uart_driver.elf serial_virt_tx.elf serial_virt_rx.elf $(BLK_IMAGES) \
+	  blk_driver_vmm.elf fat.elf
 
 all: $(IMAGE_FILE)
 
