@@ -15,7 +15,7 @@
 #define SERIAL_TX_ONLY 1
 
 /* Associate a colour with each client's output. */
-#define SERIAL_WITH_COLOUR 1
+#define SERIAL_WITH_COLOUR 0
 
 /* Default baud rate of the uart device */
 #define UART_DEFAULT_BAUD 115200
