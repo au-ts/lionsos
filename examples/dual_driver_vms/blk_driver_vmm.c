@@ -121,7 +121,7 @@ void init(void)
     assert(success);
 
     /* Register the UIO IRQ */
-    virq_register(GUEST_VCPU_ID, UIO_IRQ, uio_ack, NULL);
+   /* virq_register(GUEST_VCPU_ID, UIO_IRQ, uio_ack, NULL); */
 
 #if defined(BOARD_odroidc4)
     /* Register the SD card IRQ */
@@ -135,6 +135,9 @@ void init(void)
 
     /* Finally start the guest */
     guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
+
+    LOG_VMM("\"%s\" is ready.\n", microkit_name);
+
 }
 
 void notified(microkit_channel ch)
