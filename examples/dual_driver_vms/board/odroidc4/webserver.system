@@ -286,6 +286,23 @@
     <memory_region name="uio_irq_status" size="0x1000" page_size="0x1000" />
 
     <memory_region name="blk_driver_vm_ram" size="0x6_000_000" page_size="0x200_000" phys_addr="0x20_000_000"/>
+    <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0xffc06000" />
+    <memory_region name="bus1_1" size="0x34000" phys_addr="0xff600000" />
+    <memory_region name="bus1_pinmux" size="0x1000" phys_addr="0xff634000" />
+    <memory_region name="bus1_2" size="0x7000" phys_addr="0xff635000" />
+    <memory_region name="bus1_clk" size="0x1000" phys_addr="0xff63c000" />
+    <memory_region name="bus1_3" size="0x1c3000" phys_addr="0xff63d000" />
+
+    <memory_region name="bus2_pinmux" size="0x1000" phys_addr="0xff800000" />
+    <memory_region name="bus2_1" size="0x2000" phys_addr="0xff801000" />
+    <memory_region name="bus2_2" size="0x1fc000" phys_addr="0xff804000" />
+
+    <memory_region name="bus3_1" size="0xf000" phys_addr="0xffd00000" />
+    <memory_region name="bus3_2" size="0x8000" phys_addr="0xffd10000" />
+    <memory_region name="bus3_measure_clk" size="0x1000" phys_addr="0xFFD18000"/>
+    <memory_region name="bus3_3" size="0xe7000" phys_addr="0xffd19000" />
+    <memory_region name="uart_void_vmm2" size="0x1000" />
+    <memory_region name="sd" size="0x1000" phys_addr="0xffe05000" />
     <protection_domain name="BLK_DRIVER_VMM" priority="200" budget="100" period="400">
         <program_image path="blk_driver_vmm.elf" />
         <map mr="blk_driver_vm_ram" vaddr="0x20000000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
@@ -301,14 +318,6 @@
             <map mr="blk_driver_vm_ram" vaddr="0x20000000" perms="rwx" />
             <map mr="gic_vcpu" vaddr="0xffc02000" perms="rw" cached="false" />
 
-            <!-- Passthrough I/O -->
-            <map mr="sd" vaddr="0xffe05000" perms="rw" cached="false" />
-            <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
-            <map mr="bus2-1" vaddr="0xff800000" perms="rw" cached="false" />
-            <map mr="uart" vaddr="0xff803000" perms="rw" cached="false" />
-            <map mr="bus2-2" vaddr="0xff804000" perms="rw" cached="false" />
-            <map mr="bus3" vaddr="0xffd00000" perms="rw" cached="false" />
-
             <!-- sDDF block -->
             <map mr="blk_storage_info_driver" vaddr="0x40000000" perms="rw" cached="false" />
             <map mr="req_blk_driver" vaddr="0x40200000" perms="rw" cached="false" />
@@ -317,6 +326,27 @@
 
             <!-- UIO irq status -->
             <map mr="uio_irq_status" vaddr="0x39800000" perms="rw" cached="true" />
+
+            <!-- We let the guest access anything that is not pinmux or clock -->
+            <map mr="bus1_1" vaddr="0xff600000" perms="rw" cached="false" />
+            <map mr="bus1_2" vaddr="0xff635000" perms="rw" cached="false" />
+            <map mr="bus1_3" vaddr="0xff63d000" perms="rw" cached="false" />
+
+            <map mr="bus2_1" vaddr="0xff801000" perms="rw" cached="false" />
+            <map mr="bus2_2" vaddr="0xff804000" perms="rw" cached="false" />
+
+            <map mr="bus3_1" vaddr="0xffd00000" perms="rw" cached="false" />
+            <map mr="bus3_2" vaddr="0xffd10000" perms="rw" cached="false" />
+            <map mr="bus3_3" vaddr="0xffd19000" perms="rw" cached="false" />
+
+            <map mr="uart_void_vmm2" vaddr="0xff803000" perms="rw" cached="false" />
+
+            <map mr="sd" vaddr="0xffe05000" perms="rw" cached="false" />
+
+            <!-- TODO: remove -->
+            <map mr="bus1_pinmux" vaddr="0xff634000" perms="rw" cached="false" />
+            <map mr="bus2_pinmux" vaddr="0xff800000" perms="rw" cached="false" />
+            <map mr="bus1_clk" vaddr="0xff63c000" perms="rw" cached="false" />
         </virtual_machine>
         <!-- SD Card -->
         <irq irq="222" id="1"/>

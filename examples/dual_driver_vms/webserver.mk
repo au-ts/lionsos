@@ -39,16 +39,12 @@ MUSL := musllibc
 MICRODOT := ${LIONSOS}/dep/microdot/src
 LIBVMM_TOOLS := $(LIBVMM)/tools
 BLK_COMPONENTS := $(SDDF)/blk/components
-VIRTIO_EXAMPLE:= $(abspath .)
 SYSTEM_DIR := $(VIRTIO_EXAMPLE)/board/$(MICROKIT_BOARD)
 
 BLK_DRIVER_VM_USERLEVEL := uio_blk_driver
 BLK_DRIVER_VM_USERLEVEL_INIT := blk_driver_init
 
-IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
-	  copy.elf network_virt_rx.elf network_virt_tx.elf \
-	  uart_driver.elf serial_virt_tx.elf \
-      $(BLK_IMAGES) blk_driver_vmm.elf
+vpath %.c $(SDDF) $(LIBVMM) $(VIRTIO_EXAMPLE)
 
 SYSTEM_FILE := $(WEBSERVER_SRC_DIR)/board/$(MICROKIT_BOARD)/webserver.system
 
@@ -65,17 +61,53 @@ CFLAGS := \
 	-target $(TARGET) \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
+	-I$(LIBVMM)/include \
 	-I$(SDDF)/include \
+	-I$(EXAMPLE_DIR)/include \
 	-I$(CONFIG_INCLUDE)
 
+CFLAGS_USERLEVEL := \
+		-g3 \
+		-O3 \
+		-Wno-unused-command-line-argument \
+		-Wall -Wno-unused-function \
+		-D_GNU_SOURCE \
+		-target aarch64-linux-gnu \
+		-I$(EXAMPLE_DIR) \
+		-I$(BOARD_DIR)/include \
+		-I$(CONFIG_INCLUDE) \
+		-I$(SDDF)/include
+
 LDFLAGS := -L$(BOARD_DIR)/lib
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
+LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a libvmm.a
 
 IMAGE_FILE := webserver.img
 REPORT_FILE := report.txt
 
+SDDF_MAKEFILES := ${SDDF}/util/util.mk \
+		  ${SDDF}/drivers/timer/${TIMER_DRIVER_DIR}/timer_driver.mk \
+		  ${SDDF}/drivers/network/${ETHERNET_DRIVER_DIR}/eth_driver.mk \
+		  ${SDDF}/drivers/serial/${UART_DRIVER_DIR}/uart_driver.mk \
+		  ${SDDF}/network/components/network_components.mk \
+		  ${SDDF}/serial/components/serial_components.mk
+
+include ${SDDF_MAKEFILES}
+include $(NFS)/nfs.mk
+include $(BLK_COMPONENTS)/blk_components.mk
+include $(LIBVMM)/vmm.mk
+include $(LIBVMM_TOOLS)/linux/uio/uio.mk
+include $(LIBVMM_TOOLS)/linux/blk/blk_init.mk
+include $(LIBVMM_TOOLS)/linux/uio_drivers/blk/uio_blk.mk
+
+IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
+	  copy.elf network_virt_rx.elf network_virt_tx.elf \
+	  uart_driver.elf serial_virt_tx.elf $(BLK_IMAGES) blk_driver_vmm.elf
+
 all: $(IMAGE_FILE)
-${IMAGES}: libsddf_util_debug.a
+
+-include vmm.d
+
+${IMAGES}: libsddf_util_debug.a libvmm.a
 
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 
@@ -115,23 +147,8 @@ $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL}/Makefile
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-SDDF_MAKEFILES := ${SDDF}/util/util.mk \
-		  ${SDDF}/drivers/timer/${TIMER_DRIVER_DIR}/timer_driver.mk \
-		  ${SDDF}/drivers/network/${ETHERNET_DRIVER_DIR}/eth_driver.mk \
-		  ${SDDF}/drivers/serial/${UART_DRIVER_DIR}/uart_driver.mk \
-		  ${SDDF}/network/components/network_components.mk \
-		  ${SDDF}/serial/components/serial_components.mk
-
-include ${SDDF_MAKEFILES}
-include $(NFS)/nfs.mk
-include $(BLK_COMPONENTS)/blk_components.mk
-include $(LIBVMM)/vmm.mk
-include $(LIBVMM_TOOLS)/linux/uio/uio.mk
-include $(LIBVMM_TOOLS)/linux/blk/blk_init.mk
-include $(LIBVMM_TOOLS)/linux/uio_drivers/blk/uio_blk.mk
-
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
-	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+	RUST_BACKTRACE=full $(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu: ${IMAGE_FILE}
 	$(QEMU) -machine virt,virtualization=on \

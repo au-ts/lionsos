@@ -31,12 +31,16 @@ ifeq ($(strip $(LIBMATH)),)
 export LIBMATH:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libm.a)))
 endif
 
+export EXAMPLE_DIR:=$(abspath .)
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD := $(MICROKIT_BOARD)
-export CONFIG_INCLUDE ?= $(abspath config)
+export CONFIG_INCLUDE := $(abspath config)
 export WEBSERVER_SRC_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+export VIRTIO_EXAMPLE:= $(abspath .)
 export LIONSOS := $(abspath ../..)
+export DTC := dtc
+export CPU := cortex-a55
 export SDDF=$(abspath ../../dep/sddf)
 export LIBVMM=$(LIONSOS)/dep/libvmm
 
