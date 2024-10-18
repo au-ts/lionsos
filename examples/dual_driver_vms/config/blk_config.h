@@ -15,6 +15,7 @@
 #define BLK_NAME_CLI0                      "CLIENT_VMM-1"
 #define BLK_NAME_CLI1                      "CLIENT_VMM-2"
 
+#define BLK_QUEUE_SIZE_CLI_FAT             16
 #define BLK_QUEUE_CAPACITY_CLI0            1024
 #define BLK_QUEUE_CAPACITY_CLI1            1024
 #define BLK_QUEUE_CAPACITY_DRIV            (BLK_QUEUE_CAPACITY_CLI0 + BLK_QUEUE_CAPACITY_CLI1)

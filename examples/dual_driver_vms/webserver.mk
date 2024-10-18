@@ -41,6 +41,9 @@ LIBVMM_TOOLS := $(LIBVMM)/tools
 BLK_COMPONENTS := $(SDDF)/blk/components
 SYSTEM_DIR := $(VIRTIO_EXAMPLE)/board/$(MICROKIT_BOARD)
 
+LWIP := $(SDDF)/network/ipstacks/lwip/src
+FAT := $(LIONSOS)/components/fs/fat
+
 BLK_DRIVER_VM_USERLEVEL := uio_blk_driver
 BLK_DRIVER_VM_USERLEVEL_INIT := blk_driver_init
 
@@ -89,7 +92,9 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 		  ${SDDF}/drivers/network/${ETHERNET_DRIVER_DIR}/eth_driver.mk \
 		  ${SDDF}/drivers/serial/${UART_DRIVER_DIR}/uart_driver.mk \
 		  ${SDDF}/network/components/network_components.mk \
-		  ${SDDF}/serial/components/serial_components.mk
+		  ${SDDF}/serial/components/serial_components.mk \
+		  ${SDDF}/libco/libco.mk
+
 
 include ${SDDF_MAKEFILES}
 include $(NFS)/nfs.mk
@@ -101,7 +106,8 @@ include $(LIBVMM_TOOLS)/linux/uio_drivers/blk/uio_blk.mk
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  copy.elf network_virt_rx.elf network_virt_tx.elf \
-	  uart_driver.elf serial_virt_tx.elf $(BLK_IMAGES) blk_driver_vmm.elf
+	  uart_driver.elf serial_virt_tx.elf $(BLK_IMAGES) \
+	  blk_driver_vmm.elf
 
 all: $(IMAGE_FILE)
 
@@ -135,6 +141,20 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 
 %.py: ${WEBSERVER_SRC_DIR}/%.py
 	cp $< $@
+
+fat.elf: musllibc/lib/libc.a
+	make -C $(LIONSOS)/components/fs/fat \
+		CC=$(CC) \
+		LD=$(LD) \
+		CPU=$(CPU) \
+		BUILD_DIR=$(abspath .) \
+		CONFIG=$(MICROKIT_CONFIG) \
+		MICROKIT_SDK=$(MICROKIT_SDK) \
+		MICROKIT_BOARD=$(MICROKIT_BOARD) \
+		LIBC_DIR=$(abspath $(BUILD_DIR)/musllibc) \
+		BUILD_DIR=$(abspath .) \
+		CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
+		TARGET=$(TARGET)
 
 $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL}/Makefile
 	make -C $(MUSL_SRC) \
