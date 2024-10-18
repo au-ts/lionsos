@@ -26,8 +26,8 @@
 #define NET_HW_REGION_SIZE                      0x10000
 
 #if defined(CONFIG_PLAT_ODROIDC4)
-#define MAC_ADDR_CLI0                       0x525401000010
-#define MAC_ADDR_CLI1                       0x525401000011
+#define MAC_ADDR_CLI0                       0x52540100aa10
+#define MAC_ADDR_CLI1                       0x52540100aa11
 #elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
 #define MAC_ADDR_CLI0                       0x525401000012
 #define MAC_ADDR_CLI1                       0x525401000013
