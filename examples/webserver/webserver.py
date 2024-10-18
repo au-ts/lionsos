@@ -22,6 +22,7 @@ content_types_map = Response.types_map | {
 # buffer size.
 class FileStream:
     def __init__(self, f):
+        print(f'O {f.fd}')
         self.f = f
 
     def __aiter__(self):
@@ -34,6 +35,7 @@ class FileStream:
         return buf
 
     async def aclose(self):
+        print(f'C {self.f.fd}')
         await self.f.close()
 
 
@@ -178,6 +180,7 @@ async def send_file(relative_path, request_headers):
     response_headers['Last-Modified'] = format_http_date(mtime)
 
     f = await fs_async.open(path)
+    print(f'F {f.fd} {path}')
     return Response(body=FileStream(f), headers=response_headers)
 
 
