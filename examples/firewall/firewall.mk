@@ -52,6 +52,7 @@ ${IMAGE_FILE} $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 
 include ${SDDF}/util/util.mk
 include ${SERIAL_COMPONENTS}/serial_components.mk
+include ${UART_DRIVER}/uart_driver.mk
 
 # common settings for eth0 and eth1
 CHECK_NETWORK_FLAGS_MD5:=.network_cflags-$(shell echo -- ${CFLAGS} ${CFLAGS_network} | shasum | sed 's/ *-//')

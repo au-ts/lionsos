@@ -32,7 +32,9 @@
 #define PD_VIRT_TX0_ID      5
 #define PD_VIRT_TX1_ID      6
 #define PD_FWD0_ID          7
-#define PD_FWD1_ID          8    
+#define PD_FWD1_ID          8
+#define PD_SERIAL_VIRT_TX   10
+#define PD_UART             9    
 
 uintptr_t uart_base;
 uintptr_t cyclecounters_vaddr;
@@ -96,6 +98,12 @@ static void print_pdid_name(uint64_t pd_id)
     case PD_FWD1_ID:
         sddf_printf("eth1_forwarder");
         break;
+    case PD_SERIAL_VIRT_TX:
+        sddf_printf("serial_virt_tx");
+        break;
+    case PD_UART:
+        sddf_printf("uart_driver");
+        break;
     default:
         sddf_printf("unknown");
         break;
@@ -114,6 +122,9 @@ static void microkit_benchmark_start(void)
     seL4_BenchmarkResetThreadUtilisation(BASE_TCB_CAP + PD_VIRT_TX1_ID);
     seL4_BenchmarkResetThreadUtilisation(BASE_TCB_CAP + PD_FWD0_ID);
     seL4_BenchmarkResetThreadUtilisation(BASE_TCB_CAP + PD_FWD1_ID);
+    seL4_BenchmarkResetThreadUtilisation(BASE_TCB_CAP + PD_SERIAL_VIRT_TX);
+    seL4_BenchmarkResetThreadUtilisation(BASE_TCB_CAP + PD_SERIAL_VIRT_TX);
+    seL4_BenchmarkResetThreadUtilisation(BASE_TCB_CAP + PD_UART);
     seL4_BenchmarkResetLog();
 }
 
@@ -260,6 +271,12 @@ void notified(microkit_channel ch)
         print_benchmark_details(PD_FWD0_ID, kernel, entries, number_schedules, total);
 
         microkit_benchmark_stop_tcb(PD_FWD1_ID, &total, &number_schedules, &kernel, &entries);
+        print_benchmark_details(PD_FWD1_ID, kernel, entries, number_schedules, total);
+
+        microkit_benchmark_stop_tcb(PD_SERIAL_VIRT_TX, &total, &number_schedules, &kernel, &entries);
+        print_benchmark_details(PD_FWD1_ID, kernel, entries, number_schedules, total);
+
+        microkit_benchmark_stop_tcb(PD_UART, &total, &number_schedules, &kernel, &entries);
         print_benchmark_details(PD_FWD1_ID, kernel, entries, number_schedules, total);
 #endif
 
