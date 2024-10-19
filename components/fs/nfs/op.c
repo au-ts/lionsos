@@ -346,7 +346,7 @@ void handle_open(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     struct fs_cmd_params_file_open params = cmd.params.file_open;
 
-    dlog("SO=%lu SC=%lu SO-SC=%lu", successful_opens, unsuccessful_opens, successful_closes, unsuccessful_closes);
+    dlog("SO=%lu SC=%lu SO-SC=%lu", successful_opens, successful_closes, successful_opens - successful_closes);
 
     char *path = copy_path(0, params.path);
     if (path == NULL) {
