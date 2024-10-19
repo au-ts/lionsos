@@ -274,10 +274,10 @@ void notified(microkit_channel ch)
         print_benchmark_details(PD_FWD1_ID, kernel, entries, number_schedules, total);
 
         microkit_benchmark_stop_tcb(PD_SERIAL_VIRT_TX, &total, &number_schedules, &kernel, &entries);
-        print_benchmark_details(PD_FWD1_ID, kernel, entries, number_schedules, total);
+        print_benchmark_details(PD_SERIAL_VIRT_TX, kernel, entries, number_schedules, total);
 
         microkit_benchmark_stop_tcb(PD_UART, &total, &number_schedules, &kernel, &entries);
-        print_benchmark_details(PD_FWD1_ID, kernel, entries, number_schedules, total);
+        print_benchmark_details(PD_UART, kernel, entries, number_schedules, total);
 #endif
 
 #ifdef CONFIG_BENCHMARK_TRACK_KERNEL_ENTRIES
