@@ -21,13 +21,16 @@ content_types_map = Response.types_map | {
 # suboptimal. Hence we implement our own class which uses a better
 # buffer size.
 class FileStream:
-    def __init__(self, f):
-        self.f = f
+    def __init__(self, path):
+        self.path = path
+        self.f = None
 
     def __aiter__(self):
         return self
 
     async def __anext__(self):
+        if self.f is None:
+            self.f = await fs_async.open(self.path)
         buf = await self.f.read(0x8000)
         if len(buf) == 0:
             raise StopAsyncIteration
@@ -177,8 +180,7 @@ async def send_file(relative_path, request_headers):
 
     response_headers['Last-Modified'] = format_http_date(mtime)
 
-    f = await fs_async.open(path)
-    return Response(body=FileStream(f), headers=response_headers)
+    return Response(body=FileStream(path), headers=response_headers)
 
 
 app = Microdot()
