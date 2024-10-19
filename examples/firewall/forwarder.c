@@ -11,8 +11,10 @@
 #include <sddf/util/printf.h>
 #include <ethernet_config.h>
 
-#define VIRT_RX_CH 0
-#define CLIENT_CH 1
+#define VIRT_RX_CH  0
+#define CLIENT_CH   1
+#define BENCH_START 2
+#define BENCH_STOP  3   
 
 net_queue_handle_t rx_queue_virt;
 net_queue_handle_t rx_queue_cli;
@@ -67,6 +69,7 @@ static void start_stop_benchmarking(net_buff_desc_t* buffer) {
                 uint8_t fourth_byte = ethernet_frame[tcp_data_start + 3];
                 if (first_byte == 'S' && second_byte == 'T' && third_byte == 'O' && fourth_byte == 'P') {
                     sddf_dprintf("found STOP\n");
+                    microkit_notify(BENCH_STOP);
                 }
             }
 
@@ -78,6 +81,7 @@ static void start_stop_benchmarking(net_buff_desc_t* buffer) {
                 uint8_t fifth_byte = ethernet_frame[tcp_data_start + 4];
                 if (first_byte == 'S' && second_byte == 'T' && third_byte == 'A' && fourth_byte == 'R' && fifth_byte == 'T') {
                     sddf_dprintf("found START\n");
+                    microkit_notify(BENCH_START);
                 }
             }
         }

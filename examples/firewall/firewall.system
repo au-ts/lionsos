@@ -248,4 +248,14 @@
         <end pd="benchIdle" id="3" /> 
         <end pd="bench" id="3" />
     </channel>
+
+     <channel>
+        <end pd="eth1_forwarder" id="2" /> <!-- start channel -->
+        <end pd="bench" id="1" />
+    </channel>
+
+    <channel>
+        <end pd="eth1_forwarder" id="3" /> <!-- stop channel -->
+        <end pd="bench" id="2" />
+    </channel>
 </system>
