@@ -245,7 +245,7 @@
     </channel>
 
     <channel>
-        <end pd="benchIdle" id="3" /> <!-- bench init channel -->
+        <end pd="benchIdle" id="3" /> 
         <end pd="bench" id="3" />
     </channel>
 </system>
