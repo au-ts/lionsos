@@ -121,7 +121,7 @@ void init(void)
     assert(success);
 
     /* Register the UIO IRQ */
-   /* virq_register(GUEST_VCPU_ID, UIO_IRQ, uio_ack, NULL); */
+   virq_register(GUEST_VCPU_ID, UIO_IRQ, uio_ack, NULL);
 
 #if defined(BOARD_odroidc4)
     /* Register the SD card IRQ */

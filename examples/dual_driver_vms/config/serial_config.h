@@ -22,9 +22,11 @@
 
 /* One read/write client, one write only client */
 #define SERIAL_CLI0_NAME "micropython"
-#define SERIAL_CLI1_NAME "blk"
+#define SERIAL_CLI1_NAME "BLK_DRIVER_VMM"
 #define SERIAL_CLI2_NAME "fat"
+#define SERIAL_VIRT_RX_NAME "serial_virt_rx"
 #define SERIAL_VIRT_TX_NAME "serial_virt_tx"
+#define SERIAL_DRIVER_NAME "uart_driver"
 
 #define SERIAL_QUEUE_SIZE                          0x1000
 #define SERIAL_DATA_REGION_SIZE                    0x2000
@@ -66,12 +68,18 @@ static inline void serial_cli_queue_init_sys(const char *pd_name,
     if (!sddf_strcmp(pd_name, SERIAL_CLI0_NAME)) {
         serial_queue_init(tx_queue_handle, tx_queue,
                         SERIAL_TX_DATA_REGION_SIZE_CLI0, tx_data);
+        serial_queue_init(rx_queue_handle, rx_queue,
+                        SERIAL_RX_DATA_REGION_SIZE_CLI0, rx_data);
     } else if (!sddf_strcmp(pd_name, SERIAL_CLI1_NAME)) {
         serial_queue_init(tx_queue_handle, tx_queue,
                         SERIAL_TX_DATA_REGION_SIZE_CLI1, tx_data);
+        serial_queue_init(rx_queue_handle, rx_queue,
+                        SERIAL_RX_DATA_REGION_SIZE_CLI1, rx_data);
     } else if (!sddf_strcmp(pd_name, SERIAL_CLI2_NAME)) {
         serial_queue_init(tx_queue_handle, tx_queue,
                         SERIAL_TX_DATA_REGION_SIZE_CLI2, tx_data);
+        serial_queue_init(rx_queue_handle, rx_queue,
+                        SERIAL_RX_DATA_REGION_SIZE_CLI2, rx_data);
     }
 }
 
@@ -80,7 +88,20 @@ static inline void serial_virt_queue_init_sys(char *pd_name,
                                               serial_queue_t *cli_queue,
                                               char *cli_data)
 {
-    if (!sddf_strcmp(pd_name, SERIAL_VIRT_TX_NAME)) {
+    if (!sddf_strcmp(pd_name, SERIAL_VIRT_RX_NAME)) {
+        serial_queue_init(cli_queue_handle, cli_queue,
+                          SERIAL_RX_DATA_REGION_SIZE_CLI0, cli_data);
+        serial_queue_init(&cli_queue_handle[1],
+                          (serial_queue_t *)((uintptr_t)cli_queue +
+                                             SERIAL_QUEUE_SIZE),
+                          SERIAL_RX_DATA_REGION_SIZE_CLI1,
+                          cli_data + SERIAL_RX_DATA_REGION_SIZE_CLI0);
+        serial_queue_init(&cli_queue_handle[2],
+                          (serial_queue_t *)((uintptr_t)cli_queue +
+                                             SERIAL_QUEUE_SIZE * 2),
+                          SERIAL_RX_DATA_REGION_SIZE_CLI1 * 2,
+                          cli_data + SERIAL_RX_DATA_REGION_SIZE_CLI0 * 2);
+    } else if (!sddf_strcmp(pd_name, SERIAL_VIRT_TX_NAME)) {
         serial_queue_init(cli_queue_handle, cli_queue,
                           SERIAL_TX_DATA_REGION_SIZE_CLI0, cli_data);
         serial_queue_init(&cli_queue_handle[1],
