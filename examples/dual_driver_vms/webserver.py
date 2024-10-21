@@ -181,6 +181,7 @@ async def send_file(relative_path, request_headers):
     return Response(body=FileStream(f), headers=response_headers)
 
 
+print("Initialise app...")
 app = Microdot()
 
 @app.route('/')
@@ -191,4 +192,5 @@ async def index(request):
 async def static(request, path):
     return await send_file(path, request.headers)
 
+print("Webserver running")
 app.run(debug=True, port=80)

@@ -9,7 +9,7 @@
 #pragma once
 
 /* Number of clients of the serial subsystem. */
-#define SERIAL_NUM_CLIENTS 2
+#define SERIAL_NUM_CLIENTS 3
 
 /* Support only output. */
 #define SERIAL_TX_ONLY 1
@@ -22,7 +22,8 @@
 
 /* One read/write client, one write only client */
 #define SERIAL_CLI0_NAME "micropython"
-#define SERIAL_CLI1_NAME "nfs"
+#define SERIAL_CLI1_NAME "blk"
+#define SERIAL_CLI2_NAME "fat"
 #define SERIAL_VIRT_TX_NAME "serial_virt_tx"
 
 #define SERIAL_QUEUE_SIZE                          0x1000
@@ -31,11 +32,13 @@
 #define SERIAL_TX_DATA_REGION_SIZE_DRIV            (2 * SERIAL_DATA_REGION_SIZE)
 #define SERIAL_TX_DATA_REGION_SIZE_CLI0            SERIAL_DATA_REGION_SIZE
 #define SERIAL_TX_DATA_REGION_SIZE_CLI1            SERIAL_DATA_REGION_SIZE
+#define SERIAL_TX_DATA_REGION_SIZE_CLI2            SERIAL_DATA_REGION_SIZE
 #define SERIAL_TX_DATA_REGION_CAPACITY_DRIV        SERIAL_TX_DATA_REGION_SIZE_DRIV
 
 #define SERIAL_RX_DATA_REGION_SIZE_DRIV            (2 * SERIAL_DATA_REGION_SIZE)
 #define SERIAL_RX_DATA_REGION_SIZE_CLI0            SERIAL_DATA_REGION_SIZE
 #define SERIAL_RX_DATA_REGION_SIZE_CLI1            SERIAL_DATA_REGION_SIZE
+#define SERIAL_RX_DATA_REGION_SIZE_CLI2            SERIAL_DATA_REGION_SIZE
 #define SERIAL_RX_DATA_REGION_CAPACITY_DRIV        SERIAL_TX_DATA_REGION_SIZE_DRIV
 
 #define SERIAL_MAX_TX_DATA_SIZE MAX(SERIAL_TX_DATA_REGION_SIZE_DRIV, \
@@ -66,6 +69,9 @@ static inline void serial_cli_queue_init_sys(const char *pd_name,
     } else if (!sddf_strcmp(pd_name, SERIAL_CLI1_NAME)) {
         serial_queue_init(tx_queue_handle, tx_queue,
                         SERIAL_TX_DATA_REGION_SIZE_CLI1, tx_data);
+    } else if (!sddf_strcmp(pd_name, SERIAL_CLI2_NAME)) {
+        serial_queue_init(tx_queue_handle, tx_queue,
+                        SERIAL_TX_DATA_REGION_SIZE_CLI2, tx_data);
     }
 }
 
@@ -82,6 +88,11 @@ static inline void serial_virt_queue_init_sys(char *pd_name,
                                              SERIAL_QUEUE_SIZE),
                           SERIAL_TX_DATA_REGION_SIZE_CLI1,
                           cli_data + SERIAL_TX_DATA_REGION_SIZE_CLI0);
+        serial_queue_init(&cli_queue_handle[2],
+                          (serial_queue_t *)((uintptr_t)cli_queue +
+                                             SERIAL_QUEUE_SIZE * 2),
+                          SERIAL_TX_DATA_REGION_SIZE_CLI1 * 2,
+                          cli_data + SERIAL_TX_DATA_REGION_SIZE_CLI0 * 2);
     }
 }
 
@@ -90,6 +101,7 @@ static inline void serial_channel_names_init(char **client_names)
 {
     client_names[0] = SERIAL_CLI0_NAME;
     client_names[1] = SERIAL_CLI1_NAME;
+    client_names[2] = SERIAL_CLI2_NAME;
 }
 #endif
 

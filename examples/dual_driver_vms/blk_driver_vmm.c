@@ -145,6 +145,7 @@ void notified(microkit_channel ch)
     bool handled = false;
 
     handled = virq_handle_passthrough(ch);
+    LOG_VMM("Received notification on channel: %d\n", ch);
 
     switch (ch) {
     case UIO_CH: {
