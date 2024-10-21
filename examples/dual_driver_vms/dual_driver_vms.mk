@@ -49,7 +49,7 @@ CFLAGS_USERLEVEL := \
 		-target aarch64-linux-gnu \
 		-I$(EXAMPLE_DIR) \
 		-I$(BOARD_DIR)/include \
-		-I$(SDDF)/include
+		-I$(SDDF)/include 
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := --start-group -lmicrokit -Tmicrokit.ld libsddf_util_debug.a libvmm.a --end-group
@@ -154,7 +154,7 @@ micropython.elf: mpy-cross \
 			LIBMATH=$(LIBMATH) \
 			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
 			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE))
-			
+
 # re add exec module and frozen manifest later after everything works
 # remove the VFS disable after block integration
 

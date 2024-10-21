@@ -62,6 +62,10 @@
     <memory_region name="tx_queue_serial_vmm_2" size="0x1_000" page_size="0x1_000"/>
     <memory_region name="rx_queue_serial_vmm_2" size="0x1_000" page_size="0x1_000"/>
 
+    <!-- Shared region between Ethernet driver VM guest and Hypervisor for frame ferrying -->
+    <memory_region name="net_tx_ferry" size="0x10_000" page_size="0x1_000" />
+    <memory_region name="net_rx_ferry" size="0x10_000" page_size="0x1_000" />
+
     <!-- Serial TX Virtualiser -->
     <protection_domain name="serial_virt_tx" priority="104">
         <program_image path="serial_virt_tx.elf" />
@@ -110,6 +114,9 @@
         <map mr="guest1_ram" vaddr="0x20_000_000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
         <map mr="bus1_clk" vaddr="0xff63c000" perms="rw" cached="false" />
 
+        <map mr="net_tx_ferry" vaddr="0x40000000" perms="rw" cached="false" />
+        <map mr="net_rx_ferry" vaddr="0x40010000" perms="rw" cached="false" />
+
         <!-- sDDF related regions for Ethernet control queues -->
         <map mr="eth_rx_free_drv" vaddr="0x3_400_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
         <map mr="eth_rx_active_drv" vaddr="0x3_600_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
@@ -153,6 +160,9 @@
             <map mr="bus3_timer_registers" vaddr="0xffd0f000" perms="rw" cached="false" />
 
             <map mr="uart_void_vmm1" vaddr="0xff803000" perms="rw" cached="false" />
+
+            <map mr="net_tx_ferry" vaddr="0x40000000" perms="rw" cached="false" />
+            <map mr="net_rx_ferry" vaddr="0x40010000" perms="rw" cached="false" />
 
         </virtual_machine>
         <!-- Ethernet IRQ -->

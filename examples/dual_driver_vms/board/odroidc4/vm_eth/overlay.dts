@@ -20,17 +20,17 @@
         };
     };
 
-	virtio-console@0130000 {
-		compatible = "virtio,mmio";
-		reg = <0x00 0x130000 0x00 0x200>;
-		interrupts = <0x00 42 0x04>;
+    virtio-console@0130000 {
+        compatible = "virtio,mmio";
+        reg = <0x00 0x130000 0x00 0x200>;
+        interrupts = <0x00 42 0x04>;
         // IRQ = 74
-	};
+    };
 
-	uio@0 {
-		compatible = "generic-uio\0uio";
-		reg = <
-			0x00 0x40000000 0x00 0xc00000
+    uio@0 {
+        compatible = "generic-uio\0uio";
+        reg = <
+            0x00 0x40000000 0x00 0xc00000
 
             // sDDF control and data queues
             // 0x40000000 is eth_rx_free_drv
@@ -39,41 +39,41 @@
             // 0x40600000 is eth_tx_active_drv
             // 0x40800000 is tx data region
             // 0x40a00000 is rx data region
-		>;
-	};
+        >;
+    };
 
-	uio@1 {
-		compatible = "generic-uio\0uio";
-		reg = <
-            // VM <-> Hypervisor interrupt for TX path. This remains unmapped in SDF, which
-            // generate a fault to hypervisor when VM writes. VM will also poll on this UIO FD,
-            // a vIRQ inject from the hypervisor trigger an event in the net UIO driver
+    uio@1 {
+        compatible = "generic-uio\0uio";
+        reg = <
+            // VM <-> Hypervisor interrupt for TX path. VM will poll on this UIO FD,
+            // a vIRQ inject from the hypervisor trigger an event in the net UIO driver.
+            // When the guest writes to UIO, the ack function is called in VMM.
             0x00 0x50000000 0x00 0x1000
-		>;
-		interrupts = <0x00 39 0x04>;
-		// IRQ = 71
-	};
+        >;
+        interrupts = <0x00 39 0x04>;
+        // IRQ = 71
+    };
 
-	uio@2 {
-		compatible = "generic-uio\0uio";
-		reg = <
+    uio@2 {
+        compatible = "generic-uio\0uio";
+        reg = <
             // Same idea as above but for RX
-            0x00 0x60000000 0x00 0x1000
-		>;
-		interrupts = <0x00 40 0x04>;
-		// IRQ = 72
-	};
+            0x00 0x50002000 0x00 0x1000
+        >;
+        interrupts = <0x00 40 0x04>;
+        // IRQ = 72
+    };
 
-	uio@3 {
-		compatible = "generic-uio\0uio";
-		reg = <
+    uio@3 {
+        compatible = "generic-uio\0uio";
+        reg = <
             // Small memory region that is shared between the guest and VMM, for the VMM to ferry
             // the physical addresses of `eth_tx_buffer_data_region_micropython` and
             // `eth_rx_buffer_data_region` to the guest because the addr in buffer queues is relative to
             // physical addr for DMA.
-            0x00 0x70000000 0x00 0x1000
-		>;
-	};
+            0x00 0x50004000 0x00 0x1000
+        >;
+    };
 
     chosen {
         stdout-path = "/virtio-console@0130000";

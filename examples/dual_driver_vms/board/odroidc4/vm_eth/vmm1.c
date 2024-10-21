@@ -291,6 +291,16 @@ void notified(microkit_channel ch) {
             break;
         }
         case VIRT_NET_TX_CH:
+            // if (!virq_inject(GUEST_VCPU_ID, UIO_NET_TX_IRQ)) {
+            //     LOG_VMM_ERR("failed to inject TX UIO IRQ\n");
+            // }
+
+            // while (!(hw_ring_full(&tx, TX_COUNT)) && !net_queue_empty_active(&tx_queue)) {
+            //     net_buff_desc_t buffer;
+            //     int err = net_dequeue_active(&tx_queue, &buffer);
+            //     assert(!err);
+            // }
+
             if (!virq_inject(GUEST_VCPU_ID, UIO_NET_TX_IRQ)) {
                 LOG_VMM_ERR("failed to inject TX UIO IRQ\n");
             }
