@@ -34,6 +34,7 @@ CFLAGS := \
 	  -DBOARD_$(MICROKIT_BOARD) \
 	  -I$(BOARD_DIR)/include \
 	  -I$(LIBVMM)/include \
+	  -I$(LIBVMM_TOOLS)/linux/include \
 	  -I$(SDDF)/include \
 	  -I$(EXAMPLE_DIR)/config \
 	  -MD \

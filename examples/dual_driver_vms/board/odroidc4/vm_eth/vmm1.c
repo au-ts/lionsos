@@ -62,9 +62,7 @@ static struct virtio_console_device virtio_console;
 
 /* UIO Network Interrupts */
 #define UIO_NET_TX_IRQ 71
-#define UIO_NET_TX_FAULT_ADDR 0x50000000
 #define UIO_NET_RX_IRQ 72
-#define UIO_NET_RX_FAULT_ADDR 0x60000000
 
 /* sDDF Networking queues  */
 #include "../../../config/ethernet_config.h"
@@ -76,12 +74,12 @@ net_queue_t *tx_active;
 
 net_queue_handle_t rx_queue;
 net_queue_handle_t tx_queue;
-/* Data region */
-uintptr_t buffer_data_region_cli0_vaddr;
-uintptr_t buffer_data_region_cli0_paddr;
-uintptr_t buffer_data_region_cli1_vaddr;
-uintptr_t buffer_data_region_cli1_paddr;
-
+/* TX RX "DMA" Data regions */
+uintptr_t eth_rx_buffer_data_region_paddr;
+uintptr_t eth_tx_cli0_buffer_data_region_paddr;
+/* Data passing between VMM and Hypervisor */
+#include <uio/net.h>
+vmm_net_info_t *vmm_info_passing;
 
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
@@ -183,9 +181,14 @@ bool pinmux_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_Use
     }
 }
 
-void uio_ack(size_t vcpu_id, int irq, void *cookie)
+void uio_net_tx_ack(size_t vcpu_id, int irq, void *cookie)
 {
-    // do nothing
+    microkit_signal(VIRT_NET_TX_CH);
+}
+
+void uio_net_rx_ack(size_t vcpu_id, int irq, void *cookie)
+{
+    microkit_signal(VIRT_NET_RX_CH);
 }
 
 void init(void) {
@@ -261,11 +264,11 @@ void init(void) {
                                   SERIAL_VIRT_TX_CH);
     
     /* Initialise UIO IRQ for TX and RX path */
-    if (!virq_register(GUEST_VCPU_ID, UIO_NET_TX_IRQ, uio_ack, NULL)) {
+    if (!virq_register(GUEST_VCPU_ID, UIO_NET_TX_IRQ, uio_net_tx_ack, NULL)) {
         LOG_VMM_ERR("Failed to register TX interrupt\n");
         return;
     }
-    if (!virq_register(GUEST_VCPU_ID, UIO_NET_RX_IRQ, uio_ack, NULL)) {
+    if (!virq_register(GUEST_VCPU_ID, UIO_NET_RX_IRQ, uio_net_rx_ack, NULL)) {
         LOG_VMM_ERR("Failed to register RX interrupt\n");
         return;
     }
@@ -274,6 +277,12 @@ void init(void) {
         LOG_VMM_ERR("Failed to initialise virtio console\n");
         return;
     }
+
+    /* Tell the VMM what the physaddr of the TX and RX data buffers are, so it can deduct it from the offset given by virtualiser */
+    vmm_info_passing->rx_paddr = eth_rx_buffer_data_region_paddr;
+    vmm_info_passing->tx_paddr = eth_tx_cli0_buffer_data_region_paddr;
+    LOG_VMM("tx data physadd is 0x%p\n", vmm_info_passing->tx_paddr);
+    LOG_VMM("rx data physadd is 0x%p\n", vmm_info_passing->rx_paddr);
 
     LOG_VMM("starting %s at \"%s\"\n", VMM_MACHINE_NAME, microkit_name);
 
