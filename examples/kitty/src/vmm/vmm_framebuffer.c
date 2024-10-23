@@ -101,12 +101,17 @@ uintptr_t gpio_vaddr;
 
 uintptr_t pinctrl_periphs_void;
 uintptr_t pinctrl_ao_void;
+uintptr_t clk_void;
 
 #define PINCTRL_PERIPHS_PADDR_START 0xff634400
 #define PINCTRL_PERIPHS_PADDR_END 0xff634800 // exclusive
 
 #define PINCTRL_AO_PADDR_START 0xff800000
 #define PINCTRL_AO_PADDR_END 0xff8000a8 // exclusive
+
+#define CLK_CNTL_PADDR_START 0xff63c000
+#define CLK_CNTL_PADDR_END 0xff63d000
+#define CLK_CNTL_MR_SIZE 0x1000
 
 // Emulate memory read and writes from the guest at the vaddr in VMM's address space
 bool emulate_memory(uintptr_t vaddr, size_t fsr, seL4_UserContext *regs) {
@@ -193,6 +198,52 @@ bool emulate_memory(uintptr_t vaddr, size_t fsr, seL4_UserContext *regs) {
     return true;
 }
 
+bool clk_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data) {
+    uintptr_t phys_addr = addr + CLK_CNTL_PADDR_START;
+    if (fault_is_read(fsr)) {
+        uint32_t *target_phys_vaddr = (uint32_t *)phys_addr;
+        asm volatile("" : : : "memory");
+        uint64_t phys_data = *target_phys_vaddr;
+        asm volatile("" : : : "memory");
+
+        uint32_t *target_void_vaddr = (uint32_t *)(clk_void + addr);
+        asm volatile("" : : : "memory");
+        uint64_t void_data = *target_void_vaddr;
+        asm volatile("" : : : "memory");
+        if (phys_addr == 0xff63c098 && void_data == 0x14090496) {
+            // printf("1111\n");
+            fault_emulate_write(regs, phys_addr, fsr, 0x84090496);
+        } else {
+            fault_emulate_write(regs, phys_addr, fsr, phys_data);
+
+        }
+        // printf("CLK|READ: vaddr(0x%llx) phys_data(0x%lx) void_data(0x%x)\n", phys_addr, phys_data, void_data);
+
+    } else {
+        uint64_t mask = fault_get_data_mask(addr, fsr);
+        uint64_t data = fault_get_data(regs, fsr);
+
+        uint32_t *target_void_vaddr = (uint32_t *)(clk_void + addr);
+        asm volatile("" : : : "memory");
+        *target_void_vaddr = (uint32_t)(data & mask);
+        asm volatile("" : : : "memory");
+
+        uint32_t *target_phys_vaddr = (uint32_t *)phys_addr;
+        asm volatile("" : : : "memory");
+        uint64_t phys_data = *target_phys_vaddr;
+        asm volatile("" : : : "memory");
+
+        if (phys_data != data) {
+            // printf("CLK|NATIVE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, phys_data, mask);
+            // printf("CLK|WRITE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, data, mask);
+        } else {
+            // printf("CLK|MATCHED WRITE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, data, mask);
+        }
+    }
+
+    return true;
+}
+
 bool bus_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data) {
     // Data is the base guest address for the fault.
     // If the fault is in the pinmux region, redirect to the void region
@@ -269,6 +320,13 @@ void init(void) {
     bool periphs_fault_reg_ok = fault_register_vm_exception_handler(gpio_vaddr, GPIO_MR_SIZE, &bus_vmfault_handler, (void *) gpio_vaddr);
     if (!periphs_fault_reg_ok) {
         LOG_VMM_ERR("Failed to register the VM fault handler for peripherals pinmux\n");
+        return;
+    }
+
+    /* Trap all access to clk into the hypervisor for emulation */
+    bool clk_fault_reg_ok = fault_register_vm_exception_handler(CLK_CNTL_PADDR_START, CLK_CNTL_MR_SIZE, &clk_vmfault_handler, NULL);
+    if (!clk_fault_reg_ok) {
+        LOG_VMM_ERR("Failed to register the VM fault handler for clk\n");
         return;
     }
 
