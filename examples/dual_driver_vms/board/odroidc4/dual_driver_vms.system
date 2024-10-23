@@ -122,6 +122,13 @@
         <map mr="tx_data_serial_vmm_1" vaddr="0x6_002_000" perms="rw" cached="true" setvar_vaddr="serial_tx_data" />
         <map mr="rx_data_serial_vmm_1" vaddr="0x6_004_000" perms="rw" cached="true" setvar_vaddr="serial_rx_data" />
 
+        <!-- sDDF related regions for networking initialisation, this should be done inside the guest
+             but there is no way to hang the system such that the guest finish booting before the virtualisers -->
+        <map mr="eth_rx_free_drv" vaddr="0x8_000_000" perms="rw" cached="true" setvar_vaddr="rx_free"/>
+        <map mr="eth_rx_active_drv" vaddr="0x8_200_000" perms="rw" cached="true" setvar_vaddr="rx_active"/>
+        <map mr="eth_tx_free_drv" vaddr="0x8_400_000" perms="rw" cached="true" setvar_vaddr="tx_free"/>
+        <map mr="eth_tx_active_drv" vaddr="0x8_600_000" perms="rw" cached="true" setvar_vaddr="tx_active"/>
+
         <!-- We intercept anything that touches the pinmux or clock device
         and send it into the void MR. To create an illusion that the devices has been set to the guest's
         specifications, but in reality the native drivers maintains full control at all times. -->

@@ -29,7 +29,7 @@
 #define GUEST_DTB_VADDR 0x2f000000
 #define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
 
-#define PAGE_SIZE_4K
+#define PAGE_SIZE_4K 0x1000
 
 /* Interrupts */
 #define SERIAL_IRQ 225
@@ -80,6 +80,9 @@ uintptr_t eth_tx_cli0_buffer_data_region_paddr;
 /* Data passing between VMM and Hypervisor */
 #include <uio/net.h>
 vmm_net_info_t *vmm_info_passing;
+
+#define GUEST_TO_VMM_TX_FAULT_ADDR 0x60000000
+#define GUEST_TO_VMM_RX_FAULT_ADDR 0x70000000
 
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
@@ -181,15 +184,18 @@ bool pinmux_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_Use
     }
 }
 
-void uio_net_tx_ack(size_t vcpu_id, int irq, void *cookie)
-{
-    microkit_signal(VIRT_NET_TX_CH);
-}
+void uio_net_to_vmm_ack(size_t vcpu_id, int irq, void *cookie) {}
 
-void uio_net_rx_ack(size_t vcpu_id, int irq, void *cookie)
+bool uio_net_from_vmm_tx_signal(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data)
 {
-    microkit_signal(VIRT_NET_RX_CH);
+    microkit_notify(VIRT_NET_TX_CH);
+    return true;
 }
+bool uio_net_from_vmm_rx_signal(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data)
+{
+    microkit_notify(VIRT_NET_RX_CH);
+    return true;
+} 
 
 void init(void) {
     /* Initialise the VMM, the VCPU(s), and start the guest */
@@ -264,11 +270,11 @@ void init(void) {
                                   SERIAL_VIRT_TX_CH);
     
     /* Initialise UIO IRQ for TX and RX path */
-    if (!virq_register(GUEST_VCPU_ID, UIO_NET_TX_IRQ, uio_net_tx_ack, NULL)) {
+    if (!virq_register(GUEST_VCPU_ID, UIO_NET_TX_IRQ, uio_net_to_vmm_ack, NULL)) {
         LOG_VMM_ERR("Failed to register TX interrupt\n");
         return;
     }
-    if (!virq_register(GUEST_VCPU_ID, UIO_NET_RX_IRQ, uio_net_rx_ack, NULL)) {
+    if (!virq_register(GUEST_VCPU_ID, UIO_NET_RX_IRQ, uio_net_to_vmm_ack, NULL)) {
         LOG_VMM_ERR("Failed to register RX interrupt\n");
         return;
     }
@@ -283,6 +289,18 @@ void init(void) {
     vmm_info_passing->tx_paddr = eth_tx_cli0_buffer_data_region_paddr;
     LOG_VMM("tx data physadd is 0x%p\n", vmm_info_passing->tx_paddr);
     LOG_VMM("rx data physadd is 0x%p\n", vmm_info_passing->rx_paddr);
+
+    /* Finally, register vmfault handlers for getting signals from the guest on tx and rx */
+    bool tx_vmfault_reg_ok = fault_register_vm_exception_handler(GUEST_TO_VMM_TX_FAULT_ADDR, PAGE_SIZE_4K, &uio_net_from_vmm_tx_signal, NULL);
+    if (!tx_vmfault_reg_ok) {
+        LOG_VMM_ERR("Failed to register the VM fault handler for tx\n");
+        return;
+    }
+    bool rx_vmfault_reg_ok = fault_register_vm_exception_handler(GUEST_TO_VMM_RX_FAULT_ADDR, PAGE_SIZE_4K, &uio_net_from_vmm_rx_signal, NULL);
+    if (!rx_vmfault_reg_ok) {
+        LOG_VMM_ERR("Failed to register the VM fault handler for rx\n");
+        return;
+    }
 
     LOG_VMM("starting %s at \"%s\"\n", VMM_MACHINE_NAME, microkit_name);
 
