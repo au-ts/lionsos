@@ -71,7 +71,7 @@ state_t state;
 
 LWIP_MEMPOOL_DECLARE(
     RX_POOL,
-    NET_RX_QUEUE_SIZE_CLI0 * 2,
+    NET_RX_QUEUE_CAPACITY_CLI0 * 2,
     sizeof(pbuf_custom_offset_t),
     "Zero-copy RX pool");
 
@@ -241,10 +241,10 @@ void tcp_update(void)
 
 void tcp_init_0(void)
 {
-    size_t rx_size, tx_size;
-    net_cli_queue_size(microkit_name, &rx_size, &tx_size);
-    net_queue_init(&state.rx_queue, rx_free, rx_active, rx_size);
-    net_queue_init(&state.tx_queue, tx_free, tx_active, tx_size);
+    size_t rx_capacity, tx_capacity;
+    net_cli_queue_capacity(microkit_name, &rx_capacity, &tx_capacity);
+    net_queue_init(&state.rx_queue, rx_free, rx_active, rx_capacity);
+    net_queue_init(&state.tx_queue, tx_free, tx_active, tx_capacity);
     net_buffers_init(&state.tx_queue, 0);
 
     lwip_init();
