@@ -7,7 +7,7 @@
  * Linux kernel. The licenses of all input files to this process
  * are compatible with GPL-2.0-only.
  *
- * This file came from the seL4 kernel with the i2c2 and hdmicec patched to enable
+ * This file came from the seL4 kernel with the i2c2, ic2c3 and hdmicec patched to enable
  */
 
 /dts-v1/;

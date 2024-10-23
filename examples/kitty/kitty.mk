@@ -40,11 +40,6 @@ else
 $(error Unsupported MICROKIT_BOARD given)
 endif
 
-VMM_IMAGE_DIR := ${KITTY_DIR}/board/$(MICROKIT_BOARD)/framebuffer_vmm_images
-VMM_SRC_DIR := ${KITTY_DIR}/src/vmm
-DTS := $(VMM_IMAGE_DIR)/linux.dts
-DTB := linux.dtb
-
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 NFS := $(LIONSOS)/components/fs/nfs
 MUSL_SRC := $(LIONSOS)/dep/musllibc
@@ -54,7 +49,7 @@ LIONSOS_DOWNLOADS := https://lionsos.org/downloads/examples/kitty
 I2C_BUS_NUM=2
 
 IMAGES := timer_driver.elf \
-	  vmm.elf \
+	  vmm_framebuffer.elf \
 	  eth_driver.elf \
 	  micropython.elf \
 	  nfs.elf \
@@ -136,24 +131,33 @@ $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL}/Makefile
 		STAGE_DIR=$(abspath $(MUSL)) \
 		SOURCE_DIR=.
 
-# Build the VMM for graphics
-VMM_OBJS := vmm.o package_guest_images.o
-VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}:${VMM_SRC_DIR}
+VMM_SRC_DIR := ${KITTY_DIR}/src/vmm
 
-$(DTB): $(DTS)
+# Build the VMM for graphics
+FRAMEBUFFER_VMM_IMAGE_DIR := ${KITTY_DIR}/board/$(MICROKIT_BOARD)/framebuffer_vmm_images
+FRAMEBUFFER_DTS := $(FRAMEBUFFER_VMM_IMAGE_DIR)/linux.dts
+FRAMEBUFFER_DTB := framebuffer_linux.dtb
+FRAMEBUFFER_KERNEL := ${FRAMEBUFFER_VMM_IMAGE_DIR}/linux
+FRAMEBUFFER_INITRD := ${FRAMEBUFFER_VMM_IMAGE_DIR}/rootfs.cpio.gz
+VMM_FRAMEBUFFER_OBJS := vmm_framebuffer.o package_guest_framebuffer_images.o
+
+VPATH := ${LIBVMM_DIR}:${FRAMEBUFFER_VMM_IMAGE_DIR}:${VMM_SRC_DIR}
+
+$(FRAMEBUFFER_DTB): $(FRAMEBUFFER_DTS)
 	$(DTC) -q -I dts -O dtb $< > $@
 
-package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
-			$(VMM_IMAGE_DIR) $(LINUX) $(INITRD) $(DTB)
+package_guest_framebuffer_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
+			$(FRAMEBUFFER_VMM_IMAGE_DIR) $(FRAMEBUFFER_KERNEL) $(FRAMEBUFFER_INITRD) $(FRAMEBUFFER_DTB)
 	$(CC) -c -g3 -x assembler-with-cpp \
-					-DGUEST_KERNEL_IMAGE_PATH=\"$(LINUX)\" \
-					-DGUEST_DTB_IMAGE_PATH=\"$(DTB)\" \
-					-DGUEST_INITRD_IMAGE_PATH=\"$(INITRD)\" \
+					-DGUEST_KERNEL_IMAGE_PATH=\"$(FRAMEBUFFER_KERNEL)\" \
+					-DGUEST_DTB_IMAGE_PATH=\"$(FRAMEBUFFER_DTB)\" \
+					-DGUEST_INITRD_IMAGE_PATH=\"$(FRAMEBUFFER_INITRD)\" \
 					-target $(TARGET) \
 					$< -o $@
 
+vmm_framebuffer.o: ${VMM_SRC_DIR}/vmm_framebuffer.c
 
-vmm.elf: ${VMM_OBJS} libvmm.a
+vmm_framebuffer.elf: ${VMM_FRAMEBUFFER_OBJS} libvmm.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 # Build with two threads in parallel

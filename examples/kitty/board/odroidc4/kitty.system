@@ -285,7 +285,7 @@
     <memory_region name="pinctrl_ao_void" size="0x1000" />
 
     <protection_domain name="framebuffer_vmm" priority="1">
-        <program_image path="vmm.elf" />
+        <program_image path="vmm_framebuffer.elf" />
 
         <map mr="framebuffer_guest_ram" vaddr="0x20000000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
 
