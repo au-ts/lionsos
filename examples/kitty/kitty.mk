@@ -25,6 +25,7 @@ ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
 	TIMER_DRIV_DIR := meson
 	I2C_DRIV_DIR := meson
 	PINCTRL_DRIV_DIR := meson
+	CLK_DRIV_DIR := meson
 	CPU := cortex-a55
 	INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
 	LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
@@ -61,6 +62,7 @@ IMAGES := timer_driver.elf \
 	  serial_virt_tx.elf \
 	  i2c_virt.elf \
 	  i2c_driver.elf \
+	  clk_driver.elf
 
 CFLAGS := \
 	-mtune=$(CPU) \
@@ -115,6 +117,9 @@ IMAGES += pinctrl_driver.elf
 SOC := hardkernel,odroid-c4
 endif
 
+export CLK_DIR := ${SDDF}/drivers/clk/${CLK_DRIV_DIR}
+
+include ${CLK_DIR}/clk_driver.mk
 include ${SDDF_MAKEFILES}
 include ${LIBVMM_DIR}/vmm.mk
 include ${NFS}/nfs.mk

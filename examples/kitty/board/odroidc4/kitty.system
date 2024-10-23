@@ -6,6 +6,7 @@
     <memory_region name="i2c_bus" size="0x1000" phys_addr="0xffd1d000"/>
     <memory_region name="gpio" size="0x1000" phys_addr="0xff634000"/>
     <memory_region name="clk" size="0x1000" phys_addr="0xff63c000"/>
+    <memory_region name="clk_measure" size="0x1000" phys_addr="0xFFD18000"/>
 
     <!-- UIO framebuffer-->
     <memory_region name="uio_framebuffer" size="0x2_000_000" page_size="0x200_000" />
@@ -81,6 +82,13 @@
 
         <map mr="pinctrl_ao" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="pinctrl_ao_base" />
         <map mr="gpio" vaddr="0x2_010_000" perms="rw" cached="false" setvar_vaddr="pinctrl_periphs_base" />
+    </protection_domain>
+
+    <protection_domain name="clk_driver" priority="253" passive="true" stack_size="0x5000">
+        <program_image path="clk_driver.elf"/>
+
+        <map mr="clk" vaddr="0x3_200_000" perms="rw" setvar_vaddr="clk_regs" cached="false" />
+        <map mr="clk_measure" vaddr="0x3_300_000" perms="rw" setvar_vaddr="msr_clk_base" cached="false" />
     </protection_domain>
 
     <protection_domain name="i2c_driver" priority="253">
@@ -261,9 +269,11 @@
 
     <memory_region name="bus1" size="0x34000" phys_addr="0xff600000" />
     <memory_region name="bus1_continued" size="0x3000" phys_addr="0xff635000" />
+
     <memory_region name="pinctrl_ao" size="0x1000" phys_addr="0xff800000" />
     <memory_region name="bus2" size="0x2000" phys_addr="0xff801000" />
-    <memory_region name="bus3" size="0xa000" phys_addr="0xffd13000" />
+    <memory_region name="bus3" size="0x5000" phys_addr="0xffd13000" />
+    <memory_region name="bus3_1" size="0x4000" phys_addr="0xffd19000" />
     <memory_region name="bus4" size="0xf000" phys_addr="0xffd00000" />
     <memory_region name="bus5" size="0x4000" phys_addr="0xff638000" />
     <memory_region name="bus6" size="0x10000" phys_addr="0xff640000" />
