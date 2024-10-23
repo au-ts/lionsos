@@ -36,20 +36,16 @@
 #define SERIAL_CLI0_NAME "vmm"
 #define SERIAL_VIRT_RX_NAME "serial_virt_rx"
 #define SERIAL_VIRT_TX_NAME "serial_virt_tx"
-#define SERIAL_DRIVER_NAME "uart_driver"
+#define SERIAL_DRIVER_NAME "uart"
 
 #define SERIAL_QUEUE_SIZE                          0x1000
-#define SERIAL_DATA_REGION_SIZE                    0x2000
+#define SERIAL_DATA_REGION_SIZE                    0x10000
 
 #define SERIAL_TX_DATA_REGION_CAPACITY_DRIV            SERIAL_DATA_REGION_SIZE
 #define SERIAL_TX_DATA_REGION_CAPACITY_CLI0            SERIAL_DATA_REGION_SIZE
-#define SERIAL_TX_DATA_REGION_CAPACITY_CLI1            SERIAL_DATA_REGION_SIZE
-#define SERIAL_TX_DATA_REGION_CAPACITY_CLI2            SERIAL_DATA_REGION_SIZE
 
 #define SERIAL_RX_DATA_REGION_CAPACITY_DRIV            SERIAL_DATA_REGION_SIZE
 #define SERIAL_RX_DATA_REGION_CAPACITY_CLI0            SERIAL_DATA_REGION_SIZE
-#define SERIAL_RX_DATA_REGION_CAPACITY_CLI1            SERIAL_DATA_REGION_SIZE
-#define SERIAL_RX_DATA_REGION_CAPACITY_CLI2            SERIAL_DATA_REGION_SIZE
 
 static inline void serial_cli_queue_init_sys(char *pd_name, serial_queue_handle_t *rx_queue_handle,
                                              serial_queue_t *rx_queue, char *rx_data, serial_queue_handle_t *tx_queue_handle,

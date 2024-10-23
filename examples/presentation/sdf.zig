@@ -186,6 +186,7 @@ fn odroidc4(allocator: Allocator, blob: *dtb.Node) !void {
 
     sdf.addProtectionDomain(&vmm);
 
+    // work
     try vmm.addInterrupt(.create(5, .level, null));
     try vmm.addInterrupt(.create(0x39 + 32, .edge, null));
     try vmm.addInterrupt(.create(35, .edge, null));
@@ -213,6 +214,10 @@ fn odroidc4(allocator: Allocator, blob: *dtb.Node) !void {
 
     var net_system = sddf.NetworkSystem.init(allocator, &sdf, net_node, &net_driver, &net_virt_rx, &net_virt_tx, .{});
     net_system.addClientWithCopier(&vmm, &vmm_net_copy);
+
+    uart_driver.priority = 200;
+    serial_virt_rx.priority = 199;
+    serial_virt_tx.priority = 199;
 
     try vmm_system.connect();
     try serial_system.connect();
