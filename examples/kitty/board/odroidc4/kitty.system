@@ -233,8 +233,8 @@
 
         <map mr="serial_rx_data_driver" vaddr="0x5_002_000" perms="r" cached="true" setvar_vaddr="rx_data_drv" />
         <map mr="serial_rx_data_micropython" vaddr="0x5_004_000" perms="rw" cached="true" setvar_vaddr="rx_data_cli0" />
-        <map mr="serial_rx_data_framebuffer_vmm" vaddr="0x5_008_000" perms="r" cached="true"/>
-        <map mr="serial_rx_data_ethernet_vmm" vaddr="0x5_00a_000" perms="r" cached="true"/>
+        <map mr="serial_rx_data_framebuffer_vmm" vaddr="0x5_008_000" perms="rw" cached="true"/>
+        <map mr="serial_rx_data_ethernet_vmm" vaddr="0x5_00a_000" perms="rw" cached="true"/>
     </protection_domain>
 
     <protection_domain name="nfs" priority="98" stack_size="0x10000">

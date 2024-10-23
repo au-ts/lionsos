@@ -14,11 +14,21 @@
 /* Support full duplex. */
 #define SERIAL_TX_ONLY 0
 
+/* Control character to switch input stream - ctrl \. To input character input twice. */
+#define SERIAL_SWITCH_CHAR 28
+
+/* Control character to terminate client number input. */
+#define SERIAL_TERMINATE_NUM '\r'
+
 /* Associate a colour with each client's output. */
 #define SERIAL_WITH_COLOUR 1
 
 /* Default baud rate of the uart device */
 #define UART_DEFAULT_BAUD 115200
+
+/* String to be printed to start console input */
+#define SERIAL_CONSOLE_BEGIN_STRING "Begin input\n"
+#define SERIAL_CONSOLE_BEGIN_STRING_LEN 13
 
 /* One read/write client, one write only client */
 #define SERIAL_CLI0_NAME "micropython"
@@ -45,10 +55,6 @@
                                     SERIAL_RX_DATA_REGION_CAPACITY_CLI0)
 #define SERIAL_MAX_DATA_CAPACITY MAX(SERIAL_MAX_TX_DATA_CAPACITY, \
                                  SERIAL_MAX_RX_DATA_CAPACITY)
-
-/* String to be printed to start console input */
-#define SERIAL_CONSOLE_BEGIN_STRING ""
-#define SERIAL_CONSOLE_BEGIN_STRING_LEN 0
 
 _Static_assert(SERIAL_MAX_DATA_CAPACITY < UINT32_MAX,
                "Data regions must be smaller than UINT32"
@@ -80,6 +86,8 @@ static inline void serial_cli_queue_init_sys(const char *pd_name,
                         SERIAL_RX_DATA_REGION_CAPACITY_CLI0, rx_data);
         serial_queue_init(tx_queue_handle, tx_queue,
                         SERIAL_TX_DATA_REGION_CAPACITY_CLI0, tx_data);
+    } else {
+        assert(false);
     }
 }
 
@@ -91,12 +99,15 @@ static inline void serial_virt_queue_init_sys(char *pd_name,
     if (!sddf_strcmp(pd_name, SERIAL_VIRT_RX_NAME)) {
         serial_queue_init(cli_queue_handle, cli_queue,
                           SERIAL_RX_DATA_REGION_CAPACITY_CLI0, cli_data);
-        serial_queue_init(&cli_queue_handle[2], (serial_queue_t *)(cli_queue + 2 * SERIAL_QUEUE_CAPACITY),
+        serial_queue_init(&cli_queue_handle[1], (serial_queue_t *)((uintptr_t)cli_queue + 1 * SERIAL_QUEUE_CAPACITY),
+                          SERIAL_RX_DATA_REGION_CAPACITY_CLI0,
+                          (char *)(cli_data + SERIAL_RX_DATA_REGION_CAPACITY_CLI0));
+        serial_queue_init(&cli_queue_handle[2], (serial_queue_t *)((uintptr_t)cli_queue + 2 * SERIAL_QUEUE_CAPACITY),
                           SERIAL_RX_DATA_REGION_CAPACITY_CLI0,
                           (char *)(cli_data + SERIAL_RX_DATA_REGION_CAPACITY_CLI0 + SERIAL_RX_DATA_REGION_CAPACITY_CLI0));
-        serial_queue_init(&cli_queue_handle[3], (serial_queue_t *)(cli_queue + 3 * SERIAL_QUEUE_CAPACITY),
+        serial_queue_init(&cli_queue_handle[3], (serial_queue_t *)((uintptr_t)cli_queue + 3 * SERIAL_QUEUE_CAPACITY),
                           SERIAL_RX_DATA_REGION_CAPACITY_CLI0,
-                          (char *)(cli_data + SERIAL_RX_DATA_REGION_CAPACITY_CLI0 + SERIAL_RX_DATA_REGION_CAPACITY_CLI0));
+                          (char *)(cli_data + SERIAL_RX_DATA_REGION_CAPACITY_CLI0 + SERIAL_RX_DATA_REGION_CAPACITY_CLI0 * 2));
     } else if (!sddf_strcmp(pd_name, SERIAL_VIRT_TX_NAME)) {
         serial_queue_init(cli_queue_handle, cli_queue,
                           SERIAL_TX_DATA_REGION_CAPACITY_CLI0, cli_data);
@@ -109,12 +120,12 @@ static inline void serial_virt_queue_init_sys(char *pd_name,
                           (serial_queue_t *)((uintptr_t)cli_queue +
                                              SERIAL_QUEUE_CAPACITY * 2),
                           SERIAL_TX_DATA_REGION_CAPACITY_CLI1,
-                          cli_data + SERIAL_TX_DATA_REGION_CAPACITY_CLI0);
+                          cli_data + SERIAL_TX_DATA_REGION_CAPACITY_CLI0 * 2);
         serial_queue_init(&cli_queue_handle[3],
                           (serial_queue_t *)((uintptr_t)cli_queue +
                                              SERIAL_QUEUE_CAPACITY * 3),
                           SERIAL_TX_DATA_REGION_CAPACITY_CLI1,
-                          cli_data + SERIAL_TX_DATA_REGION_CAPACITY_CLI0);
+                          cli_data + SERIAL_TX_DATA_REGION_CAPACITY_CLI0 * 3);
     }
 }
 
@@ -127,11 +138,5 @@ static inline void serial_channel_names_init(char **client_names)
     client_names[3] = SERIAL_CLI3_NAME;
 }
 #endif
-
-/*
- * UNUSED but needed for compilation
- */
-#define SERIAL_SWITCH_CHAR '\0'
-#define SERIAL_TERMINATE_NUM (4) /* control-D */
 
 #endif /* KITTY_SERIAL_CONFIG_H */
