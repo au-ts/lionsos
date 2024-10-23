@@ -309,6 +309,7 @@
     they have control whereas our native pinmux driver actually have control -->
     <memory_region name="pinctrl_periphs_void" size="0x1000" />
     <memory_region name="pinctrl_ao_void" size="0x1000" />
+    <memory_region name="clk_void_vmm2" size="0x1000" />
 
     <protection_domain name="framebuffer_vmm" priority="1">
         <program_image path="vmm_framebuffer.elf" />
@@ -327,6 +328,7 @@
 
         <map mr="pinctrl_periphs_void" vaddr="0xAAA_900_000" perms="rw" cached="false" setvar_vaddr="pinctrl_periphs_void"  />
         <map mr="pinctrl_ao_void" vaddr="0xAAA_903_000" perms="rw" cached="false" setvar_vaddr="pinctrl_ao_void" />
+        <map mr="clk_void_vmm2" vaddr="0xAAA_905_000" perms="rw" cached="false" setvar_vaddr="clk_void" />
 
         <virtual_machine name="linux" priority="1">
             <vcpu id="0" />
