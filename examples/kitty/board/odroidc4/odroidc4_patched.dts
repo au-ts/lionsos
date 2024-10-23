@@ -1799,6 +1799,7 @@
 			mdio-multiplexer@4c000 {
 				compatible = "amlogic,g12a-mdio-mux";
 				reg = <0x00 0x4c000 0x00 0xa4>;
+				status = "okay";
 				clocks = <0x02 0x13 0x1b 0x02 0xb1>;
 				clock-names = "pclk\0clkin0\0clkin1";
 				mdio-parent-bus = <0x1e>;
@@ -1811,6 +1812,7 @@
 					#size-cells = <0x00>;
 
 					ethernet-phy@0 {
+						status = "okay";
 						reg = <0x00>;
 						max-speed = <0x3e8>;
 						interrupt-parent = <0x1f>;

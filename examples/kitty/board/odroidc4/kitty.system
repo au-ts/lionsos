@@ -92,7 +92,7 @@
         <map mr="gpio" vaddr="0x2_010_000" perms="rw" cached="false" setvar_vaddr="pinctrl_periphs_base" />
     </protection_domain>
 
-    <protection_domain name="clk_driver" priority="253" passive="true" stack_size="0x5000">
+    <protection_domain name="clk_driver" priority="252" passive="true" stack_size="0x5000">
         <program_image path="clk_driver.elf"/>
 
         <map mr="clk" vaddr="0x3_200_000" perms="rw" setvar_vaddr="clk_regs" cached="false" />
@@ -121,7 +121,7 @@
         <map mr="i2c_driver_response_region" vaddr="0x7_000_000" perms="rw" setvar_vaddr="driver_response_region" />
     </protection_domain>
 
-    <protection_domain name="timer_driver" priority="150" pp="true" passive="true">
+    <protection_domain name="timer_driver" priority="253" pp="true" passive="true">
         <program_image path="timer_driver.elf" />
         <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" />
         <irq irq="42" id="0" trigger="edge" /> <!-- timer interrupt -->
