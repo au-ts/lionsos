@@ -67,8 +67,8 @@ uint32_t irqs[] = { 35, 36, 37, 38 };
 #endif
 
 /* Virtio Console */
-#define SERIAL_VIRT_TX_CH 1
-#define SERIAL_VIRT_RX_CH 2
+#define SERIAL_VIRT_TX_CH 3
+#define SERIAL_VIRT_RX_CH 4
 #define VIRTIO_CONSOLE_IRQ (74)
 #define VIRTIO_CONSOLE_BASE (0x130000)
 #define VIRTIO_CONSOLE_SIZE (0x1000)
