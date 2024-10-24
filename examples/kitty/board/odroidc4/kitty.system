@@ -137,7 +137,7 @@
         <map mr="eth_tx_free_drv" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
         <map mr="eth_tx_active_drv" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
 
-        <irq irq="40" id="0" /> <!--> ethernet interrupt -->
+        <irq irq="40" id="0" />
 
         <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
     </protection_domain>
@@ -340,7 +340,7 @@
             <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="true" />
             <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
             <map mr="bus1_continued" vaddr="0xff635000" perms="rw" cached="false" />
-            <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" />
+            <!-- <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" /> -->
             <map mr="bus5" vaddr="0xff638000" perms="rw" cached="false" />
             <map mr="bus6" vaddr="0xff640000" perms="rw" cached="false" />
             <map mr="bus2" vaddr="0xff801000" perms="rw" cached="false" />

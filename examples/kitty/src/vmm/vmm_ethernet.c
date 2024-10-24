@@ -65,7 +65,7 @@ static struct virtio_console_device virtio_console;
 #define UIO_NET_RX_IRQ 72
 
 /* sDDF Networking queues  */
-#include "../../../config/ethernet_config.h"
+#include "../config/ethernet_config.h"
 /* Control queues */
 net_queue_t *rx_free;
 net_queue_t *rx_active;
@@ -77,6 +77,8 @@ net_queue_handle_t tx_queue;
 /* TX RX "DMA" Data regions */
 uintptr_t eth_rx_buffer_data_region_paddr;
 uintptr_t eth_tx_cli0_buffer_data_region_paddr;
+uintptr_t eth_tx_cli1_buffer_data_region_paddr;
+
 /* Data passing between VMM and Hypervisor */
 #include <uio/net.h>
 vmm_net_info_t *vmm_info_passing;
@@ -116,7 +118,7 @@ uintptr_t pinctrl_periphs_void;
 uintptr_t pinctrl_ao_void;
 uintptr_t clk_void;
 
-#include "../../../vmm_mem_emu.h"
+#include "../include/vmm_mem_emu.h"
 
 bool clk_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data) {
     uintptr_t phys_addr = addr + CLK_CNTL_PADDR_START;
@@ -286,9 +288,12 @@ void init(void) {
 
     /* Tell the VMM what the physaddr of the TX and RX data buffers are, so it can deduct it from the offset given by virtualiser */
     vmm_info_passing->rx_paddr = eth_rx_buffer_data_region_paddr;
-    vmm_info_passing->tx_paddr = eth_tx_cli0_buffer_data_region_paddr;
-    LOG_VMM("tx data physadd is 0x%p\n", vmm_info_passing->tx_paddr);
+    vmm_info_passing->tx_paddrs[0] = eth_tx_cli0_buffer_data_region_paddr;
+    vmm_info_passing->tx_paddrs[1] = eth_tx_cli1_buffer_data_region_paddr;
+    
     LOG_VMM("rx data physadd is 0x%p\n", vmm_info_passing->rx_paddr);
+    LOG_VMM("tx cli0 data physadd is 0x%p\n",  vmm_info_passing->tx_paddrs[0]);
+    LOG_VMM("tx cli1 data physadd is 0x%p\n",  vmm_info_passing->tx_paddrs[1]);
 
     /* Finally, register vmfault handlers for getting signals from the guest on tx and rx */
     bool tx_vmfault_reg_ok = fault_register_vm_exception_handler(GUEST_TO_VMM_TX_FAULT_ADDR, PAGE_SIZE_4K, &uio_net_from_vmm_tx_signal, NULL);
@@ -302,7 +307,7 @@ void init(void) {
         return;
     }
 
-    LOG_VMM("starting %s at \"%s\"\n", VMM_MACHINE_NAME, microkit_name);
+    LOG_VMM("starting %s at \"%s\"\n", "ethernet driver vm", microkit_name);
 
     /* Finally start the guest */
     guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
