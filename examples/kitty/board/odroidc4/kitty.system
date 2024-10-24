@@ -314,6 +314,8 @@
     <protection_domain name="framebuffer_vmm" priority="1">
         <program_image path="vmm_framebuffer.elf" />
 
+        <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" />
+
         <!-- sDDF related regions for virtIO console -->
         <map mr="serial_tx_queue_framebuffer_vmm" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="serial_tx_queue" />
         <map mr="serial_rx_queue_framebuffer_vmm" vaddr="0x6_001_000" perms="rw" cached="true" setvar_vaddr="serial_rx_queue" />
@@ -340,7 +342,7 @@
             <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="true" />
             <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
             <map mr="bus1_continued" vaddr="0xff635000" perms="rw" cached="false" />
-            <!-- <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" /> -->
+            <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" />
             <map mr="bus5" vaddr="0xff638000" perms="rw" cached="false" />
             <map mr="bus6" vaddr="0xff640000" perms="rw" cached="false" />
             <map mr="bus2" vaddr="0xff801000" perms="rw" cached="false" />
