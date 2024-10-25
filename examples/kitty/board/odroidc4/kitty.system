@@ -127,7 +127,7 @@
         <irq irq="42" id="0" trigger="edge" /> <!-- timer interrupt -->
     </protection_domain>
 
-    <protection_domain name="eth" priority="110" budget="100" period="400">
+    <!-- <protection_domain name="eth" priority="110" budget="100" period="400">
         <program_image path="eth_driver.elf" />
         <map mr="eth" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth_mac" />
         <map mr="hw_ring_buffer" vaddr="0x2_200_000" perms="rw" cached="false" setvar_vaddr="hw_ring_buffer_vaddr" />
@@ -140,6 +140,94 @@
         <irq irq="40" id="0" />
 
         <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
+    </protection_domain> -->
+
+    <memory_region name="guest_eth_ram" size="0x10_000_000" page_size="0x200_000" phys_addr="0xA0_000_000" />
+
+    <memory_region name="pinctrl_periphs_void_vmm_eth" size="0x1000" />
+    <memory_region name="pinctrl_ao_void_vmm_eth" size="0x1000" />    
+    <memory_region name="clk_void_vmm_eth" size="0x1000" />    
+    <memory_region name="uart_void_vmm_eth" size="0x1000" /> 
+
+    <!-- uio@1 and uio@2 for Ethernet driver VM, backing memory for eth TX and RX UIO IRQ -->
+    <memory_region name="eth_vm_tx_uio_irq" size="0x1_000" page_size="0x1_000"/>
+    <memory_region name="eth_vm_rx_uio_irq" size="0x1_000" page_size="0x1_000"/>
+    <!-- uio@3 for Ethernet driver VM, data passing between VMM and guest -->
+    <memory_region name="eth_vm_data_passing" size="0x1_000" page_size="0x1_000"/>
+
+    <protection_domain name="ethernet_vmm" priority="110">
+        <program_image path="vmm_ethernet.elf" />
+        <map mr="guest_eth_ram" vaddr="0xa0_000_000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
+        <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" />
+
+        <!-- sDDF related regions for virtIO console -->
+        <map mr="serial_tx_queue_ethernet_vmm" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="serial_tx_queue" />
+        <map mr="serial_rx_queue_ethernet_vmm" vaddr="0x6_001_000" perms="rw" cached="true" setvar_vaddr="serial_rx_queue" />
+        <map mr="serial_tx_data_ethernet_vmm" vaddr="0x6_002_000" perms="rw" cached="true" setvar_vaddr="serial_tx_data" />
+        <map mr="serial_rx_data_ethernet_vmm" vaddr="0x6_004_000" perms="rw" cached="true" setvar_vaddr="serial_rx_data" />
+
+        <!-- sDDF related regions for networking initialisation, this should be done inside the guest
+             but there is no way to hang the system such that the guest finish booting before the virtualisers -->
+        <map mr="eth_rx_free_drv" vaddr="0x8_000_000" perms="rw" cached="true" setvar_vaddr="rx_free"/>
+        <map mr="eth_rx_active_drv" vaddr="0x8_200_000" perms="rw" cached="true" setvar_vaddr="rx_active"/>
+        <map mr="eth_tx_free_drv" vaddr="0x8_400_000" perms="rw" cached="true" setvar_vaddr="tx_free"/>
+        <map mr="eth_tx_active_drv" vaddr="0x8_600_000" perms="rw" cached="true" setvar_vaddr="tx_active"/>
+
+        <!-- We intercept anything that touches the pinmux or clock device
+        and send it into the void MR. To create an illusion that the devices has been set to the guest's
+        specifications, but in reality the native drivers maintains full control at all times. -->
+        <map mr="pinctrl_periphs_void_vmm_eth" vaddr="0xAAA_900_000" perms="rw" cached="false" setvar_vaddr="pinctrl_periphs_void"  />
+        <map mr="pinctrl_ao_void_vmm_eth" vaddr="0xAAA_903_000" perms="rw" cached="false" setvar_vaddr="pinctrl_ao_void" />
+        <map mr="clk_void_vmm_eth" vaddr="0xAAA_905_000" perms="rw" cached="false" setvar_vaddr="clk_void" />
+        <!-- There are other devices sharing the same page as pinmux so we need to emulate access to them -->
+        <map mr="gpio" vaddr="0xff634000" perms="rw" cached="false" />
+        <map mr="pinctrl_ao" vaddr="0xff800000" perms="rw" cached="false" />
+
+        <setvar symbol="eth_rx_buffer_data_region_paddr" region_paddr="eth_rx_buffer_data_region" />
+        <setvar symbol="eth_tx_cli0_buffer_data_region_paddr" region_paddr="eth_tx_buffer_data_region_nfs" />
+        <setvar symbol="eth_tx_cli1_buffer_data_region_paddr" region_paddr="eth_tx_buffer_data_region_micropython" />
+        <map mr="eth_vm_data_passing" vaddr="0x7_000_000" perms="rw" cached="true" setvar_vaddr="vmm_info_passing" />
+
+        <virtual_machine name="linux" >
+            <vcpu id="0" />
+            <map mr="guest_eth_ram" vaddr="0xA0000000" perms="rwx" />
+
+            <!-- We let the guest access anything that is not pinmux or clock -->
+            <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
+            <map mr="bus1_continued" vaddr="0xff635000" perms="rw" cached="false" />
+
+            <map mr="bus2" vaddr="0xff801000" perms="rw" cached="false" />
+
+            <map mr="bus3" vaddr="0xffd13000" perms="rw" cached="false" />
+
+            <map mr="gic_vcpu" vaddr="0xffc02000" perms="rw" cached="false" />
+            <map mr="eth" vaddr="0xff3f0000" perms="rw" cached="false" />
+
+            <map mr="timer" vaddr="0xffd0f000" perms="rw" cached="false" />
+
+            <!-- <map mr="uart_void_vmm_eth" vaddr="0xff803000" perms="rw" cached="false" /> -->
+
+            <!-- uio@0 -->
+            <map mr="eth_rx_free_drv" vaddr="0x40000000" perms="rw" cached="true" />
+            <map mr="eth_rx_active_drv" vaddr="0x40200000" perms="rw" cached="true" />
+            <map mr="eth_tx_free_drv" vaddr="0x40400000" perms="rw" cached="true" />
+            <map mr="eth_tx_active_drv" vaddr="0x40600000" perms="rw" cached="true" />
+            <map mr="eth_rx_buffer_data_region" vaddr="0x40800000" perms="rw" cached="false" />
+            <map mr="eth_tx_buffer_data_region_micropython" vaddr="0x40a00000" perms="rw" cached="false" />
+
+            <!-- uio@1 and uio@2 -->
+            <map mr="eth_vm_tx_uio_irq" vaddr="0x50000000" perms="rw" cached="true" />
+            <map mr="eth_vm_rx_uio_irq" vaddr="0x50002000" perms="rw" cached="true" />
+
+            <!-- uio@3 -->
+            <map mr="eth_vm_data_passing" vaddr="0x50004000" perms="rw" cached="true" />
+        </virtual_machine>
+        <!-- Ethernet IRQ -->
+        <irq irq="40" id="4" />
+        <!-- Ethernet PHY -->
+        <irq irq="96" id="5" />
+        <!-- IRQ work -->
+        <!-- <irq irq="5" id="6" /> -->
     </protection_domain>
 
     <protection_domain name="eth_virt_rx" priority="108" budget="100" period="500" >
@@ -342,7 +430,11 @@
             <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="true" />
             <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
             <map mr="bus1_continued" vaddr="0xff635000" perms="rw" cached="false" />
+
+
             <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" />
+
+
             <map mr="bus5" vaddr="0xff638000" perms="rw" cached="false" />
             <map mr="bus6" vaddr="0xff640000" perms="rw" cached="false" />
             <map mr="bus2" vaddr="0xff801000" perms="rw" cached="false" />
@@ -401,12 +493,12 @@
     </channel>
 
     <channel>
-        <end pd="eth" id="2" />
+        <end pd="ethernet_vmm" id="8" />
         <end pd="eth_virt_rx" id="0" />
     </channel>
 
     <channel>
-        <end pd="eth" id="1" />
+        <end pd="ethernet_vmm" id="7" />
         <end pd="eth_virt_tx" id="0" />
     </channel>
 
@@ -499,6 +591,16 @@
     <channel>
         <end pd="framebuffer_vmm" id="4"/>
         <end pd="serial_virt_rx" id="3"/>
+    </channel>
+
+    <channel>
+        <end pd="ethernet_vmm" id="1"/>
+        <end pd="serial_virt_tx" id="4"/>
+    </channel>
+
+    <channel>
+        <end pd="ethernet_vmm" id="2"/>
+        <end pd="serial_virt_rx" id="4"/>
     </channel>
 
     <channel>

@@ -6,7 +6,7 @@
 / {
     memory@0 {
         device_type = "memory";
-        reg = <0x00 0x20000000 0x00 0x10000000>;
+        reg = <0x00 0xA0000000 0x00 0x10000000>;
     };
 
     secure-monitor {
@@ -95,8 +95,8 @@
     chosen {
         stdout-path = "/virtio-console@0130000";
         linux,stdout-path = "/virtio-console@0130000";
-        linux,initrd-end = <0x00000000 0x2e000000>;
-        linux,initrd-start = <0x00000000 0x2d700000>;
+        linux,initrd-end = <0x00000000 0xAe000000>;
+        linux,initrd-start = <0x00000000 0xAd700000>;
         bootargs = "console=hvc0 earlycon=hvc0 root=/dev/ram0 nosmp rw debug loglevel=8 pci=nomsi earlyprintk=serial maxcpus=1 uio_pdrv_genirq.of_id=generic-uio";
     };
 };

@@ -20,7 +20,7 @@
 #define NET_COPY1_NAME "eth_copy_mp"
 #define NET_VIRT_RX_NAME "eth_virt_rx"
 #define NET_VIRT_TX_NAME "eth_virt_tx"
-#define NET_DRIVER_NAME "eth"
+#define NET_DRIVER_NAME "ethernet_vmm"
 
 #define NET_DATA_REGION_CAPACITY            0x200000
 #define NET_HW_REGION_SIZE                  0x10000

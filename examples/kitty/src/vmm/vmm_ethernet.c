@@ -26,8 +26,8 @@
 // of this in the build system to avoid doing any run-time DTB stuff.
 
 #define GUEST_RAM_SIZE 0x10000000
-#define GUEST_DTB_VADDR 0x2f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2d700000
+#define GUEST_DTB_VADDR 0xAf000000
+#define GUEST_INIT_RAM_DISK_VADDR 0xAd700000
 
 #define PAGE_SIZE_4K 0x1000
 
@@ -323,16 +323,6 @@ void notified(microkit_channel ch) {
             break;
         }
         case VIRT_NET_TX_CH:
-            // if (!virq_inject(GUEST_VCPU_ID, UIO_NET_TX_IRQ)) {
-            //     LOG_VMM_ERR("failed to inject TX UIO IRQ\n");
-            // }
-
-            // while (!(hw_ring_full(&tx, TX_COUNT)) && !net_queue_empty_active(&tx_queue)) {
-            //     net_buff_desc_t buffer;
-            //     int err = net_dequeue_active(&tx_queue, &buffer);
-            //     assert(!err);
-            // }
-
             if (!virq_inject(GUEST_VCPU_ID, UIO_NET_TX_IRQ)) {
                 LOG_VMM_ERR("failed to inject TX UIO IRQ\n");
             }
@@ -341,7 +331,6 @@ void notified(microkit_channel ch) {
             if (!virq_inject(GUEST_VCPU_ID, UIO_NET_RX_IRQ)) {
                 LOG_VMM_ERR("failed to inject RX UIO IRQ\n");
             }
-
         default:
             if (handled) {
                 return;
