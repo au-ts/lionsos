@@ -307,7 +307,7 @@ void init(void) {
         return;
     }
 
-    LOG_VMM("starting %s at \"%s\"\n", "ethernet driver vm", microkit_name);
+    // LOG_VMM("starting %s at \"%s\"\n", "ethernet driver vm", microkit_name);
 
     /* Finally start the guest */
     guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
@@ -326,11 +326,12 @@ void notified(microkit_channel ch) {
             if (!virq_inject(GUEST_VCPU_ID, UIO_NET_TX_IRQ)) {
                 LOG_VMM_ERR("failed to inject TX UIO IRQ\n");
             }
-
+            break;
         case VIRT_NET_RX_CH:
             if (!virq_inject(GUEST_VCPU_ID, UIO_NET_RX_IRQ)) {
                 LOG_VMM_ERR("failed to inject RX UIO IRQ\n");
             }
+            break;
         default:
             if (handled) {
                 return;

@@ -235,11 +235,11 @@ bool clk_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserCo
         asm volatile("" : : : "memory");
 
         if (phys_data != data) {
-            printf("CLK|NATIVE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, phys_data, mask);
-            printf("CLK|WRITE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, data, mask);
+            // printf("CLK|NATIVE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, phys_data, mask);
+            // printf("CLK|WRITE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, data, mask);
             sddf_clk_handle_request(CLK_DRIVER_CH, phys_addr, data);
         } else {
-            printf("CLK|MATCHED WRITE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, data, mask);
+            // printf("CLK|MATCHED WRITE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, data, mask);
         }
 
     }
@@ -278,7 +278,7 @@ bool uio_init_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserConte
 
 void init(void) {
     /* Initialise the VMM, the VCPU(s), and start the guest */
-    LOG_VMM("hello pinmux, starting \"%s\"\n", microkit_name);
+    LOG_VMM("starting \"%s\"\n", microkit_name);
 
     /* Place all the binaries in the right locations before starting the guest */
     size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
@@ -347,7 +347,7 @@ void init(void) {
                                   SERIAL_VIRT_TX_CH);
 
     /* Finally start the guest */
-    guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
+    // guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
 
     LOG_VMM("FB VMM is ready.\n");
 }

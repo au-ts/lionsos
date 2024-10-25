@@ -188,7 +188,7 @@
         <setvar symbol="eth_tx_cli1_buffer_data_region_paddr" region_paddr="eth_tx_buffer_data_region_micropython" />
         <map mr="eth_vm_data_passing" vaddr="0x7_000_000" perms="rw" cached="true" setvar_vaddr="vmm_info_passing" />
 
-        <virtual_machine name="linux" >
+        <virtual_machine name="linux_net" >
             <vcpu id="0" />
             <map mr="guest_eth_ram" vaddr="0x30000000" perms="rwx" />
 
@@ -199,13 +199,16 @@
             <map mr="bus2" vaddr="0xff801000" perms="rw" cached="false" />
 
             <map mr="bus3" vaddr="0xffd13000" perms="rw" cached="false" />
+            <map mr="bus6" vaddr="0xff640000" perms="rw" cached="false" />
+            <map mr="adc" vaddr="0xff809000" perms="rw" cached="false" />
+            <map mr="bus4" vaddr="0xffd00000" perms="rw" cached="false" />
 
             <map mr="gic_vcpu" vaddr="0xffc02000" perms="rw" cached="false" />
             <map mr="eth" vaddr="0xff3f0000" perms="rw" cached="false" />
 
             <map mr="timer" vaddr="0xffd0f000" perms="rw" cached="false" />
 
-            <!-- <map mr="uart_void_vmm_eth" vaddr="0xff803000" perms="rw" cached="false" /> -->
+            <map mr="uart_void_vmm_eth" vaddr="0xff803000" perms="rw" cached="false" />
 
             <!-- uio@0 -->
             <map mr="eth_rx_free_drv" vaddr="0x40000000" perms="rw" cached="true" />
@@ -213,7 +216,8 @@
             <map mr="eth_tx_free_drv" vaddr="0x40400000" perms="rw" cached="true" />
             <map mr="eth_tx_active_drv" vaddr="0x40600000" perms="rw" cached="true" />
             <map mr="eth_rx_buffer_data_region" vaddr="0x40800000" perms="rw" cached="false" />
-            <map mr="eth_tx_buffer_data_region_micropython" vaddr="0x40a00000" perms="rw" cached="false" />
+            <map mr="eth_tx_buffer_data_region_nfs" vaddr="0x40a00000" perms="rw" cached="false" />
+            <map mr="eth_tx_buffer_data_region_micropython" vaddr="0x40c00000" perms="rw" cached="false" />
 
             <!-- uio@1 and uio@2 -->
             <map mr="eth_vm_tx_uio_irq" vaddr="0x50000000" perms="rw" cached="true" />

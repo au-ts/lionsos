@@ -189,6 +189,7 @@ ETHERNET_DTS_FINAL := $(ETHERNET_VMM_IMAGE_DIR)/linux_overlayed.dts
 ETHERNET_DTB := ethernet_linux.dtb
 ETHERNET_KERNEL := ${ETHERNET_VMM_IMAGE_DIR}/linux
 ETHERNET_INITRD := ${ETHERNET_VMM_IMAGE_DIR}/rootfs.cpio.gz
+ETHERNET_INITRD_FINAL := ethernet_linux_rootfs.cpio.gz
 VMM_ETHERNET_OBJS := vmm_ethernet.o package_guest_ethernet_images.o
 
 NET_DRIVER_VM_USERLEVEL := uio_net_driver
@@ -208,19 +209,19 @@ $(ETHERNET_DTB): $(ETHERNET_DTS_FINAL)
 ${ETHERNET_DTS_FINAL}: $(ETHERNET_DTS) $(ETHERNET_DTS_OVERLAY)
 	$(LIBVMM_DIR)/tools/dtscat $(ETHERNET_DTS) $(ETHERNET_DTS_OVERLAY) > $@
 
-${ETHERNET_INITRD}: ${ETHERNET_INITRD} $(NET_DRIVER_VM_USERLEVEL) $(NET_DRIVER_VM_USERLEVEL_INIT)
+${ETHERNET_INITRD_FINAL}: ${ETHERNET_INITRD} $(NET_DRIVER_VM_USERLEVEL) $(NET_DRIVER_VM_USERLEVEL_INIT)
 	$(LIBVMM)/tools/packrootfs ${ETHERNET_INITRD} rootfs1 -o $@ \
 		--startup $(NET_DRIVER_VM_USERLEVEL_INIT) \
 		--home $(NET_DRIVER_VM_USERLEVEL)
 
 package_guest_ethernet_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
-			$(ETHERNET_VMM_IMAGE_DIR) $(ETHERNET_KERNEL) $(ETHERNET_INITRD) $(ETHERNET_DTB)
+			$(ETHERNET_VMM_IMAGE_DIR) $(ETHERNET_KERNEL) $(ETHERNET_INITRD_FINAL) $(ETHERNET_DTB)
 	$(CC) -c -g3 -x assembler-with-cpp \
 					-DGUEST_KERNEL_IMAGE_PATH=\"$(ETHERNET_KERNEL)\" \
 					-DGUEST_DTB_IMAGE_PATH=\"$(ETHERNET_DTB)\" \
-					-DGUEST_INITRD_IMAGE_PATH=\"$(ETHERNET_INITRD)\" \
+					-DGUEST_INITRD_IMAGE_PATH=\"$(ETHERNET_INITRD_FINAL)\" \
 					-target $(TARGET) \
-					$< -o $@
+					$(LIBVMM_DIR)/tools/package_guest_images.S -o $@
 
 vmm_ethernet.o: ${VMM_SRC_DIR}/vmm_ethernet.c
 
