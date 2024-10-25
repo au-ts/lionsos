@@ -160,6 +160,7 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a config.py manifest.py \
 			FROZEN_MANIFEST=$(abspath manifest.py) \
 			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
 			ENABLE_I2C=1 \
+			EXEC_MODULE=kitty.py \
 			ENABLE_FRAMEBUFFER=1 \
 			V=1
 

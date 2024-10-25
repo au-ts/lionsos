@@ -298,13 +298,23 @@ async def read_from_server():
             else:
                 message_display_time = 3
 
-            # Success, print message that the user's account has been charged
-            if words[0] == '200':
-                display.rect(0, 500, 2000, 2000, 0x0, True)
-                charged_str = "Charged $1"
-                wri50.set_textpos(display, 500, (config.TRUE_DISPLAY_WIDTH - wri50.stringlen(charged_str))//2)
+            place_str = ""
+            if words[0] == '1':
+                place_str = "Currently in 1st place!"
+            elif words[0] == '2':
+                place_str = "Currently in 2nd place!"
+            elif words[0] == '3':
+                place_str = "Currently in 3rd place!"
+            elif words[0] == '4':
+                place_str = "Currently in 4th place!"
+            elif words[0] == '5':
+                place_str = "Currently in 5th place!"
+            elif words[0] == '6':
+                place_str = "Currently in 6th place!"
 
-                wri50.printstring(charged_str)
+            wri50.set_textpos(display, 500, (config.TRUE_DISPLAY_WIDTH - wri50.stringlen(place_str))//2)
+
+            wri50.printstring(place_str)
 
             display.show()
 
@@ -395,4 +405,4 @@ def run(host: str):
     asyncio.run(main())
 
 
-help_prompt()
+run("192.168.192.11")
