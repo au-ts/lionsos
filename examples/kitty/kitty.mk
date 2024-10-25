@@ -37,6 +37,13 @@ else
 $(error Unsupported MICROKIT_BOARD given)
 endif
 
+# If the KITTY_CONFIG is in deploy, then we will set the exec module
+# of Micropython to be the "deploy.py" file resident in the client directory.
+ifeq ($(strip $(KITTY_CONFIG)), deploy)
+export EXEC_FILE := deploy.py
+export EXEC_MODULE := EXEC_MODULE=$(EXEC_FILE)
+endif
+
 VMM_IMAGE_DIR := ${KITTY_DIR}/board/$(MICROKIT_BOARD)/framebuffer_vmm_images
 VMM_SRC_DIR := ${KITTY_DIR}/src/vmm
 DTS := $(VMM_IMAGE_DIR)/linux.dts
@@ -145,9 +152,8 @@ vmm.elf: ${VMM_OBJS} libvmm.a
 # Build with two threads in parallel
 nproc=2
 
-
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a config.py manifest.py \
-		kitty.py pn532.py font_height50.py font_height35.py writer.py \
+		kitty.py pn532.py font_height50.py font_height35.py writer.py deploy.py\
 		$(LIONSOS)/dep/libmicrokitco/Makefile
 	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
 			MICROKIT_SDK=$(MICROKIT_SDK) \
@@ -161,6 +167,7 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a config.py manifest.py \
 			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
 			ENABLE_I2C=1 \
 			ENABLE_FRAMEBUFFER=1 \
+			$(EXEC_MODULE) \
 			V=1
 
 config.py: ${KITTY_DIR}/board/$(MICROKIT_BOARD)/config.py
