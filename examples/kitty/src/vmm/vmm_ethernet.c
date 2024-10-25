@@ -26,8 +26,8 @@
 // of this in the build system to avoid doing any run-time DTB stuff.
 
 #define GUEST_RAM_SIZE 0x10000000
-#define GUEST_DTB_VADDR 0xAf000000
-#define GUEST_INIT_RAM_DISK_VADDR 0xAd700000
+#define GUEST_DTB_VADDR 0x3f000000
+#define GUEST_INIT_RAM_DISK_VADDR 0x3d700000
 
 #define PAGE_SIZE_4K 0x1000
 

@@ -142,7 +142,7 @@
         <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
     </protection_domain> -->
 
-    <memory_region name="guest_eth_ram" size="0x10_000_000" page_size="0x200_000" phys_addr="0xA0_000_000" />
+    <memory_region name="guest_eth_ram" size="0x10_000_000" page_size="0x200_000" phys_addr="0x30_000_000" />
 
     <memory_region name="pinctrl_periphs_void_vmm_eth" size="0x1000" />
     <memory_region name="pinctrl_ao_void_vmm_eth" size="0x1000" />    
@@ -157,7 +157,7 @@
 
     <protection_domain name="ethernet_vmm" priority="110">
         <program_image path="vmm_ethernet.elf" />
-        <map mr="guest_eth_ram" vaddr="0xa0_000_000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
+        <map mr="guest_eth_ram" vaddr="0x30_000_000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
         <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" />
 
         <!-- sDDF related regions for virtIO console -->
@@ -190,7 +190,7 @@
 
         <virtual_machine name="linux" >
             <vcpu id="0" />
-            <map mr="guest_eth_ram" vaddr="0xA0000000" perms="rwx" />
+            <map mr="guest_eth_ram" vaddr="0x30000000" perms="rwx" />
 
             <!-- We let the guest access anything that is not pinmux or clock -->
             <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
@@ -415,7 +415,6 @@
         <!-- The VMM will only touch non pinmux devices on these pages -->
         <map mr="pinctrl_ao" vaddr="0xff800000" perms="rw" setvar_vaddr="bus2_vaddr" cached="false" />
         <map mr="gpio" vaddr="0xff634000" perms="rw" setvar_vaddr="gpio_vaddr" cached="false" />
-        <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" />
 
         <map mr="pinctrl_periphs_void" vaddr="0xAAA_900_000" perms="rw" cached="false" setvar_vaddr="pinctrl_periphs_void"  />
         <map mr="pinctrl_ao_void" vaddr="0xAAA_903_000" perms="rw" cached="false" setvar_vaddr="pinctrl_ao_void" />
