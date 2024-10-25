@@ -17,6 +17,7 @@
 
 #include <libvmm/virtio/virtio.h>
 #include <sddf/serial/queue.h>
+#include <sddf/clk/client.h>
 #include <serial_config.h>
 
 #if defined(CONFIG_PLAT_ODROIDC4)
@@ -40,6 +41,7 @@
 #define UIO_GPU_IRQ 50
 /* For when we get notified from MicroPython */
 #define MICROPYTHON_CH 1
+#define CLK_DRIVER_CH 0
 
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
@@ -211,13 +213,12 @@ bool clk_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserCo
         uint64_t void_data = *target_void_vaddr;
         asm volatile("" : : : "memory");
         if (phys_addr == 0xff63c098 && void_data == 0x14090496) {
-            // printf("1111\n");
             fault_emulate_write(regs, phys_addr, fsr, 0x84090496);
         } else {
             fault_emulate_write(regs, phys_addr, fsr, phys_data);
 
         }
-        // printf("CLK|READ: vaddr(0x%llx) phys_data(0x%lx) void_data(0x%x)\n", phys_addr, phys_data, void_data);
+        /* printf("CLK|READ: vaddr(0x%llx) phys_data(0x%lx) void_data(0x%x)\n", phys_addr, phys_data, void_data); */
 
     } else {
         uint64_t mask = fault_get_data_mask(addr, fsr);
@@ -234,11 +235,13 @@ bool clk_vmfault_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserCo
         asm volatile("" : : : "memory");
 
         if (phys_data != data) {
-            // printf("CLK|NATIVE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, phys_data, mask);
-            // printf("CLK|WRITE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, data, mask);
+            printf("CLK|NATIVE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, phys_data, mask);
+            printf("CLK|WRITE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, data, mask);
+            sddf_clk_handle_request(CLK_DRIVER_CH, phys_addr, data);
         } else {
-            // printf("CLK|MATCHED WRITE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, data, mask);
+            printf("CLK|MATCHED WRITE: vaddr(0x%llx) data(0x%lx) mask(0x%llx)\n", phys_addr, data, mask);
         }
+
     }
 
     return true;
@@ -276,6 +279,7 @@ bool uio_init_handler(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserConte
 void init(void) {
     /* Initialise the VMM, the VCPU(s), and start the guest */
     LOG_VMM("hello pinmux, starting \"%s\"\n", microkit_name);
+
     /* Place all the binaries in the right locations before starting the guest */
     size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
     size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
@@ -344,6 +348,8 @@ void init(void) {
 
     /* Finally start the guest */
     guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
+
+    LOG_VMM("FB VMM is ready.\n");
 }
 
 void notified(microkit_channel ch) {
