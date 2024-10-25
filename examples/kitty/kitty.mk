@@ -6,6 +6,7 @@
 
 TOOLCHAIN := clang
 CC := clang
+CC_USERLEVEL := zig cc
 LD := ld.lld
 RANLIB := llvm-ranlib
 AR := llvm-ar
@@ -51,6 +52,7 @@ I2C_BUS_NUM=2
 
 IMAGES := timer_driver.elf \
 	  vmm_framebuffer.elf \
+	  vmm_ethernet.elf \
 	  eth_driver.elf \
 	  micropython.elf \
 	  nfs.elf \
@@ -76,7 +78,21 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I${CONFIG_INCLUDE}
+	-I${CONFIG_INCLUDE} \
+	-I$(LIBVMM_DIR)/tools/linux/include
+
+CFLAGS_USERLEVEL := \
+	-g3 \
+	-O3 \
+	-Wno-unused-command-line-argument \
+	-Wall -Wno-unused-function \
+	-D_GNU_SOURCE \
+	-target aarch64-linux-gnu \
+	-I$(KITTY_DIR) \
+	-I$(BOARD_DIR)/include \
+	-I$(SDDF)/include \
+	-I$(KITTY_DIR)/src \
+	-I$(KITTY_DIR)/src/config
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
@@ -163,6 +179,52 @@ package_guest_framebuffer_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
 vmm_framebuffer.o: ${VMM_SRC_DIR}/vmm_framebuffer.c
 
 vmm_framebuffer.elf: ${VMM_FRAMEBUFFER_OBJS} libvmm.a
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+# Build the VMM for ethernet
+ETHERNET_VMM_IMAGE_DIR := ${KITTY_DIR}/board/$(MICROKIT_BOARD)/ethernet_vmm_images
+ETHERNET_DTS := $(ETHERNET_VMM_IMAGE_DIR)/linux.dts
+ETHERNET_DTS_OVERLAY := $(ETHERNET_VMM_IMAGE_DIR)/overlay.dts
+ETHERNET_DTS_FINAL := $(ETHERNET_VMM_IMAGE_DIR)/linux_overlayed.dts
+ETHERNET_DTB := ethernet_linux.dtb
+ETHERNET_KERNEL := ${ETHERNET_VMM_IMAGE_DIR}/linux
+ETHERNET_INITRD := ${ETHERNET_VMM_IMAGE_DIR}/rootfs.cpio.gz
+VMM_ETHERNET_OBJS := vmm_ethernet.o package_guest_ethernet_images.o
+
+NET_DRIVER_VM_USERLEVEL := uio_net_driver
+NET_DRIVER_VM_USERLEVEL_INIT := net_driver_init
+
+LIBVMM := $(LIBVMM_DIR)
+LIBVMM_TOOLS := $(LIBVMM_DIR)/tools/
+include $(LIBVMM_DIR)/tools/linux/uio/uio.mk
+include $(LIBVMM_DIR)/tools/linux/net/net_init.mk
+include $(LIBVMM_DIR)/tools/linux/uio_drivers/net/uio_net.mk
+
+VPATH := ${LIBVMM_DIR}:${ETHERNET_VMM_IMAGE_DIR}:${VMM_SRC_DIR}
+
+$(ETHERNET_DTB): $(ETHERNET_DTS_FINAL)
+	$(DTC) -q -I dts -O dtb $< > $@
+
+${ETHERNET_DTS_FINAL}: $(ETHERNET_DTS) $(ETHERNET_DTS_OVERLAY)
+	$(LIBVMM_DIR)/tools/dtscat $(ETHERNET_DTS) $(ETHERNET_DTS_OVERLAY) > $@
+
+${ETHERNET_INITRD}: ${ETHERNET_INITRD} $(NET_DRIVER_VM_USERLEVEL) $(NET_DRIVER_VM_USERLEVEL_INIT)
+	$(LIBVMM)/tools/packrootfs ${ETHERNET_INITRD} rootfs1 -o $@ \
+		--startup $(NET_DRIVER_VM_USERLEVEL_INIT) \
+		--home $(NET_DRIVER_VM_USERLEVEL)
+
+package_guest_ethernet_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
+			$(ETHERNET_VMM_IMAGE_DIR) $(ETHERNET_KERNEL) $(ETHERNET_INITRD) $(ETHERNET_DTS_FINAL)
+	$(CC) -c -g3 -x assembler-with-cpp \
+					-DGUEST_KERNEL_IMAGE_PATH=\"$(ETHERNET_KERNEL)\" \
+					-DGUEST_DTB_IMAGE_PATH=\"$(ETHERNET_DTS_FINAL)\" \
+					-DGUEST_INITRD_IMAGE_PATH=\"$(ETHERNET_INITRD)\" \
+					-target $(TARGET) \
+					$< -o $@
+
+vmm_ethernet.o: ${VMM_SRC_DIR}/vmm_ethernet.c
+
+vmm_ethernet.elf: ${VMM_ETHERNET_OBJS} libvmm.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 # Build with two threads in parallel

@@ -137,7 +137,7 @@
         <map mr="eth_tx_free_drv" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="tx_free" />
         <map mr="eth_tx_active_drv" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="tx_active" />
 
-        <irq irq="40" id="0" /> <!--> ethernet interrupt -->
+        <irq irq="40" id="0" />
 
         <setvar symbol="hw_ring_buffer_paddr" region_paddr="hw_ring_buffer" />
     </protection_domain>
@@ -313,6 +313,8 @@
 
     <protection_domain name="framebuffer_vmm" priority="1">
         <program_image path="vmm_framebuffer.elf" />
+
+        <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" />
 
         <!-- sDDF related regions for virtIO console -->
         <map mr="serial_tx_queue_framebuffer_vmm" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="serial_tx_queue" />
