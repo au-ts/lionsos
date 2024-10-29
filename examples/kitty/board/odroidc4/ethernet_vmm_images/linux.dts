@@ -2527,20 +2527,20 @@
 				phandle = <0x05>;
 			};
 
-			interrupt-controller@f080 {
-				compatible = "amlogic,meson-sm1-gpio-intc\0amlogic,meson-gpio-intc";
-				reg = <0x00 0xf080 0x00 0x10>;
-				interrupt-controller;
-				#interrupt-cells = <0x02>;
-				amlogic,channel-interrupts = <0x40 0x41 0x42 0x43 0x44 0x45 0x46 0x47>;
-				phandle = <0x15>;
-			};
+//			interrupt-controller@f080 {
+//				compatible = "amlogic,meson-sm1-gpio-intc\0amlogic,meson-gpio-intc";
+//				reg = <0x00 0xf080 0x00 0x10>;
+//				interrupt-controller;
+//				#interrupt-cells = <0x02>;
+//				amlogic,channel-interrupts = <0x40 0x41 0x42 0x43 0x44 0x45 0x46 0x47>;
+//				phandle = <0x15>;
+//			};
 
-			watchdog@f0d0 {
-				compatible = "amlogic,meson-gxbb-wdt";
-				reg = <0x00 0xf0d0 0x00 0x10>;
-				clocks = <0x11>;
-			};
+//			watchdog@f0d0 {
+//				compatible = "amlogic,meson-gxbb-wdt";
+//				reg = <0x00 0xf0d0 0x00 0x10>;
+//				clocks = <0x11>;
+//			};
 
 			spi@13000 {
 				compatible = "amlogic,meson-g12a-spicc";

@@ -347,7 +347,7 @@ void init(void) {
                                   SERIAL_VIRT_TX_CH);
 
     /* Finally start the guest */
-    // guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
+    guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
 
     LOG_VMM("FB VMM is ready.\n");
 }

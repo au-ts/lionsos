@@ -186,9 +186,9 @@
         <setvar symbol="eth_rx_buffer_data_region_paddr" region_paddr="eth_rx_buffer_data_region" />
         <setvar symbol="eth_tx_cli0_buffer_data_region_paddr" region_paddr="eth_tx_buffer_data_region_nfs" />
         <setvar symbol="eth_tx_cli1_buffer_data_region_paddr" region_paddr="eth_tx_buffer_data_region_micropython" />
-        <map mr="eth_vm_data_passing" vaddr="0x7_000_000" perms="rw" cached="true" setvar_vaddr="vmm_info_passing" />
+        <map mr="eth_vm_data_passing" vaddr="0x7_000_000" perms="rw" cached="false" setvar_vaddr="vmm_info_passing" />
 
-        <virtual_machine name="linux_net" >
+        <virtual_machine name="linux_net">
             <vcpu id="0" />
             <map mr="guest_eth_ram" vaddr="0x30000000" perms="rwx" />
 
@@ -206,25 +206,28 @@
             <map mr="gic_vcpu" vaddr="0xffc02000" perms="rw" cached="false" />
             <map mr="eth" vaddr="0xff3f0000" perms="rw" cached="false" />
 
-            <map mr="timer" vaddr="0xffd0f000" perms="rw" cached="false" />
+            <!-- <map mr="timer" vaddr="0xffd0f000" perms="rw" cached="false" /> -->
 
             <map mr="uart_void_vmm_eth" vaddr="0xff803000" perms="rw" cached="false" />
 
             <!-- uio@0 -->
-            <map mr="eth_rx_free_drv" vaddr="0x40000000" perms="rw" cached="true" />
-            <map mr="eth_rx_active_drv" vaddr="0x40200000" perms="rw" cached="true" />
-            <map mr="eth_tx_free_drv" vaddr="0x40400000" perms="rw" cached="true" />
-            <map mr="eth_tx_active_drv" vaddr="0x40600000" perms="rw" cached="true" />
+            <map mr="eth_rx_free_drv"   vaddr="0x40000000" perms="rw" cached="false" />
+            <map mr="eth_rx_active_drv" vaddr="0x40200000" perms="rw" cached="false" />
+            <map mr="eth_tx_free_drv"   vaddr="0x40400000" perms="rw" cached="false" />
+            <map mr="eth_tx_active_drv" vaddr="0x40600000" perms="rw" cached="false" />
             <map mr="eth_rx_buffer_data_region" vaddr="0x40800000" perms="rw" cached="false" />
             <map mr="eth_tx_buffer_data_region_nfs" vaddr="0x40a00000" perms="rw" cached="false" />
             <map mr="eth_tx_buffer_data_region_micropython" vaddr="0x40c00000" perms="rw" cached="false" />
 
             <!-- uio@1 and uio@2 -->
-            <map mr="eth_vm_tx_uio_irq" vaddr="0x50000000" perms="rw" cached="true" />
-            <map mr="eth_vm_rx_uio_irq" vaddr="0x50002000" perms="rw" cached="true" />
+            <map mr="eth_vm_tx_uio_irq" vaddr="0x50000000" perms="rw" cached="false" />
+            <map mr="eth_vm_rx_uio_irq" vaddr="0x50002000" perms="rw" cached="false" />
 
             <!-- uio@3 -->
-            <map mr="eth_vm_data_passing" vaddr="0x50004000" perms="rw" cached="true" />
+            <map mr="eth_vm_data_passing" vaddr="0x50004000" perms="rw" cached="false" />
+
+            <!-- uio@4 and 5 -->
+            <!-- unmapped so VMM gets the faults -->
         </virtual_machine>
         <!-- Ethernet IRQ -->
         <irq irq="40" id="4" />
@@ -236,15 +239,15 @@
 
     <protection_domain name="eth_virt_rx" priority="108" budget="100" period="500" >
         <program_image path="network_virt_rx.elf" />
-        <map mr="eth_rx_free_drv" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="rx_free_drv" />
-        <map mr="eth_rx_active_drv" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="rx_active_drv" />
+        <map mr="eth_rx_free_drv" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="rx_free_drv" />
+        <map mr="eth_rx_active_drv" vaddr="0x2_200_000" perms="rw" cached="false" setvar_vaddr="rx_active_drv" />
 
         <map mr="eth_rx_free_copy_nfs" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli0" />
         <map mr="eth_rx_active_copy_nfs" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli0" />
         <map mr="eth_rx_free_copy_micropython" vaddr="0x2_c00_000" perms="rw" cached="true" />
         <map mr="eth_rx_active_copy_micropython" vaddr="0x2_e00_000" perms="rw" cached="true" />
 
-        <map mr="eth_rx_buffer_data_region" vaddr="0x3_000_000" perms="rw" cached="true" setvar_vaddr="buffer_data_vaddr" />
+        <map mr="eth_rx_buffer_data_region" vaddr="0x3_000_000" perms="rw" cached="false" setvar_vaddr="buffer_data_vaddr" />
         <setvar symbol="buffer_data_paddr" region_paddr="eth_rx_buffer_data_region" />
     </protection_domain>
 
@@ -256,7 +259,7 @@
         <map mr="eth_rx_free_nfs" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free_cli" />
         <map mr="eth_rx_active_nfs" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active_cli" />
 
-        <map mr="eth_rx_buffer_data_region" vaddr="0x2_800_000" perms="r" cached="true" setvar_vaddr="virt_buffer_data_region" />
+        <map mr="eth_rx_buffer_data_region" vaddr="0x2_800_000" perms="r" cached="false" setvar_vaddr="virt_buffer_data_region" />
         <map mr="eth_rx_buffer_data_region_nfs" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="cli_buffer_data_region" />
     </protection_domain>
 
@@ -274,16 +277,16 @@
 
     <protection_domain name="eth_virt_tx" priority="109" budget="100" period="500" >
         <program_image path="network_virt_tx.elf" />
-        <map mr="eth_tx_free_drv" vaddr="0x2_000_000" perms="rw" cached="true" setvar_vaddr="tx_free_drv" />
-        <map mr="eth_tx_active_drv" vaddr="0x2_200_000" perms="rw" cached="true" setvar_vaddr="tx_active_drv" />
+        <map mr="eth_tx_free_drv" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="tx_free_drv" />
+        <map mr="eth_tx_active_drv" vaddr="0x2_200_000" perms="rw" cached="false" setvar_vaddr="tx_active_drv" />
 
         <map mr="eth_tx_free_nfs" vaddr="0x2_800_000" perms="rw" cached="true" setvar_vaddr="tx_free_cli0" />
         <map mr="eth_tx_active_nfs" vaddr="0x2_a00_000" perms="rw" cached="true" setvar_vaddr="tx_active_cli0" />
         <map mr="eth_tx_free_micropython" vaddr="0x2_c00_000" perms="rw" cached="true" />
         <map mr="eth_tx_active_micropython" vaddr="0x2_e00_000" perms="rw" cached="true" />
 
-        <map mr="eth_tx_buffer_data_region_nfs" vaddr="0x3_200_000" perms="rw" cached="true" setvar_vaddr="buffer_data_region_cli0_vaddr" />
-        <map mr="eth_tx_buffer_data_region_micropython" vaddr="0x3_400_000" perms="rw" cached="true" />
+        <map mr="eth_tx_buffer_data_region_nfs" vaddr="0x3_200_000" perms="rw" cached="false" setvar_vaddr="buffer_data_region_cli0_vaddr" />
+        <map mr="eth_tx_buffer_data_region_micropython" vaddr="0x3_400_000" perms="rw" cached="false" />
         <setvar symbol="buffer_data_region_cli0_paddr" region_paddr="eth_tx_buffer_data_region_nfs" />
         <setvar symbol="buffer_data_region_cli1_paddr" region_paddr="eth_tx_buffer_data_region_micropython" />
     </protection_domain>
@@ -424,7 +427,7 @@
         <map mr="pinctrl_ao_void" vaddr="0xAAA_903_000" perms="rw" cached="false" setvar_vaddr="pinctrl_ao_void" />
         <map mr="clk_void_vmm2" vaddr="0xAAA_905_000" perms="rw" cached="false" setvar_vaddr="clk_void" />
 
-        <virtual_machine name="linux" priority="1">
+        <virtual_machine name="linux">
             <vcpu id="0" />
 
             <!-- <map mr="pinctrl_ao" vaddr="0xff800000" perms="rw" cached="false" /> -->

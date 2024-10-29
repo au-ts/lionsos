@@ -311,6 +311,8 @@ async def main():
     wri.set_textpos(display, 200, 500)
     wri.setcolor(0x8e27, 0x0000)
     wri.printstring("Running on LionsOS!")
+    wri.set_textpos(display, 300, 500)
+    wri.printstring("With dual driver VMs!!")
     wri.setcolor(0xffff, 0x0000)
     wri.set_textpos(display, 430, 330)
     wri.printstring("Waiting for taps...")

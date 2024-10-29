@@ -190,11 +190,13 @@ void uio_net_to_vmm_ack(size_t vcpu_id, int irq, void *cookie) {}
 
 bool uio_net_from_vmm_tx_signal(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data)
 {
+    // LOG_VMM("VMM signalled virt tx\n");
     microkit_notify(VIRT_NET_TX_CH);
     return true;
 }
 bool uio_net_from_vmm_rx_signal(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data)
 {
+    // LOG_VMM("VMM signalled virt rx\n");
     microkit_notify(VIRT_NET_RX_CH);
     return true;
 } 
@@ -235,7 +237,7 @@ void init(void) {
         return;
     }
     if (!virq_register_passthrough(GUEST_VCPU_ID, WORK_IRQ, WORK_IRQ_CH)) {
-        LOG_VMM_ERR("Failed to pass thru ETH PHY irq\n");
+        LOG_VMM_ERR("Failed to pass thru work irq\n");
         return;
     }
 
@@ -280,6 +282,7 @@ void init(void) {
         LOG_VMM_ERR("Failed to register RX interrupt\n");
         return;
     }
+    LOG_VMM("registered UIO TX RX net IRQs\n");
 
     if (!success) {
         LOG_VMM_ERR("Failed to initialise virtio console\n");
@@ -311,6 +314,8 @@ void init(void) {
 
     /* Finally start the guest */
     guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
+
+    LOG_VMM("ETH VMM is ready.\n");
 }
 
 void notified(microkit_channel ch) {
