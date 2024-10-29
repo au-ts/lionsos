@@ -15,6 +15,7 @@ microkernel-based operating systems. We aim to achieve all three goals by a
 highly modular yet ruthlessly performance-oriented design and strict adherence
 to the time-honoured KISS principle.
 
-For documentation on LionsOS and the reference example system, see the
-[LionsOS website](https://lionsos.org).
+LionsOS and its verification story are under active research and development.
+
+For more information, see the [website](https://lionsos.org).
 
