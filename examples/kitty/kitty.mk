@@ -83,7 +83,7 @@ CFLAGS := \
 
 CFLAGS_USERLEVEL := \
 	-g3 \
-	-O3 \
+	-O2 \
 	-Wno-unused-command-line-argument \
 	-Wall -Wno-unused-function \
 	-D_GNU_SOURCE \
