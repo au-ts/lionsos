@@ -428,7 +428,7 @@
 	/delete-node/ virtio_mmio@a003800;
 	/delete-node/ virtio_mmio@a003a00;
 	/delete-node/ virtio_mmio@a003e00;
-	
+
 	flash@0 {
 		status = "disabled";
 	};
