@@ -3,6 +3,7 @@
 
 import os
 import asyncio
+import aiorepl
 import fs_async
 import time
 from microdot import Microdot, Response
@@ -193,4 +194,17 @@ async def index(request):
 async def static(request, path):
     return await send_file(path, request.headers)
 
-app.run(debug=True, port=80)
+async def start_httpd(app, port, debug):
+    app.run(port=port, debug=debug)
+        
+
+#app.run(debug=True, port=80)
+
+
+async def main():
+    httpd = asyncio.create_task(start_httpd(app, port=80, debug=True))
+    repl = asyncio.create_task(aiorepl.task())
+    while True:
+        await asyncio.sleep(100)
+
+asyncio.run(main())
