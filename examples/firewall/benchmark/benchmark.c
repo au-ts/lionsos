@@ -52,6 +52,11 @@ serial_queue_handle_t serial_tx_queue_handle;
 benchmark_track_kernel_entry_t *log_buffer;
 #endif
 
+struct bench *bench;
+
+uint64_t total_cycles;
+uint64_t idle_cycles;
+
 char *counter_names[] = {
     "L1 i-cache misses",
     "L1 d-cache misses",
@@ -215,6 +220,9 @@ void notified(microkit_channel ch)
     switch (ch) {
     case START:
 #ifdef MICROKIT_CONFIG_benchmark
+        total_cycles = __atomic_load_n(&bench->ts, __ATOMIC_RELAXED);
+        idle_cycles = __atomic_load_n(&bench->ccount, __ATOMIC_RELAXED);
+
         sel4bench_reset_counters();
         THREAD_MEMORY_RELEASE();
         sel4bench_start_counters(benchmark_bf);
@@ -231,6 +239,12 @@ void notified(microkit_channel ch)
         break;
     case STOP:
 #ifdef MICROKIT_CONFIG_benchmark
+        total_cycles = __atomic_load_n(&bench->ts, __ATOMIC_RELAXED) - total_cycles;
+        idle_cycles = __atomic_load_n(&bench->ccount, __ATOMIC_RELAXED) - idle_cycles;
+
+        sddf_printf("Total cycles: %lx\n", total_cycles);
+        sddf_printf("Idle cycles: %lx\n", idle_cycles);
+
         sel4bench_get_counters(benchmark_bf, &counter_values[0]);
         sel4bench_stop_counters(benchmark_bf);
 
@@ -286,6 +300,8 @@ void notified(microkit_channel ch)
         seL4_BenchmarkTrackDumpSummary(log_buffer, entries);
 #endif
 
+        sddf_printf("\n\n\n\n");
+
         break;
     case SERIAL_TX_CH:
         // Nothing to do
@@ -300,6 +316,7 @@ void init(void)
     serial_cli_queue_init_sys(microkit_name, NULL, NULL, NULL, &serial_tx_queue_handle, serial_tx_queue, serial_tx_data);
     serial_putchar_init(SERIAL_TX_CH, &serial_tx_queue_handle);
 #ifdef MICROKIT_CONFIG_benchmark
+    bench = (void *)cyclecounters_vaddr;
     sel4bench_init();
     seL4_Word n_counters = sel4bench_get_num_counters();
 
