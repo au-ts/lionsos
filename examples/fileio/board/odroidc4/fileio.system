@@ -182,9 +182,12 @@
     <memory_region name="blk_client_response" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="blk_client_data" size="0x200_000" page_size="0x200_000" />
 
+    <memory_region name="sdmmc_private_data" size="0x1000" phys_addr="0xf5500000" />
+
     <protection_domain name="BLK_DRIVER" priority="110">
         <program_image path="sdmmc_driver.elf" />
         <map mr="sdio" vaddr="0xffe05000" perms="rw" cached="false" />
+        <map mr="sdmmc_private_data" vaddr="0xf5500000" perms="rw" cached="false" />
 
         <!-- sDDF block -->
         <map mr="blk_driver_config" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="blk_config"     />
@@ -196,23 +199,24 @@
     <protection_domain name="BLK_VIRT" priority="101">
         <program_image path="blk_virt.elf" />
 
-        <map mr="blk_driver_config" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="blk_config_driver"     />
-        <map mr="blk_driver_request" vaddr="0x40200000" perms="rw" cached="false" setvar_vaddr="blk_req_queue_driver"  />
-        <map mr="blk_driver_response" vaddr="0x40400000" perms="rw" cached="false" setvar_vaddr="blk_resp_queue_driver" />
-        <map mr="blk_driver_data" vaddr="0x40600000" perms="rw" cached="true" setvar_vaddr="blk_data_driver" />
-        <setvar symbol="blk_data_driver_paddr" region_paddr="blk_driver_data" />
+        <map mr="blk_driver_config" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="blk_driver_storage_info"     />
+        <map mr="blk_driver_request" vaddr="0x40200000" perms="rw" cached="false" setvar_vaddr="blk_driver_req_queue"  />
+        <map mr="blk_driver_response" vaddr="0x40400000" perms="rw" cached="false" setvar_vaddr="blk_driver_resp_queue" />
+        <map mr="blk_driver_data" vaddr="0x40600000" perms="rw" cached="true" setvar_vaddr="blk_driver_data" />
+        <setvar symbol="blk_data_paddr_driver" region_paddr="blk_driver_data" />
 
-        <map mr="blk_client_config" vaddr="0x30000000" perms="rw" cached="false" setvar_vaddr="blk_config"     />
-        <map mr="blk_client_request" vaddr="0x30200000" perms="rw" cached="false" setvar_vaddr="blk_req_queue"  />
-        <map mr="blk_client_response" vaddr="0x30400000" perms="rw" cached="false" setvar_vaddr="blk_resp_queue" />
-        <map mr="blk_client_data" vaddr="0x30600000" perms="rw" cached="true" setvar_vaddr="blk_client_data_start" />
+        <map mr="blk_client_config" vaddr="0x30000000" perms="rw" cached="false" setvar_vaddr="blk_client_storage_info"     />
+        <map mr="blk_client_request" vaddr="0x30200000" perms="rw" cached="false" setvar_vaddr="blk_client_req_queue"  />
+        <map mr="blk_client_response" vaddr="0x30400000" perms="rw" cached="false" setvar_vaddr="blk_client_resp_queue" />
+        <map mr="blk_client_data" vaddr="0x30600000" perms="rw" cached="true" setvar_vaddr="blk_client_data" />
+        <setvar symbol="blk_client0_data_paddr" region_paddr="blk_client_data" />
     </protection_domain>
 
     <!-- FAT File system -->
     <protection_domain name="fatfs" priority="100" pp="true">
-        <program_image path="fatfs.elf" />
-        <map mr="fs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="fatfs_command_queue" />
-        <map mr="fs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="fatfs_completion_queue" />
+        <program_image path="fat.elf" />
+        <map mr="fs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="fs_command_queue" />
+        <map mr="fs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="fs_completion_queue" />
 
         <map mr="blk_client_config" vaddr="0x40_000_000" perms="r" cached="false" setvar_vaddr="blk_config" />
 
