@@ -81,6 +81,7 @@ CFLAGS_USERLEVEL := \
 	-target aarch64-linux-gnu \
 	-I$(BOARD_DIR)/include \
 	-I$(SDDF)/include \
+	-I$(LIONSOS)/include
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
