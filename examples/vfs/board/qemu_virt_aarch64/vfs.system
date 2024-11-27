@@ -314,16 +314,6 @@
         <end pd="micropython" id="1" />
     </channel>
 
-    <!-- <channel>
-        <end pd="micropython" id="7"/>
-        <end pd="fat" id="1"/>
-    </channel> -->
-
-    <!-- <channel>
-        <end pd="fat" id="2"/>
-        <end pd="BLK_VIRT" id="1"/>
-    </channel> -->
-
     <channel>
         <end pd="micropython" id="7"/>
         <end pd="fs_driver_vmm" id="4"/>

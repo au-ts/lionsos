@@ -60,7 +60,7 @@ CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
 	-ffreestanding \
-	-g \
+	-g3 \
 	-O3 \
 	-Wall \
 	-Wno-unused-function \
@@ -71,6 +71,16 @@ CFLAGS := \
 	-I${CONFIG_INCLUDE} \
 	-I$(LIBVMM)/include \
 	-DVIRTIO_MMIO_NET_OFFSET=0xc00 
+
+CFLAGS_USERLEVEL := \
+	-g3 \
+	-O3 \
+	-Wno-unused-command-line-argument \
+	-Wall -Wno-unused-function \
+	-D_GNU_SOURCE \
+	-target aarch64-linux-gnu \
+	-I$(BOARD_DIR)/include \
+	-I$(SDDF)/include \
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
@@ -94,6 +104,8 @@ BLK_COMPONENTS := $(SDDF)/blk/components
 
 include ${SDDF}/util/util.mk
 include ${LIBVMM_DIR}/vmm.mk
+include ${LIBVMM_DIR}/tools/linux/uio_drivers/fs/uio_fs.mk
+include ${LIBVMM_DIR}/tools/linux/fs/fs_init.mk
 include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
 include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
 include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk
@@ -122,8 +134,8 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 # Compile the FS Driver VM
 vpath %.c $(LIBVMM_DIR)
 SYSTEM_DIR := $(EXAMPLE_DIR)/board/$(MICROKIT_BOARD)
-FS_VM_USERLEVEL :=
-FS_VM_USERLEVEL_INIT := $(LIBVMM_TOOLS)/linux/blk/blk_client_init
+FS_VM_USERLEVEL := uio_fs_driver
+FS_VM_USERLEVEL_INIT := fs_driver_init
 
 rootfs.cpio.gz: $(SYSTEM_DIR)/fs_driver_vm/rootfs.cpio.gz \
 	$(FS_VM_USERLEVEL) $(FS_VM_USERLEVEL_INIT)
