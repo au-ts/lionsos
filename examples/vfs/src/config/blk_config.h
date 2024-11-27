@@ -11,11 +11,10 @@
 
 #define BLK_NUM_CLIENTS 1
 
-#define BLK_NAME_CLI0                      "fat"
+#define BLK_NAME_CLI0                      "fs_driver_vmm"
 
-#define BLK_QUEUE_CAPACITY_CLI_FAT              16
-#define BLK_QUEUE_CAPACITY_CLI0                 BLK_QUEUE_CAPACITY_CLI_FAT
-#define BLK_QUEUE_CAPACITY_DRIV                 1024
+#define BLK_QUEUE_CAPACITY_CLI0                 1024
+#define BLK_QUEUE_CAPACITY_DRIV                 BLK_QUEUE_CAPACITY_CLI0
 
 #define BLK_REGION_SIZE                     0x200000
 #define BLK_CONFIG_REGION_SIZE_CLI0         BLK_REGION_SIZE

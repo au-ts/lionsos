@@ -36,8 +36,10 @@
     <!-- serial data regions -->
     <memory_region name="serial_tx_data_driver" size="0x4_000" />
     <memory_region name="serial_tx_data_micropython" size="0x2_000" />
+    <memory_region name="serial_tx_data_fs_driver_vmm" size="0x2_000" />
     <memory_region name="serial_rx_data_driver" size="0x2_000" />
     <memory_region name="serial_rx_data_micropython" size="0x2_000" />
+    <memory_region name="serial_rx_data_fs_driver_vmm" size="0x2_000" />
 
     <!-- shared memory for serial driver/serial virt queue mechanism -->
     <memory_region name="serial_rx_queue_driver" size="0x1_000" />
@@ -45,19 +47,14 @@
 
     <!-- shared memory for serial virt/client queue mechanism -->
     <memory_region name="serial_tx_queue_micropython" size="0x1_000" />
+    <memory_region name="serial_tx_queue_fs_driver_vmm" size="0x1_000" />
     <memory_region name="serial_rx_queue_micropython" size="0x1_000" />
+    <memory_region name="serial_rx_queue_fs_driver_vmm" size="0x1_000" />
 
     <!-- shared memory for micropython/fs queue -->
     <memory_region name="shared_fs_micropython" size="0x4000000" />
     <memory_region name="fs_command_queue" size="0x8_000" />
     <memory_region name="fs_completion_queue" size="0x8_000" />
-
-    <!-- Fat file system memory region -->
-    <memory_region name="fs_metadata" size="0x200_000" page_size="0x1000"/>
-    <memory_region name="fat_thread_stack1" size="0x40_000" page_size="0x1000"/>
-    <memory_region name="fat_thread_stack2" size="0x40_000" page_size="0x1000"/>
-    <memory_region name="fat_thread_stack3" size="0x40_000" page_size="0x1000"/>
-    <memory_region name="fat_thread_stack4" size="0x40_000" page_size="0x1000"/>
 
     <protection_domain name="eth" priority="101" budget="100" period="400">
         <program_image path="eth_driver.elf" />
@@ -133,18 +130,22 @@
         <program_image path="serial_virt_tx.elf" />
         <map mr="serial_tx_queue_driver" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="tx_queue_drv" />
         <map mr="serial_tx_queue_micropython" vaddr="0x4_001_000" perms="rw" cached="true" setvar_vaddr="tx_queue_cli0" />
+        <map mr="serial_tx_queue_fs_driver_vmm" vaddr="0x4_002_000" perms="rw" cached="true" />
 
         <map mr="serial_tx_data_driver" vaddr="0x4_004_000" perms="rw" cached="true" setvar_vaddr="tx_data_drv" />
         <map mr="serial_tx_data_micropython" vaddr="0x4_008_000" perms="r" cached="true" setvar_vaddr="tx_data_cli0" />
+        <map mr="serial_tx_data_fs_driver_vmm" vaddr="0x4_00A_000" perms="r" cached="true" />
     </protection_domain>
 
     <protection_domain name="serial_virt_rx" priority="98" >
         <program_image path="serial_virt_rx.elf" />
         <map mr="serial_rx_queue_driver" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_queue_drv" />
         <map mr="serial_rx_queue_micropython" vaddr="0x4_001_000" perms="rw" cached="true" setvar_vaddr="rx_queue_cli0" />
+        <map mr="serial_rx_queue_fs_driver_vmm" vaddr="0x4_002_000" perms="rw" cached="true" />
 
         <map mr="serial_rx_data_driver" vaddr="0x4_004_000" perms="r" cached="true" setvar_vaddr="rx_data_drv" />
         <map mr="serial_rx_data_micropython" vaddr="0x4_006_000" perms="rw" cached="true" setvar_vaddr="rx_data_cli0" />
+        <map mr="serial_rx_data_fs_driver_vmm" vaddr="0x4_008_000" perms="rw" cached="true" />
     </protection_domain>
 
     <protection_domain name="micropython" priority="1">
@@ -216,7 +217,7 @@
     </protection_domain>
 
     <!-- FAT File system -->
-    <protection_domain name="fat" priority="100" pp="true">
+    <!-- <protection_domain name="fat" priority="100" pp="true">
         <program_image path="fat.elf" />
         <map mr="fs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="fs_command_queue" />
         <map mr="fs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="fs_completion_queue" />
@@ -234,6 +235,33 @@
         <map mr="fat_thread_stack2" vaddr="0xB0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_two" />
         <map mr="fat_thread_stack3" vaddr="0xC0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_three" />
         <map mr="fat_thread_stack4" vaddr="0xD0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_four" />
+    </protection_domain> -->
+
+    <!-- FS Driver VM get 96MB of RAM -->
+    <memory_region name="fs_driver_vm_ram" size="0x8_000_000" page_size="0x200_000" phys_addr="0x40_000_000" />
+    <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0x8040000" />
+
+    <protection_domain name="fs_driver_vmm" priority="100">
+        <program_image path="fs_driver_vmm.elf" />
+        <map mr="fs_driver_vm_ram" vaddr="0x40_000_000" perms="rw" setvar_vaddr="guest_ram_vaddr" />
+
+        <!-- sDDF related regions for virtIO console -->
+        <map mr="serial_tx_queue_fs_driver_vmm" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="serial_tx_queue" />
+        <map mr="serial_rx_queue_fs_driver_vmm" vaddr="0x6_001_000" perms="rw" cached="true" setvar_vaddr="serial_rx_queue" />
+        <map mr="serial_tx_data_fs_driver_vmm" vaddr="0x6_002_000" perms="rw" cached="true" setvar_vaddr="serial_tx_data" />
+        <map mr="serial_rx_data_fs_driver_vmm" vaddr="0x6_004_000" perms="rw" cached="true" setvar_vaddr="serial_rx_data" />
+
+        <!-- sDDF related regions for virtIO block -->
+        <map mr="blk_client_config" vaddr="0x30000000" perms="rw" cached="false" setvar_vaddr="blk_storage_info" />
+        <map mr="blk_client_request" vaddr="0x103_800_000" perms="rw" cached="false" setvar_vaddr="blk_req_queue" />
+        <map mr="blk_client_response" vaddr="0x103_a00_000" perms="rw" cached="false" setvar_vaddr="blk_resp_queue" />
+        <map mr="blk_client_data" vaddr="0x30600000" perms="rw" cached="true" setvar_vaddr="blk_data" />
+
+        <virtual_machine name="linux">
+            <vcpu id="0" />
+            <map mr="fs_driver_vm_ram" vaddr="0x40000000" perms="rwx" />
+            <map mr="gic_vcpu" vaddr="0x8010000" perms="rw" cached="false" />
+        </virtual_machine>
     </protection_domain>
 
     <channel>
@@ -286,14 +314,34 @@
         <end pd="micropython" id="1" />
     </channel>
 
-    <channel>
+    <!-- <channel>
         <end pd="micropython" id="7"/>
         <end pd="fat" id="1"/>
+    </channel> -->
+
+    <!-- <channel>
+        <end pd="fat" id="2"/>
+        <end pd="BLK_VIRT" id="1"/>
+    </channel> -->
+
+    <channel>
+        <end pd="micropython" id="7"/>
+        <end pd="fs_driver_vmm" id="4"/>
     </channel>
 
     <channel>
-        <end pd="fat" id="2"/>
+        <end pd="fs_driver_vmm" id="3"/>
         <end pd="BLK_VIRT" id="1"/>
+    </channel>
+
+    <channel>
+        <end pd="serial_virt_rx" id="2"/>
+        <end pd="fs_driver_vmm" id="2"/>
+    </channel>
+
+    <channel>
+        <end pd="serial_virt_tx" id="2"/>
+        <end pd="fs_driver_vmm" id="1"/>
     </channel>
 
     <channel>

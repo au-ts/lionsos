@@ -7,7 +7,7 @@ IMAGES := \
 	timer_driver.elf \
 	eth_driver.elf \
 	micropython.elf \
-	fat.elf \
+	fs_driver_vmm.elf \
 	copy.elf \
 	network_virt_rx.elf \
 	network_virt_tx.elf \
@@ -39,9 +39,11 @@ endif
 
 TOOLCHAIN := clang
 CC := clang
+CC_USERLEVEL := zig cc
 LD := ld.lld
 RANLIB := llvm-ranlib
 AR := llvm-ar
+AS := llvm-as
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
@@ -50,23 +52,16 @@ BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 PLATFORM := meson
 SDDF := $(LIONSOS)/dep/sddf
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
-
-VMM_IMAGE_DIR := ${EXAMPLE_DIR}/src/vmm/images
-LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
-INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
-DTS := $(VMM_IMAGE_DIR)/linux.dts
-DTB := linux.dtb
+LIBVMM_TOOLS := $(LIBVMM_DIR)/tools
 
 LWIP := $(SDDF)/network/ipstacks/lwip/src
-FAT := $(LIONSOS)/components/fs/fat
-MUSL := $(LIONSOS)/dep/musllibc
 
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
 	-ffreestanding \
 	-g \
-	-O1 \
+	-O3 \
 	-Wall \
 	-Wno-unused-function \
 	-I$(BOARD_DIR)/include \
@@ -74,8 +69,8 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include \
 	-I${CONFIG_INCLUDE} \
-	-DVIRTIO_MMIO_NET_OFFSET=0xc00
-
+	-I$(LIBVMM)/include \
+	-DVIRTIO_MMIO_NET_OFFSET=0xc00 
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
@@ -124,27 +119,41 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 		FROZEN_MANIFEST=$(abspath ./manifest.py) \
 		V=1
 
-fat.elf: musllibc/lib/libc.a
-	make -C $(LIONSOS)/components/fs/fat \
-		CC=$(CC) \
-		LD=$(LD) \
-		CPU=$(CPU) \
-		BUILD_DIR=$(abspath .) \
-		CONFIG=$(MICROKIT_CONFIG) \
-		MICROKIT_SDK=$(MICROKIT_SDK) \
-		MICROKIT_BOARD=$(MICROKIT_BOARD) \
-		LIBC_DIR=$(abspath $(BUILD_DIR)/musllibc) \
-		BUILD_DIR=$(abspath .) \
-		CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
-		TARGET=$(TARGET)
+# Compile the FS Driver VM
+vpath %.c $(LIBVMM_DIR)
+SYSTEM_DIR := $(EXAMPLE_DIR)/board/$(MICROKIT_BOARD)
+FS_VM_USERLEVEL :=
+FS_VM_USERLEVEL_INIT := $(LIBVMM_TOOLS)/linux/blk/blk_client_init
 
-musllibc/lib/libc.a:
-	make -C $(MUSL) \
-		C_COMPILER=aarch64-none-elf-gcc \
-		TOOLPREFIX=aarch64-none-elf- \
-		CONFIG_ARCH_AARCH64=y \
-		STAGE_DIR=$(abspath $(BUILD_DIR)/musllibc) \
-		SOURCE_DIR=.
+rootfs.cpio.gz: $(SYSTEM_DIR)/fs_driver_vm/rootfs.cpio.gz \
+	$(FS_VM_USERLEVEL) $(FS_VM_USERLEVEL_INIT)
+	$(LIBVMM_TOOLS)/packrootfs $(SYSTEM_DIR)/fs_driver_vm/rootfs.cpio.gz \
+		rootfs -o $@ \
+		--startup $(FS_VM_USERLEVEL_INIT) \
+		--home $(FS_VM_USERLEVEL)
+
+fs_vm.dts: $(SYSTEM_DIR)/fs_driver_vm/dts/linux.dts $(SYSTEM_DIR)/fs_driver_vm/dts/overlays/*.dts
+	$(LIBVMM_TOOLS)/dtscat $^ > $@
+
+fs_vm.dtb: fs_vm.dts
+	$(DTC) -q -I dts -O dtb $< > $@
+
+fs_driver_vm_image.o: $(LIBVMM_TOOLS)/package_guest_images.S $(CHECK_FLAGS_BOARD_MD5) \
+	$(SYSTEM_DIR)/fs_driver_vm/linux fs_vm.dtb rootfs.cpio.gz
+	$(CC) -c -g3 -x assembler-with-cpp \
+					-DGUEST_KERNEL_IMAGE_PATH=\"$(SYSTEM_DIR)/fs_driver_vm/linux\" \
+					-DGUEST_DTB_IMAGE_PATH=\"fs_vm.dtb\" \
+					-DGUEST_INITRD_IMAGE_PATH=\"rootfs.cpio.gz\" \
+					-target $(TARGET) \
+					$(LIBVMM_TOOLS)/package_guest_images.S -o $@
+
+fs_driver_vmm.o: $(EXAMPLE_DIR)/src/fs_vmm.c
+	${CC} ${CFLAGS} -c -o $@ $<
+
+fs_driver_vmm.elf: fs_driver_vmm.o fs_driver_vm_image.o libvmm.a
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+#
 
 ${IMAGES}: libsddf_util_debug.a
 
@@ -167,10 +176,10 @@ FORCE:
 mpy-cross: FORCE
 	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
-qemu_disk:
+qemu_disk.img:
 	$(LIONSOS)/dep/sddf/examples/blk/mkvirtdisk $@ 1 512 16777216
 
-qemu: ${IMAGE_FILE} qemu_disk
+qemu: ${IMAGE_FILE} qemu_disk.img
 	$(QEMU) -machine virt,virtualization=on \
 		-cpu cortex-a53 \
 		-serial mon:stdio \
@@ -179,7 +188,7 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-nographic \
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
-		-drive file=qemu_disk,if=none,format=raw,id=hd \
+		-drive file=qemu_disk.img,if=none,format=raw,id=hd \
 		-device virtio-blk-device,drive=hd \
 		-device virtio-net-device,netdev=netdev0 \
 		-netdev user,id=netdev0
