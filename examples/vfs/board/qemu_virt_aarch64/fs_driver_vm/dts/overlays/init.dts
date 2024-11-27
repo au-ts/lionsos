@@ -1,0 +1,23 @@
+/*
+ * Copyright 2024, UNSW
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+/ {
+    /delete-node/ memory@40000000;
+    /delete-node/ chosen;
+
+    memory@40000000 {
+		reg = <0x00 0x40000000 0x00 0x8000000>;
+		device_type = "memory";
+	};
+
+	chosen {
+		stdout-path = "/pl011@9000000";
+		bootargs = "console=hvc0 earlycon=hvc0 earlyprintk=serial debug loglevel=8";
+		linux,stdout-path = "/pl011@9000000";
+		linux,initrd-start = <0x47000000>;
+		linux,initrd-end = <0x47f00000>;
+	};
+};
