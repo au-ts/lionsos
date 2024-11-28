@@ -42,7 +42,6 @@ def test_environment(path):
         raise AssertionError(f"Test failed: Directory '{final_dir}' already exists.")
     else:
         os.mkdir(final_dir)
-        print(f"Test environment set up: '{final_dir}' created successfully.")
 
     return final_dir
 
@@ -112,21 +111,21 @@ def test_write_and_read_back_complex(directory):
     ]
 
     try:
-        # Write the poem to the file line by line and read back each line to verify
+        # Step 1: Write the poem to the file line by line
         with open(test_file, "w") as f:
-            for index, line in enumerate(poem_lines):
+            for line in poem_lines:
                 f.write(line + "\n")
-                # print(f"Line {index + 1} written to file.")
+            f.flush()  # Ensure all content is written to disk
 
-                # Read the line back immediately to verify
-                f.flush()  # Ensure the content is written to the file
-                with open(test_file, "r") as fr:
-                    lines = fr.readlines()
-                    read_back_line = lines[-1].strip()  # Read the last line written
+        # Step 2: Open the file for reading after writing is complete
+        with open(test_file, "r") as f:
+            read_back_lines = [line.strip() for line in f.readlines()]  # Read all lines and strip newlines
 
-                    assert read_back_line == line, (
-                        f"Test failed at line {index + 1}: Expected: '{line}', Got: '{read_back_line}'"
-                    )
+        # Step 3: Verify each line matches the expected poem lines
+        for index, line in enumerate(poem_lines):
+            assert read_back_lines[index] == line, (
+                f"Test failed at line {index + 1}: Expected: '{line}', Got: '{read_back_lines[index]}'"
+            )
 
         # Increment success count if all lines are verified
         success_count += 1
@@ -136,9 +135,10 @@ def test_write_and_read_back_complex(directory):
         fail_count += 1
 
     finally:
-        # Cleanup
+        # Cleanup: Remove the test file
         if path_exists(test_file):
             os.remove(test_file)
+
 
 def test_mkdir_and_remove(directory):
     """Test creating directories with various names and removing them."""
