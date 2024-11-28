@@ -69,7 +69,8 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include \
 	-I${CONFIG_INCLUDE} \
-	-I$(LIBVMM)/include \
+	-I$(LIBVMM_DIR)/include \
+	-I$(LIBVMM_DIR)/tools/linux/include \
 	-DVIRTIO_MMIO_NET_OFFSET=0xc00 
 
 CFLAGS_USERLEVEL := \
