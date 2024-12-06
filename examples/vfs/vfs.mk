@@ -40,6 +40,7 @@ endif
 TOOLCHAIN := clang
 CC := clang
 CC_USERLEVEL := zig cc
+CPP_USERLEVEL := zig c++
 LD := ld.lld
 RANLIB := llvm-ranlib
 AR := llvm-ar
@@ -77,12 +78,13 @@ CFLAGS_USERLEVEL := \
 	-g3 \
 	-O3 \
 	-Wno-unused-command-line-argument \
-	-Wall -Wno-unused-function \
+	-Wall -Werror -Wno-unused-function \
 	-D_GNU_SOURCE \
 	-target aarch64-linux-gnu \
 	-I$(BOARD_DIR)/include \
 	-I$(SDDF)/include \
-	-I$(LIONSOS)/include
+	-I$(LIONSOS)/include \
+	-I${CONFIG_INCLUDE}
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
@@ -190,10 +192,10 @@ FORCE:
 mpy-cross: FORCE
 	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
-qemu_disk.img:
+qemu_disk:
 	$(LIONSOS)/dep/sddf/examples/blk/mkvirtdisk $@ 1 512 16777216
 
-qemu: ${IMAGE_FILE}
+qemu: ${IMAGE_FILE} qemu_disk
 	$(QEMU) -machine virt,virtualization=on \
 		-cpu cortex-a53 \
 		-serial mon:stdio \
@@ -202,7 +204,7 @@ qemu: ${IMAGE_FILE}
 		-nographic \
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
-		-drive file=/Users/dreamliner787-9/ext4_disk_64mb.img,if=none,format=raw,id=hd \
+		-drive file=qemu_disk,if=none,format=raw,id=hd \
 		-device virtio-blk-device,drive=hd \
 		-device virtio-net-device,netdev=netdev0 \
 		-netdev user,id=netdev0
