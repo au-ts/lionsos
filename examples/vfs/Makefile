@@ -42,5 +42,6 @@ submodules:
 	git submodule update --init $(LIONSOS)/dep/sddf
 	git submodule update --init $(LIONSOS)/dep/libmicrokitco
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+	cd ${LIONSOS}/dep/libvmm && git submodule update --init dep/liburing
 
 FORCE:
