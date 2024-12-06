@@ -40,7 +40,6 @@ endif
 TOOLCHAIN := clang
 CC := clang
 CC_USERLEVEL := zig cc
-CPP_USERLEVEL := zig c++
 LD := ld.lld
 RANLIB := llvm-ranlib
 AR := llvm-ar
