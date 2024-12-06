@@ -27,9 +27,11 @@ Assuming an in-kernel FS implementation, the setup is as follows:
                                                         |
             UIO Driver                         LionsOS FS Protocol
                                                         |
-            glibc                                    Syscalls
+            liburing                                    |
                                                         |
     ---- KERNEL SPACE                                   |
+                                                        |
+            io_uring                                    |
                                                         |
             Filesystem implementation (FAT, ext4,...)   FS
                                                         |
