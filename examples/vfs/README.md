@@ -124,6 +124,7 @@ UIO(FS): *** Setting up fault region via UIO
 UIO(FS): *** Enabling UIO interrupt on command queue
 UIO(FS): *** Creating epoll object
 UIO(FS): *** Binding command queue IRQ to epoll
+UIO(FS): *** Initialising liburing for io_uring
 UIO(FS): *** Consuming requests already in command queue
 UIO(FS): *** All initialisation successful!
 UIO(FS): *** You won't see any output from UIO FS anymore. Unless there is a warning or error.
