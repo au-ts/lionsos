@@ -65,6 +65,7 @@ CFLAGS := \
 	-I$(BOARD_DIR)/include \
 	-target $(TARGET) \
 	-DBOARD_$(MICROKIT_BOARD) \
+	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I${CONFIG_INCLUDE} \
 	-DVIRTIO_MMIO_NET_OFFSET=0xc00
@@ -116,21 +117,11 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 		FROZEN_MANIFEST=$(abspath ./manifest.py) \
 		V=1
 
-fat.elf: musllibc/lib/libc.a
-	make -C $(LIONSOS)/components/fs/fat \
-		CC=$(CC) \
-		LD=$(LD) \
-		CPU=$(CPU) \
-		BUILD_DIR=$(abspath .) \
-		CONFIG=$(MICROKIT_CONFIG) \
-		MICROKIT_SDK=$(MICROKIT_SDK) \
-		MICROKIT_BOARD=$(MICROKIT_BOARD) \
-		LIBC_DIR=$(abspath $(BUILD_DIR)/musllibc) \
-		BUILD_DIR=$(abspath .) \
-		CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
-		TARGET=$(TARGET)
+FAT_LIBC_LIB := musllibc/lib/libc.a
+FAT_LIBC_INCLUDE := musllibc/include
+include $(LIONSOS)/components/fs/fat/fat.mk
 
-musllibc/lib/libc.a:
+musllibc/lib/libc.a musllibc/include:
 	make -C $(MUSL) \
 		C_COMPILER=aarch64-none-elf-gcc \
 		TOOLPREFIX=aarch64-none-elf- \
