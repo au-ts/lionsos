@@ -41,9 +41,6 @@ uint64_t worker_thread_stack_four;
 
 char *client_data_addr;
 
-// File system metadata region
-uintptr_t fs_metadata;
-
 char *blk_data_region;
 
 // Flag for determine if there are blk_requests pushed by the file system
