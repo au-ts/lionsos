@@ -101,21 +101,15 @@ include ${SDDF}/libco/libco.mk
 include ${BLK_DRIVER}/${BLK_MK}
 include ${BLK_COMPONENTS}/blk_components.mk
 
-micropython.elf: mpy-cross libsddf_util_debug.a libco.a
-	cp $(LIONSOS)/examples/fileio/fs_test.py .
-	cp $(LIONSOS)/examples/fileio/manifest.py .
-	cp $(LIONSOS)/examples/fileio/bench.py .
-	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
-		MICROKIT_SDK=$(MICROKIT_SDK) \
-		MICROKIT_BOARD=$(MICROKIT_BOARD) \
-		MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
-		MICROPY_MPYCROSS=$(abspath mpy_cross/mpy-cross) \
-		MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
-		BUILD=$(abspath .) \
-		LIBMATH=${LIBMATH} \
-		CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
-		FROZEN_MANIFEST=$(abspath ./manifest.py) \
-		V=1
+MICROPYTHON_LIBMATH := ${LIBMATH}
+MICROPYTHON_CONFIG_INCLUDE := ${CONFIG_INCLUDE}
+MICROPYTHON_FROZEN_MANIFEST := manifest.py
+include $(LIONSOS)/components/micropython/micropython.mk
+
+manifest.py: fs_test.py bench.py
+
+%.py: ${FILEIO_DIR}/%.py
+	cp $< $@
 
 FAT_LIBC_LIB := musllibc/lib/libc.a
 FAT_LIBC_INCLUDE := musllibc/include
@@ -142,13 +136,8 @@ $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${FILEIO_DIR}/board/$(MICROKIT_BOARD)/fi
 		-o $(IMAGE_FILE) \
 		-r $(REPORT_FILE)
 
-FORCE:
-
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
-
-mpy-cross: FORCE
-	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 qemu_disk:
 	$(LIONSOS)/dep/sddf/tools/mkvirtdisk $@ 1 512 16777216

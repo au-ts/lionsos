@@ -44,6 +44,7 @@ DTB := linux.dtb
 
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 NFS := $(LIONSOS)/components/fs/nfs
+MICROPYTHON := $(LIONSOS)/components/micropython
 MUSL_SRC := $(LIONSOS)/dep/musllibc
 MUSL := musllibc
 LIONSOS_DOWNLOADS := https://lionsos.org/downloads/examples/kitty
@@ -145,28 +146,17 @@ vmm.elf: ${VMM_OBJS} libvmm.a
 # Build with two threads in parallel
 nproc=2
 
-
-micropython.elf: mpy-cross libsddf_util_debug.a libco.a config.py manifest.py \
-		kitty.py pn532.py font_height50.py font_height35.py writer.py \
-		$(LIONSOS)/dep/libmicrokitco/Makefile
-	make  -C $(LIONSOS)/components/micropython -j$(nproc) \
-			MICROKIT_SDK=$(MICROKIT_SDK) \
-			MICROKIT_BOARD=$(MICROKIT_BOARD) \
-			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
-			MICROPY_MPYCROSS=$(abspath mpy_cross/mpy-cross) \
-			MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
-			BUILD=$(abspath $(BUILD_DIR)) \
-			LIBMATH=${LIBMATH} \
-			FROZEN_MANIFEST=$(abspath manifest.py) \
-			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
-			ENABLE_I2C=1 \
-			ENABLE_FRAMEBUFFER=1 \
-			V=1
+MICROPYTHON_LIBMATH := ${LIBMATH}
+MICROPYTHON_CONFIG_INCLUDE := $(CONFIG_INCLUDE)
+MICROPYTHON_FROZEN_MANIFEST := manifest.py
+MICROPYTHON_ENABLE_I2C := 1
+MICROPYTHON_ENABLE_FRAMEBUFFER := 1
+include $(MICROPYTHON)/micropython.mk
 
 config.py: ${KITTY_DIR}/board/$(MICROKIT_BOARD)/config.py
 	cp $< $@
 
-manifest.py: ${KITTY_DIR}/manifest.py
+manifest.py: ${KITTY_DIR}/manifest.py kitty.py pn532.py font_height50.py font_height35.py writer.py config.py
 	cp $< $@
 
 %.py: ${KITTY_DIR}/client/%.py
@@ -184,9 +174,6 @@ $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${KITTY_DIR}/board/${MICROKIT_BOARD}/kit
 	$(MICROKIT_TOOL) ${KITTY_DIR}/board/${MICROKIT_BOARD}/kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 FORCE:
-
-mpy-cross: FORCE ${LIONSOS}/dep/micropython/mpy-cross
-	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 # If you want to use your own VM for the graphics driver
 # then change these lines or just make sure you've already put
