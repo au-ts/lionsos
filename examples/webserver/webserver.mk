@@ -85,19 +85,14 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-micropython.elf: mpy-cross manifest.py webserver.py config.py \
-		${MICRODOT} ${LIONSOS}/dep/libmicrokitco/Makefile
-	make -C $(LIONSOS)/components/micropython -j$(nproc) \
-			MICROKIT_SDK=$(MICROKIT_SDK) \
-			MICROKIT_BOARD=$(MICROKIT_BOARD) \
-			MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
-			MICROPY_MPYCROSS=$(abspath mpy_cross/mpy-cross) \
-			MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
-			BUILD=$(abspath .) \
-			LIBMATH=$(LIBMATH) \
-			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
-			FROZEN_MANIFEST=$(abspath ./manifest.py) \
-			EXEC_MODULE=webserver.py
+MICROPYTHON_LIBMATH := $(LIBMATH)
+MICROPYTHON_CONFIG_INCLUDE := $(CONFIG_INCLUDE)
+MICROPYTHON_EXEC_MODULE := webserver.py
+MICROPYTHON_FROZEN_MANIFEST := manifest.py
+include $(LIONSOS)/components/micropython/micropython.mk
+
+manifest.py: webserver.py config.py
+webserver.py: $(MICRODOT) config.py
 
 config.py: ${CHECK_FLAGS_BOARD_MD5}
 	echo "base_dir='$(WEBSITE_DIR)'" > config.py
@@ -166,11 +161,6 @@ qemu: ${IMAGE_FILE}
 			-global virtio-mmio.force-legacy=false
 
 FORCE: ;
-
-mpy-cross: FORCE  ${LIONSOS}/dep/micropython/mpy-cross
-	make -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
-
-.PHONY: mpy-cross
 
 $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
 	cd ${LIONSOS}; git submodule update --init dep/micropython
