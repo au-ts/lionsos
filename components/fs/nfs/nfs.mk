@@ -46,8 +46,6 @@ $(CHECK_NFS_FLAGS_MD5):
 $(LIBNFS)/CMakeLists.txt $(LIBNFS)/include:
 	cd $(LIONSOS); git submodule update --init dep/libnfs
 
-$(LIBNFS)/CMakeLists.txt:
-	cd ${LIONSOS}; git submodule update --init dep/libnfs
 libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt $(MUSL)/lib/libc.a
 	MUSL=$(abspath $(MUSL)) cmake -S $(LIBNFS) -B libnfs
 	cmake --build libnfs
