@@ -151,7 +151,7 @@ mpy-cross: FORCE
 	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 qemu_disk:
-	$(LIONSOS)/dep/sddf/examples/blk/mkvirtdisk $@ 1 512 16777216
+	$(LIONSOS)/dep/sddf/tools/mkvirtdisk $@ 1 512 16777216
 
 qemu: ${IMAGE_FILE} qemu_disk
 	$(QEMU) -machine virt,virtualization=on \
