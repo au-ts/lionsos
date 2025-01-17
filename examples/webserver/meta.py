@@ -3,7 +3,7 @@
 import argparse
 import struct
 from typing import Dict, List, Any, Tuple
-from sdfgen import SystemDescription, Sddf, DeviceTree
+from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
@@ -56,7 +56,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     nfs_net_copier = ProtectionDomain("nfs_net_copier", "network_copy_nfs.elf", priority=97, budget=20000)
 
     nfs = ProtectionDomain("nfs", "nfs.elf", priority=96)
-    fs = LionsOs.FileSystem.Nfs(sdf, nfs, micropython, nfs_net_copier)
+    fs = LionsOs.FileSystem.Nfs(sdf, nfs, micropython, net_system, nfs_net_copier)
 
     pds = [
         uart_driver,
