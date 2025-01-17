@@ -17,11 +17,22 @@
 #include "vfs_fs.h"
 #include <extmod/vfs.h>
 #include <sddf/serial/queue.h>
-#include <serial_config.h>
+#include <sddf/serial/config.h>
 #include <sddf/i2c/queue.h>
+#include <sddf/timer/config.h>
+#include <sddf/network/config.h>
 #include "lwip/init.h"
 #include "mpconfigport.h"
 #include "fs_helpers.h"
+
+__attribute__((__section__(".serial_client_config")))
+serial_client_config_t serial_config;
+
+__attribute__((__section__(".timer_client_config")))
+timer_client_config_t timer_config;
+
+__attribute__((__section__(".net_client_config")))
+net_client_config_t net_config;
 
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
@@ -106,10 +117,8 @@ start_repl:
 }
 
 void init(void) {
-    serial_cli_queue_init_sys(microkit_name, &serial_rx_queue_handle,
-                              serial_rx_queue, serial_rx_data,
-                              &serial_tx_queue_handle, serial_tx_queue,
-                              serial_tx_data);
+    serial_queue_init(&serial_rx_queue_handle, serial_config.rx.queue.vaddr, serial_config.rx.data.size, serial_config.rx.data.vaddr);
+    serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 
 #ifdef ENABLE_I2C
     i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
