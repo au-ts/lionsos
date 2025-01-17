@@ -91,7 +91,7 @@ void reply(fs_cmpl_t cmpl) {
     assert(fs_queue_length_producer(completion_queue) != FS_QUEUE_CAPACITY);
     fs_queue_idx_empty(completion_queue, 0)->cmpl = cmpl;
     fs_queue_publish_production(completion_queue, 1);
-    microkit_notify(CLIENT_CHANNEL);
+    microkit_notify(10);
 }
 
 void process_commands(void) {
