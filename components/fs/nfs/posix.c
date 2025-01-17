@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sddf/serial/queue.h>
+#include <sddf/serial/config.h>
 
 #include "nfs.h"
 #include "posix.h"
@@ -44,6 +45,8 @@
 typedef long (*muslcsys_syscall_t)(va_list);
 
 extern void *__sysinfo;
+
+extern serial_client_config_t serial_config;
 
 static muslcsys_syscall_t syscall_table[MUSLC_NUM_SYSCALLS] = {0};
 
