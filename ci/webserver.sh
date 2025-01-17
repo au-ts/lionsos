@@ -36,7 +36,7 @@ build() {
     export LIONSOS=$LIONSOS
 
     cd $LIONSOS/examples/webserver
-    make
+    make -j$(nproc)
 }
 
 build "odroidc4" "debug"
