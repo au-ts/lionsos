@@ -40,7 +40,7 @@ MUSL_SRC := $(LIONSOS)/dep/musllibc
 MUSL := musllibc
 MICRODOT := ${LIONSOS}/dep/microdot/src
 
-METAPROGRAM := $(TOP)/meta.py
+METAPROGRAM := $(WEBSERVER_SRC_DIR)/meta.py
 DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
 DTB := $(MICROKIT_BOARD).dtb
 
