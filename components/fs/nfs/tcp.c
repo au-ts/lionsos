@@ -11,7 +11,6 @@
 #include <sddf/network/queue.h>
 #include <sddf/network/util.h>
 #include <sddf/network/constants.h>
-#include <ethernet_config.h>
 
 #include <lwip/dhcp.h>
 #include <lwip/init.h>
