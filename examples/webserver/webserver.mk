@@ -48,7 +48,7 @@ IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  network_copy.elf network_virt_rx.elf network_virt_tx.elf \
 	  uart_driver.elf serial_virt_tx.elf
 
-SYSTEM_FILE := $(WEBSERVER_SRC_DIR)/board/$(MICROKIT_BOARD)/webserver.system
+SYSTEM_FILE := webserver.system
 
 CFLAGS := \
 	-mtune=$(CPU) \
@@ -117,10 +117,10 @@ include ${SDDF_MAKEFILES}
 include $(NFS)/nfs.mk
 
 $(DTB): $(DTS)
-	dtc -q -I dts -O dtb $(DTS) > $(DTB)
+	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --platform $(MICROKIT_BOARD) --dtbs . --output . --sdf $(SYSTEM_FILE)
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
 	$(OBJCOPY) --update-section .device_resources=uart_driver_device_resources.data uart_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data uart_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
