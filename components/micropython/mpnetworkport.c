@@ -19,10 +19,10 @@
 
 #include <sddf/timer/client.h>
 #include <sddf/network/queue.h>
+#include <sddf/network/config.h>
 #include <sddf/network/util.h>
 #include <sddf/util/cache.h>
 #include <sddf/network/constants.h>
-#include <ethernet_config.h>
 
 #include <lwip/dhcp.h>
 #include <lwip/init.h>
@@ -39,6 +39,8 @@
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
+
+extern net_client_config_t net_config;
 
 #define dlogp(pred, fmt, ...) do { \
     if (pred) { \
@@ -69,9 +71,10 @@ typedef struct state
 
 state_t state;
 
+// DO NOT MERGE: need to figure out how to do this
 LWIP_MEMPOOL_DECLARE(
     RX_POOL,
-    NET_RX_QUEUE_CAPACITY_CLI1 * 2,
+    512 * 2,
     sizeof(pbuf_custom_offset_t),
     "Zero-copy RX pool");
 
@@ -170,17 +173,14 @@ static err_t ethernet_init(struct netif *netif)
 
 void init_networking(void) {
     /* Set up shared memory regions */
-    size_t rx_capacity, tx_capacity;
-    net_cli_queue_capacity(microkit_name, &rx_capacity, &tx_capacity);
-    net_queue_init(&state.rx_queue, rx_free, rx_active, rx_capacity);
-    net_queue_init(&state.tx_queue, tx_free, tx_active, tx_capacity);
+    net_queue_init(&state.rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr, net_config.rx.num_buffers);
+    net_queue_init(&state.tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
     net_buffers_init(&state.tx_queue, 0);
 
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
-    uint64_t mac_addr = net_cli_mac_addr(microkit_name);
-    net_set_mac_addr(state.mac, mac_addr);
+    sddf_memcpy(state.mac, net_config.mac_addr, 6);
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
