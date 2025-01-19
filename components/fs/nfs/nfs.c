@@ -27,14 +27,9 @@
 
 #define TIMEOUT (1 * NS_IN_MS)
 
-__attribute__((__section__(".serial_client_config")))
-serial_client_config_t serial_config;
-
-__attribute__((__section__(".timer_client_config")))
-timer_client_config_t timer_config;
-
-__attribute__((__section__(".net_client_config")))
-net_client_config_t net_config;
+__attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
+__attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
+__attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
 
 serial_queue_handle_t serial_tx_queue_handle;
 
