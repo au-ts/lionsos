@@ -25,14 +25,9 @@
 #include "mpconfigport.h"
 #include "fs_helpers.h"
 
-__attribute__((__section__(".serial_client_config")))
-serial_client_config_t serial_config;
-
-__attribute__((__section__(".timer_client_config")))
-timer_client_config_t timer_config;
-
-__attribute__((__section__(".net_client_config")))
-net_client_config_t net_config;
+__attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
+__attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
+__attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
 
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
@@ -117,6 +112,10 @@ start_repl:
 }
 
 void init(void) {
+    serial_config_check_magic(&serial_config);
+    timer_config_check_magic(&timer_config);
+    net_config_check_magic(&net_config);
+
     serial_queue_init(&serial_rx_queue_handle, serial_config.rx.queue.vaddr, serial_config.rx.data.size, serial_config.rx.data.vaddr);
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 

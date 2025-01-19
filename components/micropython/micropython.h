@@ -10,15 +10,14 @@
 #include <microkit.h>
 #include <libmicrokitco.h>
 
+// TODO
 #ifdef ENABLE_FRAMEBUFFER
 #define FRAMEBUFFER_VMM_CH 0
 #endif
-#define TIMER_CH 1
-#define ETH_RX_CH 2
-#define ETH_TX_CH 3
-#define FS_CH 7
-#define SERIAL_RX_CH 8
-#define SERIAL_TX_CH 9
+
+// TODO
+#define FS_CH 0
+// TODO
 #ifdef ENABLE_I2C
 #define I2C_CH 10
 #endif

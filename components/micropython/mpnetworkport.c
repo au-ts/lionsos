@@ -135,7 +135,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
     notify_tx = true;
 
     // @alwin: Maybe instead of notify_tx = true, an explicit notify is more appropriate
-    // microkit_notify(ETH_TX_CH);
+    // microkit_notify(net_config.tx.id);
 
     return ret;
 }
@@ -207,9 +207,9 @@ void init_networking(void) {
         net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(ETH_RX_CH);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_RX_CH) {
-            microkit_notify(ETH_RX_CH);
+            microkit_deferred_notify(net_config.rx.id);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.rx.id) {
+            microkit_notify(net_config.rx.id);
         }
     }
 
@@ -217,9 +217,9 @@ void init_networking(void) {
         net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(ETH_TX_CH);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_TX_CH) {
-            microkit_notify(ETH_TX_CH);
+            microkit_deferred_notify(net_config.tx.id);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.tx.id) {
+            microkit_notify(net_config.tx.id);
         }
     }
 }
@@ -271,9 +271,9 @@ void mpnet_handle_notify(void) {
         net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(ETH_RX_CH);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_RX_CH) {
-            microkit_notify(ETH_RX_CH);
+            microkit_deferred_notify(net_config.rx.id);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.rx.id) {
+            microkit_notify(net_config.rx.id);
         }
     }
 
@@ -281,9 +281,9 @@ void mpnet_handle_notify(void) {
         net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(ETH_TX_CH);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_TX_CH) {
-            microkit_notify(ETH_TX_CH);
+            microkit_deferred_notify(net_config.tx.id);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.tx.id) {
+            microkit_notify(net_config.tx.id);
         }
     }
 }
