@@ -53,7 +53,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     net_virt_rx = ProtectionDomain("net_virt_rx", "network_virt_rx.elf", priority=99)
     net_system = Sddf.Network(sdf, ethernet_node, ethernet_driver, net_virt_tx, net_virt_rx)
 
-    micropython = ProtectionDomain("micropython", "micropython.elf", priority=98, budget=20000)
+    micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000, stack_size=0x10000)
     micropython_net_copier = ProtectionDomain("micropython_net_copier", "network_copy_micropython.elf", priority=97, budget=20000)
 
     serial_system.add_client(micropython)
@@ -62,7 +62,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     nfs_net_copier = ProtectionDomain("nfs_net_copier", "network_copy_nfs.elf", priority=97, budget=20000)
 
-    nfs = ProtectionDomain("nfs", "nfs.elf", priority=96)
+    nfs = ProtectionDomain("nfs", "nfs.elf", priority=96, stack_size=0x10000)
     serial_system.add_client(nfs)
     timer_system.add_client(nfs)
 
