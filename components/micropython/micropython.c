@@ -112,9 +112,9 @@ start_repl:
 }
 
 void init(void) {
-    serial_config_check_magic(&serial_config);
-    timer_config_check_magic(&timer_config);
-    net_config_check_magic(&net_config);
+    assert(serial_config_check_magic(&serial_config));
+    assert(timer_config_check_magic(&timer_config));
+    assert(net_config_check_magic(&net_config));
 
     serial_queue_init(&serial_rx_queue_handle, serial_config.rx.queue.vaddr, serial_config.rx.data.size, serial_config.rx.data.vaddr);
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
