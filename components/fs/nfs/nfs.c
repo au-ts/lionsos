@@ -66,6 +66,8 @@ void notified(microkit_channel ch) {
         tcp_process_rx();
     } else if (ch == net_config.tx.id || ch == serial_config.tx.id) {
         /* Nothing to do in this case */
+    } else if (ch == 10) {
+        // TODO: revisit
     } else {
         dlog("got notification from unknown channel %llu", ch);
     }

@@ -80,13 +80,6 @@ LWIP_MEMPOOL_DECLARE(
     sizeof(pbuf_custom_offset_t),
     "Zero-copy RX pool");
 
-net_queue_t *rx_free;
-net_queue_t *rx_active;
-net_queue_t *tx_free;
-net_queue_t *tx_active;
-uintptr_t rx_buffer_data_region;
-uintptr_t tx_buffer_data_region;
-
 // Should only need 1 at any one time, accounts for any reconnecting that might happen
 socket_t sockets[MAX_SOCKETS] = {0};
 
@@ -145,7 +138,7 @@ static err_t lwip_eth_send(struct netif *netif, struct pbuf *p) {
         return ERR_MEM;
     }
     
-    unsigned char *frame = (unsigned char *)(buffer.io_or_offset + tx_buffer_data_region);
+    unsigned char *frame = (unsigned char *)(buffer.io_or_offset + net_config.tx_data.vaddr);
     unsigned int copied = 0;
     for (struct pbuf *curr = p; curr != NULL; curr = curr->next) {
         memcpy(frame + copied, curr->payload, curr->len);
@@ -219,7 +212,7 @@ void tcp_process_rx(void) {
                 buffer.len,
                 PBUF_REF,
                 &custom_pbuf_offset->custom,
-                (void *)(buffer.io_or_offset + rx_buffer_data_region),
+                (void *)(buffer.io_or_offset + net_config.rx_data.vaddr),
                 NET_BUFFER_SIZE
             );
 
