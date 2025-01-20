@@ -136,6 +136,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_client_config=net_client_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .nfs_config=nfs_config.data nfs.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
