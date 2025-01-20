@@ -44,6 +44,7 @@ char *fs_share;
 
 serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
+i2c_queue_handle_t i2c_queue_handle;
 
 #ifdef ENABLE_FRAMEBUFFER
 uintptr_t framebuffer_data_region;
@@ -111,7 +112,7 @@ void init(void) {
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 
 #ifdef ENABLE_I2C
-    i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
+    i2c_queue_handle = i2c_queue_init(i2c_config.virt.req_queue.vaddr, i2c_config.virt.resp_queue.vaddr);
 #endif
 
     stack_ptrs_arg_array_t costacks = { mp_stack };
