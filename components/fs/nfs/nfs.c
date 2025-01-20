@@ -19,6 +19,7 @@
 #include <sddf/timer/client.h>
 
 #include <lions/fs/server.h>
+#include <lions/fs/config.h>
 
 #include "nfs.h"
 #include "config.h"
@@ -31,9 +32,14 @@
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
+__attribute__((__section__(".fs_server_config"))) fs_server_config_t fs_config;
 __attribute__((__section__(".nfs_config"))) nfs_config_t nfs_config;
 
 serial_queue_handle_t serial_tx_queue_handle;
+
+struct fs_queue *fs_command_queue;
+struct fs_queue *fs_completion_queue;
+char *fs_share;
 
 struct nfs_context *nfs;
 
@@ -68,7 +74,7 @@ void notified(microkit_channel ch) {
         tcp_process_rx();
     } else if (ch == net_config.tx.id || ch == serial_config.tx.id) {
         /* Nothing to do in this case */
-    } else if (ch == 10) {
+    } else if (ch == fs_config.client.id) {
         // TODO: revisit
     } else {
         dlog("got notification from unknown channel %llu", ch);
@@ -85,7 +91,12 @@ void notified(microkit_channel ch) {
 
 void init(void)
 {
+    assert(fs_config_check_magic(&fs_config));
     assert(nfs_config_check_magic(&nfs_config));
+
+    fs_command_queue = fs_config.client.command_queue.vaddr;
+    fs_completion_queue = fs_config.client.completion_queue.vaddr;
+    fs_share = fs_config.client.share.vaddr;
 
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.queue.size, serial_config.tx.data.vaddr);
 
