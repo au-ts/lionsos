@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 import argparse
 import struct
-import random
+from random import randint
 from dataclasses import dataclass
 from typing import List, Tuple
 from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
@@ -31,6 +31,14 @@ BOARDS: List[Board] = [
         timer="timer",
         ethernet="virtio_mmio@a003e00"
     ),
+    Board(
+        name="odroidc4",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x60000000,
+        serial="soc/bus@ff800000/serial@3000",
+        timer="soc/bus@ffd00000/watchdog@f0d0",
+        ethernet="soc/ethernet@ff3f0000"
+    ),
 ]
 
 def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
@@ -53,20 +61,29 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     net_virt_rx = ProtectionDomain("net_virt_rx", "network_virt_rx.elf", priority=99)
     net_system = Sddf.Network(sdf, ethernet_node, ethernet_driver, net_virt_tx, net_virt_rx)
 
-    micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000, stack_size=0x10000)
+    micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000)
     micropython_net_copier = ProtectionDomain("micropython_net_copier", "network_copy_micropython.elf", priority=97, budget=20000)
 
     serial_system.add_client(micropython)
     timer_system.add_client(micropython)
-    net_system.add_client_with_copier(micropython, micropython_net_copier, mac_addr="0f:1f:2f:3f:4f:5f")
+    micropython_mac_addr = f"52:54:01:00:00:{hex(randint(0, 0xfe))[2:]:0>2}"
+    net_system.add_client_with_copier(micropython, micropython_net_copier, mac_addr=micropython_mac_addr)
 
     nfs_net_copier = ProtectionDomain("nfs_net_copier", "network_copy_nfs.elf", priority=97, budget=20000)
 
+    nfs_mac_addr = f"52:54:01:00:00:{hex(randint(0, 0xfe))[2:]:0>2}"
     nfs = ProtectionDomain("nfs", "nfs.elf", priority=96, stack_size=0x10000)
-    serial_system.add_client(nfs)
-    timer_system.add_client(nfs)
 
-    fs = LionsOs.FileSystem.Nfs(sdf, nfs, micropython, net_system, nfs_net_copier)
+    fs = LionsOs.FileSystem.Nfs(
+        sdf,
+        nfs,
+        micropython,
+        net=net_system,
+        net_copier=nfs_net_copier,
+        mac_addr=nfs_mac_addr,
+        serial=serial_system,
+        timer=timer_system,
+    )
 
     pds = [
         uart_driver,
