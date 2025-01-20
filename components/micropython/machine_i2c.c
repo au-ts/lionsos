@@ -36,7 +36,7 @@ machine_i2c_obj_t i2c_bus_objs[I2C_MAX_BUSES] = {};
 int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, bool stop) {
     /* TODO: check that len is within the data region */
     /* TODO: this code makes assumptions about there being only a single i2c device */
-    uint8_t *i2c_data = (uint8_t *) i2c_data_region;
+    uint8_t *i2c_data = (uint8_t *) i2c_config.virt.data.vaddr;
     i2c_data[0] = I2C_TOKEN_START;
     i2c_data[1] = I2C_TOKEN_ADDR_READ;
     i2c_data[2] = len;
@@ -77,8 +77,8 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, b
         return -MP_ENOMEM;
     }
 
-    uint8_t *response = (uint8_t *) i2c_data_region + response_data_offset;
-    uint8_t *response_data = (uint8_t *) i2c_data_region + response_data_offset + RESPONSE_DATA_OFFSET;
+    uint8_t *response = (uint8_t *) i2c_config.virt.data.vaddr + response_data_offset;
+    uint8_t *response_data = (uint8_t *) i2c_config.virt.data.vaddr + response_data_offset + RESPONSE_DATA_OFFSET;
 
     if (response[RESPONSE_ERR] == I2C_ERR_OK) {
         memcpy(buf, response_data, response_data_len - RESPONSE_DATA_OFFSET);
@@ -89,7 +89,7 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, b
 
 int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
     // TODO: check that len < 256
-    uint8_t *i2c_data = (uint8_t *) i2c_data_region;
+    uint8_t *i2c_data = (uint8_t *) i2c_config.virt.data.vaddr;
     i2c_data[0] = I2C_TOKEN_START;
     i2c_data[1] = I2C_TOKEN_ADDR_WRITE;
     i2c_data[2] = len;
@@ -125,7 +125,7 @@ int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) 
         return -MP_ENOMEM;
     }
 
-    uint8_t *response_data = (uint8_t *) i2c_data_region + response_data_offset;
+    uint8_t *response_data = (uint8_t *) i2c_config.virt.data.vaddr + response_data_offset;
 
     if (response_data[RESPONSE_ERR] != I2C_ERR_OK) {
         /* @ivanv: it should be noted that this does not adhere to the MicroPython API for 'write' currently. */
