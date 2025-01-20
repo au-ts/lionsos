@@ -23,7 +23,6 @@ endif
 
 export LIONSOS ?= $(abspath ../..)
 export KITTY_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-export CONFIG_INCLUDE ?= $(abspath src/config)
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 
