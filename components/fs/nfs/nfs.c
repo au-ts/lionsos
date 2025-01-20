@@ -21,6 +21,7 @@
 #include <lions/fs/server.h>
 
 #include "nfs.h"
+#include "config.h"
 #include "util.h"
 #include "tcp.h"
 #include "posix.h"
@@ -30,6 +31,7 @@
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
+__attribute__((__section__(".nfs_config"))) nfs_config_t nfs_config;
 
 serial_queue_handle_t serial_tx_queue_handle;
 
@@ -83,6 +85,8 @@ void notified(microkit_channel ch) {
 
 void init(void)
 {
+    assert(nfs_config_check_magic(&nfs_config));
+
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.queue.size, serial_config.tx.data.vaddr);
 
     syscalls_init();

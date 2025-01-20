@@ -23,10 +23,13 @@
 #include <lions/fs/server.h>
 
 #include "nfs.h"
+#include "config.h"
 #include "util.h"
 
 #define MAX_CONCURRENT_OPS FS_QUEUE_CAPACITY
 #define CLIENT_SHARE_SIZE 0x4000000
+
+extern nfs_config_t nfs_config;
 
 struct fs_queue *fs_command_queue;
 struct fs_queue *fs_completion_queue;
@@ -179,7 +182,7 @@ void handle_initialise(fs_cmd_t cmd) {
     /* Infinite retries */
     nfs_set_autoreconnect(nfs, -1);
 
-    int err = nfs_mount_async(nfs, NFS_SERVER, NFS_DIRECTORY, initialise_cb, cont);
+    int err = nfs_mount_async(nfs, nfs_config.server, nfs_config.export, initialise_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_mount;
