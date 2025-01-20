@@ -198,6 +198,9 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_client_config=net_client_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .nfs_config=nfs_config.data nfs.elf
+	$(OBJCOPY) --update-section .fs_server_config=fs_server_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .fs_client_config=fs_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .vmm_config=vmm_framebuffer_vmm.data vmm.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
