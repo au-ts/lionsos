@@ -8,12 +8,14 @@
 #include <assert.h>
 #include <stdio.h>
 #include <lions/fs/protocol.h>
+#include <lions/fs/config.h>
 #include "micropython.h"
 #include "fs_helpers.h"
 
+extern fs_client_config_t fs_config;
+extern fs_queue_t *fs_command_queue;
+extern fs_queue_t *fs_completion_queue;
 extern char *fs_share;
-struct fs_queue *fs_command_queue;
-struct fs_queue *fs_completion_queue;
 
 #define REQUEST_ID_MAXIMUM (FS_QUEUE_CAPACITY - 1)
 struct request_metadata {
@@ -94,7 +96,7 @@ void fs_command_issue(fs_cmd_t cmd) {
     assert(fs_queue_length_producer(fs_command_queue) != FS_QUEUE_CAPACITY);
     *fs_queue_idx_empty(fs_command_queue, 0) = message;
     fs_queue_publish_production(fs_command_queue, 1);
-    microkit_notify(FS_CH);
+    microkit_notify(fs_config.server.id);
     request_metadata[cmd.id].command = cmd;
 }
 
@@ -118,7 +120,7 @@ int fs_command_blocking(fs_cmpl_t *completion, fs_cmd_t cmd) {
 
     fs_command_issue(cmd);
     while (!request_metadata[request_id].complete) {
-        microkit_cothread_wait_on_channel(FS_CH);
+        microkit_cothread_wait_on_channel(fs_config.server.id);
     }
 
     fs_command_complete(request_id, NULL, completion);

@@ -22,6 +22,7 @@
 #include <sddf/i2c/queue.h>
 #include <sddf/timer/config.h>
 #include <sddf/network/config.h>
+#include <lions/fs/config.h>
 #include "lwip/init.h"
 #include "mpconfigport.h"
 #include "fs_helpers.h"
@@ -29,6 +30,7 @@
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
+__attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
 
 #ifdef ENABLE_I2C
 __attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_config;
@@ -40,6 +42,8 @@ static char heap[MICROPY_HEAP_SIZE];
 static char mp_stack[MICROPY_STACK_SIZE];
 static co_control_t co_controller_mem;
 
+fs_queue_t *fs_command_queue;
+fs_queue_t *fs_completion_queue;
 char *fs_share;
 
 serial_queue_handle_t serial_rx_queue_handle;
@@ -107,9 +111,14 @@ void init(void) {
     assert(serial_config_check_magic(&serial_config));
     assert(timer_config_check_magic(&timer_config));
     assert(net_config_check_magic(&net_config));
+    assert(fs_config_check_magic(&fs_config));
 
     serial_queue_init(&serial_rx_queue_handle, serial_config.rx.queue.vaddr, serial_config.rx.data.size, serial_config.rx.data.vaddr);
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
+
+    fs_command_queue = fs_config.server.command_queue.vaddr;
+    fs_completion_queue = fs_config.server.completion_queue.vaddr;
+    fs_share = fs_config.server.share.vaddr;
 
 #ifdef ENABLE_I2C
     i2c_queue_handle = i2c_queue_init(i2c_config.virt.req_queue.vaddr, i2c_config.virt.resp_queue.vaddr);

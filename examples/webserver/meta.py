@@ -114,6 +114,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         sdf.add_pd(pd)
 
     assert fs.connect()
+    assert fs.serialise_config(output_dir)
     assert serial_system.connect()
     assert serial_system.serialise_config(output_dir)
     assert net_system.connect()
