@@ -5,6 +5,7 @@
 
 #include <microkit.h>
 #include <sddf/i2c/queue.h>
+#include <sddf/i2c/config.h>
 #include <sddf/i2c/client.h>
 #include <string.h>
 #include "micropython.h"
@@ -16,8 +17,8 @@
 
 #if MICROPY_PY_MACHINE_I2C && MICROPY_HW_ENABLE_HW_I2C
 
+extern i2c_client_config_t i2c_config;
 extern i2c_queue_handle_t i2c_queue_handle;
-extern uintptr_t i2c_data_region;
 
 #define I2C_AVAILABLE_BUSES 1
 #define I2C_MAX_BUSES 4
@@ -58,9 +59,9 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, b
         return -MP_ENOMEM;
     }
 
-    microkit_notify(I2C_CH);
+    microkit_notify(i2c_config.virt.id);
     /* Now that we've enqueued our request, wait for the event signalling the I2C response. */
-    microkit_cothread_wait_on_channel(I2C_CH);
+    microkit_cothread_wait_on_channel(i2c_config.virt.id);
 
     /* Now process the response */
     size_t bus_address = 0;
@@ -106,9 +107,9 @@ int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) 
         return -MP_ENOMEM;
     }
 
-    microkit_notify(I2C_CH);
+    microkit_notify(i2c_config.virt.id);
     /* Now that we've enqueued our request, wait for the event signalling the I2C response. */
-    microkit_cothread_wait_on_channel(I2C_CH);
+    microkit_cothread_wait_on_channel(i2c_config.virt.id);
 
     /* Now process the response */
     size_t bus_address = 0;
@@ -141,7 +142,7 @@ STATIC int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
     /* TODO: we should provide a wrapper API for this like in the timer API */
     microkit_msginfo msginfo = microkit_msginfo_new(I2C_BUS_CLAIM, 1);
     microkit_mr_set(I2C_BUS_SLOT, addr);
-    msginfo = microkit_ppcall(I2C_CH, msginfo);
+    msginfo = microkit_ppcall(i2c_config.virt.id, msginfo);
     seL4_Word claim_label = microkit_msginfo_get_label(msginfo);
     if (claim_label == I2C_FAILURE) {
        mp_raise_msg_varg(&mp_type_RuntimeError,
@@ -166,7 +167,7 @@ STATIC int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
         if (ret < 0) {
             msginfo = microkit_msginfo_new(I2C_BUS_RELEASE, 1);
             microkit_mr_set(I2C_BUS_SLOT, addr);
-            msginfo = microkit_ppcall(I2C_CH, msginfo);
+            msginfo = microkit_ppcall(i2c_config.virt.id, msginfo);
             seL4_Word release_label = microkit_msginfo_get_label(msginfo);
             assert(release_label == I2C_SUCCESS);
             return ret;
@@ -176,7 +177,7 @@ STATIC int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
 
     msginfo = microkit_msginfo_new(I2C_BUS_RELEASE, 1);
     microkit_mr_set(I2C_BUS_SLOT, addr);
-    msginfo = microkit_ppcall(I2C_CH, msginfo);
+    msginfo = microkit_ppcall(i2c_config.virt.id, msginfo);
     seL4_Word release_label = microkit_msginfo_get_label(msginfo);
     assert(release_label == I2C_SUCCESS);
 

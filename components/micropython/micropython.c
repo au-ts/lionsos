@@ -18,6 +18,7 @@
 #include <extmod/vfs.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
+#include <sddf/i2c/config.h>
 #include <sddf/i2c/queue.h>
 #include <sddf/timer/config.h>
 #include <sddf/network/config.h>
@@ -29,6 +30,10 @@ __attribute__((__section__(".serial_client_config"))) serial_client_config_t ser
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
 
+#ifdef ENABLE_I2C
+__attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_config;
+#endif
+
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
 
@@ -37,22 +42,8 @@ static co_control_t co_controller_mem;
 
 char *fs_share;
 
-/*
- * Shared regions for Serial communication
- */
-char *serial_rx_data;
-char *serial_tx_data;
-serial_queue_t *serial_rx_queue;
-serial_queue_t *serial_tx_queue;
 serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
-
-#ifdef ENABLE_I2C
-i2c_queue_handle_t i2c_queue_handle;
-uintptr_t i2c_request_region;
-uintptr_t i2c_response_region;
-uintptr_t i2c_data_region;
-#endif
 
 #ifdef ENABLE_FRAMEBUFFER
 uintptr_t framebuffer_data_region;
