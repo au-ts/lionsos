@@ -86,7 +86,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     nfs_mac_addr = f"52:54:01:00:00:{hex(randint(0, 0xfe))[2:]:0>2}"
     nfs = ProtectionDomain("nfs", "nfs.elf", priority=96, stack_size=0x10000)
 
-    nfs_config = NfsConfig("172.16.0.2", "/vmm-work")
+    nfs_config = NfsConfig(args.nfs_server, args.nfs_dir)
     fs = LionsOs.FileSystem.Nfs(
         sdf,
         nfs,
@@ -135,6 +135,8 @@ if __name__ == '__main__':
     parser.add_argument("--board", required=True, choices=[b.name for b in BOARDS])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
+    parser.add_argument("--nfs-server", required=True)
+    parser.add_argument("--nfs-dir", required=True)
 
     args = parser.parse_args()
 
