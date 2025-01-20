@@ -17,10 +17,6 @@
 
 // TODO
 #define FS_CH 0
-// TODO
-#ifdef ENABLE_I2C
-#define I2C_CH 10
-#endif
 
 extern serial_queue_handle_t serial_rx_queue_handle;
 extern serial_queue_handle_t serial_tx_queue_handle;
