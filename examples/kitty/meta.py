@@ -5,11 +5,13 @@ import struct
 from random import randint
 from dataclasses import dataclass
 from typing import List, Tuple, Optional
-from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
+from sdfgen import SystemDescription, Sddf, Vmm, DeviceTree, LionsOs
 
 ProtectionDomain = SystemDescription.ProtectionDomain
+VirtualMachine = SystemDescription.VirtualMachine
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
+Irq = SystemDescription.Irq
 Channel = SystemDescription.Channel
 
 @dataclass
@@ -44,6 +46,19 @@ BOARDS: List[Board] = [
         i2c="soc/bus@ffd00000/i2c@1d000",
     ),
 ]
+
+class NfsConfig:
+    def __init__(self, server, export):
+        self.server = server
+        self.export = export
+
+    def serialise(self):
+        magic = b'LionsOS\x01'
+        server_bytes = self.server.encode('utf-8')[:4096]
+        export_bytes = self.export.encode('utf-8')[:4096]
+        packed_data = struct.pack('8s4096s4096s', magic, server_bytes, export_bytes)
+        return packed_data
+
 
 def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     serial_node = dtb.node(board.serial)
@@ -94,6 +109,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     nfs_mac_addr = f"52:54:01:00:00:{hex(randint(0, 0xfe))[2:]:0>2}"
     nfs = ProtectionDomain("nfs", "nfs.elf", priority=96, stack_size=0x10000)
 
+    nfs_config = NfsConfig(args.nfs_server, args.nfs_dir)
     fs = LionsOs.FileSystem.Nfs(
         sdf,
         nfs,
@@ -104,6 +120,37 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         serial=serial_system,
         timer=timer_system,
     )
+
+    vmm = ProtectionDomain("framebuffer_vmm", "vmm.elf", priority=1)
+    vm = VirtualMachine("linux", [VirtualMachine.Vcpu(id=0)])
+    vmm_system = Vmm(sdf, vmm, vm, guest_dtb)
+
+    vmm_system.add_passthrough_irq(Irq(35))
+    vmm_system.add_passthrough_irq(Irq(36))
+    vmm_system.add_passthrough_irq(Irq(37))
+    vmm_system.add_passthrough_irq(Irq(38))
+
+    vmm_system.add_passthrough_device("gic_v2m", dtb.node("intc@8000000/v2m@8020000"))
+
+    framebuffer = MemoryRegion("framebuffer", 0x2_000_000)
+    sdf.add_mr(framebuffer)
+    framebuffer_map = Map(framebuffer, 0x30000000, Map.Perms(r=True, w=True))
+    micropython.add_map(framebuffer_map)
+    vm.add_map(framebuffer_map)
+
+    # Other pass-through devices
+    devices = [
+        ("virtio_mmio", 0x3000, 0xa000000),
+        ("pcie", 0x1000000, 0x4010000000),
+        ("pcie_config", 0x1000000, 0x10000000),
+        ("pcie_bus", 0x1000000, 0x8000000000)
+    ]
+    for d in devices:
+        mr = MemoryRegion(d[0], d[1], paddr=d[2])
+        sdf.add_mr(mr)
+        vm.add_map(Map(mr, d[2], Map.Perms(r=True, w=True), cached=False))
+
+    sdf.add_channel(Channel(micropython, vmm))
 
     pds = [
         uart_driver,
@@ -116,6 +163,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         nfs,
         nfs_net_copier,
         timer_driver,
+        vmm,
     ]
     if board.i2c:
         pds += [i2c_driver, i2c_virt]
@@ -123,6 +171,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         sdf.add_pd(pd)
 
     assert fs.connect()
+    assert fs.serialise_config(output_dir)
     assert serial_system.connect()
     assert serial_system.serialise_config(output_dir)
     assert net_system.connect()
@@ -132,6 +181,11 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     if board.i2c:
         assert i2c_system.connect()
         assert i2c_system.serialise_config(output_dir)
+    assert vmm_system.connect()
+    assert vmm_system.serialise_config(output_dir)
+
+    with open(f"{output_dir}/nfs_config.data", "wb+") as f:
+        f.write(nfs_config.serialise())
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
         f.write(sdf.xml())
@@ -144,6 +198,9 @@ if __name__ == '__main__':
     parser.add_argument("--board", required=True, choices=[b.name for b in BOARDS])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
+    parser.add_argument("--nfs-server", required=True)
+    parser.add_argument("--nfs-dir", required=True)
+    parser.add_argument("--guest-dtb", required=True)
 
     args = parser.parse_args()
 
@@ -154,5 +211,8 @@ if __name__ == '__main__':
 
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
+
+    with open(args.guest_dtb, "rb") as f:
+        guest_dtb = DeviceTree(f.read())
 
     generate(args.sdf, args.output, dtb)

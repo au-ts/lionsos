@@ -179,7 +179,7 @@ ${IMAGES}: libsddf_util_debug.a
 	${CC} ${CFLAGS} -c -o $@ $<
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY) --guest-dtb $(LINUX_DTB)
 # 	$(OBJCOPY) --update-section .device_resources=uart_driver_device_resources.data i2c_driver.elf
 # 	$(OBJCOPY) --update-section .i2c_driver_config=i2c_driver_config.data i2c_driver.elf
 # 	$(OBJCOPY) --update-section .i2c_virt_config=i2c_virt_config.data i2c_virt.elf
@@ -199,6 +199,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_client_config=net_client_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .vmm_config=vmm_framebuffer_vmm.data vmm.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
