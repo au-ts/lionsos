@@ -51,7 +51,7 @@ serial_queue_handle_t serial_tx_queue_handle;
 i2c_queue_handle_t i2c_queue_handle;
 
 #ifdef ENABLE_FRAMEBUFFER
-uintptr_t framebuffer_data_region;
+uintptr_t framebuffer_data_region = 0x30000000;
 #endif
 
 STATIC bool init_vfs(void) {
