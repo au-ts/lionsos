@@ -89,7 +89,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     uart_driver = ProtectionDomain("uart_driver", "uart_driver.elf", priority=100)
     serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
-    serial_system = Sddf.Serial(sdf, serial_node, uart_driver, serial_virt_tx)
+    serial_virt_rx = ProtectionDomain("serial_virt_rx", "serial_virt_rx.elf", priority=99)
+    serial_system = Sddf.Serial(sdf, serial_node, uart_driver, serial_virt_tx, virt_rx=serial_virt_rx)
 
     ethernet_driver = ProtectionDomain("ethernet_driver", "eth_driver.elf", priority=101, budget=100, period=400)
     net_virt_tx = ProtectionDomain("net_virt_tx", "network_virt_tx.elf", priority=100, budget=20000)
@@ -155,6 +156,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     pds = [
         uart_driver,
         serial_virt_tx,
+        serial_virt_rx,
         ethernet_driver,
         net_virt_tx,
         net_virt_rx,
