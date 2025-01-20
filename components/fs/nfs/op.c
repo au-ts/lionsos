@@ -21,6 +21,7 @@
 
 #include <lions/fs/protocol.h>
 #include <lions/fs/server.h>
+#include <lions/fs/config.h>
 
 #include "nfs.h"
 #include "config.h"
@@ -29,11 +30,12 @@
 #define MAX_CONCURRENT_OPS FS_QUEUE_CAPACITY
 #define CLIENT_SHARE_SIZE 0x4000000
 
+extern fs_server_config_t fs_config;
 extern nfs_config_t nfs_config;
 
-struct fs_queue *fs_command_queue;
-struct fs_queue *fs_completion_queue;
-char *fs_share;
+extern struct fs_queue *fs_command_queue;
+extern struct fs_queue *fs_completion_queue;
+extern char *fs_share;
 
 char path_buffer[FS_MAX_PATH_LENGTH + 1][2];
 
@@ -94,7 +96,7 @@ void reply(fs_cmpl_t cmpl) {
     assert(fs_queue_length_producer(fs_completion_queue) != FS_QUEUE_CAPACITY);
     fs_queue_idx_empty(fs_completion_queue, 0)->cmpl = cmpl;
     fs_queue_publish_production(fs_completion_queue, 1);
-    microkit_notify(10);
+    microkit_notify(fs_config.client.id);
 }
 
 void process_commands(void) {
