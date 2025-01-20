@@ -9,7 +9,7 @@
 # NOTES:
 # Generates nfs.elf
 # Requires ${SDDF}/util/util.mk to build the utility library for debug output
-# Requires CONFIG_INCLUDE, NFS_SERVER and NFS_DIRECTORY to be defined
+# Requires NFS_SERVER and NFS_DIRECTORY to be defined
 
 NFS_DIR := $(LIONSOS)/components/fs/nfs
 LWIP := $(SDDF)/network/ipstacks/lwip/src

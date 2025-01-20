@@ -8,7 +8,7 @@
 #include <sddf/util/cache.h>
 #include "py/runtime.h"
 #include "micropython.h"
-#include "../vmm/uio.h"
+#include "uio.h"
 
 extern void *framebuffer_data_region;
 /*
