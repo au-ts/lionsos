@@ -73,6 +73,7 @@ state_t state;
 
 extern timer_client_config_t timer_config;
 extern net_client_config_t net_config;
+extern nfs_config_t nfs_config;
 
 LWIP_MEMPOOL_DECLARE(
     RX_POOL,
@@ -424,7 +425,7 @@ int tcp_socket_connect(int index, int port) {
     assert(sock->state == socket_state_bound);
 
     ip_addr_t ipaddr;
-    ip4_addr_set_u32(&ipaddr, ipaddr_addr(NFS_SERVER));
+    ip4_addr_set_u32(&ipaddr, ipaddr_addr(nfs_config.server));
 
     err_t err = tcp_connect(sock->sock_tpcb, &ipaddr, port, socket_connected);
     if (err != ERR_OK) {
