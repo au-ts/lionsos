@@ -12,6 +12,7 @@ AR := llvm-ar
 OBJCOPY := llvm-objcopy
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
+PYTHON ?= python3
 DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
