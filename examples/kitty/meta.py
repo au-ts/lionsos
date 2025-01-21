@@ -113,7 +113,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     vmm = ProtectionDomain("framebuffer_vmm", "vmm.elf", priority=1)
     vm = VirtualMachine("linux", [VirtualMachine.Vcpu(id=0)])
-    vmm_system = Vmm(sdf, vmm, vm, guest_dtb)
+    vmm_system = Vmm(sdf, vmm, vm, guest_dtb, one_to_one_ram=True)
 
     vmm_system.add_passthrough_irq(Irq(35))
     vmm_system.add_passthrough_irq(Irq(36))
