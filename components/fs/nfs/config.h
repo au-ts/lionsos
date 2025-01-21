@@ -8,7 +8,7 @@
 #define LIONS_NFS_EXPORT_PATH_LEN_MAX 4096
 
 #define LIONS_NFS_MAGIC_LEN 8
-static char LIONS_NFS_MAGIC[LIONS_NFS_MAGIC_LEN] = { 'L', 'i', 'o', 'n', 's', 'O', 'S', 0x1 };
+static char LIONS_NFS_MAGIC[LIONS_NFS_MAGIC_LEN] = { 'L', 'i', 'o', 'n', 's', 'O', 'S', 0x2 };
 
 typedef struct nfs_config {
     char magic[LIONS_NFS_MAGIC_LEN];
