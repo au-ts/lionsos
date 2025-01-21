@@ -85,7 +85,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         serial=serial_system,
         timer=timer_system,
         server=args.nfs_server,
-        export=args.nfs_dir,
+        export_path=args.nfs_dir,
     )
 
     pds = [
