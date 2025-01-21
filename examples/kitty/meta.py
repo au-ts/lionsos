@@ -47,18 +47,6 @@ BOARDS: List[Board] = [
     ),
 ]
 
-class NfsConfig:
-    def __init__(self, server, export):
-        self.server = server
-        self.export = export
-
-    def serialise(self):
-        magic = b'LionsOS\x01'
-        server_bytes = self.server.encode('utf-8')[:4096]
-        export_bytes = self.export.encode('utf-8')[:4096]
-        packed_data = struct.pack('8s4096s4096s', magic, server_bytes, export_bytes)
-        return packed_data
-
 
 def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     serial_node = dtb.node(board.serial)
@@ -110,7 +98,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     nfs_mac_addr = f"52:54:01:00:00:{hex(randint(0, 0xfe))[2:]:0>2}"
     nfs = ProtectionDomain("nfs", "nfs.elf", priority=96, stack_size=0x10000)
 
-    nfs_config = NfsConfig(args.nfs_server, args.nfs_dir)
     fs = LionsOs.FileSystem.Nfs(
         sdf,
         nfs,
@@ -120,6 +107,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         mac_addr=nfs_mac_addr,
         serial=serial_system,
         timer=timer_system,
+        server=args.nfs_server,
+        export_path=args.nfs_dir,
     )
 
     vmm = ProtectionDomain("framebuffer_vmm", "vmm.elf", priority=1)
@@ -185,9 +174,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         assert i2c_system.serialise_config(output_dir)
     assert vmm_system.connect()
     assert vmm_system.serialise_config(output_dir)
-
-    with open(f"{output_dir}/nfs_config.data", "wb+") as f:
-        f.write(nfs_config.serialise())
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
         f.write(sdf.xml())
