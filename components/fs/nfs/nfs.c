@@ -98,7 +98,7 @@ void init(void)
     fs_completion_queue = fs_config.client.completion_queue.vaddr;
     fs_share = fs_config.client.share.vaddr;
 
-    serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.queue.size, serial_config.tx.data.vaddr);
+    serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 
     syscalls_init();
     continuation_pool_init();
