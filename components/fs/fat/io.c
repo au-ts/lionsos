@@ -3,36 +3,31 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+#include <libmicrokitco.h>
+#include <sddf/util/util.h>
+#include <sddf/blk/queue.h>
+#include <sddf/blk/storage_info.h>
 #include "ff.h"
 #include "diskio.h"
 #include "decl.h"
-#include <stdbool.h>
-#include <stdint.h>
-#include <sddf/blk/queue.h>
-#include <string.h>
-#include <libmicrokitco.h>
-#include <blk_config.h>
-#include <sddf/util/util.h>
-#include <assert.h>
 
-extern blk_queue_handle_t *blk_queue_handle;
+extern blk_queue_handle_t *blk_queue;
+extern blk_storage_info_t *blk_storage_info;
+extern char *blk_data;
 
 extern bool blk_request_pushed;
 
-// This is the offset of the data buffer shared between file system and blk device driver
-extern uint64_t fs_metadata;
-
-extern blk_storage_info_t *blk_storage_info;
-
-extern char *blk_data;
-
-/*
+/* TODO fix comment
  *  This def restrict the maximum cluster size that the fatfs can have
  *  This restriction should not cause any problem as long as the BLK_REGION_SIZE between file system and blk virt is not
  *  too small. For example, 32GB - 256TB disks are recommended to have a sector size of 128KB, and if you have 4 worker threads,
  *  BLK_REGION_SIZE should be bigger than 512KB. In fileio example, BLK_REGION_SIZE is set to 2 MB.
  */
-#define MAX_CLUSTER_SIZE (BLK_REGION_SIZE / FAT_WORKER_THREAD_NUM)
+extern uint64_t max_cluster_size;
 
 uint64_t thread_blk_addr[FAT_WORKER_THREAD_NUM];
 
@@ -50,7 +45,7 @@ DSTATUS disk_initialize (
 {
     // thread_blk_addr[0] is not initialized as that is the slot for event thread
     for (uint16_t i = 0; i < FAT_WORKER_THREAD_NUM; i++) {
-        thread_blk_addr[i] = i * MAX_CLUSTER_SIZE;
+        thread_blk_addr[i] = i * max_cluster_size;
     }
 
     // Check whether the block device is ready or not
@@ -101,7 +96,7 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
     if (cmd == CTRL_SYNC) {
         res = RES_OK;
         LOG_FATFS("blk_enqueue_syncreq\n");
-        int err = blk_enqueue_req(blk_queue_handle, BLK_REQ_FLUSH, 0, 0, 0, microkit_cothread_my_handle());
+        int err = blk_enqueue_req(&blk_queue, BLK_REQ_FLUSH, 0, 0, 0, microkit_cothread_my_handle());
         assert(!err);
         blk_request_pushed = true;
         wait_for_blk_resp();
@@ -138,12 +133,12 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     int32_t aligned_sector = count - unaligned_head_sector - unaligned_tail_sector;
     sddf_count += DIV_POWER_OF_2(aligned_sector, sector_per_transfer);
 
-    assert(MUL_POWER_OF_2(sddf_count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
+    assert(MUL_POWER_OF_2(sddf_count, BLK_TRANSFER_SIZE) <= max_cluster_size);
 
     LOG_FATFS("blk_enqueue_read pre adjust: addr: 0x%lx sector: %u, count: %u ID: %d\n", read_data_offset, sector, count, handle);
     LOG_FATFS("blk_enqueue_read after adjust: addr: 0x%lx sector: %u, count: %d ID: %d\n", read_data_offset, sddf_sector, sddf_count, handle);
 
-    int err = blk_enqueue_req(blk_queue_handle, BLK_REQ_READ, read_data_offset, sddf_sector, sddf_count, handle);
+    int err = blk_enqueue_req(&blk_queue, BLK_REQ_READ, read_data_offset, sddf_sector, sddf_count, handle);
     assert(!err);
 
     blk_request_pushed = true;
@@ -161,10 +156,10 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
     uint64_t write_data_offset = thread_blk_addr[handle - 1];
     uint16_t sector_size = blk_storage_info->sector_size;
     if (sector_size == BLK_TRANSFER_SIZE) {
-        assert(MUL_POWER_OF_2(count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
+        assert(MUL_POWER_OF_2(count, BLK_TRANSFER_SIZE) <= max_cluster_size);
 
         memcpy(blk_data + write_data_offset, buff, sector_size * count);
-        int err = blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sector, count,handle);
+        int err = blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, write_data_offset, sector, count,handle);
         assert(!err);
     }
     else {
@@ -183,7 +178,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
         int32_t aligned_sector = count - unaligned_head_sector - unaligned_tail_sector;
         sddf_count += DIV_POWER_OF_2(aligned_sector, sector_per_transfer);
 
-        assert(MUL_POWER_OF_2(sddf_count, BLK_TRANSFER_SIZE) <= MAX_CLUSTER_SIZE);
+        assert(MUL_POWER_OF_2(sddf_count, BLK_TRANSFER_SIZE) <= max_cluster_size);
 
         LOG_FATFS("blk_enqueue_write pre adjust: addr: 0x%lx sector: %u, count: %u ID: %d buffer_addr_in_fs: 0x%p\n", write_data_offset, sector, count, handle, buff);
         LOG_FATFS("blk_enqueue_write after adjust: addr: 0x%lx sector: %u, count: %d ID: %d\n", write_data_offset, sddf_sector, sddf_count, handle);
@@ -191,11 +186,11 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
         // When there is no unaligned sector, we do not need to send a read request
         if (unaligned_head_sector == 0 && unaligned_tail_sector == 0) {
             memcpy(blk_data + write_data_offset, buff, sector_size * count);
-            int err = blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sddf_sector, sddf_count,handle);
+            int err = blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, write_data_offset, sddf_sector, sddf_count,handle);
             assert(!err);
         }
         else {
-            int err = blk_enqueue_req(blk_queue_handle, BLK_REQ_READ, write_data_offset, sddf_sector, sddf_count,handle);
+            int err = blk_enqueue_req(&blk_queue, BLK_REQ_READ, write_data_offset, sddf_sector, sddf_count,handle);
             assert(!err);
             blk_request_pushed = true;
             wait_for_blk_resp();
@@ -205,7 +200,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
                 return res;
             }
             memcpy(blk_data + write_data_offset + sector_size * MOD_POWER_OF_2(sector, sector_per_transfer), buff, sector_size * count);
-            err = blk_enqueue_req(blk_queue_handle, BLK_REQ_WRITE, write_data_offset, sddf_sector, sddf_count,handle);
+            err = blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, write_data_offset, sddf_sector, sddf_count,handle);
             assert(!err);
         }
     }
