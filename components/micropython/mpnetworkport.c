@@ -217,7 +217,7 @@ void init_networking(void) {
     }
 }
 
-void process_rx(void) {
+void mpnet_process_rx(void) {
     bool reprocess = true;
     while (reprocess) {
         while (!net_queue_empty_active(&state.rx_queue)) {
