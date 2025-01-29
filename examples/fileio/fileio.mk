@@ -8,16 +8,12 @@ IMAGES := \
 	eth_driver.elf \
 	micropython.elf \
 	fat.elf \
-	copy.elf \
-	network_virt_rx.elf \
-	network_virt_tx.elf \
 	uart_driver.elf \
 	serial_virt_rx.elf \
 	serial_virt_tx.elf \
 	blk_virt.elf
 
 ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
-	NET_DRIV_DIR := imx
 	BLK_DRIV_DIR := mmc/imx
 	UART_DRIV_DIR := imx
 	TIMER_DRIV_DIR := imx
@@ -25,7 +21,6 @@ ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
 	BLK_MK := mmc_driver.mk
 	CPU := cortex-a53
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
-	NET_DRIV_DIR := virtio
 	BLK_DRIV_DIR := virtio
 	UART_DRIV_DIR := arm
 	TIMER_DRIV_DIR := arm
@@ -42,15 +37,19 @@ CC := clang
 LD := ld.lld
 RANLIB := llvm-ranlib
 AR := llvm-ar
+OBJCOPY := llvm-objcopy
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
+PYTHON ?= python3
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-PLATFORM := meson
 SDDF := $(LIONSOS)/dep/sddf
 
-LWIP := $(SDDF)/network/ipstacks/lwip/src
+METAPROGRAM := $(FILEIO_DIR)/meta.py
+DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
+DTB := $(MICROKIT_BOARD).dtb
+
 FAT := $(LIONSOS)/components/fs/fat
 MUSL_SRC := $(LIONSOS)/dep/musllibc
 MUSL := musllibc
@@ -67,14 +66,13 @@ CFLAGS := \
 	-target $(TARGET) \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
-	-I$(SDDF)/include \
-	-I${CONFIG_INCLUDE} \
-	-DVIRTIO_MMIO_NET_OFFSET=0xc00
+	-I$(SDDF)/include
 
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 
+SYSTEM_FILE := fileio.system
 IMAGE_FILE := fileio.img
 REPORT_FILE := report.txt
 
@@ -94,9 +92,7 @@ BLK_COMPONENTS := $(SDDF)/blk/components
 
 include ${SDDF}/util/util.mk
 include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
-include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
 include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk
-include ${SDDF}/network/components/network_components.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/libco/libco.mk
 include ${BLK_DRIVER}/${BLK_MK}
@@ -128,16 +124,35 @@ ${IMAGES}: libsddf_util_debug.a
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${FILEIO_DIR}/board/$(MICROKIT_BOARD)/fileio.system
-	$(MICROKIT_TOOL) ${FILEIO_DIR}/board/$(MICROKIT_BOARD)/fileio.system \
-		--search-path $(BUILD_DIR) \
-		--board $(MICROKIT_BOARD) \
-		--config $(MICROKIT_CONFIG) \
-		-o $(IMAGE_FILE) \
-		-r $(REPORT_FILE)
+FORCE:
 
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
+
+mpy-cross: FORCE
+	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
+
+$(DTB): $(DTS)
+	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
+
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
+	$(OBJCOPY) --update-section .device_resources=uart_driver_device_resources.data uart_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data uart_driver.elf
+	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
+	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
+	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .fs_client_config=fs_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .device_resources=blk_driver_device_resources.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_driver_config=blk_driver.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_virt_config=blk_virt.data blk_virt.elf
+	$(OBJCOPY) --update-section .blk_client_config=blk_client_fatfs.data fat.elf
+	$(OBJCOPY) --update-section .fs_server_config=fs_server_fatfs.data fat.elf
+
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
+	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu_disk:
 	$(LIONSOS)/dep/sddf/tools/mkvirtdisk $@ 1 512 16777216
@@ -152,6 +167,4 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
 		-drive file=qemu_disk,if=none,format=raw,id=hd \
-		-device virtio-blk-device,drive=hd \
-		-device virtio-net-device,netdev=netdev0 \
-		-netdev user,id=netdev0
+		-device virtio-blk-device,drive=hd
