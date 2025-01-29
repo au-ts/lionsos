@@ -36,6 +36,8 @@ __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
 __attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_config;
 #endif
 
+bool net_enabled = false;
+
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
 
@@ -82,7 +84,9 @@ start_repl:
     gc_init(heap, heap + sizeof(heap));
     mp_init();
 
-    init_networking();
+    if (net_enabled) {
+        init_networking();
+    }
     // initialisation of the filesystem utilises the event loop and the event
     // loop unconditionally tries to process incoming network buffers; therefore
     // the networking needs to be initialised before initialising the fs
@@ -108,12 +112,17 @@ start_repl:
 }
 
 void init(void) {
+    // TODO: problem, if one of these asserts fails it crashse micropython since it tries to output
+    // to real serial instead of microkit_dbg_puts
     assert(serial_config_check_magic(&serial_config));
     assert(timer_config_check_magic(&timer_config));
-    assert(net_config_check_magic(&net_config));
+    // assert(net_config_check_magic(&net_config));
     assert(fs_config_check_magic(&fs_config));
 
-    serial_queue_init(&serial_rx_queue_handle, serial_config.rx.queue.vaddr, serial_config.rx.data.size, serial_config.rx.data.vaddr);
+    // TODO: hack
+    if (serial_config.rx.queue.vaddr != NULL) {
+        serial_queue_init(&serial_rx_queue_handle, serial_config.rx.queue.vaddr, serial_config.rx.data.size, serial_config.rx.data.vaddr);
+    }
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 
     fs_command_queue = fs_config.server.command_queue.vaddr;
@@ -137,18 +146,22 @@ void init(void) {
 }
 
 void pyb_lwip_poll(void);
-void process_rx(void);
+void mpnet_process_rx(void);
 void mpnet_handle_notify(void);
 
 void notified(microkit_channel ch) {
-    process_rx();
-    pyb_lwip_poll();
+    if (net_enabled) {
+        mpnet_process_rx();
+        pyb_lwip_poll();
+    }
     fs_process_completions();
 
     // We ignore errors because notified can be invoked without the MP cothread awaiting in cases such as an async I/O completing.
     microkit_cothread_recv_ntfn(ch);
 
-    mpnet_handle_notify();
+    if (net_enabled) {
+        mpnet_handle_notify();
+    }
 }
 
 // Handle uncaught exceptions (should never be reached in a correct C implementation).

@@ -3,45 +3,41 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include "decl.h"
-#include "ff.h"
-#include "diskio.h"
-#include <sddf/blk/queue.h>
-#include <libmicrokitco.h>
-#include <lions/fs/protocol.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <blk_config.h>
-#include <microkit.h>
 #include <assert.h>
+#include <microkit.h>
+#include <libmicrokitco.h>
+#include <sddf/blk/queue.h>
+#include <sddf/blk/storage_info.h>
+#include <sddf/blk/config.h>
+#include <lions/fs/protocol.h>
+#include <lions/fs/config.h>
+#include "decl.h"
+#include "ff.h"
+#include "diskio.h"
 
-#define CLIENT_CH 1
-#define SERVER_CH 2
+__attribute__((__section__(".fs_server_config"))) fs_server_config_t fs_config;
+__attribute__((__section__(".blk_client_config"))) blk_client_config_t blk_config;
 
 co_control_t co_controller_mem;
 microkit_cothread_sem_t sem[FAT_WORKER_THREAD_NUM + 1];
 
-blk_queue_handle_t blk_queue_handle_memory;
-blk_queue_handle_t *blk_queue_handle = &blk_queue_handle_memory;
+blk_queue_handle_t blk_queue;
+blk_storage_info_t *blk_storage_info;
+char *blk_data;
 
 fs_queue_t *fs_command_queue;
 fs_queue_t *fs_completion_queue;
-
-blk_req_queue_t *blk_req_queue;
-blk_resp_queue_t *blk_resp_queue;
-
-// Config pointed to the SDDF_blk config
-blk_storage_info_t *blk_storage_info;
+char *fs_share;
 
 uint64_t worker_thread_stack_one;
 uint64_t worker_thread_stack_two;
 uint64_t worker_thread_stack_three;
 uint64_t worker_thread_stack_four;
 
-char *fs_share;
-
-char *blk_data;
+uint64_t max_cluster_size;
 
 // Flag for determine if there are blk_requests pushed by the file system
 // It is used to determine whether to notify the blk device driver
@@ -118,18 +114,27 @@ void print_sector_data(uint8_t *buffer, unsigned long size) {
     LOG_FATFS("\n");
 }
 
-_Static_assert(BLK_QUEUE_CAPACITY_CLI_FAT >= FAT_WORKER_THREAD_NUM,
-    "The size of queue between fs and blk should be at least the size of FAT_WORKER_THREAD_NUM");
-
 // TODO: The FF_FS_LOCK is meant to prevent illegal behavior from the client, e.g. open a file and remove the file before closing it
 // However, the illegal operations can ideatically be sanitized on an upper layer
 _Static_assert(FF_FS_LOCK >= (FAT_MAX_OPENED_DIRNUM + FAT_MAX_OPENED_FILENUM),
     "FF_FS_LOCK should be equal or larger than max opened dir number and max opened file number combined");
 
 void init(void) {
-    // Init the block device queue
-    // Have to make sure who initialize this SDDF queue
-    blk_queue_init(blk_queue_handle, blk_req_queue, blk_resp_queue, BLK_QUEUE_CAPACITY_CLI_FAT);
+    assert(fs_config_check_magic(&fs_config));
+    assert(blk_config_check_magic(&blk_config));
+
+    assert(blk_config.virt.num_buffers >= FAT_WORKER_THREAD_NUM);
+
+    max_cluster_size = blk_config.data.size / FAT_WORKER_THREAD_NUM;
+    fs_command_queue = fs_config.client.command_queue.vaddr;
+    fs_completion_queue = fs_config.client.completion_queue.vaddr;
+    fs_share = fs_config.client.share.vaddr;
+
+    blk_data = blk_config.data.vaddr;
+
+    blk_queue_init(&blk_queue, blk_config.virt.req_queue.vaddr, blk_config.virt.resp_queue.vaddr, blk_config.virt.num_buffers);
+
+    blk_storage_info = blk_config.virt.storage_info.vaddr;
     /*
        This part of the code is for setting up the thread pool by
        assign stacks and size of the stack to the pool
@@ -157,7 +162,7 @@ void init(void) {
 */
 void notified(microkit_channel ch) {
     LOG_FATFS("Notification received on channel:: %d\n", ch);
-    if (ch != CLIENT_CH && ch != SERVER_CH) {
+    if (ch != fs_config.client.id && ch != blk_config.virt.id) {
         LOG_FATFS("Unknown channel:%d\n", ch);
         return;
     }
@@ -179,11 +184,11 @@ void notified(microkit_channel ch) {
             uint16_t success_count;
             uint32_t id;
             // Get current element numbers in blk response queue
-            uint32_t len = blk_queue_length_resp(blk_queue_handle);
+            uint32_t len = blk_queue_length_resp(&blk_queue);
 
             while (len > 0) {
                 // This id is the index to the request pool
-                int err = blk_dequeue_resp(blk_queue_handle, &status, &success_count, &id);
+                int err = blk_dequeue_resp(&blk_queue, &status, &success_count, &id);
                 assert(!err);
 
                 LOG_FATFS("blk_dequeue_resp: status: %d success_count: %d ID: %d\n", status, success_count, id);
@@ -265,11 +270,11 @@ void notified(microkit_channel ch) {
     if (fs_response_enqueued) {
         LOG_FATFS("FS notify client\n");
         fs_queue_publish_production(fs_completion_queue, fs_response_enqueued);
-        microkit_notify(CLIENT_CH);
+        microkit_notify(fs_config.client.id);
     }
     if (blk_request_pushed) {
-        LOG_FATFS("FS notify driver\n");
-        microkit_notify(SERVER_CH);
+        LOG_FATFS("FS notify block virt\n");
+        microkit_notify(blk_config.virt.id);
         blk_request_pushed = false;
     }
 }
