@@ -11,21 +11,19 @@ IMAGES := \
 	uart_driver.elf \
 	serial_virt_rx.elf \
 	serial_virt_tx.elf \
-	blk_virt.elf
+	blk_virt.elf \
+	blk_driver.elf
 
 ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
 	BLK_DRIV_DIR := mmc/imx
 	UART_DRIV_DIR := imx
 	TIMER_DRIV_DIR := imx
-	IMAGES += mmc_driver.elf
-	BLK_MK := mmc_driver.mk
 	CPU := cortex-a53
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
 	BLK_DRIV_DIR := virtio
 	UART_DRIV_DIR := arm
 	TIMER_DRIV_DIR := arm
 	IMAGES += blk_driver.elf
-	BLK_MK := blk_driver.mk
 	CPU := cortex-a53
 	QEMU := qemu-system-aarch64
 else
@@ -94,7 +92,7 @@ include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
 include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/libco/libco.mk
-include ${BLK_DRIVER}/${BLK_MK}
+include ${BLK_DRIVER}/blk_driver.mk
 include ${BLK_COMPONENTS}/blk_components.mk
 
 micropython.elf: mpy-cross libsddf_util_debug.a libco.a
