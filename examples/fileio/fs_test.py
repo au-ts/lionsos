@@ -371,32 +371,32 @@ def run_tests():
     simple_write_and_read_back_test(test_dir_path)
 
     # Indicate the start of the second, more complex test
-    print("\nTest 2: Running test_write_and_read_back_complex")
+    print("Test 2: Running test_write_and_read_back_complex")
 
     test_write_and_read_back_complex(test_dir_path)
 
     # Indicate the start of the third test
-    print("\nTest 3: Running test_mkdir_and_remove")
+    print("Test 3: Running test_mkdir_and_remove")
 
     test_mkdir_and_remove(test_dir_path)
 
     # Indicate the start of the fourth test
-    print("\nTest 4: Running test_big_file_write_and_read")
+    print("Test 4: Running test_big_file_write_and_read")
 
     test_big_file_write_and_read(test_dir_path)
 
     # Indicate the start of the fifth test
-    print("\nTest 5: Running test_rename_files_and_dirs")
+    print("Test 5: Running test_rename_files_and_dirs")
 
     test_rename_files_and_dirs(test_dir_path)
 
     # Indicate the start of the sixth test
-    print("\nTest 6: Running test_truncate_file")
+    print("Test 6: Running test_truncate_file")
 
     test_truncate_using_open_flag(test_dir_path)
 
     # Print the results
-    print(f"\nTests completed. Success: {success_count}, Fail: {fail_count}")
+    print(f"Tests completed. Success: {success_count}, Fail: {fail_count}")
 
     # Cleanup: Remove the test dir
     if path_exists(test_dir_path):
