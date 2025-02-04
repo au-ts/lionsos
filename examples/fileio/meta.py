@@ -65,7 +65,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     blk_virt = ProtectionDomain("blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000)
     blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
 
-    micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000)
+    micropython = ProtectionDomain("micropython", "micropython.elf", priority=1)
 
     serial_system.add_client(micropython)
     timer_system.add_client(micropython)
