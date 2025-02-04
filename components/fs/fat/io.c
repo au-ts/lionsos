@@ -15,7 +15,7 @@
 #include "diskio.h"
 #include "decl.h"
 
-extern blk_queue_handle_t *blk_queue;
+extern blk_queue_handle_t blk_queue;
 extern blk_storage_info_t *blk_storage_info;
 extern char *blk_data;
 
