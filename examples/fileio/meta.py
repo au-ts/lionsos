@@ -33,6 +33,15 @@ BOARDS: List[Board] = [
         blk="virtio_mmio@a003e00",
         blk_partition=0,
     ),
+    Board(
+        name="maaxboard",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x7_0000_000,
+        serial="soc@0/bus@30800000/serial@30860000",
+        timer="soc@0/bus@30000000/timer@302d0000",
+        blk="soc@0/bus@30800000/mmc@30b40000",
+        blk_partition=2,
+    ),
 ]
 
 
@@ -70,6 +79,9 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         blk=blk_system,
         partition=board.blk_partition
     )
+
+    if board.name == "maaxboard":
+        timer_system.add_client(blk_driver)
 
     pds = [
         uart_driver,
