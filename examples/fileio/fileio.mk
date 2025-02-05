@@ -27,7 +27,7 @@ else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
 	CPU := cortex-a53
 	QEMU := qemu-system-aarch64
 else
-	$(error Unsupported MICROKIT_BOARD given)
+$(error Unsupported MICROKIT_BOARD given)
 endif
 
 TOOLCHAIN := clang
