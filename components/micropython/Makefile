@@ -105,6 +105,7 @@ SRC_C = \
 	mphalport.c \
 	modtime.c \
 	mpnetworkport.c \
+	modfirewall.c \
 	modfs_raw.c \
 	vfs_fs_file.c \
 	vfs_fs.c \
@@ -133,7 +134,7 @@ SRC_C = \
 	shared/netutils/netutils.c
 
 # Define source files containung qstrs.
-SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c vfs_fs_file.c vfs_fs.c modfs_raw.c
+SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c vfs_fs_file.c vfs_fs.c modfs_raw.c modfirewall.c
 
 # Frozen module to execute; otherwise run REPL
 ifdef EXEC_MODULE

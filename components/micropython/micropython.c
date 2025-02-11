@@ -84,7 +84,7 @@ start_repl:
     // initialisation of the filesystem utilises the event loop and the event
     // loop unconditionally tries to process incoming network buffers; therefore
     // the networking needs to be initialised before initialising the fs
-    init_vfs();
+    // init_vfs();
 
     // Start a normal REPL; will exit when ctrl-D is entered on a blank line.
 #ifndef EXEC_MODULE
