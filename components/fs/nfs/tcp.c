@@ -29,6 +29,7 @@
 #include "nfs.h"
 #include "util.h"
 #include "tcp.h"
+#include "config.h"
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
