@@ -60,7 +60,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     ethernet_driver = ProtectionDomain("ethernet_driver", "eth_driver.elf", priority=101, budget=100, period=400)
     net_virt_tx = ProtectionDomain("net_virt_tx", "network_virt_tx.elf", priority=100, budget=20000)
     net_virt_rx = ProtectionDomain("net_virt_rx", "network_virt_rx.elf", priority=99)
-    net_system = Sddf.Network(sdf, ethernet_node, ethernet_driver, net_virt_tx, net_virt_rx)
+    net_system = Sddf.Net(sdf, ethernet_node, ethernet_driver, net_virt_tx, net_virt_rx)
 
     micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000)
     micropython_net_copier = ProtectionDomain("micropython_net_copier", "network_copy_micropython.elf", priority=97, budget=20000)
@@ -113,7 +113,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     assert timer_system.serialise_config(output_dir)
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
-        f.write(sdf.xml())
+        f.write(sdf.render())
 
 
 if __name__ == '__main__':
