@@ -95,8 +95,7 @@ static size_t output(void *data, size_t count)
         src += enq + 1;
     }
 
-    if (sent && serial_require_producer_signal(&serial_tx_queue_handle)) {
-        serial_cancel_producer_signal(&serial_tx_queue_handle);
+    if (sent) {
         microkit_notify(serial_config.tx.id);
     }
 
@@ -160,8 +159,7 @@ long sys_write(va_list ap)
     {
         uint32_t n = serial_enqueue_batch(&serial_tx_queue_handle, count, buf);
 
-        if (n && serial_require_producer_signal(&serial_tx_queue_handle)) {
-            serial_cancel_producer_signal(&serial_tx_queue_handle);
+        if (n) {
             microkit_notify(serial_config.tx.id);
         }
 
