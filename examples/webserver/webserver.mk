@@ -14,6 +14,11 @@ ifeq (${MICROKIT_BOARD},odroidc4)
 	ETHERNET_DRIVER_DIR := meson
 	UART_DRIVER_DIR := meson
 	CPU := cortex-a55
+else ifeq (${MICROKIT_BOARD},maaxboard)
+	TIMER_DRIVER_DIR := imx
+	ETHERNET_DRIVER_DIR := imx
+	UART_DRIVER_DIR := imx
+	CPU := cortex-a53
 else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
 	TIMER_DRIVER_DIR := arm
 	ETHERNET_DRIVER_DIR := virtio
