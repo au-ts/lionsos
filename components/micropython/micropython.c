@@ -116,7 +116,7 @@ void init(void) {
     // to real serial instead of microkit_dbg_puts
     assert(serial_config_check_magic(&serial_config));
     assert(timer_config_check_magic(&timer_config));
-    // assert(net_config_check_magic(&net_config));
+    net_enabled = net_config_check_magic(&net_config);
     assert(fs_config_check_magic(&fs_config));
 
     // TODO: there should be a better solution than this
