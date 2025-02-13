@@ -115,26 +115,28 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     vm = VirtualMachine("linux", [VirtualMachine.Vcpu(id=0)])
     vmm_system = Vmm(sdf, vmm, vm, guest_dtb, one_to_one_ram=True)
 
-    vmm_system.add_passthrough_irq(Irq(35))
-    vmm_system.add_passthrough_irq(Irq(36))
-    vmm_system.add_passthrough_irq(Irq(37))
-    vmm_system.add_passthrough_irq(Irq(38))
-
-    vmm_system.add_passthrough_device("gic_v2m", dtb.node("intc@8000000/v2m@8020000"))
-
     framebuffer = MemoryRegion("framebuffer", 0x2_000_000)
     sdf.add_mr(framebuffer)
     framebuffer_map = Map(framebuffer, 0x30000000, Map.Perms(r=True, w=True))
     micropython.add_map(framebuffer_map)
     vm.add_map(framebuffer_map)
 
-    # Other pass-through devices
-    devices = [
-        ("virtio_mmio", 0x3000, 0xa000000),
-        ("pcie", 0x1000000, 0x4010000000),
-        ("pcie_config", 0x1000000, 0x10000000),
-        ("pcie_bus", 0x1000000, 0x8000000000)
-    ]
+    if board.name == "qemu_virt_aarch64":
+        passthrough_irqs = [Irq(35), Irq(36), Irq(37), Irq(38)]
+        vmm_system.add_passthrough_device("gic_v2m", dtb.node("intc@8000000/v2m@8020000"))
+        # Other pass-through devices
+        devices = [
+            ("virtio_mmio", 0x3000, 0xa000000),
+            ("pcie", 0x1000000, 0x4010000000),
+            ("pcie_config", 0x1000000, 0x10000000),
+            ("pcie_bus", 0x1000000, 0x8000000000)
+        ]
+    elif board.name == "odroidc4":
+        pass
+
+    for irq in passthrough_irqs:
+        vmm_system.add_passthrough_irq(irq)
+
     for d in devices:
         mr = MemoryRegion(d[0], d[1], paddr=d[2])
         sdf.add_mr(mr)
@@ -176,7 +178,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     assert vmm_system.serialise_config(output_dir)
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
-        f.write(sdf.xml())
+        f.write(sdf.render())
 
 
 if __name__ == '__main__':
