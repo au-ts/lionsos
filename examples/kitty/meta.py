@@ -64,7 +64,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         i2c_virt = ProtectionDomain("i2c_virt", "i2c_virt.elf", priority=2)
         # Right now we do not have separate clk and GPIO drivers and so our I2C driver does manual
         # clk/GPIO setup for I2C.
-        clk_mr = MemoryRegion("clk", 0x1000, paddr=0xff63c000)
+        clk_mr = MemoryRegion("clk", 0x2000, paddr=0xff63c000) # @alwin: Changed this to 0x2000 so that it is equal to vmm bus2
         gpio_mr = MemoryRegion("gpio", 0x1000, paddr=0xff634000)
         sdf.add_mr(clk_mr)
         sdf.add_mr(gpio_mr)
@@ -114,7 +114,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     vmm = ProtectionDomain("framebuffer_vmm", "vmm.elf", priority=1)
     vm = VirtualMachine("linux", [VirtualMachine.Vcpu(id=0)])
     vmm_system = Vmm(sdf, vmm, vm, guest_dtb, one_to_one_ram=True)
-
     framebuffer = MemoryRegion("framebuffer", 0x2_000_000)
     sdf.add_mr(framebuffer)
     framebuffer_map = Map(framebuffer, 0x30000000, Map.Perms(r=True, w=True))
@@ -122,8 +121,12 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     vm.add_map(framebuffer_map)
 
     if board.name == "qemu_virt_aarch64":
-        passthrough_irqs = [Irq(35), Irq(36), Irq(37), Irq(38)]
+        passthrough_irqs = [Irq(x) for x in [35, 36, 37, 38] ]
         vmm_system.add_passthrough_device("gic_v2m", dtb.node("intc@8000000/v2m@8020000"))
+        # @alwin: THis doesn't work yet
+        # for addr in range(0xa000000, 0xa004000, 0x200):
+            # vmm_system.add_passthrough_device(f"virtio_mmio@{hex(addr)[2:]}", dtb.node(f"virtio_mmio@{hex(addr)[2:]}"))
+
         # Other pass-through devices
         devices = [
             ("virtio_mmio", 0x3000, 0xa000000),
@@ -132,7 +135,48 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             ("pcie_bus", 0x1000000, 0x8000000000)
         ]
     elif board.name == "odroidc4":
-        pass
+        passthrough_irqs = [Irq(5)] # @alwin: idk where in the dts this comes from
+        devices = []
+
+        # @alwin: This doesn't work
+        vmm_system.add_passthrough_device("hdmi-tx", dtb.node("soc/bus@ff600000/hdmi-tx@0"))
+        vmm_system.add_passthrough_device("bus1", dtb.node("soc/bus@ff600000/bus@30000"))
+        vmm_system.add_passthrough_device("audio-controller", dtb.node("soc/bus@ff600000/audio-controller@32000"))
+        vmm_system.add_passthrough_device("video-lut", dtb.node("soc/bus@ff600000/bus@38000/video-lut@48"))
+        vmm_system.add_passthrough_device("phy1", dtb.node("soc/bus@ff600000/phy@3a000"))
+        vmm_system.add_passthrough_device("bus2", dtb.node("soc/bus@ff600000/bus@3c000"))
+        vmm_system.add_passthrough_device("phy2", dtb.node("soc/bus@ff600000/phy@46000"))
+        vmm_system.add_passthrough_device("mdio-mux", dtb.node("soc/bus@ff600000/mdio-multiplexer@4c000"))
+        vmm_system.add_passthrough_device("bus3", dtb.node("soc/bus@ff600000/bus@60000"))
+        vmm_system.add_passthrough_device("audio-controller", dtb.node("soc/bus@ff600000/audio-controller@61000"))
+
+        vmm_system.add_passthrough_device("sys-ctrl", dtb.node("soc/bus@ff800000/sys-ctrl@0"))
+        vmm_system.add_passthrough_device("cec1", dtb.node("soc/bus@ff800000/cec@100"), irqs = [])
+        vmm_system.add_passthrough_device("ao-secure", dtb.node("soc/bus@ff800000/ao-secure@140"))
+        vmm_system.add_passthrough_device("cec2", dtb.node("soc/bus@ff800000/cec@280"), irqs = [])
+        vmm_system.add_passthrough_device("pwm1", dtb.node("soc/bus@ff800000/pwm@2000"))
+        vmm_system.add_passthrough_device("ir", dtb.node("soc/bus@ff800000/ir@8000"))
+        vmm_system.add_passthrough_device("adc", dtb.node("soc/bus@ff800000/adc@9000"))
+        vmm_system.add_passthrough_device("i2c_50", dtb.node("soc/bus@ff800000/i2c@5000"))
+
+
+        vmm_system.add_passthrough_device("reset_controller", dtb.node("soc/bus@ffd00000/reset-controller@1004"))
+        vmm_system.add_passthrough_device("spi1", dtb.node("soc/bus@ffd00000/spi@13000"), irqs = [])
+        vmm_system.add_passthrough_device("spi2", dtb.node("soc/bus@ffd00000/spi@14000"))
+        vmm_system.add_passthrough_device("spi3", dtb.node("soc/bus@ffd00000/spi@15000"), irqs = [])
+        vmm_system.add_passthrough_device("pwm2", dtb.node("soc/bus@ffd00000/pwm@19000"))
+        vmm_system.add_passthrough_device("pwm3", dtb.node("soc/bus@ffd00000/pwm@1a000"))
+        vmm_system.add_passthrough_device("pwm4", dtb.node("soc/bus@ffd00000/pwm@1b000"))
+        vmm_system.add_passthrough_device("i2c_1c", dtb.node("soc/bus@ffd00000/i2c@1c000"))
+        vmm_system.add_passthrough_device("i2c_1e", dtb.node("soc/bus@ffd00000/i2c@1e000"))
+        vmm_system.add_passthrough_device("i2c_1f", dtb.node("soc/bus@ffd00000/i2c@1f000"))
+
+        vmm_system.add_passthrough_device("usb", dtb.node("soc/usb@ffe09000"))
+        vmm_system.add_passthrough_device("usb1", dtb.node("soc/usb@ffe09000/usb@ff400000"))
+        vmm_system.add_passthrough_device("usb2", dtb.node("soc/usb@ffe09000/usb@ff500000"))
+        vmm_system.add_passthrough_device("gpu", dtb.node("soc/gpu@ffe40000"))
+        vmm_system.add_passthrough_device("vpu", dtb.node("soc/vpu@ff900000"), regions = [0])
+
 
     for irq in passthrough_irqs:
         vmm_system.add_passthrough_irq(irq)

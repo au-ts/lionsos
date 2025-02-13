@@ -39,6 +39,14 @@ BOARDS: List[Board] = [
         timer="soc/bus@ffd00000/watchdog@f0d0",
         ethernet="soc/ethernet@ff3f0000"
     ),
+    Board(
+        name="maaxboard",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x70000000,
+        serial="soc@0/bus@30800000/serial@30860000",
+        timer="soc@0/bus@30000000/timer@302d0000",
+        ethernet="soc@0/bus@30800000/ethernet@30be0000"
+    )
 ]
 
 
@@ -72,9 +80,11 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     nfs_net_copier = ProtectionDomain("nfs_net_copier", "network_copy_nfs.elf", priority=97, budget=20000)
 
-    nfs_mac_addr = f"52:54:01:00:00:{hex(randint(0, 0xfe))[2:]:0>2}"
+    # nfs_mac_addr = f"52:54:01:00:00:{hex(randint(0, 0xfe))[2:]:0>2}"
+    nfs_mac_addr = f"52:54:01:00:00:ab" # @alwin: Experimenting for maaxboard
     nfs = ProtectionDomain("nfs", "nfs.elf", priority=96, stack_size=0x10000)
 
+    print("server is " + args.nfs_server)
     fs = LionsOs.FileSystem.Nfs(
         sdf,
         nfs,
