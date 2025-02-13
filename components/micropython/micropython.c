@@ -36,7 +36,7 @@ __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
 __attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_config;
 #endif
 
-bool net_enabled = false;
+bool net_enabled;
 
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
@@ -118,6 +118,9 @@ void init(void) {
     assert(timer_config_check_magic(&timer_config));
     // assert(net_config_check_magic(&net_config));
     assert(fs_config_check_magic(&fs_config));
+
+    // TODO: there should be a better solution than this
+    net_enabled = net_config_check_magic(&net_config);
 
     // TODO: hack
     if (serial_config.rx.queue.vaddr != NULL) {
