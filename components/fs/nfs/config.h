@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#pragma once
+
 #define LIONS_NFS_SERVER_URL_LEN_MAX 4096
 #define LIONS_NFS_EXPORT_PATH_LEN_MAX 4096
 
