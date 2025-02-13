@@ -26,6 +26,7 @@
 #include <lwip/timeouts.h>
 #include <netif/etharp.h>
 
+#include "config.h"
 #include "nfs.h"
 #include "util.h"
 #include "tcp.h"
