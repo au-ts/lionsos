@@ -190,9 +190,12 @@ ${IMAGES}: libsddf_util_debug.a
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY) --guest-dtb $(LINUX_DTB)
-# 	$(OBJCOPY) --update-section .device_resources=uart_driver_device_resources.data i2c_driver.elf
-# 	$(OBJCOPY) --update-section .i2c_driver_config=i2c_driver_config.data i2c_driver.elf
-# 	$(OBJCOPY) --update-section .i2c_virt_config=i2c_virt_config.data i2c_virt.elf
+	if [ "$(I2C_DRIV_DIR)" != "" ]; then \
+		$(OBJCOPY) --update-section .device_resources=i2c_driver_device_resources.data i2c_driver.elf; \
+		$(OBJCOPY) --update-section .i2c_driver_config=i2c_driver.data i2c_driver.elf; \
+		$(OBJCOPY) --update-section .i2c_virt_config=i2c_virt.data i2c_virt.elf; \
+		$(OBJCOPY) --update-section .i2c_client_config=i2c_client_micropython.data micropython.elf; \
+	fi
 	$(OBJCOPY) --update-section .device_resources=uart_driver_device_resources.data uart_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data uart_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
