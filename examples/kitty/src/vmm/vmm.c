@@ -25,7 +25,7 @@ __attribute__((__section__(".vmm_config"))) vmm_config_t config;
  */
 #define UIO_GPU_IRQ 50
 /* For when we get notified from MicroPython */
-#define MICROPYTHON_CH 4
+#define MICROPYTHON_CH 15
 
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
