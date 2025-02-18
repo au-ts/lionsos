@@ -193,7 +193,7 @@ mpy-cross: FORCE
 qemu_disk.img:
 	$(LIONSOS)/dep/sddf/examples/blk/mkvirtdisk $@ 1 512 16777216
 
-qemu: ${IMAGE_FILE} qemu_disk.img
+qemu: ${IMAGE_FILE}
 	$(QEMU) -machine virt,virtualization=on \
 		-cpu cortex-a53 \
 		-serial mon:stdio \
@@ -202,7 +202,7 @@ qemu: ${IMAGE_FILE} qemu_disk.img
 		-nographic \
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
-		-drive file=qemu_disk.img,if=none,format=raw,id=hd \
+		-drive file=/Users/dreamliner787-9/ext4_disk_64mb.img,if=none,format=raw,id=hd \
 		-device virtio-blk-device,drive=hd \
 		-device virtio-net-device,netdev=netdev0 \
 		-netdev user,id=netdev0
