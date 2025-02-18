@@ -22,7 +22,7 @@ export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD ?= qemu_virt_aarch64
 
-IMAGE_FILE := $(BUILD_DIR)/vfs.img
+IMAGE_FILE := $(BUILD_DIR)/vmfs.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
 all: ${IMAGE_FILE}
@@ -30,9 +30,9 @@ all: ${IMAGE_FILE}
 qemu ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
 	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} $(notdir $@)
 
-${BUILD_DIR}/Makefile: vfs.mk
+${BUILD_DIR}/Makefile: vmfs.mk
 	mkdir -p ${BUILD_DIR}
-	cp vfs.mk $@
+	cp vmfs.mk $@
 
 submodules:
 	git submodule update --init $(LIONSOS)/dep/libvmm

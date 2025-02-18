@@ -88,7 +88,7 @@ CFLAGS_USERLEVEL := \
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 
-IMAGE_FILE := vfs.img
+IMAGE_FILE := vfms.img
 REPORT_FILE := report.txt
 
 all: cache.o
@@ -174,8 +174,8 @@ ${IMAGES}: libsddf_util_debug.a
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${EXAMPLE_DIR}/board/$(MICROKIT_BOARD)/vfs.system
-	$(MICROKIT_TOOL) ${EXAMPLE_DIR}/board/$(MICROKIT_BOARD)/vfs.system \
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${EXAMPLE_DIR}/board/$(MICROKIT_BOARD)/vmfs.system
+	$(MICROKIT_TOOL) ${EXAMPLE_DIR}/board/$(MICROKIT_BOARD)/vmfs.system \
 		--search-path $(BUILD_DIR) \
 		--board $(MICROKIT_BOARD) \
 		--config $(MICROKIT_CONFIG) \
@@ -191,7 +191,7 @@ mpy-cross: FORCE
 	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 qemu_disk:
-	$(LIONSOS)/dep/sddf/examples/blk/mkvirtdisk $@ 1 512 16777216
+	$(LIONSOS)/dep/sddf/tools/mkvirtdisk $@ 1 512 16777216
 
 qemu: ${IMAGE_FILE} qemu_disk
 	$(QEMU) -machine virt,virtualization=on \
