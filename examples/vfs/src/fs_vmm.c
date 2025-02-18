@@ -17,6 +17,8 @@
 #include <serial_config.h>
 #include <blk_config.h>
 
+#include <uio/fs.h>
+
 #define GUEST_RAM_SIZE 0x6000000
 
 #if defined(BOARD_qemu_virt_aarch64)
@@ -75,6 +77,17 @@ static struct virtio_blk_device virtio_blk;
 
 /* FS output to Micropython */
 #define MICROPYTHON_CH 4
+
+void uio_fs_to_vmm_ack(size_t vcpu_id, int irq, void *cookie)
+{
+    /* Nothing to do. */
+}
+
+bool uio_fs_from_vmm_signal(size_t vcpu_id, uintptr_t addr, size_t fsr, seL4_UserContext *regs, void *data)
+{
+    microkit_notify(MICROPYTHON_CH);
+    return true;
+}
 
 void init(void)
 {
@@ -140,6 +153,17 @@ void init(void)
                                    BLK_CH);
     assert(success);
 
+    /* Register the fault handler to trap guest's fault to signal FS client. */
+    success = fault_register_vm_exception_handler(GUEST_TO_VMM_NOTIFY_FAULT_ADDR,
+                                                  0x1000,
+                                                  uio_fs_from_vmm_signal,
+                                                  NULL);
+    assert(success);
+
+    /* Register the UIO IRQ */
+    success = virq_register(GUEST_VCPU_ID, UIO_FS_IRQ_NUM, uio_fs_to_vmm_ack, NULL);
+    assert(success);
+
     /* Finally start the guest */
     guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
 }
@@ -155,6 +179,10 @@ void notified(microkit_channel ch)
     }
     case BLK_CH: {
         virtio_blk_handle_resp(&virtio_blk);
+        break;
+    }
+    case MICROPYTHON_CH: {
+        virq_inject(GUEST_VCPU_ID, UIO_FS_IRQ_NUM);
         break;
     }
     default:
