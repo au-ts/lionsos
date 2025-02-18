@@ -150,9 +150,9 @@
 
     <protection_domain name="micropython" priority="1">
         <program_image path="micropython.elf" />
-        <map mr="fs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="fs_command_queue" />
-        <map mr="fs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="fs_completion_queue" />
-        <map mr="shared_fs_micropython" vaddr="0x7_900_000" perms="rw" cached="true" setvar_vaddr="fs_share" />
+        <map mr="fs_command_queue" vaddr="0x7_800_000" perms="rw" cached="false" setvar_vaddr="fs_command_queue" />
+        <map mr="fs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="false" setvar_vaddr="fs_completion_queue" />
+        <map mr="shared_fs_micropython" vaddr="0x7_900_000" perms="rw" cached="false" setvar_vaddr="fs_share" />
 
         <map mr="eth_rx_free_micropython" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
         <map mr="eth_rx_active_micropython" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
@@ -216,28 +216,6 @@
         <setvar symbol="blk_client0_data_paddr" region_paddr="blk_client_data" />
     </protection_domain>
 
-    <!-- FAT File system -->
-    <!-- <protection_domain name="fat" priority="100" pp="true">
-        <program_image path="fat.elf" />
-        <map mr="fs_command_queue" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="fs_command_queue" />
-        <map mr="fs_completion_queue" vaddr="0x7_810_000" perms="rw" cached="true" setvar_vaddr="fs_completion_queue" />
-
-        <map mr="blk_client_config" vaddr="0x40_000_000" perms="r" cached="false" setvar_vaddr="blk_config" />
-
-        <map mr="blk_client_request" vaddr="0x40_200_000" perms="rw" cached="false" setvar_vaddr="blk_request" />
-        <map mr="blk_client_response" vaddr="0x40_400_000" perms="rw" cached="false" setvar_vaddr="blk_response" />
-        <map mr="blk_client_data" vaddr="0x40_800_000" perms="rw" cached="true" setvar_vaddr="blk_data_region" />
-
-        <map mr="fs_metadata" vaddr="0x42_000_000" perms="rw" cached="true" setvar_vaddr="fs_metadata" />
-        <map mr="shared_fs_micropython" vaddr="0x43_000_000" perms="rw" cached="true" setvar_vaddr="client_data_addr"/>
-
-        <map mr="fat_thread_stack1" vaddr="0xA0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_one" />
-        <map mr="fat_thread_stack2" vaddr="0xB0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_two" />
-        <map mr="fat_thread_stack3" vaddr="0xC0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_three" />
-        <map mr="fat_thread_stack4" vaddr="0xD0_000_000" perms="rw" cached="true" setvar_vaddr="worker_thread_stack_four" />
-    </protection_domain> -->
-
-    <!-- FS Driver VM get 96MB of RAM -->
     <memory_region name="fs_driver_vm_ram" size="0x8_000_000" page_size="0x200_000" phys_addr="0x40_000_000" />
     <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0x8040000" />
 
@@ -261,6 +239,10 @@
             <vcpu id="0" />
             <map mr="fs_driver_vm_ram" vaddr="0x40000000" perms="rwx" />
             <map mr="gic_vcpu" vaddr="0x8010000" perms="rw" cached="false" />
+
+            <map mr="fs_command_queue" vaddr="0x20000000" perms="rw" cached="false" />
+            <map mr="fs_completion_queue" vaddr="0x21000000" perms="rw" cached="false" />
+            <map mr="shared_fs_micropython" vaddr="0x22000000" perms="rw" cached="false" />
         </virtual_machine>
     </protection_domain>
 
