@@ -17,7 +17,7 @@
 #include <serial_config.h>
 #include <blk_config.h>
 
-#include <uio/fs.h>
+#include <vmfs_shared.h>
 
 #define GUEST_RAM_SIZE 0x6000000
 

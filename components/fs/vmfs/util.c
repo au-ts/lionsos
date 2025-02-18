@@ -10,9 +10,9 @@
 #include <linux/limits.h>
 
 #include <lions/fs/protocol.h>
-#include <uio/fs.h>
 #include <liburing.h>
 
+#include "vmfs_shared.h"
 #include "util.h"
 #include "log.h"
 #include "op.h"

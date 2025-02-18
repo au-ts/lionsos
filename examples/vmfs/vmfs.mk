@@ -8,7 +8,7 @@ IMAGES := \
 	eth_driver.elf \
 	micropython.elf \
 	fs_driver_vmm.elf \
-	copy.elf \
+	network_copy.elf \
 	network_virt_rx.elf \
 	network_virt_tx.elf \
 	uart_driver.elf \
@@ -54,6 +54,10 @@ SDDF := $(LIONSOS)/dep/sddf
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 LIBVMM_TOOLS := $(LIBVMM_DIR)/tools
 
+METAPROGRAM := $(KITTY_DIR)/meta.py
+DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
+DTB := $(MICROKIT_BOARD).dtb
+
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 
 CFLAGS := \
@@ -71,6 +75,7 @@ CFLAGS := \
 	-I${CONFIG_INCLUDE} \
 	-I$(LIBVMM_DIR)/include \
 	-I$(LIBVMM_DIR)/tools/linux/include \
+	-I$(LIONSOS)/components/fs/vmfs \
 	-DVIRTIO_MMIO_NET_OFFSET=0xc00 
 
 CFLAGS_USERLEVEL := \
@@ -88,7 +93,8 @@ CFLAGS_USERLEVEL := \
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 
-IMAGE_FILE := vfms.img
+SYSTEM_FILE := vmfs.system
+IMAGE_FILE := vmfs.img
 REPORT_FILE := report.txt
 
 all: cache.o
@@ -174,8 +180,28 @@ ${IMAGES}: libsddf_util_debug.a
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${EXAMPLE_DIR}/board/$(MICROKIT_BOARD)/vmfs.system
-	$(MICROKIT_TOOL) ${EXAMPLE_DIR}/board/$(MICROKIT_BOARD)/vmfs.system \
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(LINUX_DTB)
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --guest-dtb $(LINUX_DTB)
+	$(OBJCOPY) --update-section .device_resources=uart_driver_device_resources.data uart_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data uart_driver.elf
+	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
+	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
+	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf
+	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver.elf
+	$(OBJCOPY) --update-section .net_virt_rx_config=net_virt_rx.data network_virt_rx.elf
+	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
+	$(OBJCOPY) --update-section .net_copy_config=net_copy_micropython_net_copier.data network_copy.elf network_copy_micropython.elf
+	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .net_client_config=net_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .net_client_config=net_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .fs_client_config=fs_client_micropython.data micropython.elf
+
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
+	$(MICROKIT_TOOL) $(SYSTEM_FILE) \
 		--search-path $(BUILD_DIR) \
 		--board $(MICROKIT_BOARD) \
 		--config $(MICROKIT_CONFIG) \

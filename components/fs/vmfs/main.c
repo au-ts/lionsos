@@ -15,10 +15,10 @@
 #include <linux/limits.h>
 
 #include <lions/fs/protocol.h>
-#include <uio/fs.h>
 
 #include <blk_config.h>
 
+#include "vmfs_shared.h"
 #include "log.h"
 #include "op.h"
 #include "util.h"
