@@ -135,6 +135,10 @@ void init(void) {
     blk_queue_init(&blk_queue, blk_config.virt.req_queue.vaddr, blk_config.virt.resp_queue.vaddr, blk_config.virt.num_buffers);
 
     blk_storage_info = blk_config.virt.storage_info.vaddr;
+
+    /* Mount the block device */
+    while (!blk_storage_is_ready(blk_storage_info));
+
     /*
        This part of the code is for setting up the thread pool by
        assign stacks and size of the stack to the pool
