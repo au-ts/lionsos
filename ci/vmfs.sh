@@ -21,7 +21,7 @@ build() {
     MICROKIT_BOARD=$1
     MICROKIT_CONFIG=debug
 
-    echo "CI|INFO: building vfs for board: ${MICROKIT_BOARD}"
+    echo "CI|INFO: building vmfs for board: ${MICROKIT_BOARD}"
 
     BUILD_DIR=$LIONSOS/ci_build/vfs/${MICROKIT_BOARD}/${MICROKIT_CONFIG}
     rm -rf $BUILD_DIR
