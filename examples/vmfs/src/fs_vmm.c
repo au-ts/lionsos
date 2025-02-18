@@ -105,7 +105,7 @@ void init(void)
     blk_data_share_size = blk_config.data.size;
     blk_req_queue = (blk_req_queue_t *) blk_config.virt.req_queue.vaddr;
     blk_resp_queue = (blk_resp_queue_t *) blk_config.virt.resp_queue.vaddr;
-    blk_data_share = (uintptr_t) blk_config.data.size;
+    blk_data_share = (uintptr_t) blk_config.data.vaddr;
     blk_storage_info = (blk_storage_info_t *) blk_config.virt.storage_info.vaddr;
 
     client_channel = fs_server_config.client.id;
