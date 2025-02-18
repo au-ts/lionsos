@@ -25,13 +25,16 @@ class Board:
     partition: int
 
 BOARDS: List[Board] = [
+    # Note with QEMU: if you have >1 virtio device, the order of them in memory will
+    #                 correlate to their order in the QEMU run command. This order is 
+    #                 by the QEMU command in vmfs.mk.
     Board(
         name="qemu_virt_aarch64",
         arch=SystemDescription.Arch.AARCH64,
         paddr_top=0x6000_0000,
         serial="pl011@9000000",
         timer="timer",
-        ethernet="virtio_mmio@a003e00",
+        ethernet="virtio_mmio@a003c00",
         blk="virtio_mmio@a003e00",
         partition=0,
     ),
@@ -70,7 +73,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, guest_dtb: DeviceT
     partition = 0
 
     micropython = ProtectionDomain("micropython", "micropython.elf", priority=1)
-    micropython_net_copier = ProtectionDomain("micropython_net_copier", "copy.elf", priority=97, budget=20000)
+    micropython_net_copier = ProtectionDomain("micropython_net_copier", "network_copy.elf", priority=97, budget=20000)
 
     fs_system = LionsOs.FileSystem.VmFs(
         sdf,
@@ -125,7 +128,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, guest_dtb: DeviceT
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--dtb", required=True)
-    parser.add_argument("--guest_dtb", required=True)
+    parser.add_argument("--guest-dtb", required=True)
     parser.add_argument("--sddf", required=True)
     parser.add_argument("--board", required=True, choices=[b.name for b in BOARDS])
     parser.add_argument("--output", required=True)
