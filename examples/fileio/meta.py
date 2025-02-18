@@ -40,7 +40,7 @@ BOARDS: List[Board] = [
         serial="soc@0/bus@30800000/serial@30860000",
         timer="soc@0/bus@30000000/timer@302d0000",
         blk="soc@0/bus@30800000/mmc@30b40000",
-        blk_partition=2,
+        blk_partition=3,
     ),
 ]
 
