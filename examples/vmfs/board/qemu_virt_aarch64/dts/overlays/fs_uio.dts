@@ -3,31 +3,39 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
-
 / {
+    // All of these paddrs are arbitrarily chosen.
+    // The only consideration is that you don't hit any other
+    // physical device region or the guest RAM.
     uio@0 {
-        // fs_command_queue and client IRQ
-        compatible = "generic-uio\0uio";
-        reg = <0x00 0x20000000 0x00 0x8000>;
-        interrupts = <0x00 39 0x04>;
-        // IRQ = 71
+        // config data
+        compatible = "generic-uio";
+        reg = <0x00 0x10002000 0x00 0x1000>;
     };
 
     uio@1 {
-        // fs_completion_queue
-        compatible = "generic-uio\0uio";
-        reg = <0x00 0x21000000 0x00 0x8000>;
+        // fs_command_queue and client IRQ
+        compatible = "generic-uio";
+        reg = <0x00 0x20000000 0x00 0x8000>;
+        interrupts = <0x00 39 0x04>;
+        // IRQ = 71 (39 + 32)
     };
 
     uio@2 {
-        // shared_fs_data
-        compatible = "generic-uio\0uio";
-        reg = <0x00 0x22000000 0x00 0x4000000>;
+        // fs_completion_queue
+        compatible = "generic-uio";
+        reg = <0x00 0x21000000 0x00 0x8000>;
     };
 
     uio@3 {
+        // shared_fs_data
+        compatible = "generic-uio";
+        reg = <0x00 0x22000000 0x00 0x4000000>;
+    };
+
+    uio@4 {
         // guest to vmm fault region, this must be unmapped in SDF.
-        compatible = "generic-uio\0uio";
+        compatible = "generic-uio";
         reg = <0x00 0x10000000 0x00 0x1000>;
     };
 };
