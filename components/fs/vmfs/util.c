@@ -22,6 +22,7 @@ extern char mnt_point[PATH_MAX];
 extern int mnt_point_len;
 extern struct fs_queue *comp_queue;
 extern char *fs_data;
+extern vmm_to_guest_conf_data_t *conf;
 
 bool io_uring_sqe_queue_empty(struct io_uring *ring) {
     struct io_uring_sq *sq = &ring->sq;
@@ -70,8 +71,8 @@ void fs_queue_enqueue_reply(fs_cmpl_t cmpl, uint64_t *comp_idx) {
 }
 
 void *fs_get_buffer(fs_buffer_t buf) {
-    if (buf.offset >= UIO_LENGTH_FS_DATA
-        || buf.size > UIO_LENGTH_FS_DATA - buf.offset
+    if (buf.offset >= conf->fs_data_share_region_size
+        || buf.size > conf->fs_data_share_region_size - buf.offset
         || buf.size == 0) {
         return NULL;
     }

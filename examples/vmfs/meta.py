@@ -18,6 +18,7 @@ class Board:
     arch: SystemDescription.Arch
     paddr_top: int
     serial: str
+    guest_serial: str
     timer: str
     ethernet: str
     blk: str
@@ -33,6 +34,7 @@ BOARDS: List[Board] = [
         arch=SystemDescription.Arch.AARCH64,
         paddr_top=0x6000_0000,
         serial="pl011@9000000",
+        guest_serial="virtio-console@0130000",
         timer="timer",
         ethernet="virtio_mmio@a003c00",
         blk="virtio_mmio@a003e00",
@@ -43,6 +45,8 @@ BOARDS: List[Board] = [
 def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, guest_dtb: DeviceTree):
     uart_node = dtb.node(board.serial)
     assert uart_node is not None
+    guest_uart_node = guest_dtb.node(board.guest_serial)
+    assert guest_uart_node is not None
     timer_node = dtb.node(board.timer)
     assert uart_node is not None
     ethernet_node = dtb.node(board.ethernet)
@@ -85,7 +89,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, guest_dtb: DeviceT
     )
 
     serial_system.add_client(micropython)
-    serial_system.add_client(fs_vmm)
+    fs_vm_system.add_virtio_mmio_console(guest_uart_node, serial_system)
     timer_system.add_client(micropython)
     micropython_mac_addr = f"52:54:01:00:00:{hex(randint(0, 0xfe))[2:]:0>2}"
     net_system.add_client_with_copier(micropython, micropython_net_copier, mac_addr=micropython_mac_addr)
@@ -109,17 +113,19 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, guest_dtb: DeviceT
 
 
     assert serial_system.connect()
-    assert serial_system.serialise_config(output_dir)
     assert timer_system.connect()
-    assert timer_system.serialise_config(output_dir)
     assert net_system.connect()
-    assert net_system.serialise_config(output_dir)
     # The order of these three matters!
     assert fs_vm_system.connect()
-    assert fs_vm_system.serialise_config(output_dir)
     assert fs_system.connect()
-    assert fs_system.serialise_config(output_dir)
     assert blk_system.connect()
+    
+    assert serial_system.serialise_config(output_dir)
+    assert timer_system.serialise_config(output_dir)
+    assert net_system.serialise_config(output_dir)
+    # The order of these three matters!
+    assert fs_vm_system.serialise_config(output_dir)
+    assert fs_system.serialise_config(output_dir)
     assert blk_system.serialise_config(output_dir)
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:

@@ -33,7 +33,10 @@ For these calls, the driver will "flush" the io_uring submission queue, wait for
 ## Usage
 The VMM needs to be aware of this driver running in the guest to receive memory faults acting as notifications. 
 
-Configuration on the guest side is a bit more tricky, you need to specify 4 UIO memory regions in a DTS overlay. The first 3 correspond to the command queue, completion queue and data share in that order. The virtual IRQ for VMM -> guest signal path is attached to the command queue memory region. The final memory region is a fault region, meaning it is unmapped in the SDF for the VMM. Such that the guest can "signal" the VMM of some commands' completion for the VMM to signal the client on the native side.
+Configuration on the guest side is a bit more tricky, you need to specify exactly 5 UIO memory regions in a DTS overlay:
+- The first region is a 4K page containing data of the system's configuration shared between the VMM and guest.
+- The next 3 correspond to the command queue, completion queue and data share in that order. The virtual IRQ for VMM -> guest signal path is attached to the command queue memory region. 
+- The final memory region is a fault region, meaning it is unmapped in the SDF for the VMM. Such that the guest can "signal" the VMM of some commands' completion for the VMM to signal the client on the native side.
 
 See the `vmfs` example for more details.
 

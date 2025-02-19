@@ -40,10 +40,7 @@ extern struct io_uring ring;
 
 /* Metadata with the mounted FS */
 bool mounted = false;
-/* Our copy of the client data share, it is unsafe to give their address directly
-   to kernel as the underlying block device may DMA. Another reason is that UIO map
-   the memory as device memory, which cause weird behaviours with syscalls. */
-char our_data_region[UIO_LENGTH_FS_DATA];
+extern char *our_data_region;
 
 #define TIMESPEC_TO_NS(ts) ((long long)ts.tv_sec * 1000000000LL + ts.tv_nsec)
 

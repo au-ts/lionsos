@@ -16,8 +16,6 @@
 
 #include <lions/fs/protocol.h>
 
-#include <blk_config.h>
-
 #include "vmfs_shared.h"
 #include "log.h"
 #include "op.h"
@@ -40,10 +38,18 @@ int blk_device_len;
 char mnt_point[PATH_MAX];
 int mnt_point_len;
 
+/* Shared config data between VMM and guest (where this is running) */
+vmm_to_guest_conf_data_t *conf;
+
 /* Shared queues and data to native client via UIO */
 struct fs_queue *cmd_queue;
 struct fs_queue *comp_queue;
 char *fs_data;
+
+/* Our copy of the client data share, it is unsafe to give their address directly
+   to kernel as the underlying block device may DMA. Another reason is that UIO map
+   the memory as device memory, which cause weird behaviours with syscalls. */
+char *our_data_region;
 
 /* Guest -> VMM fault address via UIO, unmapped in SDF */
 char *vmm_notify_fault;
@@ -113,7 +119,7 @@ void bring_up_io_uring(void) {
     flags |= IORING_SETUP_COOP_TASKRUN;
 
     /* I believe there are more useful flags to us: https://man7.org/linux/man-pages/man2/io_uring_setup.2.html */
-    int err = io_uring_queue_init(BLK_QUEUE_CAPACITY_DRIV, &ring, flags);
+    int err = io_uring_queue_init(FS_QUEUE_CAPACITY, &ring, flags);
     if (err) {
         perror("bring_up_io_uring(): io_uring_queue_init(): ");
         exit(EXIT_FAILURE);
@@ -183,22 +189,32 @@ int main(int argc, char **argv)
     LOG_FS("Block device: %s\n", blk_device);
     LOG_FS("Mount point: %s\n", mnt_point);
 
+    LOG_FS("*** Setting up shared configuration data via UIO\n");
+    int conf_uio_fd = open_uio(UIO_PATH_FS_VM_CONFIG);
+    conf = (vmm_to_guest_conf_data_t *) map_uio(UIO_PATH_FS_VM_CONFIG_SZ, conf_uio_fd);
+
+    our_data_region = malloc(sizeof(char) * conf->fs_data_share_region_size);
+    if (!our_data_region) {
+        LOG_FS_ERR("out of memory creating data region copy.");
+        exit(EXIT_FAILURE);
+    }
+
     LOG_FS("*** Setting up command queue via UIO\n");
     int cmd_uio_fd = open_uio(UIO_PATH_FS_COMMAND_QUEUE_AND_IRQ);
-    cmd_queue = (struct fs_queue *) map_uio(UIO_LENGTH_FS_COMMAND_QUEUE, cmd_uio_fd);
+    cmd_queue = (struct fs_queue *) map_uio(conf->fs_cmd_queue_region_size, cmd_uio_fd);
 
     LOG_FS("*** Setting up completion queue via UIO\n");
     int comp_uio_fd = open_uio(UIO_PATH_FS_COMPLETION_QUEUE);
-    comp_queue = (struct fs_queue *) map_uio(UIO_LENGTH_FS_COMPLETION_QUEUE, comp_uio_fd);
+    comp_queue = (struct fs_queue *) map_uio(conf->fs_comp_queue_region_size, comp_uio_fd);
 
     LOG_FS("*** Setting up FS data region via UIO\n");
     int fs_data_uio_fd = open_uio(UIO_PATH_FS_DATA);
-    fs_data = map_uio(UIO_LENGTH_FS_DATA, fs_data_uio_fd);
+    fs_data = map_uio(conf->fs_data_share_region_size, fs_data_uio_fd);
 
     LOG_FS("*** Setting up fault region via UIO\n");
     // For Guest -> VMM notifications
     int fault_uio_fd = open_uio(UIO_PATH_GUEST_TO_VMM_NOTIFY_FAULT);
-    vmm_notify_fault = map_uio(UIO_LENGTH_GUEST_TO_VMM_NOTIFY_FAULT, fault_uio_fd);
+    vmm_notify_fault = map_uio(conf->fs_vm_to_vmm_fault_reg_size, fault_uio_fd);
 
     LOG_FS("*** Enabling UIO interrupt on command queue\n");
     uio_interrupt_ack(cmd_uio_fd);

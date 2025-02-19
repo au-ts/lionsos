@@ -11,6 +11,7 @@
 #include <libvmm/virq.h>
 #include <libvmm/util/util.h>
 #include <libvmm/virtio/virtio.h>
+#include <libvmm/virtio/mmio.h>
 #include <libvmm/arch/aarch64/linux.h>
 #include <libvmm/arch/aarch64/fault.h>
 
@@ -29,6 +30,16 @@ __attribute__((__section__(".serial_client_config"))) serial_client_config_t ser
 __attribute__((__section__(".blk_client_config"))) blk_client_config_t blk_config;
 __attribute__((__section__(".fs_server_config"))) fs_server_config_t fs_server_config;
 
+/* What each UIO regions means */
+enum UIO_IDX {
+    UIO_IDX_SHARED_CONFIG = 0,
+    UIO_IDX_COMMAND,
+    UIO_IDX_COMPLETION,
+    UIO_IDX_DATA,
+    UIO_IDX_FAULT,
+    NUM_UIO_REGIONS
+};
+
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
 extern char _guest_kernel_image_end[];
@@ -43,11 +54,6 @@ uintptr_t guest_ram_vaddr;
 
 /* Virtio Console */
 serial_queue_handle_t serial_rxq, serial_txq;
-
-/* From guest DTS overlay: */
-#define VIRTIO_CONSOLE_IRQ (74)
-#define VIRTIO_CONSOLE_BASE (0x130000)
-#define VIRTIO_CONSOLE_SIZE (0x1000)
 static struct virtio_console_device virtio_console;
 
 /* From sdfgen: */
@@ -59,9 +65,6 @@ uint8_t serial_tx_channel;
 uint8_t serial_rx_channel;
 
 /* Virtio Block */
-#define VIRTIO_BLK_IRQ (75)
-#define VIRTIO_BLK_BASE (0x150000)
-#define VIRTIO_BLK_SIZE (0x1000)
 static struct virtio_blk_device virtio_blk;
 
 /* From sdfgen: */
@@ -101,17 +104,6 @@ void init(void)
     serial_rx_channel = serial_config.rx.id;
     serial_tx_channel = serial_config.tx.id;
 
-    /* Initialise our sDDF ring buffers for the serial device */
-    serial_queue_init(&serial_rxq, serial_rx_queue, serial_config.rx.data.size, serial_rx_data);
-    serial_queue_init(&serial_txq, serial_tx_queue, serial_config.tx.data.size, serial_tx_data);
-    /* Initialise virtIO console device */
-    success = virtio_mmio_console_init(&virtio_console,
-                                       VIRTIO_CONSOLE_BASE,
-                                       VIRTIO_CONSOLE_SIZE,
-                                       VIRTIO_CONSOLE_IRQ,
-                                       &serial_rxq, &serial_txq,
-                                       serial_tx_channel);
-
     blk_channel = blk_config.virt.id;
     blk_data_share_size = blk_config.data.size;
     blk_req_queue = (blk_req_queue_t *) blk_config.virt.req_queue.vaddr;
@@ -119,27 +111,21 @@ void init(void)
     blk_data_share = (uintptr_t) blk_config.data.vaddr;
     blk_storage_info = (blk_storage_info_t *) blk_config.virt.storage_info.vaddr;
 
-    /* virtIO block */
-    /* Initialise our sDDF queues for the block device */
-    blk_queue_handle_t blk_queue_h;
-    blk_queue_init(&blk_queue_h, blk_config.virt.req_queue.vaddr, blk_config.virt.resp_queue.vaddr, blk_config.virt.num_buffers);
-
-    /* Make sure the blk device is ready */
-    while (!blk_storage_is_ready(blk_storage_info));
-
-    /* Initialise virtIO block device */
-    success = virtio_mmio_blk_init(&virtio_blk,
-                                   VIRTIO_BLK_BASE, VIRTIO_BLK_SIZE, VIRTIO_BLK_IRQ,
-                                   blk_data_share,
-                                   blk_data_share_size,
-                                   blk_storage_info,
-                                   &blk_queue_h,
-                                   blk_channel);
-    assert(success);
-
     client_channel = fs_server_config.client.id;
 
-    /* Initialise the VMM, the VCPU(s), and start the guest */
+    /* Make sure the UIO regions are sound */
+    assert(vmm_config.num_uio_regions == NUM_UIO_REGIONS);
+    assert(vmm_config.uios[UIO_IDX_COMMAND].irq);
+
+    /* Then fill in the shared config region between guest and VMM */
+    vmm_to_guest_conf_data_t *shared_conf = (vmm_to_guest_conf_data_t *) vmm_config.uios[UIO_IDX_SHARED_CONFIG].vmm_vaddr;
+    assert(shared_conf);
+    shared_conf->fs_cmd_queue_region_size = fs_server_config.client.command_queue.size;
+    shared_conf->fs_comp_queue_region_size = fs_server_config.client.completion_queue.size;
+    shared_conf->fs_data_share_region_size = fs_server_config.client.share.size;
+    shared_conf->fs_vm_to_vmm_fault_reg_size = vmm_config.uios[UIO_IDX_FAULT].size;
+
+    /* Initialise the VMM, guest RAM, vCPU and vGIC. */
     LOG_VMM("starting \"%s\"\n", microkit_name);
     /* Place all the binaries in the right locations before starting the guest */
     size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
@@ -168,14 +154,63 @@ void init(void)
     }
 
     /* Register the fault handler to trap guest's fault to signal FS client. */
-    success = fault_register_vm_exception_handler(GUEST_TO_VMM_NOTIFY_FAULT_ADDR,
-                                                  0x1000,
+    success = fault_register_vm_exception_handler(vmm_config.uios[UIO_IDX_FAULT].guest_paddr,
+                                                  vmm_config.uios[UIO_IDX_FAULT].size,
                                                   uio_fs_from_vmm_signal,
                                                   NULL);
     assert(success);
 
     /* Register the UIO virtual IRQ */
-    success = virq_register(GUEST_VCPU_ID, UIO_FS_IRQ_NUM, uio_fs_to_vmm_ack, NULL);
+    success = virq_register(GUEST_VCPU_ID, vmm_config.uios[UIO_IDX_COMMAND].irq, uio_fs_to_vmm_ack, NULL);
+    assert(success);
+
+    /* Find the details of the VirtIO block and console device from sdfgen data */
+    int console_vdev_idx = -1;
+    int blk_vdev_idx = -1;
+    assert(vmm_config.num_virtio_mmio_devices == 2);
+    for (int i = 0; i < vmm_config.num_virtio_mmio_devices; i += 1) {
+        switch (vmm_config.virtio_mmio_devices[i].type) {
+            case VIRTIO_DEVICE_ID_CONSOLE:
+                console_vdev_idx = i;
+                break;
+            case VIRTIO_DEVICE_ID_BLOCK:
+                blk_vdev_idx = i;
+                break;
+        }
+    }
+    assert(console_vdev_idx != -1);
+    assert(blk_vdev_idx != -1);
+
+    /* Initialise our sDDF ring buffers for the serial device */
+    serial_queue_init(&serial_rxq, serial_rx_queue, serial_config.rx.data.size, serial_rx_data);
+    serial_queue_init(&serial_txq, serial_tx_queue, serial_config.tx.data.size, serial_tx_data);
+    /* Initialise virtIO console device */
+    success = virtio_mmio_console_init(&virtio_console,
+                                       vmm_config.virtio_mmio_devices[console_vdev_idx].base,
+                                       vmm_config.virtio_mmio_devices[console_vdev_idx].size,
+                                       vmm_config.virtio_mmio_devices[console_vdev_idx].irq,
+                                       &serial_rxq, &serial_txq,
+                                       serial_tx_channel);
+    assert(success);
+
+    /* virtIO block */
+    /* Initialise our sDDF queues for the block device */
+    blk_queue_handle_t blk_queue_h;
+    blk_queue_init(&blk_queue_h, blk_config.virt.req_queue.vaddr, blk_config.virt.resp_queue.vaddr, blk_config.virt.num_buffers);
+
+    /* Make sure the blk device is ready */
+    while (!blk_storage_is_ready(blk_storage_info));
+
+    /* Initialise virtIO block device */
+    success = virtio_mmio_blk_init(&virtio_blk,
+                                   vmm_config.virtio_mmio_devices[blk_vdev_idx].base,
+                                   vmm_config.virtio_mmio_devices[blk_vdev_idx].size,
+                                   vmm_config.virtio_mmio_devices[blk_vdev_idx].irq,
+                                   blk_data_share,
+                                   blk_data_share_size,
+                                   blk_storage_info,
+                                   &blk_queue_h,
+                                   blk_channel);
     assert(success);
 
     /* Finally start the guest */
@@ -194,7 +229,7 @@ void notified(microkit_channel ch)
         virtio_blk_handle_resp(&virtio_blk);
     } else if (ch == client_channel) {
         /* Command from client */
-        virq_inject(GUEST_VCPU_ID, UIO_FS_IRQ_NUM);
+        virq_inject(GUEST_VCPU_ID, vmm_config.uios[UIO_IDX_COMMAND].irq);
     } else {
         LOG_VMM_ERR("Unexpected channel, ch: 0x%lx\n", ch);
     }
