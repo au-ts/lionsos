@@ -40,8 +40,6 @@ LIBURING_CPP := aarch64-linux-gnu-g++
 
 CFLAGS_uio_fs_driver := $(CFLAGS_uio_fs_driver) -Iliburing/src/include
 
-# ./configure --cc=$(LIBURING_CC) --cxx=$(LIBURING_CPP) --includedir=$(LIBVMM_TOOLS)/linux/uio_drivers/fs/linux && \
-
 liburing.a:
 	cp -r $(LIBURING) liburing && \
 	cd liburing && \
@@ -53,15 +51,15 @@ liburing.a:
 uio_fs_driver: $(UIO_FS_IMAGES_DEP)
 	$(CC_USERLEVEL) -static $(CFLAGS_USERLEVEL) $(CFLAGS_uio_fs_driver) $^ -o $@
 
-# uio_fs_driver_main.o: $(CHECK_UIO_FS_DRIVER_FLAGS_MD5)
+uio_fs_driver_main.o: $(CHECK_UIO_FS_DRIVER_FLAGS_MD5)
 uio_fs_driver_main.o: $(VMFS_DIR)/main.c $(VMFS_DIR)/log.h liburing.a
 	$(CC_USERLEVEL) $(CFLAGS_USERLEVEL) $(CFLAGS_uio_fs_driver) -o $@ -c $<
 
-# uio_fs_driver_op.o: $(CHECK_UIO_FS_DRIVER_FLAGS_MD5)
+uio_fs_driver_op.o: $(CHECK_UIO_FS_DRIVER_FLAGS_MD5)
 uio_fs_driver_op.o: $(VMFS_DIR)/op.c $(VMFS_DIR)/log.h liburing.a
 	$(CC_USERLEVEL) $(CFLAGS_USERLEVEL) $(CFLAGS_uio_fs_driver) -o $@ -c $<
 
-# uio_fs_driver_util.o: $(CHECK_UIO_FS_DRIVER_FLAGS_MD5)
+uio_fs_driver_util.o: $(CHECK_UIO_FS_DRIVER_FLAGS_MD5)
 uio_fs_driver_util.o: $(VMFS_DIR)/util.c $(VMFS_DIR)/log.h liburing.a
 	$(CC_USERLEVEL) $(CFLAGS_USERLEVEL) $(CFLAGS_uio_fs_driver) -o $@ -c $<
 
