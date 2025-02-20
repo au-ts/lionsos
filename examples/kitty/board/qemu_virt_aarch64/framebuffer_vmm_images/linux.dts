@@ -317,6 +317,5 @@
 		bootargs = "console=ttynull uio_pdrv_genirq.of_id=generic-uio pci=nomsi vt.global_cursor_default=0 logo.nologo";
 		linux,initrd-start = <0x4d000000>;
 		linux,initrd-end = <0x4f000000>;
-		// vt.global_cursor_default=0 logo.nologo
 	};
 };

@@ -33,7 +33,6 @@ def test_environment(path):
 
         if not path_exists(current_path):
             os.mkdir(current_path)
-            # print(f"Directory '{current_path}' does not exist. Created directory.")
 
     # The final directory should not exist
     final_dir = path_join(current_path, path_components[-1])
@@ -56,7 +55,6 @@ def simple_write_and_read_back_test(directory):
         # Write content to the file
         with open(test_file, "w") as f:
             f.write(test_content)
-        # print(f"File '{test_file}' written successfully.")
 
         # Read the content back
         with open(test_file, "r") as f:
@@ -64,7 +62,6 @@ def simple_write_and_read_back_test(directory):
 
         # Verify the content
         assert read_content == test_content, f"Test failed: Content mismatch. Expected: '{test_content}', Got: '{read_content}'"
-        # print(f"File '{test_file}' read successfully, and content verified.")
 
         # Increment success count
         success_count += 1
@@ -77,7 +74,7 @@ def simple_write_and_read_back_test(directory):
         # Cleanup
         if path_exists(test_file):
             os.remove(test_file)
-            # print(f"File '{test_file}' removed after test.")
+
 
 def test_write_and_read_back_complex(directory):
     """Test writing a poem line by line to a file and reading it back to verify contents."""
@@ -312,7 +309,6 @@ def test_truncate_using_open_flag(directory):
         # Step 1: Write the full poem to the file
         with open(test_file, "w") as f:
             f.write(original_content)
-        # print(f"File '{test_file}' written with original content.")
 
         # Verify the file contains the original content
         with open(test_file, "r") as f:
@@ -322,7 +318,6 @@ def test_truncate_using_open_flag(directory):
         # Step 2: Open the file with 'w' mode to truncate it and write shorter content
         with open(test_file, "w") as f:
             f.write(short_content)
-        # print(f"File '{test_file}' truncated and written with short content using 'w' mode.")
 
         # Verify the file now contains only the short content (previous content should be truncated)
         with open(test_file, "r") as f:
@@ -331,12 +326,10 @@ def test_truncate_using_open_flag(directory):
             "Test failed: File content was not truncated properly with 'w' mode. "
             f"Expected: '{short_content}', Got: '{read_content}'"
         )
-        # print(f"File '{test_file}' correctly truncated and contains the expected short content.")
 
         # Step 3: Open the file with 'w+' mode to truncate it again and write even shorter content
         with open(test_file, "w+") as f:
             f.write("")
-        # print(f"File '{test_file}' truncated to empty content using 'w+' mode.")
 
         # Verify the file is now empty
         with open(test_file, "r") as f:
@@ -345,7 +338,6 @@ def test_truncate_using_open_flag(directory):
 
         # Increment success count if all truncations are verified
         success_count += 1
-        # print(f"Test passed: File truncation using 'w' and 'w+' flags works as expected.")
 
     except AssertionError as e:
         print(e)
@@ -355,7 +347,6 @@ def test_truncate_using_open_flag(directory):
         # Cleanup: Remove the test file
         if path_exists(test_file):
             os.remove(test_file)
-            # print(f"File '{test_file}' removed after test.")
 
 
 def run_tests():
@@ -371,32 +362,32 @@ def run_tests():
     simple_write_and_read_back_test(test_dir_path)
 
     # Indicate the start of the second, more complex test
-    print("\nTest 2: Running test_write_and_read_back_complex")
+    print("Test 2: Running test_write_and_read_back_complex")
 
     test_write_and_read_back_complex(test_dir_path)
 
     # Indicate the start of the third test
-    print("\nTest 3: Running test_mkdir_and_remove")
+    print("Test 3: Running test_mkdir_and_remove")
 
     test_mkdir_and_remove(test_dir_path)
 
     # Indicate the start of the fourth test
-    print("\nTest 4: Running test_big_file_write_and_read")
+    print("Test 4: Running test_big_file_write_and_read")
 
     test_big_file_write_and_read(test_dir_path)
 
     # Indicate the start of the fifth test
-    print("\nTest 5: Running test_rename_files_and_dirs")
+    print("Test 5: Running test_rename_files_and_dirs")
 
     test_rename_files_and_dirs(test_dir_path)
 
     # Indicate the start of the sixth test
-    print("\nTest 6: Running test_truncate_file")
+    print("Test 6: Running test_truncate_file")
 
     test_truncate_using_open_flag(test_dir_path)
 
     # Print the results
-    print(f"\nTests completed. Success: {success_count}, Fail: {fail_count}")
+    print(f"Tests completed. Success: {success_count}, Fail: {fail_count}")
 
     # Cleanup: Remove the test dir
     if path_exists(test_dir_path):

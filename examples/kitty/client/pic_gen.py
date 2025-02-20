@@ -22,7 +22,7 @@ if __name__ == "__main__":
             f.write(d)
 
     w, h = len(data[0]) // 4, len(data)
-    print("INFO: image width: {w}, height: {h}")
+    print(f"INFO: image width: {w}, height: {h}")
     with open(args.data, "rb") as f:
         pic = list(f.read())
         for y in range(h):

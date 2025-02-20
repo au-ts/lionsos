@@ -8,10 +8,11 @@
 #include <string.h>
 
 #include <sddf/timer/client.h>
+#include <sddf/timer/config.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/util.h>
 #include <sddf/network/constants.h>
-#include <ethernet_config.h>
+#include <sddf/network/config.h>
 
 #include <lwip/dhcp.h>
 #include <lwip/init.h>
@@ -25,12 +26,15 @@
 #include <lwip/timeouts.h>
 #include <netif/etharp.h>
 
+#include "config.h"
 #include "nfs.h"
 #include "util.h"
 #include "tcp.h"
+#include "config.h"
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
+#define NUM_PBUFS 512
 
 typedef struct state
 {
@@ -69,18 +73,15 @@ typedef struct {
 
 state_t state;
 
+extern timer_client_config_t timer_config;
+extern net_client_config_t net_config;
+extern nfs_config_t nfs_config;
+
 LWIP_MEMPOOL_DECLARE(
     RX_POOL,
-    NET_RX_QUEUE_CAPACITY_CLI0 * 2,
+    NUM_PBUFS * 2,
     sizeof(pbuf_custom_offset_t),
     "Zero-copy RX pool");
-
-net_queue_t *rx_free;
-net_queue_t *rx_active;
-net_queue_t *tx_free;
-net_queue_t *tx_active;
-uintptr_t rx_buffer_data_region;
-uintptr_t tx_buffer_data_region;
 
 // Should only need 1 at any one time, accounts for any reconnecting that might happen
 socket_t sockets[MAX_SOCKETS] = {0};
@@ -98,9 +99,9 @@ void tcp_maybe_notify(void) {
         net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(ETHERNET_RX_CHANNEL);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) {
-            microkit_notify(ETHERNET_RX_CHANNEL);
+            microkit_deferred_notify(net_config.rx.id);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.rx.id) {
+            microkit_notify(net_config.rx.id);
         }
     }
 
@@ -108,15 +109,15 @@ void tcp_maybe_notify(void) {
         net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(ETHERNET_TX_CHANNEL);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) {
-            microkit_notify(ETHERNET_TX_CHANNEL);
+            microkit_deferred_notify(net_config.tx.id);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.tx.id) {
+            microkit_notify(net_config.tx.id);
         }
     }
 }
 
 uint32_t sys_now(void) {
-    return sddf_timer_time_now(TIMER_CHANNEL) / NS_IN_MS;
+    return sddf_timer_time_now(timer_config.driver_id) / NS_IN_MS;
 }
 
 static void netif_status_callback(struct netif *netif) {
@@ -140,7 +141,7 @@ static err_t lwip_eth_send(struct netif *netif, struct pbuf *p) {
         return ERR_MEM;
     }
     
-    unsigned char *frame = (unsigned char *)(buffer.io_or_offset + tx_buffer_data_region);
+    unsigned char *frame = (unsigned char *)(buffer.io_or_offset + net_config.tx_data.vaddr);
     unsigned int copied = 0;
     for (struct pbuf *curr = p; curr != NULL; curr = curr->next) {
         memcpy(frame + copied, curr->payload, curr->len);
@@ -214,7 +215,7 @@ void tcp_process_rx(void) {
                 buffer.len,
                 PBUF_REF,
                 &custom_pbuf_offset->custom,
-                (void *)(buffer.io_or_offset + rx_buffer_data_region),
+                (void *)(buffer.io_or_offset + net_config.rx_data.vaddr),
                 NET_BUFFER_SIZE
             );
 
@@ -241,17 +242,16 @@ void tcp_update(void)
 
 void tcp_init_0(void)
 {
-    size_t rx_capacity, tx_capacity;
-    net_cli_queue_capacity(microkit_name, &rx_capacity, &tx_capacity);
-    net_queue_init(&state.rx_queue, rx_free, rx_active, rx_capacity);
-    net_queue_init(&state.tx_queue, tx_free, tx_active, tx_capacity);
+    net_queue_init(&state.rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
+                   net_config.rx.num_buffers);
+    net_queue_init(&state.tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
+                   net_config.tx.num_buffers);
     net_buffers_init(&state.tx_queue, 0);
 
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
-    uint64_t mac_addr = net_cli_mac_addr(microkit_name);
-    net_set_mac_addr(state.mac, mac_addr);
+    sddf_memcpy(state.mac, net_config.mac_addr, 6);
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
@@ -277,15 +277,15 @@ void tcp_init_0(void)
     if (notify_rx && net_require_signal_free(&state.rx_queue)) {
         net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
-        if (!microkit_have_signal) microkit_deferred_notify(ETHERNET_RX_CHANNEL);
-        else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_RX_CHANNEL) microkit_notify(ETHERNET_RX_CHANNEL);
+        if (!microkit_have_signal) microkit_deferred_notify(net_config.rx.id);
+        else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.rx.id) microkit_notify(net_config.rx.id);
     }
 
     if (notify_tx && net_require_signal_active(&state.tx_queue)) {
         net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
-        if (!microkit_have_signal) microkit_deferred_notify(ETHERNET_TX_CHANNEL);
-        else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETHERNET_TX_CHANNEL) microkit_notify(ETHERNET_TX_CHANNEL);
+        if (!microkit_have_signal) microkit_deferred_notify(net_config.tx.id);
+        else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.tx.id) microkit_notify(net_config.tx.id);
     }
 }
 
@@ -427,7 +427,7 @@ int tcp_socket_connect(int index, int port) {
     assert(sock->state == socket_state_bound);
 
     ip_addr_t ipaddr;
-    ip4_addr_set_u32(&ipaddr, ipaddr_addr(NFS_SERVER));
+    ip4_addr_set_u32(&ipaddr, ipaddr_addr(nfs_config.server));
 
     err_t err = tcp_connect(sock->sock_tpcb, &ipaddr, port, socket_connected);
     if (err != ERR_OK) {

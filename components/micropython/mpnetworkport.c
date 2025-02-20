@@ -19,10 +19,10 @@
 
 #include <sddf/timer/client.h>
 #include <sddf/network/queue.h>
+#include <sddf/network/config.h>
 #include <sddf/network/util.h>
 #include <sddf/util/cache.h>
 #include <sddf/network/constants.h>
-#include <ethernet_config.h>
 
 #include <lwip/dhcp.h>
 #include <lwip/init.h>
@@ -39,6 +39,8 @@
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
+
+extern net_client_config_t net_config;
 
 #define dlogp(pred, fmt, ...) do { \
     if (pred) { \
@@ -69,18 +71,12 @@ typedef struct state
 
 state_t state;
 
+// DO NOT MERGE: need to figure out how to do this
 LWIP_MEMPOOL_DECLARE(
     RX_POOL,
-    NET_RX_QUEUE_CAPACITY_CLI1 * 2,
+    512 * 2,
     sizeof(pbuf_custom_offset_t),
     "Zero-copy RX pool");
-
-net_queue_t *rx_free;
-net_queue_t *rx_active;
-net_queue_t *tx_free;
-net_queue_t *tx_active;
-uintptr_t rx_buffer_data_region;
-uintptr_t tx_buffer_data_region;
 
 static bool notify_tx = false;
 static bool notify_rx = false;
@@ -118,7 +114,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
     if (err) {
         return ERR_MEM;
     }
-    unsigned char *frame = (unsigned char *)(buffer.io_or_offset + tx_buffer_data_region);
+    unsigned char *frame = (unsigned char *)(buffer.io_or_offset + net_config.tx_data.vaddr);
     unsigned int copied = 0;
     for (struct pbuf *curr = p; curr != NULL; curr = curr->next) {
         memcpy(frame + copied, curr->payload, curr->len);
@@ -132,7 +128,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
     notify_tx = true;
 
     // @alwin: Maybe instead of notify_tx = true, an explicit notify is more appropriate
-    // microkit_notify(ETH_TX_CH);
+    // microkit_notify(net_config.tx.id);
 
     return ret;
 }
@@ -170,17 +166,14 @@ static err_t ethernet_init(struct netif *netif)
 
 void init_networking(void) {
     /* Set up shared memory regions */
-    size_t rx_capacity, tx_capacity;
-    net_cli_queue_capacity(microkit_name, &rx_capacity, &tx_capacity);
-    net_queue_init(&state.rx_queue, rx_free, rx_active, rx_capacity);
-    net_queue_init(&state.tx_queue, tx_free, tx_active, tx_capacity);
+    net_queue_init(&state.rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr, net_config.rx.num_buffers);
+    net_queue_init(&state.tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
     net_buffers_init(&state.tx_queue, 0);
 
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
-    uint64_t mac_addr = net_cli_mac_addr(microkit_name);
-    net_set_mac_addr(state.mac, mac_addr);
+    sddf_memcpy(state.mac, net_config.mac_addr, 6);
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
@@ -207,9 +200,9 @@ void init_networking(void) {
         net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(ETH_RX_CH);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_RX_CH) {
-            microkit_notify(ETH_RX_CH);
+            microkit_deferred_notify(net_config.rx.id);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.rx.id) {
+            microkit_notify(net_config.rx.id);
         }
     }
 
@@ -217,14 +210,14 @@ void init_networking(void) {
         net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(ETH_TX_CH);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_TX_CH) {
-            microkit_notify(ETH_TX_CH);
+            microkit_deferred_notify(net_config.tx.id);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.tx.id) {
+            microkit_notify(net_config.tx.id);
         }
     }
 }
 
-void process_rx(void) {
+void mpnet_process_rx(void) {
     bool reprocess = true;
     while (reprocess) {
         while (!net_queue_empty_active(&state.rx_queue)) {
@@ -240,7 +233,7 @@ void process_rx(void) {
                 buffer.len,
                 PBUF_REF,
                 &custom_pbuf_offset->custom,
-                (void *)(buffer.io_or_offset + rx_buffer_data_region),
+                (void *)(buffer.io_or_offset + net_config.rx_data.vaddr),
                 NET_BUFFER_SIZE
             );
 
@@ -271,9 +264,9 @@ void mpnet_handle_notify(void) {
         net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(ETH_RX_CH);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_RX_CH) {
-            microkit_notify(ETH_RX_CH);
+            microkit_deferred_notify(net_config.rx.id);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.rx.id) {
+            microkit_notify(net_config.rx.id);
         }
     }
 
@@ -281,9 +274,9 @@ void mpnet_handle_notify(void) {
         net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(ETH_TX_CH);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + ETH_TX_CH) {
-            microkit_notify(ETH_TX_CH);
+            microkit_deferred_notify(net_config.tx.id);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.tx.id) {
+            microkit_notify(net_config.tx.id);
         }
     }
 }

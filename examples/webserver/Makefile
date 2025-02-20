@@ -35,7 +35,6 @@ endif
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD := $(MICROKIT_BOARD)
-export CONFIG_INCLUDE ?= $(abspath config)
 export WEBSERVER_SRC_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 export LIONSOS := $(abspath ../..)
 

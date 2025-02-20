@@ -17,11 +17,26 @@
 #include "vfs_fs.h"
 #include <extmod/vfs.h>
 #include <sddf/serial/queue.h>
-#include <serial_config.h>
+#include <sddf/serial/config.h>
+#include <sddf/i2c/config.h>
 #include <sddf/i2c/queue.h>
+#include <sddf/timer/config.h>
+#include <sddf/network/config.h>
+#include <lions/fs/config.h>
 #include "lwip/init.h"
 #include "mpconfigport.h"
 #include "fs_helpers.h"
+
+__attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
+__attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
+__attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
+__attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
+
+#ifdef ENABLE_I2C
+__attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_config;
+#endif
+
+bool net_enabled;
 
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
@@ -29,27 +44,16 @@ static char heap[MICROPY_HEAP_SIZE];
 static char mp_stack[MICROPY_STACK_SIZE];
 static co_control_t co_controller_mem;
 
+fs_queue_t *fs_command_queue;
+fs_queue_t *fs_completion_queue;
 char *fs_share;
 
-/*
- * Shared regions for Serial communication
- */
-char *serial_rx_data;
-char *serial_tx_data;
-serial_queue_t *serial_rx_queue;
-serial_queue_t *serial_tx_queue;
 serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
-
-#ifdef ENABLE_I2C
 i2c_queue_handle_t i2c_queue_handle;
-uintptr_t i2c_request_region;
-uintptr_t i2c_response_region;
-uintptr_t i2c_data_region;
-#endif
 
 #ifdef ENABLE_FRAMEBUFFER
-uintptr_t framebuffer_data_region;
+uintptr_t framebuffer_data_region = 0x30000000;
 #endif
 
 STATIC bool init_vfs(void) {
@@ -80,7 +84,9 @@ start_repl:
     gc_init(heap, heap + sizeof(heap));
     mp_init();
 
-    init_networking();
+    if (net_enabled) {
+        init_networking();
+    }
     // initialisation of the filesystem utilises the event loop and the event
     // loop unconditionally tries to process incoming network buffers; therefore
     // the networking needs to be initialised before initialising the fs
@@ -106,13 +112,28 @@ start_repl:
 }
 
 void init(void) {
-    serial_cli_queue_init_sys(microkit_name, &serial_rx_queue_handle,
-                              serial_rx_queue, serial_rx_data,
-                              &serial_tx_queue_handle, serial_tx_queue,
-                              serial_tx_data);
+    // TODO: problem, if one of these asserts fails it crashse micropython since it tries to output
+    // to real serial instead of microkit_dbg_puts
+    assert(serial_config_check_magic(&serial_config));
+    assert(timer_config_check_magic(&timer_config));
+    net_enabled = net_config_check_magic(&net_config);
+    assert(fs_config_check_magic(&fs_config));
+
+    // TODO: there should be a better solution than this
+    net_enabled = net_config_check_magic(&net_config);
+
+    // TODO: hack
+    if (serial_config.rx.queue.vaddr != NULL) {
+        serial_queue_init(&serial_rx_queue_handle, serial_config.rx.queue.vaddr, serial_config.rx.data.size, serial_config.rx.data.vaddr);
+    }
+    serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
+
+    fs_command_queue = fs_config.server.command_queue.vaddr;
+    fs_completion_queue = fs_config.server.completion_queue.vaddr;
+    fs_share = fs_config.server.share.vaddr;
 
 #ifdef ENABLE_I2C
-    i2c_queue_handle = i2c_queue_init((i2c_queue_t *)i2c_request_region, (i2c_queue_t *)i2c_response_region);
+    i2c_queue_handle = i2c_queue_init(i2c_config.virt.req_queue.vaddr, i2c_config.virt.resp_queue.vaddr);
 #endif
 
     stack_ptrs_arg_array_t costacks = { mp_stack };
@@ -128,18 +149,22 @@ void init(void) {
 }
 
 void pyb_lwip_poll(void);
-void process_rx(void);
+void mpnet_process_rx(void);
 void mpnet_handle_notify(void);
 
 void notified(microkit_channel ch) {
-    process_rx();
-    pyb_lwip_poll();
+    if (net_enabled) {
+        mpnet_process_rx();
+        pyb_lwip_poll();
+    }
     fs_process_completions();
 
     // We ignore errors because notified can be invoked without the MP cothread awaiting in cases such as an async I/O completing.
     microkit_cothread_recv_ntfn(ch);
 
-    mpnet_handle_notify();
+    if (net_enabled) {
+        mpnet_handle_notify();
+    }
 }
 
 // Handle uncaught exceptions (should never be reached in a correct C implementation).
