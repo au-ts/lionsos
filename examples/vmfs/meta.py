@@ -115,15 +115,14 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, guest_dtb: DeviceT
     assert serial_system.connect()
     assert timer_system.connect()
     assert net_system.connect()
+    assert serial_system.serialise_config(output_dir)
+    assert timer_system.serialise_config(output_dir)
+    assert net_system.serialise_config(output_dir)
+
     # The order of these three matters!
     assert fs_vm_system.connect()
     assert fs_system.connect()
     assert blk_system.connect()
-    
-    assert serial_system.serialise_config(output_dir)
-    assert timer_system.serialise_config(output_dir)
-    assert net_system.serialise_config(output_dir)
-    # The order of these three matters!
     assert fs_vm_system.serialise_config(output_dir)
     assert fs_system.serialise_config(output_dir)
     assert blk_system.serialise_config(output_dir)

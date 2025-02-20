@@ -52,7 +52,7 @@ DTC := dtc
 PYTHON ?= python3
 OBJCOPY := llvm-objcopy
 
-LIONSOS_DOWNLOADS := https://lionsos.org/downloads/examples/vmfs
+LIONSOS_DOWNLOADS := https://trustworthy.systems/Downloads/lionsos/examples/vmfs
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 PLATFORM := meson
