@@ -1,10 +1,8 @@
-# Virtualised Filesystems
+# Virtualised Filesystem
 
-This example system showcases a Filesystem (FS) being virtualised in a Linux VM on LionsOS. The raw byte data comes from a native block driver (virtIO or MMC) and a FS is exposed to userspace in VM from a FS implementation. A Userspace IO driver then map Linux's File I/O APIs to LionsOS' equivalent, allowing native clients such as Micropython to access the filesystem without having a native FS implementation.
+This example system showcases a Filesystem (FS) being virtualised in a Linux VM on LionsOS. The raw byte data comes from a native block driver (virtIO or MMC) and a FS is exposed to userspace in VM from a FS implementation. A userspace driver then map Linux's File I/O APIs to LionsOS' equivalent, allowing native clients such as Micropython to access the filesystem without having a native FS implementation. This driver accesses the command, completion queue and data regions via UIO, which is coded as a series of memory regions in a DTS overlay.
 
 This approach ensure complex FS implementations are contained in a VM, where vulnerabilities in the implementation does not have the potential to bring down the entire system. We could just reboot the VM if we detect a fault.
-
-Thus the name of this system, "VFS", has a different meaning than what you might be used to.
 
 ## High level overview
 ```
@@ -33,7 +31,7 @@ Assuming an in-kernel FS implementation, the setup is as follows:
                                                         |
             io_uring                                    |
                                                         |
-            Filesystem implementation (FAT, ext4,...)   FS
+            FS implementations (FAT, ext4,...)      block -> FS
                                                         |
             virtIO block                                |
                                                         | 
@@ -51,9 +49,9 @@ Assuming an in-kernel FS implementation, the setup is as follows:
 
 ## Supported platforms
 ### QEMU Virt AArch64
-An MBR disk with 1 FAT partition is provided as an image, which is presented as a virtIO block device inside the VM. 
+An MBR disk with 1 FAT partition is generated during the build process as an image, which is presented as a virtIO block device inside the VM. 
 
-The build script generates a FAT disk image, though you can provide your own disk image with any Filesystems supported by the Linux kernel.
+Though you can provide your own disk image with any Filesystems supported by the Linux kernel.
 
 To run the example:
 ```
