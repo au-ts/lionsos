@@ -12,17 +12,17 @@ SDDF := $(LIONSOS)/dep/sddf
 ifeq (${MICROKIT_BOARD},odroidc4)
 	TIMER_DRIVER_DIR := meson
 	ETHERNET_DRIVER_DIR := meson
-	UART_DRIVER_DIR := meson
+	SERIAL_DRIVER_DIR := meson
 	CPU := cortex-a55
 else ifeq (${MICROKIT_BOARD},maaxboard)
 	TIMER_DRIVER_DIR := imx
 	ETHERNET_DRIVER_DIR := imx
-	UART_DRIVER_DIR := imx
+	SERIAL_DRIVER_DIR := imx
 	CPU := cortex-a53
 else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
 	TIMER_DRIVER_DIR := arm
 	ETHERNET_DRIVER_DIR := virtio
-	UART_DRIVER_DIR := arm
+	SERIAL_DRIVER_DIR := arm
 	CPU := cortex-a53
 	QEMU := qemu-system-aarch64
 else
@@ -51,7 +51,7 @@ DTB := $(MICROKIT_BOARD).dtb
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  network_copy.elf network_virt_rx.elf network_virt_tx.elf \
-	  uart_driver.elf serial_virt_tx.elf
+	  serial_driver.elf serial_virt_tx.elf
 
 SYSTEM_FILE := webserver.system
 
@@ -113,7 +113,7 @@ $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 		  ${SDDF}/drivers/timer/${TIMER_DRIVER_DIR}/timer_driver.mk \
 		  ${SDDF}/drivers/network/${ETHERNET_DRIVER_DIR}/eth_driver.mk \
-		  ${SDDF}/drivers/serial/${UART_DRIVER_DIR}/uart_driver.mk \
+		  ${SDDF}/drivers/serial/${SERIAL_DRIVER_DIR}/serial_driver.mk \
 		  ${SDDF}/network/components/network_components.mk \
 		  ${SDDF}/serial/components/serial_components.mk
 
@@ -125,8 +125,8 @@ $(DTB): $(DTS)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY)
-	$(OBJCOPY) --update-section .device_resources=uart_driver_device_resources.data uart_driver.elf
-	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data uart_driver.elf
+	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
 	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf
 	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver.elf
