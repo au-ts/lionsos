@@ -8,7 +8,7 @@ IMAGES := \
 	eth_driver.elf \
 	micropython.elf \
 	fat.elf \
-	uart_driver.elf \
+	serial_driver.elf \
 	serial_virt_rx.elf \
 	serial_virt_tx.elf \
 	blk_virt.elf \
@@ -16,12 +16,12 @@ IMAGES := \
 
 ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
 	BLK_DRIV_DIR := mmc/imx
-	UART_DRIV_DIR := imx
+	SERIAL_DRIV_DIR := imx
 	TIMER_DRIV_DIR := imx
 	CPU := cortex-a53
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
 	BLK_DRIV_DIR := virtio
-	UART_DRIV_DIR := arm
+	SERIAL_DRIV_DIR := arm
 	TIMER_DRIV_DIR := arm
 	IMAGES += blk_driver.elf
 	CPU := cortex-a53
@@ -89,7 +89,7 @@ BLK_COMPONENTS := $(SDDF)/blk/components
 
 include ${SDDF}/util/util.mk
 include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
-include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk
+include ${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/libco/libco.mk
 include ${BLK_DRIVER}/blk_driver.mk
@@ -140,8 +140,8 @@ $(DTB): $(DTS)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
-	$(OBJCOPY) --update-section .device_resources=uart_driver_device_resources.data uart_driver.elf
-	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data uart_driver.elf
+	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
 	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
