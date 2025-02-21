@@ -21,7 +21,7 @@ LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 
 ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
 	NET_DRIV_DIR := meson
-	UART_DRIV_DIR := meson
+	SERIAL_DRIVER_DIR := meson
 	TIMER_DRIV_DIR := meson
 	I2C_DRIV_DIR := meson
 	CPU := cortex-a55
@@ -29,7 +29,7 @@ ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
 	LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
 	NET_DRIV_DIR := virtio
-	UART_DRIV_DIR := arm
+	SERIAL_DRIVER_DIR := arm
 	TIMER_DRIV_DIR := arm
 	CPU := cortex-a53
 	QEMU := qemu-system-aarch64
@@ -65,7 +65,7 @@ IMAGES := timer_driver.elf \
 	  network_copy.elf \
 	  network_virt_rx.elf \
 	  network_virt_tx.elf \
-	  uart_driver.elf \
+	  serial_driver.elf \
 	  serial_virt_rx.elf \
 	  serial_virt_tx.elf \
 	  i2c_virt.elf \
@@ -106,7 +106,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 	${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
 	${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
-	${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk \
+	${SDDF}/drivers/serial/${SERIAL_DRIVER_DIR}/serial_driver.mk \
 	${SDDF}/network/components/network_components.mk \
 	${SDDF}/serial/components/serial_components.mk \
 	${SDDF}/i2c/components/i2c_virt.mk \
@@ -187,8 +187,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 		$(OBJCOPY) --update-section .i2c_virt_config=i2c_virt.data i2c_virt.elf; \
 		$(OBJCOPY) --update-section .i2c_client_config=i2c_client_micropython.data micropython.elf; \
 	fi
-	$(OBJCOPY) --update-section .device_resources=uart_driver_device_resources.data uart_driver.elf
-	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data uart_driver.elf
+	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
 	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
 	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf

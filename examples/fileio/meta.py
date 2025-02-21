@@ -56,10 +56,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=254)
     timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
 
-    uart_driver = ProtectionDomain("uart_driver", "uart_driver.elf", priority=100)
+    serial_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
     serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
     serial_virt_rx = ProtectionDomain("serial_virt_rx", "serial_virt_rx.elf", priority=99)
-    serial_system = Sddf.Serial(sdf, serial_node, uart_driver, serial_virt_tx, virt_rx=serial_virt_rx)
+    serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx, virt_rx=serial_virt_rx)
 
     blk_driver = ProtectionDomain("blk_driver", "blk_driver.elf", priority=200)
     blk_virt = ProtectionDomain("blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000)
@@ -84,7 +84,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         timer_system.add_client(blk_driver)
 
     pds = [
-        uart_driver,
+        serial_driver,
         serial_virt_tx,
         serial_virt_rx,
         micropython,
