@@ -36,6 +36,7 @@ __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
 __attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_config;
 #endif
 
+bool fs_enabled;
 bool net_enabled;
 
 // Allocate memory for the MicroPython GC heap.
@@ -57,6 +58,7 @@ uintptr_t framebuffer_data_region = 0x30000000;
 #endif
 
 STATIC bool init_vfs(void) {
+    assert(fs_enabled);
     mp_obj_t args[2] = {
         MP_OBJ_TYPE_GET_SLOT(&mp_type_vfs_fs, make_new)(&mp_type_vfs_fs, 0, 0, NULL),
         MP_OBJ_NEW_QSTR(MP_QSTR__slash_),
@@ -90,7 +92,9 @@ start_repl:
     // initialisation of the filesystem utilises the event loop and the event
     // loop unconditionally tries to process incoming network buffers; therefore
     // the networking needs to be initialised before initialising the fs
-    init_vfs();
+    if (fs_enabled) {
+        init_vfs();
+    }
 
     // Start a normal REPL; will exit when ctrl-D is entered on a blank line.
 #ifndef EXEC_MODULE
@@ -117,9 +121,9 @@ void init(void) {
     assert(serial_config_check_magic(&serial_config));
     assert(timer_config_check_magic(&timer_config));
     net_enabled = net_config_check_magic(&net_config);
-    assert(fs_config_check_magic(&fs_config));
 
     // TODO: there should be a better solution than this
+    fs_enabled = fs_config_check_magic(&fs_config);
     net_enabled = net_config_check_magic(&net_config);
 
     // TODO: hack
@@ -128,9 +132,11 @@ void init(void) {
     }
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 
-    fs_command_queue = fs_config.server.command_queue.vaddr;
-    fs_completion_queue = fs_config.server.completion_queue.vaddr;
-    fs_share = fs_config.server.share.vaddr;
+    if (fs_enabled) {
+        fs_command_queue = fs_config.server.command_queue.vaddr;
+        fs_completion_queue = fs_config.server.completion_queue.vaddr;
+        fs_share = fs_config.server.share.vaddr;
+    }
 
 #ifdef ENABLE_I2C
     i2c_queue_handle = i2c_queue_init(i2c_config.virt.req_queue.vaddr, i2c_config.virt.resp_queue.vaddr);
@@ -157,7 +163,9 @@ void notified(microkit_channel ch) {
         mpnet_process_rx();
         pyb_lwip_poll();
     }
-    fs_process_completions();
+    if (fs_enabled) {
+        fs_process_completions();
+    }
 
     // We ignore errors because notified can be invoked without the MP cothread awaiting in cases such as an async I/O completing.
     microkit_cothread_recv_ntfn(ch);
