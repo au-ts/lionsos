@@ -47,7 +47,7 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Run examples script
-        run: nix develop -c bash -c './ci/examples.sh $(pwd) $(pwd)/$MICROKIT_SDK'
+        run: nix develop -c bash -c './ci/examples.sh $(pwd) $MICROKIT_SDK'
   build_examples_macos_aarch64_nix:
     name: Build example systems (macOS ARM64 via Nix)
     runs-on: [self-hosted, macos, ARM64]
@@ -63,4 +63,4 @@ jobs:
           git submodule foreach --recursive git clean -ffdx
           git submodule foreach --recursive git reset --hard
       - name: Run examples script
-        run: nix develop -c bash -c './ci/examples.sh $(pwd) $(pwd)/$MICROKIT_SDK'
+        run: nix develop -c bash -c './ci/examples.sh $(pwd) $MICROKIT_SDK'
