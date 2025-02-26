@@ -17,6 +17,8 @@ fi
 LIONSOS=$1
 MICROKIT_SDK=$2
 
+echo "CI|INFO: running for LionsOS '${LIONSOS}' with Microkit '${MICROKIT_SDK}'"
+
 $LIONSOS/ci/kitty.sh $LIONSOS $MICROKIT_SDK
 $LIONSOS/ci/webserver.sh $LIONSOS $MICROKIT_SDK
 $LIONSOS/ci/vmm.sh $LIONSOS $MICROKIT_SDK
