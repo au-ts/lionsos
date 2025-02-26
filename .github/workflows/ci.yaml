@@ -25,11 +25,17 @@ jobs:
           wget -O aarch64-toolchain.tar.gz https://trustworthy.systems/Downloads/microkit/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf.tar.xz
           tar xf aarch64-toolchain.tar.gz
           echo "$(pwd)/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf/bin" >> $GITHUB_PATH
+      - name: Setup pyenv
+        run: |
+          python3 -m venv venv
+          ./venv/bin/pip install sdfgen==0.19.1
       - name: Install dependencies (apt)
         run: |
           sudo apt update && sudo apt install make cmake clang lld llvm device-tree-compiler qemu-system-arm
       - name: Run examples script
         run: ./ci/examples.sh $(pwd) $(pwd)/microkit-sdk-1.4.1-dev.54+a8b7894-linux-x86-64
+        env:
+          PYTHON: ${{ github.workspace }}/venv/bin/python
   build_examples_linux_x86_64_nix:
     name: Build example systems (Linux x86-64 via Nix)
     runs-on: ubuntu-24.04
