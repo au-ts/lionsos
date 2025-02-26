@@ -24,11 +24,11 @@ typedef struct fb_config {
 
 fb_config_t *get_fb_config(void *uio_map) {
     if (uio_map == NULL) {
-        printf("UIO ERROR: uio_map is NULL\n");
+        // printf("UIO ERROR: uio_map is NULL\n");
         return NULL;
     }
     if ((uintptr_t)uio_map % sizeof(uint32_t) != 0) {
-        printf("UIO ERROR: uio_map is not aligned with fb_config_t\n");
+        // printf("UIO ERROR: uio_map is not aligned with fb_config_t\n");
         return NULL;
     }
     return (fb_config_t *)uio_map;
@@ -36,11 +36,11 @@ fb_config_t *get_fb_config(void *uio_map) {
 
 void set_fb_config(void *uio_map, fb_config_t config) {
     if (uio_map == NULL) {
-        printf("UIO ERROR: uio_map is NULL\n");
+        // printf("UIO ERROR: uio_map is NULL\n");
         return;
     }
     if ((uintptr_t)uio_map % sizeof(uint32_t) != 0) {
-        printf("UIO ERROR: uio_map is not aligned with fb_config_t\n");
+        // printf("UIO ERROR: uio_map is not aligned with fb_config_t\n");
         return;
     }
     *(fb_config_t *)uio_map = config;
@@ -48,12 +48,12 @@ void set_fb_config(void *uio_map, fb_config_t config) {
 
 void get_fb_base_addr(void *uio_map, uint8_t **fb_base_addr) {
     if (uio_map == NULL) {
-        printf("UIO ERROR: uio_map is NULL\n");
+        // printf("UIO ERROR: uio_map is NULL\n");
         *fb_base_addr = NULL;
         return;
     }
     if ((uintptr_t)uio_map % sizeof(uint32_t) != 0) {
-        printf("UIO ERROR: uio_map is not aligned with fb_config_t\n");
+        // printf("UIO ERROR: uio_map is not aligned with fb_config_t\n");
         *fb_base_addr = NULL;
         return;
     }
