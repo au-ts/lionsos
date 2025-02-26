@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: seL4 Device Driver Framework
-Source: https://github.com/au-ts/sddf
+Upstream-Name: LionsOS
+Source: https://github.com/au-ts/LionsOS
 
 Files:
     CHANGES.md
