@@ -6,6 +6,7 @@ Files:
     CHANGES.md
     .gitignore
     .gitmodules
+    flake.lock
 Copyright: UNSW
 License: BSD-2-Clause
 
