@@ -125,7 +125,7 @@ STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t a
             });
             if (err || completion.status != FS_STATUS_SUCCESS) {
                 mp_raise_OSError(completion.status);
-                return mp_const_none;
+                return -1;
             }
             return 0;
         }
