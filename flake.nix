@@ -6,7 +6,7 @@
   description = "A flake for building LionsOS";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/release-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     zig-overlay.url = "github:mitchellh/zig-overlay";
     sdfgen.url = "github:au-ts/microkit_sdf_gen/0.19.1";
     sdfgen.inputs.nixpkgs.follows = "nixpkgs";
