@@ -24,7 +24,7 @@ fs_driver_init: $(VMFS_DIR)/fs_driver_init
 UIO_FS_IMAGES_DEP := uio_fs_driver_main.o uio_fs_driver_op.o uio_fs_driver_util.o liburing.a
 UIO_FS_IMAGES := uio_fs_driver
 
-CFLAGS_uio_fs_driver := -I$(SDDF)/include -I$(VMFS_DIR)
+CFLAGS_uio_fs_driver := -I$(SDDF)/include -I$(LIBVMM_DIR)/include -I$(VMFS_DIR)
 
 CHECK_UIO_FS_DRIVER_FLAGS_MD5:=.uio_fs_driver_cflags-$(shell echo -- $(CFLAGS_USERLEVEL) $(CFLAGS_uio_fs_driver) | shasum | sed 's/ *-//')
 

@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -28,6 +29,12 @@
 #endif
 
 #define ARGC_REQURED 3
+
+#define UIO_COMPAT_MAX_LEN 64
+
+#define UIO_PATH "/sys/class/uio"
+#define UIO_PATH_MAX 128
+char uio_dev_path[UIO_PATH_MAX];
 
 /* Event queue for polling */
 #define MAX_EVENTS 16 // Arbitrary length
@@ -77,6 +84,67 @@ void bind_fd_to_epoll(int fd, int epollfd)
         LOG_FS_ERR("can't register fd %d to epoll fd %d.\n", fd, epollfd);
         exit(EXIT_FAILURE);
     }
+}
+
+// Find a UIO device path by its name
+bool find_uio_by_name(const char *target_name, char *dev_path) {
+    DIR *dir;
+    struct dirent *entry;
+    char name[UIO_COMPAT_MAX_LEN];
+    char name_path[UIO_PATH_MAX];
+    int fd;
+    ssize_t bytes_read;
+    bool found = false;
+
+    dir = opendir(UIO_PATH);
+    if (!dir) {
+        perror("Failed to open UIO directory");
+        return -1;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        if (strncmp(entry->d_name, "uio", 3) == 0) {
+            snprintf(name_path, UIO_PATH_MAX, "%s/%s/device/of_node/compatible", UIO_PATH, entry->d_name);
+            
+            // Read the compat string
+            fd = open(name_path, O_RDONLY);
+            if (fd < 0) {
+                continue;
+            }
+            bytes_read = read(fd, name, UIO_COMPAT_MAX_LEN - 1);
+            close(fd);
+            
+            if (bytes_read > 0) {
+                // Null-terminate the string (removing any newline)
+                if (name[bytes_read-1] == '\n')
+                    bytes_read--;
+                name[bytes_read] = '\0';
+
+                if (bytes_read <= strlen("generic-uio") + 2) { // plus the string's null term then the next first character
+                    // Should never get here unless the sdfgen tool is broken.
+                    LOG_FS_ERR("found a compat string without name!");
+                }
+
+                // Since the compat string is something like `generic-uio\0<name>`
+                // Find the first null term.
+                char *node_name = memchr(name, 0, bytes_read) + 1;
+
+                // Check if this is the device we're looking for
+                if (strcmp(node_name, target_name) == 0) {
+                    snprintf(dev_path, UIO_PATH_MAX, "/dev/%s", entry->d_name);
+                    found = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    closedir(dir);
+    return found;
 }
 
 int open_uio(const char *abs_path)
@@ -190,7 +258,12 @@ int main(int argc, char **argv)
     LOG_FS("Mount point: %s\n", mnt_point);
 
     LOG_FS("*** Setting up shared configuration data via UIO\n");
-    int conf_uio_fd = open_uio(UIO_PATH_FS_VM_CONFIG);
+    if (!find_uio_by_name(UIO_DEV_NAME_FS_VM_CONF, uio_dev_path)) {
+        LOG_FS_ERR("Can't find UIO device %s\n", UIO_DEV_NAME_FS_VM_CONF);
+        return EXIT_FAILURE;
+    }
+    LOG_FS("Found dev @ %s\n", uio_dev_path);
+    int conf_uio_fd = open_uio(uio_dev_path);
     conf = (vmm_to_guest_conf_data_t *) map_uio(UIO_PATH_FS_VM_CONFIG_SZ, conf_uio_fd);
 
     our_data_region = malloc(sizeof(char) * conf->fs_data_share_region_size);
@@ -200,20 +273,40 @@ int main(int argc, char **argv)
     }
 
     LOG_FS("*** Setting up command queue via UIO\n");
-    int cmd_uio_fd = open_uio(UIO_PATH_FS_COMMAND_QUEUE_AND_IRQ);
+    if (!find_uio_by_name(UIO_DEV_NAME_FS_CMD, uio_dev_path)) {
+        LOG_FS_ERR("Can't find UIO device %s\n", UIO_DEV_NAME_FS_CMD);
+        return EXIT_FAILURE;
+    }
+    LOG_FS("Found dev @ %s\n", uio_dev_path);
+    int cmd_uio_fd = open_uio(uio_dev_path);
     cmd_queue = (struct fs_queue *) map_uio(conf->fs_cmd_queue_region_size, cmd_uio_fd);
 
     LOG_FS("*** Setting up completion queue via UIO\n");
-    int comp_uio_fd = open_uio(UIO_PATH_FS_COMPLETION_QUEUE);
+    if (!find_uio_by_name(UIO_DEV_NAME_FS_COMP, uio_dev_path)) {
+        LOG_FS_ERR("Can't find UIO device %s\n", UIO_DEV_NAME_FS_COMP);
+        return EXIT_FAILURE;
+    }
+    LOG_FS("Found dev @ %s\n", uio_dev_path);
+    int comp_uio_fd = open_uio(uio_dev_path);
     comp_queue = (struct fs_queue *) map_uio(conf->fs_comp_queue_region_size, comp_uio_fd);
 
     LOG_FS("*** Setting up FS data region via UIO\n");
-    int fs_data_uio_fd = open_uio(UIO_PATH_FS_DATA);
+    if (!find_uio_by_name(UIO_DEV_NAME_FS_DATA, uio_dev_path)) {
+        LOG_FS_ERR("Can't find UIO device %s\n", UIO_DEV_NAME_FS_DATA);
+        return EXIT_FAILURE;
+    }
+    LOG_FS("Found dev @ %s\n", uio_dev_path);
+    int fs_data_uio_fd = open_uio(uio_dev_path);
     fs_data = map_uio(conf->fs_data_share_region_size, fs_data_uio_fd);
 
     LOG_FS("*** Setting up fault region via UIO\n");
     // For Guest -> VMM notifications
-    int fault_uio_fd = open_uio(UIO_PATH_GUEST_TO_VMM_NOTIFY_FAULT);
+    if (!find_uio_by_name(UIO_DEV_NAME_FS_FAULT, uio_dev_path)) {
+        LOG_FS_ERR("Can't find UIO device %s\n", UIO_DEV_NAME_FS_FAULT);
+        return EXIT_FAILURE;
+    }
+    LOG_FS("Found dev @ %s\n", uio_dev_path);
+    int fault_uio_fd = open_uio(uio_dev_path);
     vmm_notify_fault = map_uio(conf->fs_vm_to_vmm_fault_reg_size, fault_uio_fd);
 
     LOG_FS("*** Enabling UIO interrupt on command queue\n");
@@ -237,8 +330,11 @@ int main(int argc, char **argv)
     LOG_FS("*** You won't see any output from UIO FS anymore. Unless there is a warning or error.\n");
 
     // Only notify when we have consumed every commands.
-    // After printing our finish message to not mess up Micropython.
+    // After printing our finish message to not mess up client's printing.
     notify_vmm();
+
+    // Turn on IRQ
+    uio_interrupt_ack(cmd_uio_fd);
 
     while (1) {
         int n_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);

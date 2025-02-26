@@ -6,19 +6,18 @@
 
 #pragma once
 
+#define NUM_UIO_DEVICES 5
+
+/* UIO devices name */
+#define UIO_DEV_NAME_FS_VM_CONF "vmfs_config"
+#define UIO_DEV_NAME_FS_CMD     "vmfs_command"
+#define UIO_DEV_NAME_FS_COMP    "vmfs_completion"
+#define UIO_DEV_NAME_FS_DATA    "vmfs_data"
+#define UIO_DEV_NAME_FS_FAULT   "vmfs_fault"
+
 /* Common values between the guest and VMM */
-/* All of these details must match up with the DTS overlay and Sys Desc File. */
-/* See the vmfs example for more details. */
-
-#define UIO_PATH_FS_VM_CONFIG "/dev/uio0"
-
 /* This is the only hardcoded memory region size, everything else are derived from sdfgen. */
 #define UIO_PATH_FS_VM_CONFIG_SZ 0x1000
-
-#define UIO_PATH_FS_COMMAND_QUEUE_AND_IRQ "/dev/uio1"
-#define UIO_PATH_FS_COMPLETION_QUEUE "/dev/uio2"
-#define UIO_PATH_FS_DATA "/dev/uio3"
-#define UIO_PATH_GUEST_TO_VMM_NOTIFY_FAULT "/dev/uio4"
 
 typedef struct vmm_to_fs_vm_conf_data {
     uint64_t fs_cmd_queue_region_size;

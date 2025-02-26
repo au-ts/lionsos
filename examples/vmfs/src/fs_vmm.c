@@ -30,16 +30,6 @@ __attribute__((__section__(".serial_client_config"))) serial_client_config_t ser
 __attribute__((__section__(".blk_client_config"))) blk_client_config_t blk_config;
 __attribute__((__section__(".fs_server_config"))) fs_server_config_t fs_server_config;
 
-/* What each UIO regions means */
-enum UIO_IDX {
-    UIO_IDX_SHARED_CONFIG = 0,
-    UIO_IDX_COMMAND,
-    UIO_IDX_COMPLETION,
-    UIO_IDX_DATA,
-    UIO_IDX_FAULT,
-    NUM_UIO_REGIONS
-};
-
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
 extern char _guest_kernel_image_end[];
@@ -76,6 +66,7 @@ uintptr_t blk_data_share;
 blk_storage_info_t *blk_storage_info;
 
 /* Client ch, also from sdfgen */
+uint64_t vmfs_irq;
 uint8_t client_channel;
 
 void uio_fs_to_vmm_ack(size_t vcpu_id, int irq, void *cookie)
@@ -114,16 +105,31 @@ void init(void)
     client_channel = fs_server_config.client.id;
 
     /* Make sure the UIO regions are sound */
-    assert(vmm_config.num_uio_regions == NUM_UIO_REGIONS);
-    assert(vmm_config.uios[UIO_IDX_COMMAND].irq);
+    assert(vmm_config.num_uio_regions == NUM_UIO_DEVICES);
 
     /* Then fill in the shared config region between guest and VMM */
-    vmm_to_guest_conf_data_t *shared_conf = (vmm_to_guest_conf_data_t *) vmm_config.uios[UIO_IDX_SHARED_CONFIG].vmm_vaddr;
-    assert(shared_conf);
-    shared_conf->fs_cmd_queue_region_size = fs_server_config.client.command_queue.size;
-    shared_conf->fs_comp_queue_region_size = fs_server_config.client.completion_queue.size;
-    shared_conf->fs_data_share_region_size = fs_server_config.client.share.size;
-    shared_conf->fs_vm_to_vmm_fault_reg_size = vmm_config.uios[UIO_IDX_FAULT].size;
+    vmm_config_uio_region_t *uio_shared_conf = vmm_config_find_uio_by_name(&vmm_config, UIO_DEV_NAME_FS_VM_CONF);
+    vmm_config_uio_region_t *uio_cmd = vmm_config_find_uio_by_name(&vmm_config, UIO_DEV_NAME_FS_CMD);
+    vmm_config_uio_region_t *uio_comp = vmm_config_find_uio_by_name(&vmm_config, UIO_DEV_NAME_FS_COMP);
+    vmm_config_uio_region_t *uio_data = vmm_config_find_uio_by_name(&vmm_config, UIO_DEV_NAME_FS_DATA);
+    vmm_config_uio_region_t *uio_fault = vmm_config_find_uio_by_name(&vmm_config, UIO_DEV_NAME_FS_FAULT);
+
+    assert(uio_shared_conf);
+    assert(uio_cmd);
+    assert(uio_comp);
+    assert(uio_data);
+    assert(uio_fault);
+
+    assert(uio_cmd->irq);
+    assert(uio_shared_conf->vmm_vaddr);
+
+    vmm_to_guest_conf_data_t *shared_conf = (vmm_to_guest_conf_data_t *) uio_shared_conf->vmm_vaddr;
+    shared_conf->fs_cmd_queue_region_size = uio_cmd->size;
+    shared_conf->fs_comp_queue_region_size = uio_comp->size;
+    shared_conf->fs_data_share_region_size = uio_data->size;
+    shared_conf->fs_vm_to_vmm_fault_reg_size = uio_fault->size;
+
+    vmfs_irq = uio_cmd->irq;
 
     /* Initialise the VMM, guest RAM, vCPU and vGIC. */
     LOG_VMM("starting \"%s\"\n", microkit_name);
@@ -154,14 +160,14 @@ void init(void)
     }
 
     /* Register the fault handler to trap guest's fault to signal FS client. */
-    success = fault_register_vm_exception_handler(vmm_config.uios[UIO_IDX_FAULT].guest_paddr,
-                                                  vmm_config.uios[UIO_IDX_FAULT].size,
+    success = fault_register_vm_exception_handler(uio_fault->guest_paddr,
+                                                  uio_fault->size,
                                                   uio_fs_from_vmm_signal,
                                                   NULL);
     assert(success);
 
     /* Register the UIO virtual IRQ */
-    success = virq_register(GUEST_VCPU_ID, vmm_config.uios[UIO_IDX_COMMAND].irq, uio_fs_to_vmm_ack, NULL);
+    success = virq_register(GUEST_VCPU_ID, uio_cmd->irq, uio_fs_to_vmm_ack, NULL);
     assert(success);
 
     /* Find the details of the VirtIO block and console device from sdfgen data */
@@ -229,7 +235,7 @@ void notified(microkit_channel ch)
         virtio_blk_handle_resp(&virtio_blk);
     } else if (ch == client_channel) {
         /* Command from client */
-        virq_inject(GUEST_VCPU_ID, vmm_config.uios[UIO_IDX_COMMAND].irq);
+        virq_inject(GUEST_VCPU_ID, vmfs_irq);
     } else {
         LOG_VMM_ERR("Unexpected channel, ch: 0x%lx\n", ch);
     }
