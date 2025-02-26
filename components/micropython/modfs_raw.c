@@ -16,7 +16,7 @@ void fs_request_flag_set(uint64_t request_id) {
     mp_obj_t flag = request_flags[request_id];
     if (flag != NULL) {
         mp_obj_t set_method[2];
-        mp_load_method(flag, MP_QSTR_set, &set_method);
+        mp_load_method(flag, MP_QSTR_set, set_method);
         mp_call_method_n_kw(0, 0, set_method);
     }
     request_flags[request_id] = NULL;
