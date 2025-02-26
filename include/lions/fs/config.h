@@ -1,3 +1,7 @@
+/*
+ * Copyright 2025, UNSW
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 #include <microkit.h>
 #include <stdbool.h>
 #include <stdint.h>
