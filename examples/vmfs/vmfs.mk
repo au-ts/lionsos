@@ -166,10 +166,7 @@ rootfs.cpio.gz: $(INITRD) $(FS_VM_USERLEVEL) $(FS_VM_USERLEVEL_INIT)
 		--startup $(FS_VM_USERLEVEL_INIT) \
 		--home $(FS_VM_USERLEVEL)
 
-fs_vm.dts: $(SYSTEM_DIR)/dts/linux.dts $(SYSTEM_DIR)/dts/overlays/*.dts
-	$(LIBVMM_TOOLS)/dtscat $^ > $@
-
-fs_vm.dtb: fs_vm.dts
+fs_vm.dtb: $(SYSTEM_DIR)/linux_overlayed.dts
 	$(DTC) -q -I dts -O dtb $< > $@
 
 fs_driver_vm_image.o: $(LIBVMM_TOOLS)/package_guest_images.S fs_vm.dtb ${LINUX} rootfs.cpio.gz $(CHECK_FLAGS_BOARD_MD5)

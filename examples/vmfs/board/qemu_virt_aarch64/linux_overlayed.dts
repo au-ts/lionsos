@@ -19,7 +19,7 @@
 		compatible = "arm,psci-0.2\0arm,psci";
 	};
 
-	memory@40000000 {
+    memory@40000000 {
 		reg = <0x00 0x40000000 0x00 0x8000000>;
 		device_type = "memory";
 	};
@@ -92,9 +92,59 @@
 
 	chosen {
 		stdout-path = "/pl011@9000000";
-		bootargs = "console=hvc0 earlycon=hvc0 earlyprintk=serial debug loglevel=8";
+		bootargs = "console=hvc0 earlycon=hvc0 earlyprintk=serial debug loglevel=8 uio_pdrv_genirq.of_id=generic-uio";
 		linux,stdout-path = "/pl011@9000000";
-		linux,initrd-start = <0x46000000>;
-		linux,initrd-end = <0x47000000>;
+		linux,initrd-start = <0x47000000>;
+		linux,initrd-end = <0x47f00000>;
+	};
+
+    // Filesystem Driver VM specific UIO devices.
+
+    // All of these paddrs are arbitrarily chosen.
+    // The only consideration is that you don't hit any other
+    // physical device region or the guest RAM.
+    uio@0 {
+        // config data
+        compatible = "generic-uio\0vmfs_config";
+        reg = <0x00 0x10002000 0x00 0x1000>;
+    };
+
+    uio@1 {
+        // fs_command_queue and client IRQ
+        compatible = "generic-uio\0vmfs_command";
+        reg = <0x00 0x20000000 0x00 0x8000>;
+        interrupts = <0x00 39 0x04>;
+        // IRQ = uKit 71 (39 + 32)
+    };
+
+    uio@2 {
+        // fs_completion_queue
+        compatible = "generic-uio\0vmfs_completion";
+        reg = <0x00 0x21000000 0x00 0x8000>;
+    };
+
+    uio@3 {
+        // shared_fs_data
+        compatible = "generic-uio\0vmfs_data";
+        reg = <0x00 0x22000000 0x00 0x4000000>;
+    };
+
+    uio@4 {
+        // guest to vmm fault region, this must be unmapped in SDF.
+        compatible = "generic-uio\0vmfs_fault";
+        reg = <0x00 0x10001000 0x00 0x1000>;
+    };
+
+	virtio_console@0130000 {
+		compatible = "virtio,mmio";
+		reg = <0x00 0x130000 0x00 0x200>;
+		interrupts = <0x00 42 0x04>;
+	};
+	
+	virtio_blk@0150000 {
+		compatible = "virtio,mmio";
+		reg = <0x00 0x0150000 0x00 0x10000>;
+		interrupts = <0x00 47 0x04>;
+		// IRQ number = 79
 	};
 };

@@ -22,8 +22,10 @@ class Board:
     timer: str
     ethernet: str
     blk: str
+    guest_blk: str
     # Default partition if the user has not specified one
     partition: int
+    passthrough: List[str]
 
 BOARDS: List[Board] = [
     # Note with QEMU: if you have >1 virtio device, the order of them in memory will
@@ -34,11 +36,38 @@ BOARDS: List[Board] = [
         arch=SystemDescription.Arch.AARCH64,
         paddr_top=0x6000_0000,
         serial="pl011@9000000",
-        guest_serial="virtio-console@0130000",
+        guest_serial="virtio_console@0130000",
         timer="timer",
         ethernet="virtio_mmio@a003c00",
         blk="virtio_mmio@a003e00",
+        guest_blk="virtio_blk@0150000",
         partition=0,
+        passthrough=[]
+    ),
+    Board(
+        name="maaxboard",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x90000000,
+        serial="soc@0/bus@30800000/serial@30860000",
+        guest_serial="virtio_console@0130000",
+        timer="soc@0/bus@30000000/timer@302d0000",
+        ethernet="soc@0/bus@30800000/ethernet@30be0000",
+        blk="soc@0/bus@30800000/mmc@30b40000",
+        guest_blk="virtio_blk@0150000",
+        partition=0,
+        passthrough=[
+            "soc@0/bus@30000000/syscon@30360000",
+            "soc@0/bus@30000000/gpc@303a0000",
+            "soc@0/bus@32c00000/interrupt-controller@32e2d000",
+            "soc@0/bus@30000000/iomuxc@30330000",
+            "soc@0/bus@30000000/gpio@30200000",
+            "soc@0/bus@30000000/gpio@30210000",
+            "soc@0/bus@30000000/gpio@30220000",
+            "soc@0/bus@30000000/gpio@30230000",
+            "soc@0/bus@30000000/gpio@30240000",
+            "soc@0/bus@30400000/timer@306a0000",
+            "soc@0/bus@30000000/clock-controller@30380000",
+        ],
     ),
 ]
 
@@ -53,6 +82,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, guest_dtb: DeviceT
     assert ethernet_node is not None
     blk_node = dtb.node(board.blk)
     assert blk_node is not None
+    guest_blk_node = guest_dtb.node(board.guest_blk)
+    assert guest_blk_node is not None
 
     uart_driver = ProtectionDomain("uart_driver", "uart_driver.elf", priority=100)
     serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
@@ -76,6 +107,11 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, guest_dtb: DeviceT
     fs_vm_system = Vmm(sdf, fs_vmm, fs_vm, guest_dtb, one_to_one_ram=True)
     partition = 0
 
+    for device_dt_path in board.passthrough:
+        node = dtb.node(device_dt_path)
+        assert node is not None
+        fs_vm_system.add_passthrough_device(node)
+
     micropython = ProtectionDomain("micropython", "micropython.elf", priority=1)
     micropython_net_copier = ProtectionDomain("micropython_net_copier", "network_copy.elf", priority=97, budget=20000)
 
@@ -84,7 +120,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, guest_dtb: DeviceT
         fs_vm_system,
         micropython,
         blk_system,
-        blk_node,
+        guest_blk_node,
         partition
     )
 
