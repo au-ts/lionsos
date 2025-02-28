@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
-name: CI
+name: Examples
 
 on:
   pull_request:
