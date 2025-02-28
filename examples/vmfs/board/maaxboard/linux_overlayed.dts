@@ -20,16 +20,14 @@
 		device_type = "memory";
 	};
 
-	intc@8000000 {
-		phandle = <0x8001>;
-		interrupts = <0x01 0x09 0x04>;
-		reg = <0x00 0x8000000 0x00 0x10000 0x00 0x8010000 0x00 0x10000 0x00 0x8030000 0x00 0x10000 0x00 0x8040000 0x00 0x10000>;
-		compatible = "arm,cortex-a15-gic";
-		ranges;
-		#size-cells = <0x02>;
-		#address-cells = <0x02>;
-		interrupt-controller;
+	interrupt-controller@38800000 {
+		compatible = "arm,gic-v3";
+		reg = <0x0 0x38800000 0x0 0x10000 0x0 0x38880000 0x0 0xc0000 0x0 0x31000000 0x0 0x2000 0x0 0x31010000 0x0 0x2000 0x0 0x31020000 0x0 0x2000>;
 		#interrupt-cells = <0x03>;
+		interrupt-controller;
+		interrupts = <0x01 0x09 0x04>;
+		interrupt-parent = <0x07>;
+		phandle = <0x8001>;
 	};
 
 	cpus {
@@ -50,7 +48,7 @@
 	};
 
 	chosen {
-		bootargs = "console=hvc0 earlycon=hvc0 earlyprintk=serial debug loglevel=8 uio_pdrv_genirq.of_id=generic-uio";
+		bootargs = "console=hvc0 earlycon=hvc0 earlyprintk=serial debug loglevel=0 uio_pdrv_genirq.of_id=generic-uio";
 		linux,initrd-start = <0x47000000>;
 		linux,initrd-end = <0x47800000>;
         stdout-path = "/virtio_console@0130000";

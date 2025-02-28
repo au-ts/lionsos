@@ -58,8 +58,8 @@ To run the example:
 $ make qemu MICROKIT_BOARD=qemu_virt_aarch64 MICROKIT_SDK=<absolute path to SDK>
 ```
 
-# Boot
-On a successful boot, you would see the following and can start playing with the example:
+#### Boot
+On a successful boot, you would see the following and can start playing with the example (note, the networking error is due to our minimal Linux kernel not having a network stack compiled in):
 ```
 LDR|INFO: jumping to kernel
 Bootstrapping kernel
@@ -67,58 +67,51 @@ Warning: Could not infer GIC interrupt target ID, assuming 0.
 available phys memory regions: 1
   [60000000..c0000000]
 reserved virt address space regions: 3
-  [8060000000..8060246000]
-  [8060246000..8064634000]
-  [8064634000..806463c000]
+  [8060000000..8060244000]
+  [8060244000..8062eda000]
+  [8062eda000..8062ee4000]
 Booting all finished, dropped to user space
 MON|INFO: Microkit Bootstrap
 MON|INFO: bootinfo untyped list matches expected list
 MON|INFO: Number of bootstrap invocations: 0x0000000e
-MON|INFO: Number of system invocations:    0x0000457d
+MON|INFO: Number of system invocations:    0x000035ce
 MON|INFO: completed bootstrap invocations
 MON|INFO: completed system invocations
 MON|INFO: PD 'timer_driver' is now passive!
 fs_driver_vmm|INFO: starting "fs_driver_vmm"
-fs_driver_vmm|INFO: Copying guest kernel image to 0x40000000 (0x23df200 bytes)
-fs_driver_vmm|INFO: Copying guest DTB to 0x47f00000 (0xa47 bytes)
-fs_driver_vmm|INFO: Copying guest initial RAM disk to 0x47000000 (0x18636e bytes)
+fs_driver_vmm|INFO: Copying guest kernel image to 0x40000000 (0xcb4a00 bytes)
+fs_driver_vmm|INFO: Copying guest DTB to 0x47f00000 (0xabf bytes)
+fs_driver_vmm|INFO: Copying guest initial RAM disk to 0x47000000 (0x181f5f bytes)
 fs_driver_vmm|INFO: initialised virtual GICv2 driver
 fs_driver_vmm|INFO: starting guest at 0x40000000, DTB at 0x47f00000, initial RAM disk at 0x47000000
+Begin input
 'micropython' is client 0
 'fs_driver_vmm' is client 1
 MP|INFO: initialising!
 fs_driver_vmm|ERROR: vGIC distributor is not enabled for IRQ 0x47
 fs_driver_vmm|ERROR: vIRQ 0x47 is not enabled
-micropython: mpnetworkport.c:142:netif_status_callback: DHCP request finished, IP address for netif e0 is: 10.0.2.15
-[    0.444266] cfs_driver_vmm|ERROR: Unexpected channel, ch: 0x1
-acheinfo: Unable to detect cache hierarchy for CPU 0
-[    0.487358] loop: module loaded
-[    0.492998] virtio_blk virtio1: 1/0/0 default/read/poll queues
-[    0.511272] virtio_blk virtio1: [vda] 30712 512-byte logical blocks (15.7 MB/15.0 MiB)
-[    0.547366]  vda:
-...Linux boot logs...
-[    0.801251] Freeing unused kernel memory: 7616K
-[    0.804809] Run /init as init process
-[    0.808493]   with arguments:
-[    0.811743]     /init
-[    0.813109]   with environment:
-[    0.816355]     HOME=/
-[    0.818365]     TERM=linux
-[    0.820449]     earlyprintk=serial
-Starting syslogd: OK
+micropython: mpnetworkport.c:138:netif_status_callback: DHCP request finished, IP address for netif e0 is: 10.0.2.15
+Starting syslogd: fs_driver_vmm|ERROR: Unexpected channel, ch: 0x1
+OK
 Starting klogd: OK
 Running sysctl: OK
-Saving random seed: [    2.723213] random: crng init done
-OK
-Starting network: OK
-fs_driver_init...
+Saving 256 bits of non-creditable seed for next boot
+Starting network: ip: socket: Function not implemented
+ip: socket: Function not implemented
+FAIL
 UIO(FS): *** Starting up
 UIO(FS): Block device: /dev/vda
 UIO(FS): Mount point: /mnt
+UIO(FS): *** Setting up shared configuration data via UIO
+UIO(FS): Found dev @ /dev/uio0
 UIO(FS): *** Setting up command queue via UIO
+UIO(FS): Found dev @ /dev/uio1
 UIO(FS): *** Setting up completion queue via UIO
+UIO(FS): Found dev @ /dev/uio2
 UIO(FS): *** Setting up FS data region via UIO
+UIO(FS): Found dev @ /dev/uio3
 UIO(FS): *** Setting up fault region via UIO
+UIO(FS): Found dev @ /dev/uio4
 UIO(FS): *** Enabling UIO interrupt on command queue
 UIO(FS): *** Creating epoll object
 UIO(FS): *** Binding command queue IRQ to epoll
@@ -126,7 +119,7 @@ UIO(FS): *** Initialising liburing for io_uring
 UIO(FS): *** Consuming requests already in command queue
 UIO(FS): *** All initialisation successful!
 UIO(FS): *** You won't see any output from UIO FS anymore. Unless there is a warning or error.
-MicroPython v1.22.2 on 2024-12-04; QEMU virt AArch64 with Cortex A53
+MicroPython v1.22.2 on 2025-02-27; QEMU virt AArch64 with Cortex A53
 >>> import os
 >>> os.listdir()
 []
@@ -145,3 +138,14 @@ MicroPython v1.22.2 on 2024-12-04; QEMU virt AArch64 with Cortex A53
 ['Formally verified!']
 >>> 
 ```
+
+### Maaxboard
+The example uses the Block device @ `soc@0/bus@30800000/mmc@30b40000` and by default mounts the first partition. If you need to change this, see `meta.py`.
+
+To get a bootable image, run:
+```
+make MICROKIT_BOARD=maaxboard
+```
+
+## Troubleshooting
+If you get a memory fault on boot, try to remove intermediate build artifacts with `rm -rfd build` and re-compile a fresh image.

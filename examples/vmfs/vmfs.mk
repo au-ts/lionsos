@@ -16,25 +16,25 @@ IMAGES := \
 	serial_virt_tx.elf \
 	blk_virt.elf
 
+IMAGES += blk_driver.elf
+BLK_MK := blk_driver.mk
+# We use a common minimal Linux kernel (no device drivers, no networking) and initrd for both QEMU and Maaxboard
+LINUX := 9b59d0094253799d716bfb8bed0ddbf336441364-linux
+INITRD := b6a276df6a0e39f76bc8950e975daa2888ad83df-rootfs.cpio.gz
+
 ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
 	NET_DRIV_DIR := imx
 	BLK_DRIV_DIR := mmc/imx
 	UART_DRIV_DIR := imx
 	TIMER_DRIV_DIR := imx
-	IMAGES += mmc_driver.elf
-	BLK_MK := mmc_driver.mk
 	CPU := cortex-a53
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
 	NET_DRIV_DIR := virtio
 	BLK_DRIV_DIR := virtio
 	UART_DRIV_DIR := arm
 	TIMER_DRIV_DIR := arm
-	IMAGES += blk_driver.elf
-	BLK_MK := blk_driver.mk
 	CPU := cortex-a53
 	QEMU := qemu-system-aarch64
-	LINUX := da02bab908e2912c4134b98e9153a6a19c5de590bb8b0832e4b55f1e603a587c-linux
-	INITRD := 6a9382e506410ab1abb5a0b6be80ce09af078a211c0de4a54e4bb2892d4f6b45-rootfs.cpio.gz
 else
 	$(error Unsupported MICROKIT_BOARD given)
 endif
@@ -52,7 +52,7 @@ DTC := dtc
 PYTHON ?= python3
 OBJCOPY := llvm-objcopy
 
-LIONSOS_DOWNLOADS := https://trustworthy.systems/Downloads/lionsos/examples/vmfs
+LIONSOS_DOWNLOADS := https://lionsos.org/downloads/examples/vmfs
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 PLATFORM := meson
@@ -146,34 +146,36 @@ micropython.elf: mpy-cross libsddf_util_debug.a libco.a
 		V=1
 
 # Compile the FS Driver VM
-# If you want to use your own VM for the FS driver
-# then change these lines or just make sure you've already put
-# linux and rootfs.cpio.gz into the Build directory
+# Grab the kernel and initrd from LionsOS server
 ${LINUX}:
 	curl -L ${LIONSOS_DOWNLOADS}/$(LINUX) -o $@
-
 ${INITRD}:
 	curl -L ${LIONSOS_DOWNLOADS}/$(INITRD) -o $@
+
+# If you want to use your own kernel and initrd, then comment out the above
+# and specify an *absolute* path like so:
+# LINUX=/path/to/linux
+# INITRD=/path/to/initrd
 
 vpath %.c $(LIBVMM_DIR)
 SYSTEM_DIR := $(EXAMPLE_DIR)/board/$(MICROKIT_BOARD)
 FS_VM_USERLEVEL := uio_fs_driver
 FS_VM_USERLEVEL_INIT := ${LIONSOS}/components/fs/vmfs/fs_driver_init
 
-rootfs.cpio.gz: $(INITRD) $(FS_VM_USERLEVEL) $(FS_VM_USERLEVEL_INIT)
+fs_vm_initrd: $(INITRD) $(FS_VM_USERLEVEL) $(FS_VM_USERLEVEL_INIT)
 	$(LIBVMM_TOOLS)/packrootfs $(INITRD) \
-		rootfs -o $@ \
+		initrd_staging -o $@ \
 		--startup $(FS_VM_USERLEVEL_INIT) \
 		--home $(FS_VM_USERLEVEL)
 
 fs_vm.dtb: $(SYSTEM_DIR)/linux_overlayed.dts
 	$(DTC) -q -I dts -O dtb $< > $@
 
-fs_driver_vm_image.o: $(LIBVMM_TOOLS)/package_guest_images.S fs_vm.dtb ${LINUX} rootfs.cpio.gz $(CHECK_FLAGS_BOARD_MD5)
+fs_driver_vm_image.o: $(LIBVMM_TOOLS)/package_guest_images.S fs_vm.dtb ${LINUX} fs_vm_initrd $(CHECK_FLAGS_BOARD_MD5)
 	$(CC) -c -g3 -x assembler-with-cpp \
 					-DGUEST_KERNEL_IMAGE_PATH=\"${LINUX}\" \
 					-DGUEST_DTB_IMAGE_PATH=\"fs_vm.dtb\" \
-					-DGUEST_INITRD_IMAGE_PATH=\"rootfs.cpio.gz\" \
+					-DGUEST_INITRD_IMAGE_PATH=\"fs_vm_initrd\" \
 					-target $(TARGET) \
 					$(LIBVMM_TOOLS)/package_guest_images.S -o $@
 
