@@ -14,6 +14,11 @@ ifeq (${MICROKIT_BOARD},odroidc4)
 	ETHERNET_DRIVER_DIR := meson
 	UART_DRIVER_DIR := meson
 	CPU := cortex-a55
+else ifeq (${MICROKIT_BOARD},maaxboard)
+	TIMER_DRIVER_DIR := imx
+	ETHERNET_DRIVER_DIR := imx
+	UART_DRIVER_DIR := imx
+	CPU := cortex-a53
 else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
 	TIMER_DRIVER_DIR := arm
 	ETHERNET_DRIVER_DIR := virtio
@@ -29,19 +34,26 @@ CC := clang
 LD := ld.lld
 AR := llvm-ar
 RANLIB := llvm-ranlib
+OBJCOPY := llvm-objcopy
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
+PYTHON ?= python3
+DTC := dtc
 
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL_SRC := $(LIONSOS)/dep/musllibc
 MUSL := musllibc
 MICRODOT := ${LIONSOS}/dep/microdot/src
 
+METAPROGRAM := $(WEBSERVER_SRC_DIR)/meta.py
+DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
+DTB := $(MICROKIT_BOARD).dtb
+
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
-	  copy.elf network_virt_rx.elf network_virt_tx.elf \
+	  network_copy.elf network_virt_rx.elf network_virt_tx.elf \
 	  uart_driver.elf serial_virt_tx.elf
 
-SYSTEM_FILE := $(WEBSERVER_SRC_DIR)/board/$(MICROKIT_BOARD)/webserver.system
+SYSTEM_FILE := webserver.system
 
 CFLAGS := \
 	-mtune=$(CPU) \
@@ -56,8 +68,7 @@ CFLAGS := \
 	-target $(TARGET) \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
-	-I$(SDDF)/include \
-	-I$(CONFIG_INCLUDE)
+	-I$(SDDF)/include
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
@@ -85,7 +96,6 @@ micropython.elf: mpy-cross manifest.py webserver.py config.py \
 			BUILD=$(abspath .) \
 			LIBMATH=$(LIBMATH) \
 			LIBMATH=$(abspath $(BUILD_DIR)/libm) \
-			CONFIG_INCLUDE=$(abspath $(CONFIG_INCLUDE)) \
 			FROZEN_MANIFEST=$(abspath ./manifest.py) \
 			EXEC_MODULE=webserver.py
 
@@ -115,6 +125,31 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 
 include ${SDDF_MAKEFILES}
 include $(NFS)/nfs.mk
+
+$(DTB): $(DTS)
+	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
+
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY)
+	$(OBJCOPY) --update-section .device_resources=uart_driver_device_resources.data uart_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data uart_driver.elf
+	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
+	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf
+	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver.elf
+	$(OBJCOPY) --update-section .net_virt_rx_config=net_virt_rx.data network_virt_rx.elf
+	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
+	$(OBJCOPY) --update-section .net_copy_config=net_copy_micropython_net_copier.data network_copy.elf network_copy_micropython.elf
+	$(OBJCOPY) --update-section .net_copy_config=net_copy_nfs_net_copier.data network_copy.elf network_copy_nfs.elf
+	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .net_client_config=net_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .net_client_config=net_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .fs_server_config=fs_server_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .fs_client_config=fs_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .nfs_config=nfs_config.data nfs.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)

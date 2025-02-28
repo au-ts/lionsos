@@ -1,0 +1,1 @@
+These two files are not used for building the example. It is for you to reproduce the kernel and initrd if necessary.

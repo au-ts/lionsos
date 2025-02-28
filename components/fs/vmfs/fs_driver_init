@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# Copyright 2024, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+BLOCK_DEVICE='/dev/vda'
+MOUNT_POINT='/mnt'
+
+chmod +x /root/uio_fs_driver && /root/uio_fs_driver "$BLOCK_DEVICE" "$MOUNT_POINT"
