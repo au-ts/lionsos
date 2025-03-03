@@ -108,6 +108,7 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 	${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
 	${SDDF}/drivers/serial/${SERIAL_DRIVER_DIR}/serial_driver.mk \
 	${SDDF}/network/components/network_components.mk \
+	${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
 	${SDDF}/serial/components/serial_components.mk \
 	${SDDF}/i2c/components/i2c_virt.mk \
 	${SDDF}/libco/libco.mk
@@ -208,6 +209,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .fs_server_config=fs_server_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .fs_client_config=fs_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .vmm_config=vmm_framebuffer_vmm.data vmm.elf
+	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_nfs.data nfs.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)

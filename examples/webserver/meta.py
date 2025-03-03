@@ -93,6 +93,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         server=args.nfs_server,
         export_path=args.nfs_dir,
     )
+    nfs_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, nfs)
 
     pds = [
         serial_driver,
@@ -117,6 +118,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     assert net_system.serialise_config(output_dir)
     assert timer_system.connect()
     assert timer_system.serialise_config(output_dir)
+    assert nfs_lib_sddf_lwip.connect()
+    assert nfs_lib_sddf_lwip.serialise_config(output_dir)
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
         f.write(sdf.render())
