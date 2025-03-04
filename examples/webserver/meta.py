@@ -75,13 +75,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     serial_system.add_client(micropython)
     timer_system.add_client(micropython)
-    micropython_mac_addr = f"52:54:01:00:00:{hex(randint(0, 0xfe))[2:]:0>2}"
-    net_system.add_client_with_copier(micropython, micropython_net_copier, mac_addr=micropython_mac_addr)
+    net_system.add_client_with_copier(micropython, micropython_net_copier)
 
     nfs_net_copier = ProtectionDomain("nfs_net_copier", "network_copy_nfs.elf", priority=97, budget=20000)
 
-    # nfs_mac_addr = f"52:54:01:00:00:{hex(randint(0, 0xfe))[2:]:0>2}"
-    nfs_mac_addr = f"52:54:01:00:00:ab" # @alwin: Experimenting for maaxboard
     nfs = ProtectionDomain("nfs", "nfs.elf", priority=96, stack_size=0x10000)
 
     print("server is " + args.nfs_server)
@@ -91,7 +88,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         micropython,
         net=net_system,
         net_copier=nfs_net_copier,
-        mac_addr=nfs_mac_addr,
         serial=serial_system,
         timer=timer_system,
         server=args.nfs_server,
