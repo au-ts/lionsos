@@ -90,7 +90,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     serial_system.add_client(micropython)
     timer_system.add_client(micropython)
-    micropython_mac_addr = f"52:54:01:00:00:{hex(randint(0, 0xfe))[2:]:0>2}"
     net_system.add_client_with_copier(micropython, micropython_net_copier)
     if board.i2c:
         i2c_system.add_client(micropython)
