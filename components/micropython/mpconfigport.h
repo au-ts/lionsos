@@ -97,6 +97,9 @@ typedef long mp_off_t;
 #elif defined(CONFIG_PLAT_MAAXBOARD)
 #define MICROPY_HW_BOARD_NAME "MaaXBoard"
 #define MICROPY_HW_MCU_NAME   "Cortex A53"
+#elif defined(CONFIG_PLAT_IMX8MP_EVK)
+#define MICROPY_HW_BOARD_NAME "i.MX 8M Plus"
+#define MICROPY_HW_MCU_NAME   "Cortex A53"
 #elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
 #define MICROPY_HW_BOARD_NAME "QEMU virt AArch64"
 #define MICROPY_HW_MCU_NAME   "Cortex A53"
