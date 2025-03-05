@@ -11,9 +11,6 @@ override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 ifeq ($(strip $(LIBGCC)),)
 export LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
 endif
-ifeq ($(strip $(LIBMATH)),)
-export LIBMATH:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libm.a)))
-endif
 
 export LIONSOS ?= $(abspath ../..)
 export FILEIO_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))

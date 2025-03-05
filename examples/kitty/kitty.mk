@@ -155,7 +155,6 @@ vmm.elf: ${VMM_OBJS} libvmm.a
 # Build with two threads in parallel
 nproc=2
 
-MICROPYTHON_LIBMATH := ${LIBMATH}
 MICROPYTHON_CONFIG_INCLUDE := $(CONFIG_INCLUDE)
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
 MICROPYTHON_ENABLE_I2C := 1

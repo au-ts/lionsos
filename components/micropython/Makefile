@@ -42,7 +42,7 @@ CFLAGS += \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU)
-LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBC) -L$(LIBMATH)
+LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBC)
 LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
 
 # Include libmicrokitco for blocking in Micropython

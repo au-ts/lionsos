@@ -8,7 +8,6 @@
 # NOTES:
 # Generates micropython.elf
 # Requires variables:
-#	MICROPYTHON_LIBMATH
 #	MICROPYTHON_CONFIG_INCLUDE
 # Optional variables:
 #	MICROPYTHON_FROZEN_MANIFEST
@@ -29,7 +28,6 @@ micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPY
 		MICROPY_MPYCROSS=$(abspath mpy_cross/mpy-cross) \
 		MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
 		BUILD=$(abspath .) \
-		LIBMATH=$(MICROPYTHON_LIBMATH) \
 		CONFIG_INCLUDE=$(abspath $(MICROPYTHON_CONFIG_INCLUDE)) \
 		FROZEN_MANIFEST=$(abspath $(MICROPYTHON_FROZEN_MANIFEST)) \
 		EXEC_MODULE=$(MICROPYTHON_EXEC_MODULE) \
