@@ -19,7 +19,7 @@
 
 MICROPYTHON_DIR := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 
-micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE)
+micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE) ${MUSL}/lib/libc.a
 	$(MAKE) -C $(MICROPYTHON_DIR) \
 		-j$(nproc) \
 		MICROKIT_SDK=$(MICROKIT_SDK) \
@@ -37,6 +37,6 @@ micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPY
 		ENABLE_SERIAL_STDIO=$(MICROPYTHON_ENABLE_SERIAL_STDIO)
 
 mpy-cross: FORCE $(LIONSOS)/dep/micropython/mpy-cross
-	make -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
+	make -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross) UNAME_S=lions_os LDFLAGS_ARCH="-Wl,-map,$@.map -Wl,-dead_strip"
 
 FORCE: ;

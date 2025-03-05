@@ -2,9 +2,14 @@
 # Copyright 2024, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 #
-LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
-CC := aarch64-none-elf-gcc
-LD := aarch64-none-elf-ld
+LIBC := $(BUILD)/musllibc/lib/ # $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
+LIBC_INCLUDE := $(BUILD)/musllibc/include # $(LIBC)/../include
+override CC := clang
+override LD := ld.lld
+override SIZE := llvm-size
+override OBJCOPY := llvm-objcopy
+override STRIP := llvm-strip
+override AR := llvm-ar
 
 LIONSOS := $(abspath ../../)
 SDDF := $(LIONSOS)/dep/sddf
@@ -21,14 +26,15 @@ include $(MICROPYTHON_SRC)/py/mkenv.mk
 include $(TOP)/py/py.mk
 include $(TOP)/extmod/extmod.mk
 
-CROSS_COMPILE ?= aarch64-none-elf-
-
 CPU ?= cortex-a55
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
+TARGET=aarch64-none-elf
 
 # Set CFLAGS and libraries.
 CFLAGS += \
+	-target $(TARGET) \
 	-O2 \
+	-I$(LIBC_INCLUDE) \
 	-I. \
 	-Ilwip_include \
 	-I$(BUILD) \
@@ -47,7 +53,6 @@ LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
 
 # Include libmicrokitco for blocking in Micropython
 BUILD_DIR=$(BUILD)
-TARGET=aarch64-none-elf
 LLVM=1
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LIBMICROKITCO_OPT_PATH := $(LIONSOS)/components/micropython
