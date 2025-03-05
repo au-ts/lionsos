@@ -45,21 +45,21 @@ BOARDS: List[Board] = [
 ]
 
 def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
-    uart_node = dtb.node(board.serial)
-    assert uart_node is not None
+    serial_node = dtb.node(board.serial)
+    assert serial_node is not None
     ethernet_node = dtb.node(board.ethernet)
     assert ethernet_node is not None
     ethernet_node1 = dtb.node(board.ethernet1)
     assert ethernet_node1 is not None
     timer_node = dtb.node(board.timer)
-    assert uart_node is not None
+    assert serial_node is not None
 
     timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=101)
     timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
 
-    uart_driver = ProtectionDomain("uart_driver", "uart_driver.elf", priority=100)
+    serial_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
     serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
-    serial_system = Sddf.Serial(sdf, uart_node, uart_driver, serial_virt_tx)
+    serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx)
 
     ethernet_driver = ProtectionDomain(
         "ethernet_driver", "eth_driver.elf", priority=101, budget=100, period=400
@@ -100,7 +100,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     timer_system.add_client(arp_requester1)
 
     pds = [
-        uart_driver,
+        serial_driver,
         serial_virt_tx,
         ethernet_driver,
         ethernet_driver1,

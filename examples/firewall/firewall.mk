@@ -21,7 +21,7 @@ UTIL:=$(SDDF)/util
 ETHERNET_DRIVER:=$(SDDF)/drivers/network/$(DRIV_DIR)
 ETHERNET_DRIVER_DWMAC:=$(SDDF)/drivers/network/dwmac-5.10a
 SERIAL_COMPONENTS := $(SDDF)/serial/components
-UART_DRIVER := $(SDDF)/drivers/serial/$(UART_DRIV_DIR)
+SERIAL_DRIVER := $(SDDF)/drivers/serial/$(SERIAL_DRIV_DIR)
 TIMER_DRIVER:=$(SDDF)/drivers/timer/$(TIMER_DRV_DIR)
 NETWORK_COMPONENTS:=$(SDDF)/network/components
 
@@ -40,7 +40,7 @@ vpath %.c ${SDDF} ${FIREWALL} ${FIREWALL_COMPONENTS}
 
 IMAGES := eth_driver.elf firewall_network_virt_rx.elf network_virt_tx.elf network_copy.elf \
 		  eth_driver_dwmac.elf network_virt_rx_1.elf firewall_network_virt_rx_1.elf \
-		  timer_driver.elf uart_driver.elf serial_virt_tx.elf \
+		  timer_driver.elf serial_driver.elf serial_virt_tx.elf \
 		  arp_requester.elf arp_responder.elf routing.elf \
 		  arp_requester2.elf arp_responder2.elf routing2.elf \
 		  icmp_filter.elf udp_filter.elf tcp_filter.elf \
@@ -118,8 +118,8 @@ $(DTB): $(DTS)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
-	$(OBJCOPY) --update-section .device_resources=uart_driver_device_resources.data uart_driver.elf
-	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data uart_driver.elf
+	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
 	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf
 	$(OBJCOPY) --update-section .net_driver_config=net_ethernet_driver.data eth_driver.elf
@@ -168,7 +168,7 @@ include ${SDDF}/network/components/network_components.mk
 include ${ETHERNET_DRIVER}/eth_driver.mk
 include ${ETHERNET_DRIVER_DWMAC}/eth_driver.mk
 include ${TIMER_DRIVER}/timer_driver.mk
-include ${UART_DRIVER}/uart_driver.mk
+include ${SERIAL_DRIVER}/serial_driver.mk
 include ${SERIAL_COMPONENTS}/serial_components.mk
 
 qemu: $(IMAGE_FILE)

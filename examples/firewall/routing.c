@@ -24,6 +24,7 @@
 #include "hashmap.h"
 #include "config.h"
 #include "linkedlist.h"
+#include "protocols.h"
 
 __attribute__((__section__(".router_config"))) router_config_t router_config;
 

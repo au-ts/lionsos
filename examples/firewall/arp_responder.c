@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include "config.h"
+#include "protocols.h"
 
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
 

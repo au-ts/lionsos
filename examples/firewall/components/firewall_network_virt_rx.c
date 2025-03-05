@@ -17,6 +17,8 @@ specific filtering components. */
 #include <sddf/util/printf.h>
 #include <sddf/util/cache.h>
 
+#include "protocols.h"
+
 /* Used to signify that a packet has come in for the broadcast address and does not match with
  * any particular client. */
 #define BROADCAST_ID (-2)
