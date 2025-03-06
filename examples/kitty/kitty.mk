@@ -121,13 +121,9 @@ include ${SDDF_MAKEFILES}
 include ${LIBVMM_DIR}/vmm.mk
 include ${NFS}/nfs.mk
 
-$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL}/Makefile
-	make -C $(MUSL_SRC) \
-		C_COMPILER=aarch64-none-elf-gcc \
-		TOOLPREFIX=aarch64-none-elf- \
-		CONFIG_ARCH_AARCH64=y \
-		STAGE_DIR=$(abspath $(MUSL)) \
-		SOURCE_DIR=.
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile
+	mkdir ${MUSL} && cd ${MUSL} && CC=aarch64-none-elf-gcc CROSS_COMPILE=aarch64-none-elf- ${MUSL_SRC}/configure --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=aarch64 --enable-warnings --disable-shared --enable-static
+	${MAKE} -C ${MUSL} install
 
 # Build the VMM for graphics
 VMM_OBJS := vmm.o package_guest_images.o
@@ -235,7 +231,7 @@ $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
 ${LIONSOS}/dep/libmicrokitco/Makefile:
 	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
 
-${MUSL}/Makefile:
+${MUSL_SRC}/Makefile:
 	cd ${LIONSOS}; git submodule update --init dep/musllibc
 
 ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
