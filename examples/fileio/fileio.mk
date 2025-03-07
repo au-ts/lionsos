@@ -52,7 +52,8 @@ SDDF := $(LIONSOS)/dep/sddf
 
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 FAT := $(LIONSOS)/components/fs/fat
-MUSL := $(LIONSOS)/dep/musllibc
+MUSL_SRC := $(LIONSOS)/dep/musllibc
+MUSL := musllibc
 
 CFLAGS := \
 	-mtune=$(CPU) \
@@ -115,13 +116,12 @@ FAT_LIBC_LIB := musllibc/lib/libc.a
 FAT_LIBC_INCLUDE := musllibc/include
 include $(LIONSOS)/components/fs/fat/fat.mk
 
-musllibc/lib/libc.a musllibc/include:
-	make -C $(MUSL) \
-		C_COMPILER=aarch64-none-elf-gcc \
-		TOOLPREFIX=aarch64-none-elf- \
-		CONFIG_ARCH_AARCH64=y \
-		STAGE_DIR=$(abspath $(BUILD_DIR)/musllibc) \
-		SOURCE_DIR=.
+$(MUSL):
+	mkdir -p $@
+
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL}
+	cd ${MUSL} && CC=aarch64-none-elf-gcc CROSS_COMPILE=aarch64-none-elf- ${MUSL_SRC}/configure --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=aarch64 --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
+	${MAKE} -C ${MUSL} install
 
 ${IMAGES}: libsddf_util_debug.a
 
