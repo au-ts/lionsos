@@ -89,13 +89,12 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 %.py: ${WEBSERVER_SRC_DIR}/%.py
 	cp $< $@
 
-$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile
-	make -C $(MUSL_SRC) \
-		C_COMPILER=aarch64-none-elf-gcc \
-		TOOLPREFIX=aarch64-none-elf- \
-		CONFIG_ARCH_AARCH64=y \
-		STAGE_DIR=$(abspath $(MUSL)) \
-		SOURCE_DIR=.
+$(MUSL):
+	mkdir -p $@
+
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
+	cd ${MUSL} && CC=aarch64-none-elf-gcc CROSS_COMPILE=aarch64-none-elf- ${MUSL_SRC}/configure --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=aarch64 --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
+	${MAKE} -C ${MUSL} install
 
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
