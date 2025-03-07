@@ -5,6 +5,9 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <stddef.h>
+
 #define UIO_INIT_ADDRESS 0x300000
 
 /*

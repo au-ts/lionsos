@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sddf/serial/queue.h>
+#include <sddf/serial/config.h>
 
 #include "nfs.h"
 #include "posix.h"
@@ -44,6 +45,8 @@
 typedef long (*muslcsys_syscall_t)(va_list);
 
 extern void *__sysinfo;
+
+extern serial_client_config_t serial_config;
 
 static muslcsys_syscall_t syscall_table[MUSLC_NUM_SYSCALLS] = {0};
 
@@ -92,9 +95,8 @@ static size_t output(void *data, size_t count)
         src += enq + 1;
     }
 
-    if (sent && serial_require_producer_signal(&serial_tx_queue_handle)) {
-        serial_cancel_producer_signal(&serial_tx_queue_handle);
-        microkit_notify(SERIAL_TX_CH);
+    if (sent) {
+        microkit_notify(serial_config.tx.id);
     }
 
     return sent;
@@ -157,9 +159,8 @@ long sys_write(va_list ap)
     {
         uint32_t n = serial_enqueue_batch(&serial_tx_queue_handle, count, buf);
 
-        if (n && serial_require_producer_signal(&serial_tx_queue_handle)) {
-            serial_cancel_producer_signal(&serial_tx_queue_handle);
-            microkit_notify(SERIAL_TX_CH);
+        if (n) {
+            microkit_notify(serial_config.tx.id);
         }
 
         return n;

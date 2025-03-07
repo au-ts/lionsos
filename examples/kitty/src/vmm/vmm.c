@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <microkit.h>
+#include <libvmm/config.h>
 #include <libvmm/guest.h>
 #include <libvmm/virq.h>
 #include <libvmm/tcb.h>
@@ -15,19 +16,8 @@
 /* Specific to the framebuffer example */
 #include "uio.h"
 
-#if defined(CONFIG_PLAT_ODROIDC4)
-#define GUEST_RAM_SIZE 0x10000000
-#define GUEST_DTB_VADDR 0x2f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x2c000000
-#elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
-#define GUEST_RAM_SIZE 0x10000000
-#define GUEST_DTB_VADDR 0x4f000000
-#define GUEST_INIT_RAM_DISK_VADDR 0x4d000000
-#else
-#error "Need to define platform specific guest info"
-#endif
+__attribute__((__section__(".vmm_config"))) vmm_config_t config;
 
-// @ivanv: need a more systematic way of choosing this IRQ number?
 /*
  * This is a virtual IRQ, meaning it does not correspond to any hardware.
  * The IRQ number is chosen because it does not overlap with any other
@@ -35,7 +25,7 @@
  */
 #define UIO_GPU_IRQ 50
 /* For when we get notified from MicroPython */
-#define MICROPYTHON_CH 1
+#define MICROPYTHON_CH 15
 
 /* Data for the guest's kernel image. */
 extern char _guest_kernel_image[];
@@ -46,21 +36,6 @@ extern char _guest_dtb_image_end[];
 /* Data for the initial RAM disk to be passed to the kernel. */
 extern char _guest_initrd_image[];
 extern char _guest_initrd_image_end[];
-/* Microkit will set this variable to the start of the guest RAM memory region. */
-uintptr_t guest_ram_vaddr;
-
-/* IRQs to pass-through to the guest */
-/* These are expected to have a 1-1 mapping between index and Microkit channel,
- * starting from 10. For example, the second IRQ in this list should have the
- * channel number of 12. This will be cleaned up in the future.
- */
-#if defined(CONFIG_PLAT_ODROIDC4)
-uint32_t irqs[] = { 232, 35, 192, 193, 194, 53, 246, 71, 227, 228, 63, 62, 48, 89, 5 };
-#elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
-uint32_t irqs[] = { 35, 36, 37, 38 };
-#else
-#error "Need to define platform specific pass-through IRQs"
-#endif
 
 void uio_gpu_ack(size_t vcpu_id, int irq, void *cookie) {
     // Do nothing, there is no actual IRQ to ack since UIO IRQs are virtual!
@@ -78,14 +53,14 @@ void init(void) {
     size_t kernel_size = _guest_kernel_image_end - _guest_kernel_image;
     size_t dtb_size = _guest_dtb_image_end - _guest_dtb_image;
     size_t initrd_size = _guest_initrd_image_end - _guest_initrd_image;
-    uintptr_t kernel_pc = linux_setup_images(guest_ram_vaddr,
+    uintptr_t kernel_pc = linux_setup_images(config.ram,
                                       (uintptr_t) _guest_kernel_image,
                                       kernel_size,
                                       (uintptr_t) _guest_dtb_image,
-                                      GUEST_DTB_VADDR,
+                                      config.dtb,
                                       dtb_size,
                                       (uintptr_t) _guest_initrd_image,
-                                      GUEST_INIT_RAM_DISK_VADDR,
+                                      config.initrd,
                                       initrd_size
                                       );
     if (!kernel_pc) {
@@ -99,8 +74,8 @@ void init(void) {
         return;
     }
 
-    for (int i = 0; i < sizeof(irqs) / sizeof(uint32_t); i++) {
-        bool success = virq_register_passthrough(GUEST_VCPU_ID, irqs[i], i + 10);
+    for (int i = 0; i < config.num_irqs; i++) {
+        bool success = virq_register_passthrough(config.vcpus[0].id, config.irqs[i].irq, config.irqs[i].id);
         /* Should not be any reason for this to fail */
         assert(success);
     }
@@ -110,7 +85,7 @@ void init(void) {
     fault_register_vm_exception_handler(UIO_INIT_ADDRESS, sizeof(size_t), &uio_init_handler, NULL);
 
     /* Finally start the guest */
-    guest_start(GUEST_VCPU_ID, kernel_pc, GUEST_DTB_VADDR, GUEST_INIT_RAM_DISK_VADDR);
+    guest_start(GUEST_VCPU_ID, kernel_pc, config.dtb, config.initrd);
 }
 
 void notified(microkit_channel ch) {
@@ -125,7 +100,7 @@ void notified(microkit_channel ch) {
         default: {
             bool success = virq_handle_passthrough(ch);
             if (!success) {
-                LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", irqs[ch - 10], GUEST_VCPU_ID);
+                LOG_VMM_ERR("IRQ %d dropped on vCPU %d\n", vmm_config_irq_from_id(&config, ch), GUEST_VCPU_ID);
             }
             break;
         }
