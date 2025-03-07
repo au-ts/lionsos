@@ -89,7 +89,7 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 %.py: ${WEBSERVER_SRC_DIR}/%.py
 	cp $< $@
 
-$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL}/Makefile
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile
 	make -C $(MUSL_SRC) \
 		C_COMPILER=aarch64-none-elf-gcc \
 		TOOLPREFIX=aarch64-none-elf- \
@@ -135,7 +135,7 @@ ${LIONSOS}/dep/libmicrokitco/Makefile:
 ${MICRODOT}:
 	cd ${LIONSOS}; git submodule update --init dep/microdot
 
-${MUSL}/Makefile:
+${MUSL_SRC}/Makefile:
 	cd ${LIONSOS}; git submodule update --init dep/musllibc
 
 ${SDDF_MAKEFILES} &:
