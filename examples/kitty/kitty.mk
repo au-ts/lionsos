@@ -122,7 +122,7 @@ include ${LIBVMM_DIR}/vmm.mk
 include ${NFS}/nfs.mk
 
 $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile
-	mkdir ${MUSL} && cd ${MUSL} && CC=aarch64-none-elf-gcc CROSS_COMPILE=aarch64-none-elf- ${MUSL_SRC}/configure --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=aarch64 --enable-warnings --disable-shared --enable-static
+	mkdir ${MUSL} && cd ${MUSL} && CC=aarch64-none-elf-gcc CROSS_COMPILE=aarch64-none-elf- ${MUSL_SRC}/configure --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=aarch64 --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
 	${MAKE} -C ${MUSL} install
 
 # Build the VMM for graphics

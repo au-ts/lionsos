@@ -110,7 +110,7 @@ FAT_LIBC_INCLUDE := musllibc/include
 include $(LIONSOS)/components/fs/fat/fat.mk
 
 $(MUSL)/lib/libc.a $(MUSL)/include:
-	mkdir ${MUSL} && cd ${MUSL} && CC=aarch64-none-elf-gcc CROSS_COMPILE=aarch64-none-elf- ${MUSL_SRC}/configure --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=aarch64 --enable-warnings --disable-shared --enable-static
+	mkdir ${MUSL} && cd ${MUSL} && CC=aarch64-none-elf-gcc CROSS_COMPILE=aarch64-none-elf- ${MUSL_SRC}/configure --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=aarch64 --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
 	${MAKE} -C ${MUSL} install
 
 ${IMAGES}: libsddf_util_debug.a
