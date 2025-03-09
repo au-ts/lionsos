@@ -20,6 +20,7 @@
 #include "firewall_arp.h"
 #include "hashmap.h"
 #include "config.h"
+#include "protocols.h"
 
 __attribute__((__section__(".arp_resources"))) arp_requester_config_t arp_config;
 
