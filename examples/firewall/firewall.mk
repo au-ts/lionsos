@@ -73,6 +73,13 @@ ${CHECK_FLAGS_BOARD_MD5}:
 
 all: $(IMAGE_FILE)
 
+# Need to build libsddf_util_debug.a because it's included in LIBS
+# for the unimplemented libc dependencies
+${IMAGES}: libsddf_util_debug.a
+
+$(DTB): $(DTS)
+	dtc -q -I dts -O dtb $(DTS) > $(DTB)
+
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
