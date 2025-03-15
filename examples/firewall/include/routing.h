@@ -23,7 +23,9 @@ typedef struct llnode_pkt_waiting {
     void *next;
     void *prev;
 
+    void *next_ip_match;
     uint32_t ip;
+    // TODO: Implement validity of waiting packets
     bool valid;
     firewall_buff_desc_t buffer;
 } llnode_pkt_waiting_t;

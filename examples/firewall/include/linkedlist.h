@@ -1,9 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "string.h"
-#include <sddf/util/util.h>
-
+#include <string.h>
 struct ll_info {
     uint8_t *llnode_pool;   // pointer to region of memory used for the pool
     uint32_t pool_size;       // size of the pool, # of elements
@@ -26,7 +24,7 @@ static void llinit(struct ll_info *info)
 {
     assert(info);
 
-    sddf_memset(info->llnode_pool, 0, info->pool_size * info->node_size);
+    memset(info->llnode_pool, 0, info->pool_size * info->node_size);
     info->empty_head = info->llnode_pool;
     struct llnode_ptrs *curr = LLNODE_PTRS_CAST(info->empty_head);
     curr->prev = NULL;
@@ -59,6 +57,17 @@ static void *llalloc(struct ll_info *info)
     return ret;
 }
 
+static void lldealloc(struct ll_info *info, void *node)
+{
+    assert(info && node);
+
+    memset(node, 0, info->node_size);
+
+    /* Return to free list. */
+    LLNODE_PTRS_CAST(node)->next = info->empty_head;
+    info->empty_head = node;
+}
+
 static void llfree(struct ll_info *info, void *node)
 {
     assert(info && node);
@@ -66,9 +75,14 @@ static void llfree(struct ll_info *info, void *node)
     struct llnode_ptrs *prev = LLNODE_PTRS_CAST(node)->prev;
     struct llnode_ptrs *next = LLNODE_PTRS_CAST(node)->next;
 
+    memset(node, 0, info->node_size);
+
     /* A -> node -> B: if A exists, A->next = B */
     if (prev) {
         prev->next = next;
+    } else {
+        /* if node was the head */
+        info->tail = next;
     }
 
     /* A -> node -> B:  if B exists, B->prev = A */
@@ -82,8 +96,7 @@ static void llfree(struct ll_info *info, void *node)
     /* Return to free list. */
     LLNODE_PTRS_CAST(node)->next = info->empty_head;
     info->empty_head = node;
-
-    sddf_memset(node, 0, info->node_size);
+    info->curr_size--;
 }
 
 static void llpush(struct ll_info *info, void *node)

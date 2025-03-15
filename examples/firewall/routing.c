@@ -13,8 +13,6 @@
 #include <sddf/network/util.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
-#include <sddf/timer/client.h>
-#include <sddf/timer/config.h>
 #include <config.h>
 #include <routing.h>
 #include <firewall_arp.h>
@@ -54,33 +52,26 @@ static bool returned;
 static bool notify_arp;
 
 /* Return node with maching ip, or null. */
-static void *ll_node_find(struct ll_info *info, uint32_t ip)
+static void *ll_find_pkt_node(struct ll_info *info, uint32_t ip)
 {
-    struct llnode_ptrs *curr = LLNODE_PTRS_CAST(info->head);
+    llnode_pkt_waiting_t *curr = (llnode_pkt_waiting_t *)info->head;
     while (curr != NULL) {
-        llnode_pkt_waiting_t *curr_node = (llnode_pkt_waiting_t *) curr;
-        if (curr_node->ip == ip) {
-            return (void *) curr;
+        if (curr->ip == ip) {
+            return (void *)curr;
         }
-        curr = LLNODE_PTRS_CAST(curr->next);
+        curr = (llnode_pkt_waiting_t *)curr->next;
     }
 
     return NULL;
 }
 
-/* Check if there is a packet with this IP address already waiting on an ARP reply. */
-static bool check_waiting(struct ll_info *info, uint32_t ip)
-{
-    struct llnode_ptrs *curr = LLNODE_PTRS_CAST(info->head);
-    while (curr != NULL) {
-        llnode_pkt_waiting_t *curr_node = (llnode_pkt_waiting_t *) curr;
-        if (curr_node->ip == ip) {
-            return true;
-        }
-        curr = LLNODE_PTRS_CAST(curr->next);
+/* Add a child waiting packet to a parent llnode */
+static void llpush_child(llnode_pkt_waiting_t *parent_pkt, llnode_pkt_waiting_t *child_pkt) {
+    llnode_pkt_waiting_t *curr = parent_pkt;
+    while (curr->next_ip_match != NULL) {
+        curr = (llnode_pkt_waiting_t *)curr->next_ip_match;
     }
-
-    return false;
+    curr->next_ip_match = (void *)child_pkt;
 }
 
 static uint32_t find_route(uint32_t ip)
@@ -111,36 +102,59 @@ static void process_arp_waiting(void)
         }
 
         /* Check that we actually have a packet waiting. */
-        llnode_pkt_waiting_t *waiting_packet = (llnode_pkt_waiting_t *) ll_node_find(&pkt_waiting_queue, response.ip_addr);
-        if (!waiting_packet) {
+        llnode_pkt_waiting_t *req_pkt = (llnode_pkt_waiting_t *) ll_find_pkt_node(&pkt_waiting_queue, response.ip_addr);
+        if (!req_pkt) {
             continue;
         }
 
-        /* TODO: search for other matching packets and send them */
-        if (!response.valid && waiting_packet->valid) {
+        /* Send all matching ip packets */
+        if (!response.valid) {
             /* Invalid response, drop packet associated with the IP address */
-            waiting_packet->buffer.len = 0;
-            err = firewall_enqueue(&state.rx_free, waiting_packet->buffer);
-            assert(!err);
-        } else {
-            /* Substitute the MAC address and send the packet out of the NIC */
-            struct ipv4_packet *pkt = (struct ipv4_packet *)(state.data_vaddr + waiting_packet->buffer.io_or_offset);
-            memcpy(pkt->ethdst_addr, response.mac_addr, ETH_HWADDR_LEN);
-            memcpy(pkt->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
-            pkt->check = 0;
+            llnode_pkt_waiting_t *free_pkt = NULL;
+            bool child = false;
+            while (req_pkt) {
+                req_pkt->buffer.len = 0;
+                err = firewall_enqueue(&state.rx_free, req_pkt->buffer);
+                assert(!err);
 
-            if (FIREWALL_DEBUG_OUTPUT) {
-                sddf_printf("MAC[5] = %x | Router sending packet for ip %u with buffer number %lu\n", router_config.mac_addr[5], response.ip_addr, waiting_packet->buffer.io_or_offset/NET_BUFFER_SIZE);
+                free_pkt = req_pkt;
+                req_pkt = req_pkt->next_ip_match;
+                if (child) {
+                    lldealloc(&pkt_waiting_queue, (void *)free_pkt);
+                } else {
+                    llfree(&pkt_waiting_queue, (void *)free_pkt);
+                }
+                child = true;
             }
+        } else {
+            /* Substitute the MAC address and send packets out of the NIC */
+            llnode_pkt_waiting_t *free_pkt = NULL;
+            bool child = false;
+            while (req_pkt) {
+                struct ipv4_packet *tx_pkt = (struct ipv4_packet *)(state.data_vaddr + req_pkt->buffer.io_or_offset);
+                memcpy(tx_pkt->ethdst_addr, response.mac_addr, ETH_HWADDR_LEN);
+                memcpy(tx_pkt->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
+                tx_pkt->check = 0;
 
-            err = firewall_enqueue(&state.tx_active, waiting_packet->buffer);
-            assert(!err);
-            transmitted = true;
+                if (FIREWALL_DEBUG_OUTPUT) {
+                    sddf_printf("MAC[5] = %x | Router sending packet for ip %u with buffer number %lu\n", router_config.mac_addr[5], response.ip_addr, req_pkt->buffer.io_or_offset/NET_BUFFER_SIZE);
+                }
+
+                err = firewall_enqueue(&state.tx_active, req_pkt->buffer);
+                assert(!err);
+                transmitted = true;
+
+                free_pkt = req_pkt;
+                req_pkt = req_pkt->next_ip_match;
+                if (child) {
+                    lldealloc(&pkt_waiting_queue, (void *)free_pkt);
+                } else {
+                    llfree(&pkt_waiting_queue, (void *)free_pkt);
+                }
+                child = true;
+            }
         }
-
-        llfree(&pkt_waiting_queue, (void *)waiting_packet);
     }
-
 }
 
 static void route()
@@ -187,27 +201,37 @@ static void route()
                         *  response. If we get a timeout, we will then drop the 
                         *  packets associated with that IP address in the queue.
                         */
-                        if (!check_waiting(&pkt_waiting_queue, nextIP)) {
-                            if (arp_queue_full_request(arp_queue)) {
-                                sddf_dprintf("ROUTING|LOG: ARP request queue full, dropping packet!\n");
-                                buffer.len = 0;
-                                err = firewall_enqueue(&state.rx_free, buffer);
-                                assert(!err);
-                                returned = true;
-                                continue;
-                            } else {
-                                int err = arp_enqueue_request(arp_queue, nextIP);
-                                assert(!err);
-                            }
-                        }
+                        llnode_pkt_waiting_t *parent_pkt = (llnode_pkt_waiting_t *) ll_find_pkt_node(&pkt_waiting_queue, nextIP);
+                        if (parent_pkt) {
+                            /* ARP request already enqueued, add node as child. */
+                            llnode_pkt_waiting_t *child_pkt = (llnode_pkt_waiting_t *) llalloc(&pkt_waiting_queue);
+                            child_pkt->ip = nextIP;
+                            child_pkt->buffer = buffer;
+                            child_pkt->valid = true;
 
-                        /* Add packet to the ARP waiting queue */
-                        llnode_pkt_waiting_t *waiting_packet = (llnode_pkt_waiting_t *) llalloc(&pkt_waiting_queue);
-                        waiting_packet->ip = nextIP;
-                        waiting_packet->buffer = buffer;
-                        waiting_packet->valid = true;
-                        llpush(&pkt_waiting_queue, (void *)waiting_packet);
-                        notify_arp = true;
+                            llpush_child(parent_pkt, child_pkt);
+
+                        } else if (arp_queue_full_request(arp_queue)) {
+                            /* No existing ARP request and queue is full, drop packet. */
+                            sddf_dprintf("ROUTING|LOG: ARP request queue full, dropping packet!\n");
+                            buffer.len = 0;
+                            err = firewall_enqueue(&state.rx_free, buffer);
+                            assert(!err);
+
+                            returned = true;
+                        } else {
+                            /* Generate ARP request and enqueue packet. */
+                            int err = arp_enqueue_request(arp_queue, nextIP);
+                            assert(!err);
+
+                            llnode_pkt_waiting_t *new_pkt = (llnode_pkt_waiting_t *) llalloc(&pkt_waiting_queue);
+                            new_pkt->ip = nextIP;
+                            new_pkt->buffer = buffer;
+                            new_pkt->valid = true;
+                            llpush(&pkt_waiting_queue, (void *)new_pkt);
+
+                            notify_arp = true;
+                        }
                     }
                 } else {
                     /* Match found for MAC address, replace the destination in eth header */
@@ -217,7 +241,7 @@ static void route()
 
                     /* Transmit packet our the NIC */
                     if (FIREWALL_DEBUG_OUTPUT) {
-                        sddf_printf("MAC[5] = %x | Router sending packet for ip %u mac[5] %u with buffer number %lu\n", router_config.mac_addr[5], nextIP, pkt->ethdst_addr[5], buffer.io_or_offset/NET_BUFFER_SIZE);
+                        sddf_printf("MAC[5] = %x | Router sending packet for ip %u mac[5] %x with buffer number %lu\n", router_config.mac_addr[5], nextIP, pkt->ethdst_addr[5], buffer.io_or_offset/NET_BUFFER_SIZE);
                     }
 
                     int err = firewall_enqueue(&state.tx_active, buffer);
@@ -259,7 +283,7 @@ void init(void)
 
     /* Initialise the packet waiting queue from mapped in memory */
     pkt_waiting_queue.llnode_pool = (uint8_t *) router_config.packet_queue.vaddr;
-    pkt_waiting_queue.pool_size = 10;
+    pkt_waiting_queue.pool_size = router_config.rx_free.conn.capacity;
     pkt_waiting_queue.node_size = sizeof(llnode_pkt_waiting_t);
 
     llinit(&pkt_waiting_queue);
