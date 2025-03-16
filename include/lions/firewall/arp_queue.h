@@ -2,22 +2,21 @@
 
 #include <stdint.h>
 #include <string.h>
-#include <protocols.h>
+#include <lions/firewall/protocols.h>
 
 #define MAX_ARP_ENTRIES 512
-#define ARP_BUFFER_SIZE 128
 
 typedef struct arp_entry {
-    uint8_t mac_addr[ETH_HWADDR_LEN];
-    /* @kwinter: Add a timeout for stale ARP entries*/
-    bool valid;
+    uint8_t mac_addr[ETH_HWADDR_LEN];   /* Mac address key IP */
+    bool valid;                         /* Whether this entry is valid */
+    uint8_t client;                     /* Client that initiated the request */
+                                        /* TODO: Add a timeout for stale ARP entries*/
 } arp_entry_t;
 
 typedef struct arp_request {
-    uint32_t ip_addr;
-    uint8_t mac_addr[ETH_HWADDR_LEN];
-    /* If valid is false on reply, drop the packet. */
-    bool valid;
+    uint32_t ip_addr;                   /* Requested IP */
+    uint8_t mac_addr[ETH_HWADDR_LEN];   /* Zero filled or MAC of IP */
+    bool valid;                         /* Outcome of ARP request */
 } arp_request_t;
 
 typedef struct arp_queue {

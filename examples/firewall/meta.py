@@ -34,7 +34,7 @@ arp_queue_capacity = 512
 arp_queue_region_size = round_up_to_Page(2 * (8 + 16 * arp_queue_capacity) + 4)
 
 arp_cache_entries = 512
-arp_cache_region_size = round_up_to_Page(16 * arp_cache_entries)
+arp_cache_region_size = round_up_to_Page(16 * arp_cache_entries + arp_cache_entries)
 
 arp_packet_queue_region_size = round_up_to_Page(dma_queue_capacity * 48)
 
@@ -356,6 +356,30 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     networks[1]["filters"] = {}
     networks[1]["filters"][0x01] = ProtectionDomain("icmp_filter1", "icmp_filter1.elf", priority=93, budget=20000)
+
+    # Create the webserver component
+    micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000)
+    sdf.add_pd(micropython)
+
+    # # Webserver is a tx client of the internal network
+    # networks[1]["in_net"].add_client_with_copier(micropython, rx=False)
+
+    # # Webserver receives traffic from the external -> internal router
+    # # TODO: Technically this requires copying as lwip writes to DMA buffers!
+
+    # # Webserver returns packets to external rx virtualiser
+
+    # # Webserver has pp channels and shared memory with each filter to update and read rules
+
+    # # Webserver has arp channel for arp requests/responses
+
+    # # Webserver has pp channel and shared memory with router to update rules
+
+    # # Filters have shared memory to allow for dual-direction rules 
+
+    # # Webserver is a serial and timer client
+    # serial_system.add_client(micropython)
+    # timer_system.add_client(micropython)
 
     for pd in common_pds:
         sdf.add_pd(pd)

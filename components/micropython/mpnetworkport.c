@@ -37,10 +37,15 @@
 #include <lwip/err.h>
 #include <netif/etharp.h>
 
+#include <lions/firewall/config.h>
+#include <lions/firewall/queue.h>
+
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
 
 extern net_client_config_t net_config;
+
+__attribute__((__section__(".firewall_webserver_config"))) firewall_webserver_config_t firewall_config;
 
 #define dlogp(pred, fmt, ...) do { \
     if (pred) { \
@@ -166,6 +171,8 @@ static err_t ethernet_init(struct netif *netif)
 
 void init_networking(void) {
     /* Set up shared memory regions */
+    // firewall_queue_init(&state.rx_queue, firewall_config.rx_free[i].queue.vaddr,
+    //     firewall_config.free_clients[i].capacity);
     net_queue_init(&state.rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr, net_config.rx.num_buffers);
     net_queue_init(&state.tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
     net_buffers_init(&state.tx_queue, 0);

@@ -9,8 +9,8 @@
 #include <sddf/util/cache.h>
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
-#include <firewall_queue.h>
-#include <config.h>
+#include <lions/firewall/config.h>
+#include <lions/firewall/queue.h>
 
 __attribute__((__section__(".net_virt_tx_config"))) net_virt_tx_config_t config;
 
@@ -19,8 +19,8 @@ __attribute__((__section__(".firewall_net_virt_tx_config"))) firewall_net_virt_t
 typedef struct state {
     net_queue_handle_t tx_queue_drv;
     net_queue_handle_t tx_queue_clients[SDDF_NET_MAX_CLIENTS];
-    firewall_queue_handle_t firewall_free_clients[LIONSOS_FIREWALL_MAX_FIREWALL_CLIENTS];
-    firewall_queue_handle_t firewall_active_clients[LIONSOS_FIREWALL_MAX_FIREWALL_CLIENTS];
+    firewall_queue_handle_t firewall_free_clients[FIREWALL_MAX_FIREWALL_CLIENTS];
+    firewall_queue_handle_t firewall_active_clients[FIREWALL_MAX_FIREWALL_CLIENTS];
 } state_t;
 
 state_t state;

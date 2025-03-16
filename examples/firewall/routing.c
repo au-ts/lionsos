@@ -13,12 +13,13 @@
 #include <sddf/network/util.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
-#include <config.h>
-#include <routing.h>
-#include <firewall_arp.h>
-#include <hashmap.h>
-#include <linkedlist.h>
-#include <protocols.h>
+#include <lions/firewall/arp_queue.h>
+#include <lions/firewall/config.h>
+#include <lions/firewall/hashmap.h>
+#include <lions/firewall/linkedlist.h>
+#include <lions/firewall/protocols.h>
+#include <lions/firewall/queue.h>
+#include <lions/firewall/routing.h>
 #include <string.h>
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
@@ -30,7 +31,7 @@ serial_queue_handle_t serial_tx_queue_handle;
 typedef struct state {
     firewall_queue_handle_t rx_free;
     firewall_queue_handle_t tx_active;
-    firewall_queue_handle_t firewall_filters[LIONSOS_FIREWALL_MAX_FILTERS];
+    firewall_queue_handle_t firewall_filters[FIREWALL_MAX_FILTERS];
     uintptr_t data_vaddr;
 } state_t;
 
@@ -131,7 +132,7 @@ static void process_arp_waiting(void)
             llnode_pkt_waiting_t *free_pkt = NULL;
             bool child = false;
             while (req_pkt) {
-                struct ipv4_packet *tx_pkt = (struct ipv4_packet *)(state.data_vaddr + req_pkt->buffer.io_or_offset);
+                ipv4_packet_t *tx_pkt = (ipv4_packet_t *)(state.data_vaddr + req_pkt->buffer.io_or_offset);
                 memcpy(tx_pkt->ethdst_addr, response.mac_addr, ETH_HWADDR_LEN);
                 memcpy(tx_pkt->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
                 tx_pkt->check = 0;
@@ -165,7 +166,7 @@ static void route()
             int err = firewall_dequeue(&state.firewall_filters[filter], &buffer);
             assert(!err);
 
-            struct ipv4_packet *pkt = (struct ipv4_packet *)(state.data_vaddr + buffer.io_or_offset);
+            ipv4_packet_t *pkt = (ipv4_packet_t *)(state.data_vaddr + buffer.io_or_offset);
 
             /* Decrement the TTL field. IF it reaches 0 protocol is that we drop
             * the packet in this router.
@@ -276,10 +277,10 @@ void init(void)
     state.data_vaddr = (uintptr_t)router_config.rx_free.data.region.vaddr;
 
     /* Initialise arp queues */
-    arp_queue = (arp_queue_handle_t *) router_config.arp.arp_queue.queue.vaddr;
-    arp_handle_init(arp_queue, arp_queue->capacity);
+    arp_queue = (arp_queue_handle_t *) router_config.arp_queue.queue.vaddr;
+    arp_handle_init(arp_queue, router_config.arp_queue.capacity);
 
-    arp_table = (hashtable_t*) router_config.arp.arp_cache.vaddr;
+    arp_table = (hashtable_t*) router_config.arp_cache.vaddr;
 
     /* Initialise the packet waiting queue from mapped in memory */
     pkt_waiting_queue.llnode_pool = (uint8_t *) router_config.packet_queue.vaddr;
@@ -291,7 +292,7 @@ void init(void)
 
 void notified(microkit_channel ch)
 {
-    if (ch == router_config.arp.arp_queue.ch) {
+    if (ch == router_config.arp_queue.ch) {
         /* This is the channel between the ARP component and the routing component */
         process_arp_waiting();
     } else {
@@ -301,7 +302,7 @@ void notified(microkit_channel ch)
 
     if (notify_arp) {
         notify_arp = false;
-        microkit_notify(router_config.arp.arp_queue.ch);
+        microkit_notify(router_config.arp_queue.ch);
     }
 
     if (returned) {

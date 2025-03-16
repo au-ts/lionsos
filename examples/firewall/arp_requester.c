@@ -15,10 +15,10 @@
 #include <sddf/serial/config.h>
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
-#include <config.h>
-#include <firewall_arp.h>
-#include <hashmap.h>
-#include <protocols.h>
+#include <lions/firewall/arp_queue.h>
+#include <lions/firewall/config.h>
+#include <lions/firewall/hashmap.h>
+#include <lions/firewall/protocols.h>
 #include <string.h>
 
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
@@ -34,10 +34,10 @@ net_queue_handle_t tx_queue;
 
 serial_queue_handle_t serial_tx_queue_handle;
 
-/* This queue holds ARP requests/responses for outgoing packets in the router */
+/* Queues hold ARP requests/responses for router */
 arp_queue_handle_t *arp_queue;
 
-/* ARP table holds all known ARP entries */
+/* ARP table caches ARP request responses */
 hashtable_t *arp_table;
 
 void process_requests()
@@ -46,18 +46,14 @@ void process_requests()
     while (!arp_queue_empty_request(arp_queue) && !net_queue_empty_free(&tx_queue)) {
         arp_request_t request;
         int err = arp_dequeue_request(arp_queue, &request);
-        assert(!err);
-
-        if (!request.valid) {
-            sddf_dprintf("ARP_REQUESTER|LOG: Dequeued ARP request was invalid!\n");
-        }
+        assert(!err && request.valid);
 
         /* Generate ARP request */
         net_buff_desc_t buffer = {};
         err = net_dequeue_free(&tx_queue, &buffer);
         assert(!err);
 
-        struct arp_packet *pkt = (struct arp_packet *)(net_config.tx_data.vaddr + buffer.io_or_offset);
+        arp_packet_t *pkt = (arp_packet_t *)(net_config.tx_data.vaddr + buffer.io_or_offset);
 
         /* Set the destination MAC address as the broadcast MAC address */
         memset(&pkt->ethdst_addr, 0xFF, ETH_HWADDR_LEN);
@@ -85,6 +81,11 @@ void process_requests()
         err = net_enqueue_active(&tx_queue, buffer);
         assert(!err);
 
+        /* Create arp entry for request */
+        arp_entry_t entry = {0};
+        entry.valid = false;
+        err = hashtable_insert(arp_table, request.ip_addr, &entry);
+
         transmitted = true;
         request.valid = false;
     }
@@ -97,7 +98,7 @@ void process_requests()
 
 void process_responses()
 {
-    bool enqueued = false;
+    bool notify_client = false;
     bool returned = false;
     bool reprocess = true;
     while (reprocess) {
@@ -106,31 +107,37 @@ void process_responses()
             int err = net_dequeue_active(&rx_queue, &buffer);
             assert(!err);
 
+            arp_packet_t *pkt = (arp_packet_t *)(net_config.rx_data.vaddr + buffer.io_or_offset);
             /* Check if packet is an ARP request */
-            struct ethernet_header *ethhdr = (struct ethernet_header *)(net_config.rx_data.vaddr + buffer.io_or_offset);
-            if (ethhdr->type == HTONS(ETH_TYPE_ARP)) {
-                struct arp_packet *pkt = (struct arp_packet *)ethhdr;
+            if (pkt->type == HTONS(ETH_TYPE_ARP)) {
 
                 /* Check if it's a probe, ignore announcements */
                 if (pkt->opcode == HTONS(ETHARP_OPCODE_REPLY)) {
 
-                    /* Place response in queue for router */
-                    arp_enqueue_response(arp_queue, pkt->ipsrc_addr, pkt->hwsrc_addr, true);
+                    /* Find the arp entry */
+                    arp_entry_t *entry = NULL;
+                    int found = hashtable_search(arp_table, pkt->ipsrc_addr, entry);
+                    if (found) {
+                        /* This was a response to a request we sent, update entry */
+                        memcpy(&entry->mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
 
-                    if (FIREWALL_DEBUG_OUTPUT) {
-                        sddf_printf("MAC[5] = %x | ARP requester processing response for ip %u and MAC[0] = %x, MAC[5] = %x\n", arp_config.mac_addr[5], pkt->ipsrc_addr, pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
+                        if (FIREWALL_DEBUG_OUTPUT) {
+                            sddf_printf("MAC[5] = %x | ARP requester received response for ip %u. MAC[0] = %x, MAC[5] = %x\n", arp_config.mac_addr[5], pkt->ipsrc_addr, pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
+                        }
+                        
+                        /* Send to router */
+                        arp_enqueue_response(arp_queue, pkt->ipsrc_addr, entry->mac_addr, true);
+                        notify_client = true;
+                    } else {
+                        /* Create a new entry */
+                        arp_entry_t entry = {0};
+                        memcpy(&entry.mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
+                        entry.valid = true;
+                        err = hashtable_insert(arp_table, pkt->ipsrc_addr, &entry);
+                        if (err) {
+                            sddf_dprintf("ARP_REQUESTER|LOG: Hash table full, failed to insert!\n");
+                        }
                     }
-
-                    /* Add the ip -> mac mapping to the ARP table */
-                    arp_entry_t entry = {0};
-                    memcpy(&entry.mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
-                    entry.valid = true;
-                    err = hashtable_insert(arp_table, (uint32_t) pkt->ipsrc_addr, &entry);
-                    if (err) {
-                        sddf_dprintf("ARP_REQUESTER|ERR: Hash table full, failed to insert!\n");
-                    }
-
-                    enqueued = true;
                 }
             }
 
@@ -151,11 +158,11 @@ void process_responses()
 
     if (returned && net_require_signal_free(&rx_queue)) {
         net_cancel_signal_free(&rx_queue);
-        microkit_notify(net_config.rx.id);
+        microkit_deferred_notify(net_config.rx.id);
     }
 
-    if (enqueued) {
-        microkit_deferred_notify(arp_config.router.arp_queue.ch);
+    if (notify_client) {
+        microkit_notify(arp_config.router.ch);
     }
 }
 
@@ -173,15 +180,15 @@ void init(void)
                    net_config.tx.num_buffers);
     net_buffers_init(&tx_queue, 0);
 
-    arp_queue = (arp_queue_handle_t *) arp_config.router.arp_queue.queue.vaddr;
-    arp_handle_init(arp_queue, arp_config.router.arp_queue.capacity);
+    arp_queue = (arp_queue_handle_t *) arp_config.router.queue.vaddr;
+    arp_handle_init(arp_queue, arp_config.router.capacity);
 
-    arp_table = (hashtable_t *) arp_config.router.arp_cache.vaddr;
+    arp_table = (hashtable_t *) arp_config.arp_cache.vaddr;
 }
 
 void notified(microkit_channel ch)
 {
-    if (ch == arp_config.router.arp_queue.ch) {
+    if (ch == arp_config.router.ch) {
         process_requests();
     } if (ch == net_config.rx.id) {
         process_responses();

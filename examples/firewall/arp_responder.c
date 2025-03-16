@@ -15,8 +15,8 @@
 #include <sddf/serial/config.h>
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
-#include <config.h>
-#include <protocols.h>
+#include <lions/firewall/config.h>
+#include <lions/firewall/protocols.h>
 #include <string.h>
 
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
@@ -47,7 +47,7 @@ static int arp_reply(const uint8_t ethsrc_addr[ETH_HWADDR_LEN],
     int err = net_dequeue_free(&tx_queue, &buffer);
     assert(!err);
 
-    struct arp_packet *reply = (struct arp_packet *)(net_config.tx_data.vaddr + buffer.io_or_offset);
+    arp_packet_t *reply = (arp_packet_t *)(net_config.tx_data.vaddr + buffer.io_or_offset);
     memcpy(&reply->ethdst_addr, ethdst_addr, ETH_HWADDR_LEN);
     memcpy(&reply->ethsrc_addr, ethsrc_addr, ETH_HWADDR_LEN);
 
@@ -85,7 +85,7 @@ void receive(void)
             /* Check if packet is an ARP request */
             struct ethernet_header *ethhdr = (struct ethernet_header *)(net_config.rx_data.vaddr + buffer.io_or_offset);
             if (ethhdr->type == HTONS(ETH_TYPE_ARP)) {
-                struct arp_packet *pkt = (struct arp_packet *)ethhdr;
+                arp_packet_t *pkt = (arp_packet_t *)ethhdr;
                 /* Check if it's a probe, ignore announcements */
                 if (pkt->opcode == HTONS(ETHARP_OPCODE_REQUEST)) {
                     /* Check the destination IP address */

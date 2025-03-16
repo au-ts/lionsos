@@ -13,9 +13,9 @@
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
 #include <sddf/util/cache.h>
-#include <firewall_queue.h>
-#include <config.h>
-#include <protocols.h>
+#include <lions/firewall/config.h>
+#include <lions/firewall/protocols.h>
+#include <lions/firewall/queue.h>
 
 /* Used to signify that a packet has come in for the broadcast address and does not match with
  * any particular client. */
@@ -33,7 +33,7 @@ uint32_t *buffer_refs;
 typedef struct state {
     net_queue_handle_t rx_queue_drv;
     net_queue_handle_t rx_queue_clients[SDDF_NET_MAX_CLIENTS];
-    firewall_queue_handle_t firewall_free_clients[LIONSOS_FIREWALL_MAX_FIREWALL_CLIENTS];
+    firewall_queue_handle_t firewall_free_clients[FIREWALL_MAX_FIREWALL_CLIENTS];
 } state_t;
 
 state_t state;
@@ -81,7 +81,7 @@ static int get_protocol_match(struct ethernet_header *buffer, uint16_t *protocol
     uint16_t ethtype = buffer->type;
     if (ethtype == HTONS(ETH_TYPE_ARP)) {
         /* filter based on arp opcode */
-        struct arp_packet *pkt = (struct arp_packet *) buffer;
+        arp_packet_t *pkt = (arp_packet_t *) buffer;
         if (pkt->opcode == HTONS(ETHARP_OPCODE_REQUEST)) {
             /* Requests go to the arp responder component */
             *protocol = 0x92;
@@ -91,7 +91,7 @@ static int get_protocol_match(struct ethernet_header *buffer, uint16_t *protocol
         }
     } else if (ethtype == HTONS(ETH_TYPE_IP)) {
         /* filter based on IP protocol */
-        struct ipv4_packet *pkt = (struct ipv4_packet *) buffer;
+        ipv4_packet_t *pkt = (ipv4_packet_t *) buffer;
         *protocol = pkt->protocol;
     } else {
         /* @kwinter: TODO: remove this, this should match with the router component for now. */

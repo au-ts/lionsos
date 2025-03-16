@@ -14,7 +14,7 @@
 
 #define IPV4_ADDR(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((uint32_t) (d) << 24))
 
-struct __attribute__((__packed__)) ipv4_packet {
+typedef struct __attribute__((__packed__)) ipv4_packet {
     uint8_t ethdst_addr[ETH_HWADDR_LEN];
     uint8_t ethsrc_addr[ETH_HWADDR_LEN];
     uint16_t type;
@@ -29,9 +29,9 @@ struct __attribute__((__packed__)) ipv4_packet {
     uint16_t check;
     uint32_t src_ip;
     uint32_t dst_ip;
-  };
+} ipv4_packet_t;
 
-  struct __attribute__((__packed__)) arp_packet {
+typedef struct __attribute__((__packed__)) arp_packet {
       uint8_t ethdst_addr[ETH_HWADDR_LEN];
       uint8_t ethsrc_addr[ETH_HWADDR_LEN];
       uint16_t type;
@@ -46,4 +46,4 @@ struct __attribute__((__packed__)) ipv4_packet {
       uint32_t ipdst_addr;
       uint8_t padding[10];
       uint32_t crc;
-  };
+} arp_packet_t;

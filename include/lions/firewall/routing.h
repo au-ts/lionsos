@@ -1,8 +1,8 @@
 #pragma once
 
 #include <stdint.h>
-#include <firewall_queue.h>
-#include <linkedlist.h>
+#include <lions/firewall/linkedlist.h>
+#include <lions/firewall/queue.h>
 
 #define NUM_ROUTES 10
 

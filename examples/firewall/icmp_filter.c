@@ -11,8 +11,8 @@
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
 #include <sddf/network/util.h>
-#include <firewall_queue.h>
-#include <config.h>
+#include <lions/firewall/config.h>
+#include <lions/firewall/queue.h>
 
 __attribute__((__section__(".firewall_filter_config"))) firewall_filter_config_t filter_config;
 
