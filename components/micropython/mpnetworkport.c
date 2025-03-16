@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "micropython.h"
@@ -37,6 +38,7 @@
 #include <lwip/err.h>
 #include <netif/etharp.h>
 
+#include <lions/firewall/arp_queue.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
 
@@ -61,6 +63,7 @@ typedef struct pbuf_custom_offset
 {
     struct pbuf_custom custom;
     size_t offset;
+    bool arp_response;
 } pbuf_custom_offset_t;
 
 typedef struct state
@@ -69,9 +72,17 @@ typedef struct state
     /* mac address for this client */
     uint8_t mac[6];
 
-    /* Pointers to shared buffers */
-    net_queue_handle_t rx_queue;
+    /* Transmit packets out the transmit virtualiser */
     net_queue_handle_t tx_queue;
+
+    /* Receive packets from the routing component */
+    firewall_queue_handle_t rx_active;
+
+    /* Return free buffers to the rx network virtualiser */
+    firewall_queue_handle_t rx_free;
+
+    /* ARP request/response queue for ARP queries */
+    arp_queue_handle_t *arp_queue;
 } state_t;
 
 state_t state;
@@ -85,6 +96,7 @@ LWIP_MEMPOOL_DECLARE(
 
 static bool notify_tx = false;
 static bool notify_rx = false;
+static bool notify_arp = false;
 
 #define ROUND_DOWN(n, b) (((n) >> (b)) << (b))
 #define LINE_START(a) ROUND_DOWN(a, CONFIG_L1_CACHE_LINE_SIZE_BITS)
@@ -99,14 +111,35 @@ static void interface_free_buffer(struct pbuf *buf) {
     SYS_ARCH_DECL_PROTECT(old_level);
     pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)buf;
     SYS_ARCH_PROTECT(old_level);
-    net_buff_desc_t buffer = { custom_pbuf_offset->offset, 0 };
-    net_enqueue_free(&state.rx_queue, buffer);
-    notify_rx = true;
+    if (!custom_pbuf_offset->arp_response) {
+        firewall_buff_desc_t buffer = { custom_pbuf_offset->offset, 0 };
+        firewall_enqueue(&state.rx_free, buffer);
+        notify_rx = true;
+    }
     LWIP_MEMPOOL_FREE(RX_POOL, custom_pbuf_offset);
     SYS_ARCH_UNPROTECT(old_level);
 }
 
 static err_t netif_output(struct netif *netif, struct pbuf *p) {
+
+    /* Check is this is an arp request before copying into a DMA buffer */
+    struct ethernet_header *eth_hdr = (struct ethernet_header *)p->payload;
+    if (eth_hdr->type == HTONS(ETH_TYPE_ARP)) {
+        arphdr_t *arp_hdr = (arphdr_t *)p->next->payload;
+        if (arp_hdr->opcode == HTONS(ETHARP_OPCODE_REQUEST)) {
+            /* This is an arp request, don't transmit through the network */
+            int err = arp_enqueue_request(state.arp_queue, arp_hdr->ipdst_addr);
+            if (err) {
+                dlog("Could not enqueue arp request, queue is full");
+                return ERR_MEM;
+            }
+            notify_arp = true;
+
+            /* Successfully emulated sending out an ARP request */
+            return ERR_OK;
+        }
+    }
+
     /* Grab an available TX buffer, copy pbuf data over,
     add to active tx queue, notify server */
     err_t ret = ERR_OK;
@@ -171,9 +204,8 @@ static err_t ethernet_init(struct netif *netif)
 
 void init_networking(void) {
     /* Set up shared memory regions */
-    // firewall_queue_init(&state.rx_queue, firewall_config.rx_free[i].queue.vaddr,
-    //     firewall_config.free_clients[i].capacity);
-    net_queue_init(&state.rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr, net_config.rx.num_buffers);
+    firewall_queue_init(&state.rx_active, firewall_config.router.rx_active.queue.vaddr, firewall_config.router.rx_active.capacity);
+    firewall_queue_init(&state.rx_free, firewall_config.rx_free.queue.vaddr, firewall_config.rx_free.capacity);
     net_queue_init(&state.tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
     net_buffers_init(&state.tx_queue, 0);
 
@@ -182,6 +214,7 @@ void init_networking(void) {
 
     sddf_memcpy(state.mac, net_config.mac_addr, 6);
 
+    // TODO: Static IP and mac addr from Krishnan
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
     ipaddr_aton("0.0.0.0", &gw);
@@ -203,13 +236,12 @@ void init_networking(void) {
     int err = dhcp_start(&(state.netif));
     dlogp(err, "failed to start DHCP negotiation");
 
-    if (notify_rx && net_require_signal_free(&state.rx_queue)) {
-        net_cancel_signal_free(&state.rx_queue);
+    if (notify_rx) {
         notify_rx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(net_config.rx.id);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.rx.id) {
-            microkit_notify(net_config.rx.id);
+            microkit_deferred_notify(firewall_config.rx_free.ch);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + firewall_config.rx_free.ch) {
+            microkit_notify(firewall_config.rx_free.ch);
         }
     }
 
@@ -222,41 +254,82 @@ void init_networking(void) {
             microkit_notify(net_config.tx.id);
         }
     }
+
+    if (notify_arp) {
+        notify_arp = false;
+        if (!microkit_have_signal) {
+            microkit_deferred_notify(firewall_config.arp_queue.ch);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + firewall_config.arp_queue.ch) {
+            microkit_notify(firewall_config.arp_queue.ch);
+        }
+    }
+}
+
+// TODO: Initialise this
+arp_packet_t arp_response_pkt;
+// TODO: Add this to notified, as well as modifying channels inside notified
+void mpnet_process_arp(void) {
+    while (!arp_queue_empty_response(state.arp_queue)) {
+        arp_request_t response;
+        int err = arp_dequeue_response(state.arp_queue, &response);
+        assert(!err);
+
+        // TODO: Check validity of response
+        arp_response_pkt.ipsrc_addr = response.ip_addr;
+        memcpy(&arp_response_pkt.hwsrc_addr, &response.mac_addr, ETH_HWADDR_LEN);
+        memcpy(&arp_response_pkt.ethsrc_addr, &response.mac_addr, ETH_HWADDR_LEN);
+
+        if (FIREWALL_DEBUG_OUTPUT) {
+            // TODO: Add more logging output
+            dlog("Dequeuing ARP response for ip %u -> obtained MAC[0] = %x, MAC[5] = %x\n", response.ip_addr, response.mac_addr[0], response.mac_addr[5]);
+        }
+
+        /* Input packet into lwip stack */
+        pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
+        custom_pbuf_offset->offset = 0;
+        custom_pbuf_offset->arp_response = true;
+        custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
+
+        struct pbuf *p = pbuf_alloced_custom(
+            PBUF_RAW,
+            sizeof(arp_packet_t),
+            PBUF_REF,
+            &custom_pbuf_offset->custom,
+            &arp_response_pkt,
+            sizeof(arp_packet_t)
+        );
+
+        if (state.netif.input(p, &state.netif) != ERR_OK) {
+            // If it is successfully received, the receiver controls whether or not it gets freed.
+            dlog("netif.input() != ERR_OK");
+            pbuf_free(p);
+        }
+    }
 }
 
 void mpnet_process_rx(void) {
-    bool reprocess = true;
-    while (reprocess) {
-        while (!net_queue_empty_active(&state.rx_queue)) {
-            net_buff_desc_t buffer;
-            net_dequeue_active(&state.rx_queue, &buffer);
+    while (!firewall_queue_empty(&state.rx_active)) {
+        firewall_buff_desc_t buffer;
+        firewall_dequeue(&state.rx_active, &buffer);
 
-            pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
-            custom_pbuf_offset->offset = buffer.io_or_offset;
-            custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
+        pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
+        custom_pbuf_offset->offset = buffer.io_or_offset;
+        custom_pbuf_offset->arp_response = false;
+        custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
 
-            struct pbuf *p = pbuf_alloced_custom(
-                PBUF_RAW,
-                buffer.len,
-                PBUF_REF,
-                &custom_pbuf_offset->custom,
-                (void *)(buffer.io_or_offset + net_config.rx_data.vaddr),
-                NET_BUFFER_SIZE
-            );
+        struct pbuf *p = pbuf_alloced_custom(
+            PBUF_RAW,
+            buffer.len,
+            PBUF_REF,
+            &custom_pbuf_offset->custom,
+            (void *)(buffer.io_or_offset + net_config.rx_data.vaddr),
+            NET_BUFFER_SIZE
+        );
 
-            if (state.netif.input(p, &state.netif) != ERR_OK) {
-                // If it is successfully received, the receiver controls whether or not it gets freed.
-                dlog("netif.input() != ERR_OK");
-                pbuf_free(p);
-            }
-        }
-
-        net_request_signal_active(&state.rx_queue);
-        reprocess = false;
-
-        if (!net_queue_empty_active(&state.rx_queue)) {
-            net_cancel_signal_active(&state.rx_queue);
-            reprocess = true;
+        if (state.netif.input(p, &state.netif) != ERR_OK) {
+            // If it is successfully received, the receiver controls whether or not it gets freed.
+            dlog("netif.input() != ERR_OK");
+            pbuf_free(p);
         }
     }
 }
@@ -267,13 +340,12 @@ void pyb_lwip_poll(void) {
 }
 
 void mpnet_handle_notify(void) {
-    if (notify_rx && net_require_signal_free(&state.rx_queue)) {
-        net_cancel_signal_free(&state.rx_queue);
+    if (notify_rx) {
         notify_rx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(net_config.rx.id);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.rx.id) {
-            microkit_notify(net_config.rx.id);
+            microkit_deferred_notify(firewall_config.rx_free.ch);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + firewall_config.rx_free.ch) {
+            microkit_notify(firewall_config.rx_free.ch);
         }
     }
 
@@ -284,6 +356,15 @@ void mpnet_handle_notify(void) {
             microkit_deferred_notify(net_config.tx.id);
         } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.tx.id) {
             microkit_notify(net_config.tx.id);
+        }
+    }
+
+    if (notify_arp) {
+        notify_arp = false;
+        if (!microkit_have_signal) {
+            microkit_deferred_notify(firewall_config.arp_queue.ch);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + firewall_config.arp_queue.ch) {
+            microkit_notify(firewall_config.arp_queue.ch);
         }
     }
 }

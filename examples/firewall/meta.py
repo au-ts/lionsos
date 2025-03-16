@@ -361,25 +361,26 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000)
     sdf.add_pd(micropython)
 
-    # # Webserver is a tx client of the internal network
-    # networks[1]["in_net"].add_client_with_copier(micropython, rx=False)
+    #TODO: Fill this in...
+    # Webserver is a tx client of the internal network
+    networks[1]["in_net"].add_client_with_copier(micropython, rx=False)
 
-    # # Webserver receives traffic from the external -> internal router
-    # # TODO: Technically this requires copying as lwip writes to DMA buffers!
+    # Webserver receives traffic from the external -> internal router
+    # TODO: Technically this requires copying as lwip writes to DMA buffers!
 
-    # # Webserver returns packets to external rx virtualiser
+    # Webserver returns packets to external rx virtualiser
 
-    # # Webserver has pp channels and shared memory with each filter to update and read rules
+    # Webserver has pp channels and shared memory with each filter to update and read rules
 
-    # # Webserver has arp channel for arp requests/responses
+    # Webserver has arp channel for arp requests/responses
 
-    # # Webserver has pp channel and shared memory with router to update rules
+    # Webserver has pp channel and shared memory with router to update rules
 
-    # # Filters have shared memory to allow for dual-direction rules 
+    # Filters have shared memory to allow for dual-direction rules 
 
-    # # Webserver is a serial and timer client
-    # serial_system.add_client(micropython)
-    # timer_system.add_client(micropython)
+    # Webserver is a serial and timer client
+    serial_system.add_client(micropython)
+    timer_system.add_client(micropython)
 
     for pd in common_pds:
         sdf.add_pd(pd)

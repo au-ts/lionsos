@@ -34,8 +34,8 @@ net_queue_handle_t tx_queue;
 
 serial_queue_handle_t serial_tx_queue_handle;
 
-/* Queues hold ARP requests/responses for router */
-arp_queue_handle_t *arp_queue;
+/* Queues hold ARP requests/responses for router and webserver */
+arp_queue_handle_t *arp_queues[FIREWALL_NUM_ARP_REQUESTER_CLIENTS];
 
 /* ARP table caches ARP request responses */
 hashtable_t *arp_table;
@@ -43,51 +43,54 @@ hashtable_t *arp_table;
 void process_requests()
 {
     bool transmitted = false;
-    while (!arp_queue_empty_request(arp_queue) && !net_queue_empty_free(&tx_queue)) {
-        arp_request_t request;
-        int err = arp_dequeue_request(arp_queue, &request);
-        assert(!err && request.valid);
+    for (uint8_t client = 0; client < FIREWALL_NUM_ARP_REQUESTER_CLIENTS; client++) {
+        while (!arp_queue_empty_request(arp_queues[client]) && !net_queue_empty_free(&tx_queue)) {
+            arp_request_t request;
+            int err = arp_dequeue_request(arp_queues[client], &request);
+            assert(!err && request.valid);
 
-        /* Generate ARP request */
-        net_buff_desc_t buffer = {};
-        err = net_dequeue_free(&tx_queue, &buffer);
-        assert(!err);
+            /* Generate ARP request */
+            net_buff_desc_t buffer = {};
+            err = net_dequeue_free(&tx_queue, &buffer);
+            assert(!err);
 
-        arp_packet_t *pkt = (arp_packet_t *)(net_config.tx_data.vaddr + buffer.io_or_offset);
+            arp_packet_t *pkt = (arp_packet_t *)(net_config.tx_data.vaddr + buffer.io_or_offset);
 
-        /* Set the destination MAC address as the broadcast MAC address */
-        memset(&pkt->ethdst_addr, 0xFF, ETH_HWADDR_LEN);
-        memcpy(&pkt->ethsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
-        memcpy(&pkt->hwsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
+            /* Set the destination MAC address as the broadcast MAC address */
+            memset(&pkt->ethdst_addr, 0xFF, ETH_HWADDR_LEN);
+            memcpy(&pkt->ethsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
+            memcpy(&pkt->hwsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
 
-        pkt->type = HTONS(ETH_TYPE_ARP);
-        pkt->hwtype = HTONS(ETH_HWTYPE);
-        pkt->proto = HTONS(ETH_TYPE_IP);
-        pkt->hwlen = ETH_HWADDR_LEN;
-        pkt->protolen = IPV4_PROTO_LEN;
-        pkt->opcode = HTONS(ETHARP_OPCODE_REQUEST);
+            pkt->type = HTONS(ETH_TYPE_ARP);
+            pkt->hwtype = HTONS(ETH_HWTYPE);
+            pkt->proto = HTONS(ETH_TYPE_IP);
+            pkt->hwlen = ETH_HWADDR_LEN;
+            pkt->protolen = IPV4_PROTO_LEN;
+            pkt->opcode = HTONS(ETHARP_OPCODE_REQUEST);
 
-        /* Memset the hardware src addr to 0 for ARP requests */
-        memset(&pkt->hwdst_addr, 0, ETH_HWADDR_LEN);
-        pkt->ipdst_addr = request.ip_addr;
-        pkt->ipsrc_addr = arp_config.ip;
-        memset(&pkt->padding, 0, 10);
+            /* Memset the hardware src addr to 0 for ARP requests */
+            memset(&pkt->hwdst_addr, 0, ETH_HWADDR_LEN);
+            pkt->ipdst_addr = request.ip_addr;
+            pkt->ipsrc_addr = arp_config.ip;
+            memset(&pkt->padding, 0, 10);
 
-        if (FIREWALL_DEBUG_OUTPUT) {
-            sddf_printf("MAC[5] = %x | ARP requester processing request for ip %u\n", arp_config.mac_addr[5], request.ip_addr);
+            if (FIREWALL_DEBUG_OUTPUT) {
+                sddf_printf("MAC[5] = %x | ARP requester processing client %u request for ip %u\n", arp_config.mac_addr[5], client, request.ip_addr);
+            }
+
+            buffer.len = 56;
+            err = net_enqueue_active(&tx_queue, buffer);
+            assert(!err);
+
+            /* Create arp entry for request to store associated client */
+            arp_entry_t entry = {0};
+            entry.valid = false;
+            entry.client = client;
+            err = hashtable_insert(arp_table, request.ip_addr, &entry);
+
+            transmitted = true;
+            request.valid = false;
         }
-
-        buffer.len = 56;
-        err = net_enqueue_active(&tx_queue, buffer);
-        assert(!err);
-
-        /* Create arp entry for request */
-        arp_entry_t entry = {0};
-        entry.valid = false;
-        err = hashtable_insert(arp_table, request.ip_addr, &entry);
-
-        transmitted = true;
-        request.valid = false;
     }
 
     if (transmitted && net_require_signal_active(&tx_queue)) {
@@ -98,7 +101,7 @@ void process_requests()
 
 void process_responses()
 {
-    bool notify_client = false;
+    bool notify_client[FIREWALL_NUM_ARP_REQUESTER_CLIENTS] = {false};
     bool returned = false;
     bool reprocess = true;
     while (reprocess) {
@@ -122,17 +125,19 @@ void process_responses()
                         memcpy(&entry->mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
 
                         if (FIREWALL_DEBUG_OUTPUT) {
-                            sddf_printf("MAC[5] = %x | ARP requester received response for ip %u. MAC[0] = %x, MAC[5] = %x\n", arp_config.mac_addr[5], pkt->ipsrc_addr, pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
+                            sddf_printf("MAC[5] = %x | ARP requester received response for client %u, ip %u. MAC[0] = %x, MAC[5] = %x\n", arp_config.mac_addr[5], entry->client, pkt->ipsrc_addr, pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
                         }
                         
-                        /* Send to router */
-                        arp_enqueue_response(arp_queue, pkt->ipsrc_addr, entry->mac_addr, true);
-                        notify_client = true;
+                        /* Send to client */
+                        arp_enqueue_response(arp_queues[entry->client], pkt->ipsrc_addr, entry->mac_addr, true);
+                        notify_client[entry->client] = true;
+
                     } else {
                         /* Create a new entry */
                         arp_entry_t entry = {0};
                         memcpy(&entry.mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
                         entry.valid = true;
+                        entry.client = FIREWALL_NUM_ARP_REQUESTER_CLIENTS + 1;
                         err = hashtable_insert(arp_table, pkt->ipsrc_addr, &entry);
                         if (err) {
                             sddf_dprintf("ARP_REQUESTER|LOG: Hash table full, failed to insert!\n");
@@ -161,8 +166,10 @@ void process_responses()
         microkit_deferred_notify(net_config.rx.id);
     }
 
-    if (notify_client) {
-        microkit_notify(arp_config.router.ch);
+    for (uint8_t client = 0; client < FIREWALL_NUM_ARP_REQUESTER_CLIENTS; client++) {
+        if (notify_client[client]) {
+            microkit_notify(arp_config.clients[client].ch);
+        }
     }
 }
 
@@ -175,20 +182,22 @@ void init(void)
     serial_putchar_init(serial_config.tx.id, &serial_tx_queue_handle);
 
     net_queue_init(&rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
-                   net_config.rx.num_buffers);
+        net_config.rx.num_buffers);
     net_queue_init(&tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
-                   net_config.tx.num_buffers);
+        net_config.tx.num_buffers);
     net_buffers_init(&tx_queue, 0);
 
-    arp_queue = (arp_queue_handle_t *) arp_config.router.queue.vaddr;
-    arp_handle_init(arp_queue, arp_config.router.capacity);
+    for (uint8_t client = 0; client < FIREWALL_NUM_ARP_REQUESTER_CLIENTS; client++) {
+        arp_queues[client] = (arp_queue_handle_t *) arp_config.clients[client].queue.vaddr;
+        arp_handle_init(arp_queues[client], arp_config.clients[client].capacity);
+    }
 
     arp_table = (hashtable_t *) arp_config.arp_cache.vaddr;
 }
 
 void notified(microkit_channel ch)
 {
-    if (ch == arp_config.router.ch) {
+    if (ch == arp_config.clients[0].ch || ch == arp_config.clients[1].ch) {
         process_requests();
     } if (ch == net_config.rx.id) {
         process_responses();

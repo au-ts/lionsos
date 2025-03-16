@@ -271,10 +271,10 @@ void init(void)
                         router_config.tx_active.capacity);
 
     /* Set up virt rx firewall queue */
-    firewall_queue_init(&state.rx_free, router_config.rx_free.conn.queue.vaddr,
-                        router_config.rx_free.conn.capacity);
+    firewall_queue_init(&state.rx_free, router_config.rx_free.queue.vaddr,
+                        router_config.rx_free.capacity);
 
-    state.data_vaddr = (uintptr_t)router_config.rx_free.data.region.vaddr;
+    state.data_vaddr = (uintptr_t)router_config.data.vaddr;
 
     /* Initialise arp queues */
     arp_queue = (arp_queue_handle_t *) router_config.arp_queue.queue.vaddr;
@@ -284,7 +284,7 @@ void init(void)
 
     /* Initialise the packet waiting queue from mapped in memory */
     pkt_waiting_queue.llnode_pool = (uint8_t *) router_config.packet_queue.vaddr;
-    pkt_waiting_queue.pool_size = router_config.rx_free.conn.capacity;
+    pkt_waiting_queue.pool_size = router_config.rx_free.capacity;
     pkt_waiting_queue.node_size = sizeof(llnode_pkt_waiting_t);
 
     llinit(&pkt_waiting_queue);
@@ -307,7 +307,7 @@ void notified(microkit_channel ch)
 
     if (returned) {
         returned = false;
-        microkit_deferred_notify(router_config.rx_free.conn.ch);
+        microkit_deferred_notify(router_config.rx_free.ch);
     }
 
     if (transmitted) {

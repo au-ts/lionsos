@@ -141,6 +141,10 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data0/net_virt_rx.data firewall_network_virt_rx0.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data0/net_virt_tx.data firewall_network_virt_tx0.elf
 
+	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
+
 # arp_requester0 is a net client of the other network
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_arp_requester0.data arp_requester0.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_arp_responder0.data arp_responder0.elf

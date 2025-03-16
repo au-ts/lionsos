@@ -52,13 +52,13 @@ static uint8_t transport_layer_offset(ipv4_packet_t *ip_pkt) {
     return ip_pkt->ihl;
 }
 
-typedef struct __attribute__((__packed__)) udp_hdr
+typedef struct __attribute__((__packed__)) udphdr
 {
     uint16_t src_port;
     uint16_t dst_port;
     uint16_t len;
     uint16_t check;
-} udp_hdr_t;
+} udphdr_t;
 
 typedef struct __attribute__((__packed__)) tcphdr
   {
@@ -80,7 +80,7 @@ typedef struct __attribute__((__packed__)) tcphdr
     uint16_t urg_ptr;
 } tcphdr_t;
 
-typedef __attribute__((__packed__)) struct icmphdr
+typedef struct __attribute__((__packed__)) icmphdr
 {
     uint8_t type;		    /* message type */
     uint8_t code;		    /* type sub-code */
@@ -89,14 +89,26 @@ typedef __attribute__((__packed__)) struct icmphdr
     {
         struct
         {
-            u_int16_t id;
-            u_int16_t sequence;
+            uint16_t id;
+            uint16_t sequence;
         } echo;			    /* echo datagram */
-        u_int32_t gateway;	/* gateway address */
+        uint32_t gateway;	/* gateway address */
         struct
         {
-            u_int16_t __unused;
-            u_int16_t mtu;
+            uint16_t unused;
+            uint16_t mtu;
         } frag;			    /* path mtu discovery */
     } un;
 } icmphdr_t;
+
+typedef struct __attribute__((__packed__)) arphdr {
+    uint16_t hwtype;
+    uint16_t proto;
+    uint8_t hwlen;
+    uint8_t protolen;
+    uint16_t opcode;
+    uint8_t hwsrc_addr[ETH_HWADDR_LEN];
+    uint32_t ipsrc_addr;
+    uint8_t hwdst_addr[ETH_HWADDR_LEN];
+    uint32_t ipdst_addr;
+} arphdr_t;
