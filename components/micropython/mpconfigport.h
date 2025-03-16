@@ -94,6 +94,9 @@ typedef long mp_off_t;
 #elif defined(CONFIG_PLAT_IMX8MM_EVK)
 #define MICROPY_HW_BOARD_NAME "i.MX 8M Mini"
 #define MICROPY_HW_MCU_NAME   "Cortex A53"
+#elif defined(CONFIG_PLAT_IMX8MP_EVK)
+#define MICROPY_HW_BOARD_NAME "i.MX 8MP"
+#define MICROPY_HW_MCU_NAME   "Cortex A53"
 #elif defined(CONFIG_PLAT_MAAXBOARD)
 #define MICROPY_HW_BOARD_NAME "MaaXBoard"
 #define MICROPY_HW_MCU_NAME   "Cortex A53"
