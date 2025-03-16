@@ -32,6 +32,10 @@
 #define PPPOS_SUPPORT 1
 #define PPP_IPV4_SUPPORT 1
 #define PPP_SERVER 1
+#define MEMP_NUM_PPP_PCB 2
+#define PPP_AUTH_SUPPORT 1
+// #define NO_SYS 0
+#define PPP_INPROC_IRQ_SAFE 0
 /* Leave the checksum checking on RX to hardware */
 #define CHECKSUM_CHECK_IP 0
 #define CHECKSUM_CHECK_UDP 0

@@ -41,6 +41,7 @@
 #include <netif/ppp/ppp.h>
 #include <netif/ppp/pppos.h>
 #include <netif/ppp/pppapi.h>
+#include <netif/ppp/ppp_impl.h>
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
@@ -67,8 +68,10 @@ typedef struct pbuf_custom_offset
 
 typedef struct state
 {
-    struct ppp_pcb_s *pcb;
+    struct ppp_pcb_s *pcb_client;
+    struct ppp_pcb_s *pcb_server;
     struct netif netif;
+    struct netif client_netif;
     /* mac address for this client */
     uint8_t mac[6];
 
@@ -148,7 +151,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
 
 static err_t ppp_output(ppp_pcb *pcb, u8_t *data, u32_t len, void *ctx)
 {
-    sddf_dprintf("WE BALLING\n");
+    sddf_dprintf("In output server\n");
     sddf_dprintf("---------Buffer-------\n");
     struct ppp_header *p_head = (struct ppp_header *) data;
     sddf_dprintf("Flag: 0x%02x\n", p_head->flag);
@@ -158,10 +161,30 @@ static err_t ppp_output(ppp_pcb *pcb, u8_t *data, u32_t len, void *ctx)
     sddf_dprintf("----------------------\n");
     if (p_head->protocol == 0xc023) {
         sddf_dprintf("We are in the link-establishment phase!\n");
-        pppos_input(state.pcb, data, len);
+        // pppos_input(state.pcb_server, data, len);
+    } else if(p_head->protocol == 0x0021) {
+        sddf_dprintf("A normal packet to output\n");
     }
 
 }
+
+static err_t ppp_output_client(ppp_pcb *pcb, u8_t *data, u32_t len, void *ctx)
+{
+    sddf_dprintf("In oputput client\n");
+    sddf_dprintf("---------Buffer-------\n");
+    struct ppp_header *p_head = (struct ppp_header *) data;
+    sddf_dprintf("Flag: 0x%02x\n", p_head->flag);
+    sddf_dprintf("Addr: 0x%02x\n", p_head->address);
+    sddf_dprintf("Control: 0x%02x\n", p_head->control);
+    sddf_dprintf("Protocol: 0x%04x\n", p_head->protocol);
+    sddf_dprintf("----------------------\n");
+    if (p_head->protocol == 0xc023) {
+        sddf_dprintf("We are in the link-establishment phase!\n");
+        pppos_input(state.pcb_client, data, len);
+    }
+
+}
+
 
 static void netif_status_callback(struct netif *netif) {
     dlog("Netif is up now! IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
@@ -244,8 +267,25 @@ void init_networking(void) {
     // int err = dhcp_start(&(state.netif));
     // dlogp(err, "failed to start DHCP negotiation");
 
-    state.pcb = pppos_create(&state.netif, ppp_output, netif_status_callback, dumpy_cb);
-    int err = ppp_connect(state.pcb, 0);
+    state.pcb_server = pppos_create(&(state.client_netif), ppp_output_client, netif_status_callback, dumpy_cb);
+    assert(state.pcb_server != NULL);
+
+    ppp_set_silent(state.pcb_server, 1);
+    int err = ppp_listen(state.pcb_server);
+    state.pcb_server = PPP_PHASE_RUNNING;
+    assert(!err);
+    state.pcb_server->lcp_fsm.state = PPP_FSM_OPENED;
+
+    state.pcb_client = pppos_create(&(state.netif), ppp_output, netif_status_callback, dumpy_cb);
+    assert(state.pcb_client != NULL);
+
+    ppp_set_passive(state.pcb_client, 1);
+    err = ppp_connect(state.pcb_client, 0);
+    state.pcb_client->phase = PPP_PHASE_RUNNING;
+    ppp_start(state.pcb_client);
+    state.pcb_client->lcp_fsm.state = PPP_FSM_OPENED;
+    // assert(!err);
+    netif_set_default(&(state.netif));
 
     if (notify_rx && net_require_signal_free(&state.rx_queue)) {
         net_cancel_signal_free(&state.rx_queue);
@@ -283,19 +323,22 @@ void mpnet_process_rx(void) {
             temp->control = 0x03;
             temp->protocol = 0x21;
 
-            pppos_input(state.pcb, (uint8_t *)temp, buffer.len - ((sizeof(struct ethernet_header) - sizeof(struct ppp_header))));
-            // pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
-            // custom_pbuf_offset->offset = buffer.io_or_offset;
-            // custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
+            // pppos_input_tcpip(state.pcb_client, (uint8_t *)temp, buffer.len - ((sizeof(struct ethernet_header) - sizeof(struct ppp_header))));
+            pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
+            custom_pbuf_offset->offset = (buffer.io_or_offset + net_config.rx_data.vaddr) + ((sizeof(struct ethernet_header) - sizeof(struct ppp_header)));
+            custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
 
-            // struct pbuf *p = pbuf_alloced_custom(
-            //     PBUF_RAW,
-            //     buffer.len,
-            //     PBUF_REF,
-            //     &custom_pbuf_offset->custom,
-            //     (void *)(buffer.io_or_offset + net_config.rx_data.vaddr),
-            //     NET_BUFFER_SIZE
-            // );
+            struct pbuf *p = pbuf_alloced_custom(
+                PBUF_RAW,
+                buffer.len - ((sizeof(struct ethernet_header) - sizeof(struct ppp_header))),
+                PBUF_REF,
+                &custom_pbuf_offset->custom,
+                (void *)(temp),
+                NET_BUFFER_SIZE
+            );
+
+            ppp_input(state.pcb_client, p);
+            sddf_dprintf("Finished inputting packet into the pcb server!\n");
 
             // if (state.netif.input(p, &state.netif) != ERR_OK) {
             //     // If it is successfully received, the receiver controls whether or not it gets freed.
