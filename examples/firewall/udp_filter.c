@@ -19,7 +19,7 @@
 #include <sddf/timer/config.h>
 #include <string.h>
 
-#include "config.h"
+#include "firewall_config.h"
 
 __attribute__((__section__(".filter_config"))) filter_config_t filter_config;
 

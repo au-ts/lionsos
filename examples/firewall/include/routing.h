@@ -4,6 +4,8 @@
 #include "linkedlist.h"
 
 #define NUM_ROUTES 10
+#define WEB_GUI_ROUTE 1
+#define WEB_GUI_PORT 80
 
 typedef struct routing_entry {
     uint32_t network_id;

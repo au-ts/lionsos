@@ -19,7 +19,7 @@
 
 #include "firewall_arp.h"
 #include "hashmap.h"
-#include "config.h"
+#include "firewall_config.h"
 #include "protocols.h"
 
 __attribute__((__section__(".arp_resources"))) arp_requester_config_t arp_config;
@@ -49,6 +49,9 @@ dev_info_t *device_info;
 
 void process_requests()
 {
+    if (!sddf_strcmp(microkit_name, "arp_requester2")) {
+        sddf_dprintf("making requests in arp requester2\n");
+    }
     bool transmitted = false;
     // Loop through and generate ARP requests.
     while (!arp_queue_empty_request(arp_query) && !net_queue_empty_free(&virt_tx_queue)) {

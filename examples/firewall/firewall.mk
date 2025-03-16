@@ -41,8 +41,8 @@ vpath %.c ${SDDF} ${FIREWALL} ${FIREWALL_COMPONENTS}
 IMAGES := eth_driver.elf firewall_network_virt_rx.elf network_virt_tx.elf network_copy.elf \
 		  eth_driver_dwmac.elf network_virt_rx_1.elf firewall_network_virt_rx_1.elf \
 		  timer_driver.elf serial_driver.elf serial_virt_tx.elf \
-		  arp_requester.elf arp_responder.elf routing.elf \
-		  arp_requester2.elf arp_responder2.elf routing2.elf \
+		  arp_requester.elf arp_responder.elf routing_external.elf \
+		  arp_requester2.elf arp_responder2.elf routing_internal.elf \
 		  icmp_filter.elf udp_filter.elf tcp_filter.elf \
 		  icmp_filter2.elf micropython.elf
 
@@ -138,10 +138,10 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_client_config=net_ethernet_driver_client_arp_responder2.data arp_responder.elf arp_responder2.elf
 	$(OBJCOPY) --update-section .arp_resources=arp_responder2.data arp_responder2.elf
 
-	$(OBJCOPY) --update-section .net_client_config=net_ethernet_driver_client_routing1.data routing.elf
-	$(OBJCOPY) --update-section .router_config=router1.data routing.elf
-	$(OBJCOPY) --update-section .net_client_config=net_ethernet_driver_dwmac_client_routing2.data routing.elf routing2.elf
-	$(OBJCOPY) --update-section .router_config=router2.data routing2.elf
+	$(OBJCOPY) --update-section .net_client_config=net_ethernet_driver_client_routing1.data routing_external.elf
+	$(OBJCOPY) --update-section .router_config=router1.data routing_external.elf
+	$(OBJCOPY) --update-section .net_client_config=net_ethernet_driver_dwmac_client_routing2.data routing_internal.elf
+	$(OBJCOPY) --update-section .router_config=router2.data routing_internal.elf
 
 	$(OBJCOPY) --update-section .net_client_config=net_ethernet_driver_client_arp_requester1.data arp_requester.elf
 	$(OBJCOPY) --update-section .arp_resources=arp_requester1.data arp_requester.elf
@@ -155,9 +155,17 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 
 	$(OBJCOPY) --update-section .filter_config=firewall_filters1_udp_filter.data udp_filter.elf
 	$(OBJCOPY) --update-section .net_client_config=net_ethernet_driver_dwmac_client_udp_filter.data udp_filter.elf
+	$(OBJCOPY) --update-section .filter_config=firewall_filters2_udp_filter2.data udp_filter.elf udp_filter2.elf
+	$(OBJCOPY) --update-section .net_client_config=net_ethernet_driver_client_udp_filter2.data udp_filter2.elf
 
 	$(OBJCOPY) --update-section .filter_config=firewall_filters1_tcp_filter.data tcp_filter.elf
 	$(OBJCOPY) --update-section .net_client_config=net_ethernet_driver_dwmac_client_tcp_filter.data tcp_filter.elf
+	$(OBJCOPY) --update-section .filter_config=firewall_filters2_tcp_filter2.data tcp_filter.elf tcp_filter2.elf
+	$(OBJCOPY) --update-section .net_client_config=net_ethernet_driver_client_tcp_filter2.data tcp_filter2.elf
+
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .net_client_config=webserver.data micropython.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
 
 ${IMAGE_FILE} $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)

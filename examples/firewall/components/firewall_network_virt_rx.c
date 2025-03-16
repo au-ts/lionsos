@@ -40,6 +40,11 @@ state_t state;
 /* Boolean to indicate whether a packet has been enqueued into the driver's free queue during notification handling */
 static bool notify_drv;
 
+// int is_web_gui(struct ethernet_header *buffer)
+// {
+//     if ()
+// }
+
 /* Return the client ID if the Mac address is a match to a client, return the broadcast ID if MAC address
   is a broadcast address. */
 int get_mac_addr_match(struct ethernet_header *buffer)
@@ -80,6 +85,8 @@ int get_protocol_match(struct ethernet_header *buffer)
     uint16_t ethtype = buffer->type;
     uint16_t protocol;
     if (ethtype == HTONS(ETH_TYPE_ARP)) {
+        // First check if its destination is for the MAC of our web GUI.
+
         // We filter here based on arp opcode
         struct arp_packet *pkt = (struct arp_packet *) buffer;
         // sddf_dprintf("WE HAVE AN ARP PACKET IN GET PROTOCOL MATCH!!!\n");
@@ -107,6 +114,7 @@ int get_protocol_match(struct ethernet_header *buffer)
         }
     }
 
+    sddf_dprintf("Could not find filter for protocol: %d\n", protocol);
     return -4;
 }
 

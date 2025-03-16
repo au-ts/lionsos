@@ -22,11 +22,12 @@
 #include "routing.h"
 #include "firewall_arp.h"
 #include "hashmap.h"
-#include "config.h"
+#include "firewall_config.h"
 #include "linkedlist.h"
 #include "protocols.h"
 
-__attribute__((__section__(".router_config"))) router_config_t router_config;
+#define WEB_GUI_ID 100
+__attribute__((__section__(".router_config"))) router_config_external_t router_config;
 
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
 
@@ -38,6 +39,7 @@ static bool notify_tx;
 static bool notify_rx;
 
 net_queue_handle_t virt_tx_queue;
+net_queue_handle_t webserver_tx_queue;
 
 typedef struct state {
     net_queue_handle_t filter_queue[61];
@@ -74,18 +76,13 @@ void *ll_node_find(struct ll_info *info, uint32_t ip)
 /* Check if there is a packet with this IP address already waiting on an ARP reply. */
 bool check_waiting(struct ll_info *info, uint32_t ip)
 {
-    // Loop through the waiting list
-    struct llnode_ptrs *curr = LLNODE_PTRS_CAST(info->head);
-    while (curr != NULL) {
-        struct llnode_pkt_waiting *curr_node = (struct llnode_pkt_waiting *) curr;
-        if (curr_node->ip == ip) {
-            return true;
-        }
-        curr = LLNODE_PTRS_CAST(curr->next);
+    if (ll_node_find(info, ip) == NULL) {
+        return false;
+    } else {
+        return true;
     }
-
-    return false;
 }
+
 
 void process_arp_waiting()
 {
@@ -97,13 +94,40 @@ void process_arp_waiting()
         int err = arp_dequeue_response(arp_queries, &response);
         /* Check that we actually have a packet waiting. */
         struct llnode_pkt_waiting *waiting_packet = (struct llnode_pkt_waiting *) ll_node_find(&pkt_waiting_queue, response.ip_addr);
-
-        if (!response.valid && waiting_packet->valid) {
+        if (waiting_packet == NULL) {
+            sddf_dprintf("There where no packets waiting.")
+        }
+        sddf_dprintf("ROUTING_EXTERNAL|Processing arp waiting queue\n");
+        if (waiting_packet == NULL) {
+            sddf_dprintf("ROUTING_INTERNAL|We received and arp response for a packet not waiting\n");
+            continue;
+        } else if ((!response.valid && waiting_packet->valid)) {
             // Find all packets with this IP address and drop them.
             waiting_packet->buffer.len = 0;
             err = net_enqueue_free(&state.filter_queue[waiting_packet->filter], waiting_packet->buffer);
             assert(!err);
-        } else {
+        } else if (waiting_packet->valid && waiting_packet->filter == WEB_GUI_ID) {
+            if (response.ip_addr == waiting_packet->ip) {
+                struct ipv4_packet *pkt = (struct ipv4_packet *)(router_config.webserver_conn.data.vaddr + waiting_packet->buffer.io_or_offset);
+                sddf_memcpy(pkt->ethdst_addr, response.mac_addr, ETH_HWADDR_LEN);
+                sddf_memcpy(pkt->ethsrc_addr, device_info->mac, ETH_HWADDR_LEN);
+                net_buff_desc_t buffer_tx;
+                int err = net_dequeue_free(&virt_tx_queue, &buffer_tx);
+                assert(!err);
+                pkt->check = 0;
+
+                // @kwinter: For now we are memcpy'ing the packet from our receive buffer
+                // to the transmit buffer.
+                sddf_memcpy((net_config.tx_data.vaddr + buffer_tx.io_or_offset), (router_config.webserver_conn.data.vaddr + waiting_packet->buffer.io_or_offset), waiting_packet->buffer.len);
+                buffer_tx.len = waiting_packet->buffer.len;
+                err = net_enqueue_active(&virt_tx_queue, buffer_tx);
+                assert(!err);
+                waiting_packet->buffer.len = 0;
+                err = net_enqueue_free(&webserver_tx_queue, waiting_packet->buffer);
+                assert(!err);
+                microkit_deferred_notify(net_config.tx.id);
+            }
+        } else if (waiting_packet->valid) {
             if (response.ip_addr == waiting_packet->ip) {
                 struct ipv4_packet *pkt = (struct ipv4_packet *)(router_config.filters[waiting_packet->filter].data.vaddr + waiting_packet->buffer.io_or_offset);
                 sddf_memcpy(pkt->ethdst_addr, response.mac_addr, ETH_HWADDR_LEN);
@@ -124,6 +148,8 @@ void process_arp_waiting()
                 assert(!err);
                 microkit_deferred_notify(net_config.tx.id);
             }
+        } else {
+            sddf_dprintf("ROUTING_EXTERNAL|Unable to find packet waiting on ip address from ARP response.\n");
         }
 
         llfree(&pkt_waiting_queue, (void *)waiting_packet);
@@ -146,7 +172,114 @@ uint32_t find_route(uint32_t ip)
     return 0;
 }
 
+void route_webserver()
+{
+    bool transmitted = false;
+    bool reprocess = true;
+    while (reprocess) {
+        while (!net_queue_empty_active(&webserver_tx_queue) && !net_queue_empty_free(&virt_tx_queue)) {
+            net_buff_desc_t buffer;
+            int err = net_dequeue_active(&webserver_tx_queue, &buffer);
+            assert(!err);
 
+            struct ipv4_packet *pkt = (struct ipv4_packet *)(router_config.webserver_conn.data.vaddr + buffer.io_or_offset);
+            if (pkt == NULL) {
+                sddf_dprintf("ROUTING_EXTERNAL| We got a null packet from Micropython!\n");
+                buffer.len = 0;
+                err = net_enqueue_free(&webserver_tx_queue, buffer);
+                assert(!err);
+                continue;
+            }
+            /* Decrement the TTL field. IF it reaches 0 protocol is that we drop
+            * the packet in this router.
+            *
+            * NOTE: We assume that if we get a packet other than an IPv4 packet, we drop.buffer
+            * This edge case should be handled by a new protocol virtualiser.
+            */
+            if (pkt->ttl > 1 && pkt->type == HTONS(ETH_TYPE_IP)) {
+                pkt->ttl -= 1;
+                // This is where we will swap out the MAC address with the appropriate address
+                uint32_t destIP = pkt->dst_ip;
+
+                // From the destination IP, consult the routing tables to find the next hop address.
+                uint32_t nextIP = find_route(destIP);
+                if (nextIP == 0) {
+                    // If we have no route, assume that the device is attached directly.
+                    nextIP = destIP;
+                }
+                uint8_t mac[ETH_HWADDR_LEN];
+                arp_entry_t hash_entry;
+                int ret = hashtable_search(arp_table, (uint32_t) nextIP, &hash_entry);
+                if (ret == -1 && !llfull(&pkt_waiting_queue)) {
+                    /* In this case, the IP address is not in the ARP Tables.
+                    *  We add an entry to the ARP request queue. This is where we
+                    *  place the responses to the ARP requests, and if we get a
+                    *  timeout, we will then drop the packets associated with that IP address
+                    *  that are waiting in the queue.
+                    */
+                    if (!arp_queue_full_request(arp_queries) && !check_waiting(&pkt_waiting_queue, destIP)) {
+                        arp_request_t request = {0};
+                        request.ip_addr = nextIP;
+                        request.valid = true;
+                        char buf[16];
+                        int ret = arp_enqueue_request(arp_queries, request);
+                        if (ret != 0) {
+                            sddf_dprintf("ROUTING_EXTERNAL| Unable to enqueue into ARP request queue!\n");
+                        }
+                    } else {
+                        buffer.len = 0;
+                        err = net_enqueue_free(&webserver_tx_queue, buffer);
+                        assert(!err);
+                        continue;
+                    }
+
+                    // Add this packet to the ARP waiting queue
+                    struct llnode_pkt_waiting *waiting_packet = (struct llnode_pkt_waiting *) llalloc(&pkt_waiting_queue);
+                    waiting_packet->ip = nextIP;
+                    sddf_memcpy(&waiting_packet->buffer, &buffer, sizeof(net_buff_desc_t));
+                    waiting_packet->buffer = buffer;
+                    waiting_packet->valid = true;
+                    waiting_packet->filter = 100;
+                    llpush(&pkt_waiting_queue, (void *)waiting_packet);
+                    microkit_deferred_notify(router_config.router.id);
+                    continue;
+                } else {
+                    // We should have the mac address. Replace the dest in the ethernet header.
+                    sddf_memcpy(&pkt->ethdst_addr, &hash_entry.mac_addr, ETH_HWADDR_LEN);
+                    sddf_memcpy(&pkt->ethsrc_addr, device_info->mac, ETH_HWADDR_LEN);
+                    pkt->check = 0;
+                    // Send the packet out to the network.
+                    net_buff_desc_t buffer_tx;
+                    int err = net_dequeue_free(&virt_tx_queue, &buffer_tx);
+                    assert(!err);
+
+                    // @kwinter: For now we are memcpy'ing the packet from our receive buffer
+                    // to the transmit buffer.
+                    sddf_memcpy((net_config.tx_data.vaddr + buffer_tx.io_or_offset), (router_config.webserver_conn.data.vaddr + buffer.io_or_offset), buffer.len + (sizeof(struct ipv4_packet)));
+                    struct ipv4_packet *test = (struct ipv4_packet *)(net_config.tx_data.vaddr + buffer_tx.io_or_offset);
+                    buffer_tx.len = buffer.len;
+                    err = net_enqueue_active(&virt_tx_queue, buffer_tx);
+                    transmitted = true;
+
+                    assert(!err);
+                }
+                buffer.len = 0;
+                err = net_enqueue_free(&webserver_tx_queue, buffer);
+                assert(!err);
+
+            }
+        }
+
+        net_request_signal_active(&webserver_tx_queue);
+        reprocess = false;
+
+        if (!net_queue_empty_active(&webserver_tx_queue)) {
+            net_cancel_signal_active(&webserver_tx_queue);
+            reprocess = true;
+        }
+    }
+
+}
 
 void route()
 {
@@ -196,10 +329,9 @@ void route()
                             char buf[16];
                             int ret = arp_enqueue_request(arp_queries, request);
                             if (ret != 0) {
-                                sddf_dprintf("ROUTING| Unable to enqueue into ARP request queue!\n");
+                                sddf_dprintf("ROUTING_EXTERNAL| Unable to enqueue into ARP request queue!\n");
                             }
                         } else {
-                            sddf_dprintf("ROUTING| ARP request queue was full!\n");
                             buffer.len = 0;
                             err = net_enqueue_free(&state.filter_queue[filter], buffer);
                             assert(!err);
@@ -278,6 +410,9 @@ void init(void)
         net_config.tx.num_buffers);
     net_buffers_init(&virt_tx_queue, 0);
 
+    net_queue_init(&webserver_tx_queue, router_config.webserver_conn.conn.free_queue.vaddr,
+        router_config.webserver_conn.conn.active_queue.vaddr, router_config.webserver_conn.conn.num_buffers);
+
     arp_queries = (arp_queue_handle_t *) router_config.router.arp_queue.vaddr;
     arp_handle_init(arp_queries, 256);
 
@@ -303,6 +438,9 @@ void notified(microkit_channel ch)
     if (ch == router_config.router.id) {
         /* This is the channel between the ARP component and the routing component. */
         process_arp_waiting();
+    } else if (ch == router_config.webserver_conn.conn.id) {
+        sddf_dprintf("ROUTING_EXTERNAL|Sending some stuff for micropython!\n");
+        route_webserver();
     } else {
         route();
     }

@@ -45,6 +45,11 @@ static bool llfull(struct ll_info *info)
     return (info->empty_head == NULL);
 }
 
+static bool llempty(struct ll_info *info)
+{
+    return (info->curr_size == 0);
+}
+
 static void *llalloc(struct ll_info *info)
 {
     assert(info);

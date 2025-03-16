@@ -58,3 +58,10 @@ struct __attribute__((__packed__)) tcp_packet {
     uint16_t check;
     uint16_t urgent_ptr;
 };
+
+struct __attribute__((__packed__)) ppp_header {
+    uint8_t flag;
+    uint8_t address;
+    uint8_t control;
+    uint16_t protocol;
+};

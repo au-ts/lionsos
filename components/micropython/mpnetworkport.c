@@ -24,6 +24,8 @@
 #include <sddf/util/cache.h>
 #include <sddf/network/constants.h>
 
+#include <lions/firewall/protocols.h>
+
 #include <lwip/dhcp.h>
 #include <lwip/init.h>
 #include <lwip/ip.h>
@@ -36,11 +38,16 @@
 #include <lwip/timeouts.h>
 #include <lwip/err.h>
 #include <netif/etharp.h>
+#include <netif/ppp/ppp.h>
+#include <netif/ppp/pppos.h>
+#include <netif/ppp/pppapi.h>
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
 
 extern net_client_config_t net_config;
+
+uint8_t mac_addr[6] = {0x00, 0x01, 0xc0, 0x39, 0xd5, 0x15};
 
 #define dlogp(pred, fmt, ...) do { \
     if (pred) { \
@@ -60,6 +67,7 @@ typedef struct pbuf_custom_offset
 
 typedef struct state
 {
+    struct ppp_pcb_s *pcb;
     struct netif netif;
     /* mac address for this client */
     uint8_t mac[6];
@@ -90,6 +98,10 @@ u32_t sys_now(void) {
     return mp_obj_get_int(mp_time_time_get());
 }
 
+u32_t sys_jiffies(void) {
+    return sys_now();
+}
+
 static void interface_free_buffer(struct pbuf *buf) {
     SYS_ARCH_DECL_PROTECT(old_level);
     pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)buf;
@@ -102,6 +114,7 @@ static void interface_free_buffer(struct pbuf *buf) {
 }
 
 static err_t netif_output(struct netif *netif, struct pbuf *p) {
+    printf("Outputting data from micropython");
     /* Grab an available TX buffer, copy pbuf data over,
     add to active tx queue, notify server */
     err_t ret = ERR_OK;
@@ -133,10 +146,41 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
     return ret;
 }
 
-static void netif_status_callback(struct netif *netif) {
-    if (dhcp_supplied_address(netif)) {
-        dlog("DHCP request finished, IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
+static err_t ppp_output(ppp_pcb *pcb, u8_t *data, u32_t len, void *ctx)
+{
+    sddf_dprintf("WE BALLING\n");
+    sddf_dprintf("---------Buffer-------\n");
+    struct ppp_header *p_head = (struct ppp_header *) data;
+    sddf_dprintf("Flag: 0x%02x\n", p_head->flag);
+    sddf_dprintf("Addr: 0x%02x\n", p_head->address);
+    sddf_dprintf("Control: 0x%02x\n", p_head->control);
+    sddf_dprintf("Protocol: 0x%04x\n", p_head->protocol);
+    sddf_dprintf("----------------------\n");
+    if (p_head->protocol == 0xc023) {
+        sddf_dprintf("We are in the link-establishment phase!\n");
+        pppos_input(state.pcb, data, len);
     }
+
+}
+
+static void netif_status_callback(struct netif *netif) {
+    dlog("Netif is up now! IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
+        //     dlog("DHCP request finished, IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
+
+    // if (dhcp_supplied_address(netif)) {
+    //     dlog("DHCP request finished, IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
+    // }
+}
+
+
+// err_t packet_route(struct netif *netif, struct pbuf *q, const ip4_addr_t *ipaddr)
+// {
+//     etharp_query(netif, ipaddr, q);
+// }
+
+void dumpy_cb()
+{
+    sddf_dprintf("We are in the dumpy cb from PPP\n");
 }
 
 static err_t ethernet_init(struct netif *netif)
@@ -147,19 +191,21 @@ static err_t ethernet_init(struct netif *netif)
     }
 
     state_t *data = netif->state;
+    sddf_memcpy(netif->hwaddr, mac_addr, 6);
 
-    netif->hwaddr[0] = data->mac[0];
-    netif->hwaddr[1] = data->mac[1];
-    netif->hwaddr[2] = data->mac[2];
-    netif->hwaddr[3] = data->mac[3];
-    netif->hwaddr[4] = data->mac[4];
-    netif->hwaddr[5] = data->mac[5];
+    // netif->hwaddr[0] = data->mac[0];
+    // netif->hwaddr[1] = data->mac[1];
+    // netif->hwaddr[2] = data->mac[2];
+    // netif->hwaddr[3] = data->mac[3];
+    // netif->hwaddr[4] = data->mac[4];
+    // netif->hwaddr[5] = data->mac[5];
     netif->mtu = ETHER_MTU;
-    netif->hwaddr_len = ETHARP_HWADDR_LEN;
-    netif->output = etharp_output;
+    netif->hwaddr_len = 6;
+    netif->output = netif_output;
     netif->linkoutput = netif_output;
     NETIF_INIT_SNMP(netif, snmp_ifType_ethernet_csmacd, LINK_SPEED);
-    netif->flags = NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_LINK_UP | NETIF_FLAG_IGMP;
+    netif->input = dumpy_cb;
+    netif->flags = NETIF_FLAG_LINK_UP | NETIF_FLAG_IGMP;
 
     return ERR_OK;
 }
@@ -173,28 +219,33 @@ void init_networking(void) {
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
-    sddf_memcpy(state.mac, net_config.mac_addr, 6);
+    sddf_memcpy(state.mac, mac_addr, 6);
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
-    struct ip4_addr netmask, ipaddr, gw, multicast;
+    struct ip4_addr netmask, ipaddr, gw, multicast, macbook;
     ipaddr_aton("0.0.0.0", &gw);
-    ipaddr_aton("0.0.0.0", &ipaddr);
+    // @kwinter: Unsure of what to set this IP address to?
+    ipaddr_aton("192.168.33.0", &ipaddr);
     ipaddr_aton("0.0.0.0", &multicast);
     ipaddr_aton("255.255.255.0", &netmask);
+    ipaddr_aton("192.168.33.6", &macbook);
+    struct eth_addr mac_addr = ETH_ADDR(0x10, 0x82, 0x86, 0x2b, 0x5a, 0xf4);
 
-    state.netif.name[0] = 'e';
-    state.netif.name[1] = '0';
+    // state.netif.name[0] = 'e';
+    // state.netif.name[1] = '0';
 
-    if (!netif_add(&(state.netif), &ipaddr, &netmask, &gw, &state,
-                   ethernet_init, ethernet_input)) {
-        dlog("Netif add returned NULL");
-    }
-    netif_set_default(&(state.netif));
-    netif_set_status_callback(&(state.netif), netif_status_callback);
-    netif_set_up(&(state.netif));
+    // if (!netif_add(&(state.netif), &ipaddr, &netmask, &gw, &state,
+    //             pppoe_init, pppoe_data_input)) {
+    //     dlog("Netif add returned NULL");
+    // }
+    // netif_set_default(&(state.netif));
+    // netif_set_status_callback(&(state.netif), netif_status_callback);
+    // netif_set_up(&(state.netif));
+    // int err = dhcp_start(&(state.netif));
+    // dlogp(err, "failed to start DHCP negotiation");
 
-    int err = dhcp_start(&(state.netif));
-    dlogp(err, "failed to start DHCP negotiation");
+    state.pcb = pppos_create(&state.netif, ppp_output, netif_status_callback, dumpy_cb);
+    int err = ppp_connect(state.pcb, 0);
 
     if (notify_rx && net_require_signal_free(&state.rx_queue)) {
         net_cancel_signal_free(&state.rx_queue);
@@ -221,27 +272,36 @@ void mpnet_process_rx(void) {
     bool reprocess = true;
     while (reprocess) {
         while (!net_queue_empty_active(&state.rx_queue)) {
+            sddf_dprintf("Looooping through queue in mpnetwork\n");
             net_buff_desc_t buffer;
             net_dequeue_active(&state.rx_queue, &buffer);
 
-            pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
-            custom_pbuf_offset->offset = buffer.io_or_offset;
-            custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
+            struct ppp_header *temp = (struct ppp_header *)((buffer.io_or_offset + net_config.rx_data.vaddr) + ((sizeof(struct ethernet_header) - sizeof(struct ppp_header))));
 
-            struct pbuf *p = pbuf_alloced_custom(
-                PBUF_RAW,
-                buffer.len,
-                PBUF_REF,
-                &custom_pbuf_offset->custom,
-                (void *)(buffer.io_or_offset + net_config.rx_data.vaddr),
-                NET_BUFFER_SIZE
-            );
+            temp->flag = 0x7E;
+            temp->address = 0xFF;
+            temp->control = 0x03;
+            temp->protocol = 0x21;
 
-            if (state.netif.input(p, &state.netif) != ERR_OK) {
-                // If it is successfully received, the receiver controls whether or not it gets freed.
-                dlog("netif.input() != ERR_OK");
-                pbuf_free(p);
-            }
+            pppos_input(state.pcb, (uint8_t *)temp, buffer.len - ((sizeof(struct ethernet_header) - sizeof(struct ppp_header))));
+            // pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
+            // custom_pbuf_offset->offset = buffer.io_or_offset;
+            // custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
+
+            // struct pbuf *p = pbuf_alloced_custom(
+            //     PBUF_RAW,
+            //     buffer.len,
+            //     PBUF_REF,
+            //     &custom_pbuf_offset->custom,
+            //     (void *)(buffer.io_or_offset + net_config.rx_data.vaddr),
+            //     NET_BUFFER_SIZE
+            // );
+
+            // if (state.netif.input(p, &state.netif) != ERR_OK) {
+            //     // If it is successfully received, the receiver controls whether or not it gets freed.
+            //     dlog("netif.input() != ERR_OK");
+            //     pbuf_free(p);
+            // }
         }
 
         net_request_signal_active(&state.rx_queue);

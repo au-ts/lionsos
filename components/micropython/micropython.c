@@ -159,6 +159,9 @@ void mpnet_process_rx(void);
 void mpnet_handle_notify(void);
 
 void notified(microkit_channel ch) {
+    if (ch == 0) {
+        printf("Micropython is notified by the routing component\n");
+    }
     if (net_enabled) {
         mpnet_process_rx();
         pyb_lwip_poll();

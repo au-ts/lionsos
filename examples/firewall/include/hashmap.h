@@ -4,8 +4,8 @@
 #include <stddef.h>
 #include "firewall_arp.h"
 
-#define TABLE_SIZE 100  // Size of the hash table (can be adjusted)
-#define MAX_ENTRIES 100  // Maximum number of entries in the hash table
+#define TABLE_SIZE 1026  // Size of the hash table (can be adjusted)
+#define MAX_ENTRIES 1026  // Maximum number of entries in the hash table
 
 typedef struct entry {
     uint32_t key;

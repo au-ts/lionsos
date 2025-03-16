@@ -256,7 +256,7 @@ void tcp_init_0(void)
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
     ipaddr_aton("0.0.0.0", &gw);
-    ipaddr_aton("0.0.0.0", &ipaddr);
+    ipaddr_aton("192.168.33.0", &ipaddr);
     ipaddr_aton("0.0.0.0", &multicast);
     ipaddr_aton("255.255.255.0", &netmask);
 
@@ -271,8 +271,8 @@ void tcp_init_0(void)
     netif_set_status_callback(&(state.netif), netif_status_callback);
     netif_set_up(&(state.netif));
 
-    int err = dhcp_start(&(state.netif));
-    dlogp(err, "failed to start DHCP negotiation");
+    // int err = dhcp_start(&(state.netif));
+    // dlogp(err, "failed to start DHCP negotiation");
 
     if (notify_rx && net_require_signal_free(&state.rx_queue)) {
         net_cancel_signal_free(&state.rx_queue);

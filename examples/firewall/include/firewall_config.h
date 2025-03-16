@@ -53,14 +53,30 @@ typedef struct arp_responder_config {
     uint8_t mac_addr[ETH_HWADDR_LEN];
 } arp_responder_config_t;
 
-typedef struct router_config {
+typedef struct router_config_external {
     char magic[LIONS_FIREWALL_MAGIC_LEN];
     region_resource_t packet_queue;
     arp_router_connection_resource_t router;
     uint8_t mac_addr[ETH_HWADDR_LEN];
     firewall_filter_info_t filters[LIONSOS_FIREWALL_MAX_FILTERS];
     uint16_t num_filters;
-} router_config_t;
+    uint32_t rx_ip;
+    uint32_t tx_ip;
+    firewall_filter_info_t webserver_conn;
+} router_config_external_t;
+
+typedef struct router_config_internal {
+    char magic[LIONS_FIREWALL_MAGIC_LEN];
+    region_resource_t packet_queue;
+    arp_router_connection_resource_t router;
+    uint8_t mac_addr[ETH_HWADDR_LEN];
+    firewall_filter_info_t filters[LIONSOS_FIREWALL_MAX_FILTERS];
+    uint16_t num_filters;
+    uint32_t rx_ip;
+    uint32_t tx_ip;
+    uint8_t webserver;
+    firewall_filter_info_t webserver_conn;
+} router_config_internal_t;
 
 typedef struct filter_config {
     char magic[LIONS_FIREWALL_MAGIC_LEN];

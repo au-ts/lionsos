@@ -16,17 +16,22 @@
 #define LWIP_IPV4 1
 #define LWIP_ICMP 1
 #define LWIP_RAND rand
-#define LWIP_DHCP 1
+#define LWIP_DHCP 0
+#define LWIP_ARP 0
+#define LWIP_ETHERNET 0
 #define LWIP_IGMP 1
 #define LWIP_DNS 1
-
 #define MEM_ALIGNMENT 4
 #define MEM_SIZE 0x30000
-
 #define ETHARP_SUPPORT_STATIC_ENTRIES 1
 #define SYS_LIGHTWEIGHT_PROT 0
 #define LWIP_NETIF_STATUS_CALLBACK 1
 
+// Enabling PPPoE
+#define PPP_SUPPORT 1
+#define PPPOS_SUPPORT 1
+#define PPP_IPV4_SUPPORT 1
+#define PPP_SERVER 1
 /* Leave the checksum checking on RX to hardware */
 #define CHECKSUM_CHECK_IP 0
 #define CHECKSUM_CHECK_UDP 0
@@ -61,8 +66,8 @@
 /* Debugging options */
 #define LWIP_DEBUG
 /* Change this to LWIP_DBG_LEVEL_ALL to see a trace */
-#define LWIP_DBG_MIN_LEVEL              LWIP_DBG_LEVEL_SERIOUS
-
+#define LWIP_DBG_MIN_LEVEL              LWIP_DBG_LEVEL_ALL
+#define LWIP_DBG_TRACE                  LWIP_DBG_ON
 #define DHCP_DEBUG                      LWIP_DBG_ON
 #define UDP_DEBUG                       LWIP_DBG_ON
 #define ETHARP_DEBUG                    LWIP_DBG_ON
@@ -71,3 +76,4 @@
 #define TCPIP_DEBUG                     LWIP_DBG_ON
 #define DHCP_DEBUG                      LWIP_DBG_ON
 #define UDP_DEBUG                       LWIP_DBG_ON
+#define PPP_DEBUG                       LWIP_DBG_ON

@@ -30,6 +30,7 @@ BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 CFLAGS += \
 	-O2 \
 	-I. \
+	-g \
 	-Ilwip_include \
 	-I$(BUILD) \
 	-I$(TOP) \
@@ -89,7 +90,18 @@ CORE4FILES=core/ipv4/autoip.c \
 	core/ipv4/ip4_addr.c
 
 # NETIFFILES: Files implementing various generic network interface functions
-NETIFFILES=netif/ethernet.c
+NETIFFILES=netif/ethernet.c \
+	netif/ppp/pppos.c \
+	netif/ppp/ppp.c \
+	netif/ppp/lcp.c \
+	netif/ppp/ipcp.c \
+	netif/ppp/fsm.c \
+	netif/ppp/pppapi.c \
+	netif/ppp/utils.c \
+	netif/ppp/vj.c \
+	netif/ppp/multilink.c \
+	netif/ppp/auth.c \
+	netif/ppp/magic.c
 
 # LWIPFILES: All the above.
 LWIPFILES=$(COREFILES) $(CORE4FILES) $(NETIFFILES)
