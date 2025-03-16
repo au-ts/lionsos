@@ -33,10 +33,10 @@ ${FIREWALL_NETWORK_COMPONENT_OBJ}: |firewall_network/components
 ${FIREWALL_NETWORK_COMPONENT_OBJ}: ${CHECK_FIREWALL_NETWORK_FLAGS_MD5}
 ${FIREWALL_NETWORK_COMPONENT_OBJ}: CFLAGS+=${CFLAGS_FIREWALL_NETWORK}
 
-firewall_network/components/firewall_network_virt_%.o: ${SDDF}/firewall_network/components/virt_%.c
+firewall_network/components/firewall_network_virt_%.o: ${SDDF}/firewall_network/components/virt_%.c |firewall_network/components
 	${CC} ${CFLAGS} -c -o $@ $<
 
-%.elf: firewall_network/components/%.o
+%.elf: firewall_network/components/%.o |firewall_network/components
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 clean::

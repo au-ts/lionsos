@@ -1,69 +1,106 @@
+# Makefile for firewall.
 #
-# Copyright 2022, UNSW
+# Copyright 2025, UNSW
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
-
-QEMU := qemu-system-aarch64
-DTC := dtc
-PYTHON ?= python3
-
-METAPROGRAM := $(TOP)/meta.py
-
-MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
+# This makefile will be copied into the Build directory and used from there.
+#
+BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
-FIREWALL := $(LIONSOS)/examples/firewall
-FIREWALL_COMPONENTS := $(FIREWALL)/components
-TARGET := aarch64-none-elf
 
-UTIL:=$(SDDF)/util
-ETHERNET_DRIVER0:=$(SDDF)/drivers/network/$(ETH_DRIV_DIR0)
-ETHERNET_DRIVER1:=$(SDDF)/drivers/network/$(ETH_DRIV_DIR1)
-SERIAL_COMPONENTS := $(SDDF)/serial/components
-SERIAL_DRIVER := $(SDDF)/drivers/serial/$(SERIAL_DRIV_DIR)
-TIMER_DRIVER:=$(SDDF)/drivers/timer/$(TIMER_DRV_DIR)
-NETWORK_COMPONENTS:=$(SDDF)/network/components
+ifeq ($(strip $(MICROKIT_BOARD)), imx8mp_evk)
+	ETH_DRIV_DIR0 := imx
+	ETH_DRIV_DIR1 := dwmac-5.10a
+	SERIAL_DRIV_DIR := imx
+	TIMER_DRV_DIR := imx
+	CPU := cortex-a53
+else
+$(error Unsupported MICROKIT_BOARD given)
+endif
+
+TOOLCHAIN := clang
+CC := clang
+LD := ld.lld
+AR := llvm-ar
+RANLIB := llvm-ranlib
+OBJCOPY := llvm-objcopy
+TARGET := aarch64-none-elf
+MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
+PYTHON ?= python3
+DTC := dtc
 
 MUSL_SRC := $(LIONSOS)/dep/musllibc
 MUSL := musllibc
 MICRODOT := ${LIONSOS}/dep/microdot/src
+FIREWALL_COMPONENTS := ${FIREWALL_SRC_DIR}/components
 
-BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-IMAGE_FILE := loader.img
-REPORT_FILE := report.txt
-SYSTEM_FILE := firewall.system
+METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
 DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
 DTB := $(MICROKIT_BOARD).dtb
 
-vpath %.c ${SDDF} ${FIREWALL} ${FIREWALL_COMPONENTS}
-
-IMAGES := eth_driver_imx.elf firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
+IMAGES := micropython.elf \
+		  eth_driver_imx.elf firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
 		  eth_driver_dwmac.elf timer_driver.elf serial_driver.elf serial_virt_tx.elf \
-		  arp_requester.elf arp_responder.elf routing.elf \
-		  icmp_filter.elf udp_filter.elf tcp_filter.elf \
+		  arp_requester.elf arp_responder.elf routing.elf  \
+		  icmp_filter.elf udp_filter.elf tcp_filter.elf
 
-CFLAGS := -mcpu=$(CPU) \
-	  -mstrict-align \
-	  -ffreestanding \
-	  -g3 -O3 -Wall \
-	  -Wno-unused-function \
-	  -DMICROKIT_CONFIG_$(MICROKIT_CONFIG) \
-	  -I$(BOARD_DIR)/include \
-	  -I$(SDDF)/include \
-	  -I$(FIREWALL)/include \
-	  -I$(LIONSOS)/include \
-	  -DBOARD_$(MICROKIT_BOARD) \
-	  -MD \
-	  -MP
+SYSTEM_FILE := firewall.system
 
-LDFLAGS := -L$(BOARD_DIR)/lib -L${LIBC}
-LIBS := --start-group -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a --end-group
+CFLAGS := \
+	-mtune=$(CPU) \
+	-mstrict-align \
+	-ffreestanding \
+	-O2 \
+	-MD \
+	-MP \
+	-Wall \
+	-Wno-unused-function \
+	-I$(BOARD_DIR)/include \
+	-I$(FIREWALL_SRC_DIR)/include \
+	-I$(MUSL)/include \
+	-target $(TARGET) \
+	-DBOARD_$(MICROKIT_BOARD) \
+	-I$(LIONSOS)/include \
+	-I$(SDDF)/include
+
+LDFLAGS := -L$(BOARD_DIR)/lib
+LIBS := -lmicrokit -Tmicrokit.ld $(MUSL)/lib/libc.a libsddf_util_debug.a
+
+IMAGE_FILE := loader.img
+REPORT_FILE := report.txt
+
+all: $(IMAGE_FILE)
+${IMAGES}: libsddf_util_debug.a
 
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 
 ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
+
+vpath %.c ${SDDF} ${FIREWALL_SRC_DIR} ${FIREWALL_COMPONENTS}
+
+MICROPYTHON_LIBMATH := $(LIBMATH)
+MICROPYTHON_EXEC_MODULE := ui_server.py
+MICROPYTHON_FROZEN_MANIFEST := manifest.py
+include $(LIONSOS)/components/micropython/micropython.mk
+
+manifest.py: ui_server.py
+ui_server.py: $(MICRODOT)
+
+%.py: ${FIREWALL_SRC_DIR}/%.py
+	cp $< $@
+
+$(MUSL):
+	mkdir -p $@
+
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
+	cd ${MUSL} && CC=aarch64-none-elf-gcc CROSS_COMPILE=aarch64-none-elf- ${MUSL_SRC}/configure --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=aarch64 --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
+	${MAKE} -C ${MUSL} install
+
+%.o: %.c $(MUSL)/include
+	${CC} ${CFLAGS} -c -o $@ $<
 
 %.elf: %.o
 	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
@@ -77,17 +114,20 @@ arp_responder.elf: arp_responder.o libsddf_util.a
 routing.elf: routing.o libsddf_util.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-all: $(IMAGE_FILE)
+SDDF_MAKEFILES := ${SDDF}/util/util.mk \
+		  ${SDDF}/drivers/network/${ETH_DRIV_DIR0}/eth_driver.mk \
+		  ${SDDF}/drivers/network/${ETH_DRIV_DIR1}/eth_driver.mk \
+		  ${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk \
+		  ${SDDF}/drivers/timer/${TIMER_DRV_DIR}/timer_driver.mk \
+		  ${SDDF}/network/components/network_components.mk \
+		  ${SDDF}/serial/components/serial_components.mk
 
-# Need to build libsddf_util_debug.a because it's included in LIBS
-# for the unimplemented libc dependencies
-${IMAGES}: libsddf_util_debug.a
+include ${SDDF_MAKEFILES}
+
+include ${FIREWALL_COMPONENTS}/firewall_network_components.mk
 
 $(DTB): $(DTS)
-	dtc -q -I dts -O dtb $(DTS) > $(DTB)
-
-%.o: %.c
-	${CC} ${CFLAGS} -c -o $@ $<
+	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --objcopy $(OBJCOPY)
@@ -131,19 +171,10 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester1.data arp_requester1.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing1.data routing1.elf
 
-${IMAGE_FILE} $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
-
-include ${SDDF}/util/util.mk
-include ${FIREWALL_COMPONENTS}/firewall_network_components.mk
-include ${ETHERNET_DRIVER0}/eth_driver.mk
-include ${ETHERNET_DRIVER1}/eth_driver.mk
-include ${TIMER_DRIVER}/timer_driver.mk
-include ${SERIAL_DRIVER}/serial_driver.mk
-include ${SERIAL_COMPONENTS}/serial_components.mk
-
-qemu: $(IMAGE_FILE)
+qemu: ${IMAGE_FILE}
 	$(QEMU) -machine virt,virtualization=on \
 			-cpu cortex-a53 \
 			-serial mon:stdio \
@@ -151,8 +182,23 @@ qemu: $(IMAGE_FILE)
 			-m size=2G \
 			-nographic \
 			-device virtio-net-device,netdev=netdev0 \
-			-netdev user,id=netdev0,hostfwd=tcp::1236-:1236,hostfwd=tcp::1237-:1237,hostfwd=udp::1235-:1235 \
-			-global virtio-mmio.force-legacy=false \
-			-d guest_errors
+			-netdev user,id=netdev0,hostfwd=tcp::5555-10.0.2.16:80 \
+			-global virtio-mmio.force-legacy=false
 
--include $(DEPS)
+FORCE: ;
+
+$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
+	cd ${LIONSOS}; git submodule update --init dep/micropython
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+
+${LIONSOS}/dep/libmicrokitco/Makefile:
+	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
+
+${MICRODOT}:
+	cd ${LIONSOS}; git submodule update --init dep/microdot
+
+${MUSL_SRC}/Makefile:
+	cd ${LIONSOS}; git submodule update --init dep/musllibc
+
+${SDDF_MAKEFILES} &:
+	cd ${LIONSOS}; git submodule update --init dep/sddf
