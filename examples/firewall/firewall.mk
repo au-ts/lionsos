@@ -70,7 +70,7 @@ IMAGE_FILE := loader.img
 REPORT_FILE := report.txt
 
 all: $(IMAGE_FILE)
-${IMAGES}: libsddf_util_debug.a
+${IMAGES}: libsddf_util_debug.a $(MUSL)/lib/libc.a
 
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 
