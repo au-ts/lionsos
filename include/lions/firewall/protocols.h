@@ -47,3 +47,56 @@ typedef struct __attribute__((__packed__)) arp_packet {
       uint8_t padding[10];
       uint32_t crc;
 } arp_packet_t;
+
+static uint8_t transport_layer_offset(ipv4_packet_t *ip_pkt) {
+    return ip_pkt->ihl;
+}
+
+typedef struct __attribute__((__packed__)) udp_hdr
+{
+    uint16_t src_port;
+    uint16_t dst_port;
+    uint16_t len;
+    uint16_t check;
+} udp_hdr_t;
+
+typedef struct __attribute__((__packed__)) tcphdr
+  {
+    uint16_t src_port;
+    uint16_t dst_port;
+    uint32_t seq;
+    uint32_t ack_seq;
+    uint16_t res1:4;
+    uint16_t doff:4;
+    uint16_t fin:1;
+    uint16_t syn:1;
+    uint16_t rst:1;
+    uint16_t psh:1;
+    uint16_t ack:1;
+    uint16_t urg:1;
+    uint16_t res2:2;
+    uint16_t window;
+    uint16_t check;
+    uint16_t urg_ptr;
+} tcphdr_t;
+
+typedef __attribute__((__packed__)) struct icmphdr
+{
+    uint8_t type;		    /* message type */
+    uint8_t code;		    /* type sub-code */
+    uint16_t checksum;
+    union
+    {
+        struct
+        {
+            u_int16_t id;
+            u_int16_t sequence;
+        } echo;			    /* echo datagram */
+        u_int32_t gateway;	/* gateway address */
+        struct
+        {
+            u_int16_t __unused;
+            u_int16_t mtu;
+        } frag;			    /* path mtu discovery */
+    } un;
+} icmphdr_t;
