@@ -172,9 +172,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
 }
 
 static void netif_status_callback(struct netif *netif) {
-    if (dhcp_supplied_address(netif)) {
-        dlog("DHCP request finished, IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
-    }
+    dlog("Netif is up now! IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
 }
 
 static err_t ethernet_init(struct netif *netif)
@@ -186,12 +184,8 @@ static err_t ethernet_init(struct netif *netif)
 
     state_t *data = netif->state;
 
-    netif->hwaddr[0] = data->mac[0];
-    netif->hwaddr[1] = data->mac[1];
-    netif->hwaddr[2] = data->mac[2];
-    netif->hwaddr[3] = data->mac[3];
-    netif->hwaddr[4] = data->mac[4];
-    netif->hwaddr[5] = data->mac[5];
+    sddf_memcpy(netif->hwaddr, net_config.mac_addr, 6);
+
     netif->mtu = ETHER_MTU;
     netif->hwaddr_len = ETHARP_HWADDR_LEN;
     netif->output = etharp_output;
@@ -216,9 +210,9 @@ void init_networking(void) {
 
     // TODO: Static IP and mac addr from Krishnan
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
-    struct ip4_addr netmask, ipaddr, gw, multicast;
+    struct ip4_addr netmask, ipaddr, gw, multicast, macbook;
     ipaddr_aton("0.0.0.0", &gw);
-    ipaddr_aton("0.0.0.0", &ipaddr);
+    ipaddr_aton("192.168.33.0", &ipaddr);
     ipaddr_aton("0.0.0.0", &multicast);
     ipaddr_aton("255.255.255.0", &netmask);
 
@@ -232,9 +226,6 @@ void init_networking(void) {
     netif_set_default(&(state.netif));
     netif_set_status_callback(&(state.netif), netif_status_callback);
     netif_set_up(&(state.netif));
-
-    int err = dhcp_start(&(state.netif));
-    dlogp(err, "failed to start DHCP negotiation");
 
     if (notify_rx) {
         notify_rx = false;
@@ -275,45 +266,47 @@ void mpnet_process_arp(void) {
         assert(!err);
 
         // TODO: Check validity of response
-        // Contruct the ARP response packet
-        memcpy(&arp_response_pkt.ethdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
-        memcpy(&arp_response_pkt.ethsrc_addr, &response.mac_addr, ETH_HWADDR_LEN);
-        arp_response_pkt.type = HTONS(ETH_TYPE_ARP);
-        arp_response_pkt.hwtype = HTONS(ETH_HWADDR_LEN);
-        arp_response_pkt.proto = HTONS(ETH_TYPE_IP);
-        arp_response_pkt.hwlen = ETH_HWADDR_LEN;
-        arp_response_pkt.protolen = IPV4_PROTO_LEN;
-        arp_response_pkt.opcode = HTONS(ETHARP_OPCODE_REPLY);
-        memcpy(&arp_response_pkt.hwsrc_addr, &response.mac_addr, ETH_HWADDR_LEN);
-        arp_response_pkt.ipsrc_addr = response.ip_addr;
-        memcpy(&arp_response_pkt.hwdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
-        arp_response_pkt.ipdst_addr = firewall_config.ip;
-        memset(&arp_response_pkt.padding, 0, 10);
+            if (response.valid) {
+            // Contruct the ARP response packet
+            memcpy(&arp_response_pkt.ethdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
+            memcpy(&arp_response_pkt.ethsrc_addr, &response.mac_addr, ETH_HWADDR_LEN);
+            arp_response_pkt.type = HTONS(ETH_TYPE_ARP);
+            arp_response_pkt.hwtype = HTONS(ETH_HWADDR_LEN);
+            arp_response_pkt.proto = HTONS(ETH_TYPE_IP);
+            arp_response_pkt.hwlen = ETH_HWADDR_LEN;
+            arp_response_pkt.protolen = IPV4_PROTO_LEN;
+            arp_response_pkt.opcode = HTONS(ETHARP_OPCODE_REPLY);
+            memcpy(&arp_response_pkt.hwsrc_addr, &response.mac_addr, ETH_HWADDR_LEN);
+            arp_response_pkt.ipsrc_addr = response.ip_addr;
+            memcpy(&arp_response_pkt.hwdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
+            arp_response_pkt.ipdst_addr = firewall_config.ip;
+            memset(&arp_response_pkt.padding, 0, 10);
 
-        if (FIREWALL_DEBUG_OUTPUT) {
-            // TODO: Add more logging output
-            dlog("Dequeuing ARP response for ip %u -> obtained MAC[0] = %x, MAC[5] = %x\n", response.ip_addr, response.mac_addr[0], response.mac_addr[5]);
-        }
+            if (FIREWALL_DEBUG_OUTPUT) {
+                // TODO: Add more logging output
+                dlog("Dequeuing ARP response for ip %u -> obtained MAC[0] = %x, MAC[5] = %x\n", response.ip_addr, response.mac_addr[0], response.mac_addr[5]);
+            }
 
-        /* Input packet into lwip stack */
-        pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
-        custom_pbuf_offset->offset = 0;
-        custom_pbuf_offset->arp_response = true;
-        custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
+            /* Input packet into lwip stack */
+            pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
+            custom_pbuf_offset->offset = 0;
+            custom_pbuf_offset->arp_response = true;
+            custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
 
-        struct pbuf *p = pbuf_alloced_custom(
-            PBUF_RAW,
-            sizeof(arp_packet_t),
-            PBUF_REF,
-            &custom_pbuf_offset->custom,
-            &arp_response_pkt,
-            sizeof(arp_packet_t)
-        );
+            struct pbuf *p = pbuf_alloced_custom(
+                PBUF_RAW,
+                sizeof(arp_packet_t),
+                PBUF_REF,
+                &custom_pbuf_offset->custom,
+                &arp_response_pkt,
+                sizeof(arp_packet_t)
+            );
 
-        if (state.netif.input(p, &state.netif) != ERR_OK) {
-            // If it is successfully received, the receiver controls whether or not it gets freed.
-            dlog("netif.input() != ERR_OK");
-            pbuf_free(p);
+            if (state.netif.input(p, &state.netif) != ERR_OK) {
+                // If it is successfully received, the receiver controls whether or not it gets freed.
+                dlog("netif.input() != ERR_OK");
+                pbuf_free(p);
+            }
         }
     }
 }

@@ -16,7 +16,7 @@
 #define LWIP_IPV4 1
 #define LWIP_ICMP 1
 #define LWIP_RAND rand
-#define LWIP_DHCP 1
+#define LWIP_DHCP 0
 #define LWIP_IGMP 1
 #define LWIP_DNS 1
 
