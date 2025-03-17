@@ -212,8 +212,7 @@ static void route()
                             ret = firewall_enqueue(&state.rx_free, buffer);
                             assert(!ret);
                             // Enqueue the packet back to the filtering component.
-                            // @kwinter: Do I use the routing channel here? Or the queue channel?
-                            microkit_deferred_notify(router_config.webserver.routing_ch);
+                            microkit_deferred_notify(router_config.webserver.rx_active.ch);
                             sddf_dprintf("Continuing...\n");
                             continue;
                         }
