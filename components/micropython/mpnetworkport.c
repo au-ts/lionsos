@@ -275,9 +275,20 @@ void mpnet_process_arp(void) {
         assert(!err);
 
         // TODO: Check validity of response
-        arp_response_pkt.ipsrc_addr = response.ip_addr;
-        memcpy(&arp_response_pkt.hwsrc_addr, &response.mac_addr, ETH_HWADDR_LEN);
+        // Contruct the ARP response packet
+        memcpy(&arp_response_pkt.ethdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
         memcpy(&arp_response_pkt.ethsrc_addr, &response.mac_addr, ETH_HWADDR_LEN);
+        arp_response_pkt.type = HTONS(ETH_TYPE_ARP);
+        arp_response_pkt.hwtype = HTONS(ETH_HWADDR_LEN);
+        arp_response_pkt.proto = HTONS(ETH_TYPE_IP);
+        arp_response_pkt.hwlen = ETH_HWADDR_LEN;
+        arp_response_pkt.protolen = IPV4_PROTO_LEN;
+        arp_response_pkt.opcode = HTONS(ETHARP_OPCODE_REPLY);
+        memcpy(&arp_response_pkt.hwsrc_addr, &response.mac_addr, ETH_HWADDR_LEN);
+        arp_response_pkt.ipsrc_addr = response.ip_addr;
+        memcpy(&arp_response_pkt.hwdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
+        arp_response_pkt.ipdst_addr = firewall_config.ip;
+        memset(&arp_response_pkt.padding, 0, 10);
 
         if (FIREWALL_DEBUG_OUTPUT) {
             // TODO: Add more logging output
