@@ -73,7 +73,7 @@ BOARDS: List[Board] = [
     Board(
         name="qemu_virt_aarch64",
         arch=SystemDescription.Arch.AARCH64,
-        paddr_top=0x6_0000_000,
+        paddr_top=0x60_000_000,
         serial="pl011@9000000",
         timer="timer",
         ethernet0="virtio_mmio@a003e00",
@@ -82,7 +82,7 @@ BOARDS: List[Board] = [
     Board(
         name="imx8mp_evk",
         arch=SystemDescription.Arch.AARCH64,
-        paddr_top=0x70000000,
+        paddr_top=0x70_000_000,
         serial="soc@0/bus@30800000/spba-bus@30800000/serial@30890000",
         timer="soc@0/bus@30000000/timer@302d0000",
         ethernet0="soc@0/bus@30800000/ethernet@30be0000",
@@ -318,7 +318,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     networks[1]["out_virt"] = ProtectionDomain("net_virt_tx0", "firewall_network_virt_tx0.elf", priority=100, budget=20000)
     networks[0]["in_virt"] = ProtectionDomain("net_virt_rx0", "firewall_network_virt_rx0.elf", priority=99)
 
-    networks[0]["rx_dma_region"] = MemoryRegion("rx_dma_region0", dma_region_size, paddr = 0x50_000_000)
+    networks[0]["rx_dma_region"] = MemoryRegion("rx_dma_region0", dma_region_size, paddr = 0x80_000_000)
     sdf.add_mr(networks[0]["rx_dma_region"])
 
     # Create network 1 subsystem pds
@@ -330,7 +330,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     networks[0]["in_net"] = Sddf.Net(sdf, ethernet_node0, networks[0]["driver"], networks[1]["out_virt"], networks[0]["in_virt"], networks[0]["rx_dma_region"])
     networks[1]["out_net"] = networks[0]["in_net"]
 
-    networks[1]["rx_dma_region"] = MemoryRegion("rx_dma_region1", dma_region_size, paddr = 0x55_000_000)
+    networks[1]["rx_dma_region"] = MemoryRegion("rx_dma_region1", dma_region_size, paddr = 0x75_000_000)
     sdf.add_mr(networks[1]["rx_dma_region"])
 
     networks[1]["in_net"] = Sddf.Net(sdf, ethernet_node1, networks[1]["driver"], networks[0]["out_virt"], networks[1]["in_virt"], networks[1]["rx_dma_region"])
@@ -379,8 +379,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     # Filters have shared memory to allow for dual-direction rules 
 
     # Webserver is a serial and timer client
-    serial_system.add_client(micropython)
-    timer_system.add_client(micropython)
+
+
 
     for pd in common_pds:
         sdf.add_pd(pd)

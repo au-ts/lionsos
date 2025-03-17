@@ -44,7 +44,7 @@ typedef struct firewall_net_virt_rx_config {
 typedef struct firewall_arp_requester_config {
     uint8_t mac_addr[ETH_HWADDR_LEN];
     uint32_t ip;
-    firewall_connection_resource_t clients[FIREWALL_NUM_ARP_REQUESTER_CLIENTS];
+    firewall_connection_resource_t clients[FIREWALL_NUM_ARP_REQUESTER_CLIENTS]; // only one arp requester has webserver as client
     region_resource_t arp_cache;
 } firewall_arp_requester_config_t;
 
