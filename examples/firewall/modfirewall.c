@@ -169,6 +169,7 @@ STATIC mp_obj_t route_get_nth(mp_obj_t route_idx_in) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(route_get_nth_obj, route_get_nth);
 
 STATIC mp_obj_t rule_add(mp_obj_t protocol_in, mp_obj_t iface1_in, mp_obj_t iface2_in) {
+    // @krishnan to finish
     const char *protocol = mp_obj_str_get_str(protocol_in);
     const char *iface1 = mp_obj_str_get_str(iface1_in);
     const char *iface2 = mp_obj_str_get_str(iface2_in);
@@ -209,7 +210,14 @@ STATIC mp_obj_t rule_count(void) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(rule_count_obj, rule_count);
 
+STATIC mp_obj_t filter_default_action(void) {
+    // @krishnan finish
+    return mp_obj_new_int_from_uint(2);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(filter_default_action_obj, filter_default_action);
+
 STATIC mp_obj_t rule_get_nth(mp_obj_t rule_idx_in) {
+    // @krishnan finish
     uint64_t rule_idx = mp_obj_get_int(rule_idx_in);
 
     if (rule_idx >= n_rules) {
@@ -218,13 +226,21 @@ STATIC mp_obj_t rule_get_nth(mp_obj_t rule_idx_in) {
     }
     firewall_rule_t *rule = &firewall_rules[rule_idx];
 
-    mp_obj_t tuple[4];
+    mp_obj_t tuple[10];
     tuple[0] = mp_obj_new_int_from_uint(rule->id);
-    tuple[1] = mp_obj_new_str(rule->protocol, strlen(rule->protocol));
-    tuple[2] = mp_obj_new_str(rule->iface1, strlen(rule->iface1));
-    tuple[3] = mp_obj_new_str(rule->iface2, strlen(rule->iface2));
+    char *dummy_src_ip = "123.456.789.0";
+    uint32_t dummy_src_port = 24;
+    tuple[1] = mp_obj_new_str(dummy_src_ip, strlen(dummy_src_ip));
+    tuple[2] = mp_obj_new_int_from_uint(dummy_src_port);
+    tuple[3] = mp_obj_new_str(dummy_src_ip, strlen(dummy_src_ip));
+    tuple[4] = mp_obj_new_int_from_uint(dummy_src_port);
+    tuple[5] = mp_obj_new_str(dummy_src_ip, strlen(dummy_src_ip));
+    tuple[6] = mp_obj_new_str(dummy_src_ip, strlen(dummy_src_ip));
+    tuple[7] = mp_obj_new_str("?", 1);
+    tuple[8] = mp_obj_new_str("?", 1);
+    tuple[9] = mp_obj_new_str("?", 1);
 
-    return mp_obj_new_tuple(4, tuple);
+    return mp_obj_new_tuple(10, tuple);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(rule_get_nth_obj, rule_get_nth);
 
@@ -241,6 +257,7 @@ STATIC const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_rule_delete), MP_ROM_PTR(&rule_delete_obj) },
     { MP_ROM_QSTR(MP_QSTR_rule_count), MP_ROM_PTR(&rule_count_obj) },
     { MP_ROM_QSTR(MP_QSTR_rule_get_nth), MP_ROM_PTR(&rule_get_nth_obj) },
+    { MP_ROM_QSTR(MP_QSTR_filter_default_action), MP_ROM_PTR(&filter_default_action_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(lions_firewall_module_globals, lions_firewall_module_globals_table);
 

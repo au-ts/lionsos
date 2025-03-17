@@ -82,38 +82,80 @@ def delete_route(request, route_id):
     except IndexError:
         return {"error": "Route not found"}, 404
 
-@app.route('/api/rules', methods=['GET'])
-def get_rules(request):
+
+PROTOCOLS = ["udp", "tcp", "icmp"]
+
+
+@app.route('/api/rules/<string:protocol>', methods=['GET'])
+def get_rules(request, protocol):
+    if protocol not in PROTOCOLS:
+        return {"error": "Invalid protocol given"}, 400
+
+    default_action = lions_firewall.filter_default_action()
     rules = []
     for i in range(lions_firewall.rule_count()):
         t = lions_firewall.rule_get_nth(i)
         rules.append({
             "id": t[0],
-            "protocol": t[1],
-            "iface1": t[2],
-            "iface2": t[3]
+            "src_ip": t[1],
+            "src_port": t[2],
+            "dest_ip": t[3],
+            "dest_port": t[4],
+            "src_subnet": t[5],
+            "dest_subnet": t[6],
+            "src_port_any": t[7],
+            "dest_port_any": t[8],
+            "action": t[9],
         })
     rules.sort(key=lambda rule: rule['id'])
-    return {"rules": rules}
+    return {"default_action": default_action, "rules": rules}
 
-@app.route('/api/rules', methods=['POST'])
-def add_rule(request):
+@app.route('/api/rules/<string:protocol>/default/<int:action>', methods=['POST'])
+def set_default_action(request, protocol, action):
+    try:
+        if protocol not in PROTOCOLS:
+          return {"error": "Invalid protocol given"}, 400
+
+        # TODO: fill this out
+        # lions_firewall.filter_default_action_set(default_action)
+        print(f"INFO: setting default action for protocol '{protocol}' to '{action}'")
+
+        return {"status": "ok"}, 201
+    except Exception as e:
+        return {"error": "Invalid input"}, 400
+
+@app.route('/api/rules/<string:protocol>', methods=['POST'])
+def add_rule(request, protocol):
     try:
         data = request.json
-        protocol = data.get("protocol")
-        iface1 = data.get("iface1")
-        iface2 = data.get("iface2")
-        if protocol is None or iface1 is None or iface2 is None:
-            return {"error": "Missing protocol or interface"}, 400
+        _filter = data.get("filter")
+        src_ip = data.get("src_ip")
+        src_port = data.get("src_port")
+        src_subnet = data.get("src_subnet")
+        dest_ip = data.get("dest_ip")
+        dest_port = data.get("dest_port")
+        dest_subnet = data.get("dest_subnet")
+        action = data.get("action")
+
+        if protocol not in PROTOCOLS:
+            return {"error": "Invalid protocol given"}, 400
+
+        if _filter != 0 and _filter != 1:
+            return {"error": "Invalid filter given"}, 400
+
         rule_id = lions_firewall.rule_add(protocol, iface1, iface2)
         new_rule = {"id": rule_id, "protocol": protocol, "iface1": iface1, "iface2": iface2}
         return {"status": "ok", "rule": new_rule}, 201
     except Exception as e:
         return {"error": "Invalid input"}, 400
 
-@app.route('/api/rules/<int:rule_id>', methods=['DELETE'])
-def delete_rule(request, rule_id):
+
+@app.route('/api/rules/<string:protocol>/<int:rule_id>', methods=['DELETE'])
+def delete_rule(request, protocol, rule_id):
     try:
+        if protocol not in PROTOCOLS:
+            return {"error": "Invalid protocol given"}, 400
+
         lions_firewall.rule_delete(rule_id)
         print("ok")
         return {"status": "ok"}
@@ -132,11 +174,32 @@ def index(request):
   <head>
     <meta charset="utf-8">
     <title>Firewall Config</title>
+    <link rel="stylesheet" href="/main.css">
   </head>
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/config">Config</a> | <a href="/rules">Rules</a>
+      <a href="/">Home</a> | <a href="/config">Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+    </nav>
+  </body>
+</html>
+"""
+    return Response(body=html, headers={'Content-Type': 'text/html'})
+
+@app.route('/interface')
+def index(request):
+    html = """
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Firewall Config</title>
+    <link rel="stylesheet" href="/main.css">
+  </head>
+  <body>
+    <h1>Firewall Configuration</h1>
+    <nav>
+      <a href="/">Home</a> | <a href="/config">Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
     </nav>
     <div id="interfaces-container">
       <table border="1">
@@ -194,11 +257,12 @@ def config(request):
   <head>
     <meta charset="utf-8">
     <title>Config Page</title>
+    <link rel="stylesheet" href="/main.css">
   </head>
   <body>
     <h1>Configuration Page</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/rules">Rules</a>
+      <a href="/">Home</a> | <a href="/config">Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
     </nav>
     
     <h2>Interfaces</h2>
@@ -406,53 +470,119 @@ def config(request):
 """
     return Response(body=html, headers={'Content-Type': 'text/html'})
 
-@app.route('/rules')
-def rules(request):
+@app.route('/rules/<string:protocol>')
+def rules(request, protocol):
     html = """
 <!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">
     <title>Firewall Rules</title>
+    <link rel="stylesheet" href="/main.css">
   </head>
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/config">Config</a>
+      <a href="/">Home</a> | <a href="/config">Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
     </nav>
-    
-    <h2>Existing Rules</h2>
+    <div style="display: flex; flex-direction: column; margin-top: 1rem">
+      <a href="/rules/udp">UDP</a>
+      <a href="/rules/tcp">TCP</a>
+      <a href="/rules/icmp">ICMP</a>
+    </div>
+    <h1>INSERT_PROTOCOL_UPPER rules</h1>
+    <h2>Existing Internal Rules</h2>
+    <div class="default-action-container">
+      <h4>Default action</h4>
+      <div>
+        <select name="internal-default-action" id="internal-default-action">
+          <option value="1">Allow</option>
+          <option value="2">Drop</option>
+        </select>
+        <button id="internal-set-default-action-btn">Update Default</button>
+      </div>
+    </div>
     <table border="1">
       <thead>
         <tr>
           <th>ID</th>
-          <th>Protocol</th>
-          <th>IFACE 1</th>
-          <th>IFACE 2</th>
-          <th>Actions</th>
+          <th>Source IP</th>
+          <th>Source Port</th>
+          <th>Destination IP</th>
+          <th>Destination Port</th>
+          <th>Source Subnet</th>
+          <th>Destination Subnet</th>
+          <th>Action</th>
+          <th></th>
         </tr>
       </thead>
-      <tbody id="rules-body">
+      <tbody id="internal-rules-body">
+        <tr><td colspan="5">Loading rules...</td></tr>
+      </tbody>
+    </table>
+    <h2>Existing External Rules</h2>
+    <div class="default-action-container">
+      <h4>Default action</h4>
+      <div>
+        <select name="external-default-action" id="external-default-action">
+          <option value="">...</option>
+          <option value="1">Allow</option>
+          <option value="2">Drop</option>
+        </select>
+        <button id="external-set-default-action-btn">Update Default</button>
+      </div>
+    </div>
+    <table border="1">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Source IP</th>
+          <th>Source Port</th>
+          <th>Destination IP</th>
+          <th>Destination Port</th>
+          <th>Source Subnet</th>
+          <th>Destination Subnet</th>
+          <th>Action</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="external-rules-body">
         <tr><td colspan="5">Loading rules...</td></tr>
       </tbody>
     </table>
     
     <h2>Add New Rule</h2>
-    <p>
-      Protocol: <input type="text" id="new-protocol" placeholder="e.g. TCP"><br>
-      IFACE 1: <input type="text" id="new-iface1" placeholder="e.g. Anywhere or 192.168.10.3/24"><br>
-      IFACE 2: <input type="text" id="new-iface2" placeholder="e.g. 123.456.788.23:80"><br>
+      Filter: <input type="radio" name="new-filter" id="new-filter-internal">Internal<input type="radio" name="new-filter" id="new-filter-external">External<br>
+      Source IP: <input type="text" id="new-src-ip" placeholder="e.g. 192.168.10.3"><br>
+      Source Port: <input type="number" id="new-src-port" placeholder="e.g. 24"><br>
+      Source Subnet: <input type="text" id="new-src-subnet" placeholder="e.g. 255.255.255.0"><br>
+      Destination IP: <input type="text" id="new-dest-ip" placeholder="e.g. 192.168.10.3"><br>
+      Destination Port: <input type="number" id="new-dest-port" placeholder="e.g. 24"><br>
+      Destination Subnet: <input type="text" id="new-dest-subnet" placeholder="e.g. 255.255.255.0"><br>
+      Action
+      <select name="action" id="new-action">
+        <option value="">Rule Action</option>
+        <option value="1">Allow</option>
+        <option value="2">Drop</option>
+        <option value="3">Connect</option>
+      </select>
       <button id="add-rule-btn">Add Rule</button>
     </p>
     
     <script>
       document.addEventListener("DOMContentLoaded", function() {
-        function loadRules() {
-          var rulesBody = document.getElementById('rules-body');
+        function loadRules(type) {
+          var rulesBody = document.getElementById(`${type}-rules-body`);
           rulesBody.innerHTML = "";
-          fetch('/api/rules')
+          const defaultAction = document.getElementById(`${type}-default-action`);
+          fetch('/api/rules/INSERT_PROTOCOL')
             .then(function(response) { return response.json(); })
             .then(function(data) {
+              for (let i = 0; i < defaultAction.options.length; i++) {
+                if (data.default_action == defaultAction.options[i].value) {
+                  defaultAction.options[i].selected = true;
+                }
+              }
               if (data.rules.length === 0) {
                 var row = document.createElement('tr');
                 row.innerHTML = "<td colspan='5'>No rules available</td>";
@@ -461,9 +591,13 @@ def rules(request):
                 data.rules.forEach(function(rule) {
                   var row = document.createElement('tr');
                   row.innerHTML = "<td>" + rule.id + "</td>" +
-                                  "<td>" + rule.protocol + "</td>" +
-                                  "<td>" + rule.iface1 + "</td>" +
-                                  "<td>" + rule.iface2 + "</td>" +
+                                  "<td class='monospace'>" + rule.src_ip + "</td>" +
+                                  "<td class='monospace'>" + rule.src_port + "</td>" +
+                                  "<td class='monospace'>" + rule.dest_ip + "</td>" +
+                                  "<td class='monospace'>" + rule.dest_port + "</td>" +
+                                  "<td class='monospace'>" + rule.src_subnet + "</td>" +
+                                  "<td class='monospace'>" + rule.dest_subnet + "</td>" +
+                                  "<td>" + rule.action + "</td>" +
                                   "<td><button onclick='deleteRule(" + rule.id + ")'>Delete</button></td>";
                   rulesBody.appendChild(row);
                 });
@@ -475,9 +609,9 @@ def rules(request):
               rulesBody.appendChild(row);
             });
         }
-        
+
         window.deleteRule = function(ruleId) {
-          fetch('/api/rules/' + ruleId, {
+          fetch('/api/rules/INSERT_PROTOCOL' + ruleId, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' }
           })
@@ -487,21 +621,81 @@ def rules(request):
           })
           .then(function(result) {
             alert("Rule " + ruleId + " deleted.");
-            loadRules();
+            loadRules("internal");
+            loadRules("external");
           })
           .catch(function(error) {
             alert("Error deleting rule " + ruleId);
           });
         }
-        
+
+        document.getElementById(`external-set-default-action-btn`).addEventListener('click', function() {
+          const newDefaultAction = document.getElementById(`external-default-action`).value;
+          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}`, {
+            method: 'POST',
+          })
+          .then(function(response) {
+            if (!response.ok) throw new Error("Update default action failed");
+            return response.json();
+          })
+          .then(function(result) {
+            alert("Updated default action successfully.");
+          })
+          .catch(function(err) {
+            alert("Error updating default action");
+          });
+        });
+
+        document.getElementById(`internal-set-default-action-btn`).addEventListener('click', function() {
+          const newDefaultAction = document.getElementById(`internal-default-action`).value;
+          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}`, {
+            method: 'POST',
+          })
+          .then(function(response) {
+            if (!response.ok) throw new Error("Update default action failed");
+            return response.json();
+          })
+          .then(function(result) {
+            alert("Updated default action successfully.");
+          })
+          .catch(function(err) {
+            alert("Error updating default action");
+          });
+        });
+
         document.getElementById('add-rule-btn').addEventListener('click', function() {
-          var protocol = document.getElementById('new-protocol').value;
-          var iface1 = document.getElementById('new-iface1').value;
-          var iface2 = document.getElementById('new-iface2').value;
-          fetch('/api/rules', {
+          var filterInternal = document.getElementById('new-filter-internal').checked;
+          var filterExternal = document.getElementById('new-filter-external').checked;
+          var filter;
+          if (filterInternal) {
+            filter = 0;
+          } else if (filterExternal) {
+            filter = 1;
+          } else {
+            alert("uh oh");
+            return;
+          }
+          var srcIp = document.getElementById('new-src-ip').value;
+          var srcPort = document.getElementById('new-src-port').value;
+          var srcSubnet = document.getElementById('new-src-subnet').value;
+          var destIp = document.getElementById('new-dest-ip').value;
+          var destPort = document.getElementById('new-dest-port').value;
+          var destSubnet = document.getElementById('new-dest-subnet').value;
+          var action = document.getElementById('new-action').value;
+          const body = JSON.stringify({
+            filter: filter,
+            src_ip: srcIp,
+            src_port: srcPort,
+            src_subnet: srcSubnet,
+            dest_ip: destIp,
+            dest_port: destPort,
+            dest_subnet: destSubnet,
+            action: action,
+          });
+          fetch('/api/rules/INSERT_PROTOCOL', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ protocol: protocol, iface1: iface1, iface2: iface2 })
+            body: body,
           })
           .then(function(response) {
             if (!response.ok) throw new Error("Add rule failed");
@@ -509,19 +703,67 @@ def rules(request):
           })
           .then(function(result) {
             alert("Rule added successfully.");
-            loadRules();
+            loadRules("internal");
+            loadRules("external");
           })
           .catch(function(err) {
             alert("Error adding rule");
           });
         });
-        
-        loadRules();
+
+        loadRules("internal");
+        loadRules("external");
       });
     </script>
   </body>
 </html>
 """
+    html = html.replace("INSERT_PROTOCOL_UPPER", protocol.upper())
+    html = html.replace("INSERT_PROTOCOL", protocol)
     return Response(body=html, headers={'Content-Type': 'text/html'})
+
+@app.route('/rules')
+def rules(request):
+    html = """
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Firewall Rules</title>
+    <link rel="stylesheet" href="/main.css">
+  </head>
+  <body>
+    <h1>Firewall Rules</h1>
+    <nav>
+      <a href="/">Home</a> | <a href="/config">Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+    </nav>
+    <div style="display: inline-block; margin-top: 1rem">
+      <a href="/rules/udp">UDP</a>
+      <a href="/rules/tcp">TCP</a>
+      <a href="/rules/icmp">ICMP</a>
+    </div>
+  </body>
+</html>
+"""
+    return Response(body=html, headers={'Content-Type': 'text/html'})
+
+@app.route("/main.css")
+def css(request):
+    css = """
+body {
+  font-family: Arial;
+}
+
+.monospace {
+  font-family: monospace;
+}
+
+.default-action-container {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+"""
+    return Response(body=css, headers={'Content-Type': 'text/css'})
 
 app.run(debug=True, port=80)
