@@ -42,7 +42,7 @@ DTB := $(MICROKIT_BOARD).dtb
 IMAGES := micropython.elf \
 		  eth_driver_imx.elf firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
 		  eth_driver_dwmac.elf timer_driver.elf serial_driver.elf serial_virt_tx.elf \
-		  arp_requester.elf arp_responder.elf routing.elf  \
+		  arp_requester.elf arp_responder.elf routing_internal.elf routing_external.elf \
 		  icmp_filter.elf udp_filter.elf tcp_filter.elf
 
 SYSTEM_FILE := firewall.system
@@ -110,7 +110,10 @@ arp_requester.elf: arp_requester.o libsddf_util.a
 arp_responder.elf: arp_responder.o libsddf_util.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-routing.elf: routing.o libsddf_util.a
+routing_external.elf: routing_external.o libsddf_util.a
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+routing_internal.elf: routing_internal.o libsddf_util.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
@@ -154,7 +157,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder0.data arp_responder0.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester0.data arp_requester0.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing0.data routing0.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing_external.data routing_external.elf
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester1.data arp_requester1.elf
 
@@ -172,7 +175,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder1.data arp_responder1.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester1.data arp_requester1.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing1.data routing1.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing_internal.data routing_internal.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)

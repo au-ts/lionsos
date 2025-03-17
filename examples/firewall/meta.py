@@ -299,7 +299,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             "mac": macs[i],
             "ip": ips[i],
             "out_dir": output_dir + "/net_data" + str(i),
-            "configs":{}
+            "configs":{},
             })
         if not path.isdir(networks[i]["out_dir"]):
             assert subprocess.run(["mkdir", networks[i]["out_dir"]]).returncode == 0
@@ -337,8 +337,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     networks[0]["out_net"] = networks[1]["in_net"]
 
     # Create firewall pds
-    networks[0]["router"] = ProtectionDomain("routing0", "routing0.elf", priority=97, budget=20000)
-    networks[1]["router"] = ProtectionDomain("routing1", "routing1.elf", priority=94, budget=20000)
+    networks[0]["router"] = ProtectionDomain("routing_external", "routing_external.elf", priority=97, budget=20000)
+    networks[1]["router"] = ProtectionDomain("routing_internal", "routing_internal.elf", priority=94, budget=20000)
 
     networks[0]["arp_resp"] = ProtectionDomain("arp_responder0", "arp_responder0.elf", priority=95, budget=20000)
     networks[1]["arp_resp"] = ProtectionDomain("arp_responder1", "arp_responder1.elf", priority=93, budget=20000)
@@ -390,8 +390,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         # Add all pds to the system
         for maybe_pd in network.values():
             if type(maybe_pd) == ProtectionDomain:
-                # Drivers do not need to be copied
-                if maybe_pd != network["driver"]:
+                # Drivers and routers do not need to be copied
+                if maybe_pd != network["driver"] and maybe_pd != network["router"]:
                     # remove x.elf suffix from elf
                     copy_elf(maybe_pd.elf[:-5], maybe_pd.elf[:-5], network["num"])
                 sdf.add_pd(maybe_pd)

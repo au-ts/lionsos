@@ -5,6 +5,8 @@
 #include <lions/firewall/queue.h>
 
 #define NUM_ROUTES 10
+/* Port that the webserver is on. */
+#define WEB_GUI_PORT 80
 
 typedef struct routing_entry {
     uint32_t network_id;

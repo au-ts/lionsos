@@ -56,6 +56,8 @@ typedef struct firewall_arp_responder_config {
 typedef struct firewall_webserver_router_config {
     firewall_connection_resource_t rx_active; // TODO: Webserver should probably transmit through the router as well...
     region_resource_t packet_data;
+    /* @kwinter: Is the routing ch here needed as its in the
+    firewall connection resource. */
     uint8_t routing_ch;
     region_resource_t routing_table;
 } firewall_webserver_router_config_t;
