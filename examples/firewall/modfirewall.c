@@ -5,7 +5,15 @@
 
 #include <microkit.h>
 #include "py/runtime.h"
+#include <arpa/inet.h>
+// @kwinter: Remove this
+#include <string.h>
 #include "firewall_structs.h"
+#include <lions/firewall/filter.h>
+#include <lions/firewall/config.h>
+#include <lions/firewall/protocols.h>
+
+extern firewall_webserver_config_t firewall_config;
 
 interface_t interfaces[] = {
     {
@@ -168,18 +176,69 @@ STATIC mp_obj_t route_get_nth(mp_obj_t route_idx_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(route_get_nth_obj, route_get_nth);
 
-STATIC mp_obj_t rule_add(mp_obj_t protocol_in, mp_obj_t iface1_in, mp_obj_t iface2_in) {
-    // @krishnan to finish
-    const char *protocol = mp_obj_str_get_str(protocol_in);
-    const char *iface1 = mp_obj_str_get_str(iface1_in);
-    const char *iface2 = mp_obj_str_get_str(iface2_in);
+STATIC mp_obj_t rule_add(mp_obj_t protocol, mp_obj_t filter, mp_obj_t src_ip, mp_obj_t src_port,
+                        mp_obj_t src_subnet, mp_obj_t dest_ip, mp_obj_t dest_port, mp_obj_t dest_subnet,
+                        mp_obj_t action) {
 
-    firewall_rule_t *rule = &firewall_rules[n_rules++];
-    rule->id = next_rule_id++;
-    strcpy(rule->protocol, protocol);
-    strcpy(rule->iface1, iface1);
-    strcpy(rule->iface2, iface2);
+    const char *protocol_var = mp_obj_str_get_str(protocol);
+    int protocol_id = 0;
+    if (strcmp(protocol_var, "icmp")) {
+        protocol_id = IP_TYPE_ICMP;
+    } else if (strcmp(protocol_var, "udp")) {
+        protocol_id = IP_TYPE_UDP;
+    } else if (strcmp(protocol_var, "tcp")) {
+        protocol_id = IP_TYPE_TCP;
+    }
 
+    const char *filter_var = mp_obj_str_get_str(filter);
+    int iface = 4;
+    if (strcmp(filter_var, "external")) {
+        iface = 1;
+    } else if (strcmp(filter_var, "internal")) {
+        iface = 2;
+    }
+    const char *src_ip_var = mp_obj_str_get_str(src_ip);
+    uint16_t src_port_var = mp_obj_get_int(src_port);
+    uint8_t src_subnet_var = mp_obj_get_int(src_subnet);
+    const char *dest_ip_var = mp_obj_str_get_str(dest_ip);
+    uint16_t dest_port_var = mp_obj_get_int(dest_port);
+    uint8_t dest_subnet_var = mp_obj_get_int(dest_subnet);
+    const char *action = mp_obj_str_get_str(action);
+
+    // Find the filter that implements this protocol in this direction.
+    for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
+        if (firewall_config.filters[i].protocol == protocol_id &&
+                firewall_config.filters[i].iface == iface) {
+            // Convert all the strings to integers.
+            struct in_addr src_ip_addr;
+            inet_pton(AF_INET, src_ip_var, &src_ip_addr);
+            struct in_addr dest_ip_addr;
+            inet_pton(AF_INET, dest_ip_var, &dest_ip_addr);
+            // Choosing random value outside of enum range
+            int action_val = 9;
+            if (strcmp(action, "Allow")) {
+                action_val = ALLOW;
+            } else if (strcmp(action, "Drop")) {
+                action_val = DROP;
+            } else if (strcmp(action, "Connect")) {
+                action_val = CONNECT;
+            }
+
+            seL4_SetMR(ACTION, action_val);
+            seL4_SetMR(SRC_IP, src_ip_addr.s_addr);
+            seL4_SetMR(SRC_PORT, src_port_var);
+            seL4_SetMR(DST_IP, dest_ip_addr.s_addr);
+            seL4_SetMR(DST_PORT, dest_port_var);
+            seL4_SetMR(SRC_SUBNET, src_subnet_var);
+            seL4_SetMR(DST_SUBNET, dest_subnet_var);
+            // TODO: Add in another field to configure the "any port" in both src + dest.
+            seL4_SetMR(SRC_ANY_PORT, 0);
+            seL4_SetMR(DST_ANY_PORT, 0);
+
+            microkit_ppcall(firewall_config.filters[i].ch, microkit_msginfo_new(0, 9));
+            return
+        }
+    }
     return mp_obj_new_int_from_uint(rule->id);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(rule_add_obj, rule_add);

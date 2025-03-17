@@ -143,8 +143,9 @@ def add_rule(request, protocol):
         if _filter != 0 and _filter != 1:
             return {"error": "Invalid filter given"}, 400
 
-        rule_id = lions_firewall.rule_add(protocol, iface1, iface2)
-        new_rule = {"id": rule_id, "protocol": protocol, "iface1": iface1, "iface2": iface2}
+        rule_id = lions_firewall.rule_add(protocol, _filter, src_ip, src_port, src_subnet,
+                                          dest_ip, dest_port, dest_subnet, action)
+        new_rule = {"id": rule_id}
         return {"status": "ok", "rule": new_rule}, 201
     except Exception as e:
         return {"error": "Invalid input"}, 400
@@ -555,10 +556,10 @@ def rules(request, protocol):
       Filter: <input type="radio" name="new-filter" id="new-filter-internal">Internal<input type="radio" name="new-filter" id="new-filter-external">External<br>
       Source IP: <input type="text" id="new-src-ip" placeholder="e.g. 192.168.10.3"><br>
       Source Port: <input type="number" id="new-src-port" placeholder="e.g. 24"><br>
-      Source Subnet: <input type="text" id="new-src-subnet" placeholder="e.g. 255.255.255.0"><br>
+      Source Subnet: <input type="number" id="new-src-subnet" placeholder="e.g. 16"><br>
       Destination IP: <input type="text" id="new-dest-ip" placeholder="e.g. 192.168.10.3"><br>
       Destination Port: <input type="number" id="new-dest-port" placeholder="e.g. 24"><br>
-      Destination Subnet: <input type="text" id="new-dest-subnet" placeholder="e.g. 255.255.255.0"><br>
+      Destination Subnet: <input type="number" id="new-dest-subnet" placeholder="e.g. 16"><br>
       Action
       <select name="action" id="new-action">
         <option value="">Rule Action</option>
