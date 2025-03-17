@@ -41,10 +41,13 @@
 #include <lions/firewall/arp_queue.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
+#include <lions/firewall/hashmap.h>
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
 
+arp_packet_t arp_response_pkt = {0};
+hashtable_t *arp_table;
 extern net_client_config_t net_config;
 
 __attribute__((__section__(".firewall_webserver_config"))) firewall_webserver_config_t firewall_config;
@@ -107,6 +110,23 @@ u32_t sys_now(void) {
     return mp_obj_get_int(mp_time_time_get());
 }
 
+void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN])
+{
+    memcpy(&arp_response_pkt.ethdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
+    memcpy(&arp_response_pkt.ethsrc_addr, &mac, ETH_HWADDR_LEN);
+    arp_response_pkt.type = HTONS(ETH_TYPE_ARP);
+    arp_response_pkt.hwtype = HTONS(ETH_HWADDR_LEN);
+    arp_response_pkt.proto = HTONS(ETH_TYPE_IP);
+    arp_response_pkt.hwlen = ETH_HWADDR_LEN;
+    arp_response_pkt.protolen = IPV4_PROTO_LEN;
+    arp_response_pkt.opcode = HTONS(ETHARP_OPCODE_REPLY);
+    memcpy(&arp_response_pkt.hwsrc_addr, &mac, ETH_HWADDR_LEN);
+    arp_response_pkt.ipsrc_addr = ip;
+    memcpy(&arp_response_pkt.hwdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
+    arp_response_pkt.ipdst_addr = firewall_config.ip;
+    memset(&arp_response_pkt.padding, 0, 10);
+}
+
 static void interface_free_buffer(struct pbuf *buf) {
     SYS_ARCH_DECL_PROTECT(old_level);
     pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)buf;
@@ -127,16 +147,24 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
     if (eth_hdr->type == HTONS(ETH_TYPE_ARP)) {
         arphdr_t *arp_hdr = (arphdr_t *)p->next->payload;
         if (arp_hdr->opcode == HTONS(ETHARP_OPCODE_REQUEST)) {
-            /* This is an arp request, don't transmit through the network */
-            int err = arp_enqueue_request(state.arp_queue, arp_hdr->ipdst_addr);
-            if (err) {
-                dlog("Could not enqueue arp request, queue is full");
-                return ERR_MEM;
-            }
-            notify_arp = true;
+            /* TODO: Attempt lookup in the ARP table first. */
+            arp_entry_t hash_entry;
+            int ret = hashtable_search(arp_table, arp_hdr->ipdst_addr, &hash_entry);
+            if (!ret) {
+                /* This is an arp request, don't transmit through the network */
+                int err = arp_enqueue_request(state.arp_queue, arp_hdr->ipdst_addr);
+                if (err) {
+                    dlog("Could not enqueue arp request, queue is full");
+                    return ERR_MEM;
+                }
+                notify_arp = true;
 
-            /* Successfully emulated sending out an ARP request */
-            return ERR_OK;
+                /* Successfully emulated sending out an ARP request */
+                return ERR_OK;
+            } else {
+                fill_arp(arp_hdr->ipdst_addr, hash_entry.mac_addr);
+            }
+
         }
     }
 
@@ -202,7 +230,7 @@ void init_networking(void) {
     firewall_queue_init(&state.rx_free, firewall_config.rx_free.queue.vaddr, firewall_config.rx_free.capacity);
     net_queue_init(&state.tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
     net_buffers_init(&state.tx_queue, 0);
-
+    arp_table = (hashtable_t*) firewall_config.arp_cache.vaddr;
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
@@ -256,8 +284,6 @@ void init_networking(void) {
     }
 }
 
-// TODO: Initialise this
-arp_packet_t arp_response_pkt;
 // TODO: Add this to notified, as well as modifying channels inside notified
 void mpnet_process_arp(void) {
     while (!arp_queue_empty_response(state.arp_queue)) {
@@ -266,22 +292,9 @@ void mpnet_process_arp(void) {
         assert(!err);
 
         // TODO: Check validity of response
-            if (response.valid) {
+        if (response.valid) {
             // Contruct the ARP response packet
-            memcpy(&arp_response_pkt.ethdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
-            memcpy(&arp_response_pkt.ethsrc_addr, &response.mac_addr, ETH_HWADDR_LEN);
-            arp_response_pkt.type = HTONS(ETH_TYPE_ARP);
-            arp_response_pkt.hwtype = HTONS(ETH_HWADDR_LEN);
-            arp_response_pkt.proto = HTONS(ETH_TYPE_IP);
-            arp_response_pkt.hwlen = ETH_HWADDR_LEN;
-            arp_response_pkt.protolen = IPV4_PROTO_LEN;
-            arp_response_pkt.opcode = HTONS(ETHARP_OPCODE_REPLY);
-            memcpy(&arp_response_pkt.hwsrc_addr, &response.mac_addr, ETH_HWADDR_LEN);
-            arp_response_pkt.ipsrc_addr = response.ip_addr;
-            memcpy(&arp_response_pkt.hwdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
-            arp_response_pkt.ipdst_addr = firewall_config.ip;
-            memset(&arp_response_pkt.padding, 0, 10);
-
+            fill_arp(response.ip_addr, response.mac_addr);
             if (FIREWALL_DEBUG_OUTPUT) {
                 // TODO: Add more logging output
                 dlog("Dequeuing ARP response for ip %u -> obtained MAC[0] = %x, MAC[5] = %x\n", response.ip_addr, response.mac_addr[0], response.mac_addr[5]);
