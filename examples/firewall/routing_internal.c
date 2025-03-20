@@ -69,7 +69,7 @@ static void process_arp_waiting(void)
         }
 
         /* Send or drop all matching ip packets */
-        if (!response.reachable) {
+        if (response.state == ARP_STATE_UNREACHABLE) {
             /* Invalid response, drop packet associated with the IP address */
             pkt_waiting_node_t *pkt_node = req_pkt;
             for (uint16_t i = 0; i < req_pkt->num_children; i++) {
@@ -156,9 +156,9 @@ static void route()
                     }
                 } else {
                     arp_entry_t *arp = arp_table_find_entry(&arp_table, entry->ip);
-                    if (arp == NULL || arp->pending) {
-                        if (pkt_waiting_full(&pkt_waiting_queue)) {
-                            sddf_dprintf("ROUTING|LOG: Waiting packet queue full, dropping packet!\n");
+                    if (arp == NULL || arp->state == ARP_STATE_PENDING || arp->state == ARP_STATE_UNREACHABLE) {
+                        if (arp->state == ARP_STATE_UNREACHABLE || pkt_waiting_full(&pkt_waiting_queue)) {
+                            sddf_dprintf("ROUTING|LOG: Waiting packet queue full or destination unreachable, dropping packet!\n");
                             err = firewall_enqueue(&rx_free, buffer);
                             assert(!err);
                             returned = true;
@@ -181,7 +181,7 @@ static void route()
                                 returned = true;
                             } else {
                                 /* Generate ARP request and enqueue packet. */
-                                arp_request_t request = {entry->ip, {0}, false};
+                                arp_request_t request = {entry->ip, {0}, ARP_STATE_INVALID};
                                 err = arp_enqueue_request(arp_queue, request);
                                 assert(!err);
                                 routing_error_t routing_err = pkt_waiting_push(&pkt_waiting_queue, entry->ip, buffer);

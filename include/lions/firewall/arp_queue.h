@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <microkit.h>
+#include <sddf/util/util.h>
+#include <sddf/timer/client.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/protocols.h>
 
@@ -10,14 +13,20 @@ typedef enum {
 	ARP_ERR_FULL  /* Data structure is full */
 } arp_error_t;
 
+typedef enum {
+    ARP_STATE_INVALID,                  /* Whether this entry is valid entry in the table */
+    ARP_STATE_PENDING,                  /* Whether this entry is still pending a response */
+    ARP_STATE_UNREACHABLE,              /* Whether this ip is reachable and listed mac has meaning */
+    ARP_STATE_REACHABLE
+} arp_entry_state_t;
+
 typedef struct arp_entry {
-    bool valid;                                         /* Whether this entry is valid entry in the table */
-    bool pending;                                       /* Whether this entry is still pending a response */
-    uint32_t ip;                                        /* IP of entry */
-    uint8_t mac_addr[ETH_HWADDR_LEN];                   /* Mac address key IP */
-    bool reachable;                                     /* Whether this ip is reachable and listed mac has meaning */
-    bool client[FIREWALL_NUM_ARP_REQUESTER_CLIENTS];    /* Client(s) that initiated the request */
-                                                        /* TODO: Add a timeout for stale ARP entries*/
+    arp_entry_state_t state;                    /* State of this entry */
+    uint32_t ip;                                /* IP of entry */
+    uint8_t mac_addr[ETH_HWADDR_LEN];           /* MAC address of IP */
+    uint8_t client;                             /* Bitmap of clients that initiated the request */
+    uint8_t num_retries;                        /* Number of times we have sent out an arp request */
+    uint64_t timestamp;                         /* Time of insertion */
 } arp_entry_t;
 
 typedef struct arp_table {
@@ -28,7 +37,7 @@ typedef struct arp_table {
 typedef struct arp_request {
     uint32_t ip;                        /* Requested IP */
     uint8_t mac_addr[ETH_HWADDR_LEN];   /* Zero filled or MAC of IP */
-    bool reachable;                     /* Whether this ip is reachable and listed mac has meaning */
+    arp_entry_state_t state;            /* State of this ARP entry */
 } arp_request_t;
 
 typedef struct arp_queue {
@@ -64,7 +73,7 @@ static arp_entry_t *arp_table_find_entry(arp_table_t *table, uint32_t ip)
 {
     for (uint16_t i = 0; i < table->capacity; i++) {
         arp_entry_t *entry = table->entries + i;
-        if (!entry->valid) {
+        if (entry->state == ARP_STATE_INVALID) {
             continue;
         }
 
@@ -78,14 +87,17 @@ static arp_entry_t *arp_table_find_entry(arp_table_t *table, uint32_t ip)
 
 /* Create an arp response from an arp entry */
 static arp_request_t arp_response_from_entry(arp_entry_t *entry) {
-    arp_request_t response = {entry->ip, {0}, entry->reachable};
-    memcpy(&response.mac_addr, &entry->mac_addr, ETH_HWADDR_LEN);
+    arp_request_t response = {entry->ip, {0}, entry->state};
+    if (entry->state == ARP_STATE_REACHABLE) {
+        memcpy(&response.mac_addr, &entry->mac_addr, ETH_HWADDR_LEN);
+    }
     return response;
 }
 
 /* Add an entry to the arp table*/
 static arp_error_t arp_table_add_entry(arp_table_t *table,
-                                       bool pending,
+                                       microkit_channel timer_ch,
+                                       arp_entry_state_t state,
                                        uint32_t ip,
                                        uint8_t *mac_addr,
                                        uint8_t client)
@@ -94,7 +106,7 @@ static arp_error_t arp_table_add_entry(arp_table_t *table,
     for (uint16_t i = 0; i < table->capacity; i++) {
         arp_entry_t *entry = table->entries + i;
 
-        if (!entry->valid) {
+        if (entry->state == ARP_STATE_INVALID) {
             if (slot == NULL) {
                 slot = entry;
             }
@@ -112,16 +124,14 @@ static arp_error_t arp_table_add_entry(arp_table_t *table,
         return ARP_ERR_FULL;
     }
 
-    slot->valid = true;
-    slot->pending = pending;
+    slot->state = state;
     slot->ip = ip;
     if (mac_addr != NULL) {
         memcpy(&slot->mac_addr, mac_addr, ETH_HWADDR_LEN);
-        slot->reachable = true;
-    } else {
-        slot->reachable = false;
     }
-    slot->client[client] = true;
+    slot->client = BIT(client);
+    slot->num_retries = 0;
+    slot->timestamp = sddf_timer_time_now(timer_ch);
 
     return ARP_ERR_OKAY;
 }

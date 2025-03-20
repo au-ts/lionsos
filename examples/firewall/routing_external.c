@@ -63,7 +63,7 @@ static void process_arp_waiting(void)
         }
 
         /* Send or drop all matching ip packets */
-        if (!response.reachable) {
+        if (response.state == ARP_STATE_UNREACHABLE) {
             /* Invalid response, drop packet associated with the IP address */
             pkt_waiting_node_t *pkt_node = req_pkt;
             for (uint16_t i = 0; i < req_pkt->num_children; i++) {
@@ -137,9 +137,9 @@ static void route()
                 }
 
                 arp_entry_t *arp = arp_table_find_entry(&arp_table, entry->ip);
-                if (arp == NULL || arp->pending) {
-                    if (pkt_waiting_full(&pkt_waiting_queue)) {
-                        sddf_dprintf("ROUTING|LOG: Waiting packet queue full, dropping packet!\n");
+                if (arp == NULL || arp->state == ARP_STATE_PENDING || arp->state == ARP_STATE_UNREACHABLE) {
+                    if (arp->state == ARP_STATE_UNREACHABLE || pkt_waiting_full(&pkt_waiting_queue)) {
+                        sddf_dprintf("ROUTING|LOG: Waiting packet queue full or destination unreachable, dropping packet!\n");
                         err = firewall_enqueue(&rx_free, buffer);
                         assert(!err);
                         returned = true;
@@ -162,7 +162,7 @@ static void route()
                             returned = true;
                         } else {
                             /* Generate ARP request and enqueue packet. */
-                            arp_request_t request = {entry->ip, {0}, false};
+                            arp_request_t request = {entry->ip, {0}, ARP_STATE_INVALID};
                             err = arp_enqueue_request(arp_queue, request);
                             assert(!err);
                             routing_error_t routing_err = pkt_waiting_push(&pkt_waiting_queue, entry->ip, buffer);
@@ -170,7 +170,7 @@ static void route()
                             notify_arp = true;
                         }
                     }
-                } else {
+                } else if (arp->state == ARP_STATE_REACHABLE) {
                     /* Match found for MAC address, replace the destination in eth header */
                     memcpy(&ip_pkt->ethdst_addr, &arp->mac_addr, ETH_HWADDR_LEN);
                     memcpy(&ip_pkt->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
@@ -180,6 +180,7 @@ static void route()
                     if (FIREWALL_DEBUG_OUTPUT) {
                         sddf_printf("MAC[5] = %x | Router sending packet for ip %u mac[5] %x with buffer number %lu\n", router_config.mac_addr[5], entry->ip, ip_pkt->ethdst_addr[5], buffer.io_or_offset/NET_BUFFER_SIZE);
                     }
+
                     int err = firewall_enqueue(&tx_active, buffer);
                     assert(!err);
                     tx_net = true;

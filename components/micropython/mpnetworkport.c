@@ -285,7 +285,7 @@ void mpnet_process_arp(void) {
         assert(!err);
 
         // TODO: Check validity of response
-        if (response.reachable) {
+        if (response.state == ARP_STATE_REACHABLE) {
             // Contruct the ARP response packet
             fill_arp(response.ip, response.mac_addr);
             if (FIREWALL_DEBUG_OUTPUT) {

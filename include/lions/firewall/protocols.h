@@ -81,6 +81,29 @@ typedef struct __attribute__((__packed__)) tcphdr
     uint16_t urg_ptr;
 } tcphdr_t;
 
+/* ICMP Control Types. */
+#define ICMP_ECHO_REPLY 0
+#define ICMP_DEST_UNREACHABLE 3
+#define ICMP_SRC_QUENCH 4
+#define ICMP_REDIRECT_MSG 5
+#define ICMP_ECHO_REQ 8
+#define ICMP_ROUTER_AD 9
+#define ICMP_ROUTER_SOLIT 10
+/* @kwinter: Fill out the rest of these ICMP definitions. */
+
+/* ICMP Destination Unreachable Subtypes. */
+#define ICMP_DEST_NET_UNREACHABLE 0
+#define ICMP_DEST_HOST_UNREACHABLE 1
+#define ICMP_DEST_PROTO_UNREACHABLE 2
+#define ICMP_DEST_PORT_UNREACHABLE 3
+#define ICMP_DEST_FRAG_REQ 4
+#define ICMP_SRC_ROUTE_FAIL 5
+#define ICMP_DEST_NET_UNKNOWN 6
+#define ICMP_DEST_HOST_UNKNOWN 7
+#define ICMP_SRC_HOST_ISOLATED 8
+#define ICMP_NET_ADMIN_PROHIBITED 9
+#define ICMP_HOST_ADMIN_PROHIBITED 10
+
 typedef struct __attribute__((__packed__)) icmphdr
 {
     uint8_t type;		    /* message type */
