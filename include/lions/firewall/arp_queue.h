@@ -5,18 +5,33 @@
 #include <lions/firewall/protocols.h>
 
 #define MAX_ARP_ENTRIES 512
+#define ARP_BUFFER_SIZE 128
+#define ARP_MAX_RETRIES 5
+#define ARP_RETRY_TIMER_S 5     /* How often to retry an ARP request, in seconds. */
+#define ARP_CACHE_LIFE_M 5      /* The lifetime of  the ARP cache in minutes. After this time elapses, the cache is flushed. */
+#define ARP_CACHE_LIFE_US ((ARP_CACHE_LIFE_M * 60) * NS_IN_S)
+
+
+enum arp_state {
+    positive,
+    negative,
+    pending,
+};
 
 typedef struct arp_entry {
-    uint8_t mac_addr[ETH_HWADDR_LEN];   /* Mac address key IP */
-    bool valid;                         /* Whether this entry is valid */
-    uint8_t client;                     /* Client that initiated the request */
-                                        /* TODO: Add a timeout for stale ARP entries*/
+    uint8_t mac_addr[ETH_HWADDR_LEN];   /* Mac address key IP. */
+    uint8_t client;                     /* Client that initiated the request. */
+    uint64_t time;                      /* Time at the last request. */
+    uint16_t num_retries;               /* Number of times we have sent out an arp request. */
+    int state;                     /* 0 - Positive, 1 - Negative, 2 - In Progress. */
 } arp_entry_t;
 
+
 typedef struct arp_request {
-    uint32_t ip_addr;                   /* Requested IP */
-    uint8_t mac_addr[ETH_HWADDR_LEN];   /* Zero filled or MAC of IP */
-    bool valid;                         /* Outcome of ARP request */
+    uint32_t ip_addr;
+    uint8_t mac_addr[ETH_HWADDR_LEN];
+    /* If valid is false on reply, drop the packet. */
+    bool valid;
 } arp_request_t;
 
 typedef struct arp_queue {

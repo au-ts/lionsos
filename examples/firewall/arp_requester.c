@@ -15,7 +15,6 @@
 #include <sddf/serial/config.h>
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
-#include <lions/firewall/arp_queue.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/hashmap.h>
 #include <lions/firewall/protocols.h>
@@ -29,6 +28,8 @@ __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer
 
 __attribute__((__section__(".firewall_arp_requester_config"))) firewall_arp_requester_config_t arp_config;
 
+uint8_t empty_mac[ETH_HWADDR_LEN] = {0,0,0,0,0,0};
+
 net_queue_handle_t rx_queue;
 net_queue_handle_t tx_queue;
 
@@ -39,6 +40,31 @@ arp_queue_handle_t *arp_queues[FIREWALL_NUM_ARP_REQUESTER_CLIENTS];
 
 /* ARP table caches ARP request responses */
 hashtable_t *arp_table;
+
+/* Time that we will flush the arp queue (to the closest arp retry timer tick). */
+uint64_t time_to_flush;
+
+void generate_arp(arp_packet_t *pkt, uint32_t ip_addr)
+{
+        /* Set the destination MAC address as the broadcast MAC address */
+        memset(&pkt->ethdst_addr, 0xFF, ETH_HWADDR_LEN);
+        memcpy(&pkt->ethsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
+        memcpy(&pkt->hwsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
+
+        pkt->type = HTONS(ETH_TYPE_ARP);
+        pkt->hwtype = HTONS(ETH_HWTYPE);
+        pkt->proto = HTONS(ETH_TYPE_IP);
+        pkt->hwlen = ETH_HWADDR_LEN;
+        pkt->protolen = IPV4_PROTO_LEN;
+        pkt->opcode = HTONS(ETHARP_OPCODE_REQUEST);
+
+        /* Memset the hardware src addr to 0 for ARP requests */
+        memset(&pkt->hwdst_addr, 0, ETH_HWADDR_LEN);
+        pkt->ipdst_addr = ip_addr;
+        pkt->ipsrc_addr = arp_config.ip;
+        memset(&pkt->padding, 0, 10);
+
+}
 
 void process_requests()
 {
@@ -56,23 +82,7 @@ void process_requests()
 
             arp_packet_t *pkt = (arp_packet_t *)(net_config.tx_data.vaddr + buffer.io_or_offset);
 
-            /* Set the destination MAC address as the broadcast MAC address */
-            memset(&pkt->ethdst_addr, 0xFF, ETH_HWADDR_LEN);
-            memcpy(&pkt->ethsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
-            memcpy(&pkt->hwsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
-
-            pkt->type = HTONS(ETH_TYPE_ARP);
-            pkt->hwtype = HTONS(ETH_HWTYPE);
-            pkt->proto = HTONS(ETH_TYPE_IP);
-            pkt->hwlen = ETH_HWADDR_LEN;
-            pkt->protolen = IPV4_PROTO_LEN;
-            pkt->opcode = HTONS(ETHARP_OPCODE_REQUEST);
-
-            /* Memset the hardware src addr to 0 for ARP requests */
-            memset(&pkt->hwdst_addr, 0, ETH_HWADDR_LEN);
-            pkt->ipdst_addr = request.ip_addr;
-            pkt->ipsrc_addr = arp_config.ip;
-            memset(&pkt->padding, 0, 10);
+            generate_arp(pkt, request.ip_addr);
 
             if (FIREWALL_DEBUG_OUTPUT) {
                 sddf_printf("MAC[5] = %x | ARP requester processing client %u request for ip %u\n", arp_config.mac_addr[5], client, request.ip_addr);
@@ -82,10 +92,12 @@ void process_requests()
             err = net_enqueue_active(&tx_queue, buffer);
             assert(!err);
 
-            /* Create arp entry for request to store associated client */
+            /* Create arp entry for request */
             arp_entry_t entry = {0};
-            entry.valid = false;
+            entry.state = pending;
+            entry.time = sddf_timer_time_now(timer_config.driver_id);
             entry.client = client;
+            memcpy(entry.mac_addr, empty_mac, ETH_HWADDR_LEN);
             err = hashtable_insert(arp_table, request.ip_addr, &entry);
 
             transmitted = true;
@@ -113,32 +125,34 @@ void process_responses()
             arp_packet_t *pkt = (arp_packet_t *)(net_config.rx_data.vaddr + buffer.io_or_offset);
             /* Check if packet is an ARP request */
             if (pkt->type == HTONS(ETH_TYPE_ARP)) {
-
                 /* Check if it's a probe, ignore announcements */
                 if (pkt->opcode == HTONS(ETHARP_OPCODE_REPLY)) {
-
                     /* Find the arp entry */
-                    arp_entry_t *entry = NULL;
-                    int found = hashtable_search(arp_table, pkt->ipsrc_addr, entry);
-                    if (found) {
+                    arp_entry_t entry = {0};
+                    int found = hashtable_search(arp_table, pkt->ipsrc_addr, &entry);
+                    if (found && entry.state == pending) {
                         /* This was a response to a request we sent, update entry */
-                        memcpy(&entry->mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
+                        memcpy(entry.mac_addr, pkt->hwsrc_addr, ETH_HWADDR_LEN);
+                        entry.state = positive;
+                        err = hashtable_update(arp_table, pkt->ipsrc_addr, &entry);
+                        if (err == -1) {
+                            sddf_dprintf("MAC[5] = %x | ARP requester error updating hashtable!\n", arp_config.mac_addr[5]);
+                        }
 
                         if (FIREWALL_DEBUG_OUTPUT) {
-                            sddf_printf("MAC[5] = %x | ARP requester received response for client %u, ip %u. MAC[0] = %x, MAC[5] = %x\n", arp_config.mac_addr[5], entry->client, pkt->ipsrc_addr, pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
+                            sddf_printf("MAC[5] = %x | ARP requester received response for ip %u. MAC[0] = %x, MAC[5] = %x\n", arp_config.mac_addr[5], pkt->ipsrc_addr, pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
                         }
-                        
-                        /* Send to client */
-                        arp_enqueue_response(arp_queues[entry->client], pkt->ipsrc_addr, entry->mac_addr, true);
-                        notify_client[entry->client] = true;
 
+                        /* Send to router */
+                        arp_enqueue_response(arp_queues[entry.client], pkt->ipsrc_addr, entry.mac_addr, true);
+
+                        notify_client[entry.client] = true;
                     } else {
-                        /* Create a new entry */
-                        arp_entry_t entry = {0};
-                        memcpy(&entry.mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
-                        entry.valid = true;
-                        entry.client = FIREWALL_NUM_ARP_REQUESTER_CLIENTS + 1;
-                        err = hashtable_insert(arp_table, pkt->ipsrc_addr, &entry);
+                        arp_entry_t new_entry = {0};
+                        memcpy(&new_entry.mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
+                        new_entry.state = positive;
+                        // This new entry does not have an associtated client.
+                        err = hashtable_insert(arp_table, pkt->ipsrc_addr, &new_entry);
                         if (err) {
                             sddf_dprintf("ARP_REQUESTER|LOG: Hash table full, failed to insert!\n");
                         }
@@ -173,6 +187,54 @@ void process_responses()
     }
 }
 
+/* Returns the number of ARP's still requiring a retry. */
+int process_retries(uint64_t time)
+{
+    int pending_pkts = 0;
+    // Loop over hashmap, and check if we have any pending retries.
+    for (int i = 0; i < 100; i++) {
+        if (arp_table->used[i] == 1 ) {
+            if (arp_table->entries[i].value.state == pending) {
+                if (arp_table->entries[i].value.num_retries >= ARP_MAX_RETRIES) {
+                    // ARP table has been expired
+                    arp_table->entries[i].value.state = negative;
+                    // Generate an ARP response packet for the router.
+                    arp_enqueue_response(arp_queues[arp_table->entries[i].value.client], arp_table->entries[i].key, empty_mac, false);
+                } else {
+                    // Resend the ARP request out to the network
+                    /* Generate ARP request */
+                    pending_pkts++;
+
+                    net_buff_desc_t buffer = {};
+                    int err = net_dequeue_free(&tx_queue, &buffer);
+                    if (err) {
+                        sddf_dprintf("ARP_REQUESTER| Unable to requeue ARP request as tx queue is full!\n");
+                        return pending_pkts;
+                    }
+
+                    arp_packet_t *pkt = (arp_packet_t *)(net_config.tx_data.vaddr + buffer.io_or_offset);
+
+                    generate_arp(pkt, arp_table->entries[i].key);
+
+                    if (FIREWALL_DEBUG_OUTPUT) {
+                        sddf_printf("MAC[5] = %x | ARP requester processing request for ip %u\n", arp_config.mac_addr[5], arp_table->entries[i].key);
+                    }
+
+                    buffer.len = 56;
+                    err = net_enqueue_active(&tx_queue, buffer);
+                    assert(!err);
+
+                    // Increment the number of retries
+                    arp_table->entries[i].value.num_retries++;
+
+                    microkit_deferred_notify(net_config.tx.id);
+                }
+            }
+        }
+    }
+    return pending_pkts;
+}
+
 void init(void)
 {
     assert(net_config_check_magic((void *)&net_config));
@@ -192,7 +254,11 @@ void init(void)
         arp_handle_init(arp_queues[client], arp_config.clients[client].capacity);
     }
 
-    arp_table = (hashtable_t *) arp_config.arp_cache.vaddr;
+    /* Set the period for the arp cache flush. */
+    time_to_flush = sddf_timer_time_now(timer_config.driver_id) + ARP_CACHE_LIFE_US;
+
+    // @kwinter: Not sure if this is the best place to start the tick.
+    sddf_timer_set_timeout(timer_config.driver_id, ARP_RETRY_TIMER_S * NS_IN_S);
 }
 
 void notified(microkit_channel ch)
@@ -201,5 +267,14 @@ void notified(microkit_channel ch)
         process_requests();
     } if (ch == net_config.rx.id) {
         process_responses();
+    } else if (ch == timer_config.driver_id) {
+        uint64_t time = sddf_timer_time_now(timer_config.driver_id);
+        process_retries(time);
+        sddf_timer_set_timeout(timer_config.driver_id, ARP_RETRY_TIMER_S * NS_IN_S);
+
+        if (time >= time_to_flush) {
+            hashtable_init(arp_table);
+            time_to_flush = time + ARP_CACHE_LIFE_US;
+        }
     }
 }

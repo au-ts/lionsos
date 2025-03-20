@@ -225,7 +225,7 @@ static void route()
 
                 arp_entry_t hash_entry;
                 int ret = hashtable_search(arp_table, (uint32_t) nextIP, &hash_entry);
-                if (ret == -1) {
+                if (ret == -1 | hash_entry.state == negative) {
                     if (llfull(&pkt_waiting_queue)) {
                         sddf_dprintf("ROUTING|LOG: Waiting packet queue full, dropping packet!\n");
                         buffer.len = 0;
@@ -270,7 +270,7 @@ static void route()
                             notify_arp = true;
                         }
                     }
-                } else {
+                } else if (hash_entry.state == positive) {
                     /* Match found for MAC address, replace the destination in eth header */
                     memcpy(&pkt->ethdst_addr, &hash_entry.mac_addr, ETH_HWADDR_LEN);
                     memcpy(&pkt->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);

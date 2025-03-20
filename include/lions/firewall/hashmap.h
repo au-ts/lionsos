@@ -28,6 +28,27 @@ void hashtable_init(hashtable_t *table) {
     }
 }
 
+int hashtable_update(hashtable_t *table, uint32_t key, arp_entry_t *value)
+{
+    uint32_t index = hash(key);
+    uint32_t original_index = index;
+
+    while (table->used[index]) {
+        if (table->entries[index].key == key) {
+            memcpy(&table->entries[index].value, value, sizeof(arp_entry_t));
+            return 1;
+        }
+        index = (index + 1) % FIREWALL_MAX_CACHE_ENTRIES;
+        if (index == original_index) {
+            // Full cycle completed, element not found
+            break;
+        }
+    }
+
+    return -1;
+
+}
+
 // Insert a key-value pair into the hash table
 int hashtable_insert(hashtable_t *table, uint32_t key, arp_entry_t *value) {
     uint32_t index = hash(key);
