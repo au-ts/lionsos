@@ -62,6 +62,12 @@ typedef struct firewall_filter_state {
 #define FIREWALL_DEL_RULE 2
 
 typedef enum {
+    FILTER_PROTO_UDP,
+    FILTER_PROTO_TCP,
+    FILTER_PROTO_IMCP
+} firewall_protocol_id_t;
+
+typedef enum {
     FILTER_ARG_ACTION = 0,
     FILTER_ARG_RULE_ID = 1,
     FILTER_ARG_SRC_IP = 2,
@@ -78,11 +84,6 @@ typedef enum {
     FILTER_RET_ERR = 0,
     FILTER_RET_RULE_ID = 1
 } firewall_ret_args_t;
-
-typedef enum {
-    RET_STATUS = 0,
-    RET_RULE_ID = 1
-} firewall_return_args_t;
 
 static void firewall_filter_state_init(firewall_filter_state_t *state, 
                                        void *rules, 

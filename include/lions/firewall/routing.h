@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <lions/firewall/common.h>
+#include <lions/firewall/queue.h>
 
 /* Routing table data structures */
 
