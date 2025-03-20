@@ -14,6 +14,10 @@
 
 #define IPV4_ADDR(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((uint32_t) (d) << 24))
 
+#define IP_TYPE_ICMP 0x01
+#define IP_TYPE_TCP 0x06
+#define IP_TYPE_UDP 0x11
+
 typedef struct __attribute__((__packed__)) ipv4_packet {
     uint8_t ethdst_addr[ETH_HWADDR_LEN];
     uint8_t ethsrc_addr[ETH_HWADDR_LEN];

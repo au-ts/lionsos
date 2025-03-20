@@ -11,6 +11,12 @@
 #define FIREWALL_NUM_INSTANCES 512
 
 typedef enum {
+    UDP,
+    TCP,
+    IMCP,
+} firewall_protocol_id;
+
+typedef enum {
     OKAY = 0,   /* No error */
 	FULL,  /* Data structure is full */
 	DUPLICATE,	/* Duplicate entry exists */

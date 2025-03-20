@@ -83,6 +83,8 @@ vpath %.c ${SDDF} ${FIREWALL_SRC_DIR} ${FIREWALL_COMPONENTS}
 MICROPYTHON_LIBMATH := $(LIBMATH)
 MICROPYTHON_EXEC_MODULE := ui_server.py
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
+MICROPYTHON_USER_C_MODULES := $(FIREWALL_SRC_DIR)/modfirewall.c
+
 include $(LIONSOS)/components/micropython/micropython.mk
 
 manifest.py: ui_server.py

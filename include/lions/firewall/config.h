@@ -6,6 +6,7 @@
 #include <sddf/resources/common.h>
 #include <sddf/resources/device.h>
 #include <sddf/network/constants.h>
+#include <sddf/network/config.h>
 
 #define FIREWALL_MAX_FIREWALL_CLIENTS 61
 #define FIREWALL_NUM_ARP_REQUESTER_CLIENTS 2
@@ -81,6 +82,7 @@ typedef struct firewall_webserver_filter_config {
     uint16_t protocol;
     uint8_t default_action;
     region_resource_t rules;
+    uint8_t iface;
 } firewall_webserver_filter_config_t;
 
 typedef struct firewall_filter_config {
@@ -98,5 +100,6 @@ typedef struct firewall_webserver_config {
     firewall_webserver_router_config_t router;
     firewall_connection_resource_t rx_free;
     firewall_connection_resource_t arp_queue;
+    region_resource_t arp_cache;
     firewall_webserver_filter_config_t filters[2 * FIREWALL_MAX_FILTERS];
 } firewall_webserver_config_t;

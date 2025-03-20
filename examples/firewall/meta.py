@@ -379,7 +379,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     # Filters have shared memory to allow for dual-direction rules 
 
     # Webserver is a serial and timer client
-
+    serial_system.add_client(micropython)
+    timer_system.add_client(micropython)
 
 
     for pd in common_pds:

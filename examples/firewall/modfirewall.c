@@ -5,14 +5,12 @@
 
 #include <microkit.h>
 #include "py/runtime.h"
-#include <arpa/inet.h>
 // @kwinter: Remove this
 #include <string.h>
-#include "firewall_structs.h"
 #include <lions/firewall/filter.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/protocols.h>
-
+#include "firewall_structs.h"
 extern firewall_webserver_config_t firewall_config;
 
 interface_t interfaces[] = {
@@ -49,28 +47,84 @@ routing_entry_t routing_table[256] = {
 size_t n_routes = 3;
 size_t next_route_id = 3;
 
-firewall_rule_t firewall_rules[256] = {
-    {
-        .id = 0,
-        .protocol = "ICMP",
-        .iface1 = "Anywhere",
-        .iface2 = "123.456.789.0/23",
-    },
-    {
-        .id = 1,
-        .protocol = "UDP",
-        .iface1 = "192.168.10.3/24",
-        .iface2 = "123.456.788.10:53",
-    },
-    {
-        .id = 2,
-        .protocol = "TCP",
-        .iface1 = "Anywhere",
-        .iface2 = "123.456.788.23:80",
-    },
-};
-size_t n_rules = 3;
-size_t next_rule_id = 3;
+#define INVALID 0
+
+// TODO: Replace this ip_to_int
+
+/* Convert the character string in "ip" into an unsigned integer.
+
+This assumes that an unsigned integer contains at least 32 bits. */
+
+unsigned int ip_to_int (const char * ip)
+{
+    /* The return value. */
+    unsigned v = 0;
+    /* The count of the number of bytes processed. */
+    int i;
+    /* A pointer to the next digit to process. */
+    const char * start;
+
+    start = ip;
+    for (i = 0; i < 4; i++) {
+        /* The digit being processed. */
+        char c;
+        /* The value of this byte. */
+        int n = 0;
+        while (1) {
+            c = * start;
+            start++;
+            if (c >= '0' && c <= '9') {
+                n *= 10;
+                n += c - '0';
+            }
+            /* We insist on stopping at "." if we are still parsing
+               the first, second, or third numbers. If we have reached
+               the end of the numbers, we will allow any character. */
+            else if ((i < 3 && c == '.') || i == 3) {
+                break;
+            }
+            else {
+                return INVALID;
+            }
+        }
+        if (n >= 256) {
+            return INVALID;
+        }
+        v *= 256;
+        v += n;
+    }
+    return v;
+}
+static char *ipaddr_to_string(uint32_t s_addr, char *buf, int buflen)
+{
+    char inv[3], *rp;
+    uint8_t *ap, rem, n, i;
+    int len = 0;
+
+    rp = buf;
+    ap = (uint8_t *)&s_addr;
+    for (n = 0; n < 4; n++) {
+        i = 0;
+        do {
+            rem = *ap % (uint8_t)10;
+            *ap /= (uint8_t)10;
+            inv[i++] = (char)('0' + rem);
+        } while (*ap);
+        while (i--) {
+            if (len++ >= buflen) {
+                return NULL;
+            }
+            *rp++ = inv[i];
+        }
+        if (len++ >= buflen) {
+            return NULL;
+        }
+        *rp++ = '.';
+        ap++;
+    }
+    *--rp = 0;
+    return buf;
+}
 
 STATIC mp_obj_t interface_get_mac(mp_obj_t interface_idx_in) {
     uint64_t interface_idx = mp_obj_get_int(interface_idx_in);
@@ -188,6 +242,10 @@ STATIC mp_obj_t rule_add(mp_obj_t protocol, mp_obj_t filter, mp_obj_t src_ip, mp
         protocol_id = IP_TYPE_UDP;
     } else if (strcmp(protocol_var, "tcp")) {
         protocol_id = IP_TYPE_TCP;
+    } else {
+        printf("ERR| rule_add: Unsuppored protocol\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
     }
 
     const char *filter_var = mp_obj_str_get_str(filter);
@@ -196,6 +254,10 @@ STATIC mp_obj_t rule_add(mp_obj_t protocol, mp_obj_t filter, mp_obj_t src_ip, mp
         iface = 1;
     } else if (strcmp(filter_var, "internal")) {
         iface = 2;
+    } else {
+        printf("ERR| rule_add: Invalid interface\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
     }
     const char *src_ip_var = mp_obj_str_get_str(src_ip);
     uint16_t src_port_var = mp_obj_get_int(src_port);
@@ -203,31 +265,29 @@ STATIC mp_obj_t rule_add(mp_obj_t protocol, mp_obj_t filter, mp_obj_t src_ip, mp
     const char *dest_ip_var = mp_obj_str_get_str(dest_ip);
     uint16_t dest_port_var = mp_obj_get_int(dest_port);
     uint8_t dest_subnet_var = mp_obj_get_int(dest_subnet);
-    const char *action = mp_obj_str_get_str(action);
+    const char *action_var = mp_obj_str_get_str(action);
 
     // Find the filter that implements this protocol in this direction.
     for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
         if (firewall_config.filters[i].protocol == protocol_id &&
                 firewall_config.filters[i].iface == iface) {
             // Convert all the strings to integers.
-            struct in_addr src_ip_addr;
-            inet_pton(AF_INET, src_ip_var, &src_ip_addr);
-            struct in_addr dest_ip_addr;
-            inet_pton(AF_INET, dest_ip_var, &dest_ip_addr);
+            uint32_t src_ip_addr = ip_to_int(src_ip_var);
+            uint32_t dst_ip_addr = ip_to_int(dst_ip_addr);
             // Choosing random value outside of enum range
             int action_val = 9;
-            if (strcmp(action, "Allow")) {
+            if (strcmp(action_var, "Allow")) {
                 action_val = ALLOW;
-            } else if (strcmp(action, "Drop")) {
+            } else if (strcmp(action_var, "Drop")) {
                 action_val = DROP;
-            } else if (strcmp(action, "Connect")) {
+            } else if (strcmp(action_var, "Connect")) {
                 action_val = CONNECT;
             }
 
             seL4_SetMR(ACTION, action_val);
-            seL4_SetMR(SRC_IP, src_ip_addr.s_addr);
+            seL4_SetMR(SRC_IP, src_ip_addr);
             seL4_SetMR(SRC_PORT, src_port_var);
-            seL4_SetMR(DST_IP, dest_ip_addr.s_addr);
+            seL4_SetMR(DST_IP, dst_ip_addr);
             seL4_SetMR(DST_PORT, dest_port_var);
             seL4_SetMR(SRC_SUBNET, src_subnet_var);
             seL4_SetMR(DST_SUBNET, dest_subnet_var);
@@ -235,67 +295,268 @@ STATIC mp_obj_t rule_add(mp_obj_t protocol, mp_obj_t filter, mp_obj_t src_ip, mp
             seL4_SetMR(SRC_ANY_PORT, 0);
             seL4_SetMR(DST_ANY_PORT, 0);
 
-            microkit_ppcall(firewall_config.filters[i].ch, microkit_msginfo_new(0, 9));
-            return
+            microkit_msginfo msginfo = microkit_ppcall(firewall_config.filters[i].ch, microkit_msginfo_new(FIREWALL_ADD_RULE, 9));
+            uint32_t err = seL4_GetMR(0);
+            if(err) return mp_obj_new_int_from_uint(err);
+            uint32_t rule_id = seL4_GetMR(1);
+            return mp_obj_new_int_from_uint(rule_id);
         }
     }
-    return mp_obj_new_int_from_uint(rule->id);
+
+    mp_raise_OSError(-1);
+    return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(rule_add_obj, rule_add);
 
-STATIC mp_obj_t rule_delete(mp_obj_t rule_id_in) {
+STATIC mp_obj_t rule_delete(mp_obj_t rule_id_in, mp_obj_t protocol, mp_obj_t filter) {
     uint64_t rule_id = mp_obj_get_int(rule_id_in);
 
-    size_t table_idx = UINT64_MAX;
-    for (size_t i = 0; i < n_rules; i++) {
-        if (rule_id == firewall_rules[i].id) {
-            table_idx = i;
-            break;
-        }
-    }
-    if (table_idx == UINT64_MAX) {
+    const char *protocol_var = mp_obj_str_get_str(protocol);
+    int protocol_id = 0;
+    if (strcmp(protocol_var, "icmp")) {
+        protocol_id = IP_TYPE_ICMP;
+    } else if (strcmp(protocol_var, "udp")) {
+        protocol_id = IP_TYPE_UDP;
+    } else if (strcmp(protocol_var, "tcp")) {
+        protocol_id = IP_TYPE_TCP;
+    } else {
+        printf("ERR| rule_delete: Unsuppored protocol.\n");
         mp_raise_OSError(-1);
         return mp_const_none;
     }
 
-    firewall_rules[table_idx] = firewall_rules[n_rules - 1];
-    n_rules--;
+    const char *filter_var = mp_obj_str_get_str(filter);
+    int iface = 4;
+    if (strcmp(filter_var, "external")) {
+        iface = 1;
+    } else if (strcmp(filter_var, "internal")) {
+        iface = 2;
+    } else {
+        printf("ERR| rule_delete: Invalid interface\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    // Find the list of rules to read from
+    firewall_rule_t *rules = NULL;
+
+    for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
+        if (firewall_config.filters[i].protocol == protocol_id &&
+                firewall_config.filters[i].iface == iface) {
+            rules = (firewall_rule_t *) firewall_config.filters[i].rules.vaddr;
+        }
+    }
+
+    int index_cnt = 0;
+
+    for (int i = 0; i < FIREWALL_NUM_RULES; i++) {
+        if (index_cnt == rule_id && rules[i].valid) {
+            // We found our rule index, delete it.
+            seL4_SetMR(RULE_ID, i);
+            microkit_msginfo msginfo = microkit_ppcall(firewall_config.filters[i].ch, microkit_msginfo_new(FIREWALL_DEL_RULE, 1));
+            uint32_t err = seL4_GetMR(0);
+            if(err) return mp_obj_new_int_from_uint(err);
+            uint32_t rule_id = seL4_GetMR(1);
+            return mp_obj_new_int_from_uint(rule_id);
+        } else if (rules[i].valid){
+            index_cnt++;
+        }
+    }
+
+    // If we get here, it means that our index was invalid.
+    printf("ERR| rule_delete: Invalid index to delete\n");
+    mp_raise_OSError(-1);
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(rule_delete_obj, rule_delete);
 
-STATIC mp_obj_t rule_count(void) {
-    return mp_obj_new_int_from_uint(n_rules);
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(rule_count_obj, rule_count);
-
-STATIC mp_obj_t filter_default_action(void) {
-    // @krishnan finish
-    return mp_obj_new_int_from_uint(2);
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(filter_default_action_obj, filter_default_action);
-
-STATIC mp_obj_t rule_get_nth(mp_obj_t rule_idx_in) {
-    // @krishnan finish
-    uint64_t rule_idx = mp_obj_get_int(rule_idx_in);
-
-    if (rule_idx >= n_rules) {
+STATIC mp_obj_t rule_count(mp_obj_t protocol, mp_obj_t filter) {
+    const char *protocol_var = mp_obj_str_get_str(protocol);
+    int protocol_id = 0;
+    if (strcmp(protocol_var, "icmp")) {
+        protocol_id = IP_TYPE_ICMP;
+    } else if (strcmp(protocol_var, "udp")) {
+        protocol_id = IP_TYPE_UDP;
+    } else if (strcmp(protocol_var, "tcp")) {
+        protocol_id = IP_TYPE_TCP;
+    } else {
+        printf("ERR| rule_delete: Unsuppored protocol.\n");
         mp_raise_OSError(-1);
         return mp_const_none;
     }
-    firewall_rule_t *rule = &firewall_rules[rule_idx];
+
+    const char *filter_var = mp_obj_str_get_str(filter);
+    int iface = 4;
+    if (strcmp(filter_var, "external")) {
+        iface = 1;
+    } else if (strcmp(filter_var, "internal")) {
+        iface = 2;
+    } else {
+        printf("ERR| rule_delete: Invalid interface\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    // Find the list of rules to read from
+    firewall_rule_t *rules = NULL;
+
+    for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
+        if (firewall_config.filters[i].protocol == protocol_id &&
+                firewall_config.filters[i].iface == iface) {
+            rules = (firewall_rule_t *) firewall_config.filters[i].rules.vaddr;
+        }
+    }
+
+    int index_cnt = 0;
+
+    for (int i = 0; i < FIREWALL_NUM_RULES; i++) {
+        if (rules[i].valid) {
+            // We found our rule index, delete it.
+            index_cnt++;
+        }
+    }
+    return mp_obj_new_int_from_uint(index_cnt);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(rule_count_obj, rule_count);
+
+STATIC mp_obj_t filter_default_action(mp_obj_t protocol, mp_obj_t filter) {
+    const char *protocol_var = mp_obj_str_get_str(protocol);
+    int protocol_id = 0;
+    if (strcmp(protocol_var, "icmp")) {
+        protocol_id = IP_TYPE_ICMP;
+    } else if (strcmp(protocol_var, "udp")) {
+        protocol_id = IP_TYPE_UDP;
+    } else if (strcmp(protocol_var, "tcp")) {
+        protocol_id = IP_TYPE_TCP;
+    } else {
+        printf("ERR| filter_default_action: Unsuppored protocol.\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    const char *filter_var = mp_obj_str_get_str(filter);
+    int iface = 4;
+    if (strcmp(filter_var, "external")) {
+        iface = 1;
+    } else if (strcmp(filter_var, "internal")) {
+        iface = 2;
+    } else {
+        printf("ERR| filter_default_action: Invalid interface\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
+        if (firewall_config.filters[i].protocol == protocol_id &&
+                firewall_config.filters[i].iface == iface) {
+            return mp_obj_new_int_from_uint((firewall_config.filters[i].default_action));
+        }
+    }
+    // @kwinter: Change the front end to print an error on getting a 0
+    printf("ERR| filter_default_action: Could not find a matchong protocol on specified interface.\n");
+    return mp_obj_new_int_from_uint(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(filter_default_action_obj, filter_default_action);
+
+STATIC mp_obj_t rule_get_nth(mp_obj_t protocol, mp_obj_t filter, mp_obj_t rule_idx_in) {
+    const char *protocol_var = mp_obj_str_get_str(protocol);
+    int protocol_id = 0;
+    if (strcmp(protocol_var, "icmp")) {
+        protocol_id = IP_TYPE_ICMP;
+    } else if (strcmp(protocol_var, "udp")) {
+        protocol_id = IP_TYPE_UDP;
+    } else if (strcmp(protocol_var, "tcp")) {
+        protocol_id = IP_TYPE_TCP;
+    } else {
+        printf("ERR| rule_get_nth: Unsuppored protocol.\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    const char *filter_var = mp_obj_str_get_str(filter);
+    int iface = 4;
+    if (strcmp(filter_var, "external")) {
+        iface = 1;
+    } else if (strcmp(filter_var, "internal")) {
+        iface = 2;
+    } else {
+        printf("ERR| rule_get_nth: Invalid interface\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    // Find the list of rules to read from
+    firewall_rule_t *rules = NULL;
+
+    for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
+        if (firewall_config.filters[i].protocol == protocol_id &&
+                firewall_config.filters[i].iface == iface) {
+            rules = (firewall_rule_t *) firewall_config.filters[i].rules.vaddr;
+        }
+    }
+
+    if (rules == NULL) {
+        printf("ERR| rule_get_nth: Unable to find protocol on supplied interface\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    uint64_t rule_idx = mp_obj_get_int(rule_idx_in);
+
+    if (rule_idx >= FIREWALL_NUM_RULES) {
+        printf("ERR| rule_get_nth: Rule index exceeds bounds of rule list\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    uint32_t index_cnt = 0;
+    bool found_entry = false;
+    for (int i = 0; i < FIREWALL_NUM_RULES; i++) {
+        if (index_cnt == rule_idx && rules[i].valid) {
+            // We found our rule index
+            found_entry = true;
+            break;
+        } else if (rules[i].valid){
+            index_cnt++;
+        }
+    }
+
+    if (!found_entry) {
+        printf("ERR| rule_get_nth: Rule index exceeds bounds of rule list\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    firewall_rule_t rule = rules[index_cnt];
+
+    if (!rule.valid) {
+        printf("Invalid rule\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
 
     mp_obj_t tuple[10];
-    tuple[0] = mp_obj_new_int_from_uint(rule->id);
-    char *dummy_src_ip = "123.456.789.0";
-    uint32_t dummy_src_port = 24;
-    tuple[1] = mp_obj_new_str(dummy_src_ip, strlen(dummy_src_ip));
-    tuple[2] = mp_obj_new_int_from_uint(dummy_src_port);
-    tuple[3] = mp_obj_new_str(dummy_src_ip, strlen(dummy_src_ip));
-    tuple[4] = mp_obj_new_int_from_uint(dummy_src_port);
-    tuple[5] = mp_obj_new_str(dummy_src_ip, strlen(dummy_src_ip));
-    tuple[6] = mp_obj_new_str(dummy_src_ip, strlen(dummy_src_ip));
-    tuple[7] = mp_obj_new_str("?", 1);
+    // We use the rule index as the rule ID in the instances. Use the same
+    // index as the ID here.
+    tuple[0] = mp_obj_new_int_from_uint(rule_idx);
+    char *buf[16];
+    char src_ip = ipaddr_to_string(rule.src_ip, buf, 16);
+    tuple[1] = mp_obj_new_str(src_ip, strlen(src_ip));
+    tuple[2] = mp_obj_new_int_from_uint(rule.src_port);
+    char dest_ip = ipaddr_to_string(rule.dst_ip, buf, 16);
+    tuple[3] = mp_obj_new_str(dest_ip, strlen(dest_ip));
+    tuple[4] = mp_obj_new_int_from_uint(rule.dst_port);
+    tuple[5] = mp_obj_new_int_from_uint(rule.src_subnet);
+    tuple[6] = mp_obj_new_int_from_uint(rule.dst_subnet);
+    if (rule.action == ALLOW) {
+       tuple[7] = mp_obj_new_str("ALLOW", 5);
+    } else if (rule.action == DROP) {
+        tuple[7] = mp_obj_new_str("DROP", 4);
+    } else {
+        tuple[7] = mp_obj_new_str("CONNECT", 7);
+    }
+    // @kwinter: Not sure what these last two fields are for?
     tuple[8] = mp_obj_new_str("?", 1);
     tuple[9] = mp_obj_new_str("?", 1);
 

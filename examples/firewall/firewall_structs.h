@@ -16,10 +16,3 @@ typedef struct {
     char gateway[MAX_CIDR_LEN];
     int interface;
 } routing_entry_t;
-
-typedef struct {
-    uint64_t id;
-    char protocol[MAX_PROTOCOL_LEN];
-    char iface1[MAX_IFACE_STR_LEN];
-    char iface2[MAX_IFACE_STR_LEN];
-} firewall_rule_t;
