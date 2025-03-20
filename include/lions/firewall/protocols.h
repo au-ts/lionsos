@@ -106,6 +106,7 @@ typedef struct __attribute__((__packed__)) tcphdr
 
 typedef struct __attribute__((__packed__)) icmphdr
 {
+    ipv4_packet_t ip_hdr;
     uint8_t type;		    /* message type */
     uint8_t code;		    /* type sub-code */
     uint16_t checksum;
@@ -119,7 +120,7 @@ typedef struct __attribute__((__packed__)) icmphdr
         uint32_t gateway;	/* gateway address */
         struct
         {
-            uint16_t unused;
+            uint16_t __unused;
             uint16_t mtu;
         } frag;			    /* path mtu discovery */
     } un;
