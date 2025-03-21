@@ -20,11 +20,14 @@
 #include <lions/firewall/protocols.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/routing.h>
+#include <lions/firewall/icmp_queue.h>
 #include <string.h>
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 
 __attribute__((__section__(".firewall_router_config"))) firewall_router_config_t router_config;
+
+__attribute__((__section__(".icmp_config"))) firewall_connection_resource_t icmp_config;
 
 serial_queue_handle_t serial_tx_queue_handle;
 
@@ -35,6 +38,7 @@ typedef struct state {
     firewall_queue_handle_t webserver;
     uintptr_t webserver_data_vaddr;
     uintptr_t data_vaddr;
+    icmp_queue_handle_t icmp_module;
 } state_t;
 
 state_t state;
@@ -116,10 +120,35 @@ static void process_arp_waiting(void)
 
         /* Send all matching ip packets */
         if (!response.valid) {
+            sddf_dprintf("We have an invalid response!\n");
             /* Invalid response, drop packet associated with the IP address */
             llnode_pkt_waiting_t *free_pkt = NULL;
             bool child = false;
+            bool notify_icmp = false;
             while (req_pkt) {
+                // @kwinter: Not sure if we should send back a destination unreachable for every
+                // single packet that is waiting on this ip address?
+                // Send out an ICMP packet to notify source that the destination is unreachable
+                icmp_req_t req = {0};
+                err = icmp_dequeue(&state.icmp_module, &req);
+                if (err) {
+                    sddf_dprintf("%s| ICMP queue was full.", microkit_name);
+                } else {
+                    req.ip = response.ip_addr;
+                    ipv4_packet_t *eth_hdr = (struct ipv4_packet_t *) (req_pkt->buffer.io_or_offset + state.data_vaddr);
+                    // Copy the source of the failed packet as the dest of the ICMP response.
+                    memcpy(req.mac, eth_hdr->ethsrc_addr, ETH_HWADDR_LEN);
+                    req.type = ICMP_DEST_UNREACHABLE;
+                    // @kwinter: Not sure what sub code we want for this packet.
+                    req.code = ICMP_DEST_HOST_UNREACHABLE;
+                    sddf_memcpy(&req.old_hdr, eth_hdr, sizeof(ipv4_packet_t));
+                    // @kwinter: TODO - add a check to make sure that there is 64 bits of data following the ip header.
+                    if (req_pkt->buffer.len >= (sizeof(ipv4_packet_t) + 8)) {
+                        sddf_memcpy(&req.old_data, (void *)(req_pkt->buffer.io_or_offset + state.data_vaddr + sizeof(ipv4_packet_t)), 8);
+                    }
+                    icmp_enqueue(&state.icmp_module, req);
+                    notify_icmp = true;
+                }
                 req_pkt->buffer.len = 0;
                 err = firewall_enqueue(&state.rx_free, req_pkt->buffer);
                 assert(!err);
@@ -132,6 +161,9 @@ static void process_arp_waiting(void)
                     llfree(&pkt_waiting_queue, (void *)free_pkt);
                 }
                 child = true;
+            }
+            if (notify_icmp) {
+                microkit_deferred_notify(icmp_config.ch);
             }
         } else {
             /* Substitute the MAC address and send packets out of the NIC */
@@ -166,6 +198,7 @@ static void process_arp_waiting(void)
 
 static void route()
 {
+    bool notify_icmp = false;
     for (int filter = 0; filter < router_config.num_filters; filter++) {
         while (!firewall_queue_empty(&state.firewall_filters[filter])) {
             firewall_buff_desc_t buffer;
@@ -225,7 +258,8 @@ static void route()
 
                 arp_entry_t hash_entry;
                 int ret = hashtable_search(arp_table, (uint32_t) nextIP, &hash_entry);
-                if (ret == -1 | hash_entry.state == negative) {
+                if (ret == -1) {
+                    // Only send an ARP request if there was no entry found
                     if (llfull(&pkt_waiting_queue)) {
                         sddf_dprintf("ROUTING|LOG: Waiting packet queue full, dropping packet!\n");
                         buffer.len = 0;
@@ -234,8 +268,8 @@ static void route()
                         returned = true;
                     } else {
                         /* In this case, the IP address is not in the ARP Tables.
-                        *  We add an entry to the ARP request queue and await a 
-                        *  response. If we get a timeout, we will then drop the 
+                        *  We add an entry to the ARP request queue and await a
+                        *  response. If we get a timeout, we will then drop the
                         *  packets associated with that IP address in the queue.
                         */
                         llnode_pkt_waiting_t *parent_pkt = (llnode_pkt_waiting_t *) ll_find_pkt_node(&pkt_waiting_queue, nextIP);
@@ -284,9 +318,39 @@ static void route()
                     int err = firewall_enqueue(&state.tx_active, buffer);
                     assert(!err);
                     transmitted = true;
+                } else if (hash_entry.state == negative) {
+                    // In this case, we have already attempted to find the device, send a destination
+                    // unreachable packet back to the source.
+                    icmp_req_t req = {0};
+                    err = icmp_dequeue(&state.icmp_module, &req);
+                    if (err) {
+                        sddf_dprintf("%s| ICMP queue was full.", microkit_name);
+                    } else {
+                        req.ip = pkt->dst_ip;
+                        // Copy the source of the failed packet as the dest of the ICMP response.
+                        memcpy(req.mac, pkt->ethsrc_addr, ETH_HWADDR_LEN);
+                        req.type = ICMP_DEST_UNREACHABLE;
+                        // @kwinter: Not sure what sub code we want for this packet.
+                        req.code = ICMP_DEST_HOST_UNREACHABLE;
+                        sddf_memcpy(&req.old_hdr, pkt, sizeof(ipv4_packet_t));
+                        // @kwinter: TODO - add a check to make sure that there is 64 bits of data following the ip header.
+                        if (buffer.len >= (sizeof(ipv4_packet_t) + 8)) {
+                            sddf_memcpy(&req.old_data, (void *)(buffer.io_or_offset + state.data_vaddr + sizeof(ipv4_packet_t)), 8);
+                        }
+                        icmp_enqueue(&state.icmp_module, req);
+                        notify_icmp = true;
+                    }
+
+                    // Regardless we will drop the packet here.
+                    buffer.len = 0;
+                    err = firewall_enqueue(&state.rx_free, buffer);
+                    assert(!err);
                 }
             }
         }
+    }
+    if (notify_icmp) {
+        microkit_deferred_notify(icmp_config.ch);
     }
 }
 
