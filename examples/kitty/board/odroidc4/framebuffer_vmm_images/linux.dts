@@ -122,7 +122,6 @@
 	secure-monitor {
 		compatible = "amlogic,meson-gxbb-sm";
 		phandle = <0x04>;
-		status = "disabled";
 	};
 
 	soc {
@@ -164,7 +163,7 @@
 			clock-names = "stmmaceth\0clkin0\0clkin1\0timing-adjustment";
 			rx-fifo-depth = <0x1000>;
 			tx-fifo-depth = <0x800>;
-			status = "disabled";
+			status = "okay";
 			power-domains = <0x03 0x06>;
 			pinctrl-0 = <0x07 0x08>;
 			pinctrl-names = "default";
@@ -2385,7 +2384,6 @@
 				reg = <0x00 0x140 0x00 0x140>;
 				amlogic,has-chip-id;
 				phandle = <0x10>;
-				status = "disabled";
 			};
 
 			cec@280 {
@@ -2412,6 +2410,17 @@
 				phandle = <0x41>;
 			};
 
+			// serial@3000 {
+			// 	compatible = "amlogic,meson-gx-uart\0amlogic,meson-ao-uart";
+			// 	reg = <0x00 0x3000 0x00 0x18>;
+			// 	interrupts = <0x00 0xc1 0x01>;
+			// 	clocks = <0x11 0x19 0x04 0x11>;
+			// 	clock-names = "xtal\0pclk\0baud";
+			// 	status = "okay";
+			// 	pinctrl-0 = <0x1e>;
+			// 	pinctrl-names = "default";
+			// };
+
 			serial@4000 {
 				compatible = "amlogic,meson-gx-uart\0amlogic,meson-ao-uart";
 				reg = <0x00 0x4000 0x00 0x18>;
@@ -2423,7 +2432,6 @@
 
 			i2c@5000 {
 				compatible = "amlogic,meson-axg-i2c";
-				status = "disabled";
 				reg = <0x00 0x5000 0x00 0x20>;
 				interrupts = <0x00 0xc3 0x01>;
 				#address-cells = <0x01>;
@@ -2531,7 +2539,6 @@
 			};
 
 			watchdog@f0d0 {
-				status = "disabled";
 				compatible = "amlogic,meson-gxbb-wdt";
 				reg = <0x00 0xf0d0 0x00 0x10>;
 				clocks = <0x11>;
@@ -2599,7 +2606,6 @@
 			};
 
 			i2c@1d000 {
-				status = "disabled";
 				compatible = "amlogic,meson-axg-i2c";
 				reg = <0x00 0x1d000 0x00 0x20>;
 				interrupts = <0x00 0xd7 0x01>;
@@ -2616,7 +2622,6 @@
 				#size-cells = <0x00>;
 				clocks = <0x02 0x18>;
 				clock-frequency = <0x186a0>;
-				status = "okay";
                 pinctrl-0 = <0x68 0x69>;
                 pinctrl-names = "default";
 
@@ -2674,7 +2679,7 @@
 			compatible = "amlogic,meson-axg-mmc";
 			reg = <0x00 0xffe03000 0x00 0x800>;
 			interrupts = <0x00 0xbd 0x01>;
-			status = "disabled";
+			status = "okay";
 			clocks = <0x02 0x21 0x02 0x3c 0x02 0x02>;
 			clock-names = "core\0clkin0\0clkin1";
 			resets = <0x05 0x2c>;
@@ -2683,7 +2688,7 @@
 		sd@ffe05000 {
 			compatible = "amlogic,meson-axg-mmc";
 			reg = <0x00 0xffe05000 0x00 0x800>;
-			interrupts = <0x00 0xbe 0x04>;
+			interrupts = <0x00 0xbe 0x01>;
 			status = "okay";
 			clocks = <0x02 0x22 0x02 0x3d 0x02 0x02>;
 			clock-names = "core\0clkin0\0clkin1";
@@ -3015,12 +3020,6 @@
 		reg = <0x00 0x20000000 0x00 0x10000000>;
 	};
 
-	uio {
-		compatible = "generic-uio\0uio";
-		reg = <0x00 0x30000000 0x00 0x2000000>;
-		interrupts = <0x00 0x12 0x04>;
-	};
-
 	emmc-pwrseq {
 		compatible = "mmc-pwrseq-emmc";
 		reset-gpios = <0x14 0x25 0x01>;
@@ -3215,4 +3214,104 @@
 			panic-indicator;
 		};
 	};
+};
+
+/*
+ * Overlay
+ */
+/ {
+	uio {
+		compatible = "generic-uio\0uio";
+		reg = <0x00 0x30000000 0x00 0x2000000>;
+		interrupts = <0x00 0x12 0x04>;
+	};
+
+    secure-monitor {
+        status = "disabled";
+    };
+
+    soc {
+        ethernet@ff3f0000 {
+            status = "disabled";
+        };
+
+        bus@ff800000 {
+            ao-secure@140 {
+                status = "disabled";
+            };
+
+			ir@8000 {
+				status = "disabled";
+			};
+
+            adc@9000 {
+                status = "disabled";
+            };
+
+			i2c@5000 {
+				status = "disabled";
+			};
+        };
+
+		bus@ffd00000 {
+			i2c@1c000 {
+				status = "disabled";
+			};
+
+			i2c@1d000 {
+				status = "disabled";
+			};
+
+			i2c@1f000 {
+				status = "disabled";
+			};
+
+			watchdog@f0d0 {
+				status = "disabled";
+			};
+		};
+
+        usb@ffe09000 {
+            status = "disabled";
+        };
+
+        sd@ffe03000 {
+            status = "disabled";
+        };
+
+        sd@ffe05000 {
+            status = "disabled";
+        };
+
+		mmc@ffe07000 {
+			status = "disabled";
+		};
+    };
+
+	memory@0 {
+        device_type = "memory";
+        reg = <0x00 0x20000000 0x00 0x10000000>;
+    };
+
+    chosen {
+        linux,stdout-path = "/soc/bus@ff800000/serial@3000";
+        stdout-path = "/soc/bus@ff800000/serial@3000";
+        linux,initrd-end = <0x00000000 0x2f000000>;
+        linux,initrd-start = <0x00000000 0x2c000000>;
+        bootargs = "console=ttynull root=/dev/ram0 nosmp rw loglevel=8 pci=nomsi maxcpus=1 clk_ignore_unused uio_pdrv_genirq.of_id=generic-uio earlyprintk=serial vt.global_cursor_default=0 logo.nologo";
+
+		framebuffer-cvbs {
+			compatible = "amlogic,simple-framebuffer\0simple-framebuffer";
+			amlogic,pipeline = "vpu-cvbs";
+			clocks = <0x02 0xa8 0x02 0x35 0x02 0x3a>;
+			power-domains = <0x03 0x00>;
+		};
+
+		framebuffer-hdmi {
+			compatible = "amlogic,simple-framebuffer\0simple-framebuffer";
+			amlogic,pipeline = "vpu-hdmi";
+			clocks = <0x02 0xa8 0x02 0x35 0x02 0x3a>;
+			power-domains = <0x03 0x00>;
+		};
+    };
 };

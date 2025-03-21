@@ -257,20 +257,14 @@
     <!-- We allocate 256MiB of RAM for the guest. -->
     <memory_region name="framebuffer_guest_ram" size="0x10_000_000" page_size="0x200_000" phys_addr="0x20_000_000" />
 
-    <memory_region name="bus1" size="0x34000" phys_addr="0xff600000" />
-    <memory_region name="bus2" size="0x3000" phys_addr="0xff800000" />
-    <memory_region name="bus3" size="0xa000" phys_addr="0xffd13000" />
-    <memory_region name="bus4" size="0xf000" phys_addr="0xffd00000" />
-    <memory_region name="bus5" size="0x4000" phys_addr="0xff638000" />
-    <memory_region name="bus6" size="0x10000" phys_addr="0xff640000" />
-    <memory_region name="i2c_bus_1e" size="0x1000" phys_addr="0xffd1e000" />
-    <memory_region name="i2c_bus_1f" size="0x1000" phys_addr="0xffd1f000" />
-    <memory_region name="ir" size="0x1000" phys_addr="0xff808000" />
-    <memory_region name="adc" size="0x1000" phys_addr="0xff809000" />
+    <memory_region name="bus1-1" size="0x34000" phys_addr="0xff600000" />
+    <memory_region name="bus1-2" size="0x4000" phys_addr="0xff638000" />
+    <memory_region name="bus1-3" size="0x10000" phys_addr="0xff640000" />
+    <memory_region name="bus2-1" size="0x3000" phys_addr="0xff800000" />
+    <memory_region name="bus3-1" size="0xf000" phys_addr="0xffd00000" />
+    <memory_region name="bus3-2" size="0xa000" phys_addr="0xffd13000" />
     <memory_region name="bus_controllers" size="0x1000" phys_addr="0xff660000" />
-    <memory_region name="usb" size="0x1000" phys_addr="0xffe09000" />
-    <memory_region name="usb1" size="0x40000" phys_addr="0xff400000" />
-    <memory_region name="usb2" size="0x100000" phys_addr="0xff500000" />
+    <memory_region name="i2c_bus_1e" size="0x1000" phys_addr="0xffd1e000" />
     <memory_region name="gpu" size="0x40000" phys_addr="0xffe40000" />
     <memory_region name="vpu" size="0x100000" phys_addr="0xff900000" />
     <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0xffc06000" />
@@ -282,53 +276,34 @@
             <vcpu id="0" />
             <map mr="framebuffer_guest_ram" vaddr="0x20000000" perms="rwx" />
             <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="true" />
-            <map mr="bus1" vaddr="0xff600000" perms="rw" cached="false" />
+            <map mr="bus1-1" vaddr="0xff600000" perms="rw" cached="false" />
+            <map mr="bus1-2" vaddr="0xff638000" perms="rw" cached="false" />
             <map mr="gpio" vaddr="0xff634000" perms="rw" cached="false" />
             <map mr="clk" vaddr="0xff63c000" perms="rw" cached="false" />
-            <map mr="bus5" vaddr="0xff638000" perms="rw" cached="false" />
-            <map mr="bus6" vaddr="0xff640000" perms="rw" cached="false" />
-            <map mr="bus2" vaddr="0xff800000" perms="rw" cached="false" />
-            <map mr="bus3" vaddr="0xffd13000" perms="rw" cached="false" />
-            <map mr="bus4" vaddr="0xffd00000" perms="rw" cached="false" />
-            <map mr="usb" vaddr="0xffe09000" perms="rw" cached="false" />
-            <map mr="usb1" vaddr="0xff400000" perms="rw" cached="false" />
-            <map mr="usb2" vaddr="0xff500000" perms="rw" cached="false" />
+            <map mr="bus1-3" vaddr="0xff640000" perms="rw" cached="false" />
+            <map mr="bus2-1" vaddr="0xff800000" perms="rw" cached="false" />
+            <map mr="bus3-1" vaddr="0xffd00000" perms="rw" cached="false" />
+            <map mr="bus3-2" vaddr="0xffd13000" perms="rw" cached="false" />
+            <map mr="bus_controllers" vaddr="0xff660000" perms="rw" cached="false" />
+            <map mr="i2c_bus_1e" vaddr="0xffd1e000" perms="rw" cached="false" />
             <map mr="gpu" vaddr="0xffe40000" perms="rw" cached="false" />
             <map mr="vpu" vaddr="0xff900000" perms="rw" cached="false" />
-            <map mr="i2c_bus_1e" vaddr="0xffd1e000" perms="rw" cached="false" />
-            <map mr="i2c_bus_1f" vaddr="0xffd1f000" perms="rw" cached="false" />
-            <map mr="bus_controllers" vaddr="0xff660000" perms="rw" cached="false" />
-            <map mr="ir" vaddr="0xff808000" perms="rw" cached="false" />
-            <map mr="adc" vaddr="0xff809000" perms="rw" cached="false" />
             <map mr="gic_vcpu" vaddr="0xffc02000" perms="rw" cached="false" />
         </virtual_machine>
-        <!-- adc -->
-        <irq irq="232" id="10" trigger="edge" />
-        <!-- vpu -->
-        <irq irq="35" id="11" trigger="edge" />
         <!-- panfrost-gpu -->
-        <irq irq="192" id="12" />
+        <irq irq="192" id="10" />
         <!-- panfrost-mmu -->
-        <irq irq="193" id="13" />
+        <irq irq="193" id="11" />
         <!-- panfrost-job -->
-        <irq irq="194" id="14" />
+        <irq irq="194" id="12" />
+        <!-- work irq -->
+        <irq irq="5" id="13" />
         <!-- i2c -->
-        <irq irq="53" id="15" trigger="edge" />
-        <irq irq="246" id="16" trigger="edge" />
-        <irq irq="71" id="17" trigger="edge" />
-        <irq irq="227" id="18" trigger="edge" />
-        <!-- ir -->
-        <irq irq="228" id="19" />
-        <!-- usb -->
-        <irq irq="63" id="20" />
-        <!-- usb -->
-        <irq irq="62" id="21" />
-        <!-- usb -->
-        <irq irq="48" id="22" />
+        <irq irq="246" id="14" trigger="edge" />
         <!-- hdmi -->
-        <irq irq="89" id="23" trigger="edge" />
-        <!-- IRQ work interrupts -->
-        <irq irq="5" id="24" />
+        <irq irq="89" id="15" trigger="edge" />
+        <!-- vpu -->
+        <irq irq="35" id="16" trigger="edge" />
     </protection_domain>
 
     <channel>

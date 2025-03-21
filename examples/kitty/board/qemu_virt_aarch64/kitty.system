@@ -5,7 +5,7 @@
 -->
 <system>
     <memory_region name="uart" size="0x1_000" phys_addr="0x9000000" />
-    <memory_region name="eth_regs" size="0x1000" phys_addr="0xa003000" />
+    <memory_region name="virtio_regs" size="0x1000" phys_addr="0xa003000" />
 
     <!-- UIO framebuffer-->
     <memory_region name="uio_framebuffer" size="0x2_000_000" page_size="0x200_000" />
@@ -72,7 +72,7 @@
 
     <protection_domain name="eth" priority="110" budget="100" period="400">
         <program_image path="eth_driver.elf" />
-            <map mr="eth_regs" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth_regs"/>
+            <map mr="virtio_regs" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="eth_regs"/>
 
             <map mr="eth_rx_free_drv" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="rx_free" />
             <map mr="eth_rx_active_drv" vaddr="0x2_600_000" perms="rw" cached="true" setvar_vaddr="rx_active" />
@@ -213,11 +213,7 @@
     </protection_domain>
 
     <memory_region name="framebuffer_guest_ram" size="0x10000000" page_size="0x200_000" phys_addr="0x40000000" />
-    <memory_region name="virtio_mmio" size="0x3000" phys_addr="0xa000000" />
     <memory_region name="gic_vcpu" size="0x1_000" phys_addr="0x8040000" />
-    <memory_region name="pcie_config" size="0x1000000" phys_addr="0x10000000" />
-    <memory_region name="pcie" size="0x1000000" phys_addr="0x4010000000" />
-    <memory_region name="pcie_bus" size="0x1000000" phys_addr="0x8000000000" />
     <memory_region name="gic_v2m" size="0x1000" phys_addr="0x8020000" />
 
     <protection_domain name="framebuffer_vmm" priority="1">
@@ -227,18 +223,13 @@
             <vcpu id="0" />
             <map mr="framebuffer_guest_ram" vaddr="0x40000000" perms="rwx" />
             <map mr="uio_framebuffer" vaddr="0x30000000" perms="rw" cached="true" />
-            <map mr="virtio_mmio" vaddr="0xa000000" perms="rw" cached="false" />
             <map mr="gic_vcpu" vaddr="0x8010000" perms="rw" cached="false" />
-            <map mr="pcie" vaddr="0x4010000000" perms="rw" cached="false" />
-            <map mr="pcie_config" vaddr="0x10000000" perms="rw" cached="false" />
-            <map mr="pcie_bus" vaddr="0x8000000000" perms="rw" cached="false" />
             <map mr="gic_v2m" vaddr="0x8020000" perms="rw" cached="false" />
+            <map mr="virtio_regs" vaddr="0xa003000" perms="rw" cached="false" />
+            <!-- <map mr="uart" vaddr="0x9000000" perms="rw" cached="false" /> -->
         </virtual_machine>
         <!-- IRQ for pass-through graphics -->
-        <irq irq="35" id="10" />
-        <irq irq="36" id="11" />
-        <irq irq="37" id="12" />
-        <irq irq="38" id="13" />
+        <irq irq="78" id="10" trigger="edge" />
     </protection_domain>
 
     <channel>

@@ -55,9 +55,9 @@ uintptr_t guest_ram_vaddr;
  * channel number of 12. This will be cleaned up in the future.
  */
 #if defined(CONFIG_PLAT_ODROIDC4)
-uint32_t irqs[] = { 232, 35, 192, 193, 194, 53, 246, 71, 227, 228, 63, 62, 48, 89, 5 };
+uint32_t irqs[] = { 192, 193, 194, 5, 246, 89, 35 };
 #elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
-uint32_t irqs[] = { 35, 36, 37, 38 };
+uint32_t irqs[] = { 78 };
 #else
 #error "Need to define platform specific pass-through IRQs"
 #endif
