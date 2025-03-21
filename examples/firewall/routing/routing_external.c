@@ -19,11 +19,14 @@
 #include <lions/firewall/protocols.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/routing.h>
+#include <lions/firewall/icmp_queue.h>
 #include <string.h>
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 
 __attribute__((__section__(".fw_router_config"))) fw_router_config_t router_config;
+
+__attribute__((__section__(".icmp_config"))) firewall_connection_resource_t icmp_config;
 
 serial_queue_handle_t serial_tx_queue_handle;
 
@@ -32,6 +35,7 @@ fw_queue_handle_t firewall_filters[FW_MAX_FILTERS]; /* Filter queues to receive 
 fw_queue_handle_t rx_free; /* Queue to return free rx buffers */
 fw_queue_handle_t tx_active; /* Queue to transmit packets out the network */
 uintptr_t data_vaddr; /* Virtual address or rx buffer data region */
+icmp_queue_handle_t icmp_module; /* Queue to transmit ICMP requests to the ICMP module. */
 
 /* Arp request/entry data structures */
 fw_arp_queue_handle_t *arp_queue; /* This queue holds ARP requests/responses for the arp requester */
@@ -69,14 +73,39 @@ static void process_arp_waiting(void)
         if (response.state == ARP_STATE_UNREACHABLE) {
             /* Invalid response, drop packet associated with the IP address */
             pkt_waiting_node_t *pkt_node = req_pkt;
-            for (uint16_t i = 0; i < req_pkt->num_children + 1; i++) {
+            bool notify_icmp = false;
+            for (uint16_t i = 0; i < req_pkt->num_children; i++) {
+                icmp_req_t req = {0};
+                err = icmp_dequeue(&icmp_module, &req);
+                if (err) {
+                    sddf_dprintf("%s| ICMP queue was full.", microkit_name);
+                } else {
+                    req.ip = pkt_node->ip;
+                    ipv4_packet_t *eth_hdr = (struct ipv4_packet_t *) (req_pkt->buffer.io_or_offset + data_vaddr);
+                    // Copy the source of the failed packet as the dest of the ICMP response.
+                    memcpy(req.mac, eth_hdr->ethsrc_addr, ETH_HWADDR_LEN);
+                    req.type = ICMP_DEST_UNREACHABLE;
+                    // @kwinter: Not sure what sub code we want for this packet.
+                    req.code = ICMP_DEST_HOST_UNREACHABLE;
+                    sddf_memcpy(&req.old_hdr, eth_hdr, sizeof(ipv4_packet_t));
+                    // @kwinter: TODO - add a check to make sure that there is 64 bits of data following the ip header.
+                    if (pkt_node->buffer.len >= (sizeof(ipv4_packet_t) + 8)) {
+                        sddf_memcpy(&req.old_data, (void *)(pkt_node->buffer.io_or_offset + data_vaddr + sizeof(ipv4_packet_t)), 8);
+                    }
+                    icmp_enqueue(&icmp_module, req);
+                    notify_icmp = true;
+                }
                 err = fw_enqueue(&rx_free, pkt_node->buffer);
                 assert(!err);
                 pkt_node = pkts_waiting_next_child(&pkt_waiting_queue, pkt_node);
             }
+
             /* Free the packet waiting nodes */
             fw_routing_err_t routing_err = pkts_waiting_free_parent(&pkt_waiting_queue, req_pkt);
             assert(routing_err == ROUTING_ERR_OKAY);
+            if (notify_icmp) {
+                microkit_deferred_notify(icmp_config.ch);
+            }
         } else {
             /* Substitute the MAC address and send packets out of the NIC */
             pkt_waiting_node_t *pkt_node = req_pkt;
@@ -107,6 +136,7 @@ static void process_arp_waiting(void)
 
 static void route()
 {
+    bool notify_icmp = false;
     for (int filter = 0; filter < router_config.num_filters; filter++) {
         while (!fw_queue_empty(&firewall_filters[filter])) {
             fw_buff_desc_t buffer;
@@ -139,12 +169,17 @@ static void route()
                     if (route_id == routing_table.capacity) {
                         sddf_printf("%sRouter converted ip %s to next hop ip %s via default route\n",
                             fw_frmt_str[router_config.webserver.interface],
-                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1));                        
+                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1));
                     } else {
                         sddf_printf("%sRouter converted ip %s to next hop ip %s via route %u\n",
                             fw_frmt_str[router_config.webserver.interface],
-                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1), route_id);     
+                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1), route_id);
                     }
+                /* Find the next hop address. If we have no route, assume that the device is attached directly */
+                routing_entry_t *entry = routing_find_route(&routing_table, ip_pkt->dst_ip);
+
+                if (FIREWALL_DEBUG_OUTPUT) {
+                    sddf_printf("MAC[5] = %x | Converted ip %u to next hop ip %u\n", router_config.mac_addr[5], ip_pkt->dst_ip, entry->ip);
                 }
 
                 if (out_interface != ROUTING_OUT_EXTERNAL) {
@@ -159,13 +194,34 @@ static void route()
                     if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) || pkt_waiting_full(&pkt_waiting_queue)) {
                         sddf_dprintf("%sROUTING LOG: Waiting packet queue full or destination unreachable, dropping packet!\n",
                             fw_frmt_str[router_config.webserver.interface]);
+                        // Enqueuing request to the ICMP module to send a destintion unreachable packet back to the source
+                        icmp_req_t req = {0};
+                        err = icmp_dequeue(&icmp_module, &req);
+                        if (err) {
+                            sddf_dprintf("%s| ICMP queue was full.", microkit_name);
+                        } else {
+                            req.ip = ip_pkt->dst_ip;
+                            // Copy the source of the failed packet as the dest of the ICMP response.
+                            memcpy(req.mac, ip_pkt->ethsrc_addr, ETH_HWADDR_LEN);
+                            req.type = ICMP_DEST_UNREACHABLE;
+                            // @kwinter: Not sure what sub code we want for this packet.
+                            req.code = ICMP_DEST_HOST_UNREACHABLE;
+                            sddf_memcpy(&req.old_hdr, ip_pkt, sizeof(ipv4_packet_t));
+                            // @kwinter: TODO - add a check to make sure that there is 64 bits of data following the ip header.
+                            if (buffer.len >= (sizeof(ipv4_packet_t) + 8)) {
+                                sddf_memcpy(&req.old_data, (void *)(buffer.io_or_offset + data_vaddr + sizeof(ipv4_packet_t)), 8);
+                            }
+                            icmp_enqueue(&icmp_module, req);
+                            notify_icmp = true;
+                        }
+
                         err = fw_enqueue(&rx_free, buffer);
                         assert(!err);
                         returned = true;
                     } else {
                         /* In this case, the IP address is not in the ARP Tables.
-                        *  We add an entry to the ARP request queue and await a 
-                        *  response. If we get a timeout, we will then drop the 
+                        *  We add an entry to the ARP request queue and await a
+                        *  response. If we get a timeout, we will then drop the
                         *  packets associated with that IP address in the queue.
                         */
                         pkt_waiting_node_t *parent = pkt_waiting_find_node(&pkt_waiting_queue, next_hop);
@@ -210,6 +266,9 @@ static void route()
                }
             }
         }
+    }
+    if (notify_icmp) {
+        microkit_deferred_notify(icmp_config.ch);
     }
 }
 
