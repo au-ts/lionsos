@@ -39,7 +39,7 @@ METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
 DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
 DTB := $(MICROKIT_BOARD).dtb
 
-IMAGES := micropython.elf \
+IMAGES := micropython.elf icmp_module.elf\
 		  eth_driver_imx.elf firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
 		  eth_driver_dwmac.elf timer_driver.elf serial_driver.elf serial_virt_tx.elf \
 		  arp_requester.elf arp_responder.elf routing_internal.elf routing_external.elf \

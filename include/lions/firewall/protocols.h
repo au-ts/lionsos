@@ -19,8 +19,8 @@ typedef struct __attribute__((__packed__)) ipv4_packet {
     uint8_t ethdst_addr[ETH_HWADDR_LEN];
     uint8_t ethsrc_addr[ETH_HWADDR_LEN];
     uint16_t type;
-    unsigned int ihl:4;
     unsigned int version:4;
+    unsigned int ihl:4;
     uint8_t tos;
     uint16_t tot_len;
     uint16_t id;
@@ -123,6 +123,11 @@ typedef struct __attribute__((__packed__)) icmphdr
             uint16_t __unused;
             uint16_t mtu;
         } frag;			    /* path mtu discovery */
+        struct
+        {
+            ipv4_packet_t old_ip_hdr;
+            uint64_t old_data;
+        } dest_unreach;
     } un;
 } icmphdr_t;
 

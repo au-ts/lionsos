@@ -446,8 +446,8 @@ STATIC mp_obj_t rule_delete(mp_obj_t rule_id_in, mp_obj_t protocol, mp_obj_t fil
 
 
     if (rules[rule_id].valid) {
-        sddf_dprintf("We found our index %d, rule was valid\n", rule_id);
-        // We found our rule index, delete it.
+        sddf_dprintf("We found our index %d,  was valid\n", rule_id);
+        // We found our rule index, delete it.rule
         seL4_SetMR(FILTER_ARG_RULE_ID, rule_id);
         microkit_msginfo msginfo = microkit_ppcall(filter_config.ch, microkit_msginfo_new(FIREWALL_DEL_RULE, 2));
         uint32_t err = seL4_GetMR(FILTER_RET_ERR);
