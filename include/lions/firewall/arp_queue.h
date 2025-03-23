@@ -2,21 +2,33 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <lions/firewall/config.h>
 #include <lions/firewall/protocols.h>
 
-#define MAX_ARP_ENTRIES 512
+typedef enum {
+    ARP_ERR_OKAY = 0,   /* No error */
+	ARP_ERR_FULL  /* Data structure is full */
+} arp_error_t;
 
 typedef struct arp_entry {
-    uint8_t mac_addr[ETH_HWADDR_LEN];   /* Mac address key IP */
-    bool valid;                         /* Whether this entry is valid */
-    uint8_t client;                     /* Client that initiated the request */
-                                        /* TODO: Add a timeout for stale ARP entries*/
+    bool valid;                                         /* Whether this entry is valid entry in the table */
+    bool pending;                                       /* Whether this entry is still pending a response */
+    uint32_t ip;                                        /* IP of entry */
+    uint8_t mac_addr[ETH_HWADDR_LEN];                   /* Mac address key IP */
+    bool reachable;                                     /* Whether this ip is reachable and listed mac has meaning */
+    bool client[FIREWALL_NUM_ARP_REQUESTER_CLIENTS];    /* Client(s) that initiated the request */
+                                                        /* TODO: Add a timeout for stale ARP entries*/
 } arp_entry_t;
 
+typedef struct arp_table {
+    arp_entry_t *entries;
+    uint16_t capacity;
+} arp_table_t;
+
 typedef struct arp_request {
-    uint32_t ip_addr;                   /* Requested IP */
+    uint32_t ip;                        /* Requested IP */
     uint8_t mac_addr[ETH_HWADDR_LEN];   /* Zero filled or MAC of IP */
-    bool valid;                         /* Outcome of ARP request */
+    bool reachable;                     /* Whether this ip is reachable and listed mac has meaning */
 } arp_request_t;
 
 typedef struct arp_queue {
@@ -25,7 +37,7 @@ typedef struct arp_queue {
     /* index to remove from */
     uint16_t head;
    /* arp array */
-    arp_request_t queue[MAX_ARP_ENTRIES];
+    arp_request_t queue[FIREWALL_MAX_ARP_QUEUE_CAPACITY];
 } arp_queue_t;
 
 typedef struct arp_queue_handle {
@@ -36,6 +48,83 @@ typedef struct arp_queue_handle {
     /* capacity of the queues */
     uint32_t capacity;
 } arp_queue_handle_t;
+
+
+/* Initialise the arp table data structure */
+static void arp_table_init(arp_table_t *table,
+    void *entries, 
+    uint16_t capacity)
+{
+    table->entries = (arp_entry_t *)entries;
+    table->capacity = capacity;
+}
+
+/* Find an arp entry for an IP */
+static arp_entry_t *arp_table_find_entry(arp_table_t *table, uint32_t ip)
+{
+    for (uint16_t i = 0; i < table->capacity; i++) {
+        arp_entry_t *entry = table->entries + i;
+        if (!entry->valid) {
+            continue;
+        }
+
+        if (entry->ip == ip) {
+            return entry;
+        }
+    }
+
+    return NULL;
+}
+
+/* Create an arp response from an arp entry */
+static arp_request_t arp_response_from_entry(arp_entry_t *entry) {
+    arp_request_t response = {entry->ip, {0}, entry->reachable};
+    memcpy(&response.mac_addr, &entry->mac_addr, ETH_HWADDR_LEN);
+    return response;
+}
+
+/* Add an entry to the arp table*/
+static arp_error_t arp_table_add_entry(arp_table_t *table,
+                                       bool pending,
+                                       uint32_t ip,
+                                       uint8_t *mac_addr,
+                                       uint8_t client)
+{
+    arp_entry_t *slot = NULL;
+    for (uint16_t i = 0; i < table->capacity; i++) {
+        arp_entry_t *entry = table->entries + i;
+
+        if (!entry->valid) {
+            if (slot == NULL) {
+                slot = entry;
+            }
+            continue;
+        }
+
+        /* Check for existing entries for this ip - there should only be one */
+        if (entry->ip == ip) {
+            slot = entry;
+            break;
+        }
+    }
+
+    if (slot == NULL) {
+        return ARP_ERR_FULL;
+    }
+
+    slot->valid = true;
+    slot->pending = pending;
+    slot->ip = ip;
+    if (mac_addr != NULL) {
+        memcpy(&slot->mac_addr, mac_addr, ETH_HWADDR_LEN);
+        slot->reachable = true;
+    } else {
+        slot->reachable = false;
+    }
+    slot->client[client] = true;
+
+    return ARP_ERR_OKAY;
+}
 
 /**
  * Get the number of requests/responses enqueued into a queue.
@@ -101,18 +190,17 @@ static inline bool arp_queue_full_response(arp_queue_handle_t *queue)
  * Enqueue an element into a request queue.
  *
  * @param queue queue to enqueue into.
- * @param ip_addr ip address of the request.
+ * @param request request to be enqueued.
  *
  * @return -1 when queue is full, 0 on success.
  */
-static inline int arp_enqueue_request(arp_queue_handle_t *queue, uint32_t ip_addr)
+static inline int arp_enqueue_request(arp_queue_handle_t *queue, arp_request_t request)
 {
     if (arp_queue_full_request(queue)) {
         return -1;
     }
 
-    queue->request.queue[queue->request.tail % queue->capacity].valid = true;
-    queue->request.queue[queue->request.tail % queue->capacity].ip_addr = ip_addr;
+    memcpy(&queue->request.queue[queue->request.tail % queue->capacity], &request, sizeof(arp_request_t));
     queue->request.tail++;
 
     return 0;
@@ -122,21 +210,17 @@ static inline int arp_enqueue_request(arp_queue_handle_t *queue, uint32_t ip_add
  * Enqueue an element into an response queue.
  *
  * @param queue queue to enqueue into.
- * @param ip_addr ip address of the response.
- * @param mac_addr mac address of the response.
- * @param valid validity of the response.
+ * @param response response to be enqueued.
  *
  * @return -1 when queue is full, 0 on success.
  */
-static inline int arp_enqueue_response(arp_queue_handle_t *queue, uint32_t ip_addr, uint8_t mac_addr[ETH_HWADDR_LEN], bool valid)
+static inline int arp_enqueue_response(arp_queue_handle_t *queue, arp_request_t response)
 {
     if (arp_queue_full_response(queue)) {
         return -1;
     }
 
-    queue->response.queue[queue->response.tail % queue->capacity].ip_addr = ip_addr;
-    queue->response.queue[queue->response.tail % queue->capacity].valid = valid;
-    memcpy(&queue->response.queue[queue->response.tail % queue->capacity].mac_addr, mac_addr, ETH_HWADDR_LEN);
+    memcpy(&queue->response.queue[queue->response.tail % queue->capacity], &response, sizeof(arp_request_t));
     queue->response.tail++;
 
     return 0;
@@ -157,8 +241,6 @@ static inline int arp_dequeue_request(arp_queue_handle_t *queue, arp_request_t *
     }
 
     memcpy(request, &queue->request.queue[queue->request.head % queue->capacity], sizeof(arp_request_t));
-
-    queue->request.queue[queue->request.head % queue->capacity].valid = false;
     queue->request.head++;
 
     return 0;
@@ -179,8 +261,6 @@ static inline int arp_dequeue_response(arp_queue_handle_t *queue, arp_request_t 
     }
 
     memcpy(response, &queue->response.queue[queue->response.head % queue->capacity], sizeof(arp_request_t));
-
-    queue->response.queue[queue->response.head % queue->capacity].valid = false;
     queue->response.head++;
 
     return 0;

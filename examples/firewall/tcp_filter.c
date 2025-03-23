@@ -43,49 +43,51 @@ void filter(void)
             ipv4_packet_t *ip_pkt = (ipv4_packet_t *)pkt_vaddr;
             tcphdr_t *tcp_hdr = (tcphdr_t *)(pkt_vaddr + transport_layer_offset(ip_pkt));
 
+            bool default_action = false;
             uint8_t rule_id = 0;
             firewall_action_t action = firewall_filter_find_action(&filter_state, ip_pkt->src_ip, tcp_hdr->src_port,
                                                                    ip_pkt->dst_ip, tcp_hdr->dst_port, &rule_id);
 
             /* Perform the default action */
-            if (action == NONE) {
-                if (FIREWALL_DEBUG_OUTPUT) {
-                    sddf_printf("MAC[5] = %x | TCP filter found no match, performing default action: (ip %u, port %u) -> (ip %u, port %u)\n",
-                        filter_config.mac_addr[5], ip_pkt->src_ip, tcp_hdr->src_port, ip_pkt->dst_ip, tcp_hdr->dst_port);
-                }
+            if (action == FILTER_ACT_NONE) {
+                default_action = true;
                 action = filter_state.default_action;
+                if (FIREWALL_DEBUG_OUTPUT) {
+                    sddf_printf("MAC[5] = %x | TCP filter found no match, performing default action %u: (ip %u, port %u) -> (ip %u, port %u)\n",
+                        filter_config.mac_addr[5], action, ip_pkt->src_ip, tcp_hdr->src_port, ip_pkt->dst_ip, tcp_hdr->dst_port);
+                }
             }
             
             /* Add an established connection in shared memory for corresponding filter */
-            if (action == CONNECT) {
+            if (action == FILTER_ACT_CONNECT) {
                 firewall_filter_error_t fw_err = firewall_filter_add_instance(&filter_state, ip_pkt->src_ip, tcp_hdr->src_port,
-                                                                                ip_pkt->dst_ip, tcp_hdr->dst_port, rule_id);
+                                                                                ip_pkt->dst_ip, tcp_hdr->dst_port, default_action, rule_id);
 
-                if ((fw_err == OKAY || fw_err == DUPLICATE) && FIREWALL_DEBUG_OUTPUT) {
+                if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FIREWALL_DEBUG_OUTPUT) {
                     sddf_printf("MAC[5] = %x | TCP filter establishing connection via rule %u: (ip %u, port %u) -> (ip %u, port %u)\n",
                         filter_config.mac_addr[5], rule_id, ip_pkt->src_ip, tcp_hdr->src_port, ip_pkt->dst_ip, tcp_hdr->dst_port);
-                } else if (fw_err == FULL) {
+                } else if (fw_err == FILTER_ERR_FULL) {
                     sddf_printf("TCP_FILTER|LOG: could not establish connection (full) for rule %u: (ip %u, port %u) -> (ip %u, port %u)\n",
                         rule_id, ip_pkt->src_ip, tcp_hdr->src_port, ip_pkt->dst_ip, tcp_hdr->dst_port);
                 }
             }
 
             /* Transmit the packet to the routing component */
-            if (action == CONNECT || action == ESTABLISHED || action == ALLOW) {
+            if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED || action == FILTER_ACT_ALLOW) {
                 err = firewall_enqueue(&router_queue, net_firewall_desc(buffer));
                 assert(!err);
                 transmitted = true;
 
                 if (FIREWALL_DEBUG_OUTPUT) {
-                    if (action == ALLOW || action == CONNECT) {
+                    if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
                         sddf_printf("MAC[5] = %x | TCP filter transmitting via rule %u: (ip %u, port %u) -> (ip %u, port %u)\n",
                             filter_config.mac_addr[5], rule_id, ip_pkt->src_ip, tcp_hdr->src_port, ip_pkt->dst_ip, tcp_hdr->dst_port);
-                    } else if (action == ESTABLISHED) {
+                    } else if (action == FILTER_ACT_ESTABLISHED) {
                         sddf_printf("MAC[5] = %x | TCP filter transmitting via external rule %u: (ip %u, port %u) -> (ip %u, port %u)\n",
                             filter_config.mac_addr[5], rule_id, ip_pkt->src_ip, tcp_hdr->src_port, ip_pkt->dst_ip, tcp_hdr->dst_port);
                     }
                 }
-            } else if (action == DROP) {
+            } else if (action == FILTER_ACT_DROP) {
                 /* Return the buffer to the rx virtualiser */
                 err = net_enqueue_free(&rx_queue, buffer);
                 assert(!err);
@@ -120,44 +122,46 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     switch (microkit_msginfo_get_label(msginfo)) {
     case FIREWALL_SET_DEFAULT_ACTION: {
-        firewall_action_t action = seL4_GetMR(ACTION);
+        firewall_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
         if (FIREWALL_DEBUG_OUTPUT) {
             sddf_printf("MAC[5] = %x | TCP filter changing default action from %u to %u\n",
                 filter_config.mac_addr[5], filter_state.default_action, action);
         }
-        filter_state.default_action = action;
-        seL4_SetMR(0, OKAY);
+        firewall_filter_error_t err = firewall_filter_update_default_action(&filter_state, action);
+        assert(err == FILTER_ERR_OKAY);
+
+        seL4_SetMR(FILTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
     case FIREWALL_ADD_RULE: {
-        firewall_action_t action = seL4_GetMR(ACTION);
-        uint32_t src_ip = seL4_GetMR(SRC_IP);
-        uint16_t src_port = seL4_GetMR(SRC_PORT);
-        uint32_t dst_ip = seL4_GetMR(DST_IP);
-        uint16_t dst_port = seL4_GetMR(DST_PORT);
-        uint8_t src_subnet = seL4_GetMR(SRC_SUBNET);
-        uint8_t dst_subnet = seL4_GetMR(DST_SUBNET);
-        bool src_port_any = seL4_GetMR(SRC_ANY_PORT);
-        bool dst_port_any = seL4_GetMR(DST_ANY_PORT);
-        uint8_t rule_id = 0;
+        firewall_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
+        uint32_t src_ip = seL4_GetMR(FILTER_ARG_SRC_IP);
+        uint16_t src_port = seL4_GetMR(FILTER_ARG_SRC_PORT);
+        uint32_t dst_ip = seL4_GetMR(FILTER_ARG_DST_IP);
+        uint16_t dst_port = seL4_GetMR(FILTER_ARG_DST_PORT);
+        uint8_t src_subnet = seL4_GetMR(FILTER_ARG_SRC_SUBNET);
+        uint8_t dst_subnet = seL4_GetMR(FILTER_ARG_DST_SUBNET);
+        bool src_port_any = seL4_GetMR(FILTER_ARG_SRC_ANY_PORT);
+        bool dst_port_any = seL4_GetMR(FILTER_ARG_DST_ANY_PORT);
+        uint16_t rule_id = 0;
         firewall_filter_error_t err = firewall_filter_add_rule(&filter_state, src_ip, src_port,
             dst_ip, dst_port, src_subnet, dst_subnet, src_port_any, dst_port_any, action, &rule_id);
         if (FIREWALL_DEBUG_OUTPUT) {
             sddf_printf("MAC[5] = %x | TCP filter created rule %u with return code %u: (ip %u, mask %u, port %u, any_port %u) -(action %u)-> (ip %u, mask %u, port %u, any_port %u)\n",
                 filter_config.mac_addr[5], rule_id, err, src_ip, src_subnet, src_port, src_port_any, action, dst_ip, dst_subnet, dst_port, dst_port_any);
         }
-        seL4_SetMR(0, err);
-        seL4_SetMR(1, rule_id);
+        seL4_SetMR(FILTER_RET_ERR, err);
+        seL4_SetMR(FILTER_RET_RULE_ID, rule_id);
         return microkit_msginfo_new(0, 2);
     }
     case FIREWALL_DEL_RULE: {
-        uint8_t rule_id = seL4_GetMR(RULE_ID);
+        uint8_t rule_id = seL4_GetMR(FILTER_ARG_RULE_ID);
         firewall_filter_error_t err = firewall_filter_remove_rule(&filter_state, rule_id);
         if (FIREWALL_DEBUG_OUTPUT) {
             sddf_printf("MAC[5] = %x | TCP removed rule id %u with return code %u\n",
                 filter_config.mac_addr[5], rule_id, err);
         }
-        seL4_SetMR(0, err);
+        seL4_SetMR(FILTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
     default:
@@ -187,6 +191,7 @@ void init(void)
     
     firewall_queue_init(&router_queue, filter_config.router.queue.vaddr, filter_config.router.capacity);
 
-    firewall_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr,
-        filter_config.internal_instances.vaddr, filter_config.external_instances.vaddr, (firewall_action_t)filter_config.webserver.default_action);
+    firewall_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rules_capacity,
+        filter_config.internal_instances.vaddr, filter_config.external_instances.vaddr, filter_config.instances_capacity,
+        (firewall_action_t)filter_config.webserver.default_action);
 }

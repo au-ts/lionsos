@@ -73,11 +73,6 @@ void tx_provide(void)
 
                 uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.clients[client].data.region.vaddr;
                 cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
-
-                if (FIREWALL_DEBUG_OUTPUT) {
-                    sddf_printf("VTX: tx net cli %u, buf no %lu\n\n", client, buffer.io_or_offset/NET_BUFFER_SIZE);
-                }
-
                 buffer.io_or_offset = buffer.io_or_offset + config.clients[client].data.io_addr;
 
                 err = net_enqueue_active(&state.tx_queue_drv, buffer);
@@ -106,11 +101,6 @@ void tx_provide(void)
 
             uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)firewall_config.active_clients[client].data.region.vaddr;
             cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
-
-            if (FIREWALL_DEBUG_OUTPUT) {
-                sddf_printf("VTX: tx fw cli %u, buf no %lu\n\n", client, buffer.io_or_offset/NET_BUFFER_SIZE);
-            }
-
             buffer.io_or_offset = buffer.io_or_offset + firewall_config.active_clients[client].data.io_addr;
 
             err = net_enqueue_active(&state.tx_queue_drv, firewall_to_net_desc(buffer));
@@ -139,9 +129,6 @@ void tx_return(void)
             int client = extract_offset_net_client(&buffer.io_or_offset);
             if (client >= 0) {
 
-                if (FIREWALL_DEBUG_OUTPUT) {
-                    sddf_printf("VTX: ret net cli %u, buf no %lu\n\n", client, buffer.io_or_offset/NET_BUFFER_SIZE);
-                }
 
                 err = net_enqueue_free(&state.tx_queue_clients[client], buffer);
                 assert(!err);
@@ -151,9 +138,6 @@ void tx_return(void)
             client = extract_offset_firewall_client(&buffer.io_or_offset);
             assert(client >= 0);
 
-            if (FIREWALL_DEBUG_OUTPUT) {
-                sddf_printf("VTX: ret fw cli %u, buf no %lu\n\n", client, buffer.io_or_offset/NET_BUFFER_SIZE);
-            }
 
             err = firewall_enqueue(&state.firewall_free_clients[client], net_firewall_desc(buffer));
             assert(!err);

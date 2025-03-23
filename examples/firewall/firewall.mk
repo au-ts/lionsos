@@ -138,15 +138,12 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 
-	$(OBJCOPY) --update-section .device_resources=net_data0/ethernet_driver_imx_device_resources.data eth_driver_imx.elf
-	$(OBJCOPY) --update-section .net_driver_config=net_data0/net_driver.data eth_driver_imx.elf
+# net0 pds
+	$(OBJCOPY) --update-section .device_resources=net_data0/ethernet_driver_dwmac_device_resources.data eth_driver_dwmac.elf
+	$(OBJCOPY) --update-section .net_driver_config=net_data0/net_driver.data eth_driver_dwmac.elf
 
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data0/net_virt_rx.data firewall_network_virt_rx0.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data0/net_virt_tx.data firewall_network_virt_tx0.elf
-
-	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_micropython.data micropython.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
-	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
 
 # arp_requester0 is a net client of the other network
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_arp_requester0.data arp_requester0.elf
@@ -159,23 +156,28 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester0.data arp_requester0.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing_external.data routing_external.elf
 
-	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester1.data arp_requester1.elf
-
-	$(OBJCOPY) --update-section .device_resources=net_data1/ethernet_driver_dwmac_device_resources.data eth_driver_dwmac.elf
-	$(OBJCOPY) --update-section .net_driver_config=net_data1/net_driver.data eth_driver_dwmac.elf
+# net1 pds
+	$(OBJCOPY) --update-section .device_resources=net_data1/ethernet_driver_imx_device_resources.data eth_driver_imx.elf
+	$(OBJCOPY) --update-section .net_driver_config=net_data1/net_driver.data eth_driver_imx.elf
 
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data1/net_virt_rx.data firewall_network_virt_rx1.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data1/net_virt_tx.data firewall_network_virt_tx1.elf
 
 # arp_requester1 is a net client of the other network
-
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_arp_requester1.data arp_requester1.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_arp_responder1.data arp_responder1.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_icmp_filter1.data icmp_filter1.elf
+	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_udp_filter1.data udp_filter1.elf
+	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_tcp_filter1.data tcp_filter1.elf
+	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_micropython.data micropython.elf
 
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder1.data arp_responder1.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester1.data arp_requester1.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing_internal.data routing_internal.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
+
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester1.data arp_requester1.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)

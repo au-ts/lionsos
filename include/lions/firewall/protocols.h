@@ -12,8 +12,6 @@
 #define ETHARP_OPCODE_REQUEST 1
 #define ETHARP_OPCODE_REPLY 2
 
-#define IPV4_ADDR(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((uint32_t) (d) << 24))
-
 typedef struct __attribute__((__packed__)) ipv4_packet {
     uint8_t ethdst_addr[ETH_HWADDR_LEN];
     uint8_t ethsrc_addr[ETH_HWADDR_LEN];
@@ -49,7 +47,7 @@ typedef struct __attribute__((__packed__)) arp_packet {
 } arp_packet_t;
 
 static uint8_t transport_layer_offset(ipv4_packet_t *ip_pkt) {
-    return ip_pkt->ihl;
+    return sizeof(struct ethernet_header) + 4 * ip_pkt->ihl;
 }
 
 typedef struct __attribute__((__packed__)) udphdr

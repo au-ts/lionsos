@@ -17,7 +17,6 @@
 #include <sddf/timer/config.h>
 #include <lions/firewall/arp_queue.h>
 #include <lions/firewall/config.h>
-#include <lions/firewall/hashmap.h>
 #include <lions/firewall/protocols.h>
 #include <string.h>
 
@@ -38,16 +37,31 @@ serial_queue_handle_t serial_tx_queue_handle;
 arp_queue_handle_t *arp_queues[FIREWALL_NUM_ARP_REQUESTER_CLIENTS];
 
 /* ARP table caches ARP request responses */
-hashtable_t *arp_table;
+arp_table_t arp_table;
 
+static bool notify_client[FIREWALL_NUM_ARP_REQUESTER_CLIENTS] = {false};
 void process_requests()
 {
     bool transmitted = false;
-    for (uint8_t client = 0; client < FIREWALL_NUM_ARP_REQUESTER_CLIENTS; client++) {
+    for (uint8_t client = 0; client < arp_config.num_arp_clients; client++) {
         while (!arp_queue_empty_request(arp_queues[client]) && !net_queue_empty_free(&tx_queue)) {
             arp_request_t request;
             int err = arp_dequeue_request(arp_queues[client], &request);
-            assert(!err && request.valid);
+            assert(!err);
+
+            /* Check if an arp entry already exists */
+            arp_entry_t *entry = arp_table_find_entry(&arp_table, request.ip);
+            if (entry != NULL && !entry->pending) {
+                /* Reply immediately */
+                arp_enqueue_response(arp_queues[client], arp_response_from_entry(entry));
+                notify_client[client] = true;
+                continue;
+            } else if (entry != NULL && entry->pending) {
+                /* Notify client upon response for existing ARP request */
+                entry->client[client] = true;
+                continue;
+            }
+            
 
             /* Generate ARP request */
             net_buff_desc_t buffer = {};
@@ -70,12 +84,12 @@ void process_requests()
 
             /* Memset the hardware src addr to 0 for ARP requests */
             memset(&pkt->hwdst_addr, 0, ETH_HWADDR_LEN);
-            pkt->ipdst_addr = request.ip_addr;
+            pkt->ipdst_addr = request.ip;
             pkt->ipsrc_addr = arp_config.ip;
             memset(&pkt->padding, 0, 10);
 
             if (FIREWALL_DEBUG_OUTPUT) {
-                sddf_printf("MAC[5] = %x | ARP requester processing client %u request for ip %u\n", arp_config.mac_addr[5], client, request.ip_addr);
+                sddf_printf("MAC[5] = %x | ARP requester processing client %u request for ip %u\n", arp_config.mac_addr[5], client, request.ip);
             }
 
             buffer.len = 56;
@@ -83,13 +97,11 @@ void process_requests()
             assert(!err);
 
             /* Create arp entry for request to store associated client */
-            arp_entry_t entry = {0};
-            entry.valid = false;
-            entry.client = client;
-            err = hashtable_insert(arp_table, request.ip_addr, &entry);
-
+            arp_error_t arp_err = arp_table_add_entry(&arp_table, true, request.ip, NULL, client);
+            if (arp_err == ARP_ERR_FULL) {
+                sddf_dprintf("ARP REQUESTER|LOG: Arp cache full, cannot enqueue entry!\n");
+            }
             transmitted = true;
-            request.valid = false;
         }
     }
 
@@ -101,7 +113,6 @@ void process_requests()
 
 void process_responses()
 {
-    bool notify_client[FIREWALL_NUM_ARP_REQUESTER_CLIENTS] = {false};
     bool returned = false;
     bool reprocess = true;
     while (reprocess) {
@@ -118,29 +129,30 @@ void process_responses()
                 if (pkt->opcode == HTONS(ETHARP_OPCODE_REPLY)) {
 
                     /* Find the arp entry */
-                    arp_entry_t *entry = NULL;
-                    int found = hashtable_search(arp_table, pkt->ipsrc_addr, entry);
-                    if (found) {
+                    arp_entry_t *entry = arp_table_find_entry(&arp_table, pkt->ipsrc_addr);
+                    if (entry != NULL) {
                         /* This was a response to a request we sent, update entry */
+                        entry->pending = false;
                         memcpy(&entry->mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
-
-                        if (FIREWALL_DEBUG_OUTPUT) {
-                            sddf_printf("MAC[5] = %x | ARP requester received response for client %u, ip %u. MAC[0] = %x, MAC[5] = %x\n", arp_config.mac_addr[5], entry->client, pkt->ipsrc_addr, pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
-                        }
+                        entry->reachable = true;
                         
-                        /* Send to client */
-                        arp_enqueue_response(arp_queues[entry->client], pkt->ipsrc_addr, entry->mac_addr, true);
-                        notify_client[entry->client] = true;
+                        /* Send to clients */
+                        for (uint8_t client = 0; client < FIREWALL_NUM_ARP_REQUESTER_CLIENTS; client++) {
+                            if (entry->client[client]) {
+                                arp_enqueue_response(arp_queues[client], arp_response_from_entry(entry));
+                                notify_client[client] = true;
+
+                                if (FIREWALL_DEBUG_OUTPUT) {
+                                    sddf_printf("MAC[5] = %x | ARP requester received response for client %u, ip %u. MAC[0] = %x, MAC[5] = %x\n", arp_config.mac_addr[5], client, pkt->ipsrc_addr, pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
+                                }
+                            }
+                        }
 
                     } else {
                         /* Create a new entry */
-                        arp_entry_t entry = {0};
-                        memcpy(&entry.mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
-                        entry.valid = true;
-                        entry.client = FIREWALL_NUM_ARP_REQUESTER_CLIENTS + 1;
-                        err = hashtable_insert(arp_table, pkt->ipsrc_addr, &entry);
-                        if (err) {
-                            sddf_dprintf("ARP_REQUESTER|LOG: Hash table full, failed to insert!\n");
+                        arp_error_t arp_err = arp_table_add_entry(&arp_table, false, pkt->ipsrc_addr, pkt->hwsrc_addr, arp_config.num_arp_clients + 1);
+                        if (arp_err == ARP_ERR_FULL) {
+                            sddf_dprintf("ARP REQUESTER|LOG: Arp cache full, cannot enqueue entry!\n");
                         }
                     }
                 }
@@ -165,12 +177,6 @@ void process_responses()
         net_cancel_signal_free(&rx_queue);
         microkit_deferred_notify(net_config.rx.id);
     }
-
-    for (uint8_t client = 0; client < FIREWALL_NUM_ARP_REQUESTER_CLIENTS; client++) {
-        if (notify_client[client]) {
-            microkit_notify(arp_config.clients[client].ch);
-        }
-    }
 }
 
 void init(void)
@@ -187,12 +193,12 @@ void init(void)
         net_config.tx.num_buffers);
     net_buffers_init(&tx_queue, 0);
 
-    for (uint8_t client = 0; client < FIREWALL_NUM_ARP_REQUESTER_CLIENTS; client++) {
+    for (uint8_t client = 0; client < arp_config.num_arp_clients; client++) {
         arp_queues[client] = (arp_queue_handle_t *) arp_config.clients[client].queue.vaddr;
         arp_handle_init(arp_queues[client], arp_config.clients[client].capacity);
     }
 
-    arp_table = (hashtable_t *) arp_config.arp_cache.vaddr;
+    arp_table_init(&arp_table, (arp_entry_t *)arp_config.arp_cache.vaddr, arp_config.arp_cache_capacity);
 }
 
 void notified(microkit_channel ch)
@@ -201,5 +207,11 @@ void notified(microkit_channel ch)
         process_requests();
     } if (ch == net_config.rx.id) {
         process_responses();
+    }
+
+    for (uint8_t client = 0; client < arp_config.num_arp_clients; client++) {
+        if (notify_client[client]) {
+            microkit_notify(arp_config.clients[client].ch);
+        }
     }
 }

@@ -41,13 +41,11 @@
 #include <lions/firewall/arp_queue.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
-#include <lions/firewall/hashmap.h>
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
 
 arp_packet_t arp_response_pkt = {0};
-hashtable_t *arp_table;
 extern net_client_config_t net_config;
 
 __attribute__((__section__(".firewall_webserver_config"))) firewall_webserver_config_t firewall_config;
@@ -147,12 +145,10 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
     if (eth_hdr->type == HTONS(ETH_TYPE_ARP)) {
         arphdr_t *arp_hdr = (arphdr_t *)p->next->payload;
         if (arp_hdr->opcode == HTONS(ETHARP_OPCODE_REQUEST)) {
-            /* TODO: Attempt lookup in the ARP table first. */
-            arp_entry_t hash_entry;
-            int ret = hashtable_search(arp_table, arp_hdr->ipdst_addr, &hash_entry);
-            if (!ret) {
+
                 /* This is an arp request, don't transmit through the network */
-                int err = arp_enqueue_request(state.arp_queue, arp_hdr->ipdst_addr);
+                arp_request_t request = {arp_hdr->ipdst_addr, {0}, false};
+                int err = arp_enqueue_request(state.arp_queue, request);
                 if (err) {
                     dlog("Could not enqueue arp request, queue is full");
                     return ERR_MEM;
@@ -161,9 +157,6 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
 
                 /* Successfully emulated sending out an ARP request */
                 return ERR_OK;
-            } else {
-                fill_arp(arp_hdr->ipdst_addr, hash_entry.mac_addr);
-            }
 
         }
     }
@@ -226,17 +219,17 @@ static err_t ethernet_init(struct netif *netif)
 
 void init_networking(void) {
     /* Set up shared memory regions */
-    firewall_queue_init(&state.rx_active, firewall_config.router.rx_active.queue.vaddr, firewall_config.router.rx_active.capacity);
+    firewall_queue_init(&state.rx_active, firewall_config.rx_active.queue.vaddr, firewall_config.rx_active.capacity);
     firewall_queue_init(&state.rx_free, firewall_config.rx_free.queue.vaddr, firewall_config.rx_free.capacity);
     net_queue_init(&state.tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
     net_buffers_init(&state.tx_queue, 0);
-    arp_table = (hashtable_t*) firewall_config.arp_cache.vaddr;
+    state.arp_queue = (arp_queue_handle_t *)firewall_config.arp_queue.queue.vaddr;
+    arp_handle_init(state.arp_queue, firewall_config.arp_queue.capacity);
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
     sddf_memcpy(state.mac, net_config.mac_addr, 6);
 
-    // TODO: Static IP and mac addr from Krishnan
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast, macbook;
     ipaddr_aton("0.0.0.0", &gw);
@@ -292,12 +285,12 @@ void mpnet_process_arp(void) {
         assert(!err);
 
         // TODO: Check validity of response
-        if (response.valid) {
+        if (response.reachable) {
             // Contruct the ARP response packet
-            fill_arp(response.ip_addr, response.mac_addr);
+            fill_arp(response.ip, response.mac_addr);
             if (FIREWALL_DEBUG_OUTPUT) {
                 // TODO: Add more logging output
-                dlog("Dequeuing ARP response for ip %u -> obtained MAC[0] = %x, MAC[5] = %x\n", response.ip_addr, response.mac_addr[0], response.mac_addr[5]);
+                dlog("Dequeuing ARP response for ip %u -> obtained MAC[0] = %x, MAC[5] = %x\n", response.ip, response.mac_addr[0], response.mac_addr[5]);
             }
 
             /* Input packet into lwip stack */

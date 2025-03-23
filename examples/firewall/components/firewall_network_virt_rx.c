@@ -132,11 +132,6 @@ void rx_return(void)
             cache_clean_and_invalidate(buffer_vaddr, buffer_vaddr + buffer.len);
             uint16_t protocol = 0;
             int client = get_protocol_match((struct ethernet_header *) buffer_vaddr, &protocol);
-
-            if (FIREWALL_DEBUG_OUTPUT) {
-                sddf_printf("VRX: rx cli %d, prot %x, buf no %lu\n", client, protocol, buffer.io_or_offset/NET_BUFFER_SIZE);
-            }
-
             if (client == BROADCAST_ID) {
                 int ref_index = buffer.io_or_offset / NET_BUFFER_SIZE;
                 assert(buffer_refs[ref_index] == 0);
@@ -210,11 +205,6 @@ void rx_provide(void)
                 // case where pending writes are only written to the buffer
                 // memory after DMA has occured.
                 buffer.io_or_offset = buffer.io_or_offset + config.data.io_addr;
-
-                if (FIREWALL_DEBUG_OUTPUT) {
-                    sddf_printf("VRX: ret cli %d, buf no %lu\n", client, buffer.io_or_offset/NET_BUFFER_SIZE);
-                }
-
                 err = net_enqueue_free(&state.rx_queue_drv, buffer);
                 assert(!err);
                 notify_drv = true;
