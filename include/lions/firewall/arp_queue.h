@@ -96,7 +96,7 @@ static arp_request_t arp_response_from_entry(arp_entry_t *entry) {
 
 /* Add an entry to the arp table*/
 static arp_error_t arp_table_add_entry(arp_table_t *table,
-                                       microkit_channel timer_ch,
+                                       uint8_t timer_ch,
                                        arp_entry_state_t state,
                                        uint32_t ip,
                                        uint8_t *mac_addr,

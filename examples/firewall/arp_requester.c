@@ -213,9 +213,12 @@ static uint16_t process_retries(void)
             }
         } else {
             /* Resend the ARP request out to the network */
-            while (!net_queue_empty_free(&tx_queue)) {
-                pending_requests++;
 
+            if (FIREWALL_DEBUG_OUTPUT) {
+                sddf_printf("MAC[5] = %x | ARP requester attempting to resend request for ip %u\n", arp_config.mac_addr[5], entry->ip);
+            }
+
+            if (!net_queue_empty_free(&tx_queue)) {
                 net_buff_desc_t buffer = {0};
                 int err = net_dequeue_free(&tx_queue, &buffer);
                 assert(!err);
@@ -223,15 +226,16 @@ static uint16_t process_retries(void)
                 generate_arp(&buffer, entry->ip);
                 err = net_enqueue_active(&tx_queue, buffer);
                 assert(!err);
+                transmitted = true;
 
                 if (FIREWALL_DEBUG_OUTPUT) {
-                    sddf_printf("MAC[5] = %x | ARP requester resending request for ip %u\n", arp_config.mac_addr[5], entry->ip);
+                    sddf_printf("MAC[5] = %x | ARP requester resent request for ip %u\n", arp_config.mac_addr[5], entry->ip);
                 }
-
-                /* Increment the number of retries */
-                entry->num_retries++;
-                transmitted = true;
             }
+
+            /* Increment the number of retries */
+            entry->num_retries++;
+            pending_requests++;
         }
     }
 

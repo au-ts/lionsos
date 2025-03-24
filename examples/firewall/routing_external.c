@@ -138,7 +138,7 @@ static void route()
 
                 arp_entry_t *arp = arp_table_find_entry(&arp_table, entry->ip);
                 if (arp == NULL || arp->state == ARP_STATE_PENDING || arp->state == ARP_STATE_UNREACHABLE) {
-                    if (arp->state == ARP_STATE_UNREACHABLE || pkt_waiting_full(&pkt_waiting_queue)) {
+                    if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) || pkt_waiting_full(&pkt_waiting_queue)) {
                         sddf_dprintf("ROUTING|LOG: Waiting packet queue full or destination unreachable, dropping packet!\n");
                         err = firewall_enqueue(&rx_free, buffer);
                         assert(!err);

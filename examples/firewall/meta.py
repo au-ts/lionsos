@@ -31,10 +31,10 @@ dma_buffer_size = 2048
 dma_region_size = round_up_to_Page(dma_queue_capacity * dma_buffer_size)
 
 arp_queue_capacity = 512
-arp_queue_region_size = round_up_to_Page(2 * (8 + 16 * arp_queue_capacity) + 4)
+arp_queue_region_size = round_up_to_Page(2 * (4 + 16 * arp_queue_capacity) + 4)
 
 arp_cache_entries = 512
-arp_cache_region_size = round_up_to_Page(20 * arp_cache_entries)
+arp_cache_region_size = round_up_to_Page(24 * arp_cache_entries)
 
 arp_packet_queue_region_size = round_up_to_Page(dma_queue_capacity * 24)
 

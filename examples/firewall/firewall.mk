@@ -158,6 +158,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester0.data arp_requester0.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing_external.data routing_external.elf
 
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester0.data arp_requester0.elf
+
 # net1 pds
 	$(OBJCOPY) --update-section .device_resources=net_data1/ethernet_driver_imx_device_resources.data eth_driver_imx.elf
 	$(OBJCOPY) --update-section .net_driver_config=net_data1/net_driver.data eth_driver_imx.elf
