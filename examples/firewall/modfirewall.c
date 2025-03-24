@@ -274,8 +274,7 @@ STATIC mp_obj_t rule_add(mp_obj_t protocol, mp_obj_t filter, mp_obj_t src_ip, mp
 
     // Find the filter that implements this protocol in this direction.
     for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
-        if (firewall_config.filters[i].protocol == protocol_id &&
-                firewall_config.filters[i].iface == iface) {
+        if (firewall_config.filters[i].protocol == protocol_id) {
             // Convert all the strings to integers.
             uint32_t src_ip_addr = ip_to_int(src_ip_var);
             uint32_t dst_ip_addr = ip_to_int(dst_ip_var);
@@ -346,8 +345,7 @@ STATIC mp_obj_t rule_delete(mp_obj_t rule_id_in, mp_obj_t protocol, mp_obj_t fil
     firewall_rule_t *rules = NULL;
 
     for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
-        if (firewall_config.filters[i].protocol == protocol_id &&
-                firewall_config.filters[i].iface == iface) {
+        if (firewall_config.filters[i].protocol == protocol_id) {
             rules = (firewall_rule_t *) firewall_config.filters[i].rules.vaddr;
         }
     }
@@ -404,8 +402,7 @@ STATIC mp_obj_t rule_count(mp_obj_t protocol, mp_obj_t filter) {
     firewall_rule_t *rules = NULL;
 
     for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
-        if (firewall_config.filters[i].protocol == protocol_id &&
-                firewall_config.filters[i].iface == iface) {
+        if (firewall_config.filters[i].protocol == protocol_id) {
             rules = (firewall_rule_t *) firewall_config.filters[i].rules.vaddr;
         }
     }
@@ -450,8 +447,7 @@ STATIC mp_obj_t filter_default_action(mp_obj_t protocol, mp_obj_t filter) {
     }
 
     for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
-        if (firewall_config.filters[i].protocol == protocol_id &&
-                firewall_config.filters[i].iface == iface) {
+        if (firewall_config.filters[i].protocol == protocol_id) {
             return mp_obj_new_int_from_uint((firewall_config.filters[i].default_action));
         }
     }
@@ -492,8 +488,7 @@ STATIC mp_obj_t rule_get_nth(mp_obj_t protocol, mp_obj_t filter, mp_obj_t rule_i
     firewall_rule_t *rules = NULL;
 
     for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
-        if (firewall_config.filters[i].protocol == protocol_id &&
-                firewall_config.filters[i].iface == iface) {
+        if (firewall_config.filters[i].protocol == protocol_id) {
             rules = (firewall_rule_t *) firewall_config.filters[i].rules.vaddr;
         }
     }

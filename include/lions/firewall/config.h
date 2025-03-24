@@ -82,7 +82,6 @@ typedef struct firewall_webserver_filter_config {
     uint8_t ch;
     uint8_t default_action;
     region_resource_t rules;
-    uint8_t iface;
 } firewall_webserver_filter_config_t;
 
 typedef struct firewall_filter_config {
