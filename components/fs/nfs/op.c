@@ -21,16 +21,21 @@
 
 #include <lions/fs/protocol.h>
 #include <lions/fs/server.h>
+#include <lions/fs/config.h>
 
 #include "nfs.h"
+#include "config.h"
 #include "util.h"
 
 #define MAX_CONCURRENT_OPS FS_QUEUE_CAPACITY
 #define CLIENT_SHARE_SIZE 0x4000000
 
-struct fs_queue *command_queue;
-struct fs_queue *completion_queue;
-char *client_share;
+extern fs_server_config_t fs_config;
+extern nfs_config_t nfs_config;
+
+extern struct fs_queue *fs_command_queue;
+extern struct fs_queue *fs_completion_queue;
+extern char *fs_share;
 
 char path_buffer[FS_MAX_PATH_LENGTH + 1][2];
 
@@ -88,26 +93,26 @@ static void (*const cmd_handler[FS_NUM_COMMANDS])(fs_cmd_t cmd) = {
 };
 
 void reply(fs_cmpl_t cmpl) {
-    assert(fs_queue_length_producer(completion_queue) != FS_QUEUE_CAPACITY);
-    fs_queue_idx_empty(completion_queue, 0)->cmpl = cmpl;
-    fs_queue_publish_production(completion_queue, 1);
-    microkit_notify(CLIENT_CHANNEL);
+    assert(fs_queue_length_producer(fs_completion_queue) != FS_QUEUE_CAPACITY);
+    fs_queue_idx_empty(fs_completion_queue, 0)->cmpl = cmpl;
+    fs_queue_publish_production(fs_completion_queue, 1);
+    microkit_notify(fs_config.client.id);
 }
 
 void process_commands(void) {
-    uint64_t command_count = fs_queue_length_consumer(command_queue);
-    uint64_t completion_space = FS_QUEUE_CAPACITY - fs_queue_length_producer(completion_queue);
+    uint64_t command_count = fs_queue_length_consumer(fs_command_queue);
+    uint64_t completion_space = FS_QUEUE_CAPACITY - fs_queue_length_producer(fs_completion_queue);
     // don't dequeue a command if we have no space to enqueue its completion
     uint64_t to_consume = MIN(command_count, completion_space);
     for (uint64_t i = 0; i < to_consume; i++) {
-        fs_cmd_t cmd = fs_queue_idx_filled(command_queue, i)->cmd;
+        fs_cmd_t cmd = fs_queue_idx_filled(fs_command_queue, i)->cmd;
         if (cmd.type >= FS_NUM_COMMANDS) {
             reply((fs_cmpl_t){ .id = cmd.id, .status = FS_STATUS_INVALID_COMMAND, .data = {0} });
             continue;
         }
         cmd_handler[cmd.type](cmd);
     }
-    fs_queue_publish_consumption(command_queue, to_consume);
+    fs_queue_publish_consumption(fs_command_queue, to_consume);
 }
 
 void continuation_pool_init(void) {
@@ -179,7 +184,7 @@ void handle_initialise(fs_cmd_t cmd) {
     /* Infinite retries */
     nfs_set_autoreconnect(nfs, -1);
 
-    int err = nfs_mount_async(nfs, NFS_SERVER, NFS_DIRECTORY, initialise_cb, cont);
+    int err = nfs_mount_async(nfs, nfs_config.server, nfs_config.export, initialise_cb, cont);
     if (err) {
         dlog("failed to enqueue command");
         goto fail_mount;
@@ -217,14 +222,14 @@ void handle_stat(fs_cmd_t cmd) {
     fs_cmd_params_stat_t params = cmd.params.stat;
 
     char *path = get_path_buffer(0);
-    int err = fs_copy_client_path(path, client_share, CLIENT_SHARE_SIZE, params.path);
+    int err = fs_copy_client_path(path, fs_share, CLIENT_SHARE_SIZE, params.path);
     if (err) {
         dlog("invalid path buffer provided");
         status = FS_STATUS_INVALID_PATH;
         goto fail_buffer;
     }
 
-    void *buf = fs_get_client_buffer(client_share, CLIENT_SHARE_SIZE, params.buf);
+    void *buf = fs_get_client_buffer(fs_share, CLIENT_SHARE_SIZE, params.buf);
     if (buf == NULL || params.buf.size < sizeof (fs_stat_t)) {
         dlog("invalid output buffer provided");
         status = FS_STATUS_INVALID_BUFFER;
@@ -324,7 +329,7 @@ void handle_file_open(fs_cmd_t cmd) {
     struct fs_cmd_params_file_open params = cmd.params.file_open;
 
     char *path = get_path_buffer(0);
-    int err = fs_copy_client_path(path, client_share, CLIENT_SHARE_SIZE, params.path);
+    int err = fs_copy_client_path(path, fs_share, CLIENT_SHARE_SIZE, params.path);
     if (err) {
         dlog("invalid path buffer provided");
         status = FS_STATUS_INVALID_PATH;
@@ -454,7 +459,7 @@ void handle_file_read(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_file_read_t params = cmd.params.file_read;
 
-    char *buf = fs_get_client_buffer(client_share, CLIENT_SHARE_SIZE, params.buf);
+    char *buf = fs_get_client_buffer(fs_share, CLIENT_SHARE_SIZE, params.buf);
     if (buf == NULL) {
         dlog("invalid output buffer provided");
         status = FS_STATUS_INVALID_BUFFER;
@@ -512,7 +517,7 @@ void handle_file_write(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_file_write_t params = cmd.params.file_write;
 
-    char *buf = fs_get_client_buffer(client_share, CLIENT_SHARE_SIZE, params.buf);
+    char *buf = fs_get_client_buffer(fs_share, CLIENT_SHARE_SIZE, params.buf);
     if (buf == NULL) {
         dlog("invalid output buffer provided");
         status = FS_STATUS_INVALID_BUFFER;
@@ -565,13 +570,13 @@ void handle_rename(fs_cmd_t cmd) {
 
     char *old_path = get_path_buffer(0);
     char *new_path = get_path_buffer(1);
-    int err = fs_copy_client_path(old_path, client_share, CLIENT_SHARE_SIZE, params.old_path);
+    int err = fs_copy_client_path(old_path, fs_share, CLIENT_SHARE_SIZE, params.old_path);
     if (err) {
         dlog("invalid path buffer provided");
         status = FS_STATUS_INVALID_PATH;
         goto fail_buffer;
     }
-    err = fs_copy_client_path(new_path, client_share, CLIENT_SHARE_SIZE, params.old_path);
+    err = fs_copy_client_path(new_path, fs_share, CLIENT_SHARE_SIZE, params.old_path);
     if (err) {
         dlog("invalid path buffer provided");
         status = FS_STATUS_INVALID_PATH;
@@ -611,7 +616,7 @@ void handle_file_remove(fs_cmd_t cmd) {
     fs_cmd_params_file_remove_t params = cmd.params.file_remove;
 
     char *path = get_path_buffer(0);
-    int err = fs_copy_client_path(path, client_share, CLIENT_SHARE_SIZE, params.path);
+    int err = fs_copy_client_path(path, fs_share, CLIENT_SHARE_SIZE, params.path);
     if (err) {
         dlog("invalid path buffer provided");
         status = FS_STATUS_INVALID_PATH;
@@ -741,7 +746,7 @@ void handle_dir_create(fs_cmd_t cmd) {
     fs_cmd_params_dir_create_t params = cmd.params.dir_create;
 
     char *path = get_path_buffer(0);
-    int err = fs_copy_client_path(path, client_share, CLIENT_SHARE_SIZE, params.path);
+    int err = fs_copy_client_path(path, fs_share, CLIENT_SHARE_SIZE, params.path);
     if (err) {
         dlog("invalid path buffer provided");
         status = FS_STATUS_INVALID_PATH;
@@ -782,7 +787,7 @@ void handle_dir_remove(fs_cmd_t cmd) {
     fs_cmd_params_dir_remove_t params = cmd.params.dir_remove;
 
     char *path = get_path_buffer(0);
-    int err = fs_copy_client_path(path, client_share, CLIENT_SHARE_SIZE, params.path);
+    int err = fs_copy_client_path(path, fs_share, CLIENT_SHARE_SIZE, params.path);
     if (err) {
         dlog("invalid path buffer provided");
         status = FS_STATUS_INVALID_PATH;
@@ -832,7 +837,7 @@ void handle_dir_open(fs_cmd_t cmd) {
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_ERROR, .data = {0} };
 
     char *path = get_path_buffer(0);
-    int err = fs_copy_client_path(path, client_share, CLIENT_SHARE_SIZE, params.path);
+    int err = fs_copy_client_path(path, fs_share, CLIENT_SHARE_SIZE, params.path);
     if (err) {
         dlog("invalid path buffer provided");
         cmpl.status = FS_STATUS_INVALID_PATH;
@@ -899,7 +904,7 @@ void handle_dir_read(fs_cmd_t cmd) {
     fs_cmd_params_dir_read_t params = cmd.params.dir_read;
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
-    char *buf = fs_get_client_buffer(client_share, CLIENT_SHARE_SIZE, params.buf);
+    char *buf = fs_get_client_buffer(fs_share, CLIENT_SHARE_SIZE, params.buf);
     if (buf == NULL || params.buf.size < FS_MAX_NAME_LENGTH) {
         dlog("invalid output buffer provided");
         cmpl.status = FS_STATUS_INVALID_BUFFER;

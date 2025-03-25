@@ -1,0 +1,72 @@
+# Copyright 2024, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+name: Examples
+
+on:
+  pull_request:
+  push:
+    branches: [ "main" ]
+
+env:
+  MICROKIT_VERSION: 2.0.1
+  MICROKIT_URL: https://github.com/seL4/microkit/releases/download/2.0.1/microkit-sdk-2.0.1
+  SDFGEN_VERSION: 0.23.1
+
+jobs:
+  build_examples_linux_x86_64:
+    name: Build example systems (Linux x86-64 via apt)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout LionsOS repository
+        uses: actions/checkout@v4
+      - name: Download Microkit SDK
+        run: |
+          wget ${{ env.MICROKIT_URL }}-linux-x86-64.tar.gz
+          tar xf microkit-sdk-${{ env.MICROKIT_VERSION }}-linux-x86-64.tar.gz
+      - name: Download and install AArch64 GCC toolchain
+        run: |
+          wget -O aarch64-toolchain.tar.gz https://trustworthy.systems/Downloads/microkit/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf.tar.xz
+          tar xf aarch64-toolchain.tar.gz
+          echo "$(pwd)/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-elf/bin" >> $GITHUB_PATH
+      - name: Install dependencies (apt)
+        run: |
+          sudo apt update && sudo apt install make cmake clang lld llvm device-tree-compiler qemu-system-arm
+      - name: Setup pyenv
+        run: |
+          python3 -m venv venv
+          ./venv/bin/pip install --upgrade sdfgen==${{ env.SDFGEN_VERSION }}
+      - name: Build and run examples
+        run: ./ci/examples.sh ${PWD} ${PWD}/microkit-sdk-${{ env.MICROKIT_VERSION }}
+        shell: bash
+        env:
+          PYTHON: ${{ github.workspace }}/venv/bin/python
+  # build_examples_linux_x86_64_nix:
+  #   name: Build example systems (Linux x86-64 via Nix)
+  #   runs-on: ubuntu-24.04
+  #   steps:
+  #     - name: Checkout LionsOS repository
+  #       uses: actions/checkout@v4
+  #     - name: Install Nix
+  #       uses: cachix/install-nix-action@v25
+  #       with:
+  #         nix_path: nixpkgs=channel:nixos-unstable
+  #     - name: Run examples script
+  #       run: nix develop -c bash -c './ci/examples.sh $(pwd) $MICROKIT_SDK'
+  build_examples_macos_aarch64_nix:
+    name: Build example systems (macOS ARM64 via Nix)
+    runs-on: [self-hosted, macos, ARM64]
+    steps:
+      - name: Checkout LionsOS repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      # Because we use self-hosted actions and the checkout action does not clean submodules
+      # we need to manually clean the submodules of the repo.
+      - name: Clean submodules
+        run: |
+          git submodule foreach --recursive git clean -ffdx
+          git submodule foreach --recursive git reset --hard
+      - name: Run examples script
+        run: nix develop -c bash -c './ci/examples.sh $(pwd) $MICROKIT_SDK'

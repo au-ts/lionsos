@@ -23,7 +23,7 @@ typedef struct _mp_obj_vfs_fs_t {
     bool readonly;
 } mp_obj_vfs_fs_t;
 
-STATIC const char *vfs_fs_get_path_str(mp_obj_vfs_fs_t *self, mp_obj_t path) {
+static const char *vfs_fs_get_path_str(mp_obj_vfs_fs_t *self, mp_obj_t path) {
     if (self->root_len == 0) {
         return mp_obj_str_get_str(path);
     } else {
@@ -33,7 +33,7 @@ STATIC const char *vfs_fs_get_path_str(mp_obj_vfs_fs_t *self, mp_obj_t path) {
     }
 }
 
-STATIC mp_obj_t vfs_fs_get_path_obj(mp_obj_vfs_fs_t *self, mp_obj_t path) {
+static mp_obj_t vfs_fs_get_path_obj(mp_obj_vfs_fs_t *self, mp_obj_t path) {
     if (self->root_len == 0) {
         return path;
     } else {
@@ -43,7 +43,7 @@ STATIC mp_obj_t vfs_fs_get_path_obj(mp_obj_vfs_fs_t *self, mp_obj_t path) {
     }
 }
 
-STATIC mp_import_stat_t mp_vfs_fs_import_stat(void *self_in, const char *path) {
+static mp_import_stat_t mp_vfs_fs_import_stat(void *self_in, const char *path) {
     mp_obj_vfs_fs_t *self = self_in;
     if (self->root_len != 0) {
         self->root.len = self->root_len;
@@ -88,7 +88,7 @@ STATIC mp_import_stat_t mp_vfs_fs_import_stat(void *self_in, const char *path) {
     }
 }
 
-STATIC mp_obj_t vfs_fs_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t vfs_fs_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 1, false);
 
     mp_obj_vfs_fs_t *vfs = mp_obj_malloc(mp_obj_vfs_fs_t, type);
@@ -103,24 +103,25 @@ STATIC mp_obj_t vfs_fs_make_new(const mp_obj_type_t *type, size_t n_args, size_t
     return MP_OBJ_FROM_PTR(vfs);
 }
 
-STATIC mp_obj_t vfs_fs_mount(mp_obj_t self_in, mp_obj_t readonly, mp_obj_t mkfs) {
+static mp_obj_t vfs_fs_mount(mp_obj_t self_in, mp_obj_t readonly, mp_obj_t mkfs) {
     fs_cmpl_t completion;
     int err = fs_command_blocking(&completion, (fs_cmd_t){ .type = FS_CMD_INITIALISE });
     if (err || completion.status != FS_STATUS_SUCCESS) {
+        printf("MP|ERROR: Failed to mount\n");
         mp_raise_OSError(1);
     }
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(vfs_fs_mount_obj, vfs_fs_mount);
+static MP_DEFINE_CONST_FUN_OBJ_3(vfs_fs_mount_obj, vfs_fs_mount);
 
-STATIC mp_obj_t vfs_fs_umount(mp_obj_t self_in) {
+static mp_obj_t vfs_fs_umount(mp_obj_t self_in) {
     (void)self_in;
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(vfs_fs_umount_obj, vfs_fs_umount);
+static MP_DEFINE_CONST_FUN_OBJ_1(vfs_fs_umount_obj, vfs_fs_umount);
 
-STATIC mp_obj_t vfs_fs_open(mp_obj_t self_in, mp_obj_t path_in, mp_obj_t mode_in) {
+static mp_obj_t vfs_fs_open(mp_obj_t self_in, mp_obj_t path_in, mp_obj_t mode_in) {
     mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
     const char *mode = mp_obj_str_get_str(mode_in);
     if (self->readonly
@@ -132,17 +133,17 @@ STATIC mp_obj_t vfs_fs_open(mp_obj_t self_in, mp_obj_t path_in, mp_obj_t mode_in
     }
     return mp_vfs_fs_file_open(&mp_type_vfs_fs_textio, path_in, mode_in);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(vfs_fs_open_obj, vfs_fs_open);
+static MP_DEFINE_CONST_FUN_OBJ_3(vfs_fs_open_obj, vfs_fs_open);
 
-STATIC mp_obj_t vfs_fs_chdir(mp_obj_t self_in, mp_obj_t path_in) {
+static mp_obj_t vfs_fs_chdir(mp_obj_t self_in, mp_obj_t path_in) {
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_chdir_obj, vfs_fs_chdir);
+static MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_chdir_obj, vfs_fs_chdir);
 
-STATIC mp_obj_t vfs_fs_getcwd(mp_obj_t self_in) {
+static mp_obj_t vfs_fs_getcwd(mp_obj_t self_in) {
     return mp_obj_new_str("/", strlen("/"));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(vfs_fs_getcwd_obj, vfs_fs_getcwd);
+static MP_DEFINE_CONST_FUN_OBJ_1(vfs_fs_getcwd_obj, vfs_fs_getcwd);
 
 typedef struct _vfs_fs_ilistdir_it_t {
     mp_obj_base_t base;
@@ -151,7 +152,7 @@ typedef struct _vfs_fs_ilistdir_it_t {
     uint64_t dir;
 } vfs_fs_ilistdir_it_t;
 
-STATIC mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
+static mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
     vfs_fs_ilistdir_it_t *self = MP_OBJ_TO_PTR(self_in);
 
     for (;;) {
@@ -208,7 +209,7 @@ STATIC mp_obj_t vfs_fs_ilistdir_it_iternext(mp_obj_t self_in) {
     return MP_OBJ_STOP_ITERATION;
 }
 
-STATIC mp_obj_t vfs_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
+static mp_obj_t vfs_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
     mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
     vfs_fs_ilistdir_it_t *iter = mp_obj_malloc(vfs_fs_ilistdir_it_t, &mp_type_polymorph_iter);
     iter->iternext = vfs_fs_ilistdir_it_iternext;
@@ -248,7 +249,7 @@ STATIC mp_obj_t vfs_fs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
     iter->dir = completion.data.dir_open.fd;
     return MP_OBJ_FROM_PTR(iter);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_ilistdir_obj, vfs_fs_ilistdir);
+static MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_ilistdir_obj, vfs_fs_ilistdir);
 
 typedef struct _mp_obj_listdir_t {
     mp_obj_base_t base;
@@ -256,7 +257,7 @@ typedef struct _mp_obj_listdir_t {
     uint64_t dir;
 } mp_obj_listdir_t;
 
-STATIC mp_obj_t vfs_fs_mkdir(mp_obj_t self_in, mp_obj_t path_in) {
+static mp_obj_t vfs_fs_mkdir(mp_obj_t self_in, mp_obj_t path_in) {
     mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
     const char *path = vfs_fs_get_path_str(self, path_in);
 
@@ -290,9 +291,9 @@ STATIC mp_obj_t vfs_fs_mkdir(mp_obj_t self_in, mp_obj_t path_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_mkdir_obj, vfs_fs_mkdir);
+static MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_mkdir_obj, vfs_fs_mkdir);
 
-STATIC mp_obj_t vfs_fs_remove(mp_obj_t self_in, mp_obj_t path_in) {
+static mp_obj_t vfs_fs_remove(mp_obj_t self_in, mp_obj_t path_in) {
     mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
     const char *path = vfs_fs_get_path_str(self, path_in);
 
@@ -322,9 +323,9 @@ STATIC mp_obj_t vfs_fs_remove(mp_obj_t self_in, mp_obj_t path_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_remove_obj, vfs_fs_remove);
+static MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_remove_obj, vfs_fs_remove);
 
-STATIC mp_obj_t vfs_fs_rename(mp_obj_t self_in, mp_obj_t old_path_in, mp_obj_t new_path_in) {
+static mp_obj_t vfs_fs_rename(mp_obj_t self_in, mp_obj_t old_path_in, mp_obj_t new_path_in) {
     mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
     const char *old_path = vfs_fs_get_path_str(self, old_path_in);
     const char *new_path = vfs_fs_get_path_str(self, new_path_in);
@@ -367,9 +368,9 @@ STATIC mp_obj_t vfs_fs_rename(mp_obj_t self_in, mp_obj_t old_path_in, mp_obj_t n
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(vfs_fs_rename_obj, vfs_fs_rename);
+static MP_DEFINE_CONST_FUN_OBJ_3(vfs_fs_rename_obj, vfs_fs_rename);
 
-STATIC mp_obj_t vfs_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
+static mp_obj_t vfs_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
     mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
     const char *path = vfs_fs_get_path_str(self, path_in);
 
@@ -399,9 +400,9 @@ STATIC mp_obj_t vfs_fs_rmdir(mp_obj_t self_in, mp_obj_t path_in) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_rmdir_obj, vfs_fs_rmdir);
+static MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_rmdir_obj, vfs_fs_rmdir);
 
-STATIC mp_obj_t vfs_fs_stat(mp_obj_t self_in, mp_obj_t path_in) {
+static mp_obj_t vfs_fs_stat(mp_obj_t self_in, mp_obj_t path_in) {
     mp_obj_vfs_fs_t *self = MP_OBJ_TO_PTR(self_in);
 
     const char *path = vfs_fs_get_path_str(self, path_in);
@@ -452,9 +453,9 @@ STATIC mp_obj_t vfs_fs_stat(mp_obj_t self_in, mp_obj_t path_in) {
     t->items[9] = mp_obj_new_int_from_uint(sb.ctime);
     return MP_OBJ_FROM_PTR(t);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_stat_obj, vfs_fs_stat);
+static MP_DEFINE_CONST_FUN_OBJ_2(vfs_fs_stat_obj, vfs_fs_stat);
 
-STATIC const mp_rom_map_elem_t vfs_fs_locals_dict_table[] = {
+static const mp_rom_map_elem_t vfs_fs_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_mount), MP_ROM_PTR(&vfs_fs_mount_obj) },
     { MP_ROM_QSTR(MP_QSTR_umount), MP_ROM_PTR(&vfs_fs_umount_obj) },
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&vfs_fs_open_obj) },
@@ -471,9 +472,9 @@ STATIC const mp_rom_map_elem_t vfs_fs_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_statvfs), MP_ROM_PTR(&vfs_fs_statvfs_obj) },
     // #endif
 };
-STATIC MP_DEFINE_CONST_DICT(vfs_fs_locals_dict, vfs_fs_locals_dict_table);
+static MP_DEFINE_CONST_DICT(vfs_fs_locals_dict, vfs_fs_locals_dict_table);
 
-STATIC const mp_vfs_proto_t vfs_fs_proto = {
+static const mp_vfs_proto_t vfs_fs_proto = {
     .import_stat = mp_vfs_fs_import_stat,
 };
 

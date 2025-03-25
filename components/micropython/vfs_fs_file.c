@@ -24,26 +24,26 @@ typedef struct _mp_obj_vfs_fs_file_t {
     uint64_t size;
 } mp_obj_vfs_fs_file_t;
 
-STATIC void vfs_fs_file_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+static void vfs_fs_file_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     (void)kind;
     mp_obj_vfs_fs_file_t *self = MP_OBJ_TO_PTR(self_in);
     mp_printf(print, "<io.%s %d>", mp_obj_get_type_str(self_in), self->fd);
 }
 
-STATIC mp_obj_t vfs_fs_file_fileno(mp_obj_t self_in) {
+static mp_obj_t vfs_fs_file_fileno(mp_obj_t self_in) {
     mp_obj_vfs_fs_file_t *self = MP_OBJ_TO_PTR(self_in);
     // check_fd_is_open(self);
     return MP_OBJ_NEW_SMALL_INT(self->fd);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(vfs_fs_file_fileno_obj, vfs_fs_file_fileno);
+static MP_DEFINE_CONST_FUN_OBJ_1(vfs_fs_file_fileno_obj, vfs_fs_file_fileno);
 
-STATIC mp_obj_t vfs_fs_file___exit__(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t vfs_fs_file___exit__(size_t n_args, const mp_obj_t *args) {
     (void)n_args;
     return mp_stream_close(args[0]);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(vfs_fs_file___exit___obj, 4, 4, vfs_fs_file___exit__);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(vfs_fs_file___exit___obj, 4, 4, vfs_fs_file___exit__);
 
-STATIC mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int *errcode) {
     mp_obj_vfs_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
     // check_fd_is_open(o);
 
@@ -75,7 +75,7 @@ STATIC mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int 
     return (mp_uint_t)completion.data.file_read.len_read;
 }
 
-STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t size, int *errcode) {
+static mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t size, int *errcode) {
     mp_obj_vfs_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
     // check_fd_is_open(o);
 
@@ -109,7 +109,7 @@ STATIC mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t siz
     return (mp_uint_t)completion.data.file_write.len_written;
 }
 
-STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, int *errcode) {
+static mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     mp_obj_vfs_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
 
     if (request != MP_STREAM_CLOSE) {
@@ -125,7 +125,7 @@ STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t a
             });
             if (err || completion.status != FS_STATUS_SUCCESS) {
                 mp_raise_OSError(completion.status);
-                return mp_const_none;
+                return -1;
             }
             return 0;
         }
@@ -168,7 +168,7 @@ STATIC mp_uint_t vfs_fs_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t a
     }
 }
 
-STATIC const mp_rom_map_elem_t vfs_fs_rawfile_locals_dict_table[] = {
+static const mp_rom_map_elem_t vfs_fs_rawfile_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_fileno), MP_ROM_PTR(&vfs_fs_file_fileno_obj) },
     { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&mp_stream_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_readinto), MP_ROM_PTR(&mp_stream_readinto_obj) },
@@ -183,9 +183,9 @@ STATIC const mp_rom_map_elem_t vfs_fs_rawfile_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___exit__), MP_ROM_PTR(&vfs_fs_file___exit___obj) },
 };
 
-STATIC MP_DEFINE_CONST_DICT(vfs_fs_rawfile_locals_dict, vfs_fs_rawfile_locals_dict_table);
+static MP_DEFINE_CONST_DICT(vfs_fs_rawfile_locals_dict, vfs_fs_rawfile_locals_dict_table);
 
-STATIC const mp_stream_p_t vfs_fs_fileio_stream_p = {
+static const mp_stream_p_t vfs_fs_fileio_stream_p = {
     .read = vfs_fs_file_read,
     .write = vfs_fs_file_write,
     .ioctl = vfs_fs_file_ioctl,
@@ -200,7 +200,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &vfs_fs_rawfile_locals_dict
 );
 
-STATIC const mp_stream_p_t vfs_fs_textio_stream_p = {
+static const mp_stream_p_t vfs_fs_textio_stream_p = {
     .read = vfs_fs_file_read,
     .write = vfs_fs_file_write,
     .ioctl = vfs_fs_file_ioctl,

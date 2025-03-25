@@ -8,20 +8,20 @@
 #include <sddf/util/cache.h>
 #include "py/runtime.h"
 #include "micropython.h"
-#include "../vmm/uio.h"
+#include "uio.h"
 
 extern void *framebuffer_data_region;
 /*
  * We get notified when we *can* write to the framebuffer, meaning that MicroPython
  * needs to wait until the framebuffer is ready.
  */
-STATIC mp_obj_t fb_wait(void) {
+static mp_obj_t fb_wait(void) {
      microkit_cothread_wait_on_channel(FRAMEBUFFER_VMM_CH);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(fb_wait_obj, fb_wait);
+static MP_DEFINE_CONST_FUN_OBJ_0(fb_wait_obj, fb_wait);
 
-STATIC mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t height_obj) {
+static mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t height_obj) {
     uint8_t *framebuffer;
     get_fb_base_addr(framebuffer_data_region, &framebuffer);
 
@@ -78,14 +78,14 @@ STATIC mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t h
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(machine_fb_send_obj, machine_fb_send);
+static MP_DEFINE_CONST_FUN_OBJ_3(machine_fb_send_obj, machine_fb_send);
 
-STATIC const mp_rom_map_elem_t fb_module_globals_table[] = {
+static const mp_rom_map_elem_t fb_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR_fb) },
     { MP_ROM_QSTR(MP_QSTR_wait), MP_ROM_PTR(&fb_wait_obj) },
     { MP_ROM_QSTR(MP_QSTR_machine_fb_send), MP_ROM_PTR(&machine_fb_send_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(fb_module_globals, fb_module_globals_table);
+static MP_DEFINE_CONST_DICT(fb_module_globals, fb_module_globals_table);
 
 const mp_obj_module_t fb_module = {
     .base = { &mp_type_module },
