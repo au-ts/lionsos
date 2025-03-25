@@ -13,8 +13,7 @@
 #include <libvmm/util/util.h>
 #include <libvmm/arch/aarch64/linux.h>
 #include <libvmm/arch/aarch64/fault.h>
-/* Specific to the framebuffer example */
-#include "uio.h"
+#include <lions/fb/fb.h>
 
 __attribute__((__section__(".vmm_config"))) vmm_config_t config;
 
@@ -82,7 +81,7 @@ void init(void) {
 
     /* Setting up the UIO region for the framebuffer */
     virq_register(GUEST_VCPU_ID, UIO_GPU_IRQ, &uio_gpu_ack, NULL);
-    fault_register_vm_exception_handler(UIO_INIT_ADDRESS, sizeof(size_t), &uio_init_handler, NULL);
+    fault_register_vm_exception_handler(FB_UIO_INIT_ADDRESS, sizeof(size_t), &uio_init_handler, NULL);
 
     /* Finally start the guest */
     guest_start(GUEST_VCPU_ID, kernel_pc, config.dtb, config.initrd);
