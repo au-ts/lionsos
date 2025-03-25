@@ -63,6 +63,7 @@ CFLAGS := \
 	-target $(TARGET) \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include \
+	-I$(SDDF)/include/microkit \
 	-I$(LIBVMM)/include \
 	-MD
 
