@@ -9,8 +9,10 @@ CC := clang
 LD := ld.lld
 RANLIB := llvm-ranlib
 AR := llvm-ar
+OBJCOPY := llvm-objcopy
 TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
+PYTHON ?= python3
 DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
@@ -19,7 +21,7 @@ LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 
 ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
 	NET_DRIV_DIR := meson
-	UART_DRIV_DIR := meson
+	SERIAL_DRIVER_DIR := meson
 	TIMER_DRIV_DIR := meson
 	I2C_DRIV_DIR := meson
 	CPU := cortex-a55
@@ -27,7 +29,7 @@ ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
 	LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
 	NET_DRIV_DIR := virtio
-	UART_DRIV_DIR := arm
+	SERIAL_DRIVER_DIR := arm
 	TIMER_DRIV_DIR := arm
 	CPU := cortex-a53
 	QEMU := qemu-system-aarch64
@@ -39,8 +41,12 @@ endif
 
 VMM_IMAGE_DIR := ${KITTY_DIR}/board/$(MICROKIT_BOARD)/framebuffer_vmm_images
 VMM_SRC_DIR := ${KITTY_DIR}/src/vmm
-DTS := $(VMM_IMAGE_DIR)/linux.dts
-DTB := linux.dtb
+LINUX_DTS := $(VMM_IMAGE_DIR)/linux.dts
+LINUX_DTB := linux.dtb
+
+METAPROGRAM := $(KITTY_DIR)/meta.py
+DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
+DTB := $(MICROKIT_BOARD).dtb
 
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 NFS := $(LIONSOS)/components/fs/nfs
@@ -56,10 +62,10 @@ IMAGES := timer_driver.elf \
 	  eth_driver.elf \
 	  micropython.elf \
 	  nfs.elf \
-	  copy.elf \
+	  network_copy.elf \
 	  network_virt_rx.elf \
 	  network_virt_tx.elf \
-	  uart_driver.elf \
+	  serial_driver.elf \
 	  serial_virt_rx.elf \
 	  serial_virt_tx.elf \
 	  i2c_virt.elf \
@@ -78,11 +84,12 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I${CONFIG_INCLUDE}
+	-I$(SDDF)/include/microkit
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 
+SYSTEM_FILE := kitty.system
 IMAGE_FILE := kitty.img
 REPORT_FILE := report.txt
 
@@ -100,7 +107,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 	${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
 	${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
-	${SDDF}/drivers/serial/${UART_DRIV_DIR}/uart_driver.mk \
+	${SDDF}/drivers/serial/${SERIAL_DRIVER_DIR}/serial_driver.mk \
 	${SDDF}/network/components/network_components.mk \
 	${SDDF}/serial/components/serial_components.mk \
 	${SDDF}/i2c/components/i2c_virt.mk \
@@ -126,14 +133,17 @@ $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
 VMM_OBJS := vmm.o package_guest_images.o
 VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}:${VMM_SRC_DIR}
 
+$(LINUX_DTB): $(LINUX_DTS)
+	$(DTC) -q -I dts -O dtb $< > $@
+
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $< > $@
 
 package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
-			$(VMM_IMAGE_DIR) $(LINUX) $(INITRD) $(DTB)
+			$(VMM_IMAGE_DIR) $(LINUX) $(INITRD) $(LINUX_DTB)
 	$(CC) -c -g3 -x assembler-with-cpp \
 					-DGUEST_KERNEL_IMAGE_PATH=\"$(LINUX)\" \
-					-DGUEST_DTB_IMAGE_PATH=\"$(DTB)\" \
+					-DGUEST_DTB_IMAGE_PATH=\"$(LINUX_DTB)\" \
 					-DGUEST_INITRD_IMAGE_PATH=\"$(INITRD)\" \
 					-target $(TARGET) \
 					$< -o $@
@@ -169,8 +179,38 @@ ${IMAGES}: libsddf_util_debug.a
 %.o: %.c ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
-$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) ${KITTY_DIR}/board/${MICROKIT_BOARD}/kitty.system
-	$(MICROKIT_TOOL) ${KITTY_DIR}/board/${MICROKIT_BOARD}/kitty.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY) --guest-dtb $(LINUX_DTB)
+	if [ "$(I2C_DRIV_DIR)" != "" ]; then \
+		$(OBJCOPY) --update-section .device_resources=i2c_driver_device_resources.data i2c_driver.elf; \
+		$(OBJCOPY) --update-section .i2c_driver_config=i2c_driver.data i2c_driver.elf; \
+		$(OBJCOPY) --update-section .i2c_virt_config=i2c_virt.data i2c_virt.elf; \
+		$(OBJCOPY) --update-section .i2c_client_config=i2c_client_micropython.data micropython.elf; \
+	fi
+	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
+	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
+	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf
+	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver.elf
+	$(OBJCOPY) --update-section .net_virt_rx_config=net_virt_rx.data network_virt_rx.elf
+	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
+	$(OBJCOPY) --update-section .net_copy_config=net_copy_micropython_net_copier.data network_copy.elf network_copy_micropython.elf
+	$(OBJCOPY) --update-section .net_copy_config=net_copy_nfs_net_copier.data network_copy.elf network_copy_nfs.elf
+	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .net_client_config=net_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .net_client_config=net_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .nfs_config=nfs_config.data nfs.elf
+	$(OBJCOPY) --update-section .fs_server_config=fs_server_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .fs_client_config=fs_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .vmm_config=vmm_framebuffer_vmm.data vmm.elf
+
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
+	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 FORCE:
 
