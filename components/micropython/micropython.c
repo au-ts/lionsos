@@ -33,6 +33,9 @@ __attribute__((__section__(".net_client_config"))) net_client_config_t net_confi
 __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
 __attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_config;
 
+/* MicroPython is always built with networking and I2C support, but whether we
+ * actually do anything with it depends on how the user has connected the MicroPython PD,
+ * that is what these globals are for. */
 bool net_enabled;
 bool i2c_enabled;
 
