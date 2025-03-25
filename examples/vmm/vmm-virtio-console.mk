@@ -55,7 +55,7 @@ LINUX := $(VMM_IMAGE_DIR)/Linux
 INITRD := $(VMM_IMAGE_DIR)/initrd.img
 DT_OVERLAYS := ${VMM_IMAGE_DIR}/overlay-virtcon.dts
 
-IMAGES := vmm.elf uart_driver.elf serial_rx_virt.elf serial_tx_virt.elf 
+IMAGES := vmm.elf serial_driver.elf serial_rx_virt.elf serial_tx_virt.elf
 CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
@@ -72,6 +72,7 @@ CFLAGS := \
 	-I$(LIBVMM_DIR)/src/util \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include \
+	-I$(SDDF)/include/microkit \
 	-MD \
 	-DMAC_BASE_ADDRESS=$(MAC_BASE_ADDRESS)
 
