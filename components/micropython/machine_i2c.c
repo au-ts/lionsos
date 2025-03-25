@@ -17,6 +17,7 @@
 
 #if MICROPY_PY_MACHINE_I2C && MICROPY_HW_ENABLE_HW_I2C
 
+extern bool i2c_enabled;
 extern i2c_client_config_t i2c_config;
 extern i2c_queue_handle_t i2c_queue_handle;
 
@@ -185,6 +186,10 @@ static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
 }
 
 mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
+    if (!i2c_enabled) {
+        mp_raise_msg_varg(&mp_type_NotImplementedError, MP_ERROR_TEXT("MicroPython not configured as sDDF I2C client"));
+        return NULL;
+    }
 
     enum { ARG_id, ARG_scl, ARG_sda, ARG_freq, ARG_timeout };
     static const mp_arg_t allowed_args[] = {

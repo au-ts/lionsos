@@ -31,12 +31,10 @@ __attribute__((__section__(".serial_client_config"))) serial_client_config_t ser
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
 __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
-
-#ifdef ENABLE_I2C
 __attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_config;
-#endif
 
 bool net_enabled;
+bool i2c_enabled;
 
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
@@ -130,10 +128,10 @@ void init(void) {
     fs_completion_queue = fs_config.server.completion_queue.vaddr;
     fs_share = fs_config.server.share.vaddr;
 
-#ifdef ENABLE_I2C
-    assert(i2c_config_check_magic(&i2c_config));
-    i2c_queue_handle = i2c_queue_init(i2c_config.virt.req_queue.vaddr, i2c_config.virt.resp_queue.vaddr);
-#endif
+    i2c_enabled = i2c_config_check_magic(&i2c_config);
+    if (i2c_enabled) {
+        i2c_queue_handle = i2c_queue_init(i2c_config.virt.req_queue.vaddr, i2c_config.virt.resp_queue.vaddr);
+    }
 
     stack_ptrs_arg_array_t costacks = { (uintptr_t) mp_stack };
     microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, costacks);
