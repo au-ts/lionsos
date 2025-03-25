@@ -140,6 +140,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
         # This is quite a lot of passthrough devices, which we can cleanup with
         # https://github.com/au-ts/lionsos/pull/134.
+        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/hdmi-tx@0"))
         vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/bus@30000"))
         vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/audio-controller@32000"))
         vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/bus@38000/video-lut@48"))
