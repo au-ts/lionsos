@@ -29,6 +29,7 @@
 #define MICROPY_PY_OS (1)
 #define MICROPY_PY_IO (1)
 #define MICROPY_VFS (1)
+#define MICROPY_PY_VFS (0)
 #define MICROPY_READER_VFS (1)
 #define MICROPY_PY_ASYNCIO (1)
 #define MICROPY_PY_ASYNC_AWAIT (1)

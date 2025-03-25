@@ -2,9 +2,6 @@
 # Copyright 2024, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 #
-ifeq ($(strip $(CONFIG_INCLUDE)),)
-$(error CONFIG_INCLUDE must be specified)
-endif
 LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
 CC := aarch64-none-elf-gcc
 LD := aarch64-none-elf-ld
@@ -37,12 +34,12 @@ CFLAGS += \
 	-I$(BUILD) \
 	-I$(TOP) \
 	-I$(SDDF)/include \
+	-I$(SDDF)/include/microkit \
 	-I$(BOARD_DIR)/include \
 	-I$(LIBMICROKITCO_PATH) \
 	-I$(LIONSOS)/include \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
-	-I$(CONFIG_INCLUDE) \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU)

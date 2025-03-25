@@ -16,13 +16,13 @@ void fs_request_flag_set(uint64_t request_id) {
     mp_obj_t flag = request_flags[request_id];
     if (flag != NULL) {
         mp_obj_t set_method[2];
-        mp_load_method(flag, MP_QSTR_set, &set_method);
+        mp_load_method(flag, MP_QSTR_set, set_method);
         mp_call_method_n_kw(0, 0, set_method);
     }
     request_flags[request_id] = NULL;
 }
 
-STATIC mp_obj_t request_open(mp_obj_t path_in, mp_obj_t flag_in) {
+static mp_obj_t request_open(mp_obj_t path_in, mp_obj_t flag_in) {
     const char *path = mp_obj_str_get_str(path_in);
 
     uint64_t request_id;
@@ -56,9 +56,9 @@ STATIC mp_obj_t request_open(mp_obj_t path_in, mp_obj_t flag_in) {
 
     return mp_obj_new_int_from_uint(request_id);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(request_open_obj, request_open);
+static MP_DEFINE_CONST_FUN_OBJ_2(request_open_obj, request_open);
 
-STATIC mp_obj_t complete_open(mp_obj_t request_id_in) {
+static mp_obj_t complete_open(mp_obj_t request_id_in) {
     uint64_t request_id = mp_obj_get_int(request_id_in);
 
     fs_cmd_t command;
@@ -74,9 +74,9 @@ STATIC mp_obj_t complete_open(mp_obj_t request_id_in) {
     }
     return mp_obj_new_int_from_uint(completion.data.dir_open.fd);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(complete_open_obj, complete_open);
+static MP_DEFINE_CONST_FUN_OBJ_1(complete_open_obj, complete_open);
 
-STATIC mp_obj_t request_close(mp_obj_t fd_in, mp_obj_t flag_in) {
+static mp_obj_t request_close(mp_obj_t fd_in, mp_obj_t flag_in) {
     uint64_t fd = mp_obj_get_int(fd_in);
 
     uint64_t request_id;
@@ -93,9 +93,9 @@ STATIC mp_obj_t request_close(mp_obj_t fd_in, mp_obj_t flag_in) {
     });
     return mp_obj_new_int_from_uint(request_id);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(request_close_obj, request_close);
+static MP_DEFINE_CONST_FUN_OBJ_2(request_close_obj, request_close);
 
-STATIC mp_obj_t complete_close(mp_obj_t request_id_in) {
+static mp_obj_t complete_close(mp_obj_t request_id_in) {
     uint64_t request_id = mp_obj_get_int(request_id_in);
 
     fs_cmd_t command;
@@ -106,9 +106,9 @@ STATIC mp_obj_t complete_close(mp_obj_t request_id_in) {
 
     return mp_obj_new_int_from_uint(completion.status);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(complete_close_obj, complete_close);
+static MP_DEFINE_CONST_FUN_OBJ_1(complete_close_obj, complete_close);
 
-STATIC mp_obj_t request_pread(mp_uint_t n_args, const mp_obj_t *args) {
+static mp_obj_t request_pread(mp_uint_t n_args, const mp_obj_t *args) {
     uint64_t fd = mp_obj_get_int(args[0]);
     uint64_t nbyte = mp_obj_get_int(args[1]);
     uint64_t offset = mp_obj_get_int(args[2]);
@@ -142,9 +142,9 @@ STATIC mp_obj_t request_pread(mp_uint_t n_args, const mp_obj_t *args) {
     });
     return mp_obj_new_int_from_uint(request_id);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(request_pread_obj, 4, 4, request_pread);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(request_pread_obj, 4, 4, request_pread);
 
-STATIC mp_obj_t complete_pread(mp_obj_t request_id_in) {
+static mp_obj_t complete_pread(mp_obj_t request_id_in) {
     uint64_t request_id = mp_obj_get_int(request_id_in);
 
     fs_cmd_t command;
@@ -156,9 +156,9 @@ STATIC mp_obj_t complete_pread(mp_obj_t request_id_in) {
     fs_buffer_free(command.params.file_read.buf.offset);
     return ret;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(complete_pread_obj, complete_pread);
+static MP_DEFINE_CONST_FUN_OBJ_1(complete_pread_obj, complete_pread);
 
-STATIC mp_obj_t request_stat(mp_obj_t path_in, mp_obj_t flag_in) {
+static mp_obj_t request_stat(mp_obj_t path_in, mp_obj_t flag_in) {
     const char *path = mp_obj_str_get_str(path_in);
 
     uint64_t request_id;
@@ -201,9 +201,9 @@ STATIC mp_obj_t request_stat(mp_obj_t path_in, mp_obj_t flag_in) {
     });
     return mp_obj_new_int_from_uint(request_id);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(request_stat_obj, request_stat);
+static MP_DEFINE_CONST_FUN_OBJ_2(request_stat_obj, request_stat);
 
-STATIC mp_obj_t complete_stat(mp_obj_t request_id_in) {
+static mp_obj_t complete_stat(mp_obj_t request_id_in) {
     uint64_t request_id = mp_obj_get_int(request_id_in);
 
     fs_cmd_t command;
@@ -234,9 +234,9 @@ STATIC mp_obj_t complete_stat(mp_obj_t request_id_in) {
 
     return MP_OBJ_FROM_PTR(t);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(complete_stat_obj, complete_stat);
+static MP_DEFINE_CONST_FUN_OBJ_1(complete_stat_obj, complete_stat);
 
-STATIC const mp_rom_map_elem_t fs_raw_module_globals_table[] = {
+static const mp_rom_map_elem_t fs_raw_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_fs_raw) },
     { MP_ROM_QSTR(MP_QSTR_request_open), MP_ROM_PTR(&request_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_complete_open), MP_ROM_PTR(&complete_open_obj) },
@@ -247,7 +247,7 @@ STATIC const mp_rom_map_elem_t fs_raw_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_request_stat), MP_ROM_PTR(&request_stat_obj) },
     { MP_ROM_QSTR(MP_QSTR_complete_stat), MP_ROM_PTR(&complete_stat_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(fs_raw_module_globals, fs_raw_module_globals_table);
+static MP_DEFINE_CONST_DICT(fs_raw_module_globals, fs_raw_module_globals_table);
 
 const mp_obj_module_t fs_raw_module = {
     .base = { &mp_type_module },
