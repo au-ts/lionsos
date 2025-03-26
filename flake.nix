@@ -46,7 +46,7 @@
             in
             # mkShellNoCC, because we do not want the cc from stdenv to leak into this shell
             pkgs.mkShellNoCC rec {
-              name = "sddf-dev";
+              name = "lionsos-dev";
 
               microkit-platform = microkit-platforms.${system} or (throw "Unsupported system: ${system}");
 
