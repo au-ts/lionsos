@@ -68,9 +68,16 @@
                 gnumake
                 dosfstools
                 curl
+                which
                 unzip
+                # for shasum
+                perl
                 dtc
                 pythonTool
+                # for mypy-cross
+                gcc
+                # for musllibc
+                cmake
                 # for git-clang-format.
                 llvm.libclang.python
                 llvm.lld
