@@ -42,18 +42,18 @@ jobs:
         shell: bash
         env:
           PYTHON: ${{ github.workspace }}/venv/bin/python
-  # build_examples_linux_x86_64_nix:
-  #   name: Build example systems (Linux x86-64 via Nix)
-  #   runs-on: ubuntu-24.04
-  #   steps:
-  #     - name: Checkout LionsOS repository
-  #       uses: actions/checkout@v4
-  #     - name: Install Nix
-  #       uses: cachix/install-nix-action@v25
-  #       with:
-  #         nix_path: nixpkgs=channel:nixos-unstable
-  #     - name: Run examples script
-  #       run: nix develop -c bash -c './ci/examples.sh $(pwd) $MICROKIT_SDK'
+  build_examples_linux_x86_64_nix:
+    name: Build example systems (Linux x86-64 via Nix)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout LionsOS repository
+        uses: actions/checkout@v4
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Run examples script
+        run: nix develop -c bash -c './ci/examples.sh $(pwd) $MICROKIT_SDK'
   build_examples_macos_aarch64_nix:
     name: Build example systems (macOS ARM64 via Nix)
     runs-on: [self-hosted, macos, ARM64]
