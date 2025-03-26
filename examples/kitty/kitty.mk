@@ -39,6 +39,12 @@ else
 $(error Unsupported MICROKIT_BOARD given)
 endif
 
+# If the KITTY_CONFIG is in deploy, then we will set the exec module
+# of Micropython to be the "deploy.py" file resident in the client directory.
+ifeq ($(strip $(DEPLOY)),1)
+export MICROPYTHON_EXEC_MODULE := deploy.py
+endif
+
 VMM_IMAGE_DIR := ${KITTY_DIR}/board/$(MICROKIT_BOARD)/framebuffer_vmm_images
 VMM_SRC_DIR := ${KITTY_DIR}/src/vmm
 LINUX_DTS := $(VMM_IMAGE_DIR)/linux.dts
@@ -164,7 +170,7 @@ include $(MICROPYTHON)/micropython.mk
 config.py: ${KITTY_DIR}/board/$(MICROKIT_BOARD)/config.py
 	cp $< $@
 
-manifest.py: ${KITTY_DIR}/manifest.py kitty.py pn532.py font_height50.py font_height35.py writer.py config.py
+manifest.py: ${KITTY_DIR}/manifest.py kitty.py pn532.py font_height50.py font_height35.py writer.py config.py deploy.py
 	cp $< $@
 
 %.py: ${KITTY_DIR}/client/%.py
