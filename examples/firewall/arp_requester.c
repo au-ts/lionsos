@@ -18,6 +18,7 @@
 #include <lions/firewall/config.h>
 #include <lions/firewall/protocols.h>
 #include <lions/firewall/arp_queue.h>
+#include <lions/firewall/common.h>
 #include <string.h>
 
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
@@ -98,6 +99,7 @@ static void process_requests()
             } else if (entry != NULL && entry->state == ARP_STATE_PENDING) {
                 /* Notify client upon response for existing ARP request */
                 entry->client |= BIT(client);
+                sddf_dprintf("Setting notify for client: %d\n", client);
                 continue;
             }
             
@@ -112,7 +114,8 @@ static void process_requests()
             assert(!err);
 
             if (FIREWALL_DEBUG_OUTPUT) {
-                sddf_printf("MAC[5] = %x | ARP requester processing client %u request for ip %u\n", arp_config.mac_addr[5], client, request.ip);
+                char buf[16];
+                sddf_printf("MAC[5] = %x | ARP requester processing client %u request for ip %s\n", arp_config.mac_addr[5], client, ipaddr_to_string(request.ip, buf, 16));
             }
 
             /* Create arp entry for request to store associated client */
@@ -153,9 +156,10 @@ static void process_responses()
                             if (BIT(client) & entry->client) {
                                 arp_enqueue_response(arp_queues[client], arp_response_from_entry(entry));
                                 notify_client[client] = true;
-
+                                sddf_dprintf("Notifying client: %d\n", client);
                                 if (FIREWALL_DEBUG_OUTPUT) {
-                                    sddf_printf("MAC[5] = %x | ARP requester received response for client %u, ip %u. MAC[0] = %x, MAC[5] = %x\n", arp_config.mac_addr[5], client, pkt->ipsrc_addr, pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
+                                    char buf[16];
+                                    sddf_printf("MAC[5] = %x | ARP requester received response for client %u, ip %s. MAC[0] = %x, MAC[5] = %x\n", arp_config.mac_addr[5], client, ipaddr_to_string(pkt->ipsrc_addr, buf, 16), pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
                                 }
                             }
                         }
@@ -215,7 +219,8 @@ static uint16_t process_retries(void)
             /* Resend the ARP request out to the network */
 
             if (FIREWALL_DEBUG_OUTPUT) {
-                sddf_printf("MAC[5] = %x | ARP requester attempting to resend request for ip %u\n", arp_config.mac_addr[5], entry->ip);
+                char buf[16];
+                sddf_printf("MAC[5] = %x | ARP requester attempting to resend request for ip %s\n", arp_config.mac_addr[5], ipaddr_to_string(entry->ip, buf, 16));
             }
 
             if (!net_queue_empty_free(&tx_queue)) {
@@ -229,7 +234,8 @@ static uint16_t process_retries(void)
                 transmitted = true;
 
                 if (FIREWALL_DEBUG_OUTPUT) {
-                    sddf_printf("MAC[5] = %x | ARP requester resent request for ip %u\n", arp_config.mac_addr[5], entry->ip);
+                    char buf[16];
+                    sddf_printf("MAC[5] = %x | ARP requester resent request for ip %s\n", arp_config.mac_addr[5], ipaddr_to_string(entry->ip, buf, 16));
                 }
             }
 
@@ -284,6 +290,8 @@ void init(void)
     net_queue_init(&tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
         net_config.tx.num_buffers);
     net_buffers_init(&tx_queue, 0);
+
+    sddf_dprintf("This is the number of arp clients: %d\n", arp_config.num_arp_clients);
 
     for (uint8_t client = 0; client < arp_config.num_arp_clients; client++) {
         arp_queues[client] = (arp_queue_handle_t *) arp_config.clients[client].queue.vaddr;

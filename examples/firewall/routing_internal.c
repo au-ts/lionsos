@@ -18,6 +18,7 @@
 #include <lions/firewall/protocols.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/routing.h>
+#include <lions/firewall/common.h>
 #include <string.h>
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
@@ -124,22 +125,24 @@ static void route()
             if (ip_pkt->ttl > 1 && ip_pkt->type == HTONS(ETH_TYPE_IP)) {
                 ip_pkt->ttl -= 1;
 
+                char buf[16];
                 if (FIREWALL_DEBUG_OUTPUT) {
-                    sddf_printf("MAC[5] = %x | Router received packet for ip %u with buffer number %lu\n", router_config.mac_addr[5], ip_pkt->dst_ip, buffer.io_or_offset/NET_BUFFER_SIZE);
+                    sddf_printf("MAC[5] = %x | Router internal received packet for ip %s with buffer number %lu\n", router_config.mac_addr[5], ipaddr_to_string(ip_pkt->dst_ip, buf, 16), buffer.io_or_offset/NET_BUFFER_SIZE);
                 }
 
                 /* Find the next hop address. If we have no route, assume that the device is attached directly */
                 routing_entry_t *entry = routing_find_route(&routing_table, ip_pkt->dst_ip);
-                
+
                 if (FIREWALL_DEBUG_OUTPUT) {
-                    sddf_printf("MAC[5] = %x | Converted ip %u to next hop ip %u\n", router_config.mac_addr[5], ip_pkt->dst_ip, entry->ip);
+                    sddf_printf("MAC[5] = %x | Converted ip %s to next hop ip %s\n", router_config.mac_addr[5], ipaddr_to_string(ip_pkt->dst_ip, buf, 16), ipaddr_to_string(entry->ip, buf, 16));
                 }
 
                 if (entry->out_interface == ROUTING_OUT_INTERNAL) {
                     tcphdr_t *tcp_pkt = (tcphdr_t *)(pkt_vaddr + transport_layer_offset(ip_pkt));
 
                     /* Webserver only accepts TCP traffic on webserver port */
-                    if (ip_pkt->protocol != WEBSERVER_PROTOCOL || tcp_pkt->dst_port == HTONS(WEBSERVER_PORT)) {
+                    if (ip_pkt->protocol != WEBSERVER_PROTOCOL || tcp_pkt->dst_port != HTONS(WEBSERVER_PORT)) {
+                        sddf_dprintf("We matched this packet with the routing out internal\n");
                         err = firewall_enqueue(&rx_free, buffer);
                         assert(!err);
                         returned = true;
@@ -245,7 +248,7 @@ void init(void)
     routing_entry_t default_entry = {true, ROUTING_OUT_EXTERNAL, 0, 0, 0, 0};
     routing_table_init(&routing_table, default_entry, router_config.webserver.routing_table.vaddr,
         router_config.ip, router_config.webserver.routing_table_capacity);
-    
+
     /* Add an entry for the webserver */
     routing_table_add_rule(&routing_table, ROUTING_OUT_INTERNAL, 0, router_config.ip, 0, router_config.ip);
 

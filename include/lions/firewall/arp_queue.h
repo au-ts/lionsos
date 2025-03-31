@@ -46,7 +46,7 @@ typedef struct arp_queue {
     /* index to remove from */
     uint16_t head;
    /* arp array */
-    arp_request_t queue[FIREWALL_MAX_ARP_QUEUE_CAPACITY];
+    arp_request_t queue[];
 } arp_queue_t;
 
 typedef struct arp_queue_handle {
@@ -132,6 +132,7 @@ static arp_error_t arp_table_add_entry(arp_table_t *table,
     slot->client = BIT(client);
     slot->num_retries = 0;
     slot->timestamp = sddf_timer_time_now(timer_ch);
+    sddf_dprintf("Setting notify for client: %d\n", client);
 
     return ARP_ERR_OKAY;
 }

@@ -115,7 +115,7 @@ static firewall_filter_error_t firewall_filter_add_rule(firewall_filter_state_t 
 {
     firewall_rule_t *empty_slot = NULL;
     for (uint16_t i = 0; i < state->rules_capacity; i++) {
-        firewall_rule_t *rule = state->rules + i;
+        firewall_rule_t *rule = state->rules + (i * sizeof(firewall_rule_t));
 
         if (!rule->valid) {
             if (empty_slot == NULL) {
@@ -167,7 +167,7 @@ static firewall_filter_error_t firewall_filter_add_rule(firewall_filter_state_t 
     if (empty_slot == NULL) {
         return FILTER_ERR_FULL;
     }
-    
+
     empty_slot->valid = true;
     empty_slot->src_ip = src_ip;
     empty_slot->src_port = src_port;

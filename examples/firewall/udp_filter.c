@@ -120,6 +120,7 @@ void filter(void)
 
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
+    sddf_dprintf("We have received a ppc in udp filter\n");
     switch (microkit_msginfo_get_label(msginfo)) {
     case FIREWALL_SET_DEFAULT_ACTION: {
         firewall_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
@@ -134,6 +135,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         return microkit_msginfo_new(0, 1);
     }
     case FIREWALL_ADD_RULE: {
+        sddf_dprintf("Adding a udp rule\n");
         firewall_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
         uint32_t src_ip = seL4_GetMR(FILTER_ARG_SRC_IP);
         uint16_t src_port = seL4_GetMR(FILTER_ARG_SRC_PORT);
@@ -152,6 +154,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         }
         seL4_SetMR(FILTER_RET_ERR, err);
         seL4_SetMR(FILTER_RET_RULE_ID, rule_id);
+        sddf_dprintf("Finished adding rule\n");
         return microkit_msginfo_new(0, 2);
     }
     case FIREWALL_DEL_RULE: {
@@ -188,7 +191,7 @@ void init(void)
 
     net_queue_init(&rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
         net_config.rx.num_buffers);
-    
+
     firewall_queue_init(&router_queue, filter_config.router.queue.vaddr, filter_config.router.capacity);
 
     firewall_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rules_capacity,

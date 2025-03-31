@@ -86,15 +86,15 @@ def delete_route(request, route_id):
 PROTOCOLS = ["udp", "tcp", "icmp"]
 
 
-@app.route('/api/rules/<string:protocol>', methods=['GET'])
-def get_rules(request, protocol):
+@app.route('/api/rules/<string:protocol>/<string:filter>', methods=['GET'])
+def get_rules(request, protocol, filter):
     if protocol not in PROTOCOLS:
         return {"error": "Invalid protocol given"}, 400
 
-    default_action = lions_firewall.filter_default_action()
+    default_action = lions_firewall.filter_default_action(protocol, filter)
     rules = []
-    for i in range(lions_firewall.rule_count()):
-        t = lions_firewall.rule_get_nth(i)
+    for i in range(lions_firewall.rule_count(protocol, filter)):
+        t = lions_firewall.rule_get_nth(protocol, filter, i)
         rules.append({
             "id": t[0],
             "src_ip": t[1],
@@ -110,14 +110,14 @@ def get_rules(request, protocol):
     rules.sort(key=lambda rule: rule['id'])
     return {"default_action": default_action, "rules": rules}
 
-@app.route('/api/rules/<string:protocol>/default/<int:action>', methods=['POST'])
-def set_default_action(request, protocol, action):
+@app.route('/api/rules/<string:protocol>/default/<int:action>/<string:filter>', methods=['POST'])
+def set_default_action(request, protocol, action, filter):
     try:
         if protocol not in PROTOCOLS:
           return {"error": "Invalid protocol given"}, 400
 
         # TODO: fill this out
-        # lions_firewall.filter_default_action_set(default_action)
+        # lions_firewall.filter_default_action_set(action, fi)
         print(f"INFO: setting default action for protocol '{protocol}' to '{action}'")
 
         return {"status": "ok"}, 201
@@ -127,6 +127,7 @@ def set_default_action(request, protocol, action):
 @app.route('/api/rules/<string:protocol>', methods=['POST'])
 def add_rule(request, protocol):
     try:
+        print(f"This is the protocol string: {protocol}. This is the type of var: {type(protocol)}")
         data = request.json
         _filter = data.get("filter")
         src_ip = data.get("src_ip")
@@ -138,26 +139,32 @@ def add_rule(request, protocol):
         action = data.get("action")
 
         if protocol not in PROTOCOLS:
-            return {"error": "Invalid protocol given"}, 400
+          return {"error": "Invalid protocol given"}, 401
 
         if _filter != 0 and _filter != 1:
-            return {"error": "Invalid filter given"}, 400
+          return {"error": "Invalid filter given"}, 402
+        if src_port < 0 or dest_port < 0:
+          return {"error": "Invalid port given"}, 402
+        if src_subnet < 0 or dest_subnet < 0:
+          return {"error": "Invalid subnet given"}, 402
+        if action < 1 or action > 3:
+          return {"error": "Invalid action given"}, 402
 
         rule_id = lions_firewall.rule_add(protocol, _filter, src_ip, src_port, src_subnet,
                                           dest_ip, dest_port, dest_subnet, action)
         new_rule = {"id": rule_id}
         return {"status": "ok", "rule": new_rule}, 201
     except Exception as e:
-        return {"error": "Invalid input"}, 400
+        return {"error": "Invalid input"}, 403
 
 
-@app.route('/api/rules/<string:protocol>/<int:rule_id>', methods=['DELETE'])
-def delete_rule(request, protocol, rule_id):
+@app.route('/api/rules/<string:protocol>/<int:rule_id>/<string:filter>', methods=['DELETE'])
+def delete_rule(request, protocol, rule_id, filter):
     try:
         if protocol not in PROTOCOLS:
             return {"error": "Invalid protocol given"}, 400
 
-        lions_firewall.rule_delete(rule_id)
+        lions_firewall.rule_delete(rule_id, protocol, filter)
         print("ok")
         return {"status": "ok"}
     except IndexError:
@@ -576,7 +583,7 @@ def rules(request, protocol):
           var rulesBody = document.getElementById(`${type}-rules-body`);
           rulesBody.innerHTML = "";
           const defaultAction = document.getElementById(`${type}-default-action`);
-          fetch('/api/rules/INSERT_PROTOCOL')
+          fetch(`/api/rules/INSERT_PROTOCOL/${type}`)
             .then(function(response) { return response.json(); })
             .then(function(data) {
               for (let i = 0; i < defaultAction.options.length; i++) {
@@ -612,7 +619,7 @@ def rules(request, protocol):
         }
 
         window.deleteRule = function(ruleId) {
-          fetch('/api/rules/INSERT_PROTOCOL' + ruleId, {
+          fetch(`/api/rules/INSERT_PROTOCOL/${ruleId}/${type}`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' }
           })
@@ -632,7 +639,7 @@ def rules(request, protocol):
 
         document.getElementById(`external-set-default-action-btn`).addEventListener('click', function() {
           const newDefaultAction = document.getElementById(`external-default-action`).value;
-          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}`, {
+          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}/${type}`, {
             method: 'POST',
           })
           .then(function(response) {
@@ -649,7 +656,7 @@ def rules(request, protocol):
 
         document.getElementById(`internal-set-default-action-btn`).addEventListener('click', function() {
           const newDefaultAction = document.getElementById(`internal-default-action`).value;
-          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}`, {
+          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}/${type}`, {
             method: 'POST',
           })
           .then(function(response) {
@@ -677,12 +684,12 @@ def rules(request, protocol):
             return;
           }
           var srcIp = document.getElementById('new-src-ip').value;
-          var srcPort = document.getElementById('new-src-port').value;
-          var srcSubnet = document.getElementById('new-src-subnet').value;
+          var srcPort = Number(document.getElementById('new-src-port').value);
+          var srcSubnet = Number(document.getElementById('new-src-subnet').value);
           var destIp = document.getElementById('new-dest-ip').value;
-          var destPort = document.getElementById('new-dest-port').value;
-          var destSubnet = document.getElementById('new-dest-subnet').value;
-          var action = document.getElementById('new-action').value;
+          var destPort = Number(document.getElementById('new-dest-port').value);
+          var destSubnet = Number(document.getElementById('new-dest-subnet').value);
+          var action = Number(document.getElementById('new-action').value);
           const body = JSON.stringify({
             filter: filter,
             src_ip: srcIp,

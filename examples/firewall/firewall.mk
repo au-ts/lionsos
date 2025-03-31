@@ -48,6 +48,7 @@ IMAGES := micropython.elf \
 SYSTEM_FILE := firewall.system
 
 CFLAGS := \
+	-g \
 	-mtune=$(CPU) \
 	-mstrict-align \
 	-ffreestanding \

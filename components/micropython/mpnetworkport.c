@@ -41,6 +41,7 @@
 #include <lions/firewall/arp_queue.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
+#include <lions/firewall/common.h>
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
@@ -110,17 +111,19 @@ u32_t sys_now(void) {
 
 void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN])
 {
-    memcpy(&arp_response_pkt.ethdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
-    memcpy(&arp_response_pkt.ethsrc_addr, &mac, ETH_HWADDR_LEN);
+    // Ethernet header
+    memcpy(arp_response_pkt.ethdst_addr, firewall_config.mac_addr, ETH_HWADDR_LEN);
+    memcpy(arp_response_pkt.ethsrc_addr, mac, ETH_HWADDR_LEN);
     arp_response_pkt.type = HTONS(ETH_TYPE_ARP);
-    arp_response_pkt.hwtype = HTONS(ETH_HWADDR_LEN);
+    // ARP packet
+    arp_response_pkt.hwtype = HTONS(ETH_HWTYPE);
     arp_response_pkt.proto = HTONS(ETH_TYPE_IP);
     arp_response_pkt.hwlen = ETH_HWADDR_LEN;
     arp_response_pkt.protolen = IPV4_PROTO_LEN;
     arp_response_pkt.opcode = HTONS(ETHARP_OPCODE_REPLY);
-    memcpy(&arp_response_pkt.hwsrc_addr, &mac, ETH_HWADDR_LEN);
+    memcpy(arp_response_pkt.hwsrc_addr, mac, ETH_HWADDR_LEN);
     arp_response_pkt.ipsrc_addr = ip;
-    memcpy(&arp_response_pkt.hwdst_addr, &firewall_config.mac_addr, ETH_HWADDR_LEN);
+    memcpy(arp_response_pkt.hwdst_addr, firewall_config.mac_addr, ETH_HWADDR_LEN);
     arp_response_pkt.ipdst_addr = firewall_config.ip;
     memset(&arp_response_pkt.padding, 0, 10);
 }
@@ -143,21 +146,23 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
     /* Check is this is an arp request before copying into a DMA buffer */
     struct ethernet_header *eth_hdr = (struct ethernet_header *)p->payload;
     if (eth_hdr->type == HTONS(ETH_TYPE_ARP)) {
-        arphdr_t *arp_hdr = (arphdr_t *)p->next->payload;
+        arp_packet_t *arp_hdr = (arp_packet_t *)p->payload;
         if (arp_hdr->opcode == HTONS(ETHARP_OPCODE_REQUEST)) {
-
+            // Check if the ip is the same as has been assigned to this interface. If it is,
+            // this packet is most likely an ARP probe. We should discard.
+            if (arp_hdr->ipdst_addr != firewall_config.ip) {
+                char buf[16];
                 /* This is an arp request, don't transmit through the network */
                 arp_request_t request = {arp_hdr->ipdst_addr, {0}, false};
                 int err = arp_enqueue_request(state.arp_queue, request);
                 if (err) {
-                    dlog("Could not enqueue arp request, queue is full");
+                    printf("Could not enqueue arp request, queue is full");
                     return ERR_MEM;
                 }
                 notify_arp = true;
-
-                /* Successfully emulated sending out an ARP request */
-                return ERR_OK;
-
+            }
+            /* Successfully emulated sending out an ARP request */
+            return ERR_OK;
         }
     }
 
@@ -193,7 +198,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
 }
 
 static void netif_status_callback(struct netif *netif) {
-    dlog("Netif is up now! IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
+    dlog("Netif is up now for MAC[%x]! IP address for netif %s is: %s", netif->hwaddr[5], netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
 }
 
 static err_t ethernet_init(struct netif *netif)
@@ -205,7 +210,7 @@ static err_t ethernet_init(struct netif *netif)
 
     state_t *data = netif->state;
 
-    sddf_memcpy(netif->hwaddr, net_config.mac_addr, 6);
+    sddf_memcpy(netif->hwaddr, firewall_config.mac_addr, 6);
 
     netif->mtu = ETHER_MTU;
     netif->hwaddr_len = ETHARP_HWADDR_LEN;
@@ -228,10 +233,10 @@ void init_networking(void) {
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
-    sddf_memcpy(state.mac, net_config.mac_addr, 6);
+    sddf_memcpy(state.mac, firewall_config.mac_addr, 6);
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
-    struct ip4_addr netmask, ipaddr, gw, multicast, macbook;
+    struct ip4_addr netmask, ipaddr, gw, multicast;
     ipaddr_aton("0.0.0.0", &gw);
     ipaddr_aton("192.168.33.0", &ipaddr);
     ipaddr_aton("0.0.0.0", &multicast);
@@ -290,7 +295,8 @@ void mpnet_process_arp(void) {
             fill_arp(response.ip, response.mac_addr);
             if (FIREWALL_DEBUG_OUTPUT) {
                 // TODO: Add more logging output
-                dlog("Dequeuing ARP response for ip %u -> obtained MAC[0] = %x, MAC[5] = %x\n", response.ip, response.mac_addr[0], response.mac_addr[5]);
+                char buf[16];
+                dlog("Dequeuing ARP response for ip %s -> obtained MAC[0] = %x, MAC[5] = %x\n", ipaddr_to_string(response.ip, buf, 16), response.mac_addr[0], response.mac_addr[5]);
             }
 
             /* Input packet into lwip stack */
@@ -332,7 +338,7 @@ void mpnet_process_rx(void) {
             buffer.len,
             PBUF_REF,
             &custom_pbuf_offset->custom,
-            (void *)(buffer.io_or_offset + net_config.rx_data.vaddr),
+            (void *)(buffer.io_or_offset + firewall_config.data.vaddr),
             NET_BUFFER_SIZE
         );
 

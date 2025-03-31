@@ -97,6 +97,7 @@ typedef struct firewall_filter_config {
 
 typedef struct firewall_webserver_config {
     uint8_t mac_addr[ETH_HWADDR_LEN];
+    uint8_t filter_iface_id[2 * FIREWALL_MAX_FILTERS];
     uint32_t ip;
     firewall_connection_resource_t rx_active;
     region_resource_t data;

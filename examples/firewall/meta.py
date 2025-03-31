@@ -8,6 +8,7 @@ from os import path
 from dataclasses import dataclass
 from typing import List
 from sdfgen import SystemDescription, Sddf, DeviceTree
+from ctypes import *
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
@@ -47,6 +48,8 @@ filter_rule_region_size = round_up_to_Page(filter_rule_capacity * 28)
 instances_capacity = 512
 instances_region_size = round_up_to_Page(instances_capacity * 20)
 
+max_conns = 61
+
 EXT_IDX = 0
 INT_IDX = 1
 
@@ -55,13 +58,13 @@ FILTER_ACTION_DROP = 2
 FILTER_ACTION_CONNECT = 3
 
 macs = [
-    [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x10], # External network, ETH1
-    [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x18] # Internal network, ETH2
+    [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x15], # External network, ETH1
+    [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x1d] # Internal network, ETH2
 ]
 
 ips = [
-    3321892106, # 10.13.0.198
-    2271424 # 192.168.34.0
+    3338669322, # 10.13.0.199
+    2205888 # 192.168.33.0
 ]
 
 arp_responder_protocol = 0x92
@@ -106,137 +109,206 @@ BOARDS: List[Board] = [
     ),
 ]
 
+class RegionResourceStruct(LittleEndianStructure):
+    _fields_ = [("vaddr", c_uint64),
+                 ("size", c_uint64)]
+
+class DeviceRegionResourceStruct(LittleEndianStructure):
+    _fields_ = [("region", RegionResourceStruct),
+                  ("io_addr", c_uint64)]
+
+class FirewallConnectionResourceStruct(LittleEndianStructure):
+    _fields_ = [("queue", RegionResourceStruct),
+                 ("capacity", c_uint16),
+                 ("ch", c_uint8)]
+
+class FirewallDataConnectionResourceStruct(LittleEndianStructure):
+    _fields_ = [("conn", FirewallConnectionResourceStruct),
+                  ("data", DeviceRegionResourceStruct)]
+
+class FirewallNetVirtTxConfigStruct(LittleEndianStructure):
+    _fields_ = [("active_clients", FirewallDataConnectionResourceStruct * max_conns),
+                  ("num_active_clients", c_uint8),
+                  ("free_clients", FirewallDataConnectionResourceStruct * max_conns),
+                  ("num_free_clients", c_uint8)]
+
+class FirewallNetVirtRxConfigStruct(LittleEndianStructure):
+    _fields_ = [("active_client_protocols", c_uint16 * max_conns),
+                  ("free_clients", FirewallConnectionResourceStruct * max_conns),
+                  ("num_free_clients", c_uint8)]
+
+class FirewallArpRequesterConfigStruct(LittleEndianStructure):
+    _fields_ = [("mac_addr", c_uint8 * 6),
+                 ("ip", c_uint32),
+                 ("clients", FirewallConnectionResourceStruct * 2),
+                 ("num_arp_clients", c_uint8),
+                 ("arp_cache", RegionResourceStruct),
+                 ("arp_cache_capacity", c_uint16)]
+
+class FirewallArpResponderConfigStruct(LittleEndianStructure):
+    _fields_ = [("mac_addr", c_uint8 * 6),
+                  ("ip", c_uint32)]
+
+class FirewallWebserverRouterConfigStruct(LittleEndianStructure):
+    _fields_ = [("routing_ch", c_uint8),
+                  ("routing_table", RegionResourceStruct),
+                  ("routing_table_capacity", c_uint16)]
+
+class FirewallRouterConfigStruct(LittleEndianStructure):
+    _fields_ = [("mac_addr", c_uint8 * 6),
+                  ("ip", c_uint32),
+                  ("rx_free", FirewallConnectionResourceStruct),
+                  ("rx_active", FirewallConnectionResourceStruct),
+                  ("tx_active", FirewallConnectionResourceStruct),
+                  ("data", RegionResourceStruct),
+                  ("arp_queue", FirewallConnectionResourceStruct),
+                  ("arp_cache", RegionResourceStruct),
+                  ("arp_cache_capacity", c_uint16),
+                  ("packet_queue", RegionResourceStruct),
+                  ("webserver", FirewallWebserverRouterConfigStruct),
+                  ("filters", FirewallConnectionResourceStruct * max_conns),
+                  ("num_filters", c_uint8)]
+
+class FirewallWebserverFilterConfigStruct(LittleEndianStructure):
+    _fields_ = [("protocol", c_uint16),
+                  ("ch", c_uint8),
+                  ("default_action", c_uint8),
+                  ("rules", RegionResourceStruct)]
+
+class FirewallFilterConfigStruct(LittleEndianStructure):
+    _fields_ = [("mac_addr", c_uint8 * 6),
+                  ("ip", c_uint32),
+                  ("rules_capacity", c_uint16),
+                  ("instances_capacity", c_uint16),
+                  ("router", FirewallConnectionResourceStruct),
+                  ("webserver", FirewallWebserverFilterConfigStruct),
+                  ("internal_instances", RegionResourceStruct),
+                  ("external_instances", RegionResourceStruct)]
+
+class FirewallWebserverConfigStruct(LittleEndianStructure):
+    _fields_ = [("mac_addr", c_uint8 * 6),
+                  ("filter_iface_id", c_uint8 * (max_conns * 2)),
+                  ("ip", c_uint32),
+                  ("rx_active", FirewallConnectionResourceStruct),
+                  ("data", RegionResourceStruct),
+                  ("routers", FirewallWebserverRouterConfigStruct * 2),
+                  ("rx_free", FirewallConnectionResourceStruct),
+                  ("arp_queue", FirewallConnectionResourceStruct),
+                  ("filters", FirewallWebserverFilterConfigStruct * (max_conns * 2)),
+                  ("num_filters", c_uint8),
+                  ("rules_capacity", c_uint16)]
+
+
+class Serializable():
+    def serialise(self):
+        return bytes(self.to_struct())
+
 # Largest element = 8
-class FirewallRegionResource:
+class FirewallRegionResource(Serializable):
     def __init__(self, vaddr: int, size: int):
         self.vaddr = vaddr
         self.size = size
-    def serialise(self) -> bytes:
-        pack_str = "<QQ"
-        return struct.pack(pack_str, self.vaddr, self.size)
+
+    def to_struct(self) -> RegionResourceStruct:
+        return RegionResourceStruct(self.vaddr, self.size)
 
 # Largest element = 8
-class FirewallDeviceRegionResource:
+class FirewallDeviceRegionResource(Serializable):
     def __init__(self, region: FirewallRegionResource, io_addr: int):
         self.region = region
         self.io_addr = io_addr
-    def serialise(self) -> bytes:
-        region_bytes = self.region.serialise()
-        pack_str = "<Q"
-        return region_bytes + struct.pack(pack_str, self.io_addr)
+
+    def to_struct(self) -> DeviceRegionResourceStruct:
+        return DeviceRegionResourceStruct(self.region.to_struct(), self.io_addr)
+
 
 # Largest element = 8
-class FirewallConnectionResource:
+class FirewallConnectionResource(Serializable):
     def __init__(self, queue: FirewallRegionResource, capacity: int, ch: int):
         self.queue = queue
         self.capacity = capacity
         self.ch = ch
-    def serialise(self) -> bytes:
-        queue_bytes = self.queue.serialise()
-        pack_str = "<HBxxxxx"
-        return queue_bytes + struct.pack(pack_str, self.capacity, self.ch)
+
+    def to_struct(self) -> FirewallConnectionResourceStruct:
+        return FirewallConnectionResourceStruct(self.queue.to_struct(), self.capacity, self.ch)
 
 # Largest element = 8
-class FirewallDataConnectionResource:
+class FirewallDataConnectionResource(Serializable):
     def __init__(self, conn: FirewallConnectionResource, data: FirewallDeviceRegionResource):
         self.conn = conn
         self.data = data
-    def serialise(self) -> bytes:
-        '''
-        QQHBxxxxxQQQ
-        '''
-        return self.conn.serialise() + self.data.serialise()
+
+    def to_struct(self) -> FirewallDataConnectionResourceStruct:
+        return FirewallDataConnectionResourceStruct(self.conn.to_struct(), self.data.to_struct())
 
 # Largest element = 8
-class FirewallNetVirtTxConfig:
+class FirewallNetVirtTxConfig(Serializable):
     def __init__(self, active_clients: List[FirewallDataConnectionResource], free_clients: List[FirewallDataConnectionResource]):
         self.active_clients = active_clients
         self.free_clients = free_clients
         self.section_name = "firewall_net_virt_tx_config"
-    def serialise(self) -> bytes:
-        active_client_bytes = bytes()
-        for client in self.active_clients:
-            ''' QQHBxxxxxQQQ '''
-            active_client_bytes += client.serialise()
-        active_client_bytes = active_client_bytes.ljust(61 * 6 * 8, b'\0')
-        active_num_bytes = struct.pack("<Bxxxxxxx", len(self.active_clients))
-        free_client_bytes = bytes()
-        for client in self.free_clients:
-            ''' QQHBxxxxxQQQ '''
-            free_client_bytes += client.serialise()
-        free_client_bytes = free_client_bytes.ljust(61 * 6 * 8, b'\0')
-        free_num_bytes = struct.pack("<Bxxxxxxx", len(self.free_clients))
-        return active_client_bytes + active_num_bytes + free_client_bytes + free_num_bytes
+
+    def to_struct(self) -> FirewallNetVirtTxConfigStruct:
+        c_active_clients = [x.to_struct() for x in self.active_clients] + ((max_conns - len(self.active_clients)) * [FirewallDataConnectionResourceStruct()])
+        c_free_clients = [x.to_struct() for x in self.free_clients] + ((max_conns - len(self.free_clients)) * [FirewallDataConnectionResourceStruct()])
+        return FirewallNetVirtTxConfigStruct(convert_to_c_array(FirewallDataConnectionResourceStruct, max_conns, self.active_clients), len(self.active_clients),
+                                             convert_to_c_array(FirewallDataConnectionResourceStruct, max_conns, self.free_clients), len(self.free_clients))
 
 # Largest element = 8
-class FirewallNetVirtRxConfig:
+class FirewallNetVirtRxConfig(Serializable):
     def __init__(self, active_client_protocols: List[int], free_clients: List[FirewallConnectionResource]):
         self.active_client_protocols = active_client_protocols
         self.free_clients = free_clients
         self.section_name = "firewall_net_virt_rx_config"
-    def serialise(self) -> bytes:
-        protocol_bytes = bytes()
-        for protocol in self.active_client_protocols:
-            protocol_bytes += struct.pack("<H", protocol)
-        protocol_bytes = protocol_bytes.ljust(61 * 2 + 6, b'\0')
-        client_bytes = bytes()
-        for client in self.free_clients:
-            ''' QQHBxxxxx '''
-            client_bytes += client.serialise()
-        client_bytes = client_bytes.ljust(61*3*8, b'\0')
-        pack_str = "<Bxxxxxxx"
-        return protocol_bytes + client_bytes + struct.pack(pack_str, len(self.free_clients))
+
+    def to_struct(self) -> FirewallNetVirtRxConfigStruct:
+        self.active_client_protocols += [0] * (max_conns - len(self.active_client_protocols))
+        return FirewallNetVirtRxConfigStruct((c_uint16 * max_conns)(*self.active_client_protocols),
+                                             convert_to_c_array(FirewallConnectionResourceStruct, max_conns, self.free_clients),
+                                             len(self.free_clients))
 
 # Largest element = 8
-class FirewallArpRequesterConfig:
+class FirewallArpRequesterConfig(Serializable):
     def __init__(self, mac_addr: List[int], ip: int, clients: List[FirewallConnectionResource], arp_cache: FirewallRegionResource):
         self.mac_addr = mac_addr
         self.ip = ip
         self.clients = clients
         self.arp_cache = arp_cache
         self.section_name = "firewall_arp_requester_config"
-    def serialise(self) -> bytes:
-        mac_bytes = bytes()
-        for m in self.mac_addr:
-            mac_bytes += struct.pack("<B", m)
-        mac_bytes = mac_bytes.ljust(8, b'\0')
-        ip_bytes = struct.pack("<Lxxxx", self.ip)
-        client_bytes = bytes()
-        for client in self.clients:
-            client_bytes += client.serialise()
-        client_bytes = client_bytes.ljust(2*3*8, b'\0')
-        num_clients_bytes = struct.pack("<Bxxxxxxx", len(self.clients))
-        cache_bytes = self.arp_cache.serialise()
-        cache_capacity_bytes = struct.pack("<Hxxxxxx", arp_cache_entries)
-        return mac_bytes + ip_bytes + client_bytes + num_clients_bytes + cache_bytes + cache_capacity_bytes
+
+    def to_struct(self) -> FirewallArpRequesterConfigStruct:
+        return FirewallArpRequesterConfigStruct(
+            (c_uint8 * 6)(*self.mac_addr),
+            self.ip,
+            convert_to_c_array(FirewallConnectionResourceStruct, 2, self.clients),
+            len(self.clients),
+            self.arp_cache.to_struct(),
+            arp_cache_entries
+        )
+
 
 # Largest element = 4
-class FirewallArpResponderConfig:
+class FirewallArpResponderConfig(Serializable):
     def __init__(self, mac_addr: List[int], ip: int):
         self.mac_addr = mac_addr
         self.ip = ip
         self.section_name = "firewall_arp_responder_config"
-    def serialise(self) -> bytes:
-        mac_bytes = bytes()
-        for m in self.mac_addr:
-            mac_bytes += struct.pack("<B", m)
-        mac_bytes = mac_bytes.ljust(8, b'\0')
-        ip_bytes = struct.pack("<L", self.ip)
-        return mac_bytes + ip_bytes
+
+    def to_struct(self) -> FirewallArpRequesterConfigStruct:
+        return FirewallArpResponderConfigStruct((c_uint8 * 6)(*self.mac_addr), self.ip)
+
 
 # Largest element = 8
-class FirewallWebserverRouterConfig:
+class FirewallWebserverRouterConfig(Serializable):
     def __init__(self, routing_ch: int, routing_table: FirewallRegionResource):
         self.routing_ch = routing_ch
         self.routing_table = routing_table
-    def serialise(self) -> bytes:
-        routing_ch_bytes = struct.pack("<Bxxxxxxx", self.routing_ch)
-        routing_table_bytes = self.routing_table.serialise()
-        table_capacity_bytes = struct.pack("<Hxxxxxx", routing_table_capacity)
-        return routing_ch_bytes + routing_table_bytes + table_capacity_bytes
+
+    def to_struct(self) -> FirewallWebserverRouterConfigStruct:
+        return FirewallWebserverRouterConfigStruct(self.routing_ch, self.routing_table.to_struct(), routing_table_capacity)
 
 # Largest element = 8
-class FirewallRouterConfig:
+class FirewallRouterConfig(Serializable):
     def __init__(self, mac_addr: List[int], ip: int, rx_free: FirewallConnectionResource, rx_active, tx_active: FirewallConnectionResource,
                  data: FirewallRegionResource, arp_queue: FirewallConnectionResource, arp_cache: FirewallRegionResource,
                  packet_queue: FirewallRegionResource, webserver: FirewallWebserverRouterConfig,
@@ -253,48 +325,45 @@ class FirewallRouterConfig:
         self.webserver = webserver
         self.filters = filters
         self.section_name = "firewall_router_config"
-    def serialise(self) -> bytes:
-        router_config = bytes()
-        for m in self.mac_addr:
-            router_config += struct.pack("<B", m)
-        router_config = router_config.ljust(8, b'\0')
-        router_config += struct.pack("<Lxxxx", self.ip)
-        router_config += self.rx_free.serialise()
-        if self.rx_active:
-            router_config += self.rx_active.serialise()
-        else:
-            pack_str = "<" + "x" * 3*8
-            router_config += struct.pack(pack_str)
-        router_config += self.tx_active.serialise()
-        router_config += self.data.serialise()
-        router_config += self.arp_queue.serialise()
-        router_config += self.arp_cache.serialise()
-        router_config += struct.pack("<Hxxxxxx", arp_cache_entries)
-        router_config += self.packet_queue.serialise()
-        router_config += self.webserver.serialise()
-        filter_bytes = bytes()
-        for filter_conn in self.filters:
-            filter_bytes += filter_conn.serialise()
-        filter_bytes = filter_bytes.ljust(61*3*8, b'\0')
-        router_config += filter_bytes
-        router_config += struct.pack("<Bxxxxxxx", len(self.filters))
-        return router_config
+
+    def to_struct(self) -> FirewallRouterConfigStruct:
+        c_filters = [x.to_struct() for x in self.filters] + ((max_conns - len(self.filters)) * [FirewallConnectionResourceStruct()])
+
+        return FirewallRouterConfigStruct(
+            (c_uint8 * 6)(*self.mac_addr),
+            self.ip,
+            self.rx_free.to_struct(),
+            FirewallConnectionResourceStruct() if self.rx_active == None else self.rx_active.to_struct(),
+            self.tx_active.to_struct(),
+            self.data.to_struct(),
+            self.arp_queue.to_struct(),
+            self.arp_cache.to_struct(),
+            arp_cache_entries,
+            self.packet_queue.to_struct(),
+            self.webserver.to_struct(),
+            convert_to_c_array(FirewallConnectionResourceStruct, max_conns, self.filters),
+            len(self.filters)
+        )
 
 
 # Largest element = 8
-class FirewallWebserverFilterConfig:
+class FirewallWebserverFilterConfig(Serializable):
     def __init__(self, protocol: int, ch: int, default_action: int, rules: FirewallRegionResource):
         self.protocol = protocol
         self.ch = ch
         self.default_action = default_action
         self.rules = rules
-    def serialise(self) -> bytes:
-        filter_config = struct.pack("<HBBxxxx", self.protocol, self.ch, self.default_action)
-        return filter_config + self.rules.serialise()
-    
+
+    def to_struct(self) -> FirewallWebserverFilterConfigStruct:
+        return FirewallWebserverFilterConfigStruct(
+            self.protocol,
+            self.ch,
+            self.default_action,
+            self.rules.to_struct()
+        )
 
 # Largest element = 8
-class FirewallFilterConfig:
+class FirewallFilterConfig(Serializable):
     def __init__(self, mac_addr: List[int], ip: int, router: FirewallConnectionResource, webserver: FirewallWebserverFilterConfig,
                  internal_instances: FirewallRegionResource, external_instances: FirewallRegionResource):
         self.mac_addr = mac_addr
@@ -304,25 +373,31 @@ class FirewallFilterConfig:
         self.internal_instances = internal_instances
         self.external_instances = external_instances
         self.section_name = "firewall_filter_config"
-    def serialise(self) -> bytes:
-        mac_bytes = bytes()
-        for m in self.mac_addr:
-            mac_bytes += struct.pack("<B", m)
-        mac_bytes = mac_bytes.ljust(8, b'\0')
-        ip_bytes = struct.pack("<L", self.ip)
-        num_rules_instances_bytes = struct.pack("<HH", filter_rule_capacity, instances_capacity)
-        router_bytes = self.router.serialise()
-        webserver_bytes = self.webserver.serialise()
-        internal_instances_bytes = self.internal_instances.serialise()
-        external_instances_bytes = self.external_instances.serialise()
-        return mac_bytes + ip_bytes + num_rules_instances_bytes + router_bytes + webserver_bytes + internal_instances_bytes + external_instances_bytes
+
+    def to_struct(self) -> FirewallFilterConfigStruct:
+        return FirewallFilterConfigStruct(
+            (c_uint8 * 6)(*self.mac_addr),
+            self.ip,
+            filter_rule_capacity,
+            instances_capacity,
+            self.router.to_struct(),
+            self.webserver.to_struct(),
+            self.internal_instances.to_struct(),
+            self.external_instances.to_struct(),
+        )
+
+
+def convert_to_c_array(convert_type, max_length, array):
+    c_arr = [x.to_struct() for x in array] + ((max_length - len(array)) * [convert_type()])
+    return (convert_type * max_length)(*c_arr)
 
 # Largest element = 8
-class FirewallWebserverConfig:
-    def __init__(self, mac_addr: List[int], ip: int, rx_active: FirewallConnectionResource, data: FirewallRegionResource,
+class FirewallWebserverConfig(Serializable):
+    def __init__(self, mac_addr: List[int], filters_iface: List[int], ip: int, rx_active: FirewallConnectionResource, data: FirewallRegionResource,
                  routers: List[FirewallWebserverRouterConfig], rx_free: FirewallConnectionResource, arp_queue: FirewallConnectionResource,
-                 filters: FirewallWebserverFilterConfig):
+                 filters: List[FirewallWebserverFilterConfig]):
         self.mac_addr = mac_addr
+        self.filters_iface = filters_iface
         self.ip = ip
         self.rx_active = rx_active
         self.data = data
@@ -331,25 +406,22 @@ class FirewallWebserverConfig:
         self.arp_queue = arp_queue
         self.filters = filters
         self.section_name = "firewall_webserver_config"
-    def serialise(self) -> bytes:
-        mac_bytes = bytes()
-        for m in self.mac_addr:
-            mac_bytes += struct.pack("<B", m)
-        mac_bytes = mac_bytes.ljust(8, b'\0')
-        ip_bytes = struct.pack("<Lxxxx", self.ip)
-        rx_active_bytes = self.rx_active.serialise()
-        data_bytes = self.data.serialise()
-        router_bytes = bytes()
-        for router in self.routers:
-            router_bytes += router.serialise()
-        rx_free_bytes = self.rx_free.serialise()
-        arp_queue_bytes = self.arp_queue.serialise()
-        filter_bytes = bytes()
-        for filter_conn in self.filters:
-            filter_bytes += filter_conn.serialise()
-        filter_bytes = filter_bytes.ljust(2*61*3*8, b'\0')
-        num_filters_rules_bytes = struct.pack("<BxHxxxx", len(self.filters), filter_rule_capacity)
-        return mac_bytes + ip_bytes + rx_active_bytes + data_bytes + router_bytes + rx_free_bytes + arp_queue_bytes + filter_bytes + num_filters_rules_bytes
+
+    def to_struct(self) -> FirewallWebserverConfigStruct:
+        self.filters_iface += [0] * (2 * max_conns - len(self.filters_iface))
+
+        return FirewallWebserverConfigStruct(
+            (c_uint8 * 6)(*self.mac_addr),
+            (c_uint8 * (max_conns * 2))(*self.filters_iface),
+            self.ip,
+            self.rx_active.to_struct(),
+            self.data.to_struct(),
+            convert_to_c_array(FirewallWebserverRouterConfigStruct, 2, self.routers),
+            self.rx_free.to_struct(),
+            self.arp_queue.to_struct(),
+            convert_to_c_array(FirewallWebserverFilterConfigStruct, 2 * max_conns, self.filters),
+            len(self.filters)
+        )
 
 # Creates a new elf with elf_number as prefix. Adds ".elf" to elf strings
 def copy_elf(source_elf: str, new_elf: str, elf_number = None):
@@ -393,7 +465,7 @@ def firewall_region(pd: SystemDescription.ProtectionDomain, mr: SystemDescriptio
     vaddr = next_vaddr()
     pd.add_map(Map(mr, vaddr, perms=perms))
     region_resource = FirewallRegionResource(vaddr, region_size)
-    
+
     return region_resource
 
 # Map a physical mr into a pd to create a firewall device region
@@ -566,6 +638,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     # Create webserver config
     webserver_config = FirewallWebserverConfig(
         network["mac"],
+        [],
         network["ip"],
         router_webserver_conn[1],
         webserver_data_region,
@@ -647,7 +720,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         routing_table = firewall_shared_region(router, webserver, "rw", "r", "routing_table", routing_table_size)
 
         # Create pp channel for routing table updates
-        router_update_ch = Channel(webserver, router)
+        router_update_ch = Channel(webserver, router, pp_a=True)
         sdf.add_channel(router_update_ch)
 
         # Create router webserver config
@@ -690,7 +763,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             filter_rules = firewall_shared_region(filter_pd, webserver, "rw", "r", "filter_rules", filter_rule_region_size)
 
             # Create pp channel between webserver and filter for rule updates
-            filter_update_ch = Channel(webserver, filter_pd)
+            filter_update_ch = Channel(webserver, filter_pd, pp_a = True)
             sdf.add_channel(filter_update_ch)
 
             # Create webserver configs
@@ -720,6 +793,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
             network["configs"][router].filters.append((filter_router_conn[1]))
             webserver_config.filters.append(webserver_filter_config)
+            webserver_config.filters_iface.append(network["num"])
 
         # Make router and arp components serial clients
         serial_system.add_client(router)
@@ -728,7 +802,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         network["in_net"].connect()
         network["in_net"].serialise_config(network["out_dir"])
-    
+
     # Add webserver as a free client of interior rx virt
     networks[INT_IDX]["configs"][networks[INT_IDX]["in_virt"]].free_clients.append(webserver_in_virt_conn[1])
 
