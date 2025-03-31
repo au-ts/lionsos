@@ -420,7 +420,8 @@ class FirewallWebserverConfig(Serializable):
             self.rx_free.to_struct(),
             self.arp_queue.to_struct(),
             convert_to_c_array(FirewallWebserverFilterConfigStruct, 2 * max_conns, self.filters),
-            len(self.filters)
+            len(self.filters),
+            filter_rule_capacity,
         )
 
 # Creates a new elf with elf_number as prefix. Adds ".elf" to elf strings
@@ -665,7 +666,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             output_in_virt_conn[0],
             router_out_virt_conn[1].data
         )
-    
+
         # Create output virt config
         network["configs"][out_virt] = FirewallNetVirtTxConfig(
             [router_out_virt_conn[1]],
@@ -802,6 +803,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         network["in_net"].connect()
         network["in_net"].serialise_config(network["out_dir"])
+
 
     # Add webserver as a free client of interior rx virt
     networks[INT_IDX]["configs"][networks[INT_IDX]["in_virt"]].free_clients.append(webserver_in_virt_conn[1])

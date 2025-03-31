@@ -46,7 +46,7 @@ typedef struct arp_queue {
     /* index to remove from */
     uint16_t head;
    /* arp array */
-    arp_request_t queue[];
+    arp_request_t queue[FIREWALL_MAX_ARP_QUEUE_CAPACITY];
 } arp_queue_t;
 
 typedef struct arp_queue_handle {

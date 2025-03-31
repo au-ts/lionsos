@@ -362,6 +362,7 @@ STATIC mp_obj_t rule_delete(mp_obj_t rule_id_in, mp_obj_t protocol, mp_obj_t fil
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(rule_delete_obj, rule_delete);
 
 STATIC mp_obj_t rule_count(mp_obj_t protocol, mp_obj_t filter) {
+
     const char *protocol_var = mp_obj_str_get_str(protocol);
     int protocol_id = 0;
     if (!sddf_strcmp(protocol_var, "icmp")) {
@@ -411,7 +412,7 @@ STATIC mp_obj_t rule_count(mp_obj_t protocol, mp_obj_t filter) {
         }
     }
 
-    sddf_dprintf("\t\tWe got %d rules for iface %d. Protocol: %x!\n", index_cnt, iface, protocol_id);
+    sddf_dprintf("\t\tWe got %d rules for iface %d!!!!!!\n", index_cnt, iface);
     return mp_obj_new_int_from_uint(index_cnt);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(rule_count_obj, rule_count);
