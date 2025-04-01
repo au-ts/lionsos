@@ -127,7 +127,6 @@ def set_default_action(request, protocol, action, filter):
 @app.route('/api/rules/<string:protocol>', methods=['POST'])
 def add_rule(request, protocol):
     try:
-        print(f"This is the protocol string: {protocol}. This is the type of var: {type(protocol)}")
         data = request.json
         _filter = data.get("filter")
         src_ip = data.get("src_ip")
@@ -160,6 +159,7 @@ def add_rule(request, protocol):
 
 @app.route('/api/rules/<string:protocol>/<int:rule_id>/<string:filter>', methods=['DELETE'])
 def delete_rule(request, protocol, rule_id, filter):
+    print(f"WE ARE ATTEMPTING TO DELETE THE RULE HERE?--- {filter}")
     try:
         if protocol not in PROTOCOLS:
             return {"error": "Invalid protocol given"}, 400
@@ -598,15 +598,30 @@ def rules(request, protocol):
               } else {
                 data.rules.forEach(function(rule) {
                   var row = document.createElement('tr');
-                  row.innerHTML = "<td>" + rule.id + "</td>" +
-                                  "<td class='monospace'>" + rule.src_ip + "</td>" +
-                                  "<td class='monospace'>" + rule.src_port + "</td>" +
-                                  "<td class='monospace'>" + rule.dest_ip + "</td>" +
-                                  "<td class='monospace'>" + rule.dest_port + "</td>" +
-                                  "<td class='monospace'>" + rule.src_subnet + "</td>" +
-                                  "<td class='monospace'>" + rule.dest_subnet + "</td>" +
-                                  "<td>" + rule.action + "</td>" +
-                                  "<td><button onclick='deleteRule(" + rule.id + ")'>Delete</button></td>";
+                  let id = row.insertCell();
+                  id.textContent = rule.id;
+                  let srcIp = row.insertCell();
+                  srcIp.textContent = rule.src_ip;
+                  let srcPort = row.insertCell();
+                  srcPort.textContent = rule.src_port;
+                  let destIp = row.insertCell();
+                  destIp.textContent = rule.dest_ip;
+                  let destPort = row.insertCell();
+                  destPort.textContent = rule.dest_port;
+                  let srcSubnet = row.insertCell();
+                  srcSubnet.textContent = rule.src_subnet;
+                  let destSubnet = row.insertCell();
+                  destSubnet.textContent = rule.dest_subnet;
+                  let action = row.insertCell();
+                  action.textContent = rule.action;
+                  let buttonCell = row.insertCell();
+                  let button = document.createElement("button");
+                  button.textContent = "Delete";
+                  button.addEventListener("click", () => {
+                    deleteRule(rule.id, type);
+                  });
+                  buttonCell.appendChild(button);
+                  console.log("This is inner html:" + row.innerHTML);
                   rulesBody.appendChild(row);
                 });
               }
@@ -618,7 +633,7 @@ def rules(request, protocol):
             });
         }
 
-        window.deleteRule = function(ruleId) {
+        window.deleteRule = function(ruleId, type) {
           fetch(`/api/rules/INSERT_PROTOCOL/${ruleId}/${type}`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' }
@@ -676,9 +691,9 @@ def rules(request, protocol):
           var filterExternal = document.getElementById('new-filter-external').checked;
           var filter;
           if (filterInternal) {
-            filter = 0;
-          } else if (filterExternal) {
             filter = 1;
+          } else if (filterExternal) {
+            filter = 0;
           } else {
             alert("uh oh");
             return;

@@ -421,7 +421,7 @@ class FirewallWebserverConfig(Serializable):
             self.arp_queue.to_struct(),
             convert_to_c_array(FirewallWebserverFilterConfigStruct, 2 * max_conns, self.filters),
             len(self.filters),
-            filter_rule_capacity,
+            filter_rule_capacity
         )
 
 # Creates a new elf with elf_number as prefix. Adds ".elf" to elf strings
@@ -816,14 +816,12 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     # Create filter instance regions
     for (protocol, filter_pd) in networks[INT_IDX]["filters"].items():
-        
         mirror_filter = networks[EXT_IDX]["filters"][protocol]
         int_instances = firewall_shared_region(filter_pd, mirror_filter, "rw", "r", "instances", instances_region_size)
         ext_instances = firewall_shared_region(mirror_filter, filter_pd, "rw", "r", "instances", instances_region_size)
 
         networks[INT_IDX]["configs"][filter_pd].internal_instances = int_instances[0]
         networks[INT_IDX]["configs"][filter_pd].external_instances = ext_instances[1]
-    
         networks[EXT_IDX]["configs"][mirror_filter].internal_instances = ext_instances[0]
         networks[EXT_IDX]["configs"][mirror_filter].external_instances = int_instances[1]
 

@@ -208,21 +208,13 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(route_get_nth_obj, route_get_nth);
 //                         mp_obj_t src_subnet, mp_obj_t dst_ip, mp_obj_t dst_port, mp_obj_t dst_subnet,
 //                         mp_obj_t action) {
 STATIC mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
-    sddf_dprintf("IN RULE ADDDDDD\n");
-
     if (n_args != 9) {
         sddf_dprintf("Wrong amount of args supplied!\n");
-    }
-    if (mp_obj_is_str(args[0])) {
-        sddf_dprintf("Protocol is a string type?\n");
-    } else {
-        sddf_dprintf("protocol is not a string\n");
     }
 
     const char *protocol_var = mp_obj_str_get_str(args[0]);
 
     int protocol_id = 0;
-    sddf_dprintf("This is the protocol var: %s\n", protocol_var);
 
     if (!sddf_strcmp(protocol_var, "icmp")) {
         protocol_id = IPV4_PROTO_ICMP;
@@ -235,36 +227,18 @@ STATIC mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
         mp_raise_OSError(-1);
         return mp_const_none;
     }
-    sddf_dprintf("Casting filter variable\n");
     int filter_var = mp_obj_get_int(args[1]);
-
-    sddf_dprintf("Beginning to cast all of the mp objects\n");
     const char *src_ip_var = mp_obj_str_get_str(args[2]);
-    sddf_dprintf("Got src ip\n");
-    if (mp_obj_is_int(args[3])) {
-        sddf_dprintf("The port var is an int type\n");
-    } else {
-        sddf_dprintf("The port var was not an int type!\n");
-    }
     int src_port_var = mp_obj_get_int(args[3]);
-    sddf_dprintf("Got src port var\n");
     int src_subnet_var = mp_obj_get_int(args[4]);
-    sddf_dprintf("Got src subnet var\n");
     const char *dst_ip_var = mp_obj_str_get_str(args[5]);
-    sddf_dprintf("Got dst ip var\n");
     int dst_port_var = mp_obj_get_int(args[6]);
-    sddf_dprintf("Got dst port var\n");
     int dst_subnet_var = mp_obj_get_int(args[7]);
-    sddf_dprintf("Got dst subnet var\n");
-    sddf_dprintf("Now casting action variable\n");
     int action_var = mp_obj_get_int(args[8]);
     // Find the filter that implements this protocol in this direction.
-    sddf_dprintf("Searching for filter to add to\n");
     for (int i = 0; i < firewall_config.num_filters; i++) {
-        sddf_dprintf("Looping\n");
         if (firewall_config.filters[i].protocol == protocol_id && firewall_config.filter_iface_id[i] == filter_var) {
             // Convert all the strings to integers.
-            sddf_dprintf("Found a protocol and filter match\n");
             uint32_t src_ip_addr = ip_to_int(src_ip_var);
             uint32_t dst_ip_addr = ip_to_int(dst_ip_var);
             // Choosing random value outside of enum range
@@ -287,8 +261,7 @@ STATIC mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
             // TODO: Add in another field to configure the "any port" in both src + dest.
             seL4_SetMR(FILTER_ARG_SRC_ANY_PORT, 0);
             seL4_SetMR(FILTER_ARG_DST_ANY_PORT, 0);
-            sddf_dprintf("Making a ppcall with ch id: %d. Protocol filter is: %x --- Add routre protocol: %x\n", firewall_config.filters[i].ch, firewall_config.filters[i].protocol, protocol_id);
-            microkit_msginfo msginfo = microkit_ppcall(firewall_config.filters[i].ch, microkit_msginfo_new(FIREWALL_ADD_RULE, 9));
+            microkit_msginfo msginfo = microkit_ppcall(firewall_config.filters[i].ch, microkit_msginfo_new(FIREWALL_ADD_RULE, 10));
             uint32_t err = seL4_GetMR(FILTER_RET_ERR);
             if(err) return mp_obj_new_int_from_uint(err);
             uint32_t rule_id = seL4_GetMR(FILTER_RET_RULE_ID);
@@ -303,27 +276,35 @@ STATIC mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR(rule_add_obj, 9, rule_add);
 
 STATIC mp_obj_t rule_delete(mp_obj_t rule_id_in, mp_obj_t protocol, mp_obj_t filter) {
-    uint64_t rule_id = mp_obj_get_int(rule_id_in);
+    uint32_t rule_id = mp_obj_get_int(rule_id_in);
 
     const char *protocol_var = mp_obj_str_get_str(protocol);
     int protocol_id = 0;
-    if (sddf_strcmp(protocol_var, "icmp")) {
+    if (!sddf_strcmp(protocol_var, "icmp")) {
+        sddf_dprintf("We got an icmp filter\n");
         protocol_id = IPV4_PROTO_ICMP;
-    } else if (sddf_strcmp(protocol_var, "udp")) {
+    } else if (!sddf_strcmp(protocol_var, "udp")) {
+        sddf_dprintf("We got a udp filter\n");
         protocol_id = IPV4_PROTO_UDP;
-    } else if (sddf_strcmp(protocol_var, "tcp")) {
+    } else if (!sddf_strcmp(protocol_var, "tcp")) {
+        sddf_dprintf("We got a tcp filter\n");
         protocol_id = IPV4_PROTO_TCP;
     } else {
-        sddf_dprintf("ERR| rule_delete: Unsuppored protocol.\n");
+        sddf_dprintf("ERR| rule_delete: Unsupported protocol.\n");
         mp_raise_OSError(-1);
         return mp_const_none;
     }
 
+    sddf_dprintf("This is the value of protocol id: %d\n", protocol_id);
+
     const char *filter_var = mp_obj_str_get_str(filter);
     int iface = 4;
-    if (sddf_strcmp(filter_var, "external")) {
+    sddf_dprintf("This is the filter: %s\n", filter_var);
+    if (!sddf_strcmp(filter_var, "external")) {
+        sddf_dprintf("We got an external filter\n");
         iface = 0;
-    } else if (sddf_strcmp(filter_var, "internal")) {
+    } else if (!sddf_strcmp(filter_var, "internal")) {
+        sddf_dprintf("We got an internal filter\n");
         iface = 1;
     } else {
         sddf_dprintf("ERR| rule_delete: Invalid interface\n");
@@ -333,29 +314,51 @@ STATIC mp_obj_t rule_delete(mp_obj_t rule_id_in, mp_obj_t protocol, mp_obj_t fil
 
     // Find the list of rules to read from
     firewall_rule_t *rules = NULL;
+    firewall_webserver_filter_config_t filter_config;
 
     for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
         if (firewall_config.filters[i].protocol == protocol_id && firewall_config.filter_iface_id[i] == iface) {
             rules = (firewall_rule_t *) firewall_config.filters[i].rules.vaddr;
+            filter_config = firewall_config.filters[i];
         }
     }
 
-    int index_cnt = 0;
-
-    for (int i = 0; i < firewall_config.rules_capacity; i++) {
-        if (index_cnt == rule_id && rules[i].valid) {
-            // We found our rule index, delete it.
-            seL4_SetMR(FILTER_ARG_RULE_ID, i);
-            microkit_msginfo msginfo = microkit_ppcall(firewall_config.filters[i].ch, microkit_msginfo_new(FIREWALL_DEL_RULE, 1));
-            uint32_t err = seL4_GetMR(FILTER_RET_ERR);
-            return mp_obj_new_int_from_uint(err);
-        } else if (rules[i].valid){
-            index_cnt++;
-        }
+    if (rules == NULL) {
+        sddf_dprintf("ERR| rule_delete: Unable to find protocol on supplied interface\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
     }
+
+
+    if (rules[rule_id].valid) {
+        sddf_dprintf("We found our index %d, rule was valid\n", rule_id);
+        // We found our rule index, delete it.
+        seL4_SetMR(FILTER_ARG_RULE_ID, rule_id);
+        microkit_msginfo msginfo = microkit_ppcall(filter_config.ch, microkit_msginfo_new(FIREWALL_DEL_RULE, 2));
+        uint32_t err = seL4_GetMR(FILTER_RET_ERR);
+        return mp_obj_new_int_from_uint(err);
+    }
+
+    // int index_cnt = 0;
+
+    // for (int i = 0; i < firewall_config.rules_capacity; i++) {
+    //     sddf_dprintf("This is index: %d --- This is index_cnt: %d --- This is rule_id: %d\n", i, index_cnt, rule_id)
+    //     if (index_cnt == rule_id && rules[i].valid) {
+    //         sddf_dprintf("We found our index, rule was valid\n");
+    //         // We found our rule index, delete it.
+    //         seL4_SetMR(FILTER_ARG_RULE_ID, i);
+    //         microkit_msginfo msginfo = microkit_ppcall(filter_config.ch, microkit_msginfo_new(FIREWALL_DEL_RULE, 1));
+    //         uint32_t err = seL4_GetMR(FILTER_RET_ERR);
+    //         return mp_obj_new_int_from_uint(err);
+    //     } else if (index_cnt == rule_id && !rules[i].valid){
+    //         sddf_dprintf("We found our index, but the rule was invalid for some reason?\n")
+    //     } else if (rules[i].valid) {
+    //         index_cnt++;
+    //     }
+    // }
 
     // If we get here, it means that our index was invalid.
-    sddf_dprintf("ERR| rule_delete: Invalid index to delete\n");
+    sddf_dprintf("ERR| rule_delete: Invalid index to delete: %d\n", rule_id);
     mp_raise_OSError(-1);
     return mp_const_none;
 }
@@ -412,7 +415,7 @@ STATIC mp_obj_t rule_count(mp_obj_t protocol, mp_obj_t filter) {
         }
     }
 
-    sddf_dprintf("\t\tWe got %d rules for iface %d!!!!!!\n", index_cnt, iface);
+    sddf_dprintf("rule_count: We got this many rules: %d\n", index_cnt);
     return mp_obj_new_int_from_uint(index_cnt);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(rule_count_obj, rule_count);
@@ -507,7 +510,8 @@ STATIC mp_obj_t rule_get_nth(mp_obj_t protocol, mp_obj_t filter, mp_obj_t rule_i
 
     uint32_t index_cnt = 0;
     bool found_entry = false;
-    for (int i = 0; i < firewall_config.rules_capacity; i++) {
+    int i = 0;
+    for (i = 0; i < firewall_config.rules_capacity; i++) {
         if (index_cnt == rule_idx && rules[i].valid) {
             // We found our rule index
             found_entry = true;
@@ -523,41 +527,39 @@ STATIC mp_obj_t rule_get_nth(mp_obj_t protocol, mp_obj_t filter, mp_obj_t rule_i
         return mp_const_none;
     }
 
-    firewall_rule_t rule = rules[index_cnt];
+    firewall_rule_t rule = rules[i];
 
     if (!rule.valid) {
         sddf_dprintf("Invalid rule\n");
         mp_raise_OSError(-1);
         return mp_const_none;
     }
-
-
     mp_obj_t tuple[10];
     // We use the rule index as the rule ID in the instances. Use the same
     // index as the ID here.
-    tuple[0] = mp_obj_new_int_from_uint(rule_idx);
+    tuple[0] = mp_obj_new_int_from_uint(i);
     char buf[16];
     char src_ip = ipaddr_to_string(rule.src_ip, buf, 16);
-    tuple[1] = mp_obj_new_str(src_ip, sddf_strlen(src_ip));
+    tuple[1] = mp_obj_new_str(buf, sddf_strlen(buf));
     tuple[2] = mp_obj_new_int_from_uint(rule.src_port);
     char dst_ip = ipaddr_to_string(rule.dst_ip, buf, 16);
-    tuple[3] = mp_obj_new_str(dst_ip, sddf_strlen(dst_ip));
+    tuple[3] = mp_obj_new_str(buf, sddf_strlen(buf));
     tuple[4] = mp_obj_new_int_from_uint(rule.dst_port);
     tuple[5] = mp_obj_new_int_from_uint(rule.src_subnet);
     tuple[6] = mp_obj_new_int_from_uint(rule.dst_subnet);
+    tuple[7] = mp_obj_new_int_from_uint(rule.src_port_any);
+    tuple[8] = mp_obj_new_int_from_uint(rule.dst_port_any);
     if (rule.action == FILTER_ACT_ALLOW) {
-       tuple[7] = mp_obj_new_str("ALLOW", 5);
+        tuple[9] = mp_obj_new_str("ALLOW", 5);
     } else if (rule.action == FILTER_ACT_DROP) {
-        tuple[7] = mp_obj_new_str("DROP", 4);
+        tuple[9] = mp_obj_new_str("DROP", 4);
     } else {
-        tuple[7] = mp_obj_new_str("CONNECT", 7);
+        tuple[9] = mp_obj_new_str("CONNECT", 7);
     }
-    tuple[8] = mp_obj_new_int_from_uint(rule.src_port_any);
-    tuple[9] = mp_obj_new_int_from_uint(rule.dst_port_any);
 
     return mp_obj_new_tuple(10, tuple);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(rule_get_nth_obj, rule_get_nth);
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(rule_get_nth_obj, rule_get_nth);
 
 STATIC const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lions_firewall) },

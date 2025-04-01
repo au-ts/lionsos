@@ -115,7 +115,7 @@ static firewall_filter_error_t firewall_filter_add_rule(firewall_filter_state_t 
 {
     firewall_rule_t *empty_slot = NULL;
     for (uint16_t i = 0; i < state->rules_capacity; i++) {
-        firewall_rule_t *rule = state->rules + (i * sizeof(firewall_rule_t));
+        firewall_rule_t *rule = (firewall_rule_t *)(state->rules + i);
 
         if (!rule->valid) {
             if (empty_slot == NULL) {
@@ -158,8 +158,10 @@ static firewall_filter_error_t firewall_filter_add_rule(firewall_filter_state_t 
 
         /* There is a clash! */
         if (action == rule->action) {
+            sddf_dprintf("ERR| filter_add_rule: There is a duplicate!");
             return FILTER_ERR_DUPLICATE;
         } else {
+            sddf_dprintf("ERR| filter_add_rule: There is a clash!");
             return FILTER_ERR_CLASH;
         }
     }
