@@ -5,6 +5,26 @@
 #include <lions/firewall/common.h>
 #include <lions/firewall/queue.h>
 
+/* ID's for router PPC's */
+#define FIREWALL_ADD_ROUTE 0
+#define FIREWALL_DEL_ROUTE 1
+
+/* Enums used for PPC */
+typedef enum {
+    ROUTER_ADD_ARG_DEST_IP = 0,
+    ROUTER_ADD_ARG_SUBNET,
+    ROUTER_ADD_ARG_NEXT_HOP,
+    ROUTER_ADD_ARG_NUM_HOPS
+} router_add_args_t;
+
+typedef enum {
+    ROUTER_DEL_ARG_ID = 0,
+} router_del_args_t;
+
+typedef enum {
+    ROUTER_RET_ERR = 0,
+    ROUTER_RET_ROUTE_ID = 1
+} router_ret_args_t;
 /* Routing table data structures */
 
 typedef enum {
@@ -13,7 +33,7 @@ typedef enum {
 	ROUTING_ERR_DUPLICATE,	    /* Duplicate entry exists */
     ROUTING_ERR_CLASH,          /* Entry clashes with existing entry */
     ROUTING_ERR_INVALID_CHILD,  /* Child node IP does not match parent node IP */
-    ROUTING_ERR_INVALID_NODE    /* Node does not exist */
+    ROUTING_ERR_INVALID_ID    /* Node does not exist */
 } routing_error_t;
 
 typedef enum {
@@ -251,7 +271,8 @@ static routing_error_t routing_table_add_rule(routing_table_t *table,
                                               uint16_t num_hops,
                                               uint32_t ip,
                                               uint8_t subnet,
-                                              uint32_t next_hop)
+                                              uint32_t next_hop,
+                                              uint32_t *id)
 {
     routing_entry_t *empty_slot = NULL;
     for (uint16_t i = 0; i < table->capacity; i++) {
@@ -260,6 +281,7 @@ static routing_error_t routing_table_add_rule(routing_table_t *table,
         if (!entry->valid) {
             if (empty_slot == NULL) {
                 empty_slot = entry;
+                *id = i;
             }
             continue;
         }
@@ -292,6 +314,20 @@ static routing_error_t routing_table_add_rule(routing_table_t *table,
     empty_slot->ip = ip;
     empty_slot->subnet = subnet;
     empty_slot->next_hop = next_hop;
+
+    return ROUTING_ERR_OKAY;
+}
+
+static routing_error_t routing_table_remove_route(routing_table_t *table, uint32_t route_id)
+{
+    routing_entry_t *entry = table->entries + route_id;
+
+    if (!entry->valid) {
+        sddf_dprintf("Entry was already invalid???\n");
+        return ROUTING_ERR_INVALID_ID;
+    }
+
+    entry->valid = false;
 
     return ROUTING_ERR_OKAY;
 }

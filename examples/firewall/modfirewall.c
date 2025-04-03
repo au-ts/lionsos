@@ -13,8 +13,15 @@
 #include <lions/firewall/routing.h>
 #include <sddf/util/printf.h>
 #include "firewall_structs.h"
+#include <sddf/network/util.h>
 
 extern firewall_webserver_config_t firewall_config;
+
+typedef struct webserver_state {
+    routing_table_t router_info[FIREWALL_NUM_ROUTERS];
+} webserver_state_t;
+
+webserver_state_t webserver_state = {0};
 
 webserver_interface_t interfaces[] = {
     {
@@ -52,6 +59,18 @@ size_t n_routes = 3;
 size_t next_route_id = 3;
 
 #define INVALID 0
+
+// @kwinter: Find a better way to do this initialisation.
+void webserver_init(void)
+{
+    sddf_dprintf("Initialsing webserver state.\n");
+    for (int i = 0; i < FIREWALL_NUM_ROUTERS; i++) {
+        sddf_dprintf("This is the vaddr of the routing table[%d]: 0x%p\n", i, firewall_config.routers[i].routing_table.vaddr);
+        routing_entry_t default_entry = {true, ROUTING_OUT_EXTERNAL, 0, 0, 0, 0};
+        routing_table_init(&webserver_state.router_info[i], default_entry, firewall_config.routers[i].routing_table.vaddr,
+            firewall_config.ip, firewall_config.routers[i].routing_table_capacity);
+    }
+}
 
 // TODO: Replace this ip_to_int
 
@@ -140,76 +159,166 @@ STATIC mp_obj_t interface_set_cidr(mp_obj_t interface_idx_in, mp_obj_t new_cidr_
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(interface_set_cidr_obj, interface_set_cidr);
 
-STATIC mp_obj_t route_add(mp_obj_t destination_in, mp_obj_t gateway_in, mp_obj_t interface_in) {
-    const char *destination = mp_obj_str_get_str(destination_in);
-    const char *gateway = gateway_in != mp_const_none ? mp_obj_str_get_str(gateway_in) : NULL;
-    uint64_t interface = mp_obj_get_int(interface_in);
-
-    webserver_routing_entry_t *route = &routing_table[n_routes++];
-    route->id = next_route_id++;
-    sddf_strncpy(route->destination, destination, sddf_strlen(destination) + 1);
-    if (gateway != NULL) {
-        sddf_strncpy(route->gateway, gateway, sddf_strlen(gateway) + 1);
-    } else {
-        route->gateway[0] = '\0';
+STATIC mp_obj_t route_add(mp_uint_t n_args, const mp_obj_t *args) {
+    sddf_dprintf("In route add\n");
+    if (n_args != 5) {
+        sddf_dprintf("Wrong amount of args supplied!\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
     }
-    route->interface = interface;
 
-    return mp_obj_new_int_from_uint(route->id);
+    sddf_dprintf("Getting all our values\n");
+    uint32_t iface = mp_obj_get_int(args[0]);
+    if (iface != 0 && iface != 1) {
+        sddf_dprintf("Wrong interface id supplied!\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    const char *destination = mp_obj_str_get_str(args[1]);
+    uint32_t subnet = mp_obj_get_int(args[2]);
+    const char *next_hop = mp_obj_str_get_str(args[3]);
+    uint32_t num_hops = mp_obj_get_int(args[4]);
+
+    uint32_t dest_ip = (ip_to_int(destination));
+    uint32_t next_hop_ip = (ip_to_int(next_hop));
+
+    seL4_SetMR(ROUTER_ADD_ARG_DEST_IP, dest_ip);
+    seL4_SetMR(ROUTER_ADD_ARG_SUBNET, subnet);
+    seL4_SetMR(ROUTER_ADD_ARG_NEXT_HOP, next_hop_ip);
+    seL4_SetMR(ROUTER_ADD_ARG_NUM_HOPS, num_hops);
+
+    microkit_msginfo msginfo = microkit_ppcall(firewall_config.routers[iface].routing_ch, microkit_msginfo_new(FIREWALL_ADD_ROUTE, 4));
+    uint32_t err = seL4_GetMR(FILTER_RET_ERR);
+    if(err) {
+        mp_raise_OSError(-1);
+        return mp_obj_new_int_from_uint(err);
+    }
+    uint32_t route_id = seL4_GetMR(FILTER_RET_RULE_ID);
+    return mp_obj_new_int_from_uint(route_id);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(route_add_obj, route_add);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR(route_add_obj, 5, route_add);
 
-STATIC mp_obj_t route_delete(mp_obj_t route_id_in) {
-    uint64_t route_id = mp_obj_get_int(route_id_in);
+STATIC mp_obj_t route_delete(mp_obj_t route_id_in, mp_obj_t interface) {
+    uint32_t route_id = mp_obj_get_int(route_id_in);
 
-    size_t table_idx = UINT64_MAX;
-    for (size_t i = 0; i < n_routes; i++) {
-        if (route_id == routing_table[i].id) {
-            table_idx = i;
-            break;
+    const char *interface_var = mp_obj_str_get_str(interface);
+    uint32_t iface = 0;
+    sddf_dprintf("This is the interface: %s\n", interface_var);
+    if (!sddf_strcmp(interface_var, "external")) {
+        sddf_dprintf("We got an external filter\n");
+        iface = 0;
+    } else if (!sddf_strcmp(interface_var, "internal")) {
+        sddf_dprintf("We got an internal filter\n");
+        iface = 1;
+    } else {
+        sddf_dprintf("ERR| rule_delete: Invalid interface\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    seL4_SetMR(ROUTER_DEL_ARG_ID, route_id);
+    microkit_msginfo msginfo = microkit_ppcall(firewall_config.routers[iface].routing_ch, microkit_msginfo_new(FIREWALL_DEL_ROUTE, 1));
+    uint32_t err = seL4_GetMR(FILTER_RET_ERR);
+    if(err) return mp_obj_new_int_from_uint(err);
+    uint32_t route_id_ret = seL4_GetMR(FILTER_RET_RULE_ID);
+    return mp_obj_new_int_from_uint(route_id_ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(route_delete_obj, route_delete);
+
+STATIC mp_obj_t route_count(mp_obj_t interface) {
+
+    const char *interface_var = mp_obj_str_get_str(interface);
+    // Count all routes on both interfaces.
+    uint32_t n_routes = 0;
+
+    uint32_t iface = 0;
+    sddf_dprintf("This is the interface: %s\n", interface_var);
+    if (!sddf_strcmp(interface_var, "external")) {
+        sddf_dprintf("We got an external filter\n");
+        iface = 0;
+    } else if (!sddf_strcmp(interface_var, "internal")) {
+        sddf_dprintf("We got an internal filter\n");
+        iface = 1;
+    } else {
+        sddf_dprintf("ERR| rule_delete: Invalid interface\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    sddf_dprintf("This is the routing table capacity: %d\n", webserver_state.router_info[iface].capacity);
+    for (int i = 0; i < firewall_config.routers->routing_table_capacity; i++) {
+        if (webserver_state.router_info[iface].entries[i].valid ) {
+            n_routes++;
         }
     }
-    if (table_idx == UINT64_MAX) {
-        mp_raise_OSError(-1);
-        return mp_const_none;
-    }
 
-    routing_table[table_idx] = routing_table[n_routes - 1];
-    n_routes--;
-    return mp_const_none;
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(route_delete_obj, route_delete);
+    sddf_dprintf("We found this many routes %u for iface %u\n", n_routes, iface);
 
-STATIC mp_obj_t route_count(void) {
     return mp_obj_new_int_from_uint(n_routes);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(route_count_obj, route_count);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(route_count_obj, route_count);
 
-STATIC mp_obj_t route_get_nth(mp_obj_t route_idx_in) {
-    uint64_t route_idx = mp_obj_get_int(route_idx_in);
+STATIC mp_obj_t route_get_nth(mp_obj_t route_idx_in, mp_obj_t interface) {
+    const char *interface_var = mp_obj_str_get_str(interface);
 
-    if (route_idx >= n_routes) {
+    uint32_t iface = 0;
+    sddf_dprintf("This is the interface: %s\n", interface_var);
+    if (!sddf_strcmp(interface_var, "external")) {
+        sddf_dprintf("We got an external filter\n");
+        iface = 0;
+    } else if (!sddf_strcmp(interface_var, "internal")) {
+        sddf_dprintf("We got an internal filter\n");
+        iface = 1;
+    } else {
+        sddf_dprintf("ERR| rule_delete: Invalid interface\n");
         mp_raise_OSError(-1);
         return mp_const_none;
     }
-    webserver_routing_entry_t *route = &routing_table[route_idx];
 
-    mp_obj_t tuple[4];
-    tuple[0] = mp_obj_new_int_from_uint(route->id);
-    tuple[1] = mp_obj_new_str(route->destination, sddf_strlen(route->destination));
-    tuple[2] = route->gateway[0] != '\0' ? mp_obj_new_str(route->gateway, sddf_strlen(route->gateway)) : mp_const_none;
-    tuple[3] = mp_obj_new_int_from_uint(route->interface);
+    uint64_t route_idx = mp_obj_get_int(route_idx_in);
 
-    return mp_obj_new_tuple(4, tuple);
+    if (route_idx >= webserver_state.router_info[iface].capacity) {
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    routing_entry_t *routes = webserver_state.router_info[iface].entries;
+
+    uint32_t count = 0;
+    for (int i = 0; i < webserver_state.router_info[iface].capacity; i++) {
+        if (count == route_idx && routes[i].valid) {
+            mp_obj_t tuple[5];
+            tuple[0] = mp_obj_new_int_from_uint(i);
+            char dest_buf[16];
+            char dest_ip = ipaddr_to_string(routes[i].ip, dest_buf, 16);
+            tuple[1] = mp_obj_new_str(dest_buf, sddf_strlen(dest_buf));
+            tuple[2] = mp_obj_new_int_from_uint(routes[i].subnet);
+            char hop_buf[16];
+            char hop_ip = ipaddr_to_string(routes[i].next_hop, hop_buf, 16);
+            tuple[3] = mp_obj_new_str(hop_buf, sddf_strlen(hop_buf));
+            tuple[4] = mp_obj_new_int_from_uint(routes[i].num_hops);
+            return mp_obj_new_tuple(5, tuple);
+        } else if (count == route_idx && !routes[i].valid) {
+            sddf_dprintf("Was not a valid route! -- %d\n", route_idx);
+            break;
+        } else if (routes[i].valid) {
+            // Increment on valid routes
+            count++;
+        }
+    }
+
+    // @kwinter: Change the front end to print an error on getting a 0
+    sddf_dprintf("ERR| route_get_nth: Could not find a valid routes for supplied route index.\n");
+    return mp_obj_new_int_from_uint(0);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(route_get_nth_obj, route_get_nth);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(route_get_nth_obj, route_get_nth);
 
-// STATIC mp_obj_t rule_add(mp_obj_t protocol, mp_obj_t filter, mp_obj_t src_ip, mp_obj_t src_port,
-//                         mp_obj_t src_subnet, mp_obj_t dst_ip, mp_obj_t dst_port, mp_obj_t dst_subnet,
-//                         mp_obj_t action) {
 STATIC mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
     if (n_args != 9) {
         sddf_dprintf("Wrong amount of args supplied!\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
     }
 
     const char *protocol_var = mp_obj_str_get_str(args[0]);
@@ -227,7 +336,13 @@ STATIC mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
         mp_raise_OSError(-1);
         return mp_const_none;
     }
+
     int filter_var = mp_obj_get_int(args[1]);
+    if (filter_var != 0 && filter_var != 1) {
+        sddf_dprintf("Incorrect filter value!\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
     const char *src_ip_var = mp_obj_str_get_str(args[2]);
     int src_port_var = mp_obj_get_int(args[3]);
     int src_subnet_var = mp_obj_get_int(args[4]);
@@ -239,8 +354,8 @@ STATIC mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
     for (int i = 0; i < firewall_config.num_filters; i++) {
         if (firewall_config.filters[i].protocol == protocol_id && firewall_config.filter_iface_id[i] == filter_var) {
             // Convert all the strings to integers.
-            uint32_t src_ip_addr = ip_to_int(src_ip_var);
-            uint32_t dst_ip_addr = ip_to_int(dst_ip_var);
+            uint32_t src_ip_addr = HTONS(ip_to_int(src_ip_var));
+            uint32_t dst_ip_addr = HTONS(ip_to_int(dst_ip_var));
             // Choosing random value outside of enum range
             // int action_val = 9;
             // if (sddf_strcmp(action_var, "Allow")) {
@@ -415,7 +530,6 @@ STATIC mp_obj_t rule_count(mp_obj_t protocol, mp_obj_t filter) {
         }
     }
 
-    sddf_dprintf("rule_count: We got this many rules: %d\n", index_cnt);
     return mp_obj_new_int_from_uint(index_cnt);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(rule_count_obj, rule_count);

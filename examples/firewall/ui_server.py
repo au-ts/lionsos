@@ -45,16 +45,17 @@ def set_network_config(request, interface_id):
     except Exception as e:
         return {"error": "Invalid input"}, 400
 
-@app.route('/api/routes', methods=['GET'])
-def get_routes(request):
+@app.route('/api/routes/<string:interface>', methods=['GET'])
+def get_routes(request, interface):
     routes = []
-    for i in range(lions_firewall.route_count()):
-        t = lions_firewall.route_get_nth(i)
+    for i in range(lions_firewall.route_count(interface)):
+        t = lions_firewall.route_get_nth(i, interface)
         routes.append({
             "id": t[0],
             "destination": t[1],
-            "gateway": t[2],
-            "interface": t[3]
+            "subnet": t[2],
+            "next_hop": t[3],
+            "num_hops": t[4]
         })
     routes.sort(key=lambda route: route['id'])
     return {"routes": routes}
@@ -62,22 +63,32 @@ def get_routes(request):
 @app.route('/api/routes', methods=['POST'])
 def add_route(request):
     try:
+        print("In add route")
         data = request.json
+        interface = data.get("interface")
         destination = data.get("destination")
-        gateway = data.get("gateway")  # May be None
-        iface = data.get("interface")
-        if destination is None or iface is None:
+        subnet = data.get("subnet")
+        next_hop = data.get("next_hop")
+        num_hops = data.get("num_hops")
+        print("Finished getting values")
+
+        if destination is None or next_hop is None:
             return {"error": "Missing destination or interface"}, 400
-        route_id = lions_firewall.route_add(destination, gateway, iface)
-        new_route = {"id": route_id, "destination": destination, "gateway": gateway, "interface": iface}
+
+        print("Calling route add")
+        route_id = lions_firewall.route_add(interface, destination, subnet, next_hop, num_hops)
+        print("Returned from route add")
+
+        new_route = {"id": route_id, "interface": interface, "destination": destination, "next_hop": next_hop, "num_hops": num_hops}
+
         return {"status": "ok", "route": new_route}, 201
     except Exception as e:
         return {"error": "Invalid input"}, 400
 
-@app.route('/api/routes/<int:route_id>', methods=['DELETE'])
-def delete_route(request, route_id):
+@app.route('/api/routes/<int:route_id>/<string:interface>', methods=['DELETE'])
+def delete_route(request, route_id, interface):
     try:
-        lions_firewall.route_delete(route_id)
+        lions_firewall.route_delete(route_id, interface)
         return {"status": "ok"}
     except IndexError:
         return {"error": "Route not found"}, 404
@@ -186,7 +197,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/config">Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
     </nav>
   </body>
 </html>
@@ -206,7 +217,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/config">Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
     </nav>
     <div id="interfaces-container">
       <table border="1">
@@ -256,141 +267,75 @@ def index(request):
 """
     return Response(body=html, headers={'Content-Type': 'text/html'})
 
-@app.route('/config')
+@app.route('/routing_config')
 def config(request):
     html = """
 <!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Config Page</title>
+    <title>Routing Config Page</title>
     <link rel="stylesheet" href="/main.css">
   </head>
   <body>
-    <h1>Configuration Page</h1>
+    <h1>Routing Configuration Page</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/config">Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
     </nav>
-    
-    <h2>Interfaces</h2>
-    <table border="1" id="config-table">
-      <thead>
-        <tr>
-          <th>Interface</th>
-          <th>MAC Address</th>
-          <th>Current Network (CIDR)</th>
-          <th>New CIDR</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="config-body">
-        <tr>
-          <td colspan="5">Loading interface data...</td>
-        </tr>
-      </tbody>
-    </table>
-    
-    <h2>Routing Table</h2>
+
+    <h2>External Interface Routing Table</h2>
     <table border="1">
       <thead>
         <tr>
           <th>ID</th>
-          <th>Destination</th>
-          <th>Gateway</th>
-          <th>Interface</th>
-          <th>Actions</th>
+          <th>Destination IP</th>
+          <th>Subnet</th>
+          <th>Next Hop</th>
+          <th>Num Hops</th>
         </tr>
       </thead>
-      <tbody id="routes-body">
+      <tbody id="external-routes-body">
         <tr>
           <td colspan="5">Loading routes...</td>
         </tr>
       </tbody>
     </table>
-    
+
+    <h2>Internal Interface Routing Table</h2>
+    <table border="1">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Destination IP</th>
+          <th>Subnet</th>
+          <th>Next Hop</th>
+          <th>Num Hops</th>
+        </tr>
+      </thead>
+      <tbody id="internal-routes-body">
+        <tr>
+          <td colspan="5">Loading routes...</td>
+        </tr>
+      </tbody>
+    </table>
+
+
     <h3>Add New Route</h3>
     <p>
-      Destination (CIDR): <input type="text" id="new-destination" placeholder="e.g. 10.0.0.0/8"><br>
-      Gateway: <input type="text" id="new-gateway" placeholder="Gateway IP (or leave blank)"><br>
-      Interface: <input type="number" id="new-interface" placeholder="Interface index"><br>
+      Interface: <input type="radio" name="new-interface" id="new-interface-internal">Internal<input type="radio" name="new-interface" id="new-interface-external">External<br>
+      Destination IP: <input type="text" id="new-destination-ip" placeholder="e.g. 10.0.0.0"><br>
+      Subnet: <input type="number" id="new-subnet" placeholder="e.g. 24"><br>
+      Next hop: <input type="text" id="new-next-hop" placeholder="e.g. 10.0.0.0"><br>
+      Num hops: <input type="number" id="new-num-hops" placeholder="e.g. 64"><br>
       <button id="add-route-btn">Add Route</button>
     </p>
-    
+
     <script>
       document.addEventListener("DOMContentLoaded", function() {
-        var configBody = document.getElementById('config-body');
-        configBody.innerHTML = "";
-        fetch('/api/interfaces/count')
-          .then(function(response) { return response.json(); })
-          .then(function(data) {
-            for (let i = 0; i < data.count; i++) {
-              fetch('/api/interfaces/' + i)
-                .then(function(response) { return response.json(); })
-                .then(function(info) {
-                  let row = document.createElement('tr');
-                  
-                  let cellInterface = document.createElement('td');
-                  cellInterface.textContent = info.interface;
-                  row.appendChild(cellInterface);
-                  
-                  let cellMac = document.createElement('td');
-                  cellMac.textContent = info.mac;
-                  row.appendChild(cellMac);
-                  
-                  let cellCurrent = document.createElement('td');
-                  cellCurrent.textContent = info.cidr;
-                  row.appendChild(cellCurrent);
-                  
-                  let cellInput = document.createElement('td');
-                  let input = document.createElement('input');
-                  input.type = "text";
-                  input.value = info.cidr;
-                  input.id = "cidr-input-" + info.interface;
-                  cellInput.appendChild(input);
-                  row.appendChild(cellInput);
-                  
-                  let cellActions = document.createElement('td');
-                  let btn = document.createElement('button');
-                  btn.textContent = "Update";
-                  btn.addEventListener("click", function() {
-                    let newCidr = document.getElementById("cidr-input-" + info.interface).value;
-                    fetch('/api/interfaces/' + info.interface + '/network', {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ cidr: newCidr })
-                    })
-                    .then(function(response) {
-                      if (!response.ok) throw new Error('Update failed');
-                      return response.json();
-                    })
-                    .then(function(result) {
-                      alert("Interface " + info.interface + " updated to " + result.cidr);
-                      cellCurrent.textContent = result.cidr;
-                    })
-                    .catch(function(error) {
-                      alert("Error updating interface " + info.interface);
-                    });
-                  });
-                  cellActions.appendChild(btn);
-                  row.appendChild(cellActions);
-                  
-                  configBody.appendChild(row);
-                })
-                .catch(function(err) {
-                  let row = document.createElement('tr');
-                  row.innerHTML = "<td colspan='5'>Error retrieving interface " + i + "</td>";
-                  configBody.appendChild(row);
-                });
-            }
-          })
-          .catch(function(err) {
-            configBody.innerHTML = "<tr><td colspan='5'>Error retrieving interface count</td></tr>";
-          });
-
-        function loadRoutes() {
-          var routesBody = document.getElementById('routes-body');
+        function loadRoutes(type) {
+          var routesBody = document.getElementById(`${type}-routes-body`);
           routesBody.innerHTML = "";
-          fetch('/api/routes')
+          fetch(`/api/routes/${type}`)
             .then(function(response) { return response.json(); })
             .then(function(data) {
               if (data.routes.length === 0) {
@@ -400,35 +345,40 @@ def config(request):
               } else {
                 data.routes.forEach(function(route) {
                   let row = document.createElement('tr');
-                  
+
                   let cellId = document.createElement('td');
                   cellId.textContent = route.id;
                   row.appendChild(cellId);
-                  
+
                   let cellDest = document.createElement('td');
                   cellDest.textContent = route.destination;
                   row.appendChild(cellDest);
-                  
-                  let cellGateway = document.createElement('td');
-                  cellGateway.textContent = route.gateway ? route.gateway : "-";
-                  row.appendChild(cellGateway);
-                  
-                  let cellIface = document.createElement('td');
-                  cellIface.textContent = route.interface;
-                  row.appendChild(cellIface);
-                  
+
+                  let cellSubnet = document.createElement('td');
+                  cellSubnet.textContent = route.subnet ? route.subnet : "-";
+                  row.appendChild(cellSubnet);
+
+                  let cellNextHop = document.createElement('td');
+                  cellNextHop.textContent = route.next_hop;
+                  row.appendChild(cellNextHop);
+
+                  let cellNumHops = document.createElement('td');
+                  cellNumHops.textContent = route.num_hops;
+                  row.appendChild(cellNumHops);
+
                   let cellActions = document.createElement('td');
                   let delBtn = document.createElement('button');
                   delBtn.textContent = "Delete";
                   delBtn.addEventListener("click", function() {
-                    fetch('/api/routes/' + route.id, { method: 'DELETE' })
+                    fetch(`/api/routes/${route.id}/${type}`, { method: 'DELETE' })
                       .then(function(response) {
                         if (!response.ok) throw new Error("Delete failed");
                         return response.json();
                       })
                       .then(function(result) {
                         alert("Route " + route.id + " deleted.");
-                        loadRoutes();
+                        loadRoutes("internal");
+                        loadRoutes("external");
                       })
                       .catch(function(error) {
                         alert("Error deleting route " + route.id);
@@ -436,7 +386,7 @@ def config(request):
                   });
                   cellActions.appendChild(delBtn);
                   row.appendChild(cellActions);
-                  
+
                   routesBody.appendChild(row);
                 });
               }
@@ -447,16 +397,30 @@ def config(request):
               routesBody.appendChild(row);
             });
         }
-        loadRoutes();
-        
+
+        loadRoutes("internal");
+        loadRoutes("external");
+
         document.getElementById('add-route-btn').addEventListener('click', function() {
-          var destination = document.getElementById('new-destination').value;
-          var gateway = document.getElementById('new-gateway').value;
-          var iface = document.getElementById('new-interface').value;
-          fetch('/api/routes', {
+          var interfaceInternal = document.getElementById('new-interface-internal').checked;
+          var filterExternal = document.getElementById('new-interface-external').checked;
+          var interface;
+          if (interfaceInternal) {
+            interface = 1;
+          } else if (filterExternal) {
+            interface = 0;
+          } else {
+            alert("uh oh");
+            return;
+          }
+          var destination = document.getElementById('new-destination-ip').value;
+          var subnet = Number(document.getElementById('new-subnet').value);
+          var next_hop = document.getElementById('new-next-hop').value;
+          var num_hops = Number(document.getElementById('new-num-hops').value);
+          fetch(`/api/routes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ destination: destination, gateway: gateway, interface: parseInt(iface) })
+            body: JSON.stringify({ interface: interface, destination: destination, subnet: subnet, next_hop: next_hop, num_hops: num_hops })
           })
           .then(function(response) {
             if (!response.ok) throw new Error('Add route failed');
@@ -464,7 +428,8 @@ def config(request):
           })
           .then(function(result) {
             alert("Route added successfully.");
-            loadRoutes();
+            loadRoutes("internal");
+            loadRoutes("external");
           })
           .catch(function(err) {
             alert("Error adding route");
@@ -490,7 +455,7 @@ def rules(request, protocol):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/config">Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
     </nav>
     <div style="display: flex; flex-direction: column; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>
@@ -557,7 +522,7 @@ def rules(request, protocol):
         <tr><td colspan="5">Loading rules...</td></tr>
       </tbody>
     </table>
-    
+
     <h2>Add New Rule</h2>
       Filter: <input type="radio" name="new-filter" id="new-filter-internal">Internal<input type="radio" name="new-filter" id="new-filter-external">External<br>
       Source IP: <input type="text" id="new-src-ip" placeholder="e.g. 192.168.10.3"><br>
@@ -575,7 +540,7 @@ def rules(request, protocol):
       </select>
       <button id="add-rule-btn">Add Rule</button>
     </p>
-    
+
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         function loadRules(type) {
@@ -759,7 +724,7 @@ def rules(request):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/config">Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
     </nav>
     <div style="display: inline-block; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>

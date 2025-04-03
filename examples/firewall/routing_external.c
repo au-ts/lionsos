@@ -226,6 +226,42 @@ void init(void)
     pkt_waiting_init(&pkt_waiting_queue, router_config.packet_queue.vaddr, router_config.rx_free.capacity);
 }
 
+seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
+{
+    switch (microkit_msginfo_get_label(msginfo)) {
+    case FIREWALL_ADD_ROUTE: {
+        uint32_t dest_ip = seL4_GetMR(ROUTER_ADD_ARG_DEST_IP);
+        uint8_t subnet = seL4_GetMR(ROUTER_ADD_ARG_SUBNET);
+        uint32_t next_hop = seL4_GetMR(ROUTER_ADD_ARG_NEXT_HOP);
+        uint16_t num_hops = seL4_GetMR(ROUTER_ADD_ARG_NUM_HOPS);
+        uint32_t id = 0;
+        // @kwinter: Limiting this to just external routes out of the NIC
+        // for now.
+        routing_error_t err = routing_table_add_rule(&routing_table, ROUTING_OUT_EXTERNAL, num_hops, dest_ip, subnet, next_hop, &id);
+        seL4_SetMR(ROUTER_RET_ERR, err);
+        seL4_SetMR(ROUTER_RET_ROUTE_ID, id);
+        return microkit_msginfo_new(0, 2);
+    }
+    case FIREWALL_DEL_ROUTE: {
+        uint8_t id = seL4_GetMR(ROUTER_DEL_ARG_ID);
+        sddf_dprintf("Deleting route %d from external interface\n", id);
+        if (FIREWALL_DEBUG_OUTPUT) {
+            sddf_printf("External Router| Deleted route %u )\n", id);
+        }
+        routing_error_t err = routing_table_remove_route(&routing_table, id);
+        seL4_SetMR(ROUTER_RET_ERR, err);
+        seL4_SetMR(ROUTER_RET_ROUTE_ID, id);
+        return microkit_msginfo_new(0, 2);
+    }
+    default:
+        sddf_printf("ROUTING_INTERNAL|LOG: unkown request %lu on channel %u\n",
+            microkit_msginfo_get_label(msginfo), ch);
+        break;
+    }
+
+    return microkit_msginfo_new(0, 0);
+}
+
 void notified(microkit_channel ch)
 {
     if (ch == router_config.arp_queue.ch) {

@@ -114,6 +114,7 @@ start_repl:
 
     // libmicrokitco will gracefully clean up when a cothread return, no need to do anything special here
 }
+void webserver_init(void);
 
 void init(void) {
     // TODO: problem, if one of these asserts fails it crashse micropython since it tries to output
@@ -149,6 +150,8 @@ void init(void) {
         printf("MP|ERROR: Cannot initialise Micropython cothread\n");
         assert(false);
     }
+
+    webserver_init();
 
     // Run the Micropython cothread
     microkit_cothread_yield();
