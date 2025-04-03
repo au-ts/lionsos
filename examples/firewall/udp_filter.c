@@ -120,7 +120,6 @@ void filter(void)
 
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
-    sddf_dprintf("We have received a ppc in udp filter\n");
     switch (microkit_msginfo_get_label(msginfo)) {
     case FIREWALL_SET_DEFAULT_ACTION: {
         firewall_action_t action = seL4_GetMR(FILTER_ARG_ACTION);

@@ -91,7 +91,7 @@ def get_rules(request, protocol, filter):
     if protocol not in PROTOCOLS:
         return {"error": "Invalid protocol given"}, 400
 
-    default_action = lions_firewall.filter_default_action(protocol, filter)
+    default_action = lions_firewall.filter_get_default_action(protocol, filter)
     rules = []
     for i in range(lions_firewall.rule_count(protocol, filter)):
         t = lions_firewall.rule_get_nth(protocol, filter, i)
@@ -115,9 +115,8 @@ def set_default_action(request, protocol, action, filter):
     try:
         if protocol not in PROTOCOLS:
           return {"error": "Invalid protocol given"}, 400
-
-        # TODO: fill this out
-        # lions_firewall.filter_default_action_set(action, fi)
+        print(f"This is the action we are setting to: {action}")
+        lions_firewall.filter_set_default_action(protocol, filter, action)
         print(f"INFO: setting default action for protocol '{protocol}' to '{action}'")
 
         return {"status": "ok"}, 201
@@ -589,6 +588,8 @@ def rules(request, protocol):
               for (let i = 0; i < defaultAction.options.length; i++) {
                 if (data.default_action == defaultAction.options[i].value) {
                   defaultAction.options[i].selected = true;
+                } else {
+                  defaultAction.options[i].selected = false;
                 }
               }
               if (data.rules.length === 0) {
@@ -654,7 +655,7 @@ def rules(request, protocol):
 
         document.getElementById(`external-set-default-action-btn`).addEventListener('click', function() {
           const newDefaultAction = document.getElementById(`external-default-action`).value;
-          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}/${type}`, {
+          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}/external`, {
             method: 'POST',
           })
           .then(function(response) {
@@ -671,7 +672,7 @@ def rules(request, protocol):
 
         document.getElementById(`internal-set-default-action-btn`).addEventListener('click', function() {
           const newDefaultAction = document.getElementById(`internal-default-action`).value;
-          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}/${type}`, {
+          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}/internal`, {
             method: 'POST',
           })
           .then(function(response) {

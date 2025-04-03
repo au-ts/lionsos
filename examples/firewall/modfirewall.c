@@ -420,17 +420,17 @@ STATIC mp_obj_t rule_count(mp_obj_t protocol, mp_obj_t filter) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(rule_count_obj, rule_count);
 
-STATIC mp_obj_t filter_default_action(mp_obj_t protocol, mp_obj_t filter) {
+STATIC mp_obj_t filter_set_default_action(mp_obj_t protocol, mp_obj_t filter, mp_obj_t action) {
     const char *protocol_var = mp_obj_str_get_str(protocol);
     int protocol_id = 0;
-    if (sddf_strcmp(protocol_var, "icmp")) {
+    if (!sddf_strcmp(protocol_var, "icmp")) {
         protocol_id = IPV4_PROTO_ICMP;
-    } else if (sddf_strcmp(protocol_var, "udp")) {
+    } else if (!sddf_strcmp(protocol_var, "udp")) {
         protocol_id = IPV4_PROTO_UDP;
-    } else if (sddf_strcmp(protocol_var, "tcp")) {
+    } else if (!sddf_strcmp(protocol_var, "tcp")) {
         protocol_id = IPV4_PROTO_TCP;
     } else {
-        sddf_dprintf("ERR| filter_default_action: Unsuppored protocol.\n");
+        sddf_dprintf("ERR| rule_count: Unsuppored protocol.\n");
         mp_raise_OSError(-1);
         return mp_const_none;
     }
@@ -442,21 +442,75 @@ STATIC mp_obj_t filter_default_action(mp_obj_t protocol, mp_obj_t filter) {
     } else if (!sddf_strcmp(filter_var, "internal")) {
         iface = 1;
     } else {
-        sddf_dprintf("ERR| filter_default_action: Invalid interface: %s\n", filter_var);
+        sddf_dprintf("ERR| rule_count: Invalid interface\n");
         mp_raise_OSError(-1);
         return mp_const_none;
     }
 
-    for (int i = 0; i < FIREWALL_MAX_FILTERS; i++) {
+    uint32_t action_id = mp_obj_get_int(action);
+
+    if (action_id != 1 && action_id != 2) {
+        sddf_dprintf("ERR| filter_set_default_action: Invalid action id: %d\n", action_id);
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    for (int i = 0; i < firewall_config.num_filters; i++) {
+        if (firewall_config.filters[i].protocol == protocol_id && firewall_config.filter_iface_id[i] == iface) {
+            seL4_SetMR(FILTER_ARG_ACTION, action_id);
+            microkit_msginfo msginfo = microkit_ppcall(firewall_config.filters[i].ch, microkit_msginfo_new(FIREWALL_SET_DEFAULT_ACTION, 1));
+            uint32_t err = seL4_GetMR(FILTER_RET_ERR);
+            if (err) {
+                sddf_dprintf("We receieved an error when trying to do set default action via ppcall\n");
+            }
+            // If we were successful, update the default action in our own data structures.
+            firewall_config.filters[i].default_action = action_id;
+            return mp_obj_new_int_from_uint(err);
+        }
+    }
+    // @kwinter: Change the front end to print an error on getting a 0
+    sddf_dprintf("ERR| filter_set_default_action: Could not find a matchong protocol on specified interface.\n");
+    return mp_obj_new_int_from_uint(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(filter_set_default_action_obj, filter_set_default_action);
+
+STATIC mp_obj_t filter_get_default_action(mp_obj_t protocol, mp_obj_t filter) {
+    const char *protocol_var = mp_obj_str_get_str(protocol);
+    int protocol_id = 0;
+    if (!sddf_strcmp(protocol_var, "icmp")) {
+        protocol_id = IPV4_PROTO_ICMP;
+    } else if (!sddf_strcmp(protocol_var, "udp")) {
+        protocol_id = IPV4_PROTO_UDP;
+    } else if (!sddf_strcmp(protocol_var, "tcp")) {
+        protocol_id = IPV4_PROTO_TCP;
+    } else {
+        sddf_dprintf("ERR| rule_count: Unsuppored protocol.\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    const char *filter_var = mp_obj_str_get_str(filter);
+    int iface = 4;
+    if (!sddf_strcmp(filter_var, "external")) {
+        iface = 0;
+    } else if (!sddf_strcmp(filter_var, "internal")) {
+        iface = 1;
+    } else {
+        sddf_dprintf("ERR| rule_count: Invalid interface\n");
+        mp_raise_OSError(-1);
+        return mp_const_none;
+    }
+
+    for (int i = 0; i < firewall_config.num_filters; i++) {
         if (firewall_config.filters[i].protocol == protocol_id && firewall_config.filter_iface_id[i] == iface) {
             return mp_obj_new_int_from_uint((firewall_config.filters[i].default_action));
         }
     }
     // @kwinter: Change the front end to print an error on getting a 0
-    sddf_dprintf("ERR| filter_default_action: Could not find a matchong protocol on specified interface.\n");
+    sddf_dprintf("ERR| filter_get_default_action: Could not find a matchong protocol on specified interface.\n");
     return mp_obj_new_int_from_uint(0);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(filter_default_action_obj, filter_default_action);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(filter_get_default_action_obj, filter_get_default_action);
 
 STATIC mp_obj_t rule_get_nth(mp_obj_t protocol, mp_obj_t filter, mp_obj_t rule_idx_in) {
     const char *protocol_var = mp_obj_str_get_str(protocol);
@@ -574,7 +628,8 @@ STATIC const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_rule_delete), MP_ROM_PTR(&rule_delete_obj) },
     { MP_ROM_QSTR(MP_QSTR_rule_count), MP_ROM_PTR(&rule_count_obj) },
     { MP_ROM_QSTR(MP_QSTR_rule_get_nth), MP_ROM_PTR(&rule_get_nth_obj) },
-    { MP_ROM_QSTR(MP_QSTR_filter_default_action), MP_ROM_PTR(&filter_default_action_obj) },
+    { MP_ROM_QSTR(MP_QSTR_filter_get_default_action), MP_ROM_PTR(&filter_get_default_action_obj) },
+    { MP_ROM_QSTR(MP_QSTR_filter_set_default_action), MP_ROM_PTR(&filter_set_default_action_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(lions_firewall_module_globals, lions_firewall_module_globals_table);
 
