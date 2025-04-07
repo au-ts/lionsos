@@ -11,7 +11,9 @@ IMAGES := \
 	serial_virt_rx.elf \
 	serial_virt_tx.elf \
 	blk_virt.elf \
-	blk_driver.elf
+	blk_driver.elf \
+	benchmark.elf \
+	idle.elf
 
 ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
 	BLK_DRIV_DIR := mmc/imx
@@ -42,6 +44,7 @@ PYTHON ?= python3
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
+BENCHMARK:=$(SDDF)/benchmark
 
 METAPROGRAM := $(FILEIO_DIR)/meta.py
 DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
@@ -64,7 +67,10 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	-DMICROKIT_CONFIG_$(MICROKIT_CONFIG) \
+	-MD \
+	-MP
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util.a
@@ -80,16 +86,25 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
+fs_client.o: fs_client.c $(MUSL)/include
+	${CC} ${CFLAGS} -Imusllibc/include -c -o $@ $<
+
+%.o: %.c
+	${CC} ${CFLAGS} -c -o $@ $<
+
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
 BLK_COMPONENTS := $(SDDF)/blk/components
 
+vpath %.c ${SDDF} ${FILEIO_DIR}
+
 include ${SDDF}/util/util.mk
 include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
 include ${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk
 include ${SDDF}/serial/components/serial_components.mk
+include ${BENCHMARK}/benchmark.mk
 include ${BLK_DRIVER}/blk_driver.mk
 include ${BLK_COMPONENTS}/blk_components.mk
 
@@ -105,20 +120,6 @@ $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL}
 	${MAKE} -C ${MUSL} install
 
 ${IMAGES}: libsddf_util.a
-
-%.o: %.c
-	${CC} ${CFLAGS} -c -o $@ $<
-
-FORCE:
-
-%.elf: %.o
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
-
-fs_client.o: $(FILEIO_DIR)/fs_client.c $(MUSL)/lib/libc.a
-	${CC} ${CFLAGS} -I${FAT_LIBC_INCLUDE} -c -o $@ $<
-
-fs_client.elf: fs_client.o
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
@@ -142,11 +143,16 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .blk_client_config=blk_client_fatfs.data fat.elf
 	$(OBJCOPY) --update-section .fs_server_config=fs_server_fatfs.data fat.elf
 
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_bench.data benchmark.elf
+	$(OBJCOPY) --update-section .benchmark_config=benchmark_config.data benchmark.elf
+	$(OBJCOPY) --update-section .benchmark_client_config=benchmark_client_config.data fs_client.elf
+	$(OBJCOPY) --update-section .benchmark_config=benchmark_idle_config.data idle.elf
+
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu_disk:
-	$(LIONSOS)/dep/sddf/tools/mkvirtdisk $@ 1 512 16777216
+	$(LIONSOS)/dep/sddf/tools/mkvirtdisk $@ 1 512 16777216 GPT
 
 qemu: ${IMAGE_FILE} qemu_disk
 	$(QEMU) -machine virt,virtualization=on \
