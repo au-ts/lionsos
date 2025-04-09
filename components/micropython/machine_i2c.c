@@ -63,6 +63,9 @@ int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, b
     microkit_notify(i2c_config.virt.id);
     /* Now that we've enqueued our request, wait for the event signalling the I2C response. */
     microkit_cothread_wait_on_channel(i2c_config.virt.id);
+    /* This handles any interrupts that have been raised whilst
+    the main cothread has been running. */
+    mp_handle_pending(true);
 
     /* Now process the response */
     size_t bus_address = 0;
@@ -111,6 +114,9 @@ int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) 
     microkit_notify(i2c_config.virt.id);
     /* Now that we've enqueued our request, wait for the event signalling the I2C response. */
     microkit_cothread_wait_on_channel(i2c_config.virt.id);
+    /* This handles any interrupts that have been raised whilst
+    the main cothread has been running. */
+    mp_handle_pending(true);
 
     /* Now process the response */
     size_t bus_address = 0;
