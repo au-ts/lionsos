@@ -57,6 +57,8 @@ char *fs_share;
 serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
 
+int mp_mod_network_prefer_dns_use_ip_version = 4;
+
 i2c_queue_handle_t i2c_queue_handle;
 
 #ifdef ENABLE_FRAMEBUFFER
