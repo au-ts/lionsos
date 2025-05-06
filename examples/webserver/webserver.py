@@ -145,7 +145,7 @@ async def send_file(relative_path, request_headers):
 
     err, path, stat = await resolve(relative_path)
     if err == 404:
-        return Response(status_code=404, reason='Not Found')
+        return Response.redirect(f"/404.html")
     if err == 301:
         return Response.redirect(path, status_code=301)
 
