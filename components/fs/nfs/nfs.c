@@ -18,6 +18,8 @@
 #include <sddf/timer/config.h>
 #include <sddf/timer/client.h>
 
+#include <sddf/network/lib_sddf_lwip.h>
+
 #include <lions/fs/server.h>
 #include <lions/fs/config.h>
 
@@ -34,6 +36,7 @@ __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
 __attribute__((__section__(".fs_server_config"))) fs_server_config_t fs_config;
 __attribute__((__section__(".nfs_config"))) nfs_config_t nfs_config;
+__attribute__((__section__(".lib_sddf_lwip_config"))) lib_sddf_lwip_config_t lib_sddf_lwip_config;
 
 serial_queue_handle_t serial_tx_queue_handle;
 
@@ -45,8 +48,9 @@ struct nfs_context *nfs;
 
 void notified(microkit_channel ch) {
     if (ch == timer_config.driver_id) {
-        tcp_process_rx();
-        tcp_update();
+        sddf_lwip_process_rx();
+        sddf_lwip_process_timeout();
+
         if (nfs != NULL) {
             int nfs_fd = nfs_get_fd(nfs);
             int socket_index = socket_index_of_fd(nfs_fd);
@@ -71,7 +75,7 @@ void notified(microkit_channel ch) {
         }
         sddf_timer_set_timeout(timer_config.driver_id, TIMEOUT);
     } else if (ch == net_config.rx.id) {
-        tcp_process_rx();
+        sddf_lwip_process_rx();
     } else if (ch == net_config.tx.id || ch == serial_config.tx.id) {
         /* Nothing to do in this case */
     } else if (ch == fs_config.client.id) {
@@ -86,7 +90,7 @@ void notified(microkit_channel ch) {
     if (tcp_ready()) {
         process_commands();
     }
-    tcp_maybe_notify();
+    sddf_lwip_maybe_notify();
 }
 
 void init(void)
