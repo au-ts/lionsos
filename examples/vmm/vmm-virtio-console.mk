@@ -35,7 +35,7 @@ CC := clang
 LD := ld.lld
 TARGET := aarch64-none-elf
 
-CHECK_VARIANT:=.variant.$(shell md5sum ${SYSTEM})
+CHECK_VARIANT := .variant.$(shell md5sum ${SYSTEM})
 .variant.%:
 	-rm -f .variant.*
 	> $@
@@ -76,7 +76,7 @@ CFLAGS := \
 	-MD \
 	-DMAC_BASE_ADDRESS=$(MAC_BASE_ADDRESS)
 
-VPATH:=${LIBVMM_DIR}:${VMM_IMAGE_DIR}
+VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}
 # we have only one client
 SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=1
 

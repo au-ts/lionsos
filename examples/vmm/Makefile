@@ -7,26 +7,27 @@
 ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
-export override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
+override MICROKIT_SDK := $(abspath ${MICROKIT_SDK})
 export EXAMPLE_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 LIONSOS ?= ../../
 export LIONSOS := $(abspath ${LIONSOS})
 export SDDF := ${LIONSOS}/dep/sddf
 export MICROKIT_CONFIG ?= debug
-export BUILD_DIR ?= $(abspath build)
+BUILD_DIR ?= build
+export BUILD_DIR := $(abspath ${BUILD_DIR})
 export MICROKIT_BOARD := odroidc4
 export VMM_IMAGE_DIR := ${EXAMPLE_DIR}/vmm
 export ORIGINAL_DTB := $(VMM_IMAGE_DIR)/meson-sm1-odroid-c4.dtb
 
 VARIANT ?= passthrough
 ifeq (${VARIANT},passthrough)
-export SYSTEM:=${EXAMPLE_DIR}/vmm.system
-export DT_OVERLAYS:= ${VMM_IMAGE_DIR}/overlay.dts
-VAR_MAKEFILE:= vmm-dev.mk
+export SYSTEM := ${EXAMPLE_DIR}/vmm.system
+export DT_OVERLAYS := ${VMM_IMAGE_DIR}/overlay.dts
+VAR_MAKEFILE := vmm-dev.mk
 else
-export SYSTEM:=${EXAMPLE_DIR}/vmm-virtio-console.system
-export DT_OVERLAYS:= ${VMM_IMAGE_DIR}/overlay-virtcon.dts
-VAR_MAKEFILE:= vmm-virtio-console.mk
+export SYSTEM := ${EXAMPLE_DIR}/vmm-virtio-console.system
+export DT_OVERLAYS := ${VMM_IMAGE_DIR}/overlay-virtcon.dts
+VAR_MAKEFILE := vmm-virtio-console.mk
 endif
 
 IMAGE_FILE := $(BUILD_DIR)/vmdev.img
