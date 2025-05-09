@@ -30,7 +30,7 @@ TOOLCHAIN := clang
 CC := clang
 LD := ld.lld
 TARGET := aarch64-none-elf
-CHECK_VARIANT:=.variant.$(shell md5sum ${SYSTEM})
+CHECK_VARIANT := .variant.$(shell md5sum ${SYSTEM})
 .variant.%:
 	-rm -f .variant.*
 	> $@
@@ -67,7 +67,7 @@ CFLAGS := \
 	-I$(LIBVMM)/include \
 	-MD
 
-VPATH:=${LIBVMM}:${VMM_IMAGE_DIR}
+VPATH := ${LIBVMM}:${VMM_IMAGE_DIR}
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld
