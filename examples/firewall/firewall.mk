@@ -62,7 +62,8 @@ CFLAGS := \
 	-target $(TARGET) \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
-	-I$(SDDF)/include
+	-I$(SDDF)/include \
+	-I$(SDDF)/include/microkit
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld $(MUSL)/lib/libc.a libsddf_util_debug.a

@@ -5,7 +5,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <microkit.h>
+#include <os/sddf.h>
 #include <sddf/network/constants.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/util.h>

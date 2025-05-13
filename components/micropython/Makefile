@@ -35,6 +35,7 @@ CFLAGS += \
 	-I$(BUILD) \
 	-I$(TOP) \
 	-I$(SDDF)/include \
+	-I$(SDDF)/include/microkit \
 	-I$(BOARD_DIR)/include \
 	-I$(LIBMICROKITCO_PATH) \
 	-I$(LIONSOS)/include \

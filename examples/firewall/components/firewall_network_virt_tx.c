@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <microkit.h>
+#include <os/sddf.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
 #include <sddf/util/cache.h>

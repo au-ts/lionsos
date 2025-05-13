@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 #include <string.h>
-#include <microkit.h>
+#include <os/sddf.h>
 #include <sddf/util/util.h>
 #include <sddf/timer/client.h>
 #include <lions/firewall/config.h>

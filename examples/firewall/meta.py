@@ -70,14 +70,6 @@ ips = [
 arp_responder_protocol = 0x92
 arp_requester_protocol = 0x93
 
-# Global vaddr allocator... TODO: Improve this in future
-vaddr = 0x3_000_000
-def next_vaddr() -> int:
-    global vaddr
-    vaddr_curr = vaddr
-    vaddr += 0x400_000
-    return vaddr_curr
-
 @dataclass
 class Board:
     name: str
@@ -442,16 +434,16 @@ def update_elf_section(elf_name: str, section_name: str, data_name: str):
 # Create a firewall connection, which is a single queue and a channel. Data must be created and mapped separately
 def firewall_connection(pd1: SystemDescription.ProtectionDomain , pd2: SystemDescription.ProtectionDomain, capacity: int, region_size: int):
     queue_name = "firewall_queue_" + pd1.name + "_" + pd2.name
-    queue = MemoryRegion(queue_name, region_size)
+    queue = MemoryRegion(sdf, queue_name, region_size)
     sdf.add_mr(queue)
 
-    pd1_vaddr = next_vaddr()
-    pd1.add_map(Map(queue, pd1_vaddr, perms="rw"))
-    pd1_region = FirewallRegionResource(pd1_vaddr, region_size)
+    pd1_map = Map(queue, pd1.get_map_vaddr(queue), perms="rw")
+    pd1.add_map(pd1_map)
+    pd1_region = FirewallRegionResource(pd1_map.vaddr, region_size)
 
-    pd2_vaddr = next_vaddr()
-    pd2.add_map(Map(queue, pd2_vaddr, perms="rw"))
-    pd2_region = FirewallRegionResource(pd2_vaddr, region_size)
+    pd2_map = Map(queue, pd2.get_map_vaddr(queue), perms="rw")
+    pd2.add_map(pd2_map)
+    pd2_region = FirewallRegionResource(pd2_map.vaddr, region_size)
 
     ch = Channel(pd1, pd2)
     sdf.add_channel(ch)
@@ -463,15 +455,15 @@ def firewall_connection(pd1: SystemDescription.ProtectionDomain , pd2: SystemDes
 
 # Map a mr into a pd to create a firewall region
 def firewall_region(pd: SystemDescription.ProtectionDomain, mr: SystemDescription.MemoryRegion, perms: str, region_size: int):
-    vaddr = next_vaddr()
-    pd.add_map(Map(mr, vaddr, perms=perms))
-    region_resource = FirewallRegionResource(vaddr, region_size)
-
+    pd_map = Map(mr, pd.get_map_vaddr(mr), perms=perms)
+    pd.add_map(pd_map)
+    region_resource = FirewallRegionResource(pd_map.vaddr, region_size)
+    
     return region_resource
 
 # Map a physical mr into a pd to create a firewall device region
-def firewall_device_region(pd: SystemDescription.ProtectionDomain, mr: SystemDescription.MemoryRegion, perms: str, region_size: int):
-    region = firewall_region(pd, mr, perms, region_size)
+def firewall_device_region(pd: SystemDescription.ProtectionDomain, mr: SystemDescription.MemoryRegion, perms: str):
+    region = firewall_region(pd, mr, perms, mr.size)
     device_region = FirewallDeviceRegionResource(
             region,
             mr.paddr.value
@@ -481,10 +473,10 @@ def firewall_device_region(pd: SystemDescription.ProtectionDomain, mr: SystemDes
 # Create a firewall connection and map a physical mr to create a firewall data connection
 def firewall_data_connection(pd1: SystemDescription.ProtectionDomain , pd2: SystemDescription.ProtectionDomain, 
                              capacity: int, queue_size: int, data: SystemDescription.MemoryRegion, 
-                             data_perms1: str, data_perms2: str, data_size: int):
+                             data_perms1: str, data_perms2: str):
     connection = firewall_connection(pd1, pd2, capacity, queue_size)
-    data_region1 = firewall_device_region(pd1, data, data_perms1, data_size)
-    data_region2 = firewall_device_region(pd2, data, data_perms2, data_size)
+    data_region1 = firewall_device_region(pd1, data, data_perms1)
+    data_region2 = firewall_device_region(pd2, data, data_perms2)
 
     data_connection1 = FirewallDataConnectionResource(
         connection[0],
@@ -503,7 +495,7 @@ def firewall_shared_region(pd1: SystemDescription.ProtectionDomain , pd2: System
                            perms1: str, perms2: str, name_prefix: str, region_size: int):
     # Create rule memory region
     region_name = name_prefix + "_" + pd1.name + "_" + pd2.name
-    mr = MemoryRegion(region_name, region_size)
+    mr = MemoryRegion(sdf, region_name, region_size)
     sdf.add_mr(mr)
 
     # Map rule into pd1
@@ -553,7 +545,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     networks[INT_IDX]["out_virt"] = ProtectionDomain("net_virt_tx0", "firewall_network_virt_tx0.elf", priority=100, budget=20000)
     networks[EXT_IDX]["in_virt"] = ProtectionDomain("net_virt_rx0", "firewall_network_virt_rx0.elf", priority=99)
 
-    networks[EXT_IDX]["rx_dma_region"] = MemoryRegion("rx_dma_region0", dma_region_size, paddr = 0x80_000_000)
+    networks[EXT_IDX]["rx_dma_region"] = MemoryRegion(sdf, "rx_dma_region0", dma_region_size, physical=True)
     sdf.add_mr(networks[EXT_IDX]["rx_dma_region"])
 
     # Create network 1 subsystem pds
@@ -561,7 +553,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     networks[EXT_IDX]["out_virt"] = ProtectionDomain("net_virt_tx1", "firewall_network_virt_tx1.elf", priority=100, budget=20000)
     networks[INT_IDX]["in_virt"] = ProtectionDomain("net_virt_rx1", "firewall_network_virt_rx1.elf", priority=99)
 
-    networks[INT_IDX]["rx_dma_region"] = MemoryRegion("rx_dma_region1", dma_region_size, paddr = 0x75_000_000)
+    networks[INT_IDX]["rx_dma_region"] = MemoryRegion(sdf, "rx_dma_region1", dma_region_size, physical=True)
     sdf.add_mr(networks[INT_IDX]["rx_dma_region"])
 
     # Create network subsystems
@@ -658,7 +650,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         # Create a firewall data connection between router and output virt with the rx dma region as data region
         router_out_virt_conn = firewall_data_connection(router, out_virt, dma_queue_capacity, dma_queue_region_size, 
-                                                        network["rx_dma_region"], "rw", "r", dma_region_size)
+                                                        network["rx_dma_region"], "rw", "r")
 
         # Create a firewall connection for output virt to return buffers to input virt
         output_in_virt_conn = firewall_connection(out_virt, in_virt, dma_queue_capacity, dma_queue_region_size)
@@ -713,7 +705,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         )
 
         # Create arp packet queue
-        arp_packet_queue_mr = MemoryRegion("arp_packet_queue_" + router.name, arp_packet_queue_region_size)
+        arp_packet_queue_mr = MemoryRegion(sdf, "arp_packet_queue_" + router.name, arp_packet_queue_region_size)
         sdf.add_mr(arp_packet_queue_mr)
         arp_packet_queue = firewall_region(router, arp_packet_queue_mr, "rw", arp_packet_queue_region_size)
 

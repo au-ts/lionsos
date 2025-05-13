@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <microkit.h>
+#include <os/sddf.h>
 #include <stdint.h>
 #include <py/runtime.h>
 #include <sddf/util/string.h>
