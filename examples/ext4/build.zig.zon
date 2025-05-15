@@ -1,0 +1,23 @@
+
+.{
+    .name = .ext4,
+    .version = "0.0.0",
+
+    .dependencies = .{
+        .lwext4 = .{
+            .url = "https://github.com/gkostka/lwext4/archive/refs/heads/master.zip",
+            .hash = "N-V-__8AAACGDADDHwSZ2DMsnJ2IpKPI_qrzof9mwsfH-gq0",
+        },
+        .sddf = .{
+            .path = "../../dep/sddf"
+        },
+        .microkit_libc = .{
+            .path = "microkit_libc/picolibc",
+        }
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+    },
+    .fingerprint = 0x1db9a982f9c31f5d,
+}
