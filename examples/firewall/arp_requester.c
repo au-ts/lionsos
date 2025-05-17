@@ -294,8 +294,8 @@ void init(void)
     sddf_dprintf("This is the number of arp clients: %d\n", arp_config.num_arp_clients);
 
     for (uint8_t client = 0; client < arp_config.num_arp_clients; client++) {
-        arp_queues[client] = (arp_queue_handle_t *) arp_config.clients[client].queue.vaddr;
-        arp_handle_init(arp_queues[client], arp_config.clients[client].capacity);
+        arp_queues[client] = (arp_queue_handle_t *) arp_config.arp_clients[client].queue.vaddr;
+        arp_handle_init(arp_queues[client], arp_config.arp_clients[client].capacity);
     }
 
     arp_table_init(&arp_table, (arp_entry_t *)arp_config.arp_cache.vaddr, arp_config.arp_cache_capacity);
@@ -306,7 +306,7 @@ void init(void)
 
 void notified(microkit_channel ch)
 {
-    if (ch == arp_config.clients[0].ch || (arp_config.num_arp_clients == 2 && ch == arp_config.clients[1].ch)) {
+    if (ch == arp_config.arp_clients[0].ch || (arp_config.num_arp_clients == 2 && ch == arp_config.arp_clients[1].ch)) {
         process_requests();
     } if (ch == net_config.rx.id) {
         process_responses();
@@ -341,7 +341,7 @@ void notified(microkit_channel ch)
     for (uint8_t client = 0; client < arp_config.num_arp_clients; client++) {
         if (notify_client[client]) {
             notify_client[client] = false;
-            microkit_notify(arp_config.clients[client].ch);
+            microkit_notify(arp_config.arp_clients[client].ch);
         }
     }
 }
