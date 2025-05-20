@@ -74,9 +74,41 @@ syn attack protection/syn cookies, connected\established rules, flow control
 #### TODO:
 
 
-### ICMP Module
-pings, destination unreachable, what else?
-choose 1 or 2 simple functionalities
+### ICMP
+For an overview of different types of ICMP messages see:
+https://www.computernetworkingnotes.com/networking-tutorials/icmp-error-messages-and-format-explained.html.
+
+There is a basic skeleton ICMP module currently that is intended to send "destination unreachable"
+packets back to a source in the case that an ARP request for the destination IP address times out.
+We wish to extend the functionality of this module. Additionally, there is an ICMP filter that
+behaves the same as the TCP and UDP packet filters, with rules tables that allow us to decide
+when to accept/drop packets.
+
+Pings:
+We want our firewall to be able to mediate if Pings are allowed through the firewall from the external
+network into the internal. We wish to add a configuration option to the firewall allowing us to specify
+this. If not allowed, we will drop any unsolicited pings coming into the firewall from the external
+network. However, if a device on the external network sends a ping out to the external network,
+we want the reply to be let back in. This will require tracking of outgoing pings, and filtering
+which ones we let back in.
+
+This will largely involve modifying `icmp_filter.c`, and creating a shared memory region between them
+so they can track the flow of pings, as well as if we should drop all ping packets.
+
+Rejecting packets:
+Currently, the filtering components only support allowing messages through the firewall, or dropping them.
+However, there is a third option that is sometimes used, and that is "reject". TCP and UDP handle rejections
+differently. For TCP, you should send out a reset, "RST", packet. For UDP, we send an ICMP "Port Unreachable"
+packet. We wish to implement the latter. We will need to somehow communicate from the UDP filter to the ICMP
+module to generate this Port Unreachable packet.
+See here for more information: https://www.coresentinel.com/reject-versus-drop/.
+
+Destination Unreachable:
+Currently, we only generate "Destination Host Unreachable" packets if an ARP request times out. We should,
+however, distinguish between "Host Unreachable" and "Network Unreachable". We should send "Host Unreachable"
+only for devices connected directly to our router, where our router is the last along the path. And we should
+send "Network Unreachable" packets if the next hop for the packet is a router.
+Some more information can be found here: https://www.liveaction.com/glossary/internet-control-message-protocol-icmp/.
 
 #### TODO:
 
