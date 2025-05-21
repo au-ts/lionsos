@@ -84,7 +84,7 @@ We wish to extend the functionality of this module. Additionally, there is an IC
 behaves the same as the TCP and UDP packet filters, with rules tables that allow us to decide
 when to accept/drop packets.
 
-Pings:
+#### Pings
 We want our firewall to be able to mediate if Pings are allowed through the firewall from the external
 network into the internal. We wish to add a configuration option to the firewall allowing us to specify
 this. If not allowed, we will drop any unsolicited pings coming into the firewall from the external
@@ -93,9 +93,11 @@ we want the reply to be let back in. This will require tracking of outgoing ping
 which ones we let back in.
 
 This will largely involve modifying `icmp_filter.c`, and creating a shared memory region between them
-so they can track the flow of pings, as well as if we should drop all ping packets.
+so they can track the flow of pings, as well as if we should drop all ping packets. This *may*
+be covered with the already exisiting "connect establish" rules, in which we can make it a wildcard
+rule by using a subnet length of 0.
 
-Rejecting packets:
+#### Rejecting packets
 Currently, the filtering components only support allowing messages through the firewall, or dropping them.
 However, there is a third option that is sometimes used, and that is "reject". TCP and UDP handle rejections
 differently. For TCP, you should send out a reset, "RST", packet. For UDP, we send an ICMP "Port Unreachable"
@@ -103,12 +105,24 @@ packet. We wish to implement the latter. We will need to somehow communicate fro
 module to generate this Port Unreachable packet.
 See here for more information: https://www.coresentinel.com/reject-versus-drop/.
 
-Destination Unreachable:
+As an extension, if there is time we can implement the TCP reset packet generation in the ICMP module
+for now.
+
+#### Destination Unreachable
 Currently, we only generate "Destination Host Unreachable" packets if an ARP request times out. We should,
 however, distinguish between "Host Unreachable" and "Network Unreachable". We should send "Host Unreachable"
 only for devices connected directly to our router, where our router is the last along the path. And we should
 send "Network Unreachable" packets if the next hop for the packet is a router.
 Some more information can be found here: https://www.liveaction.com/glossary/internet-control-message-protocol-icmp/.
+
+#### TTL Expiry
+In our routing component, we decrement the "time to live" field in the IP packets. When we reach 0,
+we currently just drop the packet. However, we would also wish for the routing component to signal
+the ICMP module to generate a "Time Exceeded" message.
+
+Note: Alot of this work will involve broadening the interface between the router (and other components)
+and the ICMP module. Additionally, we only generate a destination unreachable packet in the ICMP module,
+so developing a more generic packet constructer is required.
 
 #### TODO:
 
