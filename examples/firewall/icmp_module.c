@@ -19,9 +19,11 @@
 #include <lions/firewall/icmp_queue.h>
 
 
-__attribute__((__section__(".firewall_router_config"))) firewall_connection_resource_t icmp_config;
+__attribute__((__section__(".fw_icmp_module_config"))) fw_icmp_module_config_t icmp_config;
 
-__attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
+__attribute__((__section__(".net1_client_config"))) net_client_config_t net1_config;
+
+__attribute__((__section__(".net2_client_config"))) net_client_config_t net2_config;
 
 typedef struct state {
     net_queue_handle_t net_queue;
@@ -67,10 +69,10 @@ void generate_icmp()
         err = net_dequeue_free(&state.net_queue, &buffer);
         assert(!err);
 
-        icmphdr_t *icmp_resp = (icmphdr_t *) (net_config.tx_data.vaddr + buffer.io_or_offset);
+        icmphdr_t *icmp_resp = (icmphdr_t *) (net1_config.tx_data.vaddr + buffer.io_or_offset);
         // Construct the IP header for the response.
         sddf_memcpy(&icmp_resp->ip_hdr.ethdst_addr, &req.old_hdr.ethsrc_addr, ETH_HWADDR_LEN);
-        sddf_memcpy(&icmp_resp->ip_hdr.ethdst_addr, &net_config.mac_addr, ETH_HWADDR_LEN);
+        sddf_memcpy(&icmp_resp->ip_hdr.ethdst_addr, &net1_config.mac_addr, ETH_HWADDR_LEN);
         icmp_resp->ip_hdr.type = HTONS(ETH_TYPE_IP);
         icmp_resp->ip_hdr.version = 4;
         icmp_resp->ip_hdr.ihl = 20;
@@ -113,17 +115,18 @@ void generate_icmp()
 void init(void)
 {
     /* Setup the queue with the router. */
-    icmp_queue_init(&state.icmp_queue, icmp_config.queue.vaddr, icmp_config.capacity);
+    icmp_queue_init(&state.icmp_queue, icmp_config.router1_conn.queue.vaddr, icmp_config.router1_conn.capacity);
+    icmp_queue_init(&state.icmp_queue, icmp_config.router2_conn.queue.vaddr, icmp_config.router2_conn.capacity);
 
     /* Setup the queue with the transmit virtualiser. */
-    net_queue_init(&state.net_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
-        net_config.tx.num_buffers);
+    net_queue_init(&state.net_queue, net1_config.tx.free_queue.vaddr, net1_config.tx.active_queue.vaddr,
+        net1_config.tx.num_buffers);
     net_buffers_init(&state.net_queue, 0);
 }
 
 void notified(microkit_channel ch)
 {
-    if (ch == icmp_config.ch) {
+    if (ch == icmp_config.router1_conn.ch) {
         sddf_dprintf("Notified by router to send out icmp\n");
         generate_icmp();
     }

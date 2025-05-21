@@ -77,10 +77,17 @@ typedef struct fw_router_config {
     region_resource_t arp_cache;
     uint16_t arp_cache_capacity;
     region_resource_t packet_queue;
-    fw_webserver_router_config_t webserver;
-    fw_connection_resource_t filters[FW_MAX_FILTERS];
+    firewall_webserver_router_config_t webserver;
+    firewall_connection_resource_t icmp_module;
+    firewall_connection_resource_t filters[FW_MAX_FILTERS];
     uint8_t num_filters;
 } fw_router_config_t;
+
+
+typedef struct fw_icmp_module_config {
+    firewall_connection_resource_t router1_conn;
+    firewall_connection_resource_t router2_conn;
+} fw_icmp_module_config_t;
 
 typedef struct fw_webserver_filter_config {
     uint8_t interface;
