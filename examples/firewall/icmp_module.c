@@ -26,7 +26,8 @@ __attribute__((__section__(".net1_client_config"))) net_client_config_t net1_con
 __attribute__((__section__(".net2_client_config"))) net_client_config_t net2_config;
 
 typedef struct state {
-    net_queue_handle_t net_queue;
+    net_queue_handle_t net1_queue;
+    net_queue_handle_t net2_queue;
     icmp_queue_handle_t icmp_queue;
 } state_t;
 
@@ -57,16 +58,22 @@ uint16_t checksum(uint8_t *buf, uint16_t len)
     return( (uint16_t) sum ^ 0xFFFF);
 }
 
-void generate_icmp()
+void generate_icmp(int out_net)
 {
     bool transmitted = false;
-    while (!icmp_queue_empty(&state.icmp_queue) && !net_queue_empty_free(&state.net_queue)) {
+    net_queue_handle_t *curr_net;
+    if (out_net == 1) {
+        curr_net = &state.net1_queue;
+    } else {
+        curr_net = &state.net2_queue;
+    }
+    while (!icmp_queue_empty(&state.icmp_queue) && !net_queue_empty_free(curr_net)) {
         icmp_req_t req = {0};
         int err = icmp_dequeue(&state.icmp_queue, &req);
         assert(!err);
 
         net_buff_desc_t buffer = {};
-        err = net_dequeue_free(&state.net_queue, &buffer);
+        err = net_dequeue_free(curr_net, &buffer);
         assert(!err);
 
         icmphdr_t *icmp_resp = (icmphdr_t *) (net1_config.tx_data.vaddr + buffer.io_or_offset);
@@ -106,7 +113,7 @@ void generate_icmp()
         // Now that the packet is constructed, calculate the final checksum.
         icmp_resp->checksum = checksum((char *) (icmp_resp + sizeof(ipv4_packet_t)), sizeof(icmp_resp) - sizeof(ipv4_packet_t));
         buffer.len = icmp_resp->ip_hdr.tot_len;
-        err = net_enqueue_active(&state.net_queue, buffer);
+        err = net_enqueue_active(curr_net, buffer);
 
         assert(!err);
     }
@@ -118,16 +125,27 @@ void init(void)
     icmp_queue_init(&state.icmp_queue, icmp_config.router1_conn.queue.vaddr, icmp_config.router1_conn.capacity);
     icmp_queue_init(&state.icmp_queue, icmp_config.router2_conn.queue.vaddr, icmp_config.router2_conn.capacity);
 
-    /* Setup the queue with the transmit virtualiser. */
-    net_queue_init(&state.net_queue, net1_config.tx.free_queue.vaddr, net1_config.tx.active_queue.vaddr,
+    /* Setup the queue with the transmit virtualisers. */
+    net_queue_init(&state.net1_queue, net1_config.tx.free_queue.vaddr, net1_config.tx.active_queue.vaddr,
         net1_config.tx.num_buffers);
-    net_buffers_init(&state.net_queue, 0);
+    net_buffers_init(&state.net1_queue, 0);
+
+    net_queue_init(&state.net2_queue, net2_config.tx.free_queue.vaddr, net2_config.tx.active_queue.vaddr,
+        net2_config.tx.num_buffers);
+    net_buffers_init(&state.net2_queue, 0);
 }
 
 void notified(microkit_channel ch)
 {
     if (ch == icmp_config.router1_conn.ch) {
-        sddf_dprintf("Notified by router to send out icmp\n");
-        generate_icmp();
+        sddf_dprintf("Notified by router 1 to send out icmp\n");
+        // Set out net argument to network 1 - this ICMP packet will
+        // go out to the external network.
+        generate_icmp(1);
+    } else if (ch == icmp_config.router2_conn.ch) {
+        sddf_dprintf("Notified by router 2 to send out icmp\n");
+        // Set out net argument to network 2 - this ICMP packet will
+        // go out to the internal network.
+        generate_icmp(2);
     }
 }
