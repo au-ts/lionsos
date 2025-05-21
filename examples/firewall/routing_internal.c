@@ -40,7 +40,7 @@ firewall_queue_handle_t rx_free; /* Queue to return free rx buffers */
 firewall_queue_handle_t tx_active; /* Queue to transmit packets out the network */
 firewall_queue_handle_t webserver; /* Queue to route to webserver */
 uintptr_t data_vaddr; /* Virtual address or rx buffer data region */
-icmp_queue_handle_t icmp_module; /* Queue to transmit ICMP requests to the ICMP module. */
+icmp_queue_handle_t icmp_queue; /* Queue to transmit ICMP requests to the ICMP module. */
 
 /* Arp request/entry data structures */
 arp_queue_handle_t *arp_queue; /* This queue holds ARP requests/responses for the arp requester */
@@ -80,7 +80,7 @@ static void process_arp_waiting(void)
             bool notify_icmp = false;
             for (uint16_t i = 0; i < req_pkt->num_children; i++) {
                 icmp_req_t req = {0};
-                err = icmp_dequeue(&icmp_module, &req);
+                err = icmp_dequeue(&icmp_queue, &req);
                 if (err) {
                     sddf_dprintf("%s| ICMP queue was full.", microkit_name);
                 } else {
@@ -96,7 +96,7 @@ static void process_arp_waiting(void)
                     if (pkt_node->buffer.len >= (sizeof(ipv4_packet_t) + 8)) {
                         sddf_memcpy(&req.old_data, (void *)(pkt_node->buffer.io_or_offset + data_vaddr + sizeof(ipv4_packet_t)), 8);
                     }
-                    icmp_enqueue(&icmp_module, req);
+                    icmp_enqueue(&icmp_queue, req);
                     notify_icmp = true;
                 }
                 err = firewall_enqueue(&rx_free, pkt_node->buffer);
@@ -195,7 +195,7 @@ static void route()
 
                             // Enqueuing request to the ICMP module to send a destintion unreachable packet back to the source
                             icmp_req_t req = {0};
-                            err = icmp_dequeue(&icmp_module, &req);
+                            err = icmp_dequeue(&icmp_queue, &req);
                             if (err) {
                                 sddf_dprintf("%s| ICMP queue was full.", microkit_name);
                             } else {
@@ -210,7 +210,7 @@ static void route()
                                 if (buffer.len >= (sizeof(ipv4_packet_t) + 8)) {
                                     sddf_memcpy(&req.old_data, (void *)(buffer.io_or_offset + data_vaddr + sizeof(ipv4_packet_t)), 8);
                                 }
-                                icmp_enqueue(&icmp_module, req);
+                                icmp_enqueue(&icmp_queue, req);
                                 notify_icmp = true;
                             }
 
@@ -299,6 +299,8 @@ void init(void)
     arp_queue = (arp_queue_handle_t *) router_config.arp_queue.queue.vaddr;
     arp_handle_init(arp_queue, router_config.arp_queue.capacity);
     arp_table_init(&arp_table, (arp_entry_t *)router_config.arp_cache.vaddr, router_config.arp_cache_capacity);
+
+    icmp_queue_init(&icmp_queue, icmp_config.queue.vaddr, icmp_config.capacity);
 
     /* Initialise routing table */
     routing_entry_t default_entry = {true, ROUTING_OUT_EXTERNAL, 0, 0, 0, 0};

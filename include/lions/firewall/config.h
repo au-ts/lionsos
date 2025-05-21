@@ -17,6 +17,9 @@
 
 #define FIREWALL_DEBUG_OUTPUT 1
 
+#define ETH_HWADDR_LEN 6
+#define SDDF_NET_MAX_CLIENTS 61
+
 typedef struct firewall_connection_resource {
     region_resource_t queue;
     uint16_t capacity;
@@ -73,9 +76,15 @@ typedef struct firewall_router_config {
     uint16_t arp_cache_capacity;
     region_resource_t packet_queue;
     firewall_webserver_router_config_t webserver;
+    firewall_connection_resource_t icmp_module;
     firewall_connection_resource_t filters[FIREWALL_MAX_FILTERS];
     uint8_t num_filters;
 } firewall_router_config_t;
+
+typedef struct firewall_icmp_module_config {
+    firewall_connection_resource_t router1_conn;
+    firewall_connection_resource_t router2_conn;
+} firewall_icmp_module_config_t;
 
 typedef struct firewall_webserver_filter_config {
     uint16_t protocol;
