@@ -33,7 +33,11 @@ DTC := dtc
 MUSL_SRC := $(LIONSOS)/dep/musllibc
 MUSL := musllibc
 MICRODOT := ${LIONSOS}/dep/microdot/src
-FIREWALL_COMPONENTS := ${FIREWALL_SRC_DIR}/components
+FIREWALL_NET_COMPONENTS := ${FIREWALL_SRC_DIR}/net_components
+FIREWALL_FILTERS := ${FIREWALL_SRC_DIR}/filters
+FIREWALL_ROUTING := ${FIREWALL_SRC_DIR}/routing
+FIREWALL_ARP := ${FIREWALL_SRC_DIR}/arp
+FIREWALL_WEBSERVER := ${FIREWALL_SRC_DIR}/webserver
 
 METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
 DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
@@ -90,18 +94,18 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-vpath %.c ${SDDF} ${FIREWALL_SRC_DIR} ${FIREWALL_COMPONENTS}
+vpath %.c ${SDDF} ${FIREWALL_SRC_DIR} ${FIREWALL_NET_COMPONENTS} ${FIREWALL_FILTERS} ${FIREWALL_ROUTING} ${FIREWALL_ARP} ${FIREWALL_WEBSERVER}
 
 MICROPYTHON_LIBMATH := $(LIBMATH)
-MICROPYTHON_EXEC_MODULE := ui_server.py
-MICROPYTHON_FROZEN_MANIFEST := manifest.py
-MICROPYTHON_USER_C_MODULES := $(FIREWALL_SRC_DIR)/modfirewall.c
+MICROPYTHON_EXEC_MODULE := ${FIREWALL_WEBSERVER}/ui_server.py
+MICROPYTHON_FROZEN_MANIFEST := ${FIREWALL_WEBSERVER}/manifest.py
+MICROPYTHON_USER_C_MODULES := $(FIREWALL_WEBSERVER)/modfirewall.c
 MICROPYTHON_ENABLE_FIREWALL := 1
 
 include $(LIONSOS)/components/micropython/micropython.mk
 
-manifest.py: ui_server.py
-ui_server.py: $(MICRODOT)
+${FIREWALL_WEBSERVER}/manifest.py: ${FIREWALL_WEBSERVER}/ui_server.py
+${FIREWALL_WEBSERVER}/ui_server.py: $(MICRODOT)
 
 %.py: ${FIREWALL_SRC_DIR}/%.py
 	cp $< $@
@@ -141,7 +145,7 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 
 include ${SDDF_MAKEFILES}
 
-include ${FIREWALL_COMPONENTS}/firewall_network_components.mk
+include ${FIREWALL_NET_COMPONENTS}/firewall_network_components.mk
 
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
