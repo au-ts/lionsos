@@ -41,7 +41,7 @@ You must set at least the following environment variables:
 
 ```sh
 export MICROKIT_SDK=<path/to/sdk>
-export MICROKIT_BOARD=imx8mp
+export MICROKIT_BOARD=imx8mp_evk
 ```
 
 This project is by default built in debug mode. Set the following environment variable to change that:
