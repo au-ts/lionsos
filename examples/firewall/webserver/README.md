@@ -4,7 +4,7 @@ We provide a basic GUI that can be accessed by any device connected on the inter
 the IP address of the firewall on port 80. This GUI allows you to view and edit all the filtering rules
 and routes for both the internal and external networks.
 
-The webserver runs ontop of Micropython using the Microdot library. The frontend is implemented in
+The webserver runs on top of Micropython using the Microdot library. The frontend is implemented in
 `ui_server.py` and the backend is implemented in `modfirewall.c`.
 
 The following is a diagram of how the webserver is connected to the system:
