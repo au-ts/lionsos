@@ -1,14 +1,14 @@
 # ARP Components
 
 We have two distinct ARP components, the ARP requester which is responsible for handling ARP requests and
-maintaing ARP tables, and the ARP responder, which simply responds to ARP requests that have been addressed
+maintaining ARP tables, and the ARP responder, which simply responds to ARP requests that have been addressed
 to the NIC it is attached to.
 
 There are two of each of these components, one set for inbound traffic and one for outbound traffic.
 
 ## ARP Requester
 
-The ARP requester receieves ARP requests from the router, and if the ARP requester for handling
+The ARP requester receives ARP requests from the router, and if the ARP requester for handling
 ARP requests for the internal network, also from the webserver component. These requests are of
 the following structure:
 
@@ -56,7 +56,7 @@ stale entries. The following are constants from `arp_requester.c` that the user 
 #define ARP_RETRY_TIMER_S 5             /* How often to retry an ARP request, in seconds. */
 #define ARP_CACHE_LIFE_M 5              /* The lifetime of the ARP cache in minutes. After this time elapses, the cache is flushed. */
 ```
-The following is a diagram with the ARP requster connected to the webserver:
+The following is a diagram with the ARP requester connected to the webserver:
 
 ![](../images/arp_requester.svg)
 

@@ -10,7 +10,7 @@ make the best possible match for the given destination IP.
 They are also connected to the ARP requesters. When a route has been found, the router will consult
 the ARP tables to see if there is a valid existing mapping of IP <-> MAC. If not, the router
 will enqueue a request to the ARP requester, and place the packet into a waiting queue. This waiting queue
-is a linked list of packets and their corresponding IP addresses. For packets with the same desitnation IP,
+is a linked list of packets and their corresponding IP addresses. For packets with the same destination IP,
 they are put into a child linked list from the root node. On a successful ARP response will use the supplied MAC
 to send the packet out. On an unsuccessful response, the router will drop the packet.
 
