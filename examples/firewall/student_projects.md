@@ -69,7 +69,10 @@ protection domains that use the arp table and queues for creating requests are:
 
 
 ### Improved TCP
-syn attack protection/syn cookies, connected\established rules, flow control
+syn attack protection/syn cookies
+connected\established rules
+monitoring network flow
+TCP module: When a TCP connection attempts a 3-way handshake with a closed port then a RST packet should be sent back as a response. See RFC793.
 
 #### TODO:
 
