@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from typing import List
 from sdfgen import SystemDescription, Sddf, DeviceTree
 from ctypes import *
+from importlib.metadata import version
+import ipaddress
 
-# Make sure to run the sdfgen helper script on all config header files referenced in the meta program before building
-# Must add definitions for macros SDDF_NET_MAX_CLIENTS and ETH_HWADDR_LEN
-# python3 sdfgen_helper.py ../../dep/sddf/include/sddf/resources/common.h ../../dep/sddf/include/sddf/resources/device.h ../../include/lions/firewall/config.h
+assert version('sdfgen').split(".")[1] == "24", "Unexpected sdfgen version"
 
 from sdfgen_helper import *
 from config_structs import *
@@ -60,14 +60,23 @@ FILTER_ACTION_ALLOW = 1
 FILTER_ACTION_DROP = 2
 FILTER_ACTION_CONNECT = 3
 
+def ip_to_int(ipString: str):
+    ipaddress.IPv4Address(ipString)
+     
+    # Switch little to big endian
+    ipSplit = ipString.split(".")
+    ipSplit.reverse()
+    reversedIp = ".".join(ipSplit)
+    return int(ipaddress.IPv4Address(reversedIp))
+
 macs = [
     [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x15], # External network, ETH1
     [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x1d] # Internal network, ETH2
 ]
 
 ips = [
-    3338669322, # 10.13.0.199
-    2205888 # 192.168.33.0
+    ip_to_int("172.16.2.1"), # 16912556
+    ip_to_int("192.168.33.1") # 18983104
 ]
 
 arp_responder_protocol = 0x92

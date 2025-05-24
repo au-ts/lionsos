@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import sys
 import re
 import subprocess
@@ -21,10 +22,10 @@ from os import path
 ### Assumptions
 # If macros or types are found in config files that are not defined, the script will output them
 # upon termination and will not create the python classes. If the unknown type is a c type, simply
-# add it to the c_type_to_p_class dictionary. If the type or macro is in another header, either
-# include this header in the files passed to the script, or temporarily add the definition to one of
-# the config files passed to generate the the python classes, then remove before building your
-# system.
+# add it to the c_type_to_p_class dictionary. If macros are unknown, their values can be passed to
+# the script as arguments. If a C type is unknown and defined in another header, either include this
+# header in the files passed to the script, or temporarily add the definition to one of the config
+# files passed to generate the the python classes, then remove before building your system.
 # 
 # The script assumes that config headers are passed in order of dependencies, so be sure to pass
 # files containing definitions that are used in other files first.
@@ -53,6 +54,9 @@ def update_elf_section(obj_copy: str, elf_name: str, section_name: str, data_nam
     assert path.isfile(elf_name)
     assert path.isfile(data_name)
     assert subprocess.run([obj_copy, "--update-section", "." + section_name + "=" + data_name, elf_name]).returncode == 0
+
+# Output file
+p_classes = "../config_structs.py"
 
 c_name_regex = r"[a-zA-Z_][a-zA-Z0-9_]{0,63}"
 # Currently we only support digits and macros for array sizes
@@ -208,12 +212,22 @@ def cNameToPName(c_name):
     
     return p_name
 
-# Output file
-p_classes = "config_structs.py"
-
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    
+    # Accept values for unknown Macros
+    parser.add_argument("--macros", required=True)
+    parser.add_argument("--configs", required=True)
+    args = parser.parse_args()
+    
+    # Store argument passed macros
+    for macro_def in args.macros.split(" "):
+        macro_val = macro_def.split("=")
+        Macro(macro_val[0], macro_val[1])
+    
     # Extract struct files
-    c_headers = sys.argv[1:]
+    c_headers = args.configs.split(" ")
+
     # Process all config headers
     for file in c_headers:
         with open(file, "r") as input:
@@ -404,7 +418,7 @@ if __name__ == '__main__':
             for field in struct.fields.values():
                 out.write(" " * 8)
                 if len(field.n_size) and field.c_type not in Struct.all_structs:
-                    out.write(f"{field.c_name}_arg = [{field.p_class}()] * ({field.e_size} - len(self.{field.c_name}))")
+                    out.write(f"{field.c_name}_arg = self.{field.c_name} + [{field.p_class}()] * ({field.e_size} - len(self.{field.c_name}))")
                 elif len(field.n_size) and field.c_type in Struct.all_structs:
                     out.write(f"{field.c_name}_arg = [x.to_struct() for x in self.{field.c_name}] + (({field.e_size} - len(self.{field.c_name})) * [{field.p_class}()])")
                 elif field.c_type in Struct.all_structs:

@@ -39,6 +39,12 @@ METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
 DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
 DTB := $(MICROKIT_BOARD).dtb
 
+SDFGEN_HELPER := $(FIREWALL_SRC_DIR)/sdfgen_helper.py
+SDFGEN_UNKOWN_MACROS := ETH_HWADDR_LEN=6 SDDF_NET_MAX_CLIENTS=64
+FIREWALL_CONFIG_HEADERS := $(SDDF)/include/sddf/resources/common.h \
+							$(SDDF)/include/sddf/resources/device.h \
+							$(LIONSOS)/include/lions/firewall/config.h
+
 IMAGES := micropython.elf \
 		  eth_driver_imx.elf firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
 		  eth_driver_dwmac.elf timer_driver.elf serial_driver.elf serial_virt_tx.elf \
@@ -86,6 +92,7 @@ MICROPYTHON_LIBMATH := $(LIBMATH)
 MICROPYTHON_EXEC_MODULE := ui_server.py
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
 MICROPYTHON_USER_C_MODULES := $(FIREWALL_SRC_DIR)/modfirewall.c
+MICROPYTHON_ENABLE_FIREWALL := 1
 
 include $(LIONSOS)/components/micropython/micropython.mk
 
@@ -136,6 +143,7 @@ $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
+	$(PYTHON) $(SDFGEN_HELPER) --macros "$(SDFGEN_UNKOWN_MACROS)" --configs "$(FIREWALL_CONFIG_HEADERS)"
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --objcopy $(OBJCOPY)
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
