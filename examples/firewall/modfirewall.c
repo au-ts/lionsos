@@ -61,7 +61,7 @@ size_t next_route_id = 3;
 #define INVALID 0
 
 // @kwinter: Find a better way to do this initialisation.
-void webserver_init(void)
+void firewall_webserver_init(void)
 {
     sddf_dprintf("Initialsing webserver state.\n");
     for (int i = 0; i < FIREWALL_NUM_ROUTERS; i++) {

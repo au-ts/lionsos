@@ -23,6 +23,7 @@
 #include <sddf/timer/config.h>
 #include <sddf/network/config.h>
 #include <lions/fs/config.h>
+#include <lions/firewall/config.h>
 #include "lwip/init.h"
 #include "mpconfigport.h"
 #include "fs_helpers.h"
@@ -34,6 +35,13 @@ __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
 
 #ifdef ENABLE_I2C
 __attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_config;
+#endif
+
+#ifdef  ENABLE_FIREWALL
+__attribute__((__section__(".firewall_webserver_config"))) firewall_webserver_config_t firewall_config;
+
+void firewall_webserver_init(void);
+void mpnet_process_arp(void);
 #endif
 
 bool fs_enabled;
@@ -151,7 +159,9 @@ void init(void) {
         assert(false);
     }
 
-    webserver_init();
+#ifdef  ENABLE_FIREWALL
+    firewall_webserver_init();
+#endif
 
     // Run the Micropython cothread
     microkit_cothread_yield();
@@ -163,6 +173,11 @@ void mpnet_handle_notify(void);
 void mpnet_process_arp(void);
 
 void notified(microkit_channel ch) {
+#ifdef  ENABLE_FIREWALL
+    if (net_enabled && (ch == firewall_config.arp_queue.ch)) {
+        mpnet_process_arp();
+    }
+#endif
     if (net_enabled) {
         mpnet_process_rx();
         mpnet_process_arp();

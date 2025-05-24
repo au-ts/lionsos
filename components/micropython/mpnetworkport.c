@@ -39,6 +39,7 @@
 #include <netif/etharp.h>
 
 #include <lions/firewall/arp_queue.h>
+#include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/common.h>
@@ -109,13 +110,13 @@ u32_t sys_now(void) {
     return mp_obj_get_int(mp_time_time_get());
 }
 
-void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN])
+static void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN])
 {
-    // Ethernet header
+    /* Ethernet header addresses */
     memcpy(arp_response_pkt.ethdst_addr, firewall_config.mac_addr, ETH_HWADDR_LEN);
     memcpy(arp_response_pkt.ethsrc_addr, mac, ETH_HWADDR_LEN);
     arp_response_pkt.type = HTONS(ETH_TYPE_ARP);
-    // ARP packet
+    /* ARP Packet */
     arp_response_pkt.hwtype = HTONS(ETH_HWTYPE);
     arp_response_pkt.proto = HTONS(ETH_TYPE_IP);
     arp_response_pkt.hwlen = ETH_HWADDR_LEN;
@@ -148,12 +149,11 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
     if (eth_hdr->type == HTONS(ETH_TYPE_ARP)) {
         arp_packet_t *arp_hdr = (arp_packet_t *)p->payload;
         if (arp_hdr->opcode == HTONS(ETHARP_OPCODE_REQUEST)) {
-            // Check if the ip is the same as has been assigned to this interface. If it is,
-            // this packet is most likely an ARP probe. We should discard.
+            /* Check if the ip is the same as has been assigned to this interface. If it is,
+            this packet is most likely an ARP probe. We should discard. */
             if (arp_hdr->ipdst_addr != firewall_config.ip) {
-                char buf[16];
                 /* This is an arp request, don't transmit through the network */
-                arp_request_t request = {arp_hdr->ipdst_addr, {0}, false};
+                arp_request_t request = {arp_hdr->ipdst_addr, {0}, ARP_STATE_INVALID};
                 int err = arp_enqueue_request(state.arp_queue, request);
                 if (err) {
                     printf("Could not enqueue arp request, queue is full");
@@ -198,7 +198,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
 }
 
 static void netif_status_callback(struct netif *netif) {
-    dlog("Netif is up now for MAC[%x]! IP address for netif %s is: %s", netif->hwaddr[5], netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
+    dlog("Netif is up for MAC[5] = %x! IP address for netif %s is: %s", netif->hwaddr[5], netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
 }
 
 static err_t ethernet_init(struct netif *netif)
@@ -210,7 +210,7 @@ static err_t ethernet_init(struct netif *netif)
 
     state_t *data = netif->state;
 
-    sddf_memcpy(netif->hwaddr, firewall_config.mac_addr, 6);
+    sddf_memcpy(netif->hwaddr, firewall_config.mac_addr, ETH_HWADDR_LEN);
 
     netif->mtu = ETHER_MTU;
     netif->hwaddr_len = ETHARP_HWADDR_LEN;
@@ -233,12 +233,12 @@ void init_networking(void) {
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
-    sddf_memcpy(state.mac, firewall_config.mac_addr, 6);
+    sddf_memcpy(state.mac, firewall_config.mac_addr, ETH_HWADDR_LEN);
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
     ipaddr_aton("0.0.0.0", &gw);
-    ipaddr_aton("192.168.33.0", &ipaddr);
+    ipaddr_aton(ipaddr_to_string(firewall_config.ip, ip_addr_buf0, 16), &ipaddr);
     ipaddr_aton("0.0.0.0", &multicast);
     ipaddr_aton("255.255.255.0", &netmask);
 
@@ -282,21 +282,18 @@ void init_networking(void) {
     }
 }
 
-// TODO: Add this to notified, as well as modifying channels inside notified
 void mpnet_process_arp(void) {
     while (!arp_queue_empty_response(state.arp_queue)) {
         arp_request_t response;
         int err = arp_dequeue_response(state.arp_queue, &response);
         assert(!err);
 
-        // TODO: Check validity of response
+        // TODO: Input ICMP unreachable packets if response state is unreachable
         if (response.state == ARP_STATE_REACHABLE) {
-            // Contruct the ARP response packet
             fill_arp(response.ip, response.mac_addr);
+
             if (FIREWALL_DEBUG_OUTPUT) {
-                // TODO: Add more logging output
-                char buf[16];
-                dlog("Dequeuing ARP response for ip %s -> obtained MAC[0] = %x, MAC[5] = %x\n", ipaddr_to_string(response.ip, buf, 16), response.mac_addr[0], response.mac_addr[5]);
+                dlog("Inputting ARP response for ip %s -> obtained MAC[0] = %x, MAC[5] = %x\n", ipaddr_to_string(response.ip, ip_addr_buf0, 16), response.mac_addr[0], response.mac_addr[5]);
             }
 
             /* Input packet into lwip stack */

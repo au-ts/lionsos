@@ -7,6 +7,9 @@
 
 #define IPV4_ADDR(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((uint32_t) (d) << 24))
 
+static char ip_addr_buf0[IPV4_ADDR_BUFLEN];
+static char ip_addr_buf1[IPV4_ADDR_BUFLEN];
+
 static char *ipaddr_to_string(uint32_t s_addr, char *buf, int buflen)
 {
     char inv[3], *rp;
@@ -23,12 +26,12 @@ static char *ipaddr_to_string(uint32_t s_addr, char *buf, int buflen)
             inv[i++] = (char)('0' + rem);
         } while (*ap);
         while (i--) {
-            if (len++ >= buflen) {
+            if (len++ >= IPV4_ADDR_BUFLEN) {
                 return NULL;
             }
             *rp++ = inv[i];
         }
-        if (len++ >= buflen) {
+        if (len++ >= IPV4_ADDR_BUFLEN) {
             return NULL;
         }
         *rp++ = '.';
