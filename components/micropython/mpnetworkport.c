@@ -42,7 +42,6 @@
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
-#include <lions/firewall/common.h>
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
@@ -156,7 +155,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
                 arp_request_t request = {arp_hdr->ipdst_addr, {0}, ARP_STATE_INVALID};
                 int err = arp_enqueue_request(state.arp_queue, request);
                 if (err) {
-                    printf("Could not enqueue arp request, queue is full");
+                    dlog("Could not enqueue arp request, queue is full");
                     return ERR_MEM;
                 }
                 notify_arp = true;
