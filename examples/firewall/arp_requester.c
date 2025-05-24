@@ -19,7 +19,6 @@
 #include <lions/firewall/config.h>
 #include <lions/firewall/protocols.h>
 #include <lions/firewall/arp_queue.h>
-#include <lions/firewall/common.h>
 #include <string.h>
 
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
@@ -100,7 +99,6 @@ static void process_requests()
             } else if (entry != NULL && entry->state == ARP_STATE_PENDING) {
                 /* Notify client upon response for existing ARP request */
                 entry->client |= BIT(client);
-                sddf_dprintf("Setting notify for client: %d\n", client);
                 continue;
             }
             
@@ -294,8 +292,6 @@ void init(void)
     net_queue_init(&tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
         net_config.tx.num_buffers);
     net_buffers_init(&tx_queue, 0);
-
-    sddf_dprintf("This is the number of arp clients: %d\n", arp_config.num_arp_clients);
 
     for (uint8_t client = 0; client < arp_config.num_arp_clients; client++) {
         arp_queues[client] = (arp_queue_handle_t *) arp_config.arp_clients[client].queue.vaddr;
