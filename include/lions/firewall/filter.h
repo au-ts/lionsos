@@ -12,7 +12,15 @@ typedef enum {
 	FILTER_ERR_DUPLICATE,	/* Duplicate entry exists */
     FILTER_ERR_CLASH, /* Entry clashes with existing entry */
     FILTER_ERR_INVALID_RULE_ID /* Rule id does not point to a valid entry */
-} firewall_filter_error_t;
+} firewall_filter_err_t;
+
+static const char *firewall_filter_err_str[] = {
+    "Ok.",
+    "Out of memory error.",
+    "Duplicate entry.",
+    "Clashing entry.",
+    "Invalid rule ID."
+};
 
 typedef enum {
     FILTER_ACT_NONE,   /* No rule exists */
@@ -21,6 +29,14 @@ typedef enum {
     FILTER_ACT_CONNECT, /* Allow traffic matching this rule, and add a rule allowing traffic in the opposite direction */
     FILTER_ACT_ESTABLISHED, /* Traffic has been established in this direction, allow return traffic */
 } firewall_action_t;
+
+static const char *firewall_filter_action_str[] = {
+    "No rule",
+    "Allow",
+    "Drop",
+    "Connect",
+    "Established"
+};
 
 typedef struct firewall_rule {
     bool valid;
@@ -51,7 +67,7 @@ typedef struct firewall_filter_state {
     firewall_rule_t *rules;
     uint16_t rules_capacity;
     firewall_instance_t *internal_instances; /* Instances for other filter to check */
-    firewall_instance_t *external_instances; /* Instances for this filter to check against*/
+    firewall_instance_t *external_instances; /* Instances for this filter to check against */
     uint16_t instances_capacity;
     firewall_action_t default_action;
 } firewall_filter_state_t;
@@ -89,7 +105,7 @@ static void firewall_filter_state_init(firewall_filter_state_t *state,
                                        void *rules, 
                                        uint16_t rules_capacity,
                                        void *internal_instances, 
-                                       void * external_instances, 
+                                       void *external_instances, 
                                        uint16_t instances_capacity,
                                        firewall_action_t default_action)
 {
@@ -101,7 +117,7 @@ static void firewall_filter_state_init(firewall_filter_state_t *state,
     state->default_action = default_action;
 }
 
-static firewall_filter_error_t firewall_filter_add_rule(firewall_filter_state_t *state,
+static firewall_filter_err_t firewall_filter_add_rule(firewall_filter_state_t *state,
                                     uint32_t src_ip,
                                     uint16_t src_port,
                                     uint32_t dst_ip,
@@ -158,10 +174,8 @@ static firewall_filter_error_t firewall_filter_add_rule(firewall_filter_state_t 
 
         /* There is a clash! */
         if (action == rule->action) {
-            sddf_dprintf("ERR| filter_add_rule: There is a duplicate!");
             return FILTER_ERR_DUPLICATE;
         } else {
-            sddf_dprintf("ERR| filter_add_rule: There is a clash!");
             return FILTER_ERR_CLASH;
         }
     }
@@ -185,7 +199,7 @@ static firewall_filter_error_t firewall_filter_add_rule(firewall_filter_state_t 
     return FILTER_ERR_OKAY;
 }
 
-static firewall_filter_error_t firewall_filter_add_instance(firewall_filter_state_t *state,
+static firewall_filter_err_t firewall_filter_add_instance(firewall_filter_state_t *state,
                                                             uint32_t src_ip,
                                                             uint16_t src_port,
                                                             uint32_t dst_ip,
@@ -313,7 +327,7 @@ static firewall_action_t firewall_filter_find_action(firewall_filter_state_t *st
     return FILTER_ACT_NONE;
 }
 
-static firewall_filter_error_t firewall_filter_remove_instances(firewall_filter_state_t *state,
+static firewall_filter_err_t firewall_filter_remove_instances(firewall_filter_state_t *state,
                                                                 bool default_rule,
                                                                 uint8_t rule_id)
 {
@@ -336,11 +350,11 @@ static firewall_filter_error_t firewall_filter_remove_instances(firewall_filter_
     return FILTER_ERR_OKAY;
 }
 
-static firewall_filter_error_t firewall_filter_update_default_action(firewall_filter_state_t *state, firewall_action_t new_action)
+static firewall_filter_err_t firewall_filter_update_default_action(firewall_filter_state_t *state, firewall_action_t new_action)
 {
     firewall_action_t old_action = state->default_action;
     if (old_action == FILTER_ACT_CONNECT) {
-        firewall_filter_error_t err = firewall_filter_remove_instances(state, true, 0);
+        firewall_filter_err_t err = firewall_filter_remove_instances(state, true, 0);
         assert(err == FILTER_ERR_OKAY);
     }
     
@@ -349,16 +363,16 @@ static firewall_filter_error_t firewall_filter_update_default_action(firewall_fi
     return FILTER_ERR_OKAY;
 }
 
-static firewall_filter_error_t firewall_filter_remove_rule(firewall_filter_state_t *state, uint8_t rule_id)
+static firewall_filter_err_t firewall_filter_remove_rule(firewall_filter_state_t *state, uint8_t rule_id)
 {
     firewall_rule_t *rule = state->rules + rule_id;
-    if (!rule->valid) {
+    if (rule_id >= state->rules_capacity || !rule->valid) {
         return FILTER_ERR_INVALID_RULE_ID;
     }
 
     firewall_action_t rule_action = rule->action;
     if (rule_action == FILTER_ACT_CONNECT) {
-        firewall_filter_error_t err = firewall_filter_remove_instances(state, false, rule_id);
+        firewall_filter_err_t err = firewall_filter_remove_instances(state, false, rule_id);
         assert(err == FILTER_ERR_OKAY);
     }
     

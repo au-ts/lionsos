@@ -18,7 +18,7 @@
 extern firewall_webserver_config_t firewall_config;
 
 typedef struct webserver_state {
-    routing_table_t router_info[FIREWALL_NUM_ROUTERS];
+    routing_table_t router_info[FIREWALL_NUM_INTERFACES];
 } webserver_state_t;
 
 webserver_state_t webserver_state = {0};
@@ -64,11 +64,11 @@ size_t next_route_id = 3;
 void firewall_webserver_init(void)
 {
     sddf_dprintf("Initialsing webserver state.\n");
-    for (int i = 0; i < FIREWALL_NUM_ROUTERS; i++) {
+    for (int i = 0; i < FIREWALL_NUM_INTERFACES; i++) {
         sddf_dprintf("This is the vaddr of the routing table[%d]: 0x%p\n", i, firewall_config.routers[i].routing_table.vaddr);
         routing_entry_t default_entry = {true, ROUTING_OUT_EXTERNAL, 0, 0, 0, 0};
         routing_table_init(&webserver_state.router_info[i], default_entry, firewall_config.routers[i].routing_table.vaddr,
-            firewall_config.ip, firewall_config.routers[i].routing_table_capacity);
+            firewall_config.routers[i].routing_table_capacity);
     }
 }
 
@@ -183,10 +183,10 @@ STATIC mp_obj_t route_add(mp_uint_t n_args, const mp_obj_t *args) {
     uint32_t dest_ip = (ip_to_int(destination));
     uint32_t next_hop_ip = (ip_to_int(next_hop));
 
-    seL4_SetMR(ROUTER_ADD_ARG_DEST_IP, dest_ip);
-    seL4_SetMR(ROUTER_ADD_ARG_SUBNET, subnet);
-    seL4_SetMR(ROUTER_ADD_ARG_NEXT_HOP, next_hop_ip);
-    seL4_SetMR(ROUTER_ADD_ARG_NUM_HOPS, num_hops);
+    seL4_SetMR(ROUTER_ARG_IP, dest_ip);
+    seL4_SetMR(ROUTER_ARG_SUBNET, subnet);
+    seL4_SetMR(ROUTER_ARG_NEXT_HOP, next_hop_ip);
+    seL4_SetMR(ROUTER_ARG_NUM_HOPS, num_hops);
 
     microkit_msginfo msginfo = microkit_ppcall(firewall_config.routers[iface].routing_ch, microkit_msginfo_new(FIREWALL_ADD_ROUTE, 4));
     uint32_t err = seL4_GetMR(FILTER_RET_ERR);
@@ -217,7 +217,7 @@ STATIC mp_obj_t route_delete(mp_obj_t route_id_in, mp_obj_t interface) {
         return mp_const_none;
     }
 
-    seL4_SetMR(ROUTER_DEL_ARG_ID, route_id);
+    seL4_SetMR(ROUTER_ARG_ROUTE_ID, route_id);
     microkit_msginfo msginfo = microkit_ppcall(firewall_config.routers[iface].routing_ch, microkit_msginfo_new(FIREWALL_DEL_ROUTE, 1));
     uint32_t err = seL4_GetMR(FILTER_RET_ERR);
     if(err) return mp_obj_new_int_from_uint(err);
@@ -291,11 +291,11 @@ STATIC mp_obj_t route_get_nth(mp_obj_t route_idx_in, mp_obj_t interface) {
             mp_obj_t tuple[5];
             tuple[0] = mp_obj_new_int_from_uint(i);
             char dest_buf[16];
-            char dest_ip = ipaddr_to_string(routes[i].ip, dest_buf, 16);
+            char dest_ip = ipaddr_to_string(routes[i].ip, dest_buf);
             tuple[1] = mp_obj_new_str(dest_buf, sddf_strlen(dest_buf));
             tuple[2] = mp_obj_new_int_from_uint(routes[i].subnet);
             char hop_buf[16];
-            char hop_ip = ipaddr_to_string(routes[i].next_hop, hop_buf, 16);
+            char hop_ip = ipaddr_to_string(routes[i].next_hop, hop_buf);
             tuple[3] = mp_obj_new_str(hop_buf, sddf_strlen(hop_buf));
             tuple[4] = mp_obj_new_int_from_uint(routes[i].num_hops);
             return mp_obj_new_tuple(5, tuple);
@@ -707,10 +707,10 @@ STATIC mp_obj_t rule_get_nth(mp_obj_t protocol, mp_obj_t filter, mp_obj_t rule_i
     // index as the ID here.
     tuple[0] = mp_obj_new_int_from_uint(i);
     char buf[16];
-    char src_ip = ipaddr_to_string(rule.src_ip, buf, 16);
+    char src_ip = ipaddr_to_string(rule.src_ip, buf);
     tuple[1] = mp_obj_new_str(buf, sddf_strlen(buf));
     tuple[2] = mp_obj_new_int_from_uint(rule.src_port);
-    char dst_ip = ipaddr_to_string(rule.dst_ip, buf, 16);
+    char dst_ip = ipaddr_to_string(rule.dst_ip, buf);
     tuple[3] = mp_obj_new_str(buf, sddf_strlen(buf));
     tuple[4] = mp_obj_new_int_from_uint(rule.dst_port);
     tuple[5] = mp_obj_new_int_from_uint(rule.src_subnet);

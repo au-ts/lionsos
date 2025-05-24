@@ -5,41 +5,47 @@
 #include <lions/firewall/common.h>
 #include <lions/firewall/queue.h>
 
-/* ID's for router PPC's */
-#define FIREWALL_ADD_ROUTE 0
-#define FIREWALL_DEL_ROUTE 1
-
-/* Enums used for PPC */
-typedef enum {
-    ROUTER_ADD_ARG_DEST_IP = 0,
-    ROUTER_ADD_ARG_SUBNET,
-    ROUTER_ADD_ARG_NEXT_HOP,
-    ROUTER_ADD_ARG_NUM_HOPS
-} router_add_args_t;
-
-typedef enum {
-    ROUTER_DEL_ARG_ID = 0,
-} router_del_args_t;
-
-typedef enum {
-    ROUTER_RET_ERR = 0,
-    ROUTER_RET_ROUTE_ID = 1
-} router_ret_args_t;
-/* Routing table data structures */
-
+/* Routing internal errors */
 typedef enum {
     ROUTING_ERR_OKAY = 0,       /* No error */
 	ROUTING_ERR_FULL,           /* Data structure is full */
 	ROUTING_ERR_DUPLICATE,	    /* Duplicate entry exists */
     ROUTING_ERR_CLASH,          /* Entry clashes with existing entry */
     ROUTING_ERR_INVALID_CHILD,  /* Child node IP does not match parent node IP */
-    ROUTING_ERR_INVALID_ID    /* Node does not exist */
-} routing_error_t;
+    ROUTING_ERR_INVALID_ID      /* Node does not exist */
+} routing_err_t;
 
+static const char *routing_err_str[] = {
+    "Ok.",
+    "Out of memory error.",
+    "Duplicate entry.",
+    "Clashing entry.",
+    "Invalid child node.",
+    "Invalid rule ID."
+};
+
+/* Routing interfaces */
 typedef enum {
     ROUTING_OUT_EXTERNAL = 0, /* transmit out NIC */
 	ROUTING_OUT_INTERNAL /* transmit within the system */
 } routing_out_interfaces_t;
+
+/* PP call parameters for webserver to call routers */
+#define FIREWALL_ADD_ROUTE 0
+#define FIREWALL_DEL_ROUTE 1
+
+typedef enum {
+    ROUTER_ARG_ROUTE_ID = 0,
+    ROUTER_ARG_IP,
+    ROUTER_ARG_SUBNET,
+    ROUTER_ARG_NEXT_HOP,
+    ROUTER_ARG_NUM_HOPS
+} router_args_t;
+
+typedef enum {
+    ROUTER_RET_ERR = 0,
+    ROUTER_RET_ROUTE_ID = 1
+} router_ret_args_t;
 
 typedef struct routing_entry {
     bool valid;
@@ -53,7 +59,6 @@ typedef struct routing_entry {
 typedef struct routing_table {
     routing_entry_t *entries; /* subnet entries */
     routing_entry_t default_route; /* default route if no matches are found */
-    uint32_t network_ip; /* ip of this network */
     uint16_t capacity; /* capacity of table */
 } routing_table_t;
 
@@ -110,7 +115,7 @@ pkt_waiting_node_t *pkts_waiting_next_child(pkts_waiting_t *pkts_waiting, pkt_wa
 }
 
 /* Add a child node to a parent waiting node */
-routing_error_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *parent, uint32_t ip, firewall_buff_desc_t buffer) {
+routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *parent, uint32_t ip, firewall_buff_desc_t buffer) {
     if (pkt_waiting_full(pkts_waiting)) {
         return ROUTING_ERR_FULL;
     }
@@ -143,7 +148,7 @@ routing_error_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting
 }
 
 /* Add a node to IP packet list */
-routing_error_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, firewall_buff_desc_t buffer) {
+routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, firewall_buff_desc_t buffer) {
     if (pkt_waiting_full(pkts_waiting)) {
         return ROUTING_ERR_FULL;
     }
@@ -178,7 +183,7 @@ routing_error_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, fire
 }
 
 /* Free a node and all child nodes. Must pass a parent node. */
-routing_error_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *parent) {
+routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *parent) {
     /* First free children */
     uint16_t child_idx = parent->next_child;
     pkt_waiting_node_t *child = pkts_waiting_next_child(pkts_waiting, parent);
@@ -222,18 +227,19 @@ routing_error_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_waiti
 }
 
 static void routing_table_init(routing_table_t *table,
-    routing_entry_t default_route,
-    void *entries, 
-    uint32_t network_ip,
-    uint16_t capacity)
+                               routing_entry_t default_route,
+                               void *entries, 
+                               uint16_t capacity)
 {
     table->entries = (routing_entry_t *)entries;
     table->default_route = default_route;
-    table->network_ip = network_ip;
     table->capacity = capacity;
 }
 
-static routing_entry_t *routing_find_route(routing_table_t *table, uint32_t ip)
+static uint16_t routing_find_route(routing_table_t *table,
+                               uint32_t ip,
+                               uint32_t *next_hop,
+                               routing_out_interfaces_t *out_interface)
 {
     routing_entry_t *match = NULL;
     for (uint16_t i = 0; i < table->capacity; i++) {
@@ -258,21 +264,26 @@ static routing_entry_t *routing_find_route(routing_table_t *table, uint32_t ip)
         }
     }
 
-    if (match == NULL) {
-        match = &table->default_route;
-        match->ip = ip;
+    if (match) {
+        *next_hop = match->next_hop;
+        *out_interface = match->out_interface;
+        return match - table->entries;
     }
 
-    return match;
+    /* Return the default route */
+    *next_hop = ip;
+    *out_interface = table->default_route.out_interface;
+
+    return table->capacity;
 }
 
-static routing_error_t routing_table_add_rule(routing_table_t *table,
-                                              routing_out_interfaces_t out_interface,
-                                              uint16_t num_hops,
-                                              uint32_t ip,
-                                              uint8_t subnet,
-                                              uint32_t next_hop,
-                                              uint32_t *id)
+static routing_err_t routing_table_add_route(routing_table_t *table,
+                                               routing_out_interfaces_t out_interface,
+                                               uint16_t num_hops,
+                                               uint32_t ip,
+                                               uint8_t subnet,
+                                               uint32_t next_hop,
+                                               uint16_t *route_id)
 {
     routing_entry_t *empty_slot = NULL;
     for (uint16_t i = 0; i < table->capacity; i++) {
@@ -281,7 +292,6 @@ static routing_error_t routing_table_add_rule(routing_table_t *table,
         if (!entry->valid) {
             if (empty_slot == NULL) {
                 empty_slot = entry;
-                *id = i;
             }
             continue;
         }
@@ -314,16 +324,16 @@ static routing_error_t routing_table_add_rule(routing_table_t *table,
     empty_slot->ip = ip;
     empty_slot->subnet = subnet;
     empty_slot->next_hop = next_hop;
+    *route_id = empty_slot - table->entries;
 
     return ROUTING_ERR_OKAY;
 }
 
-static routing_error_t routing_table_remove_route(routing_table_t *table, uint32_t route_id)
+static routing_err_t routing_table_remove_route(routing_table_t *table, uint16_t route_id)
 {
     routing_entry_t *entry = table->entries + route_id;
 
-    if (!entry->valid) {
-        sddf_dprintf("Entry was already invalid???\n");
+    if (route_id >= table->capacity || !entry->valid) {
         return ROUTING_ERR_INVALID_ID;
     }
 

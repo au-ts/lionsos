@@ -16,6 +16,7 @@
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
 #include <lions/firewall/config.h>
+#include <lions/firewall/common.h>
 #include <lions/firewall/protocols.h>
 #include <string.h>
 
@@ -92,7 +93,8 @@ void receive(void)
                     if (pkt->ipdst_addr == arp_config.ip) {
 
                         if (FIREWALL_DEBUG_OUTPUT) {
-                            sddf_printf("MAC[5] = %x | Replying for ip %u\n", arp_config.mac_addr[5], pkt->ipdst_addr);
+                            sddf_printf("%sARP Responder replying for ip %s\n", fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])],
+                                ipaddr_to_string(pkt->ipdst_addr, ip_addr_buf0));
                         }
 
                         /* Reply with the MAC of the firewall */
@@ -149,7 +151,5 @@ void notified(microkit_channel ch)
 {
     if (ch == net_config.rx.id) {
         receive();
-    } else {
-        sddf_dprintf("ARP_RESPONDER|LOG: Received notification on invalid channel: %d!\n", ch);
     }
 }

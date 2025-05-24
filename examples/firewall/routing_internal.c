@@ -14,11 +14,11 @@
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 #include <lions/firewall/arp_queue.h>
+#include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/protocols.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/routing.h>
-#include <lions/firewall/common.h>
 #include <string.h>
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
@@ -60,7 +60,9 @@ static void process_arp_waiting(void)
         assert(!err);
 
         if (FIREWALL_DEBUG_OUTPUT) {
-            sddf_printf("MAC[5] = %x | Router dequeuing response for ip %u and MAC[0] = %x, MAC[5] = %x\n", router_config.mac_addr[5], response.ip, response.mac_addr[0], response.mac_addr[5]);
+            sddf_printf("%sRouter dequeuing response for ip %s and MAC[0] = %x, MAC[5] = %x\n",
+                fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                ipaddr_to_string(response.ip, ip_addr_buf0), response.mac_addr[0], response.mac_addr[5]);
         }
 
         /* Check that we actually have a packet waiting. */
@@ -79,7 +81,7 @@ static void process_arp_waiting(void)
                 pkt_node = pkts_waiting_next_child(&pkt_waiting_queue, pkt_node);
             }
             /* Free the packet waiting nodes */
-            routing_error_t routing_err = pkts_waiting_free_parent(&pkt_waiting_queue, req_pkt);
+            routing_err_t routing_err = pkts_waiting_free_parent(&pkt_waiting_queue, req_pkt);
             assert(routing_err == ROUTING_ERR_OKAY);
         } else {
             /* Substitute the MAC address and send packets out of the NIC */
@@ -91,7 +93,10 @@ static void process_arp_waiting(void)
                 tx_pkt->check = 0;
 
                 if (FIREWALL_DEBUG_OUTPUT) {
-                    sddf_printf("MAC[5] = %x | Router sending packet for ip %u with buffer number %lu\n", router_config.mac_addr[5], response.ip, req_pkt->buffer.io_or_offset/NET_BUFFER_SIZE);
+                    sddf_printf("%sRouter sending packet for ip %s (next hop %s) with buffer number %lu\n",
+                        fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                        ipaddr_to_string(tx_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(response.ip, ip_addr_buf1),
+                        req_pkt->buffer.io_or_offset/NET_BUFFER_SIZE);
                 }
 
                 err = firewall_enqueue(&tx_active, pkt_node->buffer);
@@ -100,7 +105,7 @@ static void process_arp_waiting(void)
                 pkt_node = pkts_waiting_next_child(&pkt_waiting_queue, pkt_node);
             }
             /* Free the packet waiting nodes */
-            routing_error_t routing_err = pkts_waiting_free_parent(&pkt_waiting_queue, req_pkt);
+            routing_err_t routing_err = pkts_waiting_free_parent(&pkt_waiting_queue, req_pkt);
             assert(routing_err == ROUTING_ERR_OKAY);
         }
     }
@@ -125,24 +130,34 @@ static void route()
             if (ip_pkt->ttl > 1 && ip_pkt->type == HTONS(ETH_TYPE_IP)) {
                 ip_pkt->ttl -= 1;
 
-                char buf[16];
                 if (FIREWALL_DEBUG_OUTPUT) {
-                    sddf_printf("MAC[5] = %x | Router internal received packet for ip %s with buffer number %lu\n", router_config.mac_addr[5], ipaddr_to_string(ip_pkt->dst_ip, buf, 16), buffer.io_or_offset/NET_BUFFER_SIZE);
+                    sddf_printf("%sRouter received packet for ip %s with buffer number %lu\n",
+                        fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), buffer.io_or_offset/NET_BUFFER_SIZE);
                 }
 
-                /* Find the next hop address. If we have no route, assume that the device is attached directly */
-                routing_entry_t *entry = routing_find_route(&routing_table, ip_pkt->dst_ip);
+                /* Find the next hop address. */
+                uint32_t next_hop;
+                routing_out_interfaces_t out_interface;
+                uint16_t route_id = routing_find_route(&routing_table, ip_pkt->dst_ip, &next_hop, &out_interface);
 
                 if (FIREWALL_DEBUG_OUTPUT) {
-                    sddf_printf("MAC[5] = %x | Converted ip %s to next hop ip %s\n", router_config.mac_addr[5], ipaddr_to_string(ip_pkt->dst_ip, buf, 16), ipaddr_to_string(entry->ip, buf, 16));
+                    if (route_id == routing_table.capacity) {
+                        sddf_printf("%sRouter converted ip %s to next hop ip %s via default route\n",
+                            fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1));                        
+                    } else {
+                        sddf_printf("%sRouter converted ip %s to next hop ip %s via route %u\n",
+                            fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1), route_id);     
+                    }
                 }
 
-                if (entry->out_interface == ROUTING_OUT_INTERNAL) {
+                if (out_interface == ROUTING_OUT_INTERNAL) {
                     tcphdr_t *tcp_pkt = (tcphdr_t *)(pkt_vaddr + transport_layer_offset(ip_pkt));
 
                     /* Webserver only accepts TCP traffic on webserver port */
                     if (ip_pkt->protocol != WEBSERVER_PROTOCOL || tcp_pkt->dst_port != HTONS(WEBSERVER_PORT)) {
-                        sddf_dprintf("We matched this packet with the routing out internal\n");
                         err = firewall_enqueue(&rx_free, buffer);
                         assert(!err);
                         returned = true;
@@ -155,13 +170,16 @@ static void route()
                     tx_webserver = true;
 
                     if (FIREWALL_DEBUG_OUTPUT) {
-                        sddf_printf("MAC[5] = %x | Transmitted packet to webserver\n", router_config.mac_addr[5]);
+                        sddf_printf("%sRouter transmitted packet to webserver\n",
+                        fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])]);
                     }
+
                 } else {
-                    arp_entry_t *arp = arp_table_find_entry(&arp_table, entry->ip);
+                    arp_entry_t *arp = arp_table_find_entry(&arp_table, next_hop);
                     if (arp == NULL || arp->state == ARP_STATE_PENDING || arp->state == ARP_STATE_UNREACHABLE) {
                         if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) || pkt_waiting_full(&pkt_waiting_queue)) {
-                            sddf_dprintf("ROUTING|LOG: Waiting packet queue full or destination unreachable, dropping packet!\n");
+                            sddf_dprintf("%sLOG: Waiting packet queue full or destination unreachable, dropping packet!\n",
+                                fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])]);
                             err = firewall_enqueue(&rx_free, buffer);
                             assert(!err);
                             returned = true;
@@ -171,23 +189,24 @@ static void route()
                             *  response. If we get a timeout, we will then drop the 
                             *  packets associated with that IP address in the queue.
                             */
-                            pkt_waiting_node_t *parent = pkt_waiting_find_node(&pkt_waiting_queue, entry->ip);
+                            pkt_waiting_node_t *parent = pkt_waiting_find_node(&pkt_waiting_queue, next_hop);
                             if (parent) {
                                 /* ARP request already enqueued, add node as child. */
-                                routing_error_t routing_err = pkt_waiting_push_child(&pkt_waiting_queue, parent, entry->ip, buffer);
+                                routing_err_t routing_err = pkt_waiting_push_child(&pkt_waiting_queue, parent, next_hop, buffer);
                                 assert(routing_err == ROUTING_ERR_OKAY);
                             } else if (arp_queue_full_request(arp_queue)) {
                                 /* No existing ARP request and queue is full, drop packet. */
-                                sddf_dprintf("ROUTING|LOG: ARP request queue full, dropping packet!\n");
+                                sddf_dprintf("%sLOG: ARP request queue full, dropping packet!\n",
+                                    fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])]);
                                 err = firewall_enqueue(&rx_free, buffer);
                                 assert(!err);
                                 returned = true;
                             } else {
                                 /* Generate ARP request and enqueue packet. */
-                                arp_request_t request = {entry->ip, {0}, ARP_STATE_INVALID};
+                                arp_request_t request = {next_hop, {0}, ARP_STATE_INVALID};
                                 err = arp_enqueue_request(arp_queue, request);
                                 assert(!err);
-                                routing_error_t routing_err = pkt_waiting_push(&pkt_waiting_queue, entry->ip, buffer);
+                                routing_err_t routing_err = pkt_waiting_push(&pkt_waiting_queue, next_hop, buffer);
                                 assert(routing_err == ROUTING_ERR_OKAY);
                                 notify_arp = true;
                             }
@@ -200,7 +219,10 @@ static void route()
 
                         /* Transmit packet out the NIC */
                         if (FIREWALL_DEBUG_OUTPUT) {
-                            sddf_printf("MAC[5] = %x | Router sending packet for ip %u mac[5] %x with buffer number %lu\n", router_config.mac_addr[5], entry->ip, ip_pkt->ethdst_addr[5], buffer.io_or_offset/NET_BUFFER_SIZE);
+                            sddf_printf("%sRouter sending packet for ip %s (next hop %s) with buffer number %lu\n",
+                                fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                                ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1),
+                                buffer.io_or_offset/NET_BUFFER_SIZE);
                         }
 
                         int err = firewall_enqueue(&tx_active, buffer);
@@ -247,11 +269,11 @@ void init(void)
     /* Initialise routing table */
     routing_entry_t default_entry = {true, ROUTING_OUT_EXTERNAL, 0, 0, 0, 0};
     routing_table_init(&routing_table, default_entry, router_config.webserver.routing_table.vaddr,
-        router_config.ip, router_config.webserver.routing_table_capacity);
+        router_config.webserver.routing_table_capacity);
 
-    uint32_t id = 0;
     /* Add an entry for the webserver */
-    routing_table_add_rule(&routing_table, ROUTING_OUT_INTERNAL, 0, router_config.ip, 0, router_config.ip, &id);
+    uint16_t route_id;
+    routing_table_add_route(&routing_table, ROUTING_OUT_INTERNAL, 0, router_config.ip, 0, router_config.ip, &route_id);
 
     /* Initialise the packet waiting queue from mapped in memory */
     pkt_waiting_init(&pkt_waiting_queue, router_config.packet_queue.vaddr, router_config.rx_free.capacity);
@@ -261,30 +283,42 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     switch (microkit_msginfo_get_label(msginfo)) {
     case FIREWALL_ADD_ROUTE: {
-        uint32_t dest_ip = seL4_GetMR(ROUTER_ADD_ARG_DEST_IP);
-        uint8_t subnet = seL4_GetMR(ROUTER_ADD_ARG_SUBNET);
-        uint32_t next_hop = seL4_GetMR(ROUTER_ADD_ARG_NEXT_HOP);
-        uint16_t num_hops = seL4_GetMR(ROUTER_ADD_ARG_NUM_HOPS);
-        uint32_t id = 0;
+        uint32_t ip = seL4_GetMR(ROUTER_ARG_IP);
+        uint8_t subnet = seL4_GetMR(ROUTER_ARG_SUBNET);
+        uint32_t next_hop = seL4_GetMR(ROUTER_ARG_NEXT_HOP);
+        uint16_t num_hops = seL4_GetMR(ROUTER_ARG_NUM_HOPS);
+        uint16_t route_id;
         // @kwinter: Limiting this to just external routes out of the NIC
         // for now.
-        routing_error_t err = routing_table_add_rule(&routing_table, ROUTING_OUT_EXTERNAL, num_hops, dest_ip, subnet, next_hop, &id);
+        routing_err_t err = routing_table_add_route(&routing_table, ROUTING_OUT_EXTERNAL, num_hops, ip, subnet, next_hop, &route_id);
+
+        if (FIREWALL_DEBUG_OUTPUT) {
+            sddf_printf("%sRouter add route %u. (ip %s, mask %u, num hops %u, next hop %s): %s\n",
+                fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                route_id, ipaddr_to_string(ip, ip_addr_buf0), subnet, num_hops,
+                ipaddr_to_string(next_hop, ip_addr_buf1), routing_err_str[err]);
+        }
+
         seL4_SetMR(ROUTER_RET_ERR, err);
-        seL4_SetMR(ROUTER_RET_ROUTE_ID, id);
+        seL4_SetMR(ROUTER_RET_ROUTE_ID, route_id);
         return microkit_msginfo_new(0, 2);
     }
     case FIREWALL_DEL_ROUTE: {
-        uint32_t id = seL4_GetMR(ROUTER_DEL_ARG_ID);
+        uint16_t route_id = seL4_GetMR(ROUTER_ARG_ROUTE_ID);
+        routing_err_t err = routing_table_remove_route(&routing_table, route_id);
+
         if (FIREWALL_DEBUG_OUTPUT) {
-            sddf_printf("Internal Router| Deleted route %u )\n", id);
+            sddf_printf("%sRouter delete route %u: %s\n",
+                fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                route_id, routing_err_str[err]);
         }
-        routing_error_t err = routing_table_remove_route(&routing_table, id);
+
         seL4_SetMR(ROUTER_RET_ERR, err);
-        seL4_SetMR(ROUTER_RET_ROUTE_ID, id);
-        return microkit_msginfo_new(0, 2);
+        return microkit_msginfo_new(0, 1);
     }
     default:
-        sddf_printf("ROUTING_INTERNAL|LOG: unkown request %lu on channel %u\n",
+        sddf_printf("%sLOG: unknown request %lu on channel %u\n",
+            fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
             microkit_msginfo_get_label(msginfo), ch);
         break;
     }

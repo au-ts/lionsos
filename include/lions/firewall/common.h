@@ -7,10 +7,19 @@
 
 #define IPV4_ADDR(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((uint32_t) (d) << 24))
 
+#define IPV4_ADDR_BUFLEN 16
+
+#define INTERFACE_ID(MAC) (MAC == 0x15) ? 0 : 1
+
+static const char *fw_frmt_str[] = {
+    "EXT --> INT | ",
+    "INT --> EXT | "
+};
+
 static char ip_addr_buf0[IPV4_ADDR_BUFLEN];
 static char ip_addr_buf1[IPV4_ADDR_BUFLEN];
 
-static char *ipaddr_to_string(uint32_t s_addr, char *buf, int buflen)
+static char *ipaddr_to_string(uint32_t s_addr, char *buf)
 {
     char inv[3], *rp;
     uint8_t *ap, rem, n, i;

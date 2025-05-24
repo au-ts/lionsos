@@ -50,7 +50,7 @@
 arp_packet_t arp_response_pkt = {0};
 extern net_client_config_t net_config;
 
-__attribute__((__section__(".firewall_webserver_config"))) firewall_webserver_config_t firewall_config;
+extern firewall_webserver_config_t firewall_config;
 
 #define dlogp(pred, fmt, ...) do { \
     if (pred) { \
@@ -238,7 +238,7 @@ void init_networking(void) {
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
     ipaddr_aton("0.0.0.0", &gw);
-    ipaddr_aton(ipaddr_to_string(firewall_config.ip, ip_addr_buf0, 16), &ipaddr);
+    ipaddr_aton(ipaddr_to_string(firewall_config.ip, ip_addr_buf0), &ipaddr);
     ipaddr_aton("0.0.0.0", &multicast);
     ipaddr_aton("255.255.255.0", &netmask);
 
@@ -293,7 +293,7 @@ void mpnet_process_arp(void) {
             fill_arp(response.ip, response.mac_addr);
 
             if (FIREWALL_DEBUG_OUTPUT) {
-                dlog("Inputting ARP response for ip %s -> obtained MAC[0] = %x, MAC[5] = %x\n", ipaddr_to_string(response.ip, ip_addr_buf0, 16), response.mac_addr[0], response.mac_addr[5]);
+                dlog("Inputting ARP response for ip %s -> obtained MAC[0] = %x, MAC[5] = %x\n", ipaddr_to_string(response.ip, ip_addr_buf0), response.mac_addr[0], response.mac_addr[5]);
             }
 
             /* Input packet into lwip stack */

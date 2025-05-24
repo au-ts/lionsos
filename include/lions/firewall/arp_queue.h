@@ -132,7 +132,6 @@ static arp_error_t arp_table_add_entry(arp_table_t *table,
     slot->client = BIT(client);
     slot->num_retries = 0;
     slot->timestamp = sddf_timer_time_now(timer_ch);
-    sddf_dprintf("Setting notify for client: %d\n", client);
 
     return ARP_ERR_OKAY;
 }

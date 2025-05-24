@@ -13,7 +13,7 @@
 #define FIREWALL_MAX_ARP_QUEUE_CAPACITY 512
 
 #define FIREWALL_NUM_ARP_REQUESTER_CLIENTS 2
-#define FIREWALL_NUM_ROUTERS 2
+#define FIREWALL_NUM_INTERFACES 2
 
 #define FIREWALL_DEBUG_OUTPUT 1
 
@@ -97,14 +97,14 @@ typedef struct firewall_filter_config {
 
 typedef struct firewall_webserver_config {
     uint8_t mac_addr[ETH_HWADDR_LEN];
-    uint8_t filter_iface_id[2 * FIREWALL_MAX_FILTERS];
+    uint8_t filter_iface_id[FIREWALL_NUM_INTERFACES * FIREWALL_MAX_FILTERS];
     uint32_t ip;
     firewall_connection_resource_t rx_active;
     region_resource_t data;
-    firewall_webserver_router_config_t routers[FIREWALL_NUM_ROUTERS];
+    firewall_webserver_router_config_t routers[FIREWALL_NUM_INTERFACES];
     firewall_connection_resource_t rx_free;
     firewall_connection_resource_t arp_queue;
-    firewall_webserver_filter_config_t filters[2 * FIREWALL_MAX_FILTERS];
+    firewall_webserver_filter_config_t filters[FIREWALL_NUM_INTERFACES * FIREWALL_MAX_FILTERS];
     uint8_t num_filters;
     uint16_t rules_capacity;
 } firewall_webserver_config_t;

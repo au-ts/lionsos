@@ -15,6 +15,7 @@
 #include <sddf/serial/config.h>
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
+#include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/protocols.h>
 #include <lions/firewall/arp_queue.h>
@@ -114,8 +115,9 @@ static void process_requests()
             assert(!err);
 
             if (FIREWALL_DEBUG_OUTPUT) {
-                char buf[16];
-                sddf_printf("MAC[5] = %x | ARP requester processing client %u request for ip %s\n", arp_config.mac_addr[5], client, ipaddr_to_string(request.ip, buf, 16));
+                sddf_printf("%sARP requester processing client %u request for ip %s\n",
+                    fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])], client,
+                    ipaddr_to_string(request.ip, ip_addr_buf0));
             }
 
             /* Create arp entry for request to store associated client */
@@ -156,10 +158,10 @@ static void process_responses()
                             if (BIT(client) & entry->client) {
                                 arp_enqueue_response(arp_queues[client], arp_response_from_entry(entry));
                                 notify_client[client] = true;
-                                sddf_dprintf("Notifying client: %d\n", client);
                                 if (FIREWALL_DEBUG_OUTPUT) {
-                                    char buf[16];
-                                    sddf_printf("MAC[5] = %x | ARP requester received response for client %u, ip %s. MAC[0] = %x, MAC[5] = %x\n", arp_config.mac_addr[5], client, ipaddr_to_string(pkt->ipsrc_addr, buf, 16), pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
+                                    sddf_printf("%sARP requester received response for client %u, ip %s. MAC[0] = %x, MAC[5] = %x\n",
+                                        fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])], client, ipaddr_to_string(pkt->ipsrc_addr, ip_addr_buf0),
+                                        pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
                                 }
                             }
                         }
@@ -219,8 +221,9 @@ static uint16_t process_retries(void)
             /* Resend the ARP request out to the network */
 
             if (FIREWALL_DEBUG_OUTPUT) {
-                char buf[16];
-                sddf_printf("MAC[5] = %x | ARP requester attempting to resend request for ip %s\n", arp_config.mac_addr[5], ipaddr_to_string(entry->ip, buf, 16));
+                sddf_printf("%sARP requester attempting to resend request for ip %s\n",
+                    fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])],
+                    ipaddr_to_string(entry->ip, ip_addr_buf0));
             }
 
             if (!net_queue_empty_free(&tx_queue)) {
@@ -234,8 +237,9 @@ static uint16_t process_retries(void)
                 transmitted = true;
 
                 if (FIREWALL_DEBUG_OUTPUT) {
-                    char buf[16];
-                    sddf_printf("MAC[5] = %x | ARP requester resent request for ip %s\n", arp_config.mac_addr[5], ipaddr_to_string(entry->ip, buf, 16));
+                    sddf_printf("%sARP requester resent request for ip %s\n",
+                        fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])],
+                        ipaddr_to_string(entry->ip, ip_addr_buf0));
                 }
             }
 
@@ -316,14 +320,16 @@ void notified(microkit_channel ch)
             uint16_t retries = process_retries();
 
             if (FIREWALL_DEBUG_OUTPUT && retries > 0) {
-                sddf_printf("MAC[5] = %x | ARP requester processed %u retries for tick %lu\n", arp_config.mac_addr[5], retries, ticks_to_flush);
+                sddf_printf("%sARP requester processed %u retries for tick %lu\n",
+                    fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])], retries, ticks_to_flush);
             }
 
         } else {
             uint16_t flushed = arp_table_flush();
 
             if (FIREWALL_DEBUG_OUTPUT && flushed > 0) {
-                sddf_printf("MAC[5] = %x | ARP requester flushed %u entries from cache\n", arp_config.mac_addr[5], flushed);
+                sddf_printf("%sARP requester flushed %u entries from cache\n",
+                    fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])], flushed);
             }
 
             ticks_to_flush = ARP_TICKS_PER_FLUSH;
