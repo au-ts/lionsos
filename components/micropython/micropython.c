@@ -122,7 +122,6 @@ start_repl:
 
     // libmicrokitco will gracefully clean up when a cothread return, no need to do anything special here
 }
-void webserver_init(void);
 
 void init(void) {
     // TODO: problem, if one of these asserts fails it crashse micropython since it tries to output
@@ -170,7 +169,6 @@ void init(void) {
 void pyb_lwip_poll(void);
 void mpnet_process_rx(void);
 void mpnet_handle_notify(void);
-void mpnet_process_arp(void);
 
 void notified(microkit_channel ch) {
 #ifdef  ENABLE_FIREWALL
@@ -180,7 +178,6 @@ void notified(microkit_channel ch) {
 #endif
     if (net_enabled) {
         mpnet_process_rx();
-        mpnet_process_arp();
         pyb_lwip_poll();
     }
     if (fs_enabled) {
