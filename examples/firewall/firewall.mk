@@ -45,11 +45,15 @@ FIREWALL_CONFIG_HEADERS := $(SDDF)/include/sddf/resources/common.h \
 							$(SDDF)/include/sddf/resources/device.h \
 							$(LIONSOS)/include/lions/firewall/config.h
 
+FIREWALL_IMAGES := arp_requester.elf arp_responder.elf routing_internal.elf routing_external.elf \
+		  				icmp_filter.elf udp_filter.elf tcp_filter.elf
+
 IMAGES := micropython.elf \
 		  eth_driver_imx.elf firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
 		  eth_driver_dwmac.elf timer_driver.elf serial_driver.elf serial_virt_tx.elf \
-		  arp_requester.elf arp_responder.elf routing_internal.elf routing_external.elf \
-		  icmp_filter.elf udp_filter.elf tcp_filter.elf
+		  $(FIREWALL_IMAGES)
+
+DEPS := $(FIREWALL_IMAGES:.elf=.d)
 
 SYSTEM_FILE := firewall.system
 
@@ -224,3 +228,5 @@ ${MUSL_SRC}/Makefile:
 
 ${SDDF_MAKEFILES} &:
 	cd ${LIONSOS}; git submodule update --init dep/sddf
+
+-include $(DEPS)
