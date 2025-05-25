@@ -29,7 +29,7 @@ firewall_queue_handle_t router_queue;
 /* Holds filtering rules and state */
 firewall_filter_state_t filter_state;
 
-#define ICMP_FILTER_DUMMY_PORT 1
+#define ICMP_FILTER_DUMMY_PORT 0
 
 void filter(void)
 {
@@ -158,7 +158,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         uint8_t dst_subnet = seL4_GetMR(FILTER_ARG_DST_SUBNET);
         uint16_t rule_id = 0;
         firewall_filter_err_t err = firewall_filter_add_rule(&filter_state, src_ip, ICMP_FILTER_DUMMY_PORT,
-            dst_ip, ICMP_FILTER_DUMMY_PORT, src_subnet, dst_subnet, false, false, action, &rule_id);
+            dst_ip, ICMP_FILTER_DUMMY_PORT, src_subnet, dst_subnet, true, true, action, &rule_id);
 
         if (FIREWALL_DEBUG_OUTPUT) {
             sddf_printf("%sICMP filter create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> (ip %s, mask %u, port %u, any_port %u): %s\n",
