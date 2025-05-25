@@ -56,7 +56,7 @@ void filter(void)
                 action = filter_state.default_action;
                 if (FIREWALL_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter found no match, performing default action %s: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])], firewall_filter_action_str[action],
+                        fw_frmt_str[filter_config.webserver.interface], firewall_filter_action_str[action],
                         ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
                         ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                 }
@@ -69,14 +69,14 @@ void filter(void)
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FIREWALL_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])], rule_id,
+                        fw_frmt_str[filter_config.webserver.interface], rule_id,
                         ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
                         ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
                     sddf_printf("%sICMP FILTER LOG: could not establish connection for rule %u or default action %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
-                        fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])],
+                        fw_frmt_str[filter_config.webserver.interface],
                         rule_id, default_action, ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
                         ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT, firewall_filter_err_str[fw_err]);
                 }
@@ -91,12 +91,12 @@ void filter(void)
                 if (FIREWALL_DEBUG_OUTPUT) {
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
                         sddf_printf("%sICMP filter transmitting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                            fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])], rule_id,
+                            fw_frmt_str[filter_config.webserver.interface], rule_id,
                             ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
                             ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                     } else if (action == FILTER_ACT_ESTABLISHED) {
                         sddf_printf("%sICMP filter transmitting via external rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                            fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])], rule_id,
+                            fw_frmt_str[filter_config.webserver.interface], rule_id,
                             ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
                             ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                     }
@@ -109,7 +109,7 @@ void filter(void)
 
                 if (FIREWALL_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])], rule_id,
+                        fw_frmt_str[filter_config.webserver.interface], rule_id,
                         ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
                         ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                 }
@@ -142,7 +142,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 
         if (FIREWALL_DEBUG_OUTPUT) {
             sddf_printf("%sICMP filter changing default action from %u to %u\n",
-                fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])], filter_state.default_action, action);
+                fw_frmt_str[filter_config.webserver.interface], filter_state.default_action, action);
         }
 
         firewall_filter_err_t err = firewall_filter_update_default_action(&filter_state, action);
@@ -163,7 +163,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 
         if (FIREWALL_DEBUG_OUTPUT) {
             sddf_printf("%sICMP filter create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> (ip %s, mask %u, port %u, any_port %u): %s\n",
-                fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])], rule_id,
+                fw_frmt_str[filter_config.webserver.interface], rule_id,
                 ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet, ICMP_FILTER_DUMMY_PORT, false, firewall_filter_action_str[action],
                 ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, ICMP_FILTER_DUMMY_PORT, false, firewall_filter_err_str[err]);
         }
@@ -178,7 +178,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 
         if (FIREWALL_DEBUG_OUTPUT) {
             sddf_printf("%sICMP remove rule id %u: %s\n",
-                fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])], rule_id, firewall_filter_err_str[err]);
+                fw_frmt_str[filter_config.webserver.interface], rule_id, firewall_filter_err_str[err]);
         }
 
         seL4_SetMR(FILTER_RET_ERR, err);
@@ -186,7 +186,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
     }
     default:
         sddf_printf("%sICMP FILTER LOG: unknown request %lu on channel %u\n",
-            fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])],
+            fw_frmt_str[filter_config.webserver.interface],
             microkit_msginfo_get_label(msginfo), ch);
         break;
     }
@@ -200,7 +200,7 @@ void notified(microkit_channel ch)
         filter();
     } else {
         sddf_dprintf("%sICMP FILTER LOG: Received notification on unknown channel: %d!\n",
-            fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])], ch);
+            fw_frmt_str[filter_config.webserver.interface], ch);
     }
 }
 
@@ -213,7 +213,7 @@ void init(void)
     
     firewall_queue_init(&router_queue, filter_config.router.queue.vaddr, filter_config.router.capacity);
 
-    firewall_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rules_capacity,
+    firewall_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.webserver.rules_capacity,
         filter_config.internal_instances.vaddr, filter_config.external_instances.vaddr, filter_config.instances_capacity,
         (firewall_action_t)filter_config.webserver.default_action);
 }

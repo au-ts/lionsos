@@ -41,7 +41,7 @@ static int arp_reply(const uint8_t ethsrc_addr[ETH_HWADDR_LEN],
 {
     if (net_queue_empty_free(&tx_queue)) {
         sddf_dprintf("%sARP_RESPONDER LOG: Transmit free queue empty. Dropping reply\n",
-        fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])]);
+        fw_frmt_str[arp_config.interface]);
         return -1;
     }
 
@@ -94,7 +94,7 @@ void receive(void)
                     if (pkt->ipdst_addr == arp_config.ip) {
 
                         if (FIREWALL_DEBUG_OUTPUT) {
-                            sddf_printf("%sARP Responder replying for ip %s\n", fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])],
+                            sddf_printf("%sARP Responder replying for ip %s\n", fw_frmt_str[arp_config.interface],
                                 ipaddr_to_string(pkt->ipdst_addr, ip_addr_buf0));
                         }
 

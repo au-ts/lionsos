@@ -9,6 +9,7 @@
 #include <sddf/util/cache.h>
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
+#include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
 
@@ -64,7 +65,8 @@ void tx_provide(void)
 
                 if (buffer.io_or_offset % NET_BUFFER_SIZE
                     || buffer.io_or_offset >= NET_BUFFER_SIZE * state.tx_queue_clients[client].capacity) {
-                    sddf_dprintf("VIRT_TX|LOG: Client provided offset %lx which is not buffer aligned or outside of buffer region\n",
+                    sddf_dprintf("%sVIRT TX LOG: Client provided offset %lx which is not buffer aligned or outside of buffer region\n",
+                                 fw_frmt_str[firewall_config.interface],
                                  buffer.io_or_offset);
                     err = net_enqueue_free(&state.tx_queue_clients[client], buffer);
                     assert(!err);

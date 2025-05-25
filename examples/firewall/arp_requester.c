@@ -114,7 +114,7 @@ static void process_requests()
 
             if (FIREWALL_DEBUG_OUTPUT) {
                 sddf_printf("%sARP requester processing client %u request for ip %s\n",
-                    fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])], client,
+                    fw_frmt_str[arp_config.interface], client,
                     ipaddr_to_string(request.ip, ip_addr_buf0));
             }
 
@@ -122,7 +122,7 @@ static void process_requests()
             arp_error_t arp_err = arp_table_add_entry(&arp_table, timer_config.driver_id, ARP_STATE_PENDING, request.ip, NULL, client);
             if (arp_err == ARP_ERR_FULL) {
                 sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n",
-                fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])]);
+                fw_frmt_str[arp_config.interface]);
             }
 
             transmitted = true;
@@ -159,7 +159,7 @@ static void process_responses()
                                 notify_client[client] = true;
                                 if (FIREWALL_DEBUG_OUTPUT) {
                                     sddf_printf("%sARP requester received response for client %u, ip %s. MAC[0] = %x, MAC[5] = %x\n",
-                                        fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])], client, ipaddr_to_string(pkt->ipsrc_addr, ip_addr_buf0),
+                                        fw_frmt_str[arp_config.interface], client, ipaddr_to_string(pkt->ipsrc_addr, ip_addr_buf0),
                                         pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
                                 }
                             }
@@ -168,7 +168,7 @@ static void process_responses()
                         /* Create a new entry */
                         arp_error_t arp_err = arp_table_add_entry(&arp_table, timer_config.driver_id, ARP_STATE_REACHABLE, pkt->ipsrc_addr, pkt->hwsrc_addr, 0);
                         if (arp_err == ARP_ERR_FULL) {
-                            sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n", fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])]);
+                            sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n", fw_frmt_str[arp_config.interface]);
                         }
                     }
                 }
@@ -221,7 +221,7 @@ static uint16_t process_retries(void)
 
             if (FIREWALL_DEBUG_OUTPUT) {
                 sddf_printf("%sARP requester attempting to resend request for ip %s\n",
-                    fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])],
+                    fw_frmt_str[arp_config.interface],
                     ipaddr_to_string(entry->ip, ip_addr_buf0));
             }
 
@@ -237,7 +237,7 @@ static uint16_t process_retries(void)
 
                 if (FIREWALL_DEBUG_OUTPUT) {
                     sddf_printf("%sARP requester resent request for ip %s\n",
-                        fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])],
+                        fw_frmt_str[arp_config.interface],
                         ipaddr_to_string(entry->ip, ip_addr_buf0));
                 }
             }
@@ -318,7 +318,7 @@ void notified(microkit_channel ch)
 
             if (FIREWALL_DEBUG_OUTPUT && retries > 0) {
                 sddf_printf("%sARP requester processed %u retries for tick %lu\n",
-                    fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])], retries, ticks_to_flush);
+                    fw_frmt_str[arp_config.interface], retries, ticks_to_flush);
             }
 
         } else {
@@ -326,7 +326,7 @@ void notified(microkit_channel ch)
 
             if (FIREWALL_DEBUG_OUTPUT && flushed > 0) {
                 sddf_printf("%sARP requester flushed %u entries from cache\n",
-                    fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])], flushed);
+                    fw_frmt_str[arp_config.interface], flushed);
             }
 
             ticks_to_flush = ARP_TICKS_PER_FLUSH;

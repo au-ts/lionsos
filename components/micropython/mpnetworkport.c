@@ -71,6 +71,10 @@ typedef struct pbuf_custom_offset
 typedef struct state
 {
     struct netif netif;
+
+    /* IP address for this client */
+    uint32_t ip;
+
     /* mac address for this client */
     uint8_t mac[6];
 
@@ -112,7 +116,7 @@ u32_t sys_now(void) {
 static void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN])
 {
     /* Ethernet header addresses */
-    memcpy(arp_response_pkt.ethdst_addr, firewall_config.mac_addr, ETH_HWADDR_LEN);
+    memcpy(arp_response_pkt.ethdst_addr, state.mac, ETH_HWADDR_LEN);
     memcpy(arp_response_pkt.ethsrc_addr, mac, ETH_HWADDR_LEN);
     arp_response_pkt.type = HTONS(ETH_TYPE_ARP);
     /* ARP Packet */
@@ -123,8 +127,8 @@ static void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN])
     arp_response_pkt.opcode = HTONS(ETHARP_OPCODE_REPLY);
     memcpy(arp_response_pkt.hwsrc_addr, mac, ETH_HWADDR_LEN);
     arp_response_pkt.ipsrc_addr = ip;
-    memcpy(arp_response_pkt.hwdst_addr, firewall_config.mac_addr, ETH_HWADDR_LEN);
-    arp_response_pkt.ipdst_addr = firewall_config.ip;
+    memcpy(arp_response_pkt.hwdst_addr, state.mac, ETH_HWADDR_LEN);
+    arp_response_pkt.ipdst_addr = state.ip;
     memset(&arp_response_pkt.padding, 0, 10);
 }
 
@@ -150,7 +154,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
         if (arp_hdr->opcode == HTONS(ETHARP_OPCODE_REQUEST)) {
             /* Check if the ip is the same as has been assigned to this interface. If it is,
             this packet is most likely an ARP probe. We should discard. */
-            if (arp_hdr->ipdst_addr != firewall_config.ip) {
+            if (arp_hdr->ipdst_addr != state.ip) {
                 /* This is an arp request, don't transmit through the network */
                 arp_request_t request = {arp_hdr->ipdst_addr, {0}, ARP_STATE_INVALID};
                 int err = arp_enqueue_request(state.arp_queue, request);
@@ -209,7 +213,7 @@ static err_t ethernet_init(struct netif *netif)
 
     state_t *data = netif->state;
 
-    sddf_memcpy(netif->hwaddr, firewall_config.mac_addr, ETH_HWADDR_LEN);
+    sddf_memcpy(netif->hwaddr, state.mac, ETH_HWADDR_LEN);
 
     netif->mtu = ETHER_MTU;
     netif->hwaddr_len = ETHARP_HWADDR_LEN;
@@ -232,12 +236,13 @@ void init_networking(void) {
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
-    sddf_memcpy(state.mac, firewall_config.mac_addr, ETH_HWADDR_LEN);
+    state.ip = firewall_config.interfaces[firewall_config.interface].ip;
+    sddf_memcpy(state.mac, firewall_config.interfaces[firewall_config.interface].mac_addr, ETH_HWADDR_LEN);
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
     ipaddr_aton("0.0.0.0", &gw);
-    ipaddr_aton(ipaddr_to_string(firewall_config.ip, ip_addr_buf0), &ipaddr);
+    ipaddr_aton(ipaddr_to_string(state.ip, ip_addr_buf0), &ipaddr);
     ipaddr_aton("0.0.0.0", &multicast);
     ipaddr_aton("255.255.255.0", &netmask);
 

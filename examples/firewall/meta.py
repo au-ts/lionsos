@@ -312,16 +312,12 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     # Create webserver config
     webserver_config = FirewallWebserverConfig(
-        network["mac"],
-        [],
-        network["ip"],
+        network["num"],
         router_webserver_conn[1],
         webserver_data_region,
-        [],
         webserver_in_virt_conn[0],
         webserver_arp_conn[0],
         [],
-        filter_rule_capacity
     )
 
     for network in networks:
@@ -344,6 +340,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         # Create output virt config
         network["configs"][out_virt] = FirewallNetVirtTxConfig(
+            network["num"],
             [router_out_virt_conn[1]],
             [out_virt_in_virt_data_conn]
         )
@@ -353,6 +350,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         # Create input virt config
         network["configs"][in_virt] = FirewallNetVirtRxConfig(
+            network["num"],
             [],
             [router_in_virt_conn[1], output_in_virt_conn[1]]
         )
@@ -375,6 +373,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         # Create arp req config
         network["configs"][arp_req] = FirewallArpRequesterConfig(
+            network["num"],
             network["mac"],
             network["ip"],
             [router_arp_conn[1]],
@@ -384,6 +383,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         # Create arp resp config
         network["configs"][arp_resp] = FirewallArpResponderConfig(
+            network["num"],
             network["mac"],
             network["ip"]
         )
@@ -402,18 +402,18 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         # Create router webserver config
         router_webserver_config = FirewallWebserverRouterConfig(
+            network["num"],
             router_update_ch.pd_b_id,
             routing_table[0],
             routing_table_capacity
         )
 
         webserver_router_config = FirewallWebserverRouterConfig(
+            network["num"],
             router_update_ch.pd_a_id,
             routing_table[1],
             routing_table_capacity
         )
-
-        webserver_config.routers.append(webserver_router_config)
 
         # Create router config
         network["configs"][router] = FirewallRouterConfig(
@@ -428,6 +428,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             arp_cache_capacity,
             arp_packet_queue,
             router_webserver_config,
+            []
+        )
+        
+        webserver_interface_config = FirewallWebserverInterfaceConfig(
+            network["mac"],
+            network["ip"],
+            webserver_router_config,
             []
         )
 
@@ -448,24 +455,27 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
             # Create webserver configs
             filter_webserver_config = FirewallWebserverFilterConfig(
+                network["num"],
                 protocol,
                 filter_update_ch.pd_b_id,
                 FILTER_ACTION_ALLOW,
-                filter_rules[0]
+                filter_rules[0],
+                filter_rule_capacity
             )
 
             webserver_filter_config = FirewallWebserverFilterConfig(
+                network["num"],
                 protocol,
                 filter_update_ch.pd_a_id,
                 FILTER_ACTION_ALLOW,
-                filter_rules[1]
+                filter_rules[1],
+                filter_rule_capacity
             )
 
             # Create filter config
             network["configs"][filter_pd] = FirewallFilterConfig(
                 network["mac"],
                 network["ip"],
-                filter_rule_capacity,
                 instances_capacity,
                 filter_router_conn[0],
                 filter_webserver_config,
@@ -474,8 +484,9 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             )
 
             network["configs"][router].filters.append((filter_router_conn[1]))
-            webserver_config.filters.append(webserver_filter_config)
-            webserver_config.filter_iface_id.append(network["num"])
+            webserver_interface_config.filters.append(webserver_filter_config)
+        
+        webserver_config.interfaces.append(webserver_interface_config)
 
         # Make router and arp components serial clients
         serial_system.add_client(router)

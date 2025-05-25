@@ -11,8 +11,6 @@
 
 #define IPV4_ADDR_BUFLEN 16
 
-#define INTERFACE_ID(MAC) (MAC == 0x15) ? 0 : 1
-
 static const char *fw_frmt_str[] = {
     "EXT --> INT | ",
     "INT --> EXT | "

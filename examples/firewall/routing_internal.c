@@ -61,7 +61,7 @@ static void process_arp_waiting(void)
 
         if (FIREWALL_DEBUG_OUTPUT) {
             sddf_printf("%sRouter dequeuing response for ip %s and MAC[0] = %x, MAC[5] = %x\n",
-                fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                fw_frmt_str[router_config.webserver.interface],
                 ipaddr_to_string(response.ip, ip_addr_buf0), response.mac_addr[0], response.mac_addr[5]);
         }
 
@@ -94,7 +94,7 @@ static void process_arp_waiting(void)
 
                 if (FIREWALL_DEBUG_OUTPUT) {
                     sddf_printf("%sRouter sending packet for ip %s (next hop %s) with buffer number %lu\n",
-                        fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                        fw_frmt_str[router_config.webserver.interface],
                         ipaddr_to_string(tx_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(response.ip, ip_addr_buf1),
                         req_pkt->buffer.io_or_offset/NET_BUFFER_SIZE);
                 }
@@ -132,7 +132,7 @@ static void route()
 
                 if (FIREWALL_DEBUG_OUTPUT) {
                     sddf_printf("%sRouter received packet for ip %s with buffer number %lu\n",
-                        fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                        fw_frmt_str[router_config.webserver.interface],
                         ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), buffer.io_or_offset/NET_BUFFER_SIZE);
                 }
 
@@ -144,11 +144,11 @@ static void route()
                 if (FIREWALL_DEBUG_OUTPUT) {
                     if (route_id == routing_table.capacity) {
                         sddf_printf("%sRouter converted ip %s to next hop ip %s via default route\n",
-                            fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                            fw_frmt_str[router_config.webserver.interface],
                             ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1));                        
                     } else {
                         sddf_printf("%sRouter converted ip %s to next hop ip %s via route %u\n",
-                            fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                            fw_frmt_str[router_config.webserver.interface],
                             ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1), route_id);     
                     }
                 }
@@ -171,7 +171,7 @@ static void route()
 
                     if (FIREWALL_DEBUG_OUTPUT) {
                         sddf_printf("%sRouter transmitted packet to webserver\n",
-                        fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])]);
+                        fw_frmt_str[router_config.webserver.interface]);
                     }
 
                 } else {
@@ -179,7 +179,7 @@ static void route()
                     if (arp == NULL || arp->state == ARP_STATE_PENDING || arp->state == ARP_STATE_UNREACHABLE) {
                         if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) || pkt_waiting_full(&pkt_waiting_queue)) {
                             sddf_dprintf("%sROUTING LOG: Waiting packet queue full or destination unreachable, dropping packet!\n",
-                                fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])]);
+                                fw_frmt_str[router_config.webserver.interface]);
                             err = firewall_enqueue(&rx_free, buffer);
                             assert(!err);
                             returned = true;
@@ -197,7 +197,7 @@ static void route()
                             } else if (arp_queue_full_request(arp_queue)) {
                                 /* No existing ARP request and queue is full, drop packet. */
                                 sddf_dprintf("%sROUTING LOG: ARP request queue full, dropping packet!\n",
-                                    fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])]);
+                                    fw_frmt_str[router_config.webserver.interface]);
                                 err = firewall_enqueue(&rx_free, buffer);
                                 assert(!err);
                                 returned = true;
@@ -220,7 +220,7 @@ static void route()
                         /* Transmit packet out the NIC */
                         if (FIREWALL_DEBUG_OUTPUT) {
                             sddf_printf("%sRouter sending packet for ip %s (next hop %s) with buffer number %lu\n",
-                                fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                                fw_frmt_str[router_config.webserver.interface],
                                 ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1),
                                 buffer.io_or_offset/NET_BUFFER_SIZE);
                         }
@@ -294,7 +294,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 
         if (FIREWALL_DEBUG_OUTPUT) {
             sddf_printf("%sRouter add route %u. (ip %s, mask %u, num hops %u, next hop %s): %s\n",
-                fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                fw_frmt_str[router_config.webserver.interface],
                 route_id, ipaddr_to_string(ip, ip_addr_buf0), subnet, num_hops,
                 ipaddr_to_string(next_hop, ip_addr_buf1), routing_err_str[err]);
         }
@@ -309,7 +309,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 
         if (FIREWALL_DEBUG_OUTPUT) {
             sddf_printf("%sRouter delete route %u: %s\n",
-                fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+                fw_frmt_str[router_config.webserver.interface],
                 route_id, routing_err_str[err]);
         }
 
@@ -318,7 +318,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
     }
     default:
         sddf_printf("%sROUTING LOG: unknown request %lu on channel %u\n",
-            fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
+            fw_frmt_str[router_config.webserver.interface],
             microkit_msginfo_get_label(msginfo), ch);
         break;
     }
