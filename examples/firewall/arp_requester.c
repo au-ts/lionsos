@@ -121,7 +121,8 @@ static void process_requests()
             /* Create arp entry for request to store associated client */
             arp_error_t arp_err = arp_table_add_entry(&arp_table, timer_config.driver_id, ARP_STATE_PENDING, request.ip, NULL, client);
             if (arp_err == ARP_ERR_FULL) {
-                sddf_dprintf("ARP REQUESTER|LOG: Arp cache full, cannot enqueue entry!\n");
+                sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n",
+                fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])]);
             }
 
             transmitted = true;
@@ -167,7 +168,7 @@ static void process_responses()
                         /* Create a new entry */
                         arp_error_t arp_err = arp_table_add_entry(&arp_table, timer_config.driver_id, ARP_STATE_REACHABLE, pkt->ipsrc_addr, pkt->hwsrc_addr, 0);
                         if (arp_err == ARP_ERR_FULL) {
-                            sddf_dprintf("ARP REQUESTER|LOG: Arp cache full, cannot enqueue entry!\n");
+                            sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n", fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])]);
                         }
                     }
                 }

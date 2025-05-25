@@ -75,8 +75,9 @@ void filter(void)
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
-                    sddf_printf("ICMP_FILTER|LOG: could not establish connection for rule %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
-                        rule_id, ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
+                    sddf_printf("%sICMP FILTER LOG: could not establish connection for rule %u or default action %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
+                        fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])],
+                        rule_id, default_action, ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
                         ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT, firewall_filter_err_str[fw_err]);
                 }
             }
@@ -184,7 +185,8 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         return microkit_msginfo_new(0, 1);
     }
     default:
-        sddf_printf("ICMP_FILTER|LOG: unknown request %lu on channel %u\n",
+        sddf_printf("%sICMP FILTER LOG: unknown request %lu on channel %u\n",
+            fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])],
             microkit_msginfo_get_label(msginfo), ch);
         break;
     }
@@ -197,7 +199,8 @@ void notified(microkit_channel ch)
     if (ch == net_config.rx.id) {
         filter();
     } else {
-        sddf_dprintf("ICMP_FILTER|LOG: Received notification on unknown channel: %d!\n", ch);
+        sddf_dprintf("%sICMP FILTER LOG: Received notification on unknown channel: %d!\n",
+            fw_frmt_str[INTERFACE_ID(filter_config.mac_addr[5])], ch);
     }
 }
 

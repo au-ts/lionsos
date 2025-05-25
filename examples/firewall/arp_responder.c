@@ -40,7 +40,8 @@ static int arp_reply(const uint8_t ethsrc_addr[ETH_HWADDR_LEN],
                      const uint8_t hwdst_addr[ETH_HWADDR_LEN], const uint32_t ipdst_addr)
 {
     if (net_queue_empty_free(&tx_queue)) {
-        sddf_dprintf("ARP_RESPONDER|LOG: Transmit free queue empty. Dropping reply\n");
+        sddf_dprintf("%sARP_RESPONDER LOG: Transmit free queue empty. Dropping reply\n",
+        fw_frmt_str[INTERFACE_ID(arp_config.mac_addr[5])]);
         return -1;
     }
 

@@ -178,7 +178,7 @@ static void route()
                     arp_entry_t *arp = arp_table_find_entry(&arp_table, next_hop);
                     if (arp == NULL || arp->state == ARP_STATE_PENDING || arp->state == ARP_STATE_UNREACHABLE) {
                         if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) || pkt_waiting_full(&pkt_waiting_queue)) {
-                            sddf_dprintf("%sLOG: Waiting packet queue full or destination unreachable, dropping packet!\n",
+                            sddf_dprintf("%sROUTING LOG: Waiting packet queue full or destination unreachable, dropping packet!\n",
                                 fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])]);
                             err = firewall_enqueue(&rx_free, buffer);
                             assert(!err);
@@ -196,7 +196,7 @@ static void route()
                                 assert(routing_err == ROUTING_ERR_OKAY);
                             } else if (arp_queue_full_request(arp_queue)) {
                                 /* No existing ARP request and queue is full, drop packet. */
-                                sddf_dprintf("%sLOG: ARP request queue full, dropping packet!\n",
+                                sddf_dprintf("%sROUTING LOG: ARP request queue full, dropping packet!\n",
                                     fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])]);
                                 err = firewall_enqueue(&rx_free, buffer);
                                 assert(!err);
@@ -317,7 +317,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         return microkit_msginfo_new(0, 1);
     }
     default:
-        sddf_printf("%sLOG: unknown request %lu on channel %u\n",
+        sddf_printf("%sROUTING LOG: unknown request %lu on channel %u\n",
             fw_frmt_str[INTERFACE_ID(router_config.mac_addr[5])],
             microkit_msginfo_get_label(msginfo), ch);
         break;
