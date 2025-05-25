@@ -131,7 +131,10 @@ so developing a more generic packet constructer is required.
 
 
 ### Improved GUI
-live traffic monitoring
+
+- Remove valid entry from filter and routing table
+- Add doubly linked list structure to routing and filter tables. Optimise searches through the tables.
+- Live traffic monitoring
 
 #### TODO:
 
