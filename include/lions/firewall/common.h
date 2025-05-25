@@ -3,7 +3,9 @@
 #include <stdint.h>
 
 #define BITS_LT(N)  ((N) - 1u)
-#define BITS_LE(N)  (BITS_LT(N) | (N))
+
+/* Subnet value of N means IPs must match on highest N bits. */
+#define SUBNET_MASK(N) BITS_LT(1 << N)
 
 #define IPV4_ADDR(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((uint32_t) (d) << 24))
 

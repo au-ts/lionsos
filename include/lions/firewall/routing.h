@@ -248,8 +248,7 @@ static uint16_t routing_find_route(routing_table_t *table,
             continue;
         }
 
-        uint32_t mask = BITS_LT(entry->subnet);
-        if ((mask & ip) == (mask & entry->ip)) {
+        if ((SUBNET_MASK(entry->subnet) & ip) == (SUBNET_MASK(entry->subnet) & entry->ip)) {
             /* ip is part of subnet */
             if (match == NULL) {
                 match = entry;
@@ -302,12 +301,12 @@ static routing_err_t routing_table_add_route(routing_table_t *table,
         }
 
         /* Rules apply to different subnets */
-        if ((BITS_LT(subnet) & ip) != (BITS_LT((entry->subnet) & entry->ip))) {
+        if ((SUBNET_MASK(subnet) & ip) != (SUBNET_MASK((entry->subnet) & entry->ip))) {
             continue;
         }
 
         /* There is a clash! */
-        if ((out_interface == entry->out_interface) && (num_hops == entry->num_hops)) {
+        if ((out_interface == entry->out_interface) && (next_hop == entry->next_hop)) {
             return ROUTING_ERR_DUPLICATE;
         } else {
             return ROUTING_ERR_CLASH;
@@ -321,7 +320,7 @@ static routing_err_t routing_table_add_route(routing_table_t *table,
     empty_slot->valid = true;
     empty_slot->out_interface = out_interface;
     empty_slot->num_hops = num_hops;
-    empty_slot->ip = ip;
+    empty_slot->ip = SUBNET_MASK(subnet) & ip;
     empty_slot->subnet = subnet;
     empty_slot->next_hop = next_hop;
     *route_id = empty_slot - table->entries;

@@ -273,7 +273,7 @@ void init(void)
 
     /* Add an entry for the webserver */
     uint16_t route_id;
-    routing_table_add_route(&routing_table, ROUTING_OUT_INTERNAL, 0, router_config.ip, 0, router_config.ip, &route_id);
+    routing_table_add_route(&routing_table, ROUTING_OUT_INTERNAL, 0, router_config.ip, 24, router_config.ip, &route_id);
 
     /* Initialise the packet waiting queue from mapped in memory */
     pkt_waiting_init(&pkt_waiting_queue, router_config.packet_queue.vaddr, router_config.rx_free.capacity);

@@ -163,12 +163,12 @@ static firewall_filter_err_t firewall_filter_add_rule(firewall_filter_state_t *s
         }
 
         /* Rules apply to different source subnets */
-        if (src_subnet && ((BITS_LT(src_subnet) & src_ip) != BITS_LT((rule->src_subnet) & rule->src_ip))) {
+        if ((SUBNET_MASK(src_subnet) & src_ip) != (SUBNET_MASK(rule->src_subnet) & rule->src_ip)) {
             continue;
         }
 
         /* Rules apply to different destination subnets */
-        if (dst_subnet && ((BITS_LT(dst_subnet) & dst_ip) != BITS_LT((rule->dst_subnet) & rule->dst_ip))) {
+        if ((SUBNET_MASK(dst_subnet) & dst_ip) != (SUBNET_MASK(rule->dst_subnet) & rule->dst_ip)) {
             continue;
         }
 
@@ -185,9 +185,9 @@ static firewall_filter_err_t firewall_filter_add_rule(firewall_filter_state_t *s
     }
 
     empty_slot->valid = true;
-    empty_slot->src_ip = src_ip;
+    empty_slot->src_ip = SUBNET_MASK(src_subnet) & src_ip;
     empty_slot->src_port = src_port;
-    empty_slot->dst_ip = dst_ip;
+    empty_slot->dst_ip = SUBNET_MASK(dst_subnet) & dst_ip;
     empty_slot->dst_port = dst_port;
     empty_slot->src_subnet = src_subnet;
     empty_slot->dst_subnet = dst_subnet;
@@ -287,12 +287,12 @@ static firewall_action_t firewall_filter_find_action(firewall_filter_state_t *st
         }
 
         /* Match on src addr first */
-        if (rule->src_subnet && ((BITS_LT(rule->src_subnet) & src_ip) != (BITS_LT(rule->src_subnet) & rule->src_ip))) {
+        if ((SUBNET_MASK(rule->src_subnet) & src_ip) != (SUBNET_MASK(rule->src_subnet) & rule->src_ip)) {
             continue;
         }
 
         /* Match on src addr first */
-        if (rule->dst_subnet && ((BITS_LT(rule->dst_subnet) & dst_ip) != (BITS_LT(rule->dst_subnet) & rule->dst_ip))) {
+        if ((SUBNET_MASK(rule->dst_subnet) & dst_ip) != (SUBNET_MASK(rule->dst_subnet) & rule->dst_ip)) {
             continue;
         }
 
