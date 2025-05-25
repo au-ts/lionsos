@@ -26,7 +26,7 @@ __attribute__((__section__(".serial_client_config"))) serial_client_config_t ser
 
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 
-__attribute__((__section__(".firewall_arp_responder_config"))) firewall_arp_responder_config_t arp_config;
+__attribute__((__section__(".fw_arp_responder_config"))) fw_arp_responder_config_t arp_config;
 
 net_queue_handle_t rx_queue;
 net_queue_handle_t tx_queue;
@@ -93,7 +93,7 @@ void receive(void)
                     /* Check the destination IP address */
                     if (pkt->ipdst_addr == arp_config.ip) {
 
-                        if (FIREWALL_DEBUG_OUTPUT) {
+                        if (FW_DEBUG_OUTPUT) {
                             sddf_printf("%sARP Responder replying for ip %s\n", fw_frmt_str[arp_config.interface],
                                 ipaddr_to_string(pkt->ipdst_addr, ip_addr_buf0));
                         }

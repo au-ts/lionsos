@@ -15,13 +15,13 @@
 
 __attribute__((__section__(".net_virt_tx_config"))) net_virt_tx_config_t config;
 
-__attribute__((__section__(".firewall_net_virt_tx_config"))) firewall_net_virt_tx_config_t firewall_config;
+__attribute__((__section__(".fw_net_virt_tx_config"))) fw_net_virt_tx_config_t firewall_config;
 
 typedef struct state {
     net_queue_handle_t tx_queue_drv;
     net_queue_handle_t tx_queue_clients[SDDF_NET_MAX_CLIENTS];
-    firewall_queue_handle_t firewall_free_clients[FIREWALL_MAX_FIREWALL_CLIENTS];
-    firewall_queue_handle_t firewall_active_clients[FIREWALL_MAX_FIREWALL_CLIENTS];
+    fw_queue_handle_t firewall_free_clients[FW_MAX_FW_CLIENTS];
+    fw_queue_handle_t firewall_active_clients[FW_MAX_FW_CLIENTS];
 } state_t;
 
 state_t state;
@@ -93,9 +93,9 @@ void tx_provide(void)
     }
 
     for (int client = 0; client < firewall_config.num_active_clients; client++) {
-        while (!firewall_queue_empty(&state.firewall_active_clients[client])) {
-            firewall_buff_desc_t buffer;
-            int err = firewall_dequeue(&state.firewall_active_clients[client], &buffer);
+        while (!fw_queue_empty(&state.firewall_active_clients[client])) {
+            fw_buff_desc_t buffer;
+            int err = fw_dequeue(&state.firewall_active_clients[client], &buffer);
             assert(!err);
 
             assert(buffer.io_or_offset % NET_BUFFER_SIZE == 0 && 
@@ -105,7 +105,7 @@ void tx_provide(void)
             cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
             buffer.io_or_offset = buffer.io_or_offset + firewall_config.active_clients[client].data.io_addr;
 
-            err = net_enqueue_active(&state.tx_queue_drv, firewall_to_net_desc(buffer));
+            err = net_enqueue_active(&state.tx_queue_drv, fw_to_net_desc(buffer));
             assert(!err);
             enqueued = true;
         }
@@ -141,7 +141,7 @@ void tx_return(void)
             assert(client >= 0);
 
 
-            err = firewall_enqueue(&state.firewall_free_clients[client], net_firewall_desc(buffer));
+            err = fw_enqueue(&state.firewall_free_clients[client], net_fw_desc(buffer));
             assert(!err);
             notify_firewall_clients[client] = true;
         }
@@ -190,12 +190,12 @@ void init(void)
 
     /* Set up firewall queues */
     for (int i = 0; i < firewall_config.num_active_clients; i++) {
-        firewall_queue_init(&state.firewall_active_clients[i], firewall_config.active_clients[i].conn.queue.vaddr,
+        fw_queue_init(&state.firewall_active_clients[i], firewall_config.active_clients[i].conn.queue.vaddr,
                             firewall_config.active_clients[i].conn.capacity);
     }
 
     for (int i = 0; i < firewall_config.num_free_clients; i++) {
-        firewall_queue_init(&state.firewall_free_clients[i], firewall_config.free_clients[i].conn.queue.vaddr,
+        fw_queue_init(&state.firewall_free_clients[i], firewall_config.free_clients[i].conn.queue.vaddr,
                             firewall_config.free_clients[i].conn.capacity);
     }
     tx_provide();

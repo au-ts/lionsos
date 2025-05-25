@@ -49,7 +49,7 @@
 arp_packet_t arp_response_pkt = {0};
 extern net_client_config_t net_config;
 
-extern firewall_webserver_config_t firewall_config;
+extern fw_webserver_config_t firewall_config;
 
 #define dlogp(pred, fmt, ...) do { \
     if (pred) { \
@@ -82,13 +82,13 @@ typedef struct state
     net_queue_handle_t tx_queue;
 
     /* Receive packets from the routing component */
-    firewall_queue_handle_t rx_active;
+    fw_queue_handle_t rx_active;
 
     /* Return free buffers to the rx network virtualiser */
-    firewall_queue_handle_t rx_free;
+    fw_queue_handle_t rx_free;
 
     /* ARP request/response queue for ARP queries */
-    arp_queue_handle_t *arp_queue;
+    fw_arp_queue_handle_t *arp_queue;
 } state_t;
 
 state_t state;
@@ -137,8 +137,8 @@ static void interface_free_buffer(struct pbuf *buf) {
     pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)buf;
     SYS_ARCH_PROTECT(old_level);
     if (!custom_pbuf_offset->arp_response) {
-        firewall_buff_desc_t buffer = { custom_pbuf_offset->offset, 0 };
-        firewall_enqueue(&state.rx_free, buffer);
+        fw_buff_desc_t buffer = { custom_pbuf_offset->offset, 0 };
+        fw_enqueue(&state.rx_free, buffer);
         notify_rx = true;
     }
     LWIP_MEMPOOL_FREE(RX_POOL, custom_pbuf_offset);
@@ -156,8 +156,8 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
             this packet is most likely an ARP probe. We should discard. */
             if (arp_hdr->ipdst_addr != state.ip) {
                 /* This is an arp request, don't transmit through the network */
-                arp_request_t request = {arp_hdr->ipdst_addr, {0}, ARP_STATE_INVALID};
-                int err = arp_enqueue_request(state.arp_queue, request);
+                fw_arp_request_t request = {arp_hdr->ipdst_addr, {0}, ARP_STATE_INVALID};
+                int err = fw_arp_enqueue_request(state.arp_queue, request);
                 if (err) {
                     dlog("Could not enqueue arp request, queue is full");
                     return ERR_MEM;
@@ -227,12 +227,12 @@ static err_t ethernet_init(struct netif *netif)
 
 void init_networking(void) {
     /* Set up shared memory regions */
-    firewall_queue_init(&state.rx_active, firewall_config.rx_active.queue.vaddr, firewall_config.rx_active.capacity);
-    firewall_queue_init(&state.rx_free, firewall_config.rx_free.queue.vaddr, firewall_config.rx_free.capacity);
+    fw_queue_init(&state.rx_active, firewall_config.rx_active.queue.vaddr, firewall_config.rx_active.capacity);
+    fw_queue_init(&state.rx_free, firewall_config.rx_free.queue.vaddr, firewall_config.rx_free.capacity);
     net_queue_init(&state.tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
     net_buffers_init(&state.tx_queue, 0);
-    state.arp_queue = (arp_queue_handle_t *)firewall_config.arp_queue.queue.vaddr;
-    arp_handle_init(state.arp_queue, firewall_config.arp_queue.capacity);
+    state.arp_queue = (fw_arp_queue_handle_t *)firewall_config.arp_queue.queue.vaddr;
+    fw_arp_handle_init(state.arp_queue, firewall_config.arp_queue.capacity);
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
@@ -287,16 +287,16 @@ void init_networking(void) {
 }
 
 void mpnet_process_arp(void) {
-    while (!arp_queue_empty_response(state.arp_queue)) {
-        arp_request_t response;
-        int err = arp_dequeue_response(state.arp_queue, &response);
+    while (!fw_arp_queue_empty_response(state.arp_queue)) {
+        fw_arp_request_t response;
+        int err = fw_arp_dequeue_response(state.arp_queue, &response);
         assert(!err);
 
         // TODO: Input ICMP unreachable packets if response state is unreachable
         if (response.state == ARP_STATE_REACHABLE) {
             fill_arp(response.ip, response.mac_addr);
 
-            if (FIREWALL_DEBUG_OUTPUT) {
+            if (FW_DEBUG_OUTPUT) {
                 dlog("Inputting ARP response for ip %s -> obtained MAC[0] = %x, MAC[5] = %x\n", ipaddr_to_string(response.ip, ip_addr_buf0), response.mac_addr[0], response.mac_addr[5]);
             }
 
@@ -325,9 +325,9 @@ void mpnet_process_arp(void) {
 }
 
 void mpnet_process_rx(void) {
-    while (!firewall_queue_empty(&state.rx_active)) {
-        firewall_buff_desc_t buffer;
-        firewall_dequeue(&state.rx_active, &buffer);
+    while (!fw_queue_empty(&state.rx_active)) {
+        fw_buff_desc_t buffer;
+        fw_dequeue(&state.rx_active, &buffer);
 
         pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
         custom_pbuf_offset->offset = buffer.io_or_offset;

@@ -42,7 +42,7 @@ This ensures that stale entries are not stored indefinitely.
 
 Thus, our arp table entries need to keep track of the following fields:
 
-arp_entry_state_t state;                    /* invalid, pending reply, unreachable, reachable */
+fw_arp_entry_state_t state;                    /* invalid, pending reply, unreachable, reachable */
 uint32_t ip;                                /* IP of entry */
 uint8_t mac_addr[ETH_HWADDR_LEN];           /* MAC of IP */
 uint8_t client;                             /* client where the request originates */

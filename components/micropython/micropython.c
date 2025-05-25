@@ -38,9 +38,9 @@ __attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_confi
 #endif
 
 #ifdef  ENABLE_FIREWALL
-__attribute__((__section__(".firewall_webserver_config"))) firewall_webserver_config_t firewall_config;
+__attribute__((__section__(".fw_webserver_config"))) fw_webserver_config_t firewall_config;
 
-void firewall_webserver_init(void);
+void fw_webserver_init(void);
 void mpnet_process_arp(void);
 #endif
 
@@ -159,7 +159,7 @@ void init(void) {
     }
 
 #ifdef  ENABLE_FIREWALL
-    firewall_webserver_init();
+    fw_webserver_init();
 #endif
 
     // Run the Micropython cothread

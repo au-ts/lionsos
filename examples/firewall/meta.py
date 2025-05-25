@@ -114,8 +114,8 @@ BOARDS: List[Board] = [
 ]
 
 # Create a firewall connection, which is a single queue and a channel. Data must be created and mapped separately
-def firewall_connection(pd1: SystemDescription.ProtectionDomain , pd2: SystemDescription.ProtectionDomain, capacity: int, region_size: int):
-    queue_name = "firewall_queue_" + pd1.name + "_" + pd2.name
+def fw_connection(pd1: SystemDescription.ProtectionDomain , pd2: SystemDescription.ProtectionDomain, capacity: int, region_size: int):
+    queue_name = "fw_queue_" + pd1.name + "_" + pd2.name
     queue = MemoryRegion(sdf, queue_name, region_size)
     sdf.add_mr(queue)
 
@@ -130,13 +130,13 @@ def firewall_connection(pd1: SystemDescription.ProtectionDomain , pd2: SystemDes
     ch = Channel(pd1, pd2)
     sdf.add_channel(ch)
 
-    pd1_conn = FirewallConnectionResource(pd1_region, capacity, ch.pd_a_id)
-    pd2_conn = FirewallConnectionResource(pd2_region, capacity, ch.pd_b_id)
+    pd1_conn = FwConnectionResource(pd1_region, capacity, ch.pd_a_id)
+    pd2_conn = FwConnectionResource(pd2_region, capacity, ch.pd_b_id)
 
     return [pd1_conn, pd2_conn]
 
 # Map a mr into a pd to create a firewall region
-def firewall_region(pd: SystemDescription.ProtectionDomain, mr: SystemDescription.MemoryRegion, perms: str, region_size: int):
+def fw_region(pd: SystemDescription.ProtectionDomain, mr: SystemDescription.MemoryRegion, perms: str, region_size: int):
     pd_map = Map(mr, pd.get_map_vaddr(mr), perms=perms)
     pd.add_map(pd_map)
     region_resource = RegionResource(pd_map.vaddr, region_size)
@@ -144,8 +144,8 @@ def firewall_region(pd: SystemDescription.ProtectionDomain, mr: SystemDescriptio
     return region_resource
 
 # Map a physical mr into a pd to create a firewall device region
-def firewall_device_region(pd: SystemDescription.ProtectionDomain, mr: SystemDescription.MemoryRegion, perms: str):
-    region = firewall_region(pd, mr, perms, mr.size)
+def fw_device_region(pd: SystemDescription.ProtectionDomain, mr: SystemDescription.MemoryRegion, perms: str):
+    region = fw_region(pd, mr, perms, mr.size)
     device_region = DeviceRegionResource(
             region,
             mr.paddr.value
@@ -153,18 +153,18 @@ def firewall_device_region(pd: SystemDescription.ProtectionDomain, mr: SystemDes
     return device_region
 
 # Create a firewall connection and map a physical mr to create a firewall data connection
-def firewall_data_connection(pd1: SystemDescription.ProtectionDomain , pd2: SystemDescription.ProtectionDomain, 
+def fw_data_connection(pd1: SystemDescription.ProtectionDomain , pd2: SystemDescription.ProtectionDomain, 
                              capacity: int, queue_size: int, data: SystemDescription.MemoryRegion, 
                              data_perms1: str, data_perms2: str):
-    connection = firewall_connection(pd1, pd2, capacity, queue_size)
-    data_region1 = firewall_device_region(pd1, data, data_perms1)
-    data_region2 = firewall_device_region(pd2, data, data_perms2)
+    connection = fw_connection(pd1, pd2, capacity, queue_size)
+    data_region1 = fw_device_region(pd1, data, data_perms1)
+    data_region2 = fw_device_region(pd2, data, data_perms2)
 
-    data_connection1 = FirewallDataConnectionResource(
+    data_connection1 = FwDataConnectionResource(
         connection[0],
         data_region1
     )
-    data_connection2 = FirewallDataConnectionResource(
+    data_connection2 = FwDataConnectionResource(
         connection[1],
         data_region2
     )
@@ -173,7 +173,7 @@ def firewall_data_connection(pd1: SystemDescription.ProtectionDomain , pd2: Syst
 
 
 # Create a shared memory region between two pds from a mr
-def firewall_shared_region(pd1: SystemDescription.ProtectionDomain , pd2: SystemDescription.ProtectionDomain, 
+def fw_shared_region(pd1: SystemDescription.ProtectionDomain , pd2: SystemDescription.ProtectionDomain, 
                            perms1: str, perms2: str, name_prefix: str, region_size: int):
     # Create rule memory region
     region_name = name_prefix + "_" + pd1.name + "_" + pd2.name
@@ -181,10 +181,10 @@ def firewall_shared_region(pd1: SystemDescription.ProtectionDomain , pd2: System
     sdf.add_mr(mr)
 
     # Map rule into pd1
-    region1 = firewall_region(pd1, mr, perms1, region_size)
+    region1 = fw_region(pd1, mr, perms1, region_size)
 
     # Map rule memory region into webserver
-    region2 = firewall_region(pd2, mr, perms2, region_size)
+    region2 = fw_region(pd2, mr, perms2, region_size)
 
     return [region1, region2]
 
@@ -299,19 +299,19 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     networks[int_net]["in_net"].add_client_with_copier(webserver, rx=False)
 
     # Webserver receives traffic from the internal -> external router
-    router_webserver_conn = firewall_connection(networks[int_net]["router"], webserver, dma_queue_capacity, dma_queue_region_size)
+    router_webserver_conn = fw_connection(networks[int_net]["router"], webserver, dma_queue_capacity, dma_queue_region_size)
 
     # Webserver returns packets to interior rx virtualiser
-    webserver_in_virt_conn = firewall_connection(webserver, networks[int_net]["in_virt"], dma_queue_capacity, dma_queue_region_size)
+    webserver_in_virt_conn = fw_connection(webserver, networks[int_net]["in_virt"], dma_queue_capacity, dma_queue_region_size)
 
     # Webserver needs access to rx dma region
-    webserver_data_region = firewall_region(webserver, networks[int_net]["rx_dma_region"], "rw", dma_queue_region_size)
+    webserver_data_region = fw_region(webserver, networks[int_net]["rx_dma_region"], "rw", dma_queue_region_size)
 
     # Webserver has arp channel for arp requests/responses
-    webserver_arp_conn = firewall_connection(webserver, networks[ext_net]["arp_req"], arp_queue_capacity, arp_queue_region_size)
+    webserver_arp_conn = fw_connection(webserver, networks[ext_net]["arp_req"], arp_queue_capacity, arp_queue_region_size)
 
     # Create webserver config
-    webserver_config = FirewallWebserverConfig(
+    webserver_config = FwWebserverConfig(
         network["num"],
         router_webserver_conn[1],
         webserver_data_region,
@@ -328,28 +328,28 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         arp_resp = network["arp_resp"]
 
         # Create a firewall data connection between router and output virt with the rx dma region as data region
-        router_out_virt_conn = firewall_data_connection(router, out_virt, dma_queue_capacity, dma_queue_region_size, 
+        router_out_virt_conn = fw_data_connection(router, out_virt, dma_queue_capacity, dma_queue_region_size, 
                                                         network["rx_dma_region"], "rw", "r")
 
         # Create a firewall connection for output virt to return buffers to input virt
-        output_in_virt_conn = firewall_connection(out_virt, in_virt, dma_queue_capacity, dma_queue_region_size)
-        out_virt_in_virt_data_conn = FirewallDataConnectionResource(
+        output_in_virt_conn = fw_connection(out_virt, in_virt, dma_queue_capacity, dma_queue_region_size)
+        out_virt_in_virt_data_conn = FwDataConnectionResource(
             output_in_virt_conn[0],
             router_out_virt_conn[1].data
         )
 
         # Create output virt config
-        network["configs"][out_virt] = FirewallNetVirtTxConfig(
+        network["configs"][out_virt] = FwNetVirtTxConfig(
             network["num"],
             [router_out_virt_conn[1]],
             [out_virt_in_virt_data_conn]
         )
 
         # Create a firewall connection for router to return free buffers to receive virtualiser on interior network
-        router_in_virt_conn = firewall_connection(router, in_virt, dma_queue_capacity, dma_queue_region_size)
+        router_in_virt_conn = fw_connection(router, in_virt, dma_queue_capacity, dma_queue_region_size)
 
         # Create input virt config
-        network["configs"][in_virt] = FirewallNetVirtRxConfig(
+        network["configs"][in_virt] = FwNetVirtRxConfig(
             network["num"],
             [],
             [router_in_virt_conn[1], output_in_virt_conn[1]]
@@ -366,13 +366,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         network["configs"][in_virt].active_client_protocols.append(arp_responder_protocol)
 
         # Create arp queue firewall connection
-        router_arp_conn = firewall_connection(router, arp_req, arp_queue_capacity, arp_queue_region_size)
+        router_arp_conn = fw_connection(router, arp_req, arp_queue_capacity, arp_queue_region_size)
 
         # Create arp cache
-        arp_cache = firewall_shared_region(arp_req, router, "rw", "r", "arp_cache", arp_cache_region_size)
+        arp_cache = fw_shared_region(arp_req, router, "rw", "r", "arp_cache", arp_cache_region_size)
 
         # Create arp req config
-        network["configs"][arp_req] = FirewallArpRequesterConfig(
+        network["configs"][arp_req] = FwArpRequesterConfig(
             network["num"],
             network["mac"],
             network["ip"],
@@ -382,7 +382,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         )
 
         # Create arp resp config
-        network["configs"][arp_resp] = FirewallArpResponderConfig(
+        network["configs"][arp_resp] = FwArpResponderConfig(
             network["num"],
             network["mac"],
             network["ip"]
@@ -391,24 +391,24 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         # Create arp packet queue
         arp_packet_queue_mr = MemoryRegion(sdf, "arp_packet_queue_" + router.name, arp_packet_queue_region_size)
         sdf.add_mr(arp_packet_queue_mr)
-        arp_packet_queue = firewall_region(router, arp_packet_queue_mr, "rw", arp_packet_queue_region_size)
+        arp_packet_queue = fw_region(router, arp_packet_queue_mr, "rw", arp_packet_queue_region_size)
 
         # Create routing table
-        routing_table = firewall_shared_region(router, webserver, "rw", "r", "routing_table", routing_table_size)
+        routing_table = fw_shared_region(router, webserver, "rw", "r", "routing_table", routing_table_size)
 
         # Create pp channel for routing table updates
         router_update_ch = Channel(webserver, router, pp_a=True)
         sdf.add_channel(router_update_ch)
 
         # Create router webserver config
-        router_webserver_config = FirewallWebserverRouterConfig(
+        router_webserver_config = FwWebserverRouterConfig(
             network["num"],
             router_update_ch.pd_b_id,
             routing_table[0],
             routing_table_capacity
         )
 
-        webserver_router_config = FirewallWebserverRouterConfig(
+        webserver_router_config = FwWebserverRouterConfig(
             network["num"],
             router_update_ch.pd_a_id,
             routing_table[1],
@@ -416,7 +416,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         )
 
         # Create router config
-        network["configs"][router] = FirewallRouterConfig(
+        network["configs"][router] = FwRouterConfig(
             network["mac"],
             network["ip"],
             router_in_virt_conn[0],
@@ -431,7 +431,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             []
         )
         
-        webserver_interface_config = FirewallWebserverInterfaceConfig(
+        webserver_interface_config = FwWebserverInterfaceConfig(
             network["mac"],
             network["ip"],
             webserver_router_config,
@@ -440,21 +440,21 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         for (protocol, filter_pd) in network["filters"].items():
             # Create a firewall connection for filter to transmit buffers to router
-            filter_router_conn = firewall_connection(filter_pd, router, dma_queue_capacity, dma_queue_region_size)
+            filter_router_conn = fw_connection(filter_pd, router, dma_queue_capacity, dma_queue_region_size)
 
             # Connect filter as rx only network client
             network["in_net"].add_client_with_copier(filter_pd, tx=False)
             network["configs"][in_virt].active_client_protocols.append(protocol)
 
             # Create rule region
-            filter_rules = firewall_shared_region(filter_pd, webserver, "rw", "r", "filter_rules", filter_rule_region_size)
+            filter_rules = fw_shared_region(filter_pd, webserver, "rw", "r", "filter_rules", filter_rule_region_size)
 
             # Create pp channel between webserver and filter for rule updates
             filter_update_ch = Channel(webserver, filter_pd, pp_a = True)
             sdf.add_channel(filter_update_ch)
 
             # Create webserver configs
-            filter_webserver_config = FirewallWebserverFilterConfig(
+            filter_webserver_config = FwWebserverFilterConfig(
                 network["num"],
                 protocol,
                 filter_update_ch.pd_b_id,
@@ -463,7 +463,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 filter_rule_capacity
             )
 
-            webserver_filter_config = FirewallWebserverFilterConfig(
+            webserver_filter_config = FwWebserverFilterConfig(
                 network["num"],
                 protocol,
                 filter_update_ch.pd_a_id,
@@ -473,7 +473,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             )
 
             # Create filter config
-            network["configs"][filter_pd] = FirewallFilterConfig(
+            network["configs"][filter_pd] = FwFilterConfig(
                 network["mac"],
                 network["ip"],
                 instances_capacity,
@@ -509,8 +509,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     # Create filter instance regions
     for (protocol, filter_pd) in networks[int_net]["filters"].items():
         mirror_filter = networks[ext_net]["filters"][protocol]
-        int_instances = firewall_shared_region(filter_pd, mirror_filter, "rw", "r", "instances", instances_region_size)
-        ext_instances = firewall_shared_region(mirror_filter, filter_pd, "rw", "r", "instances", instances_region_size)
+        int_instances = fw_shared_region(filter_pd, mirror_filter, "rw", "r", "instances", instances_region_size)
+        ext_instances = fw_shared_region(mirror_filter, filter_pd, "rw", "r", "instances", instances_region_size)
 
         networks[int_net]["configs"][filter_pd].internal_instances = int_instances[0]
         networks[int_net]["configs"][filter_pd].external_instances = ext_instances[1]

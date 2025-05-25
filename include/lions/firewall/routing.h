@@ -13,9 +13,9 @@ typedef enum {
     ROUTING_ERR_CLASH,          /* Entry clashes with existing entry */
     ROUTING_ERR_INVALID_CHILD,  /* Child node IP does not match parent node IP */
     ROUTING_ERR_INVALID_ID      /* Node does not exist */
-} routing_err_t;
+} fw_routing_err_t;
 
-static const char *routing_err_str[] = {
+static const char *fw_routing_err_str[] = {
     "Ok.",
     "Out of memory error.",
     "Duplicate entry.",
@@ -28,11 +28,11 @@ static const char *routing_err_str[] = {
 typedef enum {
     ROUTING_OUT_EXTERNAL = 0, /* transmit out NIC */
 	ROUTING_OUT_INTERNAL /* transmit within the system */
-} routing_out_interfaces_t;
+} fw_routing_out_interfaces_t;
 
 /* PP call parameters for webserver to call routers */
-#define FIREWALL_ADD_ROUTE 0
-#define FIREWALL_DEL_ROUTE 1
+#define FW_ADD_ROUTE 0
+#define FW_DEL_ROUTE 1
 
 typedef enum {
     ROUTER_ARG_ROUTE_ID = 0,
@@ -40,27 +40,27 @@ typedef enum {
     ROUTER_ARG_SUBNET,
     ROUTER_ARG_NEXT_HOP,
     ROUTER_ARG_NUM_HOPS
-} router_args_t;
+} fw_router_args_t;
 
 typedef enum {
     ROUTER_RET_ERR = 0,
     ROUTER_RET_ROUTE_ID = 1
-} router_ret_args_t;
+} fw_router_ret_args_t;
 
 typedef struct routing_entry {
     bool valid;
-    routing_out_interfaces_t out_interface; /* queue subnet traffic should be transmitted through */
+    fw_routing_out_interfaces_t out_interface; /* queue subnet traffic should be transmitted through */
     uint16_t num_hops; /* minimum number of hops to destination */
     uint32_t ip; /* ip address of subnet */
     uint8_t subnet; /* number of bits in subnet mask */
     uint32_t next_hop; /* ip addr of next hop */
-} routing_entry_t;
+} fw_routing_entry_t;
 
 typedef struct routing_table {
-    routing_entry_t *entries; /* subnet entries */
-    routing_entry_t default_route; /* default route if no matches are found */
+    fw_routing_entry_t *entries; /* subnet entries */
+    fw_routing_entry_t default_route; /* default route if no matches are found */
     uint16_t capacity; /* capacity of table */
-} routing_table_t;
+} fw_routing_table_t;
 
 /* Node to track packets awaiting ARP requests */
 typedef struct pkt_waiting_node {
@@ -69,7 +69,7 @@ typedef struct pkt_waiting_node {
     uint16_t next_child;
     uint16_t num_children;
     uint32_t ip;
-    firewall_buff_desc_t buffer;
+    fw_buff_desc_t buffer;
 } pkt_waiting_node_t;
 
 typedef struct pkts_waiting {
@@ -115,7 +115,7 @@ pkt_waiting_node_t *pkts_waiting_next_child(pkts_waiting_t *pkts_waiting, pkt_wa
 }
 
 /* Add a child node to a parent waiting node */
-routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *parent, uint32_t ip, firewall_buff_desc_t buffer) {
+fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *parent, uint32_t ip, fw_buff_desc_t buffer) {
     if (pkt_waiting_full(pkts_waiting)) {
         return ROUTING_ERR_FULL;
     }
@@ -148,7 +148,7 @@ routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_n
 }
 
 /* Add a node to IP packet list */
-routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, firewall_buff_desc_t buffer) {
+fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, fw_buff_desc_t buffer) {
     if (pkt_waiting_full(pkts_waiting)) {
         return ROUTING_ERR_FULL;
     }
@@ -183,7 +183,7 @@ routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, firewa
 }
 
 /* Free a node and all child nodes. Must pass a parent node. */
-routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *parent) {
+fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *parent) {
     /* First free children */
     uint16_t child_idx = parent->next_child;
     pkt_waiting_node_t *child = pkts_waiting_next_child(pkts_waiting, parent);
@@ -226,24 +226,24 @@ routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_waiting
     return ROUTING_ERR_OKAY;
 }
 
-static void routing_table_init(routing_table_t *table,
-                               routing_entry_t default_route,
-                               void *entries, 
-                               uint16_t capacity)
+static void fw_routing_table_init(fw_routing_table_t *table,
+                                  fw_routing_entry_t default_route,
+                                  void *entries, 
+                                  uint16_t capacity)
 {
-    table->entries = (routing_entry_t *)entries;
+    table->entries = (fw_routing_entry_t *)entries;
     table->default_route = default_route;
     table->capacity = capacity;
 }
 
-static uint16_t routing_find_route(routing_table_t *table,
-                               uint32_t ip,
-                               uint32_t *next_hop,
-                               routing_out_interfaces_t *out_interface)
+static uint16_t fw_routing_find_route(fw_routing_table_t *table,
+                                      uint32_t ip,
+                                      uint32_t *next_hop,
+                                      fw_routing_out_interfaces_t *out_interface)
 {
-    routing_entry_t *match = NULL;
+    fw_routing_entry_t *match = NULL;
     for (uint16_t i = 0; i < table->capacity; i++) {
-        routing_entry_t *entry = table->entries + i;
+        fw_routing_entry_t *entry = table->entries + i;
         if (!entry->valid) {
             continue;
         }
@@ -276,17 +276,17 @@ static uint16_t routing_find_route(routing_table_t *table,
     return table->capacity;
 }
 
-static routing_err_t routing_table_add_route(routing_table_t *table,
-                                               routing_out_interfaces_t out_interface,
-                                               uint16_t num_hops,
-                                               uint32_t ip,
-                                               uint8_t subnet,
-                                               uint32_t next_hop,
-                                               uint16_t *route_id)
+static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
+                                                   fw_routing_out_interfaces_t out_interface,
+                                                   uint16_t num_hops,
+                                                   uint32_t ip,
+                                                   uint8_t subnet,
+                                                   uint32_t next_hop,
+                                                   uint16_t *route_id)
 {
-    routing_entry_t *empty_slot = NULL;
+    fw_routing_entry_t *empty_slot = NULL;
     for (uint16_t i = 0; i < table->capacity; i++) {
-        routing_entry_t *entry = table->entries + i;
+        fw_routing_entry_t *entry = table->entries + i;
 
         if (!entry->valid) {
             if (empty_slot == NULL) {
@@ -328,9 +328,9 @@ static routing_err_t routing_table_add_route(routing_table_t *table,
     return ROUTING_ERR_OKAY;
 }
 
-static routing_err_t routing_table_remove_route(routing_table_t *table, uint16_t route_id)
+static fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table, uint16_t route_id)
 {
-    routing_entry_t *entry = table->entries + route_id;
+    fw_routing_entry_t *entry = table->entries + route_id;
 
     if (route_id >= table->capacity || !entry->valid) {
         return ROUTING_ERR_INVALID_ID;

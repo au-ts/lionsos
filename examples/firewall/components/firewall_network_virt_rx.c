@@ -23,7 +23,7 @@
 
 __attribute__((__section__(".net_virt_rx_config"))) net_virt_rx_config_t config;
 
-__attribute__((__section__(".firewall_net_virt_rx_config"))) firewall_net_virt_rx_config_t firewall_config;
+__attribute__((__section__(".fw_net_virt_rx_config"))) fw_net_virt_rx_config_t firewall_config;
 
 /* In order to handle broadcast packets where the same buffer is given to multiple clients
   * we keep track of a reference count of each buffer and only hand it back to the driver once
@@ -33,7 +33,7 @@ uint32_t *buffer_refs;
 typedef struct state {
     net_queue_handle_t rx_queue_drv;
     net_queue_handle_t rx_queue_clients[SDDF_NET_MAX_CLIENTS];
-    firewall_queue_handle_t firewall_free_clients[FIREWALL_MAX_FIREWALL_CLIENTS];
+    fw_queue_handle_t firewall_free_clients[FW_MAX_FW_CLIENTS];
 } state_t;
 
 state_t state;
@@ -221,9 +221,9 @@ void rx_provide(void)
     }
 
     for (int client = 0; client < firewall_config.num_free_clients; client++) {
-        while (!firewall_queue_empty(&state.firewall_free_clients[client])) {
-            firewall_buff_desc_t buffer;
-            int err = firewall_dequeue(&state.firewall_free_clients[client], &buffer);
+        while (!fw_queue_empty(&state.firewall_free_clients[client])) {
+            fw_buff_desc_t buffer;
+            int err = fw_dequeue(&state.firewall_free_clients[client], &buffer);
             assert(!err);
             assert(!(buffer.io_or_offset % NET_BUFFER_SIZE)
                     && (buffer.io_or_offset < NET_BUFFER_SIZE * state.firewall_free_clients[client].capacity));
@@ -242,7 +242,7 @@ void rx_provide(void)
             // case where pending writes are only written to the buffer
             // memory after DMA has occured.
             buffer.io_or_offset = buffer.io_or_offset + config.data.io_addr;
-            err = net_enqueue_free(&state.rx_queue_drv, firewall_to_net_desc(buffer));
+            err = net_enqueue_free(&state.rx_queue_drv, fw_to_net_desc(buffer));
             assert(!err);
             notify_drv = true;
         }
@@ -280,7 +280,7 @@ void init(void)
 
     /* Set up firewall queues */
     for (int i = 0; i < firewall_config.num_free_clients; i++) {
-        firewall_queue_init(&state.firewall_free_clients[i], firewall_config.free_clients[i].queue.vaddr,
+        fw_queue_init(&state.firewall_free_clients[i], firewall_config.free_clients[i].queue.vaddr,
                             firewall_config.free_clients[i].capacity);
     }
 

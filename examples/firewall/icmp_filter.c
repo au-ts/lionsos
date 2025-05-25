@@ -17,17 +17,17 @@
 #include <lions/firewall/protocols.h>
 #include <lions/firewall/queue.h>
 
-__attribute__((__section__(".firewall_filter_config"))) firewall_filter_config_t filter_config;
+__attribute__((__section__(".fw_filter_config"))) fw_filter_config_t filter_config;
 
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
 
 /* Queues for receiving and transmitting packets */
 net_queue_handle_t rx_queue;
 net_queue_handle_t tx_queue;
-firewall_queue_handle_t router_queue;
+fw_queue_handle_t router_queue;
 
 /* Holds filtering rules and state */
-firewall_filter_state_t filter_state;
+fw_filter_state_t filter_state;
 
 #define ICMP_FILTER_DUMMY_PORT 0
 
@@ -47,16 +47,16 @@ void filter(void)
 
             bool default_action = false;
             uint8_t rule_id = 0;
-            firewall_action_t action = firewall_filter_find_action(&filter_state, ip_pkt->src_ip, ICMP_FILTER_DUMMY_PORT,
+            fw_action_t action = fw_filter_find_action(&filter_state, ip_pkt->src_ip, ICMP_FILTER_DUMMY_PORT,
                                                                    ip_pkt->dst_ip, ICMP_FILTER_DUMMY_PORT, &rule_id);
 
             /* Perform the default action */
             if (action == FILTER_ACT_NONE) {
                 default_action = true;
                 action = filter_state.default_action;
-                if (FIREWALL_DEBUG_OUTPUT) {
+                if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter found no match, performing default action %s: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[filter_config.webserver.interface], firewall_filter_action_str[action],
+                        fw_frmt_str[filter_config.webserver.interface], fw_filter_action_str[action],
                         ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
                         ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                 }
@@ -64,10 +64,10 @@ void filter(void)
             
             /* Add an established connection in shared memory for corresponding filter */
             if (action == FILTER_ACT_CONNECT) {
-                firewall_filter_err_t fw_err = firewall_filter_add_instance(&filter_state, ip_pkt->src_ip, ICMP_FILTER_DUMMY_PORT,
+                fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_pkt->src_ip, ICMP_FILTER_DUMMY_PORT,
                                                                                 ip_pkt->dst_ip, ICMP_FILTER_DUMMY_PORT, default_action, rule_id);
 
-                if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FIREWALL_DEBUG_OUTPUT) {
+                if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.webserver.interface], rule_id,
                         ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
@@ -78,17 +78,17 @@ void filter(void)
                     sddf_printf("%sICMP FILTER LOG: could not establish connection for rule %u or default action %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
                         fw_frmt_str[filter_config.webserver.interface],
                         rule_id, default_action, ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT, firewall_filter_err_str[fw_err]);
+                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT, fw_filter_err_str[fw_err]);
                 }
             }
 
             /* Transmit the packet to the routing component */
             if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED || action == FILTER_ACT_ALLOW) {
-                err = firewall_enqueue(&router_queue, net_firewall_desc(buffer));
+                err = fw_enqueue(&router_queue, net_fw_desc(buffer));
                 assert(!err);
                 transmitted = true;
 
-                if (FIREWALL_DEBUG_OUTPUT) {
+                if (FW_DEBUG_OUTPUT) {
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
                         sddf_printf("%sICMP filter transmitting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                             fw_frmt_str[filter_config.webserver.interface], rule_id,
@@ -107,7 +107,7 @@ void filter(void)
                 assert(!err);
                 returned = true;
 
-                if (FIREWALL_DEBUG_OUTPUT) {
+                if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.webserver.interface], rule_id,
                         ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
@@ -137,48 +137,48 @@ void filter(void)
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     switch (microkit_msginfo_get_label(msginfo)) {
-    case FIREWALL_SET_DEFAULT_ACTION: {
-        firewall_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
+    case FW_SET_DEFAULT_ACTION: {
+        fw_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
 
-        if (FIREWALL_DEBUG_OUTPUT) {
+        if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sICMP filter changing default action from %u to %u\n",
                 fw_frmt_str[filter_config.webserver.interface], filter_state.default_action, action);
         }
 
-        firewall_filter_err_t err = firewall_filter_update_default_action(&filter_state, action);
+        fw_filter_err_t err = fw_filter_update_default_action(&filter_state, action);
         assert(err == FILTER_ERR_OKAY);
 
         seL4_SetMR(FILTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
-    case FIREWALL_ADD_RULE: {
-        firewall_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
+    case FW_ADD_RULE: {
+        fw_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
         uint32_t src_ip = seL4_GetMR(FILTER_ARG_SRC_IP);
         uint32_t dst_ip = seL4_GetMR(FILTER_ARG_DST_IP);
         uint8_t src_subnet = seL4_GetMR(FILTER_ARG_SRC_SUBNET);
         uint8_t dst_subnet = seL4_GetMR(FILTER_ARG_DST_SUBNET);
         uint16_t rule_id = 0;
-        firewall_filter_err_t err = firewall_filter_add_rule(&filter_state, src_ip, ICMP_FILTER_DUMMY_PORT,
+        fw_filter_err_t err = fw_filter_add_rule(&filter_state, src_ip, ICMP_FILTER_DUMMY_PORT,
             dst_ip, ICMP_FILTER_DUMMY_PORT, src_subnet, dst_subnet, true, true, action, &rule_id);
 
-        if (FIREWALL_DEBUG_OUTPUT) {
+        if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sICMP filter create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> (ip %s, mask %u, port %u, any_port %u): %s\n",
                 fw_frmt_str[filter_config.webserver.interface], rule_id,
-                ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet, ICMP_FILTER_DUMMY_PORT, false, firewall_filter_action_str[action],
-                ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, ICMP_FILTER_DUMMY_PORT, false, firewall_filter_err_str[err]);
+                ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet, ICMP_FILTER_DUMMY_PORT, false, fw_filter_action_str[action],
+                ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, ICMP_FILTER_DUMMY_PORT, false, fw_filter_err_str[err]);
         }
 
         seL4_SetMR(FILTER_RET_ERR, err);
         seL4_SetMR(FILTER_RET_RULE_ID, rule_id);
         return microkit_msginfo_new(0, 2);
     }
-    case FIREWALL_DEL_RULE: {
+    case FW_DEL_RULE: {
         uint16_t rule_id = seL4_GetMR(FILTER_ARG_RULE_ID);
-        firewall_filter_err_t err = firewall_filter_remove_rule(&filter_state, rule_id);
+        fw_filter_err_t err = fw_filter_remove_rule(&filter_state, rule_id);
 
-        if (FIREWALL_DEBUG_OUTPUT) {
+        if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sICMP remove rule id %u: %s\n",
-                fw_frmt_str[filter_config.webserver.interface], rule_id, firewall_filter_err_str[err]);
+                fw_frmt_str[filter_config.webserver.interface], rule_id, fw_filter_err_str[err]);
         }
 
         seL4_SetMR(FILTER_RET_ERR, err);
@@ -211,9 +211,9 @@ void init(void)
     net_queue_init(&rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
         net_config.rx.num_buffers);
     
-    firewall_queue_init(&router_queue, filter_config.router.queue.vaddr, filter_config.router.capacity);
+    fw_queue_init(&router_queue, filter_config.router.queue.vaddr, filter_config.router.capacity);
 
-    firewall_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.webserver.rules_capacity,
+    fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.webserver.rules_capacity,
         filter_config.internal_instances.vaddr, filter_config.external_instances.vaddr, filter_config.instances_capacity,
-        (firewall_action_t)filter_config.webserver.default_action);
+        (fw_action_t)filter_config.webserver.default_action);
 }
