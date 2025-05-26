@@ -11,7 +11,7 @@ EthHWAddrLen = 6
 IPAddrLen = 4
 maxIpDigit = 255
 maxPortNum = 65535
-maxSubnetMask = 24
+maxSubnetMask = 32
 
 ############ System Constants and Errors ############
 
