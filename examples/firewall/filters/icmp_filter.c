@@ -88,6 +88,9 @@ void filter(void)
                 
                 /* Reset the checksum as it's recalculated in hardware */
                 icmp_hdr->checksum = 0;
+
+                // TODO: Why are we receiving ICMP packets 4 bytes longer than what is sent?
+                buffer.len -=4;
                 err = fw_enqueue(&router_queue, net_fw_desc(buffer));
                 assert(!err);
                 transmitted = true;
