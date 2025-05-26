@@ -72,7 +72,7 @@ This ensures that stale entries are not stored indefinitely.
 
 Thus, our arp table entries need to keep track of the following fields:
 
-fw_arp_entry_state_t state;                    /* invalid, pending reply, unreachable, reachable */
+fw_arp_entry_state_t state;                 /* invalid, pending reply, unreachable, reachable */
 uint32_t ip;                                /* IP of entry */
 uint8_t mac_addr[ETH_HWADDR_LEN];           /* MAC of IP */
 uint8_t client;                             /* client where the request originates */
@@ -93,19 +93,37 @@ protection domains that use the arp table and queues for creating requests are:
 - [external router](/examples/firewall/routing_external.c)
 - [arp requester](/examples/firewall/arp_requester.c)
 
-#### TODO:
-- Read about cuckoo hashes
-- Create a flush arp table function
-
 
 ### Improved TCP
-syn attack protection/syn cookies
-connected\established rules
-monitoring network flow
-TCP module: When a TCP connection attempts a 3-way handshake with a closed port then a RST packet should be sent back as a response. See RFC793.
+Currently our [TCP filter component](/examples/firewall/filters/tcp_filter.c), which monitors all
+TCP traffic, is not implemented with any distinction from our UDP and ICMP filter components. The
+goal of this project is to change this, and implement some TCP specific filtering functionalities.
 
-#### TODO:
-- Write this
+The first potential functionality is better TCP connection tracking. Currently we do implement a
+`CONNECT/ESTABLISHED` filtering rule where traffic is permitted only if it has been seen in the
+other direction. If traffic matches with a `CONNECT` rule (which is possibly the filter's default
+rule) the source and destination IP and port are written to a memory region shared with the other
+filter. The region which a filter writes to is called the internal instances region, and the region
+it reads from is called the external instances region. Whenever a filter component receives traffic,
+it first checks its external instances region before checking its rules, and if a match is found the
+traffic will be allowed. Care is taken so that if a filter's `CONNECT` rule is changed, all
+instances generated from this rule are removed. Since TCP traffic involves a 3-way handshake before
+a connection is established, we hope to implement a more complex TCP `CONNECT/ESTABLISH` rule that
+only considers a connection established once the TCP handshake has completed. This would require the
+TCP filter to perform more complex book-keeping. 
+
+Once we have the infrastructure to track TCP handshakes, this would enable the TCP filter to
+implement protection from syn attacks. This could possible be implemented with SYN cookies.
+
+Another possible improvement to the TCP filter is correctly handling TCP handshake error conditions.
+When a TCP connection attempts a 3-way handshake with a closed port then a TCP RST packet should be
+sent back as a response (See RFC793). For our TCP filter to handle this case, it will require the
+ability to send packets out the interface it is filtering (which it is currently unable to do). As a
+first implementation, we can add the infrastructure to allow the filter to send packets directly,
+but an improved implementation would involve the TCP filter contacting another component that has
+network interface transmit access, possibly the ICMP module component. This would also involve
+creating new data structures to pass the relevant information between components.
+
 
 ### ICMP
 For an overview of different types of ICMP messages see:
@@ -157,18 +175,12 @@ Note: Alot of this work will involve broadening the interface between the router
 and the ICMP module. Additionally, we only generate a destination unreachable packet in the ICMP module,
 so developing a more generic packet constructer is required.
 
-#### TODO:
-- Read this and Krishnan's code changes
-
 
 ### Improved GUI
 
 - Remove valid entry from filter and routing table
 - Add doubly linked list structure to routing and filter tables. Optimise searches through the tables.
 - Live traffic monitoring
-
-#### TODO:
-- Write this
 
 
 # Testing the Firewall
