@@ -70,21 +70,34 @@ def ip_to_int(ipString: str):
     return int(ipaddress.IPv4Address(reversedIp))
 
 macs = [
-    [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x15], # External network, ETH1
-    [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x1d] # Internal network, ETH2
+    # IOTGATE1:
+    [[0x00, 0x01, 0xc0, 0x39, 0xd5, 0x18], # External network, ETH1
+    [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x10]], # Internal network, ETH2
+    # IOTGATE2:
+    [[0x00, 0x01, 0xc0, 0x39, 0xd5, 0x1d], # External network, ETH1
+    [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x15]], # Internal network, ETH2
+    # IOTGATE3:
+    [[0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x8c], # External network, ETH1
+    [0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x83]], # Internal network, ETH2
+    # IOTGATE4:
+    [[0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x8a], # External network, ETH1
+    [0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x85]], # Internal network, ETH2
+    # IOTGATE1:
+    [[0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x80], # External network, ETH1
+    [0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x79]], # Internal network, ETH2
 ]
 
 ips = [
     # IOTGATE1: EXT = 16912556, INT = 18983104
-    [ip_to_int("172.16.2.1"), ip_to_int("192.168.31.1")],
+    [ip_to_int("172.16.2.1"), ip_to_int("192.168.1.1")],
     # IOTGATE2
-    [ip_to_int("172.16.2.2"), ip_to_int("192.168.32.1")],
+    [ip_to_int("172.16.2.2"), ip_to_int("192.168.2.1")],
     # IOTGATE3
-    [ip_to_int("172.16.2.3"), ip_to_int("192.168.33.1")],
+    [ip_to_int("172.16.2.3"), ip_to_int("192.168.3.1")],
     # IOTGATE4
-    [ip_to_int("172.16.2.4"), ip_to_int("192.168.34.1")],
+    [ip_to_int("172.16.2.4"), ip_to_int("192.168.4.1")],
     # IOTGATE5
-    [ip_to_int("172.16.2.5"), ip_to_int("192.168.35.1")],
+    [ip_to_int("172.16.2.5"), ip_to_int("192.168.5.1")],
 ]
 
 arp_responder_protocol = 0x92
@@ -214,7 +227,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     for i in range(2):
         networks.append({
             "num": i,
-            "mac": macs[i],
+            "mac": macs[iotgate_idx][i],
             "ip": ips[iotgate_idx][i],
             "out_dir": output_dir + "/net_data" + str(i),
             "configs":{},
