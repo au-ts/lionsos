@@ -177,10 +177,39 @@ so developing a more generic packet constructer is required.
 
 
 ### Improved GUI
+Currently our firewall webserver GUI is functional, however fairly basic. This project invovles two
+types of changes: back-end and front-end.
 
-- Remove valid entry from filter and routing table
-- Add doubly linked list structure to routing and filter tables. Optimise searches through the tables.
-- Live traffic monitoring
+For back-end changes, we would like to implement a creation-based ordering on our routes and filter
+rules. Currently routes and rules are stored in tables, and are assigned unique IDs by the index of
+their entry. There is no gaurantee that routes and rules will be stored consecutively within their
+tables since they may be deleted, so we must always search the entire table when finding matches and
+displaying them in the webserver. Obviously this is inefficient! The first improvement that can be
+made is to add a doubly linked list ordering into the tables, so we need only loop through valid
+entries when searching. Preferably this could be implemented in the style of the firewall, which
+would be `prev` and `next` integers storing the index of the previous and next entries. This would
+both vastly improve searching the tables, as well as allow us to display the entries in the order
+which they were created.
+
+Once this is implemented, as a follow improvement we would like to remove any `valid` booleans from
+our entries which we are currently using to verify whether an entry is in use, and instead use one
+of the existing fields to determine this.
+
+Currently the front-end implementation of the webserver is very elementary and difficult to use,
+with embedded javascript inside a python file. Unfortunatley nobody in the firewall project has much
+front-end experience, so we would be open to any improvements on this! Our webserver component uses
+micropython, and we use microdot as our web framework. As well as improving our codebase structure,
+we would also welcome improvements to the appearance of the website itself. 
+
+Finally, a functionality that would involve both front and back end changes would be to create a new
+webserver page which displays live traffic monitoring in both directions. This would require
+additional shared memory, as well as more logging in the network components. Basic logging would be
+fairly simple to implement, however a more functional system may involve the use of timestamps to
+track how long entries should be stored. Since we already have shared memory mechanisms set up for
+routes and filter rules, this can be used as a starting point. Similarly, we already have example
+webserver endpoints for displaying entries in these regions. If the project is too complex, you are
+welcome to implement only the front-end (with dummy data) or the back-end (using pre-existing serial
+output to display the logs).
 
 
 # Testing the Firewall
