@@ -300,8 +300,13 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
             continue;
         }
 
+        /* One rule applies to a larger subnet than the other */
+        if (subnet != entry->subnet) {
+            continue;
+        }
+
         /* Rules apply to different subnets */
-        if ((SUBNET_MASK(subnet) & ip) != (SUBNET_MASK((entry->subnet) & entry->ip))) {
+        if ((SUBNET_MASK(subnet) & ip) != (SUBNET_MASK(entry->subnet) & entry->ip)) {
             continue;
         }
 
