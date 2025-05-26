@@ -2,7 +2,37 @@
 
 ## Preparation
 - Microkit tutorial
-- Firewall development workflow
+
+## Building and Running the Firewall
+Please see the [firewall README.md](/examples/firewall/README.md) for details on how to build and
+run the firewall.
+
+## Configuration Structs
+As a product of building the firewall, a python module
+[config_structs.py](/examples/firewall/config_structs.py) will be generated in the firewall example
+directory. This module is generated from C config headers (e.g.
+[firewall configs](/include/lions/firewall/config.h)) which are a means to pass Microkit system
+information to components after they have been built. Components will declare the configuration
+structs they need at the top of their C files, and once the Microkit objects have been created in
+the [metaprogram](/examples/firewall/meta.py), their values will be written to `.data` files in the
+build directory, and they will be obj-copied into each `.elf` file. Config declarations look like
+this:
+
+```c
+__attribute__((__section__(".fw_arp_requester_config"))) fw_arp_requester_config_t arp_config;
+```
+
+Ensuring the data files match the precise format that the C components are expecting can be
+challenging, thus we developed a python module
+[sdfgen_helper.py](/examples/firewall/sdfgen_helper.py) which creates Python-to-C conversion data
+types to be used in the metaprogram.
+
+If you wish to change or create new configuration structs, the best way to update the metaprogram is
+to first re-run the sdfgen helper module on the new C header files, and then use the outputted
+config structs module as a reference.
+
+The sdfdgen helper module is a recent addition to the firewall system, so if you encounter any
+problems with it please let us know.
 
 ## Projects
 
@@ -75,7 +105,7 @@ monitoring network flow
 TCP module: When a TCP connection attempts a 3-way handshake with a closed port then a RST packet should be sent back as a response. See RFC793.
 
 #### TODO:
-
+- Write this
 
 ### ICMP
 For an overview of different types of ICMP messages see:
@@ -128,6 +158,7 @@ and the ICMP module. Additionally, we only generate a destination unreachable pa
 so developing a more generic packet constructer is required.
 
 #### TODO:
+- Read this and Krishnan's code changes
 
 
 ### Improved GUI
@@ -137,14 +168,91 @@ so developing a more generic packet constructer is required.
 - Live traffic monitoring
 
 #### TODO:
+- Write this
 
 
-# Firewall Testing
-- Echo server for simple packet filtering testing
-- Running the firewall on machine queue
-- Accessing both sides of the firewall for all boards (e.g. internal and external subnets)
-- Access internal web server via an internal node
-- Remotely update internal network node tables (e.g. IP forwarding)
-- Monitor internal network node traffic (e.g. Wireshark)
-- Respond to and generate traffic from the internal node of all types (UDP, TCP, ICMP, etc)
-- Test internal network with more than one node
+# Testing the Firewall
+
+1. The first step to test the firewall is to run the firewall on an iotgate. Choose which iotgate
+   you will be using first, and then pass it's number to the build system by setting the environment
+   variable: `FW_IOTGATE_IDX=[1345]`. This is used to set the correct MAC and IP addresses for the
+   external and internal interfaces, which are used by the firewall components.
+
+   The `FW_IOTGATE_IDX` argument is passed to the firewall [metaprogram](/examples/firewall/meta.py)
+   and is used as an index to select MAC and IP addresses in the `macs` and `ips` Python lists at
+   the top of the program. The MAC addresses and IPs for each interface are also listed in the
+   [interfaces](/examples/firewall/interfaces.md) document.
+
+
+2. The external firewall interfaces are part of the TFTP network (172.16.0.2/16), and the internal
+   interfaces are part of a small internal network (192.168.[1345].2/24) with only two nodes - the
+   firewall which can be found at .1, and an internal virtual machine node which can be found at .2.
+   The internal virtual machine also has a connection to the keg network (10.13.0.191/23), however
+   is configured only to send and receive traffic on this interface that is related to debugging.
+   The firewall can be tested by sending traffic through in either direction.
+
+   The TFTP network is set up to forward any traffic with destination IP in one of the internal
+   networks to the corresponding external iotgate interface. For example, if a packet of the form:
+
+   (172.16.0.5) --> (192.168.1.2)
+
+   if sent out on the TFTP network, it will be redirected as follows:
+
+   (172.16.0.5) --> iotgate1 external interface (172.16.2.1) --> iotgate1 external interface --> (192.168.1.2)
+
+   this involves updating the MAC address of the packet to the MAC of the external iotgate, but the
+   destination IP is left unchanged so the firewall can forward it to its ultimate destination.
+
+   Similarly, the internal VM node is configured to send out all non-debug traffic through its
+   firewall internal interface, so any TFTP traffic will first be routed to the internal firewall
+   interface via MAC address substitution.
+
+   To test external --> internal traffic, first ssh into TFTP (ensure you are connected to the keg
+   network), then send ICMP, UDP or TCP traffic to the internal node as follows:
+
+```sh
+ssh tftp
+ping 192.168.1.2
+nc -u 192.168.1.2 port
+nc 192.168.1.2 port
+```
+   netcat (nc) can be used to send out either UDP or TCP traffic.
+
+   To test internal --> external traffic, first ssh into the internal node (you may use hostnames
+   listed in the [interfaces](/examples/firewall/interfaces.md) file), and then send ICMP, UDP or
+   TCP traffic as above:
+
+```sh
+ssh fwp-int-1-1
+ping 172.16.0.2
+nc -u 172.16.0.2 port
+nc 172.16.0.2 port
+```
+
+   Currently the firewall does not handle traffic addressed to itself correctly (with the exception
+   of ARP requests for the firewall's IPs and webserver traffic which is explained below). If
+   traffic destined for the firewall is received, the firewall assumes it is destined for another
+   node, and will send out an ARP request for its MAC. This does not cause any errors, and will
+   ultimately result in the traffic being dropped, so can be used to test things if desired.
+
+
+3. The firewall will provide plenty of debug output for monitoring traffic on the interfaces, but
+   wireshark can also be used on the internal VM node. Currently students do not have permissions to
+   run wireshark on TFTP, however this is possible if this is needed. To run wireshark on the node,
+   it is reccomended to run the wireshark client locally, and tunnel `dumpcap` output from the VM in
+   to your client. This can be done simply using the following command:
+
+```sh
+ssh {yourTSusername}@fwp-int-[1345]-1.keg.cse.unsw.edu.au 'dumpcap -F pcap -i internal -i enp4s0 -w - -f "not port 22"' | wireshark -k -i -
+```
+
+   The `-i internal` and `-i enp4s0` arguments specify that traffic on both the internal and keg
+   interfaces is outputted, but feel free to omit `-i enp4s0`. We will ensure that everyone has the
+   correct permissions to run `dumpcap` on each internal node on your first day.
+
+4. The firewall provides a webserver interface to view, modify and create firewall routing rules and
+   traffic filtering rules. It also displays firewall interface details. The webserver can only be
+   accessed from the internal network, thus to acces the webserver, you must tunnel your requests
+   and responses through the corresponding internal node. Upon arrival, Alex (our sys admin) will
+   ensure that your ssh config is set up so that you can access each firewall webserver with your
+   browser at `localhost:8080`.
