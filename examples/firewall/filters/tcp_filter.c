@@ -83,6 +83,9 @@ void filter(void)
 
             /* Transmit the packet to the routing component */
             if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED || action == FILTER_ACT_ALLOW) {
+                /* Reset the checksum as it's recalculated in hardware */
+                tcp_hdr->check = 0;
+                
                 err = fw_enqueue(&router_queue, net_fw_desc(buffer));
                 assert(!err);
                 transmitted = true;

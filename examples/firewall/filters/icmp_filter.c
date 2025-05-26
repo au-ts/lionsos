@@ -44,6 +44,7 @@ void filter(void)
 
             void *pkt_vaddr = net_config.rx_data.vaddr + buffer.io_or_offset;
             ipv4_packet_t *ip_pkt = (ipv4_packet_t *)pkt_vaddr;
+            icmphdr_t *icmp_hdr = (icmphdr_t *)(pkt_vaddr + transport_layer_offset(ip_pkt));
 
             bool default_action = false;
             uint8_t rule_id = 0;
@@ -84,6 +85,9 @@ void filter(void)
 
             /* Transmit the packet to the routing component */
             if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED || action == FILTER_ACT_ALLOW) {
+                
+                /* Reset the checksum as it's recalculated in hardware */
+                icmp_hdr->checksum = 0;
                 err = fw_enqueue(&router_queue, net_fw_desc(buffer));
                 assert(!err);
                 transmitted = true;
