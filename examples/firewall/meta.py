@@ -75,8 +75,16 @@ macs = [
 ]
 
 ips = [
-    ip_to_int("172.16.2.1"), # 16912556
-    ip_to_int("192.168.33.1") # 18983104
+    # IOTGATE1: EXT = 16912556, INT = 18983104
+    [ip_to_int("172.16.2.1"), ip_to_int("192.168.31.1")],
+    # IOTGATE2
+    [ip_to_int("172.16.2.2"), ip_to_int("192.168.32.1")],
+    # IOTGATE3
+    [ip_to_int("172.16.2.3"), ip_to_int("192.168.33.1")],
+    # IOTGATE4
+    [ip_to_int("172.16.2.4"), ip_to_int("192.168.34.1")],
+    # IOTGATE5
+    [ip_to_int("172.16.2.5"), ip_to_int("192.168.35.1")],
 ]
 
 arp_responder_protocol = 0x92
@@ -188,7 +196,7 @@ def fw_shared_region(pd1: SystemDescription.ProtectionDomain , pd2: SystemDescri
 
     return [region1, region2]
 
-def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
+def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     serial_node = dtb.node(board.serial)
     assert serial_node is not None
     ethernet_node0 = dtb.node(board.ethernet0)
@@ -197,6 +205,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     assert ethernet_node1 is not None
     timer_node = dtb.node(board.timer)
     assert serial_node is not None
+    assert iotgate_idx is not None and iotgate_idx < 5 and iotgate_idx >= 0
 
     common_pds = []
 
@@ -206,7 +215,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         networks.append({
             "num": i,
             "mac": macs[i],
-            "ip": ips[i],
+            "ip": ips[iotgate_idx][i],
             "out_dir": output_dir + "/net_data" + str(i),
             "configs":{},
             })
@@ -547,7 +556,7 @@ if __name__ == '__main__':
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
     parser.add_argument("--objcopy", required=True)
-
+    parser.add_argument("--iotgate_idx", required=True)
     args = parser.parse_args()
 
     board = next(filter(lambda b: b.name == args.board, BOARDS))
@@ -561,4 +570,4 @@ if __name__ == '__main__':
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
 
-    generate(args.sdf, args.output, dtb)
+    generate(args.sdf, args.output, dtb, (int(args.iotgate_idx) - 1))
