@@ -201,7 +201,7 @@ static err_t netif_output(struct netif *netif, struct pbuf *p) {
 }
 
 static void netif_status_callback(struct netif *netif) {
-    dlog("Netif is up for MAC[5] = %x! IP address for netif %s is: %s", netif->hwaddr[5], netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
+    dlog("Netif is up for webserver! IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
 }
 
 static err_t ethernet_init(struct netif *netif)
