@@ -62,10 +62,10 @@ mq.sh run  -a -l mq.log -s iotgate1 -f build/loader.img
 
 where the provided arguments are: 
 
--a          Keep the machine alive after image is done
--l FILE     Optional location to write all the console output to
--s TEXT     Specifies which machine this job is for
--f FILE [+] Files to use as the job image
+* -a          Keep the machine alive after image is done
+* -l FILE     Optional location to write all the console output to
+* -s TEXT     Specifies which machine this job is for
+* -f FILE [+] Files to use as the job image
 
 The default build system output image file name is `loader.img` which can be found inside the
 `build` directory.
