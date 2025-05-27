@@ -17,20 +17,14 @@ The following is an architecture diagram of the Firewall system, with the commun
 
 ## Dependencies
 
-### Microkit SDF Gen
-This project currently uses an experimental version of the `microkit_sdf_gen` tool. The development branch can be found:
-https://github.com/au-ts/microkit_sdf_gen/tree/firewall. Please clone this repository. To build:
-
 ```sh
-git submodule --update init
-python3 -m venv venv
-./venv/bin/pip install .
+pip3 install sdfgen==0.25.0
 ```
 
-In the shell you wish to build this project, run the following command:
+If you get `error: externally-managed-environment`
+when installing via pip, instead run:
 ```sh
-# Only replace whats between < >
-export PYTHON<path/to/microkit_sdf_gen>/venv/bin/python
+pip3 install --break-system-packages sdfgen==0.25.0
 ```
 
 ## Building
