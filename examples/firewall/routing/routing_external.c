@@ -80,7 +80,6 @@ static void process_arp_waiting(void)
                 // Copy the source of the failed packet as the dest of the ICMP response.
                 memcpy(req.mac, eth_hdr->ethsrc_addr, ETH_HWADDR_LEN);
                 req.type = ICMP_DEST_UNREACHABLE;
-                // @kwinter: Not sure what sub code we want for this packet.
                 req.code = ICMP_DEST_HOST_UNREACHABLE;
                 memcpy(&req.old_hdr, eth_hdr, sizeof(ipv4_packet_t));
                 if (pkt_node->buffer.len >= (sizeof(ipv4_packet_t) + 8)) {
@@ -191,7 +190,6 @@ static void route()
                         // Copy the source of the failed packet as the dest of the ICMP response.
                         memcpy(req.mac, ip_pkt->ethsrc_addr, ETH_HWADDR_LEN);
                         req.type = ICMP_DEST_UNREACHABLE;
-                        // @kwinter: Not sure what sub code we want for this packet.
                         req.code = ICMP_DEST_HOST_UNREACHABLE;
                         memcpy(&req.old_hdr, ip_pkt, sizeof(ipv4_packet_t));
                         if (buffer.len >= (sizeof(ipv4_packet_t) + 8)) {
