@@ -80,33 +80,36 @@ void generate_icmp(int out_net)
             icmp_resp->ihl_version = (4 << 4) | (5);
             // The differentiated services code 48 is for network control traffic.
             icmp_resp->tos = 48;
+
             // Hardcode the total length of a destination unreachable packet here.
-            // Will contain two ip headers (ours and the old one), as well as 32 bits for icmp header
-            // and 64 bits for the old data.
-            icmp_resp->tot_len = HTONS(sizeof(icmphdr_t));
+            // The total length of the IP packet and the ICMP packet, therefore we
+            // subtract the size of the ethernet header.
+            icmp_resp->tot_len = HTONS(sizeof(icmphdr_t) - sizeof(struct ethernet_header));
+
             // Not fragmenting this IP packet.
             icmp_resp->id = HTONS(0);
+
             // 0x4000 sets the "Don't Fragment" Bit
             icmp_resp->frag_off = HTONS(0x4000);
+
             // Recommended inital value of ttl is 64 hops according to the TCP/IP spec.
             // @kwinter: Alot of places use 255 TTL as the default?
             icmp_resp->ttl = 64;
             icmp_resp->protocol = IPV4_PROTO_ICMP;
-            // @kwinter: Set ip header checksum to 0 and let hardware fill this in.
-            // TODO: Hide this behind an ifdef if we have hardware checksumming support.
-            icmp_resp->check = HTONS(0);
-            // @kwinter: Is the src ip in this cases just wherever the original packet
-            // was addressed to, or the IP of our NIC.
+            icmp_resp->check = 0;
+
             icmp_resp->src_ip = req.ip;
             icmp_resp->dst_ip = req.old_hdr.src_ip;
             icmp_resp->type = req.type;
-            // @kwinter: Not sure what subtype of dest unreachable we want to use.
             icmp_resp->code = req.code;
+
             // Checksum needs to be 0 for currect checksum calculation.
-            icmp_resp->checksum = HTONS(0);
-            sddf_memcpy(&icmp_resp->old_ip_hdr, &req.old_hdr, sizeof(ipv4_packet_t));
-            icmp_resp->old_data = req.old_data;
-            // Now that the packet is constructed, calculate the final checksum.
+            icmp_resp->checksum = 0;
+
+            // Strip away the ethernet header from the old packet.
+            sddf_memcpy(&icmp_resp->old_ip_hdr, &req.old_hdr.ihl_version, sizeof(ipv4_packet_no_enet_t));
+            sddf_memcpy(&icmp_resp->old_data, &req.old_data, 8);
+
             buffer.len = (sizeof(icmphdr_t));
             cache_clean(icmp_resp, icmp_resp + sizeof(icmphdr_t));
             err = net_enqueue_active(curr_net, buffer);
