@@ -284,7 +284,7 @@ nc 172.16.0.2 port
    to your client. This can be done simply using the following command:
 
 ```sh
-ssh {yourTSusername}@fwp-int-[1345]-1.keg.cse.unsw.edu.au 'dumpcap -F pcap -i internal -i enp4s0 -w - -f "not port 22"' | wireshark -k -i -
+ssh @fwp-int-[1345]-1.keg 'dumpcap -F pcap -i internal -w - -f "not port 22"' | wireshark -k -i -
 ```
 
    The `-i internal` and `-i enp4s0` arguments specify that traffic on both the internal and keg
@@ -294,6 +294,28 @@ ssh {yourTSusername}@fwp-int-[1345]-1.keg.cse.unsw.edu.au 'dumpcap -F pcap -i in
 4. The firewall provides a webserver interface to view, modify and create firewall routing rules and
    traffic filtering rules. It also displays firewall interface details. The webserver can only be
    accessed from the internal network, thus to acces the webserver, you must tunnel your requests
-   and responses through the corresponding internal node. Upon arrival, Alex (our sys admin) will
-   ensure that your ssh config is set up so that you can access each firewall webserver with your
-   browser at `localhost:8080`.
+   and responses through the corresponding internal node. To enable this, the following rule must be
+   added to you ssh config file:
+
+```sh
+Host fwp-int-?-1
+      ProxyJump login.trustworthy.systems
+      User courtneyd
+      IdentityFile ~/.ssh/ts_rsa
+      Hostname %h
+      LocalForward 8080 localhost:80
+```
+
+   You should already have a rule similar to this for matching on internal nodes, however be sure to
+   add the `LocalForward` part.
+
+   Then, when you wish to connect to the webserver, run
+
+```sh
+ssh -fN fwp-int-?-1
+```
+   in your terminal. This command does not create output. This sets up traffic forwarding with the
+   internal node. To access the webserver, go to `localhost:8080`.
+
+   To close your traffic forwarding connection with the internal node, close the terminal you used
+   to perform the ssh.
