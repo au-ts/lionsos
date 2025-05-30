@@ -69,7 +69,7 @@ requested board and opens a console displaying serial output from the
 system. A typical machine queue command would be:
 
 ```sh
-mq.sh run -c "" -l mq.log -s iotgate1 -f build/loader.img
+mq.sh run -c "emptystring" -l mq.log -s iotgate1 -f build/loader.img
 ```
 
 where the provided arguments are: 
