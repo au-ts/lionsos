@@ -3,20 +3,13 @@
 #include <stdint.h>
 #include <sddf/util/util.h>
 
-#define BITS_LT(N)  ((N) - 1u)
-
-/* Subnet value of N means IPs must match on highest N bits. */
-#define SUBNET_MASK(N) BITS_LT(1 << N)
-
-static uint32_t subnet_mask(uint8_t subnet) {
-    assert(subnet <= 32);
-    if (subnet == 32) {
-        return UINT32_MAX;
-    }
-
-    return SUBNET_MASK(subnet);
+static inline uint32_t htonl(uint32_t n) {
+    return n >> 24 | (n & 0xff) << 24 | (n & 0xff00) << 8 | (n >> 8) & 0xff00;
 }
+/* Subnet value of N means IPs must match on highest N bits. */
+#define subnet_mask(n) htonl(0xffffffff << (32 - (n)))
 
+/* We store IP addresses big-endian */
 #define IPV4_ADDR(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((uint32_t) (d) << 24))
 
 #define IPV4_ADDR_BUFLEN 16

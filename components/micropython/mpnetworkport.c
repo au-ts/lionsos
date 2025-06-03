@@ -25,6 +25,12 @@
 #include <sddf/util/cache.h>
 #include <sddf/network/constants.h>
 
+#include <lions/firewall/arp_queue.h>
+#include <lions/firewall/common.h>
+#include <lions/firewall/config.h>
+#include <lions/firewall/queue.h>
+
+
 #include <lwip/dhcp.h>
 #include <lwip/init.h>
 #include <lwip/ip.h>
@@ -37,11 +43,6 @@
 #include <lwip/timeouts.h>
 #include <lwip/err.h>
 #include <netif/etharp.h>
-
-#include <lions/firewall/arp_queue.h>
-#include <lions/firewall/common.h>
-#include <lions/firewall/config.h>
-#include <lions/firewall/queue.h>
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
