@@ -75,7 +75,8 @@ typedef struct pkt_waiting_node {
 typedef struct pkts_waiting {
     pkt_waiting_node_t *packets;
     uint16_t capacity;
-    uint16_t size;
+    uint16_t size;  /* number of nodes in use */
+    uint16_t length;  /* number of parent nodes */
     uint16_t waiting_head;
     uint16_t waiting_tail;
     uint16_t free_head;
@@ -85,10 +86,10 @@ typedef struct pkts_waiting {
 void pkt_waiting_init(pkts_waiting_t *pkts_waiting, void *packets, uint16_t capacity) {
     pkts_waiting->packets = (pkt_waiting_node_t *)packets;
     pkts_waiting->capacity = capacity;
-    for (uint16_t i = 0; i < pkts_waiting->size; i++) {
+    for (uint16_t i = 0; i < pkts_waiting->capacity; i++) {
         pkt_waiting_node_t *node = pkts_waiting->packets + i;
+        /* Free list only maintains next pointers */
         node->next_ip = i + 1;
-        node->prev_ip = i - 1;
     }
 }
 
@@ -100,10 +101,11 @@ bool pkt_waiting_full(pkts_waiting_t *pkts_waiting) {
 /* Find matching ip packet waiting node in packet waiting list */
 pkt_waiting_node_t *pkt_waiting_find_node(pkts_waiting_t *pkts_waiting, uint32_t ip) {
     pkt_waiting_node_t *node = pkts_waiting->packets + pkts_waiting->waiting_head;
-    for (uint16_t i = 0; i < pkts_waiting->size; i++) {
+    for (uint16_t i = 0; i < pkts_waiting->length; i++) {
         if (node->ip == ip) {
             return node;
         }
+        node = pkts_waiting->packets + node->next_ip;
     }
 
     return NULL;
@@ -134,11 +136,11 @@ fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waitin
 
     /* Update pointers */
     pkts_waiting->free_head = new_node->next_ip;
-    pkt_waiting_node_t *next_child = parent;
+    pkt_waiting_node_t *last_child = parent;
     for (uint16_t i = 0; i < parent->num_children; i++) {
-        next_child = pkts_waiting_next_child(pkts_waiting, next_child);
+        last_child = pkts_waiting_next_child(pkts_waiting, last_child);
     }
-    next_child->next_child = new_idx;
+    last_child->next_child = new_idx;
 
     /* Update counts */
     parent->num_children++;
@@ -159,8 +161,6 @@ fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, fw_
 
     uint16_t new_idx = pkts_waiting->free_head;
     pkt_waiting_node_t *new_node = pkts_waiting->packets + new_idx;
-    uint16_t head_idx = pkts_waiting->waiting_head;
-    pkt_waiting_node_t *head_node = pkts_waiting->packets + head_idx;
 
     /* Update values */
     new_node->ip = ip;
@@ -169,14 +169,20 @@ fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, fw_
 
     /* Update pointers */
     pkts_waiting->free_head = new_node->next_ip;
-    new_node->next_ip = head_idx;
-    head_node->prev_ip = new_idx;
-    pkts_waiting->waiting_head = new_idx;
-    if (pkts_waiting->size == 0) {
+    /* If this is not the first node */
+    if (pkts_waiting->length) {
+        uint16_t head_idx = pkts_waiting->waiting_head;
+        pkt_waiting_node_t *head_node = pkts_waiting->packets + head_idx;
+
+        new_node->next_ip = head_idx;
+        head_node->prev_ip = new_idx;
+    } else {
         pkts_waiting->waiting_tail = new_idx;
     }
+    pkts_waiting->waiting_head = new_idx;
 
     /* Update counts */
+    pkts_waiting->length++;
     pkts_waiting->size++;
     
     return ROUTING_ERR_OKAY;
@@ -220,7 +226,10 @@ fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_wait
 
     /* Only maintain prev pointers for active list */
     parent->next_ip = pkts_waiting->free_head;
-    pkts_waiting->free_head = parent - pkts_waiting->packets;
+    pkts_waiting->free_head = parent_idx;
+
+    /* Update counts */
+    pkts_waiting->length--;
     pkts_waiting->size--;
 
     return ROUTING_ERR_OKAY;
