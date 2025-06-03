@@ -43,13 +43,12 @@ void filter(void)
             assert(!err);
 
             void *pkt_vaddr = net_config.rx_data.vaddr + buffer.io_or_offset;
-            ipv4_packet_t *ip_pkt = (ipv4_packet_t *)pkt_vaddr;
-            icmphdr_t *icmp_hdr = (icmphdr_t *)(pkt_vaddr + transport_layer_offset(ip_pkt));
+            icmphdr_t *icmp_hdr = (icmphdr_t *)pkt_vaddr;
 
             bool default_action = false;
             uint8_t rule_id = 0;
-            fw_action_t action = fw_filter_find_action(&filter_state, ip_pkt->src_ip, ICMP_FILTER_DUMMY_PORT,
-                                                                   ip_pkt->dst_ip, ICMP_FILTER_DUMMY_PORT, &rule_id);
+            fw_action_t action = fw_filter_find_action(&filter_state, icmp_hdr->src_ip, ICMP_FILTER_DUMMY_PORT,
+                                                                   icmp_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, &rule_id);
 
             /* Perform the default action */
             if (action == FILTER_ACT_NONE) {
@@ -58,28 +57,28 @@ void filter(void)
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter found no match, performing default action %s: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.webserver.interface], fw_filter_action_str[action],
-                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
+                        ipaddr_to_string(icmp_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
+                        ipaddr_to_string(icmp_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                 }
             }
             
             /* Add an established connection in shared memory for corresponding filter */
             if (action == FILTER_ACT_CONNECT) {
-                fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_pkt->src_ip, ICMP_FILTER_DUMMY_PORT,
-                                                                                ip_pkt->dst_ip, ICMP_FILTER_DUMMY_PORT, default_action, rule_id);
+                fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, icmp_hdr->src_ip, ICMP_FILTER_DUMMY_PORT,
+                                                                                icmp_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, default_action, rule_id);
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.webserver.interface], rule_id,
-                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
+                        ipaddr_to_string(icmp_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
+                        ipaddr_to_string(icmp_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
                     sddf_printf("%sICMP FILTER LOG: could not establish connection for rule %u or default action %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
                         fw_frmt_str[filter_config.webserver.interface],
-                        rule_id, default_action, ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT, fw_filter_err_str[fw_err]);
+                        rule_id, default_action, ipaddr_to_string(icmp_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
+                        ipaddr_to_string(icmp_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT, fw_filter_err_str[fw_err]);
                 }
             }
 
@@ -89,8 +88,6 @@ void filter(void)
                 /* Reset the checksum as it's recalculated in hardware */
                 icmp_hdr->checksum = 0;
 
-                // TODO: Why are we receiving ICMP packets 4 bytes longer than what is sent?
-                buffer.len -=4;
                 err = fw_enqueue(&router_queue, net_fw_desc(buffer));
                 assert(!err);
                 transmitted = true;
@@ -99,13 +96,13 @@ void filter(void)
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
                         sddf_printf("%sICMP filter transmitting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                             fw_frmt_str[filter_config.webserver.interface], rule_id,
-                            ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
+                            ipaddr_to_string(icmp_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
+                            ipaddr_to_string(icmp_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                     } else if (action == FILTER_ACT_ESTABLISHED) {
                         sddf_printf("%sICMP filter transmitting via external rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                             fw_frmt_str[filter_config.webserver.interface], rule_id,
-                            ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
+                            ipaddr_to_string(icmp_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
+                            ipaddr_to_string(icmp_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                     }
                 }
             } else if (action == FILTER_ACT_DROP) {
@@ -117,8 +114,8 @@ void filter(void)
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.webserver.interface], rule_id,
-                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
+                        ipaddr_to_string(icmp_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
+                        ipaddr_to_string(icmp_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                 }
             }
         }

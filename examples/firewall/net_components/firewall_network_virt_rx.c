@@ -120,6 +120,9 @@ void rx_return(void)
             buffer.io_or_offset = buffer.io_or_offset - config.data.io_addr;
             uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.data.region.vaddr;
 
+            /* Remove additional 4 byte ethernet header from NIC promiscuous mode */
+            buffer.len -= 4;
+
             // Cache invalidate after DMA write, so we don't read stale data.
             // This must be performed after the DMA write to avoid reading
             // data that was speculatively fetched before the DMA write.
