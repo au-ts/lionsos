@@ -4,10 +4,10 @@
 #include <sddf/util/util.h>
 
 static inline uint32_t htonl(uint32_t n) {
-    return n >> 24 | (n & 0xff) << 24 | (n & 0xff00) << 8 | (n >> 8) & 0xff00;
+    return n >> 24 | (n & 0xff) << 24 | (n & 0xff00) << 8 | ((n >> 8) & 0xff00);
 }
 /* Subnet value of N means IPs must match on highest N bits. */
-#define subnet_mask(n) htonl(0xffffffff << (32 - (n)))
+#define subnet_mask(n) htonl((uint32_t)(0xffffffffUL << (32 - (n))))
 
 /* We store IP addresses big-endian */
 #define IPV4_ADDR(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((uint32_t) (d) << 24))
