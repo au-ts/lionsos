@@ -69,7 +69,7 @@ static void process_arp_waiting(void)
         if (response.state == ARP_STATE_UNREACHABLE) {
             /* Invalid response, drop packet associated with the IP address */
             pkt_waiting_node_t *pkt_node = req_pkt;
-            for (uint16_t i = 0; i < req_pkt->num_children; i++) {
+            for (uint16_t i = 0; i < req_pkt->num_children + 1; i++) {
                 err = fw_enqueue(&rx_free, pkt_node->buffer);
                 assert(!err);
                 pkt_node = pkts_waiting_next_child(&pkt_waiting_queue, pkt_node);
@@ -80,7 +80,7 @@ static void process_arp_waiting(void)
         } else {
             /* Substitute the MAC address and send packets out of the NIC */
             pkt_waiting_node_t *pkt_node = req_pkt;
-            for (uint16_t i = 0; i < req_pkt->num_children; i++) {
+            for (uint16_t i = 0; i < req_pkt->num_children + 1; i++) {
                 ipv4_packet_t *tx_pkt = (ipv4_packet_t *)(data_vaddr + pkt_node->buffer.io_or_offset);
                 memcpy(tx_pkt->ethdst_addr, response.mac_addr, ETH_HWADDR_LEN);
                 memcpy(tx_pkt->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
@@ -90,7 +90,7 @@ static void process_arp_waiting(void)
                     sddf_printf("%sRouter sending packet for ip %s (next hop %s) with buffer number %lu\n",
                         fw_frmt_str[router_config.webserver.interface],
                         ipaddr_to_string(tx_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(response.ip, ip_addr_buf1),
-                        req_pkt->buffer.io_or_offset/NET_BUFFER_SIZE);
+                        pkt_node->buffer.io_or_offset/NET_BUFFER_SIZE);
                 }
 
                 err = fw_enqueue(&tx_active, pkt_node->buffer);
