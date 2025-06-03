@@ -19,8 +19,7 @@ typedef struct __attribute__((__packed__)) ipv4_packet {
     uint8_t ethdst_addr[ETH_HWADDR_LEN];
     uint8_t ethsrc_addr[ETH_HWADDR_LEN];
     uint16_t type;
-    unsigned int ihl:4;
-    unsigned int version:4;
+    uint8_t ihl_version;
     uint8_t tos;
     uint16_t tot_len;
     uint16_t id;
@@ -31,6 +30,19 @@ typedef struct __attribute__((__packed__)) ipv4_packet {
     uint32_t src_ip;
     uint32_t dst_ip;
 } ipv4_packet_t;
+
+typedef struct __attribute__((__packed__)) ipv4_packet_no_enet {
+    uint8_t ihl_version;
+    uint8_t tos;
+    uint16_t tot_len;
+    uint16_t id;
+    uint16_t frag_off;
+    uint8_t ttl;
+    uint8_t protocol;
+    uint16_t check;
+    uint32_t src_ip;
+    uint32_t dst_ip;
+} ipv4_packet_no_enet_t;
 
 typedef struct __attribute__((__packed__)) arp_packet {
       uint8_t ethdst_addr[ETH_HWADDR_LEN];
@@ -50,7 +62,7 @@ typedef struct __attribute__((__packed__)) arp_packet {
 } arp_packet_t;
 
 static uint8_t transport_layer_offset(ipv4_packet_t *ip_pkt) {
-    return sizeof(struct ethernet_header) + 4 * ip_pkt->ihl;
+    return sizeof(struct ethernet_header) + 4 * (ip_pkt->ihl_version & 0xF);
 }
 
 typedef struct __attribute__((__packed__)) udphdr
@@ -106,23 +118,26 @@ typedef struct __attribute__((__packed__)) tcphdr
 
 typedef struct __attribute__((__packed__)) icmphdr
 {
+    uint8_t ethdst_addr[ETH_HWADDR_LEN];
+    uint8_t ethsrc_addr[ETH_HWADDR_LEN];
+    uint16_t eth_type;
+    uint8_t ihl_version;
+    uint8_t tos;
+    uint16_t tot_len;
+    uint16_t id;
+    uint16_t frag_off;
+    uint8_t ttl;
+    uint8_t protocol;
+    uint16_t check;
+    uint32_t src_ip;
+    uint32_t dst_ip;
     uint8_t type;		    /* message type */
     uint8_t code;		    /* type sub-code */
     uint16_t checksum;
-    union
-    {
-        struct
-        {
-            uint16_t id;
-            uint16_t sequence;
-        } echo;			    /* echo datagram */
-        uint32_t gateway;	/* gateway address */
-        struct
-        {
-            uint16_t unused;
-            uint16_t mtu;
-        } frag;			    /* path mtu discovery */
-    } un;
+    // 4-byte padding boundary
+    uint32_t _unused;
+    ipv4_packet_no_enet_t old_ip_hdr;
+    uint64_t old_data;
 } icmphdr_t;
 
 typedef struct __attribute__((__packed__)) arphdr {
