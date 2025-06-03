@@ -248,7 +248,7 @@ static uint16_t fw_routing_find_route(fw_routing_table_t *table,
             continue;
         }
 
-        if ((SUBNET_MASK(entry->subnet) & ip) == (SUBNET_MASK(entry->subnet) & entry->ip)) {
+        if ((subnet_mask(entry->subnet) & ip) == (subnet_mask(entry->subnet) & entry->ip)) {
             /* ip is part of subnet */
             if (match == NULL) {
                 match = entry;
@@ -306,7 +306,7 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
         }
 
         /* Rules apply to different subnets */
-        if ((SUBNET_MASK(subnet) & ip) != (SUBNET_MASK(entry->subnet) & entry->ip)) {
+        if ((subnet_mask(subnet) & ip) != (subnet_mask(entry->subnet) & entry->ip)) {
             continue;
         }
 
@@ -325,7 +325,7 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
     empty_slot->valid = true;
     empty_slot->out_interface = out_interface;
     empty_slot->num_hops = num_hops;
-    empty_slot->ip = SUBNET_MASK(subnet) & ip;
+    empty_slot->ip = subnet_mask(subnet) & ip;
     empty_slot->subnet = subnet;
     empty_slot->next_hop = next_hop;
     *route_id = empty_slot - table->entries;

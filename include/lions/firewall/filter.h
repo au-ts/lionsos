@@ -163,12 +163,12 @@ static fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
         }
 
         /* Rules apply to different source subnets */
-        if ((SUBNET_MASK(src_subnet) & src_ip) != (SUBNET_MASK(rule->src_subnet) & rule->src_ip)) {
+        if ((subnet_mask(src_subnet) & src_ip) != (subnet_mask(rule->src_subnet) & rule->src_ip)) {
             continue;
         }
 
         /* Rules apply to different destination subnets */
-        if ((SUBNET_MASK(dst_subnet) & dst_ip) != (SUBNET_MASK(rule->dst_subnet) & rule->dst_ip)) {
+        if ((subnet_mask(dst_subnet) & dst_ip) != (subnet_mask(rule->dst_subnet) & rule->dst_ip)) {
             continue;
         }
 
@@ -185,9 +185,9 @@ static fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
     }
 
     empty_slot->valid = true;
-    empty_slot->src_ip = SUBNET_MASK(src_subnet) & src_ip;
+    empty_slot->src_ip = subnet_mask(src_subnet) & src_ip;
     empty_slot->src_port = src_port;
-    empty_slot->dst_ip = SUBNET_MASK(dst_subnet) & dst_ip;
+    empty_slot->dst_ip = subnet_mask(dst_subnet) & dst_ip;
     empty_slot->dst_port = dst_port;
     empty_slot->src_subnet = src_subnet;
     empty_slot->dst_subnet = dst_subnet;
@@ -287,12 +287,12 @@ static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
         }
 
         /* Match on src addr first */
-        if ((SUBNET_MASK(rule->src_subnet) & src_ip) != (SUBNET_MASK(rule->src_subnet) & rule->src_ip)) {
+        if ((subnet_mask(rule->src_subnet) & src_ip) != (subnet_mask(rule->src_subnet) & rule->src_ip)) {
             continue;
         }
 
         /* Match on src addr first */
-        if ((SUBNET_MASK(rule->dst_subnet) & dst_ip) != (SUBNET_MASK(rule->dst_subnet) & rule->dst_ip)) {
+        if ((subnet_mask(rule->dst_subnet) & dst_ip) != (subnet_mask(rule->dst_subnet) & rule->dst_ip)) {
             continue;
         }
 
