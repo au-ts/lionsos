@@ -251,30 +251,17 @@ static uint16_t process_retries(void)
     return pending_requests;
 }
 
-/* Flush all cache entries, reply to all pending entries */
+/* Flush all non pending cache entries */
 static uint16_t arp_table_flush(void) {
     uint16_t flushed = 0;
     for (uint16_t i = 0; i < arp_table.capacity; i++) {
         fw_arp_entry_t *entry = arp_table.entries + i;
-        if (entry->state != ARP_STATE_INVALID) {
-            flushed++;
-        }
-
-        if (entry->state != ARP_STATE_PENDING) {
+        if (entry->state == ARP_STATE_INVALID || entry->state == ARP_STATE_PENDING) {
             continue;
         }
 
-        /* Node is now considered unreachable */
-        entry->state = ARP_STATE_UNREACHABLE;
-
-        /* Generate ARP responses */
-        for (uint8_t client = 0; client < arp_config.num_arp_clients; client++) {
-            if (BIT(client) & entry->client) {
-                fw_arp_enqueue_response(arp_queues[client], fw_arp_response_from_entry(entry));
-                notify_client[client] = true;
-            }
-        }
         entry->state = ARP_STATE_INVALID;
+        flushed++;
     }
 
     return flushed;
