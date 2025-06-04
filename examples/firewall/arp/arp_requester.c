@@ -267,6 +267,54 @@ static uint16_t arp_table_flush(void) {
     return flushed;
 }
 
+/* Returns the number of ARP's still requiring a retry. */
+int process_retries(uint64_t time)
+{
+    int pending_pkts = 0;
+    // Loop over hashmap, and check if we have any pending retries.
+    for (int i = 0; i < 100; i++) {
+        if (arp_table->used[i] == 1 ) {
+            if (arp_table->entries[i].value.state == pending) {
+                if (arp_table->entries[i].value.num_retries >= ARP_MAX_RETRIES) {
+                    // ARP table has been expired
+                    arp_table->entries[i].value.state = negative;
+                    // Generate an ARP response packet for the router.
+                    arp_enqueue_response(arp_queues[arp_table->entries[i].value.client], arp_table->entries[i].key, empty_mac, false);
+                } else {
+                    // Resend the ARP request out to the network
+                    /* Generate ARP request */
+                    pending_pkts++;
+
+                    net_buff_desc_t buffer = {};
+                    int err = net_dequeue_free(&tx_queue, &buffer);
+                    if (err) {
+                        sddf_dprintf("ARP_REQUESTER| Unable to requeue ARP request as tx queue is full!\n");
+                        return pending_pkts;
+                    }
+
+                    arp_packet_t *pkt = (arp_packet_t *)(net_config.tx_data.vaddr + buffer.io_or_offset);
+
+                    generate_arp(pkt, arp_table->entries[i].key);
+
+                    if (FIREWALL_DEBUG_OUTPUT) {
+                        sddf_printf("MAC[5] = %x | ARP requester processing request for ip %u\n", arp_config.mac_addr[5], arp_table->entries[i].key);
+                    }
+
+                    buffer.len = 56;
+                    err = net_enqueue_active(&tx_queue, buffer);
+                    assert(!err);
+
+                    // Increment the number of retries
+                    arp_table->entries[i].value.num_retries++;
+
+                    microkit_deferred_notify(net_config.tx.id);
+                }
+            }
+        }
+    }
+    return pending_pkts;
+}
+
 void init(void)
 {
     assert(net_config_check_magic((void *)&net_config));
