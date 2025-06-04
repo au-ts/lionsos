@@ -59,7 +59,7 @@ void generate_icmp(int out_net)
 
         if (router == 0) {
             curr_icmp_queue = &state.icmp_queue_router1;
-        } else if (router == 1) {
+        } else {
             curr_icmp_queue = &state.icmp_queue_router2;
         }
 
@@ -111,7 +111,7 @@ void generate_icmp(int out_net)
             sddf_memcpy(&icmp_resp->old_data, &req.old_data, 8);
 
             buffer.len = (sizeof(icmphdr_t));
-            cache_clean(icmp_resp, icmp_resp + sizeof(icmphdr_t));
+            cache_clean((unsigned long)icmp_resp, (unsigned long)(icmp_resp + sizeof(icmphdr_t)));
             err = net_enqueue_active(curr_net, buffer);
             transmitted = true;
             assert(!err);
