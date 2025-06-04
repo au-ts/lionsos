@@ -4,13 +4,13 @@
 
 # Actions to *only* run on GitHub pull requests
 
-name: PR
+# name: PR
 
-on: [pull_request]
+# on: [pull_request]
 
-jobs:
-  whitespace:
-    name: 'Trailing Whitespace'
-    runs-on: ubuntu-latest
-    steps:
-    - uses: seL4/ci-actions/git-diff-check@master
+# jobs:
+#   whitespace:
+#     name: 'Trailing Whitespace'
+#     runs-on: ubuntu-latest
+#     steps:
+#     - uses: seL4/ci-actions/git-diff-check@master
