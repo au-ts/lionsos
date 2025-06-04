@@ -47,7 +47,7 @@ static bool transmitted;
 static bool notify_client[FW_NUM_ARP_REQUESTER_CLIENTS] = {false};
 
 #define ARP_MAX_RETRIES 5               /* How many times the ARP requester will send out an ARP request. */
-#define ARP_RETRY_TIMER_S 5             /* How often to retry an ARP request, in seconds. */
+#define ARP_RETRY_TIMER_S 1             /* How often to retry an ARP request, in seconds. */
 #define ARP_RETRY_TIMER_NS (ARP_RETRY_TIMER_S * NS_IN_S)
 #define ARP_CACHE_LIFE_M 5              /* The lifetime of the ARP cache in minutes. After this time elapses, the cache is flushed. */
 #define ARP_CACHE_LIFE_NS ((ARP_CACHE_LIFE_M * 60) * NS_IN_S)
