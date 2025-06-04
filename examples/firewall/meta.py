@@ -290,7 +290,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     timer_system.add_client(webserver)
 
     # Create ICMP Module component
-    icmp_module = ProtectionDomain("icmp_module", "icmp_module.elf", priority=50, budget=20000)
+    icmp_module = ProtectionDomain("icmp_module", "icmp_module.elf", priority=100, budget=20000)
     common_pds.append(icmp_module)
 
     networks[ext_net]["filters"] = {}
@@ -344,16 +344,16 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     networks[int_net]["out_net"].add_client_with_copier(icmp_module, rx=False)
 
     # ICMP Module needs to be connected to both routers.
-    icmp_int_router_conn = firewall_connection(networks[int_net]["router"], icmp_module, icmp_queue_capacity, icmp_queue_region_size)
-    icmp_ext_router_conn = firewall_connection(networks[ext_net]["router"], icmp_module, icmp_queue_capacity, icmp_queue_region_size)
+    icmp_int_router_conn = fw_connection(networks[int_net]["router"], icmp_module, icmp_queue_capacity, icmp_queue_region_size)
+    icmp_ext_router_conn = fw_connection(networks[ext_net]["router"], icmp_module, icmp_queue_capacity, icmp_queue_region_size)
 
-    icmp_module_config = FirewallIcmpModuleConfig(
+    icmp_module_config = FwIcmpModuleConfig(
         icmp_int_router_conn[1],
         icmp_ext_router_conn[1]
     )
 
     networks[int_net]["icmp_module"] = icmp_int_router_conn[0]
-    networks[ext_net]["icmp_module"] = icmp_int_router_conn[0]
+    networks[ext_net]["icmp_module"] = icmp_ext_router_conn[0]
 
     # Create webserver config
     webserver_config = FwWebserverConfig(
@@ -584,7 +584,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
         f.write(webserver_config.serialise())
     update_elf_section(obj_copy, webserver.elf, webserver_config.section_name, data_path)
 
-    data_path = output_dir + "/fw_icmp_module_config.data"
+    data_path = output_dir + "/firewall_icmp_module_config.data"
     with open(data_path, "wb+") as f:
         f.write(icmp_module_config.serialise())
     update_elf_section(obj_copy, icmp_module.elf, icmp_module_config.section_name, data_path)

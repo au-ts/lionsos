@@ -121,6 +121,7 @@ static inline int icmp_dequeue(icmp_queue_handle_t *queue, icmp_req_t *req)
     return 0;
 }
 
+
 /**
  * Initialise the shared queue.
  *
@@ -128,8 +129,8 @@ static inline int icmp_dequeue(icmp_queue_handle_t *queue, icmp_req_t *req)
  * @param queue pointer to queue in shared memory.
  * @param capacity capacity of the queue.
  */
-static inline void icmp_queue_init(icmp_queue_handle_t *queue_handle, icmp_queue_t *queue, uint32_t capacity)
+static inline void icmp_queue_init(icmp_queue_handle_t *queue_handle, void *queue, uint32_t capacity)
 {
-    queue_handle->queue = queue;
+    queue_handle->queue =(icmp_queue_t *)queue;
     queue_handle->capacity = capacity;
 }
