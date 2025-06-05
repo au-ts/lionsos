@@ -40,7 +40,7 @@ arp_queue_capacity = 512
 arp_queue_region_size = round_up_to_Page(2 * (4 + 16 * arp_queue_capacity) + 4)
 
 icmp_queue_capacity = 128
-icmp_queue_region_size = round_up_to_Page(312 * icmp_queue_capacity)
+icmp_queue_region_size = round_up_to_Page((2 + 2) + (54 * icmp_queue_capacity) + 4)
 
 arp_cache_capacity = 512
 arp_cache_region_size = round_up_to_Page(24 * arp_cache_capacity)
