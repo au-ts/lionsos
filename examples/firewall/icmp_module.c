@@ -148,10 +148,10 @@ void notified(microkit_channel ch)
     if (ch == icmp_config.router1_conn.ch) {
         // Set out net argument to network 1 - this ICMP packet will
         // go out to the external network.
-        generate_icmp(2);
+        generate_icmp(1);
     } else if (ch == icmp_config.router2_conn.ch) {
         // Set out net argument to network 2 - this ICMP packet will
         // go out to the internal network.
-        generate_icmp(1);
+        generate_icmp(2);
     }
 }

@@ -348,8 +348,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     icmp_ext_router_conn = fw_connection(networks[ext_net]["router"], icmp_module, icmp_queue_capacity, icmp_queue_region_size)
 
     icmp_module_config = FwIcmpModuleConfig(
-        icmp_int_router_conn[1],
-        icmp_ext_router_conn[1]
+        icmp_ext_router_conn[1],
+        icmp_int_router_conn[1]
     )
 
     networks[int_net]["icmp_module"] = icmp_int_router_conn[0]
