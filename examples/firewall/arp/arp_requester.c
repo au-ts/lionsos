@@ -47,7 +47,7 @@ static bool transmitted;
 static bool notify_client[FW_NUM_ARP_REQUESTER_CLIENTS] = {false};
 
 #define ARP_MAX_RETRIES 5               /* How many times the ARP requester will send out an ARP request. */
-#define ARP_RETRY_TIMER_S 5             /* How often to retry an ARP request, in seconds. */
+#define ARP_RETRY_TIMER_S 1             /* How often to retry an ARP request, in seconds. */
 #define ARP_RETRY_TIMER_NS (ARP_RETRY_TIMER_S * NS_IN_S)
 #define ARP_CACHE_LIFE_M 5              /* The lifetime of the ARP cache in minutes. After this time elapses, the cache is flushed. */
 #define ARP_CACHE_LIFE_NS ((ARP_CACHE_LIFE_M * 60) * NS_IN_S)
@@ -151,7 +151,7 @@ static void process_responses()
                         /* This was a response to a request we sent, update entry */
                         entry->state = ARP_STATE_REACHABLE;
                         memcpy(&entry->mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
-                        
+
                         /* Send to clients */
                         for (uint8_t client = 0; client < arp_config.num_arp_clients; client++) {
                             if (BIT(client) & entry->client) {

@@ -50,7 +50,7 @@ FIREWALL_CONFIG_HEADERS := $(SDDF)/include/sddf/resources/common.h \
 							$(LIONSOS)/include/lions/firewall/config.h
 
 FIREWALL_IMAGES := arp_requester.elf arp_responder.elf routing_internal.elf routing_external.elf \
-		  				icmp_filter.elf udp_filter.elf tcp_filter.elf
+		  				icmp_filter.elf udp_filter.elf tcp_filter.elf icmp_module.elf
 
 IMAGES := micropython.elf \
 		  eth_driver_imx.elf firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
@@ -166,6 +166,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data0/net_virt_rx.data firewall_network_virt_rx0.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data0/net_virt_tx.data firewall_network_virt_tx0.elf
 
+	$(OBJCOPY) --update-section .net1_client_config=net_data0/net_client_icmp_module.data icmp_module.elf
+
 # arp_requester0 is a net client of the other network
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_arp_requester0.data arp_requester0.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_arp_responder0.data arp_responder0.elf
@@ -185,6 +187,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data1/net_virt_rx.data firewall_network_virt_rx1.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data1/net_virt_tx.data firewall_network_virt_tx1.elf
+
+	$(OBJCOPY) --update-section .net2_client_config=net_data1/net_client_icmp_module.data icmp_module.elf
 
 # arp_requester1 is a net client of the other network
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_arp_requester1.data arp_requester1.elf

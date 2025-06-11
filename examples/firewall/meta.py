@@ -39,6 +39,9 @@ dma_region_size = round_up_to_Page(dma_queue_capacity * dma_buffer_size)
 arp_queue_capacity = 512
 arp_queue_region_size = round_up_to_Page(2 * (4 + 16 * arp_queue_capacity) + 4)
 
+icmp_queue_capacity = 128
+icmp_queue_region_size = round_up_to_Page((2 + 2) + (54 * icmp_queue_capacity) + 4)
+
 arp_cache_capacity = 512
 arp_cache_region_size = round_up_to_Page(24 * arp_cache_capacity)
 
@@ -286,6 +289,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     serial_system.add_client(webserver)
     timer_system.add_client(webserver)
 
+    # Create ICMP Module component
+    icmp_module = ProtectionDomain("icmp_module", "icmp_module.elf", priority=100, budget=20000)
+    common_pds.append(icmp_module)
+
     networks[ext_net]["filters"] = {}
     networks[ext_net]["filters"][0x01] = ProtectionDomain("icmp_filter0", "icmp_filter0.elf", priority=90, budget=20000)
     networks[ext_net]["filters"][0x11] = ProtectionDomain("udp_filter0", "udp_filter0.elf", priority=91, budget=20000)
@@ -331,6 +338,22 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
 
     # Webserver has arp channel for arp requests/responses
     webserver_arp_conn = fw_connection(webserver, networks[ext_net]["arp_req"], arp_queue_capacity, arp_queue_region_size)
+
+    # ICMP Module needs to be able to transmit out of both NICs
+    networks[ext_net]["out_net"].add_client_with_copier(icmp_module, rx=False)
+    networks[int_net]["out_net"].add_client_with_copier(icmp_module, rx=False)
+
+    # ICMP Module needs to be connected to both routers.
+    icmp_int_router_conn = fw_connection(networks[int_net]["router"], icmp_module, icmp_queue_capacity, icmp_queue_region_size)
+    icmp_ext_router_conn = fw_connection(networks[ext_net]["router"], icmp_module, icmp_queue_capacity, icmp_queue_region_size)
+
+    icmp_module_config = FwIcmpModuleConfig(
+        icmp_ext_router_conn[1],
+        icmp_int_router_conn[1]
+    )
+
+    networks[int_net]["icmp_module"] = icmp_int_router_conn[0]
+    networks[ext_net]["icmp_module"] = icmp_ext_router_conn[0]
 
     # Create webserver config
     webserver_config = FwWebserverConfig(
@@ -450,6 +473,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
             arp_cache_capacity,
             arp_packet_queue,
             router_webserver_config,
+            network["icmp_module"],
             []
         )
         
@@ -528,6 +552,9 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     # Add a firewall connection to the webserver from the internal router for packet transmission
     networks[int_net]["configs"][networks[int_net]["router"]].rx_active = router_webserver_conn[0]
 
+    # Add ICMP module
+
+
     # Create filter instance regions
     for (protocol, filter_pd) in networks[int_net]["filters"].items():
         mirror_filter = networks[ext_net]["filters"][protocol]
@@ -556,6 +583,11 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     with open(data_path, "wb+") as f:
         f.write(webserver_config.serialise())
     update_elf_section(obj_copy, webserver.elf, webserver_config.section_name, data_path)
+
+    data_path = output_dir + "/firewall_icmp_module_config.data"
+    with open(data_path, "wb+") as f:
+        f.write(icmp_module_config.serialise())
+    update_elf_section(obj_copy, icmp_module.elf, icmp_module_config.section_name, data_path)
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
         f.write(sdf.render())
