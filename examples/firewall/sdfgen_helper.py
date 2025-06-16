@@ -55,9 +55,6 @@ def update_elf_section(obj_copy: str, elf_name: str, section_name: str, data_nam
     assert path.isfile(data_name)
     assert subprocess.run([obj_copy, "--update-section", "." + section_name + "=" + data_name, elf_name]).returncode == 0
 
-# Output file
-p_classes = "../config_structs.py"
-
 c_name_regex = r"[a-zA-Z_][a-zA-Z0-9_]{0,63}"
 # Currently we only support digits and macros for array sizes
 c_value_regex = c_name_regex + r"|0b[01]+|0x[a-fA-F0-9]+|[0-9]+"
@@ -216,14 +213,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
     # Accept values for unknown Macros
-    parser.add_argument("--macros", required=True)
+    parser.add_argument("--output", required=True)
     parser.add_argument("--configs", required=True)
+    parser.add_argument("--macros", required=False)
     args = parser.parse_args()
     
+    p_classes_out = args.output
+    
     # Store argument passed macros
-    for macro_def in args.macros.split(" "):
-        macro_val = macro_def.split("=")
-        Macro(macro_val[0], macro_val[1])
+    if args.macros:
+        for macro_def in args.macros.split(" "):
+            macro_val = macro_def.split("=")
+            Macro(macro_val[0], macro_val[1])
     
     # Extract struct files
     c_headers = args.configs.split(" ")
@@ -305,7 +306,7 @@ if __name__ == '__main__':
                     else:
                         line = next(input)
 
-    with open(p_classes, "w") as out:
+    with open(p_classes_out, "w") as out:
 
         # Import modules
         out.write("from typing import List\n")
