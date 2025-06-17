@@ -1,10 +1,19 @@
 #
-# Copyright 2024, UNSW
+# Copyright 2025, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 #
-LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
-CC := aarch64-none-elf-gcc
-LD := aarch64-none-elf-ld
+ifeq ($(strip $(LIBC)),)
+$(error "LIBC must be defined")
+endif
+ifeq ($(strip $(CPU)),)
+$(error "CPU must be defined")
+endif
+ifeq ($(strip $(CROSS_COMPILE)),)
+$(error "CROSS_COMPILE must be defined")
+endif
+
+CC := $(CROSS_COMPILE)gcc
+LD := $(CROSS_COMPILE)ld
 
 LIONSOS := $(abspath ../../)
 SDDF := $(LIONSOS)/dep/sddf
@@ -21,9 +30,6 @@ include $(MICROPYTHON_SRC)/py/mkenv.mk
 include $(TOP)/py/py.mk
 include $(TOP)/extmod/extmod.mk
 
-CROSS_COMPILE ?= aarch64-none-elf-
-
-CPU ?= cortex-a55
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 
 # Set CFLAGS and libraries.
@@ -48,15 +54,11 @@ LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
 
 # Include libmicrokitco for blocking in Micropython
 BUILD_DIR=$(BUILD)
-TARGET=aarch64-none-elf
-LLVM=1
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LIBMICROKITCO_OPT_PATH := $(LIONSOS)/components/micropython
-LIBMICROKITCO_OBJ := $(BUILD_DIR)/libmicrokitco/libmicrokitco.a
+LIBMICROKITCO_OBJ := $(BUILD)/libmicrokitco.a
 
-export LIBMICROKITCO_PATH TARGET MICROKIT_SDK BUILD_DIR MICROKIT_BOARD MICROKIT_CONFIG CPU LLVM
-$(LIBMICROKITCO_OBJ):
-	make -f $(LIBMICROKITCO_PATH)/Makefile LIBMICROKITCO_OPT_PATH=$(LIBMICROKITCO_OPT_PATH)
+include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 # Define the required source files.
 SRC_C = \

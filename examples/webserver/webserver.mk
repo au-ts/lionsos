@@ -14,17 +14,23 @@ ifeq (${MICROKIT_BOARD},odroidc4)
 	ETHERNET_DRIVER_DIR := meson
 	SERIAL_DRIVER_DIR := meson
 	CPU := cortex-a55
+	TARGET := aarch64-none-elf
+	MUSL_TARGET := aarch64
 else ifeq (${MICROKIT_BOARD},maaxboard)
 	TIMER_DRIVER_DIR := imx
 	ETHERNET_DRIVER_DIR := imx
 	SERIAL_DRIVER_DIR := imx
 	CPU := cortex-a53
+	TARGET := aarch64-none-elf
+	MUSL_TARGET := aarch64
 else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
 	TIMER_DRIVER_DIR := arm
 	ETHERNET_DRIVER_DIR := virtio
 	SERIAL_DRIVER_DIR := arm
 	CPU := cortex-a53
 	QEMU := qemu-system-aarch64
+	TARGET := aarch64-none-elf
+	MUSL_TARGET := aarch64
 else
 $(error Unsupported MICROKIT_BOARD given)
 endif
@@ -35,10 +41,22 @@ LD := ld.lld
 AR := llvm-ar
 RANLIB := llvm-ranlib
 OBJCOPY := llvm-objcopy
-TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 PYTHON ?= python3
 DTC := dtc
+CROSS_COMPILE := $(TARGET)-
+
+ifeq ($(strip $(LIBGCC)),)
+export LIBGCC:=$(dir $(realpath $(shell $(TARGET)-gcc --print-file-name libgcc.a)))
+endif
+ifeq ($(strip $(LIBC)),)
+export LIBC:=$(dir $(realpath $(shell $(TARGET)-gcc --print-file-name libc.a)))
+endif
+ifeq ($(strip $(LIBMATH)),)
+export LIBMATH:=$(dir $(realpath $(shell $(TARGET)-gcc --print-file-name libm.a)))
+endif
+
+export CPU
 
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL_SRC := $(LIONSOS)/dep/musllibc
@@ -89,6 +107,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 MICROPYTHON_LIBMATH := $(LIBMATH)
 MICROPYTHON_EXEC_MODULE := webserver.py
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
+MICROPYTHON_CROSS_COMPILE := $(CROSS_COMPILE)
 include $(LIONSOS)/components/micropython/micropython.mk
 
 manifest.py: webserver.py config.py
@@ -104,7 +123,7 @@ $(MUSL):
 	mkdir -p $@
 
 $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
-	cd ${MUSL} && CC=aarch64-none-elf-gcc CROSS_COMPILE=aarch64-none-elf- ${MUSL_SRC}/configure --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=aarch64 --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
+	cd ${MUSL} && CC=$(TARGET)-gcc CROSS_COMPILE=$(CROSS_COMPILE) ${MUSL_SRC}/configure --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=$(MUSL_TARGET) --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
 	${MAKE} -C ${MUSL} install
 
 %.o: %.c
