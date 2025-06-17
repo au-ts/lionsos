@@ -220,10 +220,10 @@ static fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state,
 
         /* Connection has already been established */
         if (((instance->default_rule && default_rule) || (instance->rule_id == rule_id)) &&
-            instance->src_ip == src_ip &&
-            instance->src_port == src_port &&
-            instance->dst_ip == dst_ip &&
-            instance->dst_port == dst_port)
+            instance->src_ip == dst_ip &&
+            instance->src_port == dst_port &&
+            instance->dst_ip == src_ip &&
+            instance->dst_port == src_port)
         {
             return FILTER_ERR_DUPLICATE;
         }
