@@ -13,24 +13,41 @@ ifeq (${MICROKIT_BOARD},odroidc4)
 	TIMER_DRIVER_DIR := meson
 	ETHERNET_DRIVER_DIR := meson
 	SERIAL_DRIVER_DIR := meson
+
 	CPU := cortex-a55
 	TARGET := aarch64-none-elf
 	MUSL_TARGET := aarch64
+	ARCH_CFLAGS := -mstrict-align -O2
 else ifeq (${MICROKIT_BOARD},maaxboard)
 	TIMER_DRIVER_DIR := imx
 	ETHERNET_DRIVER_DIR := imx
 	SERIAL_DRIVER_DIR := imx
+
 	CPU := cortex-a53
 	TARGET := aarch64-none-elf
 	MUSL_TARGET := aarch64
+	ARCH_CFLAGS := -mstrict-align -O2
 else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
 	TIMER_DRIVER_DIR := arm
 	ETHERNET_DRIVER_DIR := virtio
 	SERIAL_DRIVER_DIR := arm
+
 	CPU := cortex-a53
 	QEMU := qemu-system-aarch64
 	TARGET := aarch64-none-elf
 	MUSL_TARGET := aarch64
+	ARCH_CFLAGS := -mstrict-align -O2
+# @billn: investigate comp op on x86, irq not worky
+else ifeq (${MICROKIT_BOARD},x86_64_nehalem)
+	TIMER_DRIVER_DIR := hpet
+	ETHERNET_DRIVER_DIR := virtio
+	SERIAL_DRIVER_DIR := pc99
+
+	CPU := nehalem
+	QEMU := qemu-system-x86_64
+	TARGET := x86_64-pc-elf
+	MUSL_TARGET := x86_64
+	DTS :=
 else
 $(error Unsupported MICROKIT_BOARD given)
 endif
@@ -64,7 +81,7 @@ MUSL := musllibc
 MICRODOT := ${LIONSOS}/dep/microdot/src
 
 METAPROGRAM := $(WEBSERVER_SRC_DIR)/meta.py
-DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
+DTS ?= $(SDDF)/dts/$(MICROKIT_BOARD).dts
 DTB := $(MICROKIT_BOARD).dtb
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
@@ -75,7 +92,6 @@ SYSTEM_FILE := webserver.system
 
 CFLAGS := \
 	-mtune=$(CPU) \
-	-mstrict-align \
 	-ffreestanding \
 	-O2 \
 	-MD \
@@ -87,7 +103,8 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	$(ARCH_CFLAGS)
 
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
@@ -105,8 +122,9 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	touch $@
 
 MICROPYTHON_LIBMATH := $(LIBMATH)
-MICROPYTHON_EXEC_MODULE := webserver.py
-MICROPYTHON_FROZEN_MANIFEST := manifest.py
+MICROPYTHON_CONFIG_INCLUDE := $(CONFIG_INCLUDE)
+# MICROPYTHON_EXEC_MODULE := webserver.py
+# MICROPYTHON_FROZEN_MANIFEST := manifest.py
 MICROPYTHON_CROSS_COMPILE := $(CROSS_COMPILE)
 include $(LIONSOS)/components/micropython/micropython.mk
 
@@ -141,7 +159,9 @@ include ${SDDF_MAKEFILES}
 include $(NFS)/nfs.mk
 
 $(DTB): $(DTS)
+ifneq ($(strip $(DTS)),)
 	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
+endif
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY)
@@ -154,7 +174,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
 	$(OBJCOPY) --update-section .net_copy_config=net_copy_micropython_net_copier.data network_copy.elf network_copy_micropython.elf
 	$(OBJCOPY) --update-section .net_copy_config=net_copy_nfs_net_copier.data network_copy.elf network_copy_nfs.elf
-	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
+# $(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .net_client_config=net_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
