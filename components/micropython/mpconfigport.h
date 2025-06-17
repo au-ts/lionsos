@@ -101,8 +101,8 @@ typedef long mp_off_t;
 #define MICROPY_HW_BOARD_NAME "QEMU virt AArch64"
 #define MICROPY_HW_MCU_NAME   "Cortex A53"
 #elif defined(CONFIG_PLAT_PC99)
-#define MICROPY_HW_BOARD_NAME "Generic PC99-based Machine"
-#define MICROPY_HW_MCU_NAME   "x86_64"
+#define MICROPY_HW_BOARD_NAME "PC99-based Machine"
+#define MICROPY_HW_MCU_NAME   "Generic x86_64 CPU"
 #else
 #error "Unknown platform given for MicroPython config"
 #endif

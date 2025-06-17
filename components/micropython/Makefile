@@ -6,7 +6,7 @@ ifeq ($(strip $(LIBC)),)
 $(error "LIBC must be defined")
 endif
 ifeq ($(strip $(LIBGCC)),)
-$(error "LIBC must be defined")
+$(error "LIBGCC must be defined")
 endif
 ifeq ($(strip $(CPU)),)
 $(error "CPU must be defined")
@@ -54,8 +54,8 @@ CFLAGS += \
 	-mtune=$(CPU) \
 	-DMPZ_DIG_SIZE=16
 
-LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBC) -L$(LIBMATH)
-LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(LIBGCC)/libgcc.a
+LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBGCC) -L$(LIBC) -L$(LIBMATH)
+LIBS += -lm -lc -lgcc -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
 
 # Include libmicrokitco for blocking in Micropython
 BUILD_DIR=$(BUILD)
