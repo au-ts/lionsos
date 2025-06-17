@@ -5,6 +5,9 @@
 ifeq ($(strip $(LIBC)),)
 $(error "LIBC must be defined")
 endif
+ifeq ($(strip $(LIBGCC)),)
+$(error "LIBC must be defined")
+endif
 ifeq ($(strip $(CPU)),)
 $(error "CPU must be defined")
 endif
@@ -48,9 +51,11 @@ CFLAGS += \
 	-I$(LWIP)/src/include/ipv4 \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
-	-mtune=$(CPU)
+	-mtune=$(CPU) \
+	-DMPZ_DIG_SIZE=16
+
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBC) -L$(LIBMATH)
-LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
+LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(LIBGCC)/libgcc.a
 
 # Include libmicrokitco for blocking in Micropython
 BUILD_DIR=$(BUILD)
