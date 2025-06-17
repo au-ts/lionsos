@@ -145,7 +145,7 @@ MICROPYTHON_LIBMATH = $(LIBMATH)
 MICROPYTHON_LIBC = $(LIBC)
 MICROPYTHON_LIBGCC = $(LIBGCC)
 MICROPYTHON_CONFIG_INCLUDE = $(CONFIG_INCLUDE)
-# MICROPYTHON_EXEC_MODULE := webserver.py
+MICROPYTHON_EXEC_MODULE := webserver.py
 MICROPYTHON_FROZEN_MANIFEST = manifest.py
 MICROPYTHON_CROSS_COMPILE = $(CROSS_COMPILE)
 
@@ -197,7 +197,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
 	$(OBJCOPY) --update-section .net_copy_config=net_copy_micropython_net_copier.data network_copy.elf network_copy_micropython.elf
 	$(OBJCOPY) --update-section .net_copy_config=net_copy_nfs_net_copier.data network_copy.elf network_copy_nfs.elf
-# $(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
+	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .net_client_config=net_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
