@@ -28,6 +28,7 @@ micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPY
 		MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
 		MICROPY_MPYCROSS=$(abspath mpy_cross/mpy-cross) \
 		MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
+		CROSS_COMPILE=$(MICROPYTHON_CROSS_COMPILE) \
 		BUILD=$(abspath .) \
 		LIBMATH=$(MICROPYTHON_LIBMATH) \
 		CONFIG_INCLUDE=$(abspath $(MICROPYTHON_CONFIG_INCLUDE)) \
