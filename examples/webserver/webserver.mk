@@ -16,8 +16,6 @@ ifeq (${MICROKIT_BOARD},odroidc4)
 
 	CPU := cortex-a55
 	TARGET := aarch64-none-elf
-	MUSL_TARGET := aarch64
-	ARCH_CFLAGS := -mstrict-align -O2
 else ifeq (${MICROKIT_BOARD},maaxboard)
 	TIMER_DRIVER_DIR := imx
 	ETHERNET_DRIVER_DIR := imx
@@ -25,32 +23,66 @@ else ifeq (${MICROKIT_BOARD},maaxboard)
 
 	CPU := cortex-a53
 	TARGET := aarch64-none-elf
-	MUSL_TARGET := aarch64
-	ARCH_CFLAGS := -mstrict-align -O2
 else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
 	TIMER_DRIVER_DIR := arm
 	ETHERNET_DRIVER_DIR := virtio
 	SERIAL_DRIVER_DIR := arm
 
 	CPU := cortex-a53
-	QEMU := qemu-system-aarch64
 	TARGET := aarch64-none-elf
-	MUSL_TARGET := aarch64
-	ARCH_CFLAGS := -mstrict-align -O2
-# @billn: investigate comp op on x86, irq not worky
 else ifeq (${MICROKIT_BOARD},x86_64_nehalem)
 	TIMER_DRIVER_DIR := hpet
 	ETHERNET_DRIVER_DIR := virtio
 	SERIAL_DRIVER_DIR := pc99
 
 	CPU := nehalem
-	QEMU := qemu-system-x86_64
 	TARGET := x86_64-pc-elf
-	MUSL_TARGET := x86_64
-	DTS :=
 else
 $(error Unsupported MICROKIT_BOARD given)
 endif
+
+ifeq ($(findstring aarch64,$(TARGET)),aarch64)
+	MUSL_TARGET := aarch64
+	ARCH_CFLAGS := -mstrict-align -O2
+	QEMU := qemu-system-aarch64
+	ARCH_QEMU_BOOT_IMAGE := x86_grub.iso
+	ARCH_QEMU_FLAGS := -machine virt,virtualization=on \
+						-cpu cortex-a53 \
+						-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
+						-device virtio-net-device,netdev=netdev0 \
+						-netdev user,id=netdev0,hostfwd=tcp::5555-10.0.2.16:80 \
+						-global virtio-mmio.force-legacy=false
+
+else ifeq ($(findstring x86_64,$(TARGET)),x86_64)
+	QEMU := qemu-system-x86_64
+	MUSL_TARGET := x86_64
+# This is intentionally left empty as there are no device trees on x86.
+	DTS :=
+# @billn: investigate comp op on x86 with clang, irq not worky
+	ARCH_CFLAGS := 
+	ARCH_QEMU_FLAGS := -machine q35,kernel-irqchip=split \
+						-cpu Nehalem,+fsgsbase,+pdpe1gb,+pcid,+invpcid,+xsave,+xsaves,+xsaveopt,+vmx,+vme \
+						-device intel-iommu \
+						-cdrom x86_grub.iso \
+						-netdev user,id=net0,hostfwd=tcp::5555-10.0.2.16:80 \
+						-device virtio-net-pci,netdev=net0
+	
+	ARCH_MICROKIT_FLAG := --x86-machine /opt/billn/x86/microkit_mat_rebased/example/x86_64_nehalem/hello/machine.json
+else
+  $(error unknown target)
+endif
+
+ifeq ($(strip $(LIBGCC)),)
+LIBGCC=$(dir $(realpath $(shell $(TARGET)-gcc --print-file-name libgcc.a)))
+endif
+ifeq ($(strip $(LIBC)),)
+LIBC=$(dir $(realpath $(shell $(TARGET)-gcc --print-file-name libc.a)))
+endif
+ifeq ($(strip $(LIBMATH)),)
+LIBMATH=$(dir $(realpath $(shell $(TARGET)-gcc --print-file-name libm.a)))
+endif
+
+export CPU
 
 TOOLCHAIN := clang
 CC := clang
@@ -62,18 +94,6 @@ MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 PYTHON ?= python3
 DTC := dtc
 CROSS_COMPILE := $(TARGET)-
-
-ifeq ($(strip $(LIBGCC)),)
-export LIBGCC:=$(dir $(realpath $(shell $(TARGET)-gcc --print-file-name libgcc.a)))
-endif
-ifeq ($(strip $(LIBC)),)
-export LIBC:=$(dir $(realpath $(shell $(TARGET)-gcc --print-file-name libc.a)))
-endif
-ifeq ($(strip $(LIBMATH)),)
-export LIBMATH:=$(dir $(realpath $(shell $(TARGET)-gcc --print-file-name libm.a)))
-endif
-
-export CPU
 
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL_SRC := $(LIONSOS)/dep/musllibc
@@ -121,11 +141,14 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-MICROPYTHON_LIBMATH := $(LIBMATH)
-MICROPYTHON_CONFIG_INCLUDE := $(CONFIG_INCLUDE)
+MICROPYTHON_LIBMATH = $(LIBMATH)
+MICROPYTHON_LIBC = $(LIBC)
+MICROPYTHON_LIBGCC = $(LIBGCC)
+MICROPYTHON_CONFIG_INCLUDE = $(CONFIG_INCLUDE)
 # MICROPYTHON_EXEC_MODULE := webserver.py
-# MICROPYTHON_FROZEN_MANIFEST := manifest.py
-MICROPYTHON_CROSS_COMPILE := $(CROSS_COMPILE)
+MICROPYTHON_FROZEN_MANIFEST = manifest.py
+MICROPYTHON_CROSS_COMPILE = $(CROSS_COMPILE)
+
 include $(LIONSOS)/components/micropython/micropython.mk
 
 manifest.py: webserver.py config.py
@@ -142,7 +165,7 @@ $(MUSL):
 
 $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
 	cd ${MUSL} && CC=$(TARGET)-gcc CROSS_COMPILE=$(CROSS_COMPILE) ${MUSL_SRC}/configure --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=$(MUSL_TARGET) --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
-	${MAKE} -C ${MUSL} install
+	${MAKE} -C ${MUSL} install -j$(nproc)
 
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
@@ -188,19 +211,21 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_micropython.data micropython.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
-	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+	$(MICROKIT_TOOL) $(ARCH_MICROKIT_FLAG) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu: ${IMAGE_FILE}
-	$(QEMU) -machine virt,virtualization=on \
-			-cpu cortex-a53 \
-			-serial mon:stdio \
-			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
-			-m size=2G \
-			-nographic \
-			-device virtio-net-device,netdev=netdev0 \
-			-netdev user,id=netdev0,hostfwd=tcp::5555-10.0.2.16:80 \
-			-global virtio-mmio.force-legacy=false
+ifeq ($(findstring x86_64,$(TARGET)),x86_64)
+	mkdir -p grub_iso_staging/boot/grub
+	cp $(IMAGE_FILE) grub_iso_staging/loader.img
+	cp $(WEBSERVER_SRC_DIR)/x86_grub.cfg grub_iso_staging/boot/grub/grub.cfg
+	grub-mkrescue -d /usr/lib/grub/i386-pc -o x86_grub.iso grub_iso_staging
+endif
 
+	$(QEMU) -serial mon:stdio \
+			-m size=4G \
+			-nographic \
+			-display none \
+			$(ARCH_QEMU_FLAGS)
 FORCE: ;
 
 $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
