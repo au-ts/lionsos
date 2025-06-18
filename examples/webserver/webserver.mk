@@ -25,14 +25,14 @@ else ifeq (${MICROKIT_BOARD},maaxboard)
 	TARGET := aarch64-none-elf
 else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
 	TIMER_DRIVER_DIR := arm
-	ETHERNET_DRIVER_DIR := virtio
+	ETHERNET_DRIVER_DIR := virtio/mmio
 	SERIAL_DRIVER_DIR := arm
 
 	CPU := cortex-a53
 	TARGET := aarch64-none-elf
 else ifeq (${MICROKIT_BOARD},x86_64_nehalem)
 	TIMER_DRIVER_DIR := hpet
-	ETHERNET_DRIVER_DIR := virtio
+	ETHERNET_DRIVER_DIR := virtio/pci
 	SERIAL_DRIVER_DIR := pc99
 
 	CPU := nehalem
@@ -46,7 +46,7 @@ ifeq ($(findstring aarch64,$(TARGET)),aarch64)
 	ARCH_CFLAGS := -mstrict-align -O2
 	QEMU := qemu-system-aarch64
 	ARCH_QEMU_BOOT_IMAGE := x86_grub.iso
-	ARCH_QEMU_FLAGS := -machine virt,virtualization=on \
+	ARCH_QEMU_FLAGS = -machine virt,virtualization=on \
 						-cpu cortex-a53 \
 						-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
 						-device virtio-net-device,netdev=netdev0 \
@@ -60,7 +60,7 @@ else ifeq ($(findstring x86_64,$(TARGET)),x86_64)
 	DTS :=
 # @billn: investigate comp op on x86 with clang, irq not worky
 	ARCH_CFLAGS := 
-	ARCH_QEMU_FLAGS := -machine q35,kernel-irqchip=split \
+	ARCH_QEMU_FLAGS = -machine q35,kernel-irqchip=split \
 						-cpu Nehalem,+fsgsbase,+pdpe1gb,+pcid,+invpcid,+xsave,+xsaves,+xsaveopt,+vmx,+vme \
 						-device intel-iommu \
 						-cdrom x86_grub.iso \
@@ -129,8 +129,8 @@ CFLAGS := \
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 
-IMAGE_FILE := webserver.img
-REPORT_FILE := report.txt
+IMAGE_FILE = webserver.img
+REPORT_FILE = report.txt
 
 all: $(IMAGE_FILE)
 ${IMAGES}: libsddf_util_debug.a
@@ -231,7 +231,7 @@ FORCE: ;
 $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
 	cd ${LIONSOS}; git submodule update --init dep/micropython
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
-${LIONSOS}/dep/libmicrokitco/Makefile:
+${LIONSOS}/dep/libmicrokitco/libmicrokitco.mk:
 	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
 
 ${MICRODOT}:
