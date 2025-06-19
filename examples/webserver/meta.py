@@ -73,7 +73,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree | None):
         timer_node = dtb.node(board.timer)
         assert timer_node is not None
 
-    timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=101)
+    timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=102)
     timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
 
     if board.arch == SystemDescription.Arch.X86_64:
@@ -99,8 +99,24 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree | None):
     net_system = Sddf.Net(sdf, ethernet_node, ethernet_driver, net_virt_tx, net_virt_rx)
 
     if board.arch == SystemDescription.Arch.X86_64:
-        pass
-        # @billn todo 
+        hw_net_rings = SystemDescription.MemoryRegion(sdf, "hw_net_rings", 65536, paddr=0x7a000000)
+        sdf.add_mr(hw_net_rings)
+        hw_net_rings_map = SystemDescription.Map(hw_net_rings, 0x7000_0000, "rw")
+        ethernet_driver.add_map(hw_net_rings_map)
+
+        virtio_net_regs = SystemDescription.MemoryRegion(sdf, "virtio_net_regs", 0x4000, paddr=0xfe000000)
+        sdf.add_mr(virtio_net_regs)
+        virtio_net_regs_map = SystemDescription.Map(virtio_net_regs, 0x6000_0000, "rw", cached=False)
+        ethernet_driver.add_map(virtio_net_regs_map)
+
+        virtio_net_irq = SystemDescription.IrqIoapic(board.arch, 0, 11, 1, id=16)
+        ethernet_driver.add_irq(virtio_net_irq)
+
+        pci_config_address_port = SystemDescription.IoPort(SystemDescription.Arch.X86_64, 0xCF8, 4, 1)
+        ethernet_driver.add_ioport(pci_config_address_port)
+
+        pci_config_data_port = SystemDescription.IoPort(SystemDescription.Arch.X86_64, 0xCFC, 4, 2)
+        ethernet_driver.add_ioport(pci_config_data_port)
 
     micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000)
     micropython_net_copier = ProtectionDomain("micropython_net_copier", "network_copy_micropython.elf", priority=97, budget=20000)

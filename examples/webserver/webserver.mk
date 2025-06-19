@@ -110,10 +110,11 @@ IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 
 SYSTEM_FILE := webserver.system
 
+# @billn: why does compiler optimisation break irq??
 CFLAGS := \
 	-mtune=$(CPU) \
 	-ffreestanding \
-	-O2 \
+	-g3 \
 	-MD \
 	-MP \
 	-Wall \
