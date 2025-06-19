@@ -27,7 +27,7 @@ LIB_SDDF_LWIP_CFLAGS_mp := \
 	-I$(SDDF)/network/ipstacks/lwip/src/include
 include $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.mk
 
-micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE) lib_sddf_lwip_mp.a
+micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/libmicrokitco.mk $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE)
 	$(MAKE) -C $(MICROPYTHON_DIR) \
 		-j$(nproc) \
 		MICROKIT_SDK=$(MICROKIT_SDK) \
