@@ -55,7 +55,7 @@ CFLAGS += \
 	-DMPZ_DIG_SIZE=16
 
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBGCC) -L$(LIBC) -L$(LIBMATH)
-LIBS += -lm -lc -lgcc -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
+LIBS += -lm -lgcc -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
 
 # Include libmicrokitco for blocking in Micropython
 BUILD_DIR=$(BUILD)

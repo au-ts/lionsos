@@ -65,14 +65,6 @@ i2c_queue_handle_t i2c_queue_handle;
 uintptr_t framebuffer_data_region = 0x30000000;
 #endif
 
-/* A workaround for problematic libc's that calls malloc */
-void *sbrk(ptrdiff_t incr)
-{
-    (void) incr;
-    errno = ENOMEM;
-    return (void *)-1;
-}
-
 static bool init_vfs(void) {
     mp_obj_t args[2] = {
         MP_OBJ_TYPE_GET_SLOT(&mp_type_vfs_fs, make_new)(&mp_type_vfs_fs, 0, 0, NULL),
