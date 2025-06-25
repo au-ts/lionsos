@@ -41,7 +41,11 @@ You must set at least the following environment variables:
 ```sh
 export MICROKIT_SDK=<path/to/sdk>
 export MICROKIT_BOARD=imx8mp_evk
-export FW_IOTGATE_IDX=[1345]
+
+// For the following, pick one of the listed numbers
+// This number must correspond to the board you are
+// running on
+export FW_IOTGATE_IDX=[1|3|4|5]
 ```
 
 The index selects which of the four available iotgate boards you are
