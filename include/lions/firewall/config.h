@@ -104,8 +104,8 @@ typedef struct fw_filter_config {
     uint16_t instances_capacity;
     fw_connection_resource_t router;
     fw_webserver_filter_config_t webserver;
-    region_resource_t internal_instances;
-    region_resource_t external_instances;
+    region_resource_t local_instances;
+    region_resource_t extern_instances;
 } fw_filter_config_t;
 
 typedef struct fw_webserver_interface_config {

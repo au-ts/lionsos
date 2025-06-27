@@ -11,7 +11,9 @@ typedef enum {
 	FILTER_ERR_FULL,  /* Data structure is full */
 	FILTER_ERR_DUPLICATE,	/* Duplicate entry exists */
     FILTER_ERR_CLASH, /* Entry clashes with existing entry */
-    FILTER_ERR_INVALID_RULE_ID /* Rule id does not point to a valid entry */
+    FILTER_ERR_INVALID_RULE_ID, /* Rule id does not point to a valid entry */
+    FILTER_ERR_INVALID_INSTANCE, /* Instance pointer is not within instance regions */
+    FILTER_ERR_INVALID_INSTANCE_STATE /* Instance is in an invalid state */
 } fw_filter_err_t;
 
 static const char *fw_filter_err_str[] = {
@@ -66,8 +68,8 @@ typedef struct fw_instance {
 typedef struct fw_filter_state {
     fw_rule_t *rules;
     uint16_t rules_capacity;
-    fw_instance_t *internal_instances; /* Instances for other filter to check */
-    fw_instance_t *external_instances; /* Instances for this filter to check against */
+    fw_instance_t *local_instances; /* Instances for other filter to check */
+    fw_instance_t *extern_instances; /* Instances for this filter to check against */
     uint16_t instances_capacity;
     fw_action_t default_action;
 } fw_filter_state_t;
@@ -104,15 +106,15 @@ typedef enum {
 static void fw_filter_state_init(fw_filter_state_t *state, 
                                  void *rules, 
                                  uint16_t rules_capacity,
-                                 void *internal_instances, 
-                                 void *external_instances, 
+                                 void *local_instances, 
+                                 void *extern_instances, 
                                  uint16_t instances_capacity,
                                  fw_action_t default_action)
 {
     state->rules = (fw_rule_t *)rules;
     state->rules_capacity = rules_capacity;
-    state->internal_instances = (fw_instance_t *)internal_instances;
-    state->external_instances = (fw_instance_t *)external_instances;
+    state->local_instances = (fw_instance_t *)local_instances;
+    state->extern_instances = (fw_instance_t *)extern_instances;
     state->instances_capacity = instances_capacity;
     state->default_action = default_action;
 }
@@ -205,11 +207,11 @@ static fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state,
                                               uint32_t dst_ip,
                                               uint16_t dst_port,
                                               bool default_rule,
-                                              uint8_t rule_id)
+                                              uint16_t rule_id)
 {
     fw_instance_t *empty_slot = NULL;
     for (uint16_t i = 0; i < state->instances_capacity; i++) {
-        fw_instance_t *instance = state->internal_instances + i;
+        fw_instance_t *instance = state->local_instances + i;
 
         if (!instance->valid) {
             if (empty_slot == NULL) {
@@ -250,11 +252,11 @@ static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
                                          uint16_t src_port,
                                          uint32_t dst_ip,
                                          uint16_t dst_port,
-                                         uint8_t *rule_id)
+                                         uint16_t *rule_id)
 {
     /* We give priority to instances */
     for (uint16_t i = 0; i < state->instances_capacity; i++) {
-        fw_instance_t *instance = state->external_instances + i;
+        fw_instance_t *instance = state->extern_instances + i;
 
         if (!instance->valid) {
             continue;
@@ -329,10 +331,10 @@ static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
 
 static fw_filter_err_t fw_filter_remove_instances(fw_filter_state_t *state,
                                                   bool default_rule,
-                                                  uint8_t rule_id)
+                                                  uint16_t rule_id)
 {
     for (uint16_t i = 0; i < state->instances_capacity; i++) {
-        fw_instance_t *instance = state->internal_instances + i;
+        fw_instance_t *instance = state->local_instances + i;
         if (!instance->valid) {
             continue;
         }
@@ -363,7 +365,7 @@ static fw_filter_err_t fw_filter_update_default_action(fw_filter_state_t *state,
     return FILTER_ERR_OKAY;
 }
 
-static fw_filter_err_t fw_filter_remove_rule(fw_filter_state_t *state, uint8_t rule_id)
+static fw_filter_err_t fw_filter_remove_rule(fw_filter_state_t *state, uint16_t rule_id)
 {
     fw_rule_t *rule = state->rules + rule_id;
     if (rule_id >= state->rules_capacity || !rule->valid) {

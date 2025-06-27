@@ -103,6 +103,9 @@ ips = [
     [ip_to_int("172.16.2.5"), ip_to_int("192.168.5.1")],
 ]
 
+icmp_protocol = 0x01
+tcp_protocol = 0x06
+udp_protocol = 0x11
 arp_responder_protocol = 0x92
 arp_requester_protocol = 0x93
 
@@ -294,14 +297,14 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     common_pds.append(icmp_module)
 
     networks[ext_net]["filters"] = {}
-    networks[ext_net]["filters"][0x01] = ProtectionDomain("icmp_filter0", "icmp_filter0.elf", priority=90, budget=20000)
-    networks[ext_net]["filters"][0x11] = ProtectionDomain("udp_filter0", "udp_filter0.elf", priority=91, budget=20000)
-    networks[ext_net]["filters"][0x06] = ProtectionDomain("tcp_filter0", "tcp_filter0.elf", priority=92, budget=20000)
+    networks[ext_net]["filters"][icmp_protocol] = ProtectionDomain("icmp_filter0", "icmp_filter0.elf", priority=90, budget=20000)
+    networks[ext_net]["filters"][udp_protocol] = ProtectionDomain("udp_filter0", "udp_filter0.elf", priority=91, budget=20000)
+    networks[ext_net]["filters"][tcp_protocol] = ProtectionDomain("tcp_filter0", "tcp_filter0.elf", priority=92, budget=20000)
 
     networks[int_net]["filters"] = {}
-    networks[int_net]["filters"][0x01] = ProtectionDomain("icmp_filter1", "icmp_filter1.elf", priority=93, budget=20000)
-    networks[int_net]["filters"][0x11] = ProtectionDomain("udp_filter1", "udp_filter1.elf", priority=91, budget=20000)
-    networks[int_net]["filters"][0x06] = ProtectionDomain("tcp_filter1", "tcp_filter1.elf", priority=92, budget=20000)
+    networks[int_net]["filters"][icmp_protocol] = ProtectionDomain("icmp_filter1", "icmp_filter1.elf", priority=93, budget=20000)
+    networks[int_net]["filters"][udp_protocol] = ProtectionDomain("udp_filter1", "udp_filter1.elf", priority=91, budget=20000)
+    networks[int_net]["filters"][tcp_protocol] = ProtectionDomain("tcp_filter1", "tcp_filter1.elf", priority=92, budget=20000)
 
     for pd in common_pds:
         sdf.add_pd(pd)
@@ -558,13 +561,18 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     # Create filter instance regions
     for (protocol, filter_pd) in networks[int_net]["filters"].items():
         mirror_filter = networks[ext_net]["filters"][protocol]
-        int_instances = fw_shared_region(filter_pd, mirror_filter, "rw", "r", "instances", instances_region_size)
-        ext_instances = fw_shared_region(mirror_filter, filter_pd, "rw", "r", "instances", instances_region_size)
+        if protocol == tcp_protocol:
+            perms2 = "rw"
+        else:
+            perms2 = "r"
 
-        networks[int_net]["configs"][filter_pd].internal_instances = int_instances[0]
-        networks[int_net]["configs"][filter_pd].external_instances = ext_instances[1]
-        networks[ext_net]["configs"][mirror_filter].internal_instances = ext_instances[0]
-        networks[ext_net]["configs"][mirror_filter].external_instances = int_instances[1]
+        int_instances = fw_shared_region(filter_pd, mirror_filter, "rw", perms2, "instances", instances_region_size)
+        ext_instances = fw_shared_region(mirror_filter, filter_pd, "rw", perms2, "instances", instances_region_size)
+
+        networks[int_net]["configs"][filter_pd].local_instances = int_instances[0]
+        networks[int_net]["configs"][filter_pd].extern_instances = ext_instances[1]
+        networks[ext_net]["configs"][mirror_filter].local_instances = ext_instances[0]
+        networks[ext_net]["configs"][mirror_filter].extern_instances = int_instances[1]
 
     assert serial_system.connect()
     assert serial_system.serialise_config(output_dir)
