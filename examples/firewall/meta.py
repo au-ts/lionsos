@@ -90,6 +90,7 @@ macs = [
     [0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x79]], # Internal network, ETH2
 ]
 
+subnet_bits = [12, 24]
 ips = [
     # IOTGATE1: EXT = 16912556, INT = 18983104
     [ip_to_int("172.16.2.1"), ip_to_int("192.168.1.1")],
@@ -230,6 +231,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     for i in range(2):
         networks.append({
             "num": i,
+            "out_num": (i + 1) % 2,
             "mac": macs[iotgate_idx][i],
             "ip": ips[iotgate_idx][i],
             "out_dir": output_dir + "/net_data" + str(i),
@@ -272,8 +274,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     networks[ext_net]["out_net"] = networks[int_net]["in_net"]
 
     # Create firewall pds
-    networks[ext_net]["router"] = ProtectionDomain("routing_external", "routing_external.elf", priority=97, budget=20000)
-    networks[int_net]["router"] = ProtectionDomain("routing_internal", "routing_internal.elf", priority=94, budget=20000)
+    copy_elf("routing", "routing_internal")
+    networks[ext_net]["router"] = ProtectionDomain("routing_internal", "routing_internal.elf", priority=97, budget=20000)
+    copy_elf("routing", "routing_external")
+    networks[int_net]["router"] = ProtectionDomain("routing_external", "routing_external.elf", priority=94, budget=20000)
 
     networks[ext_net]["arp_resp"] = ProtectionDomain("arp_responder0", "arp_responder0.elf", priority=95, budget=20000)
     networks[int_net]["arp_resp"] = ProtectionDomain("arp_responder1", "arp_responder1.elf", priority=93, budget=20000)
@@ -462,8 +466,11 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
 
         # Create router config
         network["configs"][router] = FwRouterConfig(
+            network["num"],
             network["mac"],
             network["ip"],
+            ips[iotgate_idx][network["out_num"]],
+            subnet_bits[network["out_num"]],
             router_in_virt_conn[0],
             None,
             router_out_virt_conn[0].conn,

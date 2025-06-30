@@ -4,6 +4,12 @@
 #include <lions/firewall/common.h>
 #include <lions/firewall/queue.h>
 
+/* No next hop */
+#define FW_ROUTING_NONEXTHOP 0
+
+/* Maximum number of recursive calls that find route can make */
+#define FW_ROUTING_MAX_RECURSION 3
+
 /* Routing internal errors */
 typedef enum {
     ROUTING_ERR_OKAY = 0,       /* No error */
@@ -11,7 +17,8 @@ typedef enum {
 	ROUTING_ERR_DUPLICATE,	    /* Duplicate entry exists */
     ROUTING_ERR_CLASH,          /* Entry clashes with existing entry */
     ROUTING_ERR_INVALID_CHILD,  /* Child node IP does not match parent node IP */
-    ROUTING_ERR_INVALID_ID      /* Node does not exist */
+    ROUTING_ERR_INVALID_ID,     /* Node does not exist */
+    ROUTING_ERR_INVALID_ROUTE   /* Specified route is invalid */ 
 } fw_routing_err_t;
 
 static const char *fw_routing_err_str[] = {
@@ -20,14 +27,16 @@ static const char *fw_routing_err_str[] = {
     "Duplicate entry.",
     "Clashing entry.",
     "Invalid child node.",
-    "Invalid rule ID."
+    "Invalid route ID.",
+    "Invalid route values."
 };
 
 /* Routing interfaces */
 typedef enum {
-    ROUTING_OUT_EXTERNAL = 0, /* transmit out NIC */
-	ROUTING_OUT_INTERNAL, /* transmit within the system */
-} fw_routing_out_interfaces_t;
+    ROUTING_OUT_NONE = 0, /* do not transmit */
+    ROUTING_OUT_EXTERNAL, /* transmit out NIC */
+	ROUTING_OUT_INTERNAL /* transmit within the system */
+} fw_routing_interfaces_t;
 
 /* PP call parameters for webserver to call routers */
 #define FW_ADD_ROUTE 0
@@ -37,26 +46,22 @@ typedef enum {
     ROUTER_ARG_ROUTE_ID = 0,
     ROUTER_ARG_IP,
     ROUTER_ARG_SUBNET,
-    ROUTER_ARG_NEXT_HOP,
-    ROUTER_ARG_NUM_HOPS
+    ROUTER_ARG_NEXT_HOP
 } fw_router_args_t;
 
 typedef enum {
-    ROUTER_RET_ERR = 0,
-    ROUTER_RET_ROUTE_ID = 1
+    ROUTER_RET_ERR = 0
 } fw_router_ret_args_t;
 
 typedef struct routing_entry {
-    fw_routing_out_interfaces_t out_interface; /* queue subnet traffic should be transmitted through */
-    uint16_t num_hops; /* minimum number of hops to destination */
-    uint32_t ip; /* ip address of subnet */
+    fw_routing_interfaces_t interface; /* interface subnet traffic should be transmitted through */
+    uint32_t ip; /* ip address of destination subnet */
     uint8_t subnet; /* number of bits in subnet mask */
     uint32_t next_hop; /* ip addr of next hop */
 } fw_routing_entry_t;
 
 typedef struct routing_table {
     fw_routing_entry_t *entries; /* subnet entries */
-    fw_routing_entry_t default_route; /* default route if no matches are found */
     uint16_t capacity; /* capacity of table */
     uint16_t size;
 } fw_routing_table_t;
@@ -234,72 +239,73 @@ fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_wait
     return ROUTING_ERR_OKAY;
 }
 
-static void fw_routing_table_init(fw_routing_table_t *table,
-                                  fw_routing_entry_t default_route,
-                                  void *entries, 
-                                  uint16_t capacity)
-{
-    table->entries = (fw_routing_entry_t *)entries;
-    table->default_route = default_route;
-    table->capacity = capacity;
-    table->size = 0;
-}
-
-static uint16_t fw_routing_find_route(fw_routing_table_t *table,
+/* Find next hop for destination IP. Maximum recursion limit to prevent infinite looping. */
+static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
                                       uint32_t ip,
                                       uint32_t *next_hop,
-                                      fw_routing_out_interfaces_t *out_interface)
+                                      fw_routing_interfaces_t *interface,
+                                      uint8_t num_calls)
 {
     fw_routing_entry_t *match = NULL;
 
     for (uint16_t i = 0; i < table->size; ++i) {
         fw_routing_entry_t *entry = table->entries + i;
+        if (entry->interface == ROUTING_OUT_NONE) {
+            continue;
+        }
 
-        if ((subnet_mask(entry->subnet) & ip) == (subnet_mask(entry->subnet) & entry->ip)) {
-            /* ip is part of subnet */
-            if (match == NULL) {
-                match = entry;
+        /* ip is part of subnet */
+        if ((subnet_mask(entry->subnet) & ip) == entry->ip) {
+
+            /* Current match is stronger */
+            if (match != NULL && match->subnet > entry->subnet) {
                 continue;
             }
 
-            if (entry->subnet > match->subnet ||
-                ((entry->subnet == match->subnet) && (entry->next_hop < match->num_hops))) {
-                match = entry;
-                continue;
-            }
+            match = entry;
         }
     }
 
-    if (match) {
-        *next_hop = match->next_hop;
-        *out_interface = match->out_interface;
-        return match - table->entries;
+    if (match == NULL) {
+        *interface = ROUTING_OUT_NONE;
+    } else if (match->interface == ROUTING_OUT_INTERNAL) {
+        *interface = ROUTING_OUT_INTERNAL;
+    } else if (match->interface == ROUTING_OUT_EXTERNAL && match->next_hop == FW_ROUTING_NONEXTHOP) {
+        *next_hop = ip;
+        *interface = ROUTING_OUT_EXTERNAL;
+    } else if (match->interface == ROUTING_OUT_EXTERNAL && match->next_hop != FW_ROUTING_NONEXTHOP) {
+        num_calls ++;
+        if (num_calls == FW_ROUTING_MAX_RECURSION) {
+            /* Find route has hit recursive call limit, ip unreachable. */
+            *interface = ROUTING_OUT_NONE;
+            return ROUTING_ERR_OKAY;
+        }
+        fw_routing_err_t err = fw_routing_find_route(table, match->next_hop, next_hop, interface, num_calls);
+        return err;
     }
 
-    /* Return the default route */
-    *next_hop = ip;
-    *out_interface = table->default_route.out_interface;
-
-    return 0;
+    return ROUTING_ERR_OKAY;
 }
 
 static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
-                                                   fw_routing_out_interfaces_t out_interface,
-                                                   uint16_t num_hops,
+                                                   fw_routing_interfaces_t interface,
                                                    uint32_t ip,
                                                    uint8_t subnet,
                                                    uint32_t next_hop)
 {
-    if (table->size >= table->capacity) {
-        return ROUTING_ERR_FULL;
+    /* Default routes must specify a next hop! */
+    if ((subnet == 0) && (next_hop == FW_ROUTING_NONEXTHOP)) {
+        return ROUTING_ERR_INVALID_ROUTE;
     }
 
-    for (uint16_t i = 0; i < table->capacity; ++i) {
+    fw_routing_entry_t *empty_slot = NULL;
+    for (uint16_t i = 0; i < table->capacity; i++) {
         fw_routing_entry_t *entry = table->entries + i;
 
-
-        /* Check that this entry won't cause clash */
-        if (num_hops != entry->num_hops) {
+        if (entry->interface == ROUTING_OUT_NONE) {
+            if (empty_slot == NULL) {
+                empty_slot = entry;
+            }
             continue;
         }
 
@@ -309,21 +315,23 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
         }
 
         /* Rules apply to different subnets */
-        if ((subnet_mask(subnet) & ip) != (subnet_mask(entry->subnet) & entry->ip)) {
+        if ((subnet_mask(subnet) & ip) != entry->ip) {
             continue;
         }
 
         /* There is a clash! */
-        if ((out_interface == entry->out_interface) && (next_hop == entry->next_hop)) {
+        if ((interface == entry->interface) && (next_hop == entry->next_hop)) {
             return ROUTING_ERR_DUPLICATE;
         } else {
             return ROUTING_ERR_CLASH;
         }
     }
 
-    fw_routing_entry_t* empty_slot = &table->entries[table->size++]; 
-    empty_slot->out_interface = out_interface;
-    empty_slot->num_hops = num_hops;
+    if (empty_slot == NULL) {
+        return ROUTING_ERR_FULL;
+    }
+
+    empty_slot->interface = interface;
     empty_slot->ip = subnet_mask(subnet) & ip;
     empty_slot->subnet = subnet;
     empty_slot->next_hop = next_hop;
@@ -333,11 +341,30 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
 
 static fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table, uint16_t route_id)
 {
-    if (route_id >= table->size) {
+    fw_routing_entry_t *entry = table->entries + route_id;
+
+    if (route_id >= table->capacity || entry->interface == ROUTING_OUT_NONE) {
         return ROUTING_ERR_INVALID_ID;
     }
-    generic_array_shift(table->entries, sizeof(fw_routing_entry_t), table->size, route_id);
-    --table->size;
 
+    entry->interface = ROUTING_OUT_NONE;
     return ROUTING_ERR_OKAY;
+}
+
+static void fw_routing_table_init(fw_routing_table_t *table,
+                                  void *entries, 
+                                  uint16_t capacity,
+                                  uint32_t extern_ip,
+                                  uint8_t extern_subnet)
+{
+    table->entries = (fw_routing_entry_t *)entries;
+    table->capacity = capacity;
+
+    /* Add a route for external network */
+    fw_routing_err_t err = fw_routing_table_add_route(table,
+                                           ROUTING_OUT_EXTERNAL,
+                                                  extern_ip, 
+                                              extern_subnet,
+                                            FW_ROUTING_NONEXTHOP);
+    assert(err == ROUTING_ERR_OKAY);
 }

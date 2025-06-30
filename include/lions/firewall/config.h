@@ -67,8 +67,11 @@ typedef struct fw_webserver_router_config {
 } fw_webserver_router_config_t;
 
 typedef struct fw_router_config {
+    uint8_t interface;
     uint8_t mac_addr[ETH_HWADDR_LEN];
     uint32_t ip;
+    uint32_t out_ip;
+    uint8_t out_subnet;
     fw_connection_resource_t rx_free;
     fw_connection_resource_t rx_active;
     fw_connection_resource_t tx_active;
