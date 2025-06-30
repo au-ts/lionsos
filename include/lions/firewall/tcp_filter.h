@@ -8,12 +8,11 @@
 #include <lions/firewall/filter.h>
 
 // TODO:
-// Handle TCP reset
 // Handle simultaneous closing https://www.rfc-editor.org/rfc/rfc793#section-3.5
 // Figure out a solution to what order instances should be checked
 // Implement timer ticks for removing timed out and closed entries
 // Handle re-opening connections after closure
-// Handle re-using filter data structurew with different pointer types
+// Handle re-using filter data structure with different pointer types
 
 /* Recorded data from last received instance packet */
 typedef struct fw_tcp_interface_state {
