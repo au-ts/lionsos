@@ -1,6 +1,5 @@
 #pragma once
 
-#include <stdint.h>
 #include <stdbool.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/queue.h>
@@ -64,6 +63,7 @@ typedef struct routing_entry {
 typedef struct routing_table {
     fw_routing_entry_t *entries; /* subnet entries */
     uint16_t capacity; /* capacity of table */
+    uint16_t size;
 } fw_routing_table_t;
 
 /* Node to track packets awaiting ARP requests */
@@ -247,11 +247,9 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
                                       uint8_t num_calls)
 {
     fw_routing_entry_t *match = NULL;
-    for (uint16_t i = 0; i < table->capacity; i++) {
+
+    for (uint16_t i = 0; i < table->size; ++i) {
         fw_routing_entry_t *entry = table->entries + i;
-        if (entry->interface == ROUTING_OUT_NONE) {
-            continue;
-        }
 
         /* ip is part of subnet */
         if ((subnet_mask(entry->subnet) & ip) == entry->ip) {
@@ -295,18 +293,13 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
     /* Default routes must specify a next hop! */
     if ((subnet == 0) && (next_hop == FW_ROUTING_NONEXTHOP)) {
         return ROUTING_ERR_INVALID_ROUTE;
+    } else if (table->size >= table->capacity) {
+        return ROUTING_ERR_FULL;
     }
 
-    fw_routing_entry_t *empty_slot = NULL;
-    for (uint16_t i = 0; i < table->capacity; i++) {
+    for (uint16_t i = 0; i < table->capacity; ++i) {
         fw_routing_entry_t *entry = table->entries + i;
 
-        if (entry->interface == ROUTING_OUT_NONE) {
-            if (empty_slot == NULL) {
-                empty_slot = entry;
-            }
-            continue;
-        }
 
         /* One rule applies to a larger subnet than the other */
         if (subnet != entry->subnet) {
@@ -326,10 +319,7 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
         }
     }
 
-    if (empty_slot == NULL) {
-        return ROUTING_ERR_FULL;
-    }
-
+    fw_routing_entry_t* empty_slot = &table->entries[table->size++]; 
     empty_slot->interface = interface;
     empty_slot->ip = subnet_mask(subnet) & ip;
     empty_slot->subnet = subnet;
@@ -340,13 +330,12 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
 
 static fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table, uint16_t route_id)
 {
-    fw_routing_entry_t *entry = table->entries + route_id;
-
-    if (route_id >= table->capacity || entry->interface == ROUTING_OUT_NONE) {
+    if (route_id >= table->size) {
         return ROUTING_ERR_INVALID_ID;
     }
+    generic_array_shift(table->entries, sizeof(fw_routing_entry_t), table->size, route_id);
+    --table->size;
 
-    entry->interface = ROUTING_OUT_NONE;
     return ROUTING_ERR_OKAY;
 }
 
