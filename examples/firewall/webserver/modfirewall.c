@@ -106,7 +106,7 @@ void fw_webserver_init(void) {
     sddf_memcpy(webserver_state.mac_addr, firewall_config.interfaces[firewall_config.interface].mac_addr, ETH_HWADDR_LEN);
     
     for (uint8_t i = 0; i < FW_NUM_INTERFACES; i++) {
-        fw_routing_entry_t default_entry = {true, ROUTING_OUT_EXTERNAL, 0, 0, 0, 0};
+        fw_routing_entry_t default_entry = {ROUTING_OUT_EXTERNAL, 0, 0, 0, 0};
         fw_routing_table_init(&webserver_state.interfaces[i].routing_table, default_entry,
                         firewall_config.interfaces[i].router.routing_table.vaddr,
                         firewall_config.interfaces[i].router.routing_table_capacity);
@@ -196,8 +196,7 @@ STATIC mp_obj_t route_add(mp_uint_t n_args, const mp_obj_t *args) {
     }
 
     webserver_state.interfaces[interface_idx].num_routes += 1;
-    uint16_t route_id = seL4_GetMR(ROUTER_RET_ROUTE_ID);
-    return mp_obj_new_int_from_uint(route_id);
+    return mp_obj_new_int_from_uint(0);
 }
 
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR(route_add_obj, 5, route_add);
