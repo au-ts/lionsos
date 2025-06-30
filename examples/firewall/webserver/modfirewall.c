@@ -268,13 +268,10 @@ STATIC mp_obj_t route_get_nth(mp_obj_t interface_idx_in,
 
     uint16_t valid_entries = 0;
     for (uint16_t i = 0;
-        i < webserver_state.interfaces[interface_idx].routing_table.capacity; i++) {
+        i < webserver_state.interfaces[interface_idx].routing_table.size; i++) {
         fw_routing_entry_t *entry =
             (fw_routing_entry_t
                 *)(webserver_state.interfaces[interface_idx].routing_table.entries + i);
-        if (!entry->valid) {
-        continue;
-        }
 
         if (valid_entries == route_idx) {
         mp_obj_t tuple[5];

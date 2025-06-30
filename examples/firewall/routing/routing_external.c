@@ -288,7 +288,7 @@ void init(void)
     icmp_queue_init(&icmp_queue, router_config.icmp_module.queue.vaddr, router_config.icmp_module.capacity);
 
     /* Initialise routing table */
-    fw_routing_entry_t default_entry = {true, ROUTING_OUT_EXTERNAL, 0, 0, 0, 0};
+    fw_routing_entry_t default_entry = {ROUTING_OUT_EXTERNAL, 0, 0, 0, 0};
     fw_routing_table_init(&routing_table, default_entry, router_config.webserver.routing_table.vaddr,
         router_config.webserver.routing_table_capacity);
 
@@ -305,21 +305,19 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         uint8_t subnet = seL4_GetMR(ROUTER_ARG_SUBNET);
         uint32_t next_hop = seL4_GetMR(ROUTER_ARG_NEXT_HOP);
         uint16_t num_hops = seL4_GetMR(ROUTER_ARG_NUM_HOPS);
-        uint16_t route_id;
         // @kwinter: Limiting this to just external routes out of the NIC
         // for now.
-        fw_routing_err_t err = fw_routing_table_add_route(&routing_table, ROUTING_OUT_EXTERNAL, num_hops, ip, subnet, next_hop, &route_id);
+        fw_routing_err_t err = fw_routing_table_add_route(&routing_table, ROUTING_OUT_EXTERNAL, num_hops, ip, subnet, next_hop);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("%sRouter add route %u. (ip %s, mask %u, num hops %u, next hop %s): %s\n",
+            sddf_printf("%sRouter add route. (ip %s, mask %u, num hops %u, next hop %s): %s\n",
                 fw_frmt_str[router_config.webserver.interface],
-                route_id, ipaddr_to_string(ip, ip_addr_buf0), subnet, num_hops,
+                ipaddr_to_string(ip, ip_addr_buf0), subnet, num_hops,
                 ipaddr_to_string(next_hop, ip_addr_buf1), fw_routing_err_str[err]);
         }
 
         seL4_SetMR(ROUTER_RET_ERR, err);
-        seL4_SetMR(ROUTER_RET_ROUTE_ID, route_id);
-        return microkit_msginfo_new(0, 2);
+        return microkit_msginfo_new(0, 1);
     }
     case FW_DEL_ROUTE: {
         uint16_t route_id = seL4_GetMR(ROUTER_ARG_ROUTE_ID);

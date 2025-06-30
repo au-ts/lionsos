@@ -1,6 +1,5 @@
 #pragma once
 
-#include <stdint.h>
 #include <stdbool.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/queue.h>
@@ -27,7 +26,7 @@ static const char *fw_routing_err_str[] = {
 /* Routing interfaces */
 typedef enum {
     ROUTING_OUT_EXTERNAL = 0, /* transmit out NIC */
-	ROUTING_OUT_INTERNAL /* transmit within the system */
+	ROUTING_OUT_INTERNAL, /* transmit within the system */
 } fw_routing_out_interfaces_t;
 
 /* PP call parameters for webserver to call routers */
@@ -48,7 +47,6 @@ typedef enum {
 } fw_router_ret_args_t;
 
 typedef struct routing_entry {
-    bool valid;
     fw_routing_out_interfaces_t out_interface; /* queue subnet traffic should be transmitted through */
     uint16_t num_hops; /* minimum number of hops to destination */
     uint32_t ip; /* ip address of subnet */
@@ -60,6 +58,7 @@ typedef struct routing_table {
     fw_routing_entry_t *entries; /* subnet entries */
     fw_routing_entry_t default_route; /* default route if no matches are found */
     uint16_t capacity; /* capacity of table */
+    uint16_t size;
 } fw_routing_table_t;
 
 /* Node to track packets awaiting ARP requests */
@@ -243,6 +242,7 @@ static void fw_routing_table_init(fw_routing_table_t *table,
     table->entries = (fw_routing_entry_t *)entries;
     table->default_route = default_route;
     table->capacity = capacity;
+    table->size = 0;
 }
 
 static uint16_t fw_routing_find_route(fw_routing_table_t *table,
@@ -251,11 +251,9 @@ static uint16_t fw_routing_find_route(fw_routing_table_t *table,
                                       fw_routing_out_interfaces_t *out_interface)
 {
     fw_routing_entry_t *match = NULL;
-    for (uint16_t i = 0; i < table->capacity; i++) {
+
+    for (uint16_t i = 0; i < table->size; ++i) {
         fw_routing_entry_t *entry = table->entries + i;
-        if (!entry->valid) {
-            continue;
-        }
 
         if ((subnet_mask(entry->subnet) & ip) == (subnet_mask(entry->subnet) & entry->ip)) {
             /* ip is part of subnet */
@@ -282,7 +280,7 @@ static uint16_t fw_routing_find_route(fw_routing_table_t *table,
     *next_hop = ip;
     *out_interface = table->default_route.out_interface;
 
-    return table->capacity;
+    return 0;
 }
 
 static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
@@ -290,19 +288,15 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
                                                    uint16_t num_hops,
                                                    uint32_t ip,
                                                    uint8_t subnet,
-                                                   uint32_t next_hop,
-                                                   uint16_t *route_id)
+                                                   uint32_t next_hop)
 {
-    fw_routing_entry_t *empty_slot = NULL;
-    for (uint16_t i = 0; i < table->capacity; i++) {
+    if (table->size >= table->capacity) {
+        return ROUTING_ERR_FULL;
+    }
+
+    for (uint16_t i = 0; i < table->capacity; ++i) {
         fw_routing_entry_t *entry = table->entries + i;
 
-        if (!entry->valid) {
-            if (empty_slot == NULL) {
-                empty_slot = entry;
-            }
-            continue;
-        }
 
         /* Check that this entry won't cause clash */
         if (num_hops != entry->num_hops) {
@@ -327,30 +321,23 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
         }
     }
 
-    if (empty_slot == NULL) {
-        return ROUTING_ERR_FULL;
-    }
-
-    empty_slot->valid = true;
+    fw_routing_entry_t* empty_slot = &table->entries[table->size++]; 
     empty_slot->out_interface = out_interface;
     empty_slot->num_hops = num_hops;
     empty_slot->ip = subnet_mask(subnet) & ip;
     empty_slot->subnet = subnet;
     empty_slot->next_hop = next_hop;
-    *route_id = empty_slot - table->entries;
 
     return ROUTING_ERR_OKAY;
 }
 
 static fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table, uint16_t route_id)
 {
-    fw_routing_entry_t *entry = table->entries + route_id;
-
-    if (route_id >= table->capacity || !entry->valid) {
+    if (route_id >= table->size) {
         return ROUTING_ERR_INVALID_ID;
     }
-
-    entry->valid = false;
+    generic_array_shift(table->entries, sizeof(fw_routing_entry_t), table->size, route_id);
+    --table->size;
 
     return ROUTING_ERR_OKAY;
 }
