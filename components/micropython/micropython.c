@@ -38,7 +38,7 @@ __attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_confi
 #endif
 
 #ifdef  ENABLE_FIREWALL
-__attribute__((__section__(".fw_webserver_config"))) fw_webserver_config_t firewall_config;
+__attribute__((__section__(".fw_webserver_config"))) fw_webserver_config_t fw_config;
 
 void fw_webserver_init(void);
 void mpnet_process_arp(void);
@@ -172,7 +172,7 @@ void mpnet_handle_notify(void);
 
 void notified(microkit_channel ch) {
 #ifdef  ENABLE_FIREWALL
-    if (net_enabled && (ch == firewall_config.arp_queue.ch)) {
+    if (net_enabled && (ch == fw_config.arp_queue.ch)) {
         mpnet_process_arp();
     }
 #endif

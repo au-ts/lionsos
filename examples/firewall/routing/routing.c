@@ -34,7 +34,7 @@ __attribute__((__section__(".fw_router_config"))) fw_router_config_t router_conf
 serial_queue_handle_t serial_tx_queue_handle;
 
 /* DMA buffer data structures */
-fw_queue_handle_t firewall_filters[FW_MAX_FILTERS]; /* Filter queues to receive packets */
+fw_queue_handle_t fw_filters[FW_MAX_FILTERS]; /* Filter queues to receive packets */
 fw_queue_handle_t rx_free; /* Queue to return free rx buffers */
 fw_queue_handle_t tx_active; /* Queue to transmit packets out the network */
 fw_queue_handle_t webserver; /* Queue to route to webserver */
@@ -136,9 +136,9 @@ static void process_arp_waiting(void)
 static void route()
 {
     for (int filter = 0; filter < router_config.num_filters; filter++) {
-        while (!fw_queue_empty(&firewall_filters[filter])) {
+        while (!fw_queue_empty(&fw_filters[filter])) {
             fw_buff_desc_t buffer;
-            int err = fw_dequeue(&firewall_filters[filter], &buffer);
+            int err = fw_dequeue(&fw_filters[filter], &buffer);
             assert(!err);
 
             uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
@@ -293,7 +293,7 @@ void init(void)
 
     /* Set up firewall filter queues */
     for (int i = 0; i < router_config.num_filters; i++) {
-        fw_queue_init(&firewall_filters[i], router_config.filters[i].queue.vaddr,
+        fw_queue_init(&fw_filters[i], router_config.filters[i].queue.vaddr,
                             router_config.filters[i].capacity);
     }
 

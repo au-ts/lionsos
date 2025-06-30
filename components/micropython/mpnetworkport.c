@@ -50,7 +50,7 @@
 arp_packet_t arp_response_pkt = {0};
 extern net_client_config_t net_config;
 
-extern fw_webserver_config_t firewall_config;
+extern fw_webserver_config_t fw_config;
 
 #define dlogp(pred, fmt, ...) do { \
     if (pred) { \
@@ -228,17 +228,17 @@ static err_t ethernet_init(struct netif *netif)
 
 void init_networking(void) {
     /* Set up shared memory regions */
-    fw_queue_init(&state.rx_active, firewall_config.rx_active.queue.vaddr, firewall_config.rx_active.capacity);
-    fw_queue_init(&state.rx_free, firewall_config.rx_free.queue.vaddr, firewall_config.rx_free.capacity);
+    fw_queue_init(&state.rx_active, fw_config.rx_active.queue.vaddr, fw_config.rx_active.capacity);
+    fw_queue_init(&state.rx_free, fw_config.rx_free.queue.vaddr, fw_config.rx_free.capacity);
     net_queue_init(&state.tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
     net_buffers_init(&state.tx_queue, 0);
-    state.arp_queue = (fw_arp_queue_handle_t *)firewall_config.arp_queue.queue.vaddr;
-    fw_arp_handle_init(state.arp_queue, firewall_config.arp_queue.capacity);
+    state.arp_queue = (fw_arp_queue_handle_t *)fw_config.arp_queue.queue.vaddr;
+    fw_arp_handle_init(state.arp_queue, fw_config.arp_queue.capacity);
     lwip_init();
     LWIP_MEMPOOL_INIT(RX_POOL);
 
-    state.ip = firewall_config.interfaces[firewall_config.interface].ip;
-    sddf_memcpy(state.mac, firewall_config.interfaces[firewall_config.interface].mac_addr, ETH_HWADDR_LEN);
+    state.ip = fw_config.interfaces[fw_config.interface].ip;
+    sddf_memcpy(state.mac, fw_config.interfaces[fw_config.interface].mac_addr, ETH_HWADDR_LEN);
 
     /* Set some dummy IP configuration values to get lwIP bootstrapped  */
     struct ip4_addr netmask, ipaddr, gw, multicast;
@@ -261,9 +261,9 @@ void init_networking(void) {
     if (notify_rx) {
         notify_rx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(firewall_config.rx_free.ch);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + firewall_config.rx_free.ch) {
-            microkit_notify(firewall_config.rx_free.ch);
+            microkit_deferred_notify(fw_config.rx_free.ch);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + fw_config.rx_free.ch) {
+            microkit_notify(fw_config.rx_free.ch);
         }
     }
 
@@ -280,9 +280,9 @@ void init_networking(void) {
     if (notify_arp) {
         notify_arp = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(firewall_config.arp_queue.ch);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + firewall_config.arp_queue.ch) {
-            microkit_notify(firewall_config.arp_queue.ch);
+            microkit_deferred_notify(fw_config.arp_queue.ch);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + fw_config.arp_queue.ch) {
+            microkit_notify(fw_config.arp_queue.ch);
         }
     }
 }
@@ -340,7 +340,7 @@ void mpnet_process_rx(void) {
             buffer.len,
             PBUF_REF,
             &custom_pbuf_offset->custom,
-            (void *)(buffer.io_or_offset + firewall_config.data.vaddr),
+            (void *)(buffer.io_or_offset + fw_config.data.vaddr),
             NET_BUFFER_SIZE
         );
 
@@ -361,9 +361,9 @@ void mpnet_handle_notify(void) {
     if (notify_rx) {
         notify_rx = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(firewall_config.rx_free.ch);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + firewall_config.rx_free.ch) {
-            microkit_notify(firewall_config.rx_free.ch);
+            microkit_deferred_notify(fw_config.rx_free.ch);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + fw_config.rx_free.ch) {
+            microkit_notify(fw_config.rx_free.ch);
         }
     }
 
@@ -380,9 +380,9 @@ void mpnet_handle_notify(void) {
     if (notify_arp) {
         notify_arp = false;
         if (!microkit_have_signal) {
-            microkit_deferred_notify(firewall_config.arp_queue.ch);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + firewall_config.arp_queue.ch) {
-            microkit_notify(firewall_config.arp_queue.ch);
+            microkit_deferred_notify(fw_config.arp_queue.ch);
+        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + fw_config.arp_queue.ch) {
+            microkit_notify(fw_config.arp_queue.ch);
         }
     }
 }
