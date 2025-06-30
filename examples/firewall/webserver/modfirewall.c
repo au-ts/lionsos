@@ -20,6 +20,7 @@ typedef enum {
     OS_ERR_INVALID_PROTOCOL,  /* Invalid protocol number */
     OS_ERR_INVALID_ROUTE_ID,  /* Invalid route ID */
     OS_ERR_INVALID_RULE_ID,   /* Invalid rule ID */
+    OS_ERR_INVALID_ROUTE_ARGS,/* Invalid arguments to add route */
     OS_ERR_DUPLICATE,         /* Duplicate route or rule */
     OS_ERR_CLASH,             /* Clashing route or rule */
     OS_ERR_INVALID_ARGUMENTS, /* Invalid arguments supplied */
@@ -35,6 +36,7 @@ static const char *fw_os_err_str[] = {
     "No matching filter for supplied protocol number.",
     "No route matching supplied route ID.",
     "No rule matching supplied rule ID.",
+    "Invalid arguments supplied to add route.",
     "Route or rule supplied already exists.",
     "Route or rule supplied clashes with an existing route or rule.",
     "Too many or too few arguments supplied.",
@@ -59,6 +61,8 @@ fw_os_err_t fw_routing_err_to_os_err(fw_routing_err_t routing_err) {
             return OS_ERR_INTERNAL_ERROR;
         case ROUTING_ERR_INVALID_ID:
             return OS_ERR_INVALID_ROUTE_ID;
+        case ROUTING_ERR_INVALID_ROUTE:
+            return OS_ERR_INVALID_ROUTE_ARGS;
         default:
             return OS_ERR_INTERNAL_ERROR;
     }
@@ -106,10 +110,10 @@ void fw_webserver_init(void) {
     sddf_memcpy(webserver_state.mac_addr, firewall_config.interfaces[firewall_config.interface].mac_addr, ETH_HWADDR_LEN);
     
     for (uint8_t i = 0; i < FW_NUM_INTERFACES; i++) {
-        fw_routing_entry_t default_entry = {true, ROUTING_OUT_EXTERNAL, 0, 0, 0, 0};
-        fw_routing_table_init(&webserver_state.interfaces[i].routing_table, default_entry,
-                        firewall_config.interfaces[i].router.routing_table.vaddr,
-                        firewall_config.interfaces[i].router.routing_table_capacity);
+        webserver_state.interfaces[i].routing_table.entries = firewall_config.interfaces[i].router.routing_table.vaddr;
+        webserver_state.interfaces[i].routing_table.capacity = firewall_config.interfaces[i].router.routing_table_capacity;
+        /* Hardcode pre-existing interface route. */
+        webserver_state.interfaces[i].num_routes = 1;
 
         for (uint8_t j = 0; j < firewall_config.interfaces[i].num_filters; j++) {
             fw_filter_state_init(&webserver_state.interfaces[i].filter_states[j],
@@ -120,7 +124,7 @@ void fw_webserver_init(void) {
     }
 
   /* Currently harcode pre-existing internal route to webserver. */
-  webserver_state.interfaces[1].num_routes = 1;
+  webserver_state.interfaces[FW_INTERNAL_INTERFACE_ID].num_routes += 1;
 }
 
 /* Get MAC address for network interface */
@@ -160,7 +164,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(interface_get_ip_obj, interface_get_ip);
 
 /* Add a route to the routing table for a network interface */
 STATIC mp_obj_t route_add(mp_uint_t n_args, const mp_obj_t *args) {
-    if (n_args != 5) {
+    if (n_args != 4) {
         sddf_dprintf("WEBSERVER|LOG: %s\n",
                     fw_os_err_str[OS_ERR_INVALID_ARGUMENTS]);
         mp_raise_OSError(OS_ERR_INVALID_ARGUMENTS);
@@ -178,16 +182,14 @@ STATIC mp_obj_t route_add(mp_uint_t n_args, const mp_obj_t *args) {
     uint32_t ip = mp_obj_get_int(args[1]);
     uint8_t subnet = mp_obj_get_int(args[2]);
     uint32_t next_hop = mp_obj_get_int(args[3]);
-    uint16_t num_hops = mp_obj_get_int(args[4]);
 
     seL4_SetMR(ROUTER_ARG_IP, ip);
     seL4_SetMR(ROUTER_ARG_SUBNET, subnet);
     seL4_SetMR(ROUTER_ARG_NEXT_HOP, next_hop);
-    seL4_SetMR(ROUTER_ARG_NUM_HOPS, num_hops);
 
     microkit_msginfo msginfo =
         microkit_ppcall(firewall_config.interfaces[interface_idx].router.routing_ch,
-                        microkit_msginfo_new(FW_ADD_ROUTE, 5));
+                        microkit_msginfo_new(FW_ADD_ROUTE, 4));
     fw_os_err_t os_err = fw_routing_err_to_os_err(seL4_GetMR(ROUTER_RET_ERR));
     if (os_err != OS_ERR_OKAY) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[os_err]);
@@ -196,11 +198,10 @@ STATIC mp_obj_t route_add(mp_uint_t n_args, const mp_obj_t *args) {
     }
 
     webserver_state.interfaces[interface_idx].num_routes += 1;
-    uint16_t route_id = seL4_GetMR(ROUTER_RET_ROUTE_ID);
-    return mp_obj_new_int_from_uint(route_id);
+    return mp_obj_new_int_from_uint(os_err);
 }
 
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR(route_add_obj, 5, route_add);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR(route_add_obj, 4, route_add);
 
 /* Delete a route from the interface routing table */
 STATIC mp_obj_t route_delete(mp_obj_t interface_idx_in, mp_obj_t route_id_in) {
@@ -272,18 +273,17 @@ STATIC mp_obj_t route_get_nth(mp_obj_t interface_idx_in,
         fw_routing_entry_t *entry =
             (fw_routing_entry_t
                 *)(webserver_state.interfaces[interface_idx].routing_table.entries + i);
-        if (!entry->valid) {
-        continue;
+        if (entry->interface == ROUTING_OUT_NONE) {
+            continue;
         }
 
         if (valid_entries == route_idx) {
-        mp_obj_t tuple[5];
-        tuple[0] = mp_obj_new_int_from_uint(i);
-        tuple[1] = mp_obj_new_int_from_uint(entry->ip);
-        tuple[2] = mp_obj_new_int_from_uint(entry->subnet);
-        tuple[3] = mp_obj_new_int_from_uint(entry->next_hop);
-        tuple[4] = mp_obj_new_int_from_uint(entry->num_hops);
-        return mp_obj_new_tuple(5, tuple);
+            mp_obj_t tuple[4];
+            tuple[0] = mp_obj_new_int_from_uint(i);
+            tuple[1] = mp_obj_new_int_from_uint(entry->ip);
+            tuple[2] = mp_obj_new_int_from_uint(entry->subnet);
+            tuple[3] = mp_obj_new_int_from_uint(entry->next_hop);
+            return mp_obj_new_tuple(4, tuple);
         }
 
         valid_entries++;

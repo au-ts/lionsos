@@ -14,6 +14,9 @@ static inline uint32_t htonl(uint32_t n) {
 
 #define IPV4_ADDR_BUFLEN 16
 
+#define FW_EXTERNAL_INTERFACE_ID 0
+#define FW_INTERNAL_INTERFACE_ID 1
+
 static const char *fw_frmt_str[] = {
     "EXT --> INT | ",
     "INT --> EXT | "

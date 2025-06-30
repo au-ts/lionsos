@@ -49,7 +49,7 @@ FIREWALL_CONFIG_HEADERS := $(SDDF)/include/sddf/resources/common.h \
 							$(SDDF)/include/sddf/resources/device.h \
 							$(LIONSOS)/include/lions/firewall/config.h
 
-FIREWALL_IMAGES := arp_requester.elf arp_responder.elf routing_internal.elf routing_external.elf \
+FIREWALL_IMAGES := arp_requester.elf arp_responder.elf routing.elf \
 		  				icmp_filter.elf udp_filter.elf tcp_filter.elf icmp_module.elf
 
 IMAGES := micropython.elf \
@@ -130,10 +130,7 @@ arp_requester.elf: arp_requester.o libsddf_util.a
 arp_responder.elf: arp_responder.o libsddf_util.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-routing_external.elf: routing_external.o libsddf_util.a
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
-routing_internal.elf: routing_internal.o libsddf_util.a
+routing.elf: routing.o libsddf_util.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \

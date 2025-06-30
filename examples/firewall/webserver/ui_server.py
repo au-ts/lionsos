@@ -20,14 +20,15 @@ OSErrInvalidInterface = 1
 OSErrInvalidProtocol = 2
 OSErrInvalidRouteID = 3
 OSErrInvalidRuleID = 4
-OSErrDuplicate = 5
-OSErrClash = 6
-OSErrInvalidArguments = 7
-OSErrInvalidRouteNum = 8
-OSErrInvalidRuleNum = 9
-OSErrOutOfMemory = 10
-OSErrInternalError = 11
-OSErrInvalidInput = 12
+OSErrInvalidRouteArgs = 5
+OSErrDuplicate = 6
+OSErrClash = 7
+OSErrInvalidArguments = 8
+OSErrInvalidRouteNum = 9
+OSErrInvalidRuleNum = 10
+OSErrOutOfMemory = 11
+OSErrInternalError = 12
+OSErrInvalidInput = 13
 
 OSErrStrings = [
     "Ok.",
@@ -35,6 +36,7 @@ OSErrStrings = [
     "No matching filter for supplied protocol number.",
     "No route matching supplied route ID.",
     "No rule matching supplied rule ID.",
+    "Invalid arguments supplied to add route.",
     "Route or rule supplied already exists.",
     "Route or rule supplied clashes with an existing route or rule.",
     "Too many or too few arguments supplied.",
@@ -49,7 +51,12 @@ UnknownErrStr = "Unexpected unknown error."
 
 numInterfaces = 2
 
-interfaceStrings = [
+interfaceStringsRouters = [
+    "internal",
+    "external",
+]
+
+interfaceStringsFilters = [
     "external",
     "internal"
 ]
@@ -129,9 +136,14 @@ def tupleToMac(macList):
     mac = ":".join(hexList)
     return mac
     
-def interfaceStringToInt(interfaceStr):
+def interfaceStringToInt(componentType, interfaceStr):
+  if componentType == "router":
+      for i in range(numInterfaces):
+        if interfaceStr == interfaceStringsRouters[i]:
+            return i
+  elif componentType == "filter":
     for i in range(numInterfaces):
-        if interfaceStr == interfaceStrings[i]:
+        if interfaceStr == interfaceStringsFilters[i]:
             return i
 
     print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
@@ -177,7 +189,7 @@ def interfaceDetails(request, interfaceInt):
 @app.route('/api/routes/<string:interfaceStr>', methods=['GET'])
 def getRoutes(request, interfaceStr):
     try:
-        interface = interfaceStringToInt(interfaceStr)
+        interface = interfaceStringToInt("router", interfaceStr)
         routes = []
         for i in range(lions_firewall.route_count(interface)):
             route = lions_firewall.route_get_nth(interface, i)
@@ -185,8 +197,7 @@ def getRoutes(request, interfaceStr):
                 "id": route[0],
                 "ip": intToIp(route[1]),
                 "subnet": route[2],
-                "next_hop": intToIp(route[3]),
-                "num_hops": route[4]
+                "next_hop": intToIp(route[3])
             })
         return {"routes": routes}
     except OSError as OSErr:
@@ -200,7 +211,7 @@ def getRoutes(request, interfaceStr):
 @app.route('/api/routes/<int:routeId>/<string:interfaceStr>', methods=['DELETE'])
 def deleteRoute(request, routeId, interfaceStr):
     try:
-        interface = interfaceStringToInt(interfaceStr)
+        interface = interfaceStringToInt("router", interfaceStr)
         lions_firewall.route_delete(interface, routeId)
         return {"status": "ok"}
     except OSError as OSErr:
@@ -232,13 +243,14 @@ def addRoute(request):
         else:
             ip = ipToInt(newRoute.get("ip"))
 
-        nextHop = ipToInt(newRoute.get("next_hop"))
-        numHops = newRoute.get("num_hops")
-        if numHops is None:
-            numHops = 0
+        nextHop = newRoute.get("next_hop")
+        if len(nextHop) == 0 or nextHop == "0":
+          nextHop = 0
+        else:
+          nextHop = ipToInt(nextHop)
 
-        routeId = lions_firewall.route_add(interfaceInt, ip, subnet, nextHop, numHops)
-        newRouteOut = {"id": routeId, "interface": interfaceInt, "ip": ip, "next_hop": nextHop, "num_hops": numHops}
+        lions_firewall.route_add(interfaceInt, ip, subnet, nextHop)
+        newRouteOut = {"interface": interfaceInt, "ip": ip, "next_hop": nextHop}
 
         return {"status": "ok", "route": newRouteOut}, 201
     except OSError as OSErr:
@@ -255,7 +267,7 @@ def addRoute(request):
 @app.route('/api/rules/<string:protocolStr>/<string:interfaceStr>', methods=['GET'])
 def getRules(request, protocolStr, interfaceStr):
     try:
-        interface = interfaceStringToInt(interfaceStr)
+        interface = interfaceStringToInt("filter", interfaceStr)
 
         if protocolStr not in protocolNums.keys():
             print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match existing filters.")
@@ -291,7 +303,7 @@ def getRules(request, protocolStr, interfaceStr):
 @app.route('/api/rules/<string:protocolStr>/<int:ruleId>/<string:interfaceStr>', methods=['DELETE'])
 def deleteRule(request, protocolStr, ruleId, interfaceStr):
     try:
-        interface = interfaceStringToInt(interfaceStr)
+        interface = interfaceStringToInt("filter", interfaceStr)
 
         if protocolStr not in protocolNums.keys():
             print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match existing filters.")
@@ -312,7 +324,7 @@ def deleteRule(request, protocolStr, ruleId, interfaceStr):
 @app.route('/api/rules/<string:protocolStr>/default/<int:action>/<string:interfaceStr>', methods=['POST'])
 def setDefaultAction(request, protocolStr, action, interfaceStr):
     try:
-        interface = interfaceStringToInt(interfaceStr)
+        interface = interfaceStringToInt("filter", interfaceStr)
 
         if protocolStr not in protocolNums.keys():
             print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match existing filters.")
@@ -514,24 +526,6 @@ def config(request):
       <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
     </nav>
 
-    <h2>External Interface Routing Table</h2>
-    <table border="1">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>IP</th>
-          <th>Subnet</th>
-          <th>Next Hop</th>
-          <th>Num Hops</th>
-        </tr>
-      </thead>
-      <tbody id="external-routes-body">
-        <tr>
-          <td colspan="5">Loading routes...</td>
-        </tr>
-      </tbody>
-    </table>
-
     <h2>Internal Interface Routing Table</h2>
     <table border="1">
       <thead>
@@ -540,7 +534,6 @@ def config(request):
           <th>IP</th>
           <th>Subnet</th>
           <th>Next Hop</th>
-          <th>Num Hops</th>
         </tr>
       </thead>
       <tbody id="internal-routes-body">
@@ -550,14 +543,30 @@ def config(request):
       </tbody>
     </table>
 
+    <h2>External Interface Routing Table</h2>
+    <table border="1">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>IP</th>
+          <th>Subnet</th>
+          <th>Next Hop</th>
+        </tr>
+      </thead>
+      <tbody id="external-routes-body">
+        <tr>
+          <td colspan="5">Loading routes...</td>
+        </tr>
+      </tbody>
+    </table>
+
 
     <h3>Add New Route</h3>
     <p>
-      Interface: <input type="radio" name="new-interface" id="new-interface-internal">Internal<input type="radio" name="new-interface" id="new-interface-external">External<br>
+      Interface: <input type="radio" name="new-interface" id="new-interface-external">External<input type="radio" name="new-interface" id="new-interface-internal">Internal<br>
       IP: <input type="text" id="new-ip" placeholder="e.g. 10.0.0.0"><br>
       Subnet: <input type="number" id="new-subnet" placeholder="e.g. 24"><br>
       Next hop: <input type="text" id="new-next-hop" placeholder="e.g. 10.0.0.0"><br>
-      Num hops: <input type="number" id="new-num-hops" placeholder="e.g. 64"><br>
       <button id="add-route-btn">Add Route</button>
     </p>
 
@@ -593,10 +602,6 @@ def config(request):
                   cellNextHop.textContent = route.next_hop;
                   row.appendChild(cellNextHop);
 
-                  let cellNumHops = document.createElement('td');
-                  cellNumHops.textContent = route.num_hops;
-                  row.appendChild(cellNumHops);
-
                   let cellActions = document.createElement('td');
                   let delBtn = document.createElement('button');
                   delBtn.textContent = "Delete";
@@ -608,7 +613,6 @@ def config(request):
                       })
                       .then(function(result) {
                         alert("Route " + route.id + " deleted.");
-                        loadRoutes("internal");
                         loadRoutes("external");
                       })
                       .catch(function(error) {
@@ -633,13 +637,13 @@ def config(request):
         loadRoutes("external");
 
         document.getElementById('add-route-btn').addEventListener('click', function() {
-          var interfaceInternal = document.getElementById('new-interface-internal').checked;
           var interfaceExternal = document.getElementById('new-interface-external').checked;
+          var interfaceInternal = document.getElementById('new-interface-internal').checked;
           var interface;
           if (interfaceInternal) {
-            interface = 1;
-          } else if (interfaceExternal) {
             interface = 0;
+          } else if (interfaceExternal) {
+            interface = 1;
           } else {
             alert("Invalid interface supplied.");
             return;
@@ -647,11 +651,10 @@ def config(request):
           var ip = document.getElementById('new-ip').value;
           var subnet = Number(document.getElementById('new-subnet').value);
           var next_hop = document.getElementById('new-next-hop').value;
-          var num_hops = Number(document.getElementById('new-num-hops').value);
           fetch(`/api/routes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ interface: interface, ip: ip, subnet: subnet, next_hop: next_hop, num_hops: num_hops })
+            body: JSON.stringify({ interface: interface, ip: ip, subnet: subnet, next_hop: next_hop})
           })
           .then(function(response) {
             if (!response.ok) throw new Error('Add route failed');
