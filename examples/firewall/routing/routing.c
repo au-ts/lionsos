@@ -23,9 +23,9 @@
 #include <lions/firewall/icmp_queue.h>
 #include <string.h>
 
-__attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
-
-__attribute__((__section__(".fw_router_config"))) fw_router_config_t router_config;
+#define SECTION(sect) __attribute__((__section__(sect)))
+SECTION(".serial_client_config") serial_client_config_t serial_config;
+SECTION(".fw_router_config") fw_router_config_t router_config;
 
 /* Port that the webserver is on. */
 #define WEBSERVER_PROTOCOL 0x06
@@ -34,23 +34,29 @@ __attribute__((__section__(".fw_router_config"))) fw_router_config_t router_conf
 serial_queue_handle_t serial_tx_queue_handle;
 
 /* DMA buffer data structures */
-fw_queue_handle_t fw_filters[FW_MAX_FILTERS]; /* Filter queues to receive packets */
+fw_queue_handle_t fw_filters[FW_MAX_FILTERS]; /* Filter queues to
+                                               * receive packets */
 fw_queue_handle_t rx_free; /* Queue to return free rx buffers */
 fw_queue_handle_t tx_active; /* Queue to transmit packets out the network */
 fw_queue_handle_t webserver; /* Queue to route to webserver */
 uintptr_t data_vaddr; /* Virtual address or rx buffer data region */
-icmp_queue_handle_t icmp_queue; /* Queue to transmit ICMP requests to the ICMP module. */
+icmp_queue_handle_t icmp_queue; /* Queue to transmit ICMP requests to
+                                 * the ICMP module. */
 
 /* Arp request/entry data structures */
-fw_arp_queue_handle_t *arp_queue; /* This queue holds ARP requests/responses for the arp requester */
+fw_arp_queue_handle_t *arp_queue; /* This queue holds ARP
+                                   * requests/responses for the arp
+                                   * requester */
 fw_arp_table_t arp_table; /* ARP table holding all known ARP entries */
-pkts_waiting_t pkt_waiting_queue; /* Queue holding packets awaiting arp responses */
+pkts_waiting_t pkt_waiting_queue; /* Queue holding packets awaiting
+                                   * arp responses */
 
 /* Routing data structures */
 fw_routing_table_t routing_table; /* Table holding next hop data for subnets */
 
 /* Booleans to keep track of which components need to be notified */
-static bool tx_net; /* Packet has been transmitted to the network tx virtualiser */
+static bool tx_net; /* Packet has been transmitted to the network tx
+                     * virtualiser */
 static bool tx_webserver; /* Packet has been transmitted to the webserver */
 static bool returned; /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp; /* Arp request has been enqueued */
@@ -58,19 +64,23 @@ static bool notify_icmp; /* Request has been enqueued to ICMP module */
 
 static void process_arp_waiting(void)
 {
+
     while (!fw_arp_queue_empty_response(arp_queue)) {
-        fw_arp_request_t response;
+        fw_arp_request_t response; 
+        pkt_waiting_node_t *req_pkt;
+        fw_routing_err_t routing_err;
         int err = fw_arp_dequeue_response(arp_queue, &response);
         assert(!err);
 
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sRouter dequeuing response for ip %s and MAC[0] = %x, MAC[5] = %x\n",
                 fw_frmt_str[router_config.webserver.interface],
-                ipaddr_to_string(response.ip, ip_addr_buf0), response.mac_addr[0], response.mac_addr[5]);
+                ipaddr_to_string(response.ip, ip_addr_buf0),
+                        response.mac_addr[0], response.mac_addr[5]);
         }
 
         /* Check that we actually have a packet waiting. */
-        pkt_waiting_node_t *req_pkt = pkt_waiting_find_node(&pkt_waiting_queue, response.ip);
+        req_pkt = pkt_waiting_find_node(&pkt_waiting_queue, response.ip);
         if (!req_pkt) {
             continue;
         }
@@ -80,17 +90,25 @@ static void process_arp_waiting(void)
             /* Invalid response, drop packet associated with the IP address */
             pkt_waiting_node_t *pkt_node = req_pkt;
             for (uint16_t i = 0; i < req_pkt->num_children; i++) {
+                ipv4_packet_t *eth_hdr;
                 icmp_req_t req = {0};
                 assert(&icmp_queue != NULL);
                 req.ip = pkt_node->ip;
-                ipv4_packet_t *eth_hdr = (ipv4_packet_t *)(data_vaddr + pkt_node->buffer.io_or_offset);
-                // Copy the source of the failed packet as the dest of the ICMP response.
+                eth_hdr = (ipv4_packet_t *)(data_vaddr +
+                                            pkt_node->buffer.io_or_offset);
+                /*
+                 * Copy the source of the failed packet as the dest of
+                 * the ICMP response.
+                 */
                 memcpy(req.mac, eth_hdr->ethsrc_addr, ETH_HWADDR_LEN);
                 req.type = ICMP_DEST_UNREACHABLE;
                 req.code = ICMP_DEST_HOST_UNREACHABLE;
                 memcpy(&req.old_hdr, eth_hdr, sizeof(ipv4_packet_t));
                 if (pkt_node->buffer.len >= (sizeof(ipv4_packet_t) + 8)) {
-                    memcpy(&req.old_data, (void *)(pkt_node->buffer.io_or_offset + data_vaddr + sizeof(ipv4_packet_t)), 8);
+                    memcpy(&req.old_data,
+                           (void *)(pkt_node->buffer.io_or_offset
+                                    + data_vaddr + sizeof(ipv4_packet_t)),
+                           8);
                 }
                 err = icmp_enqueue(&icmp_queue, req);
                 if (err) {
@@ -101,23 +119,23 @@ static void process_arp_waiting(void)
                 assert(!err);
                 pkt_node = pkts_waiting_next_child(&pkt_waiting_queue, pkt_node);
             }
-
-            /* Free the packet waiting nodes */
-            fw_routing_err_t routing_err = pkts_waiting_free_parent(&pkt_waiting_queue, req_pkt);
-            assert(routing_err == ROUTING_ERR_OKAY);
         } else {
             /* Substitute the MAC address and send packets out of the NIC */
             pkt_waiting_node_t *pkt_node = req_pkt;
             for (uint16_t i = 0; i < req_pkt->num_children + 1; i++) {
-                ipv4_packet_t *tx_pkt = (ipv4_packet_t *)(data_vaddr + pkt_node->buffer.io_or_offset);
+                ipv4_packet_t *tx_pkt;
+                tx_pkt = (ipv4_packet_t *)(data_vaddr +
+                                           pkt_node->buffer.io_or_offset);
                 memcpy(tx_pkt->ethdst_addr, response.mac_addr, ETH_HWADDR_LEN);
-                memcpy(tx_pkt->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
+                memcpy(tx_pkt->ethsrc_addr, router_config.mac_addr,
+                       ETH_HWADDR_LEN);
                 tx_pkt->check = 0;
 
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sRouter sending packet for ip %s (next hop %s) with buffer number %lu\n",
                         fw_frmt_str[router_config.webserver.interface],
-                        ipaddr_to_string(tx_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(response.ip, ip_addr_buf1),
+                        ipaddr_to_string(tx_pkt->dst_ip, ip_addr_buf0),
+                                ipaddr_to_string(response.ip, ip_addr_buf1),
                         pkt_node->buffer.io_or_offset/NET_BUFFER_SIZE);
                 }
 
@@ -126,10 +144,10 @@ static void process_arp_waiting(void)
                 tx_net = true;
                 pkt_node = pkts_waiting_next_child(&pkt_waiting_queue, pkt_node);
             }
-            /* Free the packet waiting nodes */
-            fw_routing_err_t routing_err = pkts_waiting_free_parent(&pkt_waiting_queue, req_pkt);
-            assert(routing_err == ROUTING_ERR_OKAY);
         }
+        /* Free the packet waiting nodes */
+        routing_err = pkts_waiting_free_parent(&pkt_waiting_queue, req_pkt);
+        assert(routing_err == ROUTING_ERR_OKAY);
     }
 }
 
@@ -138,30 +156,38 @@ static void route()
     for (int filter = 0; filter < router_config.num_filters; filter++) {
         while (!fw_queue_empty(&fw_filters[filter])) {
             fw_buff_desc_t buffer;
+            uint32_t next_hop;
+            fw_routing_interfaces_t interface;
+            fw_routing_err_t fw_err;
             int err = fw_dequeue(&fw_filters[filter], &buffer);
             assert(!err);
 
             uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
             ipv4_packet_t *ip_pkt = (ipv4_packet_t *)(pkt_vaddr);
 
-            /* Decrement the TTL field. IF it reaches 0 protocol is that we drop
-            * the packet in this router.
-            *
-            * NOTE: We drop non-IPv4 packets. This case should be handled by the protocol virtualiser.
-            */
+            /*
+             * Decrement the TTL field. If it reaches 0 protocol is
+             * that we drop the packet in this router.
+             *
+             * NOTE: We drop non-IPv4 packets. This case should be
+             * handled by the protocol virtualiser.
+             */
             if (ip_pkt->ttl > 1 && ip_pkt->type == HTONS(ETH_TYPE_IP)) {
                 ip_pkt->ttl -= 1;
 
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sRouter received packet for ip %s with buffer number %lu\n",
                         fw_frmt_str[router_config.webserver.interface],
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), buffer.io_or_offset/NET_BUFFER_SIZE);
+                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0),
+                                buffer.io_or_offset/NET_BUFFER_SIZE);
                 }
 
                 /* Find the next hop address. */
-                uint32_t next_hop;
-                fw_routing_interfaces_t interface;
-                fw_routing_err_t fw_err = fw_routing_find_route(&routing_table, ip_pkt->dst_ip, &next_hop, &interface, 0);
+                fw_err = fw_routing_find_route(&routing_table,
+                                               ip_pkt->dst_ip,
+                                               &next_hop,
+                                               &interface,
+                                               0);
                 assert(fw_err == ROUTING_ERR_OKAY);
 
                 if (FW_DEBUG_OUTPUT && interface != ROUTING_OUT_NONE) {
@@ -172,7 +198,8 @@ static void route()
                 }
 
                 /* No route, drop packet  */
-                if (interface == ROUTING_OUT_NONE || (router_config.interface == FW_EXTERNAL_INTERFACE_ID &&
+                if (interface == ROUTING_OUT_NONE ||
+                    (router_config.interface == FW_EXTERNAL_INTERFACE_ID &&
                     interface == ROUTING_OUT_INTERNAL)) {
 
                     if (FW_DEBUG_OUTPUT) {
@@ -185,13 +212,16 @@ static void route()
                     assert(!err);
                     returned = true;
                     continue;
-                    
-                } else if (router_config.interface == FW_INTERNAL_INTERFACE_ID &&
-                    interface == ROUTING_OUT_INTERNAL) {
-                    tcphdr_t *tcp_pkt = (tcphdr_t *)(pkt_vaddr + transport_layer_offset(ip_pkt));
+                } else if (router_config.interface == FW_INTERNAL_INTERFACE_ID
+                           &&
+                           interface == ROUTING_OUT_INTERNAL) {
+                    tcphdr_t *tcp_pkt;
+                    tcp_pkt = (tcphdr_t *)(pkt_vaddr +
+                                           transport_layer_offset(ip_pkt));
 
                     /* Webserver only accepts TCP traffic on webserver port */
-                    if (ip_pkt->protocol != WEBSERVER_PROTOCOL || tcp_pkt->dst_port != HTONS(WEBSERVER_PORT)) {
+                    if (ip_pkt->protocol != WEBSERVER_PROTOCOL
+                        || tcp_pkt->dst_port != HTONS(WEBSERVER_PORT)) {
                         err = fw_enqueue(&rx_free, buffer);
                         assert(!err);
                         returned = true;
@@ -209,21 +239,30 @@ static void route()
                     }
 
                 } else {
-                    fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
-                    if (arp == NULL || arp->state == ARP_STATE_PENDING || arp->state == ARP_STATE_UNREACHABLE) {
-                        if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) || pkt_waiting_full(&pkt_waiting_queue)) {
+                    fw_arp_entry_t *arp;
+                    arp = fw_arp_table_find_entry(&arp_table, next_hop);
+                    if (arp == NULL ||
+                        arp->state == ARP_STATE_PENDING ||
+                        arp->state == ARP_STATE_UNREACHABLE) {
+                        if ((arp != NULL &&
+                             arp->state == ARP_STATE_UNREACHABLE) ||
+                            pkt_waiting_full(&pkt_waiting_queue)) {
                             sddf_dprintf("%sROUTING LOG: Waiting packet queue full or destination unreachable, dropping packet!\n",
                                 fw_frmt_str[router_config.webserver.interface]);
                             // Enqueuing request to the ICMP module to send a destintion unreachable packet back to the source
                             icmp_req_t req = {0};
                             req.ip = ip_pkt->dst_ip;
-                            // Copy the source of the failed packet as the dest of the ICMP response.
+                            // Copy the source of the failed packet as
+                            // the dest of the ICMP response.
                             memcpy(req.mac, ip_pkt->ethsrc_addr, ETH_HWADDR_LEN);
                             req.type = ICMP_DEST_UNREACHABLE;
                             req.code = ICMP_DEST_HOST_UNREACHABLE;
                             memcpy(&req.old_hdr, ip_pkt, sizeof(ipv4_packet_t));
                             if (buffer.len >= (sizeof(ipv4_packet_t) + 8)) {
-                                sddf_memcpy(&req.old_data, (void *)(buffer.io_or_offset + data_vaddr + sizeof(ipv4_packet_t)), 8);
+                                sddf_memcpy(&req.old_data,
+                                            (void *)(buffer.io_or_offset +
+                                                     data_vaddr +
+                                                     sizeof(ipv4_packet_t)), 8);
                             }
                             err = icmp_enqueue(&icmp_queue, req);
                             if (err) {
@@ -234,18 +273,30 @@ static void route()
                             assert(!err);
                             returned = true;
                         } else {
-                            /* In this case, the IP address is not in the ARP Tables.
-                            *  We add an entry to the ARP request queue and await a
-                            *  response. If we get a timeout, we will then drop the
-                            *  packets associated with that IP address in the queue.
-                            */
-                            pkt_waiting_node_t *parent = pkt_waiting_find_node(&pkt_waiting_queue, next_hop);
+                            /*
+                             * In this case, the IP address is not in
+                             * the ARP Tables.  We add an entry to the
+                             * ARP request queue and await a
+                             * response. If we get a timeout, we will
+                             * then drop the packets associated with
+                             * that IP address in the queue.
+                             */
+                            pkt_waiting_node_t *parent;
+                            parent = pkt_waiting_find_node(&pkt_waiting_queue,
+                                                           next_hop);
                             if (parent) {
                                 /* ARP request already enqueued, add node as child. */
-                                fw_routing_err_t routing_err = pkt_waiting_push_child(&pkt_waiting_queue, parent, next_hop, buffer);
-                                assert(routing_err == ROUTING_ERR_OKAY);
+                                fw_err = pkt_waiting_push_child(
+                                    &pkt_waiting_queue,
+                                    parent,
+                                    next_hop,
+                                    buffer);
+                                assert(fw_err == ROUTING_ERR_OKAY);
                             } else if (fw_arp_queue_full_request(arp_queue)) {
-                                /* No existing ARP request and queue is full, drop packet. */
+                                /*
+                                 * No existing ARP request and queue
+                                 * is full, drop packet.
+                                 */
                                 sddf_dprintf("%sROUTING LOG: ARP request queue full, dropping packet!\n",
                                     fw_frmt_str[router_config.webserver.interface]);
                                 err = fw_enqueue(&rx_free, buffer);
@@ -253,25 +304,37 @@ static void route()
                                 returned = true;
                             } else {
                                 /* Generate ARP request and enqueue packet. */
-                                fw_arp_request_t request = {next_hop, {0}, ARP_STATE_INVALID};
+                                fw_arp_request_t request = {
+                                    next_hop,
+                                    {0},
+                                    ARP_STATE_INVALID
+                                };
                                 err = fw_arp_enqueue_request(arp_queue, request);
                                 assert(!err);
-                                fw_routing_err_t routing_err = pkt_waiting_push(&pkt_waiting_queue, next_hop, buffer);
-                                assert(routing_err == ROUTING_ERR_OKAY);
+                                fw_err = pkt_waiting_push(&pkt_waiting_queue,
+                                                          next_hop,
+                                                          buffer);
+                                assert(fw_err == ROUTING_ERR_OKAY);
                                 notify_arp = true;
                             }
                         }
                     } else {
-                        /* Match found for MAC address, replace the destination in eth header */
-                        memcpy(&ip_pkt->ethdst_addr, &arp->mac_addr, ETH_HWADDR_LEN);
-                        memcpy(&ip_pkt->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
+                        /*
+                         * Match found for MAC address, replace the
+                         * destination in eth header
+                         */
+                        memcpy(&ip_pkt->ethdst_addr, &arp->mac_addr,
+                               ETH_HWADDR_LEN);
+                        memcpy(&ip_pkt->ethsrc_addr, router_config.mac_addr,
+                               ETH_HWADDR_LEN);
                         ip_pkt->check = 0;
 
                         /* Transmit packet out the NIC */
                         if (FW_DEBUG_OUTPUT) {
                             sddf_printf("%sRouter sending packet for ip %s (next hop %s) with buffer number %lu\n",
                                 fw_frmt_str[router_config.webserver.interface],
-                                ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1),
+                                ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0),
+                                        ipaddr_to_string(next_hop, ip_addr_buf1),
                                 buffer.io_or_offset/NET_BUFFER_SIZE);
                         }
 
@@ -287,8 +350,10 @@ static void route()
 
 void init(void)
 {
-    serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size,
-        serial_config.tx.data.vaddr);
+    serial_queue_init(&serial_tx_queue_handle,
+                      serial_config.tx.queue.vaddr,
+                      serial_config.tx.data.size,
+                      serial_config.tx.data.vaddr);
     serial_putchar_init(serial_config.tx.id, &serial_tx_queue_handle);
 
     /* Set up firewall filter queues */
@@ -312,11 +377,15 @@ void init(void)
     fw_arp_handle_init(arp_queue, router_config.arp_queue.capacity);
     fw_arp_table_init(&arp_table, (fw_arp_entry_t *)router_config.arp_cache.vaddr, router_config.arp_cache_capacity);
 
-    icmp_queue_init(&icmp_queue, router_config.icmp_module.queue.vaddr, router_config.icmp_module.capacity);
+    icmp_queue_init(&icmp_queue, router_config.icmp_module.queue.vaddr,
+                    router_config.icmp_module.capacity);
 
     /* Initialise routing table */
-    fw_routing_table_init(&routing_table, router_config.webserver.routing_table.vaddr,
-        router_config.webserver.routing_table_capacity, router_config.out_ip, router_config.out_subnet);
+    fw_routing_table_init(&routing_table,
+                          router_config.webserver.routing_table.vaddr,
+                          router_config.webserver.routing_table_capacity,
+                          router_config.out_ip,
+                          router_config.out_subnet);
 
     /* Set up router --> webserver queue. */
     if (router_config.interface == FW_INTERNAL_INTERFACE_ID) {
@@ -324,12 +393,18 @@ void init(void)
                             router_config.rx_active.capacity);
         
         /* Add an entry for the webserver */
-        fw_routing_table_add_route(&routing_table, ROUTING_OUT_INTERNAL, router_config.ip, 32, router_config.ip);
+        fw_routing_table_add_route(&routing_table,
+                                   ROUTING_OUT_INTERNAL,
+                                   router_config.ip,
+                                   32,
+                                   router_config.ip);
     }
 
     assert(router_config.packet_queue.vaddr != 0);
     /* Initialise the packet waiting queue from mapped in memory */
-    pkt_waiting_init(&pkt_waiting_queue, (icmp_queue_t *) router_config.packet_queue.vaddr, router_config.rx_free.capacity);
+    pkt_waiting_init(&pkt_waiting_queue,
+                     (icmp_queue_t *) router_config.packet_queue.vaddr,
+                     router_config.rx_free.capacity);
 }
 
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
@@ -341,13 +416,18 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         uint32_t next_hop = seL4_GetMR(ROUTER_ARG_NEXT_HOP);
         // @kwinter: Limiting this to just external routes out of the NIC
         // for now.
-        fw_routing_err_t err = fw_routing_table_add_route(&routing_table, ROUTING_OUT_EXTERNAL, ip, subnet, next_hop);
+        fw_routing_err_t err = fw_routing_table_add_route(&routing_table,
+                                                          ROUTING_OUT_EXTERNAL,
+                                                          ip,
+                                                          subnet,
+                                                          next_hop);
 
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sRouter add route. (ip %s, mask %u, next hop %s): %s\n",
                 fw_frmt_str[router_config.webserver.interface],
                 ipaddr_to_string(ip, ip_addr_buf0), subnet,
-                ipaddr_to_string(next_hop, ip_addr_buf1), fw_routing_err_str[err]);
+                ipaddr_to_string(next_hop, ip_addr_buf1),
+                        fw_routing_err_str[err]);
         }
         seL4_SetMR(ROUTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
@@ -378,7 +458,10 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 void notified(microkit_channel ch)
 {
     if (ch == router_config.arp_queue.ch) {
-        /* This is the channel between the ARP component and the routing component */
+        /*
+         * This is the channel between the ARP component and the
+         * routing component
+         */
         process_arp_waiting();
     } else {
         /* Router has been notified by a filter */
