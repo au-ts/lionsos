@@ -296,10 +296,8 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
     } else if (table->size >= table->capacity) {
         return ROUTING_ERR_FULL;
     }
-
-    for (uint16_t i = 0; i < table->capacity; ++i) {
+    for (uint16_t i = 0; i < table->size; i++) {
         fw_routing_entry_t *entry = table->entries + i;
-
 
         /* One rule applies to a larger subnet than the other */
         if (subnet != entry->subnet) {
@@ -319,7 +317,12 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
         }
     }
 
-    fw_routing_entry_t* empty_slot = &table->entries[table->size++]; 
+    if (table->size == table->capacity) {
+        return ROUTING_ERR_FULL;
+    }
+
+    fw_routing_entry_t *empty_slot = table->entries + table->size;
+    table->size++;
     empty_slot->interface = interface;
     empty_slot->ip = subnet_mask(subnet) & ip;
     empty_slot->subnet = subnet;
@@ -333,9 +336,9 @@ static fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table,
     if (route_id >= table->size) {
         return ROUTING_ERR_INVALID_ID;
     }
-    generic_array_shift(table->entries, sizeof(fw_routing_entry_t), table->size, route_id);
-    --table->size;
-
+    /* Shift everything left to delete this item*/
+    generic_array_shift(table->entries, sizeof(fw_routing_entry_t), table->capacity, route_id);
+    table->size--;
     return ROUTING_ERR_OKAY;
 }
 
@@ -347,6 +350,7 @@ static void fw_routing_table_init(fw_routing_table_t *table,
 {
     table->entries = (fw_routing_entry_t *)entries;
     table->capacity = capacity;
+    table->size = 0;
 
     /* Add a route for external network */
     fw_routing_err_t err = fw_routing_table_add_route(table,

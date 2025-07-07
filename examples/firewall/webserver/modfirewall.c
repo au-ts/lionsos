@@ -269,7 +269,7 @@ STATIC mp_obj_t route_get_nth(mp_obj_t interface_idx_in,
 
     uint16_t valid_entries = 0;
     for (uint16_t i = 0;
-        i < webserver_state.interfaces[interface_idx].routing_table.size; i++) {
+        i < webserver_state.interfaces[interface_idx].routing_table.capacity; i++) {
         fw_routing_entry_t *entry =
             (fw_routing_entry_t
                 *)(webserver_state.interfaces[interface_idx].routing_table.entries + i);
