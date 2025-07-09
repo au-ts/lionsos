@@ -89,8 +89,7 @@ fw_os_err_t filter_err_to_os_err(fw_filter_err_t filter_err) {
 extern fw_webserver_config_t fw_config;
 
 typedef struct fw_webserver_interface_state {
-    fw_routing_table_t routing_table;
-    uint16_t num_routes;
+    fw_routing_table_t *routing_table;
   
     fw_filter_state_t filter_states[FW_MAX_FILTERS];
     uint16_t num_rules[FW_MAX_FILTERS];
@@ -110,10 +109,7 @@ void fw_webserver_init(void) {
     sddf_memcpy(webserver_state.mac_addr, fw_config.interfaces[fw_config.interface].mac_addr, ETH_HWADDR_LEN);
     
     for (uint8_t i = 0; i < FW_NUM_INTERFACES; i++) {
-        webserver_state.interfaces[i].routing_table.entries = fw_config.interfaces[i].router.routing_table.vaddr;
-        webserver_state.interfaces[i].routing_table.capacity = fw_config.interfaces[i].router.routing_table_capacity;
-        /* Hardcode pre-existing interface route. */
-        webserver_state.interfaces[i].num_routes = 1;
+        webserver_state.interfaces[i].routing_table = fw_config.interfaces[i].router.routing_table.vaddr;
 
         for (uint8_t j = 0; j < fw_config.interfaces[i].num_filters; j++) {
             fw_filter_state_init(&webserver_state.interfaces[i].filter_states[j],
@@ -122,9 +118,6 @@ void fw_webserver_init(void) {
                                     fw_config.interfaces[i].filters[j].default_action);
         }
     }
-
-  /* Currently harcode pre-existing internal route to webserver. */
-  webserver_state.interfaces[FW_INTERNAL_INTERFACE_ID].num_routes += 1;
 }
 
 /* Get MAC address for network interface */
@@ -197,7 +190,6 @@ STATIC mp_obj_t route_add(mp_uint_t n_args, const mp_obj_t *args) {
         return mp_obj_new_int_from_uint(os_err);
     }
 
-    webserver_state.interfaces[interface_idx].num_routes += 1;
     return mp_obj_new_int_from_uint(os_err);
 }
 
@@ -226,7 +218,6 @@ STATIC mp_obj_t route_delete(mp_obj_t interface_idx_in, mp_obj_t route_id_in) {
         return mp_obj_new_int_from_uint(os_err);
     }
 
-    webserver_state.interfaces[interface_idx].num_routes -= 1;
     return mp_obj_new_int_from_uint(route_id);
 }
 
@@ -242,7 +233,7 @@ STATIC mp_obj_t route_count(mp_obj_t interface_idx_in) {
         return mp_const_none;
     }
 
-    return mp_obj_new_int_from_uint(webserver_state.interfaces[interface_idx].num_routes);
+    return mp_obj_new_int_from_uint(webserver_state.interfaces[interface_idx].routing_table->size);
 }
 
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(route_count_obj, route_count);
@@ -259,8 +250,7 @@ STATIC mp_obj_t route_get_nth(mp_obj_t interface_idx_in,
     }
 
     uint16_t route_idx = mp_obj_get_int(route_idx_in);
-    if (route_idx >= webserver_state.interfaces[interface_idx].num_routes ||
-        route_idx >= webserver_state.interfaces[interface_idx].routing_table.capacity) {
+    if (route_idx >= webserver_state.interfaces[interface_idx].routing_table->size) {
         sddf_dprintf("WEBSERVER|LOG: %s\n",
                     fw_os_err_str[OS_ERR_INVALID_ROUTE_NUM]);
         mp_raise_OSError(OS_ERR_INVALID_ROUTE_NUM);
@@ -269,10 +259,13 @@ STATIC mp_obj_t route_get_nth(mp_obj_t interface_idx_in,
 
     uint16_t valid_entries = 0;
     for (uint16_t i = 0;
-        i < webserver_state.interfaces[interface_idx].routing_table.capacity; i++) {
+        i < webserver_state.interfaces[interface_idx].routing_table->size; i++) {
         fw_routing_entry_t *entry =
             (fw_routing_entry_t
-                *)(webserver_state.interfaces[interface_idx].routing_table.entries + i);
+                *)(webserver_state.interfaces[interface_idx].routing_table->entries + i);
+        if (entry->interface == ROUTING_OUT_NONE) {
+            continue;
+        }
 
         if (valid_entries == route_idx) {
             mp_obj_t tuple[4];

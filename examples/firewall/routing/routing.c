@@ -52,7 +52,7 @@ pkts_waiting_t pkt_waiting_queue; /* Queue holding packets awaiting
                                    * arp responses */
 
 /* Routing data structures */
-fw_routing_table_t routing_table; /* Table holding next hop data for subnets */
+fw_routing_table_t *routing_table; /* Table holding next hop data for subnets */
 
 /* Booleans to keep track of which components need to be notified */
 static bool tx_net; /* Packet has been transmitted to the network tx
@@ -183,7 +183,7 @@ static void route()
                 }
 
                 /* Find the next hop address. */
-                fw_err = fw_routing_find_route(&routing_table,
+                fw_err = fw_routing_find_route(routing_table,
                                                ip_pkt->dst_ip,
                                                &next_hop,
                                                &interface,
@@ -393,7 +393,7 @@ void init(void)
                             router_config.rx_active.capacity);
         
         /* Add an entry for the webserver */
-        fw_routing_table_add_route(&routing_table,
+        fw_routing_table_add_route(routing_table,
                                    ROUTING_OUT_INTERNAL,
                                    router_config.ip,
                                    32,
@@ -416,7 +416,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         uint32_t next_hop = seL4_GetMR(ROUTER_ARG_NEXT_HOP);
         // @kwinter: Limiting this to just external routes out of the NIC
         // for now.
-        fw_routing_err_t err = fw_routing_table_add_route(&routing_table,
+        fw_routing_err_t err = fw_routing_table_add_route(routing_table,
                                                           ROUTING_OUT_EXTERNAL,
                                                           ip,
                                                           subnet,
@@ -434,7 +434,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
     }
     case FW_DEL_ROUTE: {
         uint16_t route_id = seL4_GetMR(ROUTER_ARG_ROUTE_ID);
-        fw_routing_err_t err = fw_routing_table_remove_route(&routing_table, route_id);
+        fw_routing_err_t err = fw_routing_table_remove_route(routing_table, route_id);
 
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sRouter delete route %u: %s\n",

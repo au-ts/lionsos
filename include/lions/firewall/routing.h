@@ -61,9 +61,9 @@ typedef struct routing_entry {
 } fw_routing_entry_t;
 
 typedef struct routing_table {
-    fw_routing_entry_t *entries; /* subnet entries */
     uint16_t capacity; /* capacity of table */
     uint16_t size;
+    fw_routing_entry_t entries[]; /* subnet entries */
 } fw_routing_table_t;
 
 /* Node to track packets awaiting ARP requests */
@@ -342,18 +342,18 @@ static fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table,
     return ROUTING_ERR_OKAY;
 }
 
-static void fw_routing_table_init(fw_routing_table_t *table,
-                                  void *entries, 
+static void fw_routing_table_init(fw_routing_table_t **table,
+                                  void *table_vadr, 
                                   uint16_t capacity,
                                   uint32_t extern_ip,
                                   uint8_t extern_subnet)
 {
-    table->entries = (fw_routing_entry_t *)entries;
-    table->capacity = capacity;
-    table->size = 0;
+    *table = table_vadr;
+    (*table)->capacity = capacity;
+    (*table)->size = 0;
 
     /* Add a route for external network */
-    fw_routing_err_t err = fw_routing_table_add_route(table,
+    fw_routing_err_t err = fw_routing_table_add_route(*table,
                                            ROUTING_OUT_EXTERNAL,
                                                   extern_ip, 
                                               extern_subnet,
