@@ -247,7 +247,6 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
                                       uint8_t num_calls)
 {
     fw_routing_entry_t *match = NULL;
-
     for (uint16_t i = 0; i < table->size; ++i) {
         fw_routing_entry_t *entry = table->entries + i;
 
@@ -296,6 +295,7 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table,
     } else if (table->size >= table->capacity) {
         return ROUTING_ERR_FULL;
     }
+
     for (uint16_t i = 0; i < table->size; i++) {
         fw_routing_entry_t *entry = table->entries + i;
 
@@ -336,19 +336,20 @@ static fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table,
     if (route_id >= table->size) {
         return ROUTING_ERR_INVALID_ID;
     }
-    /* Shift everything left to delete this item*/
+
+    /* Shift everything left to delete this item */
     generic_array_shift(table->entries, sizeof(fw_routing_entry_t), table->capacity, route_id);
     table->size--;
     return ROUTING_ERR_OKAY;
 }
 
 static void fw_routing_table_init(fw_routing_table_t **table,
-                                  void *table_vadr, 
+                                  void *table_vaddr, 
                                   uint16_t capacity,
                                   uint32_t extern_ip,
                                   uint8_t extern_subnet)
 {
-    *table = table_vadr;
+    *table = table_vaddr;
     (*table)->capacity = capacity;
     (*table)->size = 0;
 
