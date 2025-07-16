@@ -506,34 +506,26 @@ STATIC mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in,
         return mp_const_none;
     }
 
-    if (rule_idx >= webserver_state.interfaces[interface_idx].num_rules[protocol_match] ||
+    if (rule_idx >= webserver_state.interfaces[interface_idx].filter_states[protocol_match].rules_container->size ||
         rule_idx >= fw_config.interfaces[interface_idx].filters[protocol_match].rules_capacity) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_RULE_NUM]);
         mp_raise_OSError(OS_ERR_INVALID_RULE_NUM);
         return mp_const_none;
     }
 
-    uint16_t valid_rules = 0;
-    for (uint16_t i = 0; i < webserver_state.interfaces[interface_idx].filter_states[protocol_match].rules_container->size; i++) {
-            fw_rule_t *rule = (fw_rule_t *)(webserver_state.interfaces[interface_idx].filter_states[protocol_match].rules_container->rules + i);
-
-            if (valid_rules == rule_idx) {
-                mp_obj_t tuple[10];
-                tuple[0] = mp_obj_new_int_from_uint(i);
-                tuple[1] = mp_obj_new_int_from_uint(rule->src_ip);
-                tuple[2] = mp_obj_new_int_from_uint(rule->src_port);
-                tuple[3] = mp_obj_new_int_from_uint(rule->src_port_any);
-                tuple[4] = mp_obj_new_int_from_uint(rule->dst_ip);
-                tuple[5] = mp_obj_new_int_from_uint(rule->dst_port);
-                tuple[6] = mp_obj_new_int_from_uint(rule->dst_port_any);
-                tuple[7] = mp_obj_new_int_from_uint(rule->src_subnet);
-                tuple[8] = mp_obj_new_int_from_uint(rule->dst_subnet);
-                tuple[9] = mp_obj_new_int_from_uint(rule->action);
-                return mp_obj_new_tuple(10, tuple);
-            }
-
-        valid_rules++;
-    }
+    fw_rule_t *rule = (fw_rule_t *)(webserver_state.interfaces[interface_idx].filter_states[protocol_match].rules_container->rules + rule_idx);
+    mp_obj_t tuple[10];
+    tuple[0] = mp_obj_new_int_from_uint(rule->rule_id);
+    tuple[1] = mp_obj_new_int_from_uint(rule->src_ip);
+    tuple[2] = mp_obj_new_int_from_uint(rule->src_port);
+    tuple[3] = mp_obj_new_int_from_uint(rule->src_port_any);
+    tuple[4] = mp_obj_new_int_from_uint(rule->dst_ip);
+    tuple[5] = mp_obj_new_int_from_uint(rule->dst_port);
+    tuple[6] = mp_obj_new_int_from_uint(rule->dst_port_any);
+    tuple[7] = mp_obj_new_int_from_uint(rule->src_subnet);
+    tuple[8] = mp_obj_new_int_from_uint(rule->dst_subnet);
+    tuple[9] = mp_obj_new_int_from_uint(rule->action);
+    return mp_obj_new_tuple(10, tuple);
 
     sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INTERNAL_ERROR]);
     mp_raise_OSError(OS_ERR_INTERNAL_ERROR);

@@ -172,7 +172,6 @@ static fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
                                           fw_action_t action,
                                           uint16_t *rule_id)
 {
-    // fw_rule_t *empty_slot = NULL;
     for (uint16_t i = 0; i < state->rules_container->size ; i++) {
         fw_rule_t *rule = (fw_rule_t *)(state->rules_container->rules + i);
 
@@ -231,7 +230,6 @@ static fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
     empty_slot->dst_port_any = dst_port_any;
     empty_slot->action = action;
     
-    // using a bitmap to calculate the rule_id
     empty_slot->rule_id = rules_reserve_id(state->rules_id_bitmap);
     state->rules_container->size++; 
     *rule_id = empty_slot->rule_id;
@@ -310,14 +308,14 @@ static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
         if (instance->src_ip != src_ip || instance->dst_ip != dst_ip) {
             continue;
         }
-
+        
         *rule_id = instance->rule_id;
         return FILTER_ACT_ESTABLISHED;
     }
 
     /* Check rules */
     fw_rule_t *match = NULL;
-    for (uint16_t i = 0; i < state->rules_container->capacity; i++) {
+    for (uint16_t i = 0; i < state->rules_container->size; i++) {
         fw_rule_t *rule = state->rules_container->rules + i;
 
         /* Check port numbers first */
@@ -421,7 +419,6 @@ static fw_filter_err_t fw_filter_remove_rule(fw_filter_state_t *state, uint16_t 
         assert(err == FILTER_ERR_OKAY);
     }
 
-    // DEASSERT THE RULE_ID in the bitmap
     rules_free_id(state->rules_id_bitmap, rule_id);
     generic_array_shift(state->rules_container->rules, 
         sizeof(fw_rule_t), state->rules_container->size, rule - state->rules_container->rules);
