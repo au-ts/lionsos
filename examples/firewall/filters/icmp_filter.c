@@ -46,7 +46,7 @@ void filter(void)
             icmphdr_t *icmp_hdr = (icmphdr_t *)pkt_vaddr;
 
             bool default_action = false;
-            uint8_t rule_id = 0;
+            uint16_t rule_id = 0;
             fw_action_t action = fw_filter_find_action(&filter_state, icmp_hdr->src_ip, ICMP_FILTER_DUMMY_PORT,
                                                                    icmp_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, &rule_id);
 
@@ -217,7 +217,7 @@ void init(void)
     
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr, filter_config.router.capacity);
 
-    fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.webserver.rules_capacity,
+    fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rules_id_bitmap.vaddr, filter_config.webserver.rules_capacity,
         filter_config.internal_instances.vaddr, filter_config.external_instances.vaddr, filter_config.instances_capacity,
         (fw_action_t)filter_config.webserver.default_action);
 }

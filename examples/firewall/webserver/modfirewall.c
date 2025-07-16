@@ -103,7 +103,6 @@ typedef struct fw_webserver_state {
 } fw_webserver_state_t;
 
 fw_webserver_state_t webserver_state;
-
 void fw_webserver_init(void) {
     webserver_state.ip = fw_config.interfaces[fw_config.interface].ip;
     sddf_memcpy(webserver_state.mac_addr, fw_config.interfaces[fw_config.interface].mac_addr, ETH_HWADDR_LEN);
@@ -112,10 +111,7 @@ void fw_webserver_init(void) {
         webserver_state.interfaces[i].routing_table = fw_config.interfaces[i].router.routing_table.vaddr;
 
         for (uint8_t j = 0; j < fw_config.interfaces[i].num_filters; j++) {
-            fw_filter_state_init(&webserver_state.interfaces[i].filter_states[j],
-                                    fw_config.interfaces[i].filters[j].rules.vaddr,
-                                    fw_config.interfaces[i].filters[j].rules_capacity, 0, 0, 0,
-                                    fw_config.interfaces[i].filters[j].default_action);
+            webserver_state.interfaces[i].filter_states[j].rules_container = fw_config.interfaces[i].filters[j].rules.vaddr;
         }
     }
 }
@@ -518,11 +514,8 @@ STATIC mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in,
     }
 
     uint16_t valid_rules = 0;
-    for (uint16_t i = 0; i < webserver_state.interfaces[interface_idx].filter_states[protocol_match].rules_capacity; i++) {
-            fw_rule_t *rule = (fw_rule_t *)(webserver_state.interfaces[interface_idx].filter_states[protocol_match].rules + i);
-            if (!rule->valid) {
-                continue;
-            }
+    for (uint16_t i = 0; i < webserver_state.interfaces[interface_idx].filter_states[protocol_match].rules_container->size; i++) {
+            fw_rule_t *rule = (fw_rule_t *)(webserver_state.interfaces[interface_idx].filter_states[protocol_match].rules_container->rules + i);
 
             if (valid_rules == rule_idx) {
                 mp_obj_t tuple[10];

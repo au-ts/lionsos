@@ -51,7 +51,11 @@ routing_table_capacity = 256
 routing_table_size = round_up_to_Page(4 + routing_table_capacity * 24)
 
 filter_rule_capacity = 256
-filter_rule_region_size = round_up_to_Page(filter_rule_capacity * 28)
+filter_rule_region_size = round_up_to_Page(4 + filter_rule_capacity * 28) 
+
+#define the parameters for the bitmap region
+filter_rule_bitmap_capacity = (filter_rule_capacity + 63) // 64
+filter_rule_bitmap_region_size = round_up_to_Page(2 + filter_rule_bitmap_capacity * 8)
 
 instances_capacity = 512
 instances_region_size = round_up_to_Page(instances_capacity * 20)
@@ -497,6 +501,11 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
             network["in_net"].add_client_with_copier(filter_pd, tx=False)
             network["configs"][in_virt].active_client_protocols.append(protocol)
 
+            # create bitmap
+            mr = MemoryRegion(sdf, "rules_id_bitmap" + "_" + filter_pd.name, filter_rule_bitmap_region_size);
+            sdf.add_mr(mr);
+            bitmap_region1 = fw_region(filter_pd, mr, "rw",filter_rule_bitmap_region_size);
+
             # Create rule region
             filter_rules = fw_shared_region(filter_pd, webserver, "rw", "r", "filter_rules", filter_rule_region_size)
 
@@ -531,7 +540,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
                 filter_router_conn[0],
                 filter_webserver_config,
                 None,
-                None
+                None,
+                bitmap_region1
             )
 
             network["configs"][router].filters.append((filter_router_conn[1]))
