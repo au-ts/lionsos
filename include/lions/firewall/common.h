@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 #include <sddf/util/util.h>
-#include <string.h>
 
 static inline uint32_t htonl(uint32_t n) {
     return n >> 24 | (n & 0xff) << 24 | (n & 0xff00) << 8 | ((n >> 8) & 0xff00);
