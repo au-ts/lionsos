@@ -48,7 +48,7 @@ arp_cache_region_size = round_up_to_Page(24 * arp_cache_capacity)
 arp_packet_queue_region_size = round_up_to_Page(dma_queue_capacity * 32)
 
 routing_table_capacity = 256
-routing_table_size = round_up_to_Page(routing_table_capacity * 24)
+routing_table_size = round_up_to_Page(4 + routing_table_capacity * 24)
 
 filter_rule_capacity = 256
 filter_rule_region_size = round_up_to_Page(filter_rule_capacity * 28)

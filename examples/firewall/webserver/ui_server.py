@@ -191,7 +191,8 @@ def getRoutes(request, interfaceStr):
     try:
         interface = interfaceStringToInt("router", interfaceStr)
         routes = []
-        for i in range(lions_firewall.route_count(interface)):
+        route_count = lions_firewall.route_count(interface)
+        for i in range(route_count):
             route = lions_firewall.route_get_nth(interface, i)
             routes.append({
                 "id": route[0],
