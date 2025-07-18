@@ -37,7 +37,7 @@ static const char *fw_routing_err_str[] = {
 typedef enum {
     ROUTING_OUT_NONE = 0, /* do not transmit */
     ROUTING_OUT_EXTERNAL, /* transmit out NIC */
-	ROUTING_OUT_INTERNAL /* transmit within the system */
+	ROUTING_OUT_SELF /* transmit within the system */
 } fw_routing_interfaces_t;
 
 /* PP call parameters for webserver to call routers */
@@ -266,8 +266,8 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
 
     if (match == NULL) {
         *interface = ROUTING_OUT_NONE;
-    } else if (match->interface == ROUTING_OUT_INTERNAL) {
-        *interface = ROUTING_OUT_INTERNAL;
+    } else if (match->interface == ROUTING_OUT_SELF) {
+        *interface = ROUTING_OUT_SELF;
     } else if (match->interface == ROUTING_OUT_EXTERNAL && match->next_hop == FW_ROUTING_NONEXTHOP) {
         *next_hop = ip;
         *interface = ROUTING_OUT_EXTERNAL;

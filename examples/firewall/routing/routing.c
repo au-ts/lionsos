@@ -200,7 +200,7 @@ static void route()
                 /* No route, drop packet  */
                 if (interface == ROUTING_OUT_NONE ||
                     (router_config.interface == FW_EXTERNAL_INTERFACE_ID &&
-                    interface == ROUTING_OUT_INTERNAL)) {
+                    interface == ROUTING_OUT_SELF)) {
 
                     if (FW_DEBUG_OUTPUT) {
                         sddf_printf("%sRouter found no route for ip %s, dropping packet\n",
@@ -214,7 +214,7 @@ static void route()
                     continue;
                 } else if (router_config.interface == FW_INTERNAL_INTERFACE_ID
                            &&
-                           interface == ROUTING_OUT_INTERNAL) {
+                           interface == ROUTING_OUT_SELF) {
                     tcphdr_t *tcp_pkt;
                     tcp_pkt = (tcphdr_t *)(pkt_vaddr +
                                            transport_layer_offset(ip_pkt));
@@ -394,7 +394,7 @@ void init(void)
         
         /* Add an entry for the webserver */
         fw_routing_table_add_route(routing_table,
-                                   ROUTING_OUT_INTERNAL,
+                                   ROUTING_OUT_SELF,
                                    router_config.ip,
                                    32,
                                    router_config.ip);
