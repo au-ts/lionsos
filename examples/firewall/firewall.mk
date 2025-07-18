@@ -174,7 +174,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder0.data arp_responder0.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester0.data arp_requester0.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing_external.data routing_external.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing0.data routing0.elf
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester0.data arp_requester0.elf
 
@@ -197,7 +197,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder1.data arp_responder1.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester1.data arp_requester1.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing_internal.data routing_internal.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing1.data routing1.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf

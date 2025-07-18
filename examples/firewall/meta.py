@@ -274,10 +274,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     networks[ext_net]["out_net"] = networks[int_net]["in_net"]
 
     # Create firewall pds
-    copy_elf("routing", "routing_internal")
-    networks[ext_net]["router"] = ProtectionDomain("routing_internal", "routing_internal.elf", priority=97, budget=20000)
-    copy_elf("routing", "routing_external")
-    networks[int_net]["router"] = ProtectionDomain("routing_external", "routing_external.elf", priority=94, budget=20000)
+    networks[ext_net]["router"] = ProtectionDomain("routing0", "routing0.elf", priority=97, budget=20000)
+    networks[int_net]["router"] = ProtectionDomain("routing1", "routing1.elf", priority=94, budget=20000)
 
     networks[ext_net]["arp_resp"] = ProtectionDomain("arp_responder0", "arp_responder0.elf", priority=95, budget=20000)
     networks[int_net]["arp_resp"] = ProtectionDomain("arp_responder1", "arp_responder1.elf", priority=93, budget=20000)
@@ -316,7 +314,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
         for maybe_pd in network.values():
             if type(maybe_pd) == ProtectionDomain:
                 # Drivers and routers do not need to be copied
-                if maybe_pd != network["driver"] and maybe_pd != network["router"]:
+                if maybe_pd != network["driver"]:
                     # remove x.elf suffix from elf
                     copy_elf(maybe_pd.elf[:-5], maybe_pd.elf[:-5], network["num"])
                 sdf.add_pd(maybe_pd)
