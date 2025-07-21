@@ -55,10 +55,10 @@ filter_rule_region_size = round_up_to_Page(4 + filter_rule_capacity * 28)
 
 #define the parameters for the bitmap region
 filter_rule_bitmap_capacity = (filter_rule_capacity + 63) // 64
-filter_rule_bitmap_region_size = round_up_to_Page(2 + filter_rule_bitmap_capacity * 8)
+filter_rule_bitmap_region_size = round_up_to_Page(4 + filter_rule_bitmap_capacity * 8)
 
 instances_capacity = 512
-instances_region_size = round_up_to_Page(instances_capacity * 20)
+instances_region_size = round_up_to_Page(8 + instances_capacity * 20)
 
 ext_net = 0
 int_net = 1
@@ -251,7 +251,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     # Create serial subsystem
     common_pds.append(ProtectionDomain("serial_driver", "serial_driver.elf", priority=100))
     common_pds.append(ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99))
-    serial_system = Sddf.Serial(sdf, serial_node, common_pds[-2], common_pds[-1])
+    # serial_system = Sddf.Serial(sdf, serial_node, common_pds[-2], common_pds[-1])
+    serial_system = Sddf.Serial(sdf, serial_node, common_pds[-2], common_pds[-1], enable_color = False)
 
     # Create network 0 pds
     networks[ext_net]["driver"] = ProtectionDomain("ethernet_driver_dwmac", "eth_driver_dwmac.elf", priority=101, budget=100, period=400)
