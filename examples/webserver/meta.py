@@ -51,7 +51,7 @@ BOARDS: List[Board] = [
         ethernet="soc@0/bus@30800000/ethernet@30be0000"
     ),
     Board(
-        name="x86_64_nehalem",
+        name="x86_64_generic",
         arch=SystemDescription.Arch.X86_64,
         paddr_top=0x7ffdf000,
         serial=None,
@@ -99,7 +99,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree | None):
     net_system = Sddf.Net(sdf, ethernet_node, ethernet_driver, net_virt_tx, net_virt_rx)
 
     if board.arch == SystemDescription.Arch.X86_64:
-        hw_net_rings = SystemDescription.MemoryRegion(sdf, "hw_net_rings", 65536, paddr=0x7a000000)
+        hw_net_rings = SystemDescription.MemoryRegion(sdf, "hw_net_rings", 65536, paddr=0x60000000)
         sdf.add_mr(hw_net_rings)
         hw_net_rings_map = SystemDescription.Map(hw_net_rings, 0x7000_0000, "rw")
         ethernet_driver.add_map(hw_net_rings_map)

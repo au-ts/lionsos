@@ -30,12 +30,12 @@ else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
 
 	CPU := cortex-a53
 	TARGET := aarch64-none-elf
-else ifeq (${MICROKIT_BOARD},x86_64_nehalem)
+else ifeq (${MICROKIT_BOARD},x86_64_generic)
 	TIMER_DRIVER_DIR := hpet
 	ETHERNET_DRIVER_DIR := virtio/pci
 	SERIAL_DRIVER_DIR := pc99
 
-	CPU := nehalem
+	CPU := generic
 	TARGET := x86_64-pc-elf
 else
 $(error Unsupported MICROKIT_BOARD given)
@@ -63,11 +63,11 @@ else ifeq ($(findstring x86_64,$(TARGET)),x86_64)
 	ARCH_QEMU_FLAGS = -machine q35,kernel-irqchip=split \
 						-cpu Nehalem,+fsgsbase,+pdpe1gb,+pcid,+invpcid,+xsave,+xsaves,+xsaveopt,+vmx,+vme \
 						-device intel-iommu \
-						-cdrom x86_grub.iso \
 						-netdev user,id=net0,hostfwd=tcp::5555-10.0.2.16:80 \
-						-device virtio-net-pci,netdev=net0
+						-device virtio-net-pci,netdev=net0 \
+						-kernel $(COPIED_32BIT_X86_KERNEL) \
+						-initrd $(IMAGE_FILE)
 	
-	ARCH_MICROKIT_FLAG := --x86-machine /opt/billn/x86/microkit_mat_rebased/example/x86_64_nehalem/hello/machine.json
 else
   $(error unknown target)
 endif
@@ -110,7 +110,6 @@ IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 
 SYSTEM_FILE := webserver.system
 
-# @billn: why does compiler optimisation break irq??
 CFLAGS := \
 	-mtune=$(CPU) \
 	-ffreestanding \
@@ -130,8 +129,10 @@ CFLAGS := \
 LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 
-IMAGE_FILE = webserver.img
-REPORT_FILE = report.txt
+IMAGE_FILE = capdl_initialiser_with_spec.elf
+REPORT_FILE = report.json
+
+COPIED_32BIT_X86_KERNEL = sel4.elf
 
 all: $(IMAGE_FILE)
 ${IMAGES}: libsddf_util_debug.a
@@ -212,14 +213,11 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_micropython.data micropython.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
-	$(MICROKIT_TOOL) $(ARCH_MICROKIT_FLAG) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu: ${IMAGE_FILE}
 ifeq ($(findstring x86_64,$(TARGET)),x86_64)
-	mkdir -p grub_iso_staging/boot/grub
-	cp $(IMAGE_FILE) grub_iso_staging/loader.img
-	cp $(WEBSERVER_SRC_DIR)/x86_grub.cfg grub_iso_staging/boot/grub/grub.cfg
-	grub-mkrescue -d /usr/lib/grub/i386-pc -o x86_grub.iso grub_iso_staging
+	$(OBJCOPY) -O elf32-i386 $(BOARD_DIR)/elf/sel4.elf $(COPIED_32BIT_X86_KERNEL)
 endif
 
 	$(QEMU) -serial mon:stdio \
