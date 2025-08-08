@@ -21,15 +21,8 @@ CFLAGS_nfs := \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4 \
 
-include $(LWIP)/Filelists.mk
-$(LWIP)/Filelists.mk:
-	cd $(LIONSOS); git submodule update --init $(SDDF)
-
-NFS_NETIFFILES := $(LWIPDIR)/netif/ethernet.c
-NFS_LWIPFILES := $(COREFILES) $(CORE4FILES) $(NFS_NETIFFILES)
-NFS_LWIP_OBJ := $(addprefix nfs/lwip/, $(NFS_LWIPFILES:.c=.o))
-
-NFS_DIRS := nfs $(addprefix nfs/lwip/, api core core/ipv4 netif)
+LIB_SDDF_LWIP_CFLAGS_nfs := ${CFLAGS_nfs}
+include $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.mk
 
 NFS_FILES := nfs.c op.c posix.c tcp.c
 NFS_OBJ := $(addprefix nfs/, $(NFS_FILES:.c=.o)) $(NFS_LWIP_OBJ)
@@ -52,20 +45,17 @@ include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
 
 nfs.elf: LDFLAGS += -L$(LIBGCC)
 nfs.elf: LIBS += -lgcc
-nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_fs_server.a
+nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_fs_server.a lib_sddf_lwip_nfs.a
 	$(LD) $(LDFLAGS) -o $@ $(LIBS) $^
 
-$(NFS_DIRS):
+nfs:
 	mkdir -p $@
 
 $(NFS_OBJ): $(CHECK_NFS_FLAGS_MD5)
 $(NFS_OBJ): $(MUSL)/lib/libc.a
 $(NFS_OBJ): $(LIBNFS)/include
-$(NFS_OBJ): |$(NFS_DIRS)
+$(NFS_OBJ): nfs
 $(NFS_OBJ): CFLAGS += $(CFLAGS_nfs)
-
-nfs/lwip/%.o: $(LWIP)/%.c
-	$(CC) -c $(CFLAGS) $< -o $@
 
 nfs/%.o: $(NFS_DIR)/%.c
 	$(CC) -c $(CFLAGS) $< -o $@

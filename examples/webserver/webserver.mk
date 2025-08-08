@@ -87,7 +87,6 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	touch $@
 
 MICROPYTHON_LIBMATH := $(LIBMATH)
-MICROPYTHON_CONFIG_INCLUDE := $(CONFIG_INCLUDE)
 MICROPYTHON_EXEC_MODULE := webserver.py
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
 include $(LIONSOS)/components/micropython/micropython.mk
@@ -116,6 +115,7 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 		  ${SDDF}/drivers/network/${ETHERNET_DRIVER_DIR}/eth_driver.mk \
 		  ${SDDF}/drivers/serial/${SERIAL_DRIVER_DIR}/serial_driver.mk \
 		  ${SDDF}/network/components/network_components.mk \
+		  ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
 		  ${SDDF}/serial/components/serial_components.mk
 
 include ${SDDF_MAKEFILES}
@@ -145,6 +145,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .fs_server_config=fs_server_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .fs_client_config=fs_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .nfs_config=nfs_config.data nfs.elf
+	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_nfs.data nfs.elf
+	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_micropython.data micropython.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)

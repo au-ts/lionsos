@@ -9,6 +9,7 @@
 
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
+#include <sddf/network/lib_sddf_lwip.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/util.h>
 #include <sddf/network/constants.h>
@@ -32,26 +33,6 @@
 #include "tcp.h"
 #include "config.h"
 
-#define LINK_SPEED 1000000000 // Gigabit
-#define ETHER_MTU 1500
-#define NUM_PBUFS 512
-
-typedef struct state
-{
-    struct netif netif;
-    /* mac address for this client */
-    uint8_t mac[6];
-
-    /* Pointers to shared buffers */
-    net_queue_handle_t rx_queue;
-    net_queue_handle_t tx_queue;
-} state_t;
-
-typedef struct pbuf_custom_offset {
-    struct pbuf_custom custom;
-    uintptr_t offset;
-} pbuf_custom_offset_t;
-
 enum socket_state {
     socket_state_unallocated,
     socket_state_bound,
@@ -71,222 +52,39 @@ typedef struct {
     ssize_t rx_len;
 } socket_t;
 
-state_t state;
-
 extern timer_client_config_t timer_config;
 extern net_client_config_t net_config;
+extern lib_sddf_lwip_config_t lib_sddf_lwip_config;
 extern nfs_config_t nfs_config;
 
-LWIP_MEMPOOL_DECLARE(
-    RX_POOL,
-    NUM_PBUFS * 2,
-    sizeof(pbuf_custom_offset_t),
-    "Zero-copy RX pool");
+net_queue_handle_t rx_handle;
+net_queue_handle_t tx_handle;
 
 // Should only need 1 at any one time, accounts for any reconnecting that might happen
 socket_t sockets[MAX_SOCKETS] = {0};
 
 static bool network_ready;
-static bool notify_tx;
-static bool notify_rx;
 
 int tcp_ready(void) {
     return network_ready;
 }
 
-void tcp_maybe_notify(void) {
-    if (notify_rx && net_require_signal_free(&state.rx_queue)) {
-        net_cancel_signal_free(&state.rx_queue);
-        notify_rx = false;
-        if (!microkit_have_signal) {
-            microkit_deferred_notify(net_config.rx.id);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.rx.id) {
-            microkit_notify(net_config.rx.id);
-        }
-    }
+static void netif_status_callback(char *ip_addr) {
+    printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n",
+           microkit_name, __FILE__, __LINE__, __func__, microkit_name, ip_addr);
 
-    if (notify_tx && net_require_signal_active(&state.tx_queue)) {
-        net_cancel_signal_active(&state.tx_queue);
-        notify_tx = false;
-        if (!microkit_have_signal) {
-            microkit_deferred_notify(net_config.tx.id);
-        } else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.tx.id) {
-            microkit_notify(net_config.tx.id);
-        }
-    }
-}
-
-uint32_t sys_now(void) {
-    return sddf_timer_time_now(timer_config.driver_id) / NS_IN_MS;
-}
-
-static void netif_status_callback(struct netif *netif) {
-    if (dhcp_supplied_address(netif)) {
-        dlog("DHCP request finished, IP address for netif %s is: %s", netif->name, ip4addr_ntoa(netif_ip4_addr(netif)));
-
-        network_ready = true;
-    }
-}
-
-static err_t lwip_eth_send(struct netif *netif, struct pbuf *p) {
-    err_t ret = ERR_OK;
-
-    if (p->tot_len > NET_BUFFER_SIZE) {
-        return ERR_MEM;
-    }
-
-    net_buff_desc_t buffer;
-    int err = net_dequeue_free(&(state.tx_queue), &buffer);
-    if (err) {
-        return ERR_MEM;
-    }
-    
-    unsigned char *frame = (unsigned char *)(buffer.io_or_offset + net_config.tx_data.vaddr);
-    unsigned int copied = 0;
-    for (struct pbuf *curr = p; curr != NULL; curr = curr->next) {
-        memcpy(frame + copied, curr->payload, curr->len);
-        copied += curr->len;
-    }
-
-    buffer.len = copied;
-    err = net_enqueue_active(&state.tx_queue, buffer);
-    notify_tx = true;
-
-    return ret;
-}
-
-/**
- * Free a pbuf. This also returns the underlying buffer to
- * the appropriate place.
- *
- * @param buf pbuf to free.
- *
- */
-static void interface_free_buffer(struct pbuf *buf) {
-    SYS_ARCH_DECL_PROTECT(old_level);
-    pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)buf;
-    SYS_ARCH_PROTECT(old_level);
-    net_buff_desc_t buffer = {custom_pbuf_offset->offset, 0};
-    int err = net_enqueue_free(&(state.rx_queue), buffer);
-    assert(!err);
-    notify_rx = true;
-    LWIP_MEMPOOL_FREE(RX_POOL, custom_pbuf_offset);
-    SYS_ARCH_UNPROTECT(old_level);
-}
-
-/**
- * Initialise the network interface data structure.
- *
- * @param netif network interface data structuer.
- */
-static err_t ethernet_init(struct netif *netif)
-{
-    if (netif->state == NULL) return ERR_ARG;
-    state_t *data = netif->state;
-
-    netif->hwaddr[0] = data->mac[0];
-    netif->hwaddr[1] = data->mac[1];
-    netif->hwaddr[2] = data->mac[2];
-    netif->hwaddr[3] = data->mac[3];
-    netif->hwaddr[4] = data->mac[4];
-    netif->hwaddr[5] = data->mac[5];
-    netif->mtu = ETHER_MTU;
-    netif->hwaddr_len = ETHARP_HWADDR_LEN;
-    netif->output = etharp_output;
-    netif->linkoutput = lwip_eth_send;
-    NETIF_INIT_SNMP(netif, snmp_ifType_ethernet_csmacd, LINK_SPEED);
-    netif->flags = NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_LINK_UP | NETIF_FLAG_IGMP;
-    return ERR_OK;
-}
-
-void tcp_process_rx(void) {
-    bool reprocess = true;
-    while (reprocess) {
-        while (!net_queue_empty_active(&state.rx_queue)) {
-            net_buff_desc_t buffer;
-            net_dequeue_active(&state.rx_queue, &buffer);
-
-            pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
-            custom_pbuf_offset->offset = buffer.io_or_offset;
-            custom_pbuf_offset->custom.custom_free_function = interface_free_buffer;
-
-            struct pbuf *p = pbuf_alloced_custom(
-                PBUF_RAW,
-                buffer.len,
-                PBUF_REF,
-                &custom_pbuf_offset->custom,
-                (void *)(buffer.io_or_offset + net_config.rx_data.vaddr),
-                NET_BUFFER_SIZE
-            );
-
-            if (state.netif.input(p, &state.netif) != ERR_OK) {
-                dlog("netif.input() != ERR_OK");
-                pbuf_free(p);
-            }
-        }
-
-        net_request_signal_active(&state.rx_queue);
-        reprocess = false;
-
-        if (!net_queue_empty_active(&state.rx_queue)) {
-            net_cancel_signal_active(&state.rx_queue);
-            reprocess = true;
-        }
-    }
-}
-
-void tcp_update(void)
-{
-    sys_check_timeouts();
+    network_ready = true;
 }
 
 void tcp_init_0(void)
 {
-    net_queue_init(&state.rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
-                   net_config.rx.num_buffers);
-    net_queue_init(&state.tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
-                   net_config.tx.num_buffers);
-    net_buffers_init(&state.tx_queue, 0);
+    net_queue_init(&rx_handle, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr, net_config.rx.num_buffers);
+    net_queue_init(&tx_handle, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
+    net_buffers_init(&tx_handle, 0);
 
-    lwip_init();
-    LWIP_MEMPOOL_INIT(RX_POOL);
+    sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, rx_handle, tx_handle, printf, netif_status_callback, NULL);
 
-    sddf_memcpy(state.mac, net_config.mac_addr, 6);
-
-    /* Set some dummy IP configuration values to get lwIP bootstrapped  */
-    struct ip4_addr netmask, ipaddr, gw, multicast;
-    ipaddr_aton("0.0.0.0", &gw);
-    ipaddr_aton("0.0.0.0", &ipaddr);
-    ipaddr_aton("0.0.0.0", &multicast);
-    ipaddr_aton("255.255.255.0", &netmask);
-
-    state.netif.name[0] = 'e';
-    state.netif.name[1] = '0';
-
-    if (!netif_add(&(state.netif), &ipaddr, &netmask, &gw, &state,
-                   ethernet_init, ethernet_input)) {
-        dlog("Netif add returned NULL");
-    }
-    netif_set_default(&(state.netif));
-    netif_set_status_callback(&(state.netif), netif_status_callback);
-    netif_set_up(&(state.netif));
-
-    int err = dhcp_start(&(state.netif));
-    dlogp(err, "failed to start DHCP negotiation");
-
-    if (notify_rx && net_require_signal_free(&state.rx_queue)) {
-        net_cancel_signal_free(&state.rx_queue);
-        notify_rx = false;
-        if (!microkit_have_signal) microkit_deferred_notify(net_config.rx.id);
-        else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.rx.id) microkit_notify(net_config.rx.id);
-    }
-
-    if (notify_tx && net_require_signal_active(&state.tx_queue)) {
-        net_cancel_signal_active(&state.tx_queue);
-        notify_tx = false;
-        if (!microkit_have_signal) microkit_deferred_notify(net_config.tx.id);
-        else if (microkit_signal_cap != BASE_OUTPUT_NOTIFICATION_CAP + net_config.tx.id) microkit_notify(net_config.tx.id);
-    }
+    sddf_lwip_maybe_notify();
 }
 
 int socket_id(socket_t *socket) {
@@ -330,7 +128,7 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
                 socket->rx_len += to_copy;
                 copied += to_copy;
                 remaining -= to_copy;
-            }        
+            }
             pbuf_free(p);
         } else {
             socket->state = socket_state_closed_by_peer;
@@ -362,8 +160,6 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
 
 static err_t socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len)
 {
-    socket_t *socket = arg;
-    int socket_index = socket - sockets;
     return ERR_OK;
 }
 
@@ -374,7 +170,7 @@ err_t socket_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
     assert(socket->state == socket_state_connecting);
 
     socket->state = socket_state_connected;
-    
+
     tcp_sent(tpcb, socket_sent_callback);
     tcp_recv(tpcb, socket_recv_callback);
 
@@ -451,7 +247,7 @@ int tcp_socket_close(int index)
         dlogp(err != ERR_OK, "error closing socket (%d)", err);
         return err != ERR_OK;
     }
-    
+
     case socket_state_bound:
     case socket_state_error:
     case socket_state_closed_by_peer: {
@@ -521,7 +317,7 @@ int tcp_socket_readable(int index) {
 }
 
 int tcp_socket_writable(int index) {
-    return !net_queue_empty_free(&state.tx_queue);
+    return !net_queue_empty_free(&tx_handle);
 }
 
 int tcp_socket_hup(int index) {

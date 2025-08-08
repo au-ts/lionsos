@@ -98,7 +98,6 @@ include ${BLK_DRIVER}/blk_driver.mk
 include ${BLK_COMPONENTS}/blk_components.mk
 
 MICROPYTHON_LIBMATH := ${LIBMATH}
-MICROPYTHON_CONFIG_INCLUDE := ${CONFIG_INCLUDE}
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
 include $(LIONSOS)/components/micropython/micropython.mk
 

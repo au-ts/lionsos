@@ -22,14 +22,16 @@
 #include <sddf/i2c/queue.h>
 #include <sddf/timer/config.h>
 #include <sddf/network/config.h>
+#include <sddf/network/queue.h>
+#include <sddf/network/lib_sddf_lwip.h>
 #include <lions/fs/config.h>
-#include "lwip/init.h"
 #include "mpconfigport.h"
 #include "fs_helpers.h"
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
+__attribute__((__section__(".lib_sddf_lwip_config"))) lib_sddf_lwip_config_t lib_sddf_lwip_config;
 __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
 __attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_config;
 
@@ -51,6 +53,12 @@ char *fs_share;
 
 serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
+
+net_queue_handle_t net_rx_handle;
+net_queue_handle_t net_tx_handle;
+
+int mp_mod_network_prefer_dns_use_ip_version = 4;
+
 i2c_queue_handle_t i2c_queue_handle;
 
 #ifdef ENABLE_FRAMEBUFFER
@@ -74,6 +82,11 @@ void MP_WEAK __assert_func(const char *file, int line, const char *func, const c
 }
 #endif
 
+static void netif_status_callback(char *ip_addr) {
+    printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n",
+           microkit_name, __FILE__, __LINE__, __func__, microkit_name, ip_addr);
+}
+
 void t_mp_entrypoint(void) {
     printf("MP|INFO: initialising!\n");
 
@@ -86,7 +99,13 @@ start_repl:
     mp_init();
 
     if (net_enabled) {
-        init_networking();
+        net_queue_init(&net_rx_handle, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr, net_config.rx.num_buffers);
+        net_queue_init(&net_tx_handle, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
+        net_buffers_init(&net_tx_handle, 0);
+
+        sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, net_rx_handle, net_tx_handle, printf, netif_status_callback, NULL);
+
+        sddf_lwip_maybe_notify();
     }
     // initialisation of the filesystem utilises the event loop and the event
     // loop unconditionally tries to process incoming network buffers; therefore
@@ -117,7 +136,6 @@ void init(void) {
     // to real serial instead of microkit_dbg_puts
     assert(serial_config_check_magic(&serial_config));
     assert(timer_config_check_magic(&timer_config));
-    net_enabled = net_config_check_magic(&net_config);
     assert(fs_config_check_magic(&fs_config));
 
     net_enabled = net_config_check_magic(&net_config);
@@ -148,14 +166,10 @@ void init(void) {
     microkit_cothread_yield();
 }
 
-void pyb_lwip_poll(void);
-void mpnet_process_rx(void);
-void mpnet_handle_notify(void);
-
 void notified(microkit_channel ch) {
     if (net_enabled) {
-        mpnet_process_rx();
-        pyb_lwip_poll();
+        sddf_lwip_process_rx();
+        sddf_lwip_process_timeout();
     }
     fs_process_completions();
 
@@ -163,7 +177,7 @@ void notified(microkit_channel ch) {
     microkit_cothread_recv_ntfn(ch);
 
     if (net_enabled) {
-        mpnet_handle_notify();
+        sddf_lwip_maybe_notify();
     }
 }
 
