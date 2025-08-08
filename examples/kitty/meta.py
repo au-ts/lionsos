@@ -94,6 +94,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     serial_system.add_client(micropython)
     timer_system.add_client(micropython)
     net_system.add_client_with_copier(micropython, micropython_net_copier)
+    micropython_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, micropython)
     if board.i2c:
         i2c_system.add_client(micropython)
 
@@ -112,6 +113,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         server=args.nfs_server,
         export_path=args.nfs_dir,
     )
+    nfs_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, nfs)
 
     vmm = ProtectionDomain("framebuffer_vmm", "vmm.elf", priority=1)
     vm = VirtualMachine("linux", [VirtualMachine.Vcpu(id=0)])
@@ -223,6 +225,10 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         assert i2c_system.serialise_config(output_dir)
     assert vmm_system.connect()
     assert vmm_system.serialise_config(output_dir)
+    assert micropython_lib_sddf_lwip.connect()
+    assert micropython_lib_sddf_lwip.serialise_config(output_dir)
+    assert nfs_lib_sddf_lwip.connect()
+    assert nfs_lib_sddf_lwip.serialise_config(output_dir)
 
     with open(f"{output_dir}/{sdf_path}", "w+") as f:
         f.write(sdf.render())

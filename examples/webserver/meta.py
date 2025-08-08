@@ -79,6 +79,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     serial_system.add_client(micropython)
     timer_system.add_client(micropython)
     net_system.add_client_with_copier(micropython, micropython_net_copier)
+    micropython_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, micropython)
 
     nfs_net_copier = ProtectionDomain("nfs_net_copier", "network_copy_nfs.elf", priority=97, budget=20000)
 
@@ -95,6 +96,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         server=args.nfs_server,
         export_path=args.nfs_dir,
     )
+    nfs_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, nfs)
 
     pds = [
         serial_driver,
@@ -119,6 +121,10 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     assert net_system.serialise_config(output_dir)
     assert timer_system.connect()
     assert timer_system.serialise_config(output_dir)
+    assert micropython_lib_sddf_lwip.connect()
+    assert micropython_lib_sddf_lwip.serialise_config(output_dir)
+    assert nfs_lib_sddf_lwip.connect()
+    assert nfs_lib_sddf_lwip.serialise_config(output_dir)
 
     with open(f"{output_dir}/{sdf_path}", "w+") as f:
         f.write(sdf.render())

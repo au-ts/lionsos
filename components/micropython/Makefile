@@ -58,50 +58,11 @@ export LIBMICROKITCO_PATH TARGET MICROKIT_SDK BUILD_DIR MICROKIT_BOARD MICROKIT_
 $(LIBMICROKITCO_OBJ):
 	make -f $(LIBMICROKITCO_PATH)/Makefile LIBMICROKITCO_OPT_PATH=$(LIBMICROKITCO_OPT_PATH)
 
-# COREFILES, CORE4FILES: The minimum set of files needed for lwIP.
-COREFILES=core/init.c \
-	core/def.c \
-	core/dns.c \
-	core/inet_chksum.c \
-	core/ip.c \
-	core/mem.c \
-	core/memp.c \
-	core/netif.c \
-	core/pbuf.c \
-	core/raw.c \
-	core/stats.c \
-	core/sys.c \
-	core/altcp.c \
-	core/altcp_alloc.c \
-	core/altcp_tcp.c \
-	core/tcp.c \
-	core/tcp_in.c \
-	core/tcp_out.c \
-	core/timeouts.c \
-	core/udp.c
-
-CORE4FILES=core/ipv4/autoip.c \
-	core/ipv4/dhcp.c \
-	core/ipv4/etharp.c \
-	core/ipv4/icmp.c \
-	core/ipv4/igmp.c \
-	core/ipv4/ip4_frag.c \
-	core/ipv4/ip4.c \
-	core/ipv4/ip4_addr.c
-
-# NETIFFILES: Files implementing various generic network interface functions
-NETIFFILES=netif/ethernet.c
-
-# LWIPFILES: All the above.
-LWIPFILES=$(COREFILES) $(CORE4FILES) $(NETIFFILES)
-LWIP_OBJ=$(addprefix $(BUILD)/micropython/lwip/, $(LWIPFILES:.c=.o))
-
 # Define the required source files.
 SRC_C = \
 	micropython.c \
 	mphalport.c \
 	modtime.c \
-	mpnetworkport.c \
 	modfs_raw.c \
 	vfs_fs_file.c \
 	vfs_fs.c \
@@ -157,23 +118,14 @@ CFLAGS += -DENABLE_SERIAL_STDIO
 endif
 
 # Define the required object files.
-OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o)) $(LWIP_OBJ)
+OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
-all: directories $(BUILD)/micropython.elf
+all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython/lwip/%.o: $(LWIP)/src/%.c
-	$(CC) -c $(CFLAGS) $< -o $@
-
-$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ)
+$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ) $(BUILD)/lib_sddf_lwip_mp.a
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
 
 # Include remaining core make rules.
 include $(TOP)/py/mkrules.mk
-
-directories:
-	$(shell mkdir -p $(BUILD)/micropython/lwip/)
-	$(shell mkdir -p $(BUILD)/micropython/lwip/core)
-	$(shell mkdir -p $(BUILD)/micropython/lwip/netif)
-	$(shell mkdir -p $(BUILD)/micropython/lwip/core/ipv4)
