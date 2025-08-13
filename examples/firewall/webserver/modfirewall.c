@@ -111,7 +111,7 @@ void fw_webserver_init(void) {
         webserver_state.interfaces[i].routing_table = fw_config.interfaces[i].router.routing_table.vaddr;
 
         for (uint8_t j = 0; j < fw_config.interfaces[i].num_filters; j++) {
-            webserver_state.interfaces[i].filter_states[j].rules_container = fw_config.interfaces[i].filters[j].rules.vaddr;
+            webserver_state.interfaces[i].filter_states[j].rule_table = fw_config.interfaces[i].filters[j].rules.vaddr;
         }
     }
 }
@@ -506,14 +506,14 @@ STATIC mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in,
         return mp_const_none;
     }
 
-    if (rule_idx >= webserver_state.interfaces[interface_idx].filter_states[protocol_match].rules_container->size ||
+    if (rule_idx >= webserver_state.interfaces[interface_idx].filter_states[protocol_match].rule_table->size ||
         rule_idx >= fw_config.interfaces[interface_idx].filters[protocol_match].rules_capacity) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_RULE_NUM]);
         mp_raise_OSError(OS_ERR_INVALID_RULE_NUM);
         return mp_const_none;
     }
 
-    fw_rule_t *rule = (fw_rule_t *)(webserver_state.interfaces[interface_idx].filter_states[protocol_match].rules_container->rules + rule_idx);
+    fw_rule_t *rule = (fw_rule_t *)(webserver_state.interfaces[interface_idx].filter_states[protocol_match].rule_table->rules + rule_idx);
     mp_obj_t tuple[10];
     tuple[0] = mp_obj_new_int_from_uint(rule->rule_id);
     tuple[1] = mp_obj_new_int_from_uint(rule->src_ip);

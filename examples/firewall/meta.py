@@ -251,8 +251,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     # Create serial subsystem
     common_pds.append(ProtectionDomain("serial_driver", "serial_driver.elf", priority=100))
     common_pds.append(ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99))
-    # serial_system = Sddf.Serial(sdf, serial_node, common_pds[-2], common_pds[-1])
-    serial_system = Sddf.Serial(sdf, serial_node, common_pds[-2], common_pds[-1], enable_color = False)
+    serial_system = Sddf.Serial(sdf, serial_node, common_pds[-2], common_pds[-1])
 
     # Create network 0 pds
     networks[ext_net]["driver"] = ProtectionDomain("ethernet_driver_dwmac", "eth_driver_dwmac.elf", priority=101, budget=100, period=400)
@@ -505,7 +504,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
             # create bitmap
             mr = MemoryRegion(sdf, "rules_id_bitmap" + "_" + filter_pd.name, filter_rule_bitmap_region_size);
             sdf.add_mr(mr);
-            bitmap_region1 = fw_region(filter_pd, mr, "rw",filter_rule_bitmap_region_size);
+            bitmap_region = fw_region(filter_pd, mr, "rw",filter_rule_bitmap_region_size);
 
             # Create rule region
             filter_rules = fw_shared_region(filter_pd, webserver, "rw", "r", "filter_rules", filter_rule_region_size)
@@ -542,7 +541,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
                 filter_webserver_config,
                 None,
                 None,
-                bitmap_region1
+                bitmap_region
             )
 
             network["configs"][router].filters.append((filter_router_conn[1]))
