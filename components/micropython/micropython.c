@@ -27,6 +27,7 @@
 #include <lions/fs/config.h>
 #include "mpconfigport.h"
 #include "fs_helpers.h"
+#include <sddf/benchmark/sel4bench.h>
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
@@ -64,6 +65,12 @@ i2c_queue_handle_t i2c_queue_handle;
 #ifdef ENABLE_FRAMEBUFFER
 uintptr_t framebuffer_data_region = 0x30000000;
 #endif
+
+uint64_t test_val;
+uint64_t get_counter()
+{
+    return test_val;
+}
 
 static bool init_vfs(void) {
     mp_obj_t args[2] = {
@@ -110,7 +117,7 @@ start_repl:
     // initialisation of the filesystem utilises the event loop and the event
     // loop unconditionally tries to process incoming network buffers; therefore
     // the networking needs to be initialised before initialising the fs
-    init_vfs();
+    /* init_vfs(); */
 
     // Start a normal REPL; will exit when ctrl-D is entered on a blank line.
 #ifndef EXEC_MODULE
@@ -145,9 +152,9 @@ void init(void) {
     }
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 
-    fs_command_queue = fs_config.server.command_queue.vaddr;
-    fs_completion_queue = fs_config.server.completion_queue.vaddr;
-    fs_share = fs_config.server.share.vaddr;
+    /* fs_command_queue = fs_config.server.command_queue.vaddr; */
+    /* fs_completion_queue = fs_config.server.completion_queue.vaddr; */
+    /* fs_share = fs_config.server.share.vaddr; */
 
     i2c_enabled = i2c_config_check_magic(&i2c_config);
     if (i2c_enabled) {
@@ -162,6 +169,20 @@ void init(void) {
         assert(false);
     }
 
+#if defined(MICROKIT_CONFIG_benchmark) && defined(CONFIG_ARCH_ARM)
+    sel4bench_init();
+    seL4_Word n_counters = sel4bench_get_num_counters();
+    for (seL4_Word counter = 0; counter < MIN(n_counters, ARRAY_SIZE(benchmarking_events)); counter++) {
+        sel4bench_set_count_event(counter, benchmarking_events[counter]);
+        benchmark_bf |= BIT(counter);
+    }
+
+    sel4bench_reset_counters();
+    sel4bench_start_counters(benchmark_bf);
+#else
+    sddf_dprintf("BENCH|LOG: Bench running in debug mode, no access to counters\n");
+#endif
+
     // Run the Micropython cothread
     microkit_cothread_yield();
 }
@@ -170,8 +191,9 @@ void notified(microkit_channel ch) {
     if (net_enabled) {
         sddf_lwip_process_rx();
         sddf_lwip_process_timeout();
+        SEL4BENCH_READ_CCNT(test_val);
     }
-    fs_process_completions();
+    /* fs_process_completions(); */
 
     // We ignore errors because notified can be invoked without the MP cothread awaiting in cases such as an async I/O completing.
     microkit_cothread_recv_ntfn(ch);
@@ -189,7 +211,15 @@ void nlr_jump_fail(void *val) {
 
 // Do a garbage collection cycle.
 void gc_collect(void) {
+    uint64_t start, end;
+    SEL4BENCH_READ_CCNT(start);
+
     gc_collect_start();
     gc_helper_collect_regs_and_stack();
     gc_collect_end();
+
+    SEL4BENCH_READ_CCNT(end);
+    if (end - start > 2000) {
+        printf("%lu\n", end - start);
+    }
 }

@@ -87,12 +87,13 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	touch $@
 
 MICROPYTHON_LIBMATH := $(LIBMATH)
-MICROPYTHON_EXEC_MODULE := webserver.py
+MICROPYTHON_CONFIG_INCLUDE := $(CONFIG_INCLUDE)
+MICROPYTHON_EXEC_MODULE := echoserver.py
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
 include $(LIONSOS)/components/micropython/micropython.mk
 
-manifest.py: webserver.py config.py
-webserver.py: $(MICRODOT) config.py
+manifest.py: echoserver.py config.py
+echoserver.py: $(MICRODOT) config.py
 
 config.py: ${CHECK_FLAGS_BOARD_MD5}
 	echo "base_dir='$(WEBSITE_DIR)'" > config.py

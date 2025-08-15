@@ -95,17 +95,17 @@ void notified(microkit_channel ch) {
 
 void init(void)
 {
-    assert(fs_config_check_magic(&fs_config));
-    assert(nfs_config_check_magic(&nfs_config));
+    /* assert(fs_config_check_magic(&fs_config)); */
+    /* assert(nfs_config_check_magic(&nfs_config)); */
 
-    fs_command_queue = fs_config.client.command_queue.vaddr;
-    fs_completion_queue = fs_config.client.completion_queue.vaddr;
-    fs_share = fs_config.client.share.vaddr;
+    /* fs_command_queue = fs_config.client.command_queue.vaddr; */
+    /* fs_completion_queue = fs_config.client.completion_queue.vaddr; */
+    /* fs_share = fs_config.client.share.vaddr; */
 
-    serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
+    /* serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr); */
 
-    syscalls_init();
-    continuation_pool_init();
-    tcp_init_0();
-    sddf_timer_set_timeout(timer_config.driver_id, TIMEOUT);
+    /* syscalls_init(); */
+    /* continuation_pool_init(); */
+    /* tcp_init_0(); */
+    /* sddf_timer_set_timeout(timer_config.driver_id, TIMEOUT); */
 }
