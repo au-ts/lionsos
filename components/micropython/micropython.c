@@ -28,6 +28,7 @@
 #include "mpconfigport.h"
 #include "fs_helpers.h"
 #include <sddf/benchmark/sel4bench.h>
+#include <sddf/timer/client.h>
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
@@ -201,6 +202,8 @@ void notified(microkit_channel ch) {
     if (net_enabled) {
         sddf_lwip_maybe_notify();
     }
+
+    sddf_timer_set_timeout(timer_config.driver_id, NS_IN_MS); // this could be a bit less frequent.
 }
 
 // Handle uncaught exceptions (should never be reached in a correct C implementation).
