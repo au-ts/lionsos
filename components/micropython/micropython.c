@@ -19,6 +19,7 @@
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 #include <sddf/i2c/config.h>
+#include <sddf/i2c/libi2c.h>
 #include <sddf/i2c/queue.h>
 #include <sddf/timer/config.h>
 #include <sddf/network/config.h>
@@ -52,6 +53,7 @@ char *fs_share;
 serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
 i2c_queue_handle_t i2c_queue_handle;
+libi2c_conf_t libi2c_conf;
 
 #ifdef ENABLE_FRAMEBUFFER
 uintptr_t framebuffer_data_region = 0x30000000;
@@ -134,6 +136,7 @@ void init(void) {
     i2c_enabled = i2c_config_check_magic(&i2c_config);
     if (i2c_enabled) {
         i2c_queue_handle = i2c_queue_init(i2c_config.virt.req_queue.vaddr, i2c_config.virt.resp_queue.vaddr);
+        assert(libi2c_init(&libi2c_conf, &i2c_queue_handle) == 0);
     }
 
     stack_ptrs_arg_array_t costacks = { (uintptr_t) mp_stack };

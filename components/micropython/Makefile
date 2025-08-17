@@ -164,7 +164,12 @@ all: directories $(BUILD)/micropython.elf
 $(BUILD)/micropython/lwip/%.o: $(LWIP)/src/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ)
+export LIBMICROKITCO_INCLUDE_DIR := $(LIBMICROKITCO_PATH)
+export LIBMICROKITCO_OPTS_DIR := $(LIBMICROKITCO_OPT_PATH)
+
+include ${SDDF}/i2c/libi2c.mk
+
+$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ) libi2c.a
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
