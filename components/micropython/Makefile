@@ -2,7 +2,6 @@
 # Copyright 2024, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 #
-LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
 CC := aarch64-none-elf-gcc
 LD := aarch64-none-elf-ld
 
@@ -40,10 +39,11 @@ CFLAGS += \
 	-I$(LIONSOS)/include \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
+	-I$(MUSL)/include \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU)
-LDFLAGS += -L$(BOARD_DIR)/lib -L$(LIBC) -L$(LIBMATH)
+LDFLAGS += -L$(BOARD_DIR)/lib -L$(MUSL)/lib -L$(LIBMATH) 
 LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
 
 # Include libmicrokitco for blocking in Micropython
@@ -86,9 +86,7 @@ SRC_C = \
 	shared/runtime/pyexec.c \
 	shared/runtime/stdout_helpers.c \
 	shared/runtime/sys_stdio_mphal.c \
-	shared/libc/string0.c \
 	shared/libc/printf.c \
-	shared/libc/__errno.c \
 	shared/timeutils/timeutils.c \
 	shared/netutils/netutils.c \
 	$(USER_C_MODULES)
