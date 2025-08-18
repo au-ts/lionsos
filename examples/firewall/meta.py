@@ -504,7 +504,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
             # create bitmap
             mr = MemoryRegion(sdf, "rules_id_bitmap" + "_" + filter_pd.name, filter_rule_bitmap_region_size);
             sdf.add_mr(mr);
-            bitmap_region = fw_region(filter_pd, mr, "rw",filter_rule_bitmap_region_size);
+            rule_bitmap_region = fw_region(filter_pd, mr, "rw",filter_rule_bitmap_region_size);
 
             # Create rule region
             filter_rules = fw_shared_region(filter_pd, webserver, "rw", "r", "filter_rules", filter_rule_region_size)
@@ -541,7 +541,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
                 filter_webserver_config,
                 None,
                 None,
-                bitmap_region
+                rule_bitmap_region
             )
 
             network["configs"][router].filters.append((filter_router_conn[1]))
