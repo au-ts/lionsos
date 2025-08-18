@@ -28,7 +28,6 @@
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 
-#include "nfs.h"
 #include "posix.h"
 #include "tcp.h"
 #include "util.h"
@@ -45,6 +44,8 @@
 typedef long (*muslcsys_syscall_t)(va_list);
 
 extern void *__sysinfo;
+
+extern serial_queue_handle_t serial_tx_queue_handle;
 
 extern serial_client_config_t serial_config;
 
