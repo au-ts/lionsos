@@ -1,0 +1,16 @@
+diff --git a/extmod/modlwip.c b/extmod/modlwip.c
+index 0d38bf41b..94f5456fc 100644
+--- a/extmod/modlwip.c
++++ b/extmod/modlwip.c
+@@ -1081,6 +1081,11 @@ static mp_obj_t lwip_socket_accept(mp_obj_t self_in) {
+ 
+     tcp_accepted(listener);
+ 
++    /* If there is data which was previously "refused" by upper layer */
++    if (socket2->pcb.tcp->refused_data != NULL) {
++        tcp_process_refused_data(socket2->pcb.tcp);
++    }
++
+     MICROPY_PY_LWIP_EXIT
+ 
+     // make the return value
