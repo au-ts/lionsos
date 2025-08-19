@@ -87,6 +87,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	touch $@
 
 MICROPYTHON_LIBMATH := $(LIBMATH)
+MICROPYTHON_CONFIG_INCLUDE := $(CONFIG_INCLUDE)
 MICROPYTHON_EXEC_MODULE := webserver.py
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
 include $(LIONSOS)/components/micropython/micropython.mk
@@ -134,18 +135,18 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_virt_rx.data network_virt_rx.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
 	$(OBJCOPY) --update-section .net_copy_config=net_copy_micropython_net_copier.data network_copy.elf network_copy_micropython.elf
-	$(OBJCOPY) --update-section .net_copy_config=net_copy_nfs_net_copier.data network_copy.elf network_copy_nfs.elf
+	# $(OBJCOPY) --update-section .net_copy_config=net_copy_nfs_net_copier.data network_copy.elf network_copy_nfs.elf
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .net_client_config=net_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
-	$(OBJCOPY) --update-section .net_client_config=net_client_nfs.data nfs.elf
-	$(OBJCOPY) --update-section .timer_client_config=timer_client_nfs.data nfs.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_nfs.data nfs.elf
-	$(OBJCOPY) --update-section .fs_server_config=fs_server_nfs.data nfs.elf
-	$(OBJCOPY) --update-section .fs_client_config=fs_client_micropython.data micropython.elf
-	$(OBJCOPY) --update-section .nfs_config=nfs_config.data nfs.elf
-	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_nfs.data nfs.elf
+	# $(OBJCOPY) --update-section .net_client_config=net_client_nfs.data nfs.elf
+	# $(OBJCOPY) --update-section .timer_client_config=timer_client_nfs.data nfs.elf
+	# $(OBJCOPY) --update-section .serial_client_config=serial_client_nfs.data nfs.elf
+	# $(OBJCOPY) --update-section .fs_server_config=fs_server_nfs.data nfs.elf
+	# $(OBJCOPY) --update-section .fs_client_config=fs_client_micropython.data micropython.elf
+	# $(OBJCOPY) --update-section .nfs_config=nfs_config.data nfs.elf
+	# $(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_micropython.data micropython.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)

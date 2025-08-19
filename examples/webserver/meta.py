@@ -81,22 +81,22 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     net_system.add_client_with_copier(micropython, micropython_net_copier)
     micropython_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, micropython)
 
-    nfs_net_copier = ProtectionDomain("nfs_net_copier", "network_copy_nfs.elf", priority=97, budget=20000)
+    # nfs_net_copier = ProtectionDomain("nfs_net_copier", "network_copy_nfs.elf", priority=97, budget=20000)
 
-    nfs = ProtectionDomain("nfs", "nfs.elf", priority=96, stack_size=0x10000)
+    # nfs = ProtectionDomain("nfs", "nfs.elf", priority=96, stack_size=0x10000)
 
-    fs = LionsOs.FileSystem.Nfs(
-        sdf,
-        nfs,
-        micropython,
-        net=net_system,
-        net_copier=nfs_net_copier,
-        serial=serial_system,
-        timer=timer_system,
-        server=args.nfs_server,
-        export_path=args.nfs_dir,
-    )
-    nfs_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, nfs)
+    # fs = LionsOs.FileSystem.Nfs(
+    #     sdf,
+    #     nfs,
+    #     micropython,
+    #     net=net_system,
+    #     net_copier=nfs_net_copier,
+    #     serial=serial_system,
+    #     timer=timer_system,
+    #     server=args.nfs_server,
+    #     export_path=args.nfs_dir,
+    # )
+    # nfs_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, nfs)
 
     pds = [
         serial_driver,
@@ -106,15 +106,15 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         net_virt_rx,
         micropython,
         micropython_net_copier,
-        nfs,
-        nfs_net_copier,
+        # nfs,
+        # nfs_net_copier,
         timer_driver,
     ]
     for pd in pds:
         sdf.add_pd(pd)
 
-    assert fs.connect()
-    assert fs.serialise_config(output_dir)
+    # assert fs.connect()
+    # assert fs.serialise_config(output_dir)
     assert serial_system.connect()
     assert serial_system.serialise_config(output_dir)
     assert net_system.connect()
@@ -123,8 +123,8 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     assert timer_system.serialise_config(output_dir)
     assert micropython_lib_sddf_lwip.connect()
     assert micropython_lib_sddf_lwip.serialise_config(output_dir)
-    assert nfs_lib_sddf_lwip.connect()
-    assert nfs_lib_sddf_lwip.serialise_config(output_dir)
+    # assert nfs_lib_sddf_lwip.connect()
+    # assert nfs_lib_sddf_lwip.serialise_config(output_dir)
 
     with open(f"{output_dir}/{sdf_path}", "w+") as f:
         f.write(sdf.render())

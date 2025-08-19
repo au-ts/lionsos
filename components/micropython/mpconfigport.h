@@ -75,7 +75,7 @@
 // #define MICROPY_PY_TIME_INCLUDEFILE             "modtime.c"
 
 // Allocate 16MB for the heap
-#define MICROPY_HEAP_SIZE      (0x1000000)
+#define MICROPY_HEAP_SIZE      (0x10000000)
 #define MICROPY_STACK_SIZE      (0x100000)
 
 // Type definitions for the specific machine.
