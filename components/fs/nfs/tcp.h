@@ -17,7 +17,7 @@ void tcp_process_rx(void);
 void tcp_maybe_notify(void);
 
 int tcp_socket_create(void);
-int tcp_socket_connect(int index, int port);
+int tcp_socket_connect(int index, uint16_t port, uint32_t addr);
 int tcp_socket_close(int index);
 int tcp_socket_dup(int index_old, int index_new);
 int tcp_socket_write(int index, const char *buf, size_t len);
