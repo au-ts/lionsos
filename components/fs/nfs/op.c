@@ -23,9 +23,10 @@
 #include <lions/fs/server.h>
 #include <lions/fs/config.h>
 
+#include <lions/util.h>
+
 #include "nfs.h"
 #include "config.h"
-#include "util.h"
 
 #define MAX_CONCURRENT_OPS FS_QUEUE_CAPACITY
 #define CLIENT_SHARE_SIZE 0x4000000
