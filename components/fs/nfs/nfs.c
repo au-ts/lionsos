@@ -23,11 +23,12 @@
 #include <lions/fs/server.h>
 #include <lions/fs/config.h>
 
+#include <lions/util.h>
+#include <lions/posix/tcp.h>
+#include <lions/posix/posix.h>
+
 #include "nfs.h"
 #include "config.h"
-#include "util.h"
-#include "tcp.h"
-#include "posix.h"
 
 #define TIMEOUT (1 * NS_IN_MS)
 

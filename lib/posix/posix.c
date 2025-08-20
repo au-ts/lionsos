@@ -28,9 +28,9 @@
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 
-#include "posix.h"
-#include "tcp.h"
-#include "util.h"
+#include <lions/posix/posix.h>
+#include <lions/posix/tcp.h>
+#include <lions/util.h>
 
 #define MUSLC_HIGHEST_SYSCALL SYS_pkey_free
 #define MUSLC_NUM_SYSCALLS (MUSLC_HIGHEST_SYSCALL + 1)
