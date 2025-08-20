@@ -345,9 +345,13 @@ long sys_socket_connect(va_list ap)
     assert(socket_handle < MAX_SOCKETS);
     assert(socket_refcount[socket_handle] != 0);
 
-    const struct sockaddr *addr = va_arg(ap, const struct sockaddr *);
-    int port = addr->sa_data[0] << 8 | addr->sa_data[1];
-    return (long)tcp_socket_connect(socket_handle, port);
+    const struct sockaddr *sockaddr = va_arg(ap, const struct sockaddr *);
+
+    uint16_t port = sockaddr->sa_data[0] << 8 | sockaddr->sa_data[1];
+    uint32_t addr = sockaddr->sa_data[2] | sockaddr->sa_data[3] << 8 | sockaddr->sa_data[4] << 16
+                  | sockaddr->sa_data[5] << 24;
+
+    return (long)tcp_socket_connect(socket_handle, port, addr);
 }
 
 long sys_close(va_list ap)
