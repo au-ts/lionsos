@@ -27,8 +27,8 @@
 #include <lwip/timeouts.h>
 #include <netif/etharp.h>
 
-#include "util.h"
-#include "tcp.h"
+#include <lions/util.h>
+#include <lions/posix/tcp.h>
 
 enum socket_state {
     socket_state_unallocated,
