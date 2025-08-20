@@ -27,11 +27,8 @@
 #include <lwip/timeouts.h>
 #include <netif/etharp.h>
 
-#include "config.h"
-#include "nfs.h"
 #include "util.h"
 #include "tcp.h"
-#include "config.h"
 
 enum socket_state {
     socket_state_unallocated,
@@ -55,7 +52,6 @@ typedef struct {
 extern timer_client_config_t timer_config;
 extern net_client_config_t net_config;
 extern lib_sddf_lwip_config_t lib_sddf_lwip_config;
-extern nfs_config_t nfs_config;
 
 net_queue_handle_t rx_handle;
 net_queue_handle_t tx_handle;
@@ -218,12 +214,13 @@ int tcp_socket_create(void) {
     return -1;
 }
 
-int tcp_socket_connect(int index, int port) {
+int tcp_socket_connect(int index, uint16_t port, uint32_t addr)
+{
     socket_t *sock = &sockets[index];
     assert(sock->state == socket_state_bound);
 
     ip_addr_t ipaddr;
-    ip4_addr_set_u32(&ipaddr, ipaddr_addr(nfs_config.server));
+    ip4_addr_set_u32(&ipaddr, addr);
 
     err_t err = tcp_connect(sock->sock_tpcb, &ipaddr, port, socket_connected);
     if (err != ERR_OK) {
