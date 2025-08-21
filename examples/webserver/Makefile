@@ -24,13 +24,10 @@ $(error "WEBSITE_DIR must be specified: this is the filesystem path of the \
 directory containing the website's files, relative to the NFS export")
 endif
 
-ifeq ($(strip $(LIBGCC)),)
-export LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
+ifeq ($(strip $(LIBRT)),)
+CLANG_RESOURCE_DIR := $(shell clang --print-resource-dir)
+export LIBRT := $(CLANG_RESOURCE_DIR)/../../baremetal
 endif
-ifeq ($(strip $(LIBMATH)),)
-export LIBMATH:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libm.a)))
-endif
-
 
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
