@@ -63,7 +63,7 @@ the instructions in the
 Building
 --------
 
-You need to have `aarch64-none-elf-gcc` etc in your PATH; plus you
+You need to have `clang` etc in your PATH; plus you
 need to set the LionsOS and MICROKIT_SDK environment variables.
 
 If the vmm-example repository is checked out at the same level in your
@@ -78,4 +78,3 @@ MICROKIT_SDK=.../path-to/microkit-sdk-1.2.6 LionsOS=.../path-to/LionsOS make
 
 If all goes well, a directory called `build`,and a
 bootable image `boot/vmdev.img`, will be created.
-

@@ -54,6 +54,8 @@ FIREWALL_FILTERS := $(FIREWALL_SRC_DIR)/filters
 FIREWALL_ICMP := $(FIREWALL_SRC_DIR)/icmp
 FIREWALL_ROUTING := $(FIREWALL_SRC_DIR)/routing
 FIREWALL_ARP := $(FIREWALL_SRC_DIR)/arp
+MUSL_SRC := $(LIONSOS)/dep/musllibc
+MUSL := musllibc
 
 METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
 DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
@@ -122,6 +124,13 @@ include $(LIONSOS)/components/micropython/micropython.mk
 
 %.py: $(FIREWALL_SRC_DIR)/%.py
 	cp $< $@
+
+$(MUSL):
+	mkdir -p $@
+
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
+	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" ${MUSL_SRC}/configure CROSS_COMPILE=llvm- --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=$(TARGET) --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
+	${MAKE} -C ${MUSL} install
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<

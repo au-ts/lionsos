@@ -9,11 +9,9 @@ $(error MICROKIT_SDK must be specified)
 endif
 override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
-ifeq ($(strip $(LIBGCC)),)
-export LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
-endif
-ifeq ($(strip $(LIBMATH)),)
-export LIBMATH:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libm.a)))
+ifeq ($(strip $(LIBRT)),)
+CLANG_RESOURCE_DIR := $(shell clang --print-resource-dir)
+export LIBRT := $(CLANG_RESOURCE_DIR)/../../baremetal
 endif
 
 export MICROKIT_CONFIG ?= debug
