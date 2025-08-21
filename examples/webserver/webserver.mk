@@ -130,7 +130,7 @@ LDFLAGS := -L$(BOARD_DIR)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 
 IMAGE_FILE = capdl_initialiser_with_spec.elf
-REPORT_FILE = report.json
+REPORT_FILE = report.txt
 
 COPIED_32BIT_X86_KERNEL = sel4.elf
 
@@ -213,7 +213,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_micropython.data micropython.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
-	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE) --capdl-spec capdl.json
 
 qemu: ${IMAGE_FILE}
 ifeq ($(findstring x86_64,$(TARGET)),x86_64)
