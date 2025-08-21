@@ -38,7 +38,7 @@ $(LIBNFS)/CMakeLists.txt $(LIBNFS)/include:
 	cd $(LIONSOS); git submodule update --init dep/libnfs
 
 libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt $(MUSL)/lib/libc.a
-	MUSL=$(abspath $(MUSL)) cmake -S $(LIBNFS) -B libnfs
+	MUSL=$(abspath $(MUSL)) CC=$(CC) CXX=$(CC) CPU=$(CPU) TARGET=$(TARGET) cmake -S $(LIBNFS) -B libnfs
 	cmake --build libnfs
 
 LIB_FS_SERVER_LIBC_INCLUDE := $(MUSL)/include
@@ -47,8 +47,8 @@ include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
 LIB_POSIX_LIBC_INCLUDE := $(MUSL)/include
 include $(LIONSOS)/lib/posix/lib_posix.mk
 
-nfs.elf: LDFLAGS += -L$(LIBGCC)
-nfs.elf: LIBS += -lgcc
+nfs.elf: LDFLAGS += -L$(LIBRT)
+nfs.elf: LIBS += -lclang_rt.builtins-aarch64
 nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_fs_server.a lib_sddf_lwip_nfs.a lib_posix.a
 	$(LD) $(LDFLAGS) -o $@ $(LIBS) $^
 

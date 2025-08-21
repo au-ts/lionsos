@@ -62,8 +62,6 @@
 
               nativeBuildInputs = with pkgs; [
                 git
-                pkgsCross.aarch64-embedded.stdenv.cc.bintools
-                pkgsCross.aarch64-embedded.stdenv.cc
                 qemu
                 gnumake
                 dosfstools
@@ -85,7 +83,10 @@
 
                 (symlinkJoin {
                   name = "clang-complete";
-                  paths = llvm.clang-unwrapped.all;
+                  paths = [
+                    llvm.clang-unwrapped.all
+                    pkgsCross.aarch64-embedded.llvmPackages_17.compiler-rt
+                  ];
 
                   # Clang searches up from the directory where it sits to find its built-in
                   # headers. The `symlinkJoin` creates a symlink to the clang binary, and that
