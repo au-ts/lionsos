@@ -10,8 +10,9 @@ ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
 
-ifeq ($(strip $(LIBGCC)),)
-LIBGCC := $(shell dirname $$(aarch64-none-elf-gcc --print-file-name libgcc.a))
+ifeq ($(strip $(LIBRT)),)
+CLANG_RESOURCE_DIR := $(shell clang --print-resource-dir)
+export LIBRT := $(CLANG_RESOURCE_DIR)/../../baremetal
 endif
 
 ifeq ($(strip $(LionsOS)),)

@@ -2,8 +2,6 @@
 # Copyright 2024, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 #
-CC := aarch64-none-elf-gcc
-LD := aarch64-none-elf-ld
 
 LIONSOS := $(abspath ../../)
 SDDF := $(LIONSOS)/dep/sddf
@@ -16,11 +14,14 @@ FROZEN_MANIFEST ?= $(MICROPYTHON_SRC)/extmod/asyncio/manifest.py
 # Include the core environment definitions; this will set $(TOP).
 include $(MICROPYTHON_SRC)/py/mkenv.mk
 
+# Override mkenv.mk settings.
+CC = clang
+LD = ld.lld
+TARGET := aarch64-none-elf
+
 # Include py core make definitions.
 include $(TOP)/py/py.mk
 include $(TOP)/extmod/extmod.mk
-
-CROSS_COMPILE ?= aarch64-none-elf-
 
 CPU ?= cortex-a55
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
@@ -42,13 +43,14 @@ CFLAGS += \
 	-I$(MUSL)/include \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
-	-mtune=$(CPU)
-LDFLAGS += -L$(BOARD_DIR)/lib -L$(MUSL)/lib -L$(LIBMATH) 
+	-mtune=$(CPU) \
+	-target $(TARGET)
+
+LDFLAGS += -L$(BOARD_DIR)/lib -L$(MUSL)/lib
 LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
 
 # Include libmicrokitco for blocking in Micropython
 BUILD_DIR=$(BUILD)
-TARGET=aarch64-none-elf
 LLVM=1
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LIBMICROKITCO_OPT_PATH := $(LIONSOS)/components/micropython
