@@ -99,11 +99,19 @@ start_repl:
     mp_init();
 
     if (net_enabled) {
-        net_queue_init(&net_rx_handle, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr, net_config.rx.num_buffers);
-        net_queue_init(&net_tx_handle, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
-        net_buffers_init(&net_tx_handle, 0);
+        if (net_config.rx.num_buffers) {
+            net_queue_init(&net_rx_handle, net_config.rx.free_queue.vaddr,
+                net_config.rx.active_queue.vaddr, net_config.rx.num_buffers);
+        }
+        if (net_config.tx.num_buffers) {
+            net_queue_init(&net_tx_handle, net_config.tx.free_queue.vaddr,
+                net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
+            net_buffers_init(&net_tx_handle, 0);
+        }
 
-        sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, net_rx_handle, net_tx_handle, printf, netif_status_callback, NULL);
+        sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, net_rx_handle,
+            net_tx_handle, NULL, printf, netif_status_callback, NULL,
+            NULL, NULL);
 
         sddf_lwip_maybe_notify();
     }

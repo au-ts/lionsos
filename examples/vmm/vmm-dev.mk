@@ -29,7 +29,6 @@ CPU := cortex-a55
 TOOLCHAIN := clang
 CC := clang
 LD := ld.lld
-TARGET := aarch64-none-elf
 CHECK_VARIANT := .variant.$(shell md5sum ${SYSTEM})
 .variant.%:
 	-rm -f .variant.*
@@ -43,7 +42,25 @@ MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
+ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 LIBVMM ?= ${LIONSOS}/dep/libvmm
+
+ifeq ($(ARCH),aarch64)
+	CFLAGS_ARCH := -mcpu=$(CPU)
+	TARGET := aarch64-none-elf
+else ifeq ($(ARCH),riscv64)
+	CFLAGS_ARCH := -march=rv64imafdc
+	TARGET := riscv64-none-elf
+else
+$(error Unsupported ARCH given)
+endif
+
+ifeq ($(strip $(TOOLCHAIN)), clang)
+	CFLAGS_ARCH += -target $(TARGET)
+endif
+
+# Use sDDF custom libc for sDDF components
+SDDF_CUSTOM_LIBC := 1
 
 VMM_IMAGE_DIR := ${EXAMPLE_DIR}/vmm
 LINUX := 1e6f245cabe25aabf179448e41dea5fe5550c98d-linux
@@ -60,7 +77,7 @@ CFLAGS := \
 	-Wno-unused-function \
 	-I. \
 	-I$(BOARD_DIR)/include \
-	-target $(TARGET) \
+	$(CFLAGS_ARCH) \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \

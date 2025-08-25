@@ -20,6 +20,7 @@ CFLAGS_nfs := \
 	-I$(LIBNFS)/include \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4 \
+	-Wno-tautological-constant-out-of-range-compare
 
 LIB_SDDF_LWIP_CFLAGS_nfs := ${CFLAGS_nfs}
 include $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.mk
@@ -55,7 +56,8 @@ $(NFS_OBJ): $(CHECK_NFS_FLAGS_MD5)
 $(NFS_OBJ): $(MUSL)/lib/libc.a
 $(NFS_OBJ): $(LIBNFS)/include
 $(NFS_OBJ): nfs
-$(NFS_OBJ): CFLAGS += $(CFLAGS_nfs)
+$(NFS_OBJ): CFLAGS := $(CFLAGS_nfs) \
+					  $(CFLAGS)
 
 nfs/%.o: $(NFS_DIR)/%.c
 	$(CC) -c $(CFLAGS) $< -o $@

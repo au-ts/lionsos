@@ -64,7 +64,8 @@ fat:
 fat/ff15:
 	mkdir -p fat/ff15
 
-fat/ff15/%.o: CFLAGS += $(FAT_CFLAGS)
+fat/ff15/%.o: CFLAGS := $(FAT_CFLAGS) \
+						$(CFLAGS)
 fat/ff15/%.o: $(FAT_FF15_SRC_DIR)/%.c $(FAT_LIBC_INCLUDE) $(CHECK_FAT_FLAGS_MD5) |fat/ff15
 	$(CC) -c $(CFLAGS) $< -o $@
 

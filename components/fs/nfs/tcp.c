@@ -82,7 +82,7 @@ void tcp_init_0(void)
     net_queue_init(&tx_handle, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
     net_buffers_init(&tx_handle, 0);
 
-    sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, rx_handle, tx_handle, printf, netif_status_callback, NULL);
+    sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, rx_handle, tx_handle, NULL, printf, netif_status_callback, NULL, NULL, NULL);
 
     sddf_lwip_maybe_notify();
 }

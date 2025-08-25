@@ -12,7 +12,6 @@
 # Optional variables:
 #	MICROPYTHON_FROZEN_MANIFEST
 #	MICROPYTHON_EXEC_MODULE
-#	MICROPYTHON_ENABLE_I2C
 #	MICROPYTHON_ENABLE_FRAMEBUFFER
 #	MICROPYTHON_ENABLE_VFS_STDIO
 #	MICROPYTHON_ENABLE_SERIAL_STDIO
@@ -24,7 +23,9 @@ MICROPYTHON_GCC_LIBC_INCLUDE :=  $(dir $(realpath $(shell aarch64-none-elf-gcc -
 LIB_SDDF_LWIP_CFLAGS_mp := \
 	-I$(MICROPYTHON_GCC_LIBC_INCLUDE) \
 	-I$(MICROPYTHON_DIR)/lwip_include \
-	-I$(SDDF)/network/ipstacks/lwip/src/include
+	-I$(SDDF)/network/ipstacks/lwip/src/include \
+	-Wno-tautological-constant-out-of-range-compare
+
 include $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.mk
 
 micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE) lib_sddf_lwip_mp.a
