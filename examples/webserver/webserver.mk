@@ -7,6 +7,7 @@
 # This makefile will be copied into the Build directory and used from there.
 #
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
+ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
 
 ifeq (${MICROKIT_BOARD},odroidc4)
@@ -35,10 +36,26 @@ LD := ld.lld
 AR := llvm-ar
 RANLIB := llvm-ranlib
 OBJCOPY := llvm-objcopy
-TARGET := aarch64-none-elf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 PYTHON ?= python3
 DTC := dtc
+
+ifeq ($(ARCH),aarch64)
+	CFLAGS_ARCH := -mcpu=$(CPU)
+	TARGET := aarch64-none-elf
+else ifeq ($(ARCH),riscv64)
+	CFLAGS_ARCH := -march=rv64imafdc
+	TARGET := riscv64-none-elf
+else
+$(error Unsupported ARCH given)
+endif
+
+ifeq ($(strip $(TOOLCHAIN)), clang)
+	CFLAGS_ARCH += -target $(TARGET)
+endif
+
+# Use sDDF custom libc for sDDF components
+SDDF_CUSTOM_LIBC := 1
 
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL_SRC := $(LIONSOS)/dep/musllibc
@@ -65,7 +82,7 @@ CFLAGS := \
 	-Wall \
 	-Wno-unused-function \
 	-I$(BOARD_DIR)/include \
-	-target $(TARGET) \
+	$(CFLAGS_ARCH) \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \

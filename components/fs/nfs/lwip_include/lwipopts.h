@@ -34,7 +34,6 @@
  * Enable ICMP module inside the IP stack.
  */
 #define LWIP_ICMP 1
-#define LWIP_RAND rand
 
 /**
  * Enable DHCP module.
