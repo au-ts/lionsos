@@ -62,8 +62,6 @@
 
               nativeBuildInputs = with pkgs; [
                 git
-                pkgsCross.aarch64-embedded.stdenv.cc.bintools
-                pkgsCross.aarch64-embedded.stdenv.cc
                 qemu
                 gnumake
                 dosfstools

@@ -24,8 +24,8 @@ CFLAGS_nfs := \
 LIB_SDDF_LWIP_CFLAGS_nfs := ${CFLAGS_nfs}
 include $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.mk
 
-NFS_FILES := nfs.c op.c posix.c tcp.c
-NFS_OBJ := $(addprefix nfs/, $(NFS_FILES:.c=.o)) $(NFS_LWIP_OBJ)
+NFS_FILES := nfs.c op.c
+NFS_OBJ := $(addprefix nfs/, $(NFS_FILES:.c=.o))
 
 CHECK_NFS_FLAGS_MD5 := .nfs_cflags-$(shell echo -- $(CFLAGS) $(CFLAGS_nfs) | shasum | sed 's/ *-//')
 
@@ -37,15 +37,19 @@ $(LIBNFS)/CMakeLists.txt $(LIBNFS)/include:
 	cd $(LIONSOS); git submodule update --init dep/libnfs
 
 libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt $(MUSL)/lib/libc.a
-	MUSL=$(abspath $(MUSL)) cmake -S $(LIBNFS) -B libnfs
+	MUSL=$(abspath $(MUSL)) CC=$(CC) CXX=$(CC) CPU=$(CPU) TARGET=$(TARGET) cmake -S $(LIBNFS) -B libnfs
 	cmake --build libnfs
 
 LIB_FS_SERVER_LIBC_INCLUDE := $(MUSL)/include
 include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
 
-nfs.elf: LDFLAGS += -L$(LIBGCC)
-nfs.elf: LIBS += -lgcc
-nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_fs_server.a lib_sddf_lwip_nfs.a
+LIB_POSIX_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/posix/lib_posix.mk
+
+LIB_FP_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/fp/lib_fp.mk
+
+nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_fs_server.a lib_sddf_lwip_nfs.a lib_posix.a lib_fp.a
 	$(LD) $(LDFLAGS) -o $@ $(LIBS) $^
 
 nfs:

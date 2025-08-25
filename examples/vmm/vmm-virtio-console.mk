@@ -10,10 +10,6 @@ ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
 
-ifeq ($(strip $(LIBGCC)),)
-LIBGCC := $(shell dirname $$(aarch64-none-elf-gcc --print-file-name libgcc.a))
-endif
-
 ifeq ($(strip $(LionsOS)),)
 $(error LionsOS should point to the root of the LionOS source tree)
 endif
