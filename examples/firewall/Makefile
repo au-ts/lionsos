@@ -9,11 +9,6 @@ $(error MICROKIT_SDK must be specified)
 endif
 override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
-ifeq ($(strip $(LIBRT)),)
-CLANG_RESOURCE_DIR := $(shell clang --print-resource-dir)
-export LIBRT := $(CLANG_RESOURCE_DIR)/../../baremetal
-endif
-
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD := $(MICROKIT_BOARD)

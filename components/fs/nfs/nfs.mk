@@ -47,9 +47,10 @@ include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
 LIB_POSIX_LIBC_INCLUDE := $(MUSL)/include
 include $(LIONSOS)/lib/posix/lib_posix.mk
 
-nfs.elf: LDFLAGS += -L$(LIBRT)
-nfs.elf: LIBS += -lclang_rt.builtins-aarch64
-nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_fs_server.a lib_sddf_lwip_nfs.a lib_posix.a
+LIB_FP_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/fp/lib_fp.mk
+
+nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_fs_server.a lib_sddf_lwip_nfs.a lib_posix.a lib_fp.a
 	$(LD) $(LDFLAGS) -o $@ $(LIBS) $^
 
 nfs:
