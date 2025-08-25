@@ -24,11 +24,6 @@ $(error "WEBSITE_DIR must be specified: this is the filesystem path of the \
 directory containing the website's files, relative to the NFS export")
 endif
 
-ifeq ($(strip $(LIBRT)),)
-CLANG_RESOURCE_DIR := $(shell clang --print-resource-dir)
-export LIBRT := $(CLANG_RESOURCE_DIR)/../../baremetal
-endif
-
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD := $(MICROKIT_BOARD)

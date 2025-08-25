@@ -83,10 +83,7 @@
 
                 (symlinkJoin {
                   name = "clang-complete";
-                  paths = [
-                    llvm.clang-unwrapped.all
-                    pkgsCross.aarch64-embedded.llvmPackages_17.compiler-rt
-                  ];
+                  paths = llvm.clang-unwrapped.all;
 
                   # Clang searches up from the directory where it sits to find its built-in
                   # headers. The `symlinkJoin` creates a symlink to the clang binary, and that

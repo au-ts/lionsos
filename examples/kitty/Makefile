@@ -15,11 +15,6 @@ ifeq ($(strip ${NFS_DIRECTORY}),)
 $(error NFS_DIRECTORY needs to be the name of an exported directory)
 endif
 
-ifeq ($(strip $(LIBRT)),)
-CLANG_RESOURCE_DIR := $(shell clang --print-resource-dir)
-export LIBRT := $(CLANG_RESOURCE_DIR)/../../baremetal
-endif
-
 export LIONSOS ?= $(abspath ../..)
 export KITTY_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 export MICROKIT_CONFIG ?= debug
