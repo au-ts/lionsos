@@ -33,7 +33,6 @@ CPU := cortex-a55
 TOOLCHAIN := clang
 CC := clang
 LD := ld.lld
-TARGET := aarch64-none-elf
 
 CHECK_VARIANT := .variant.$(shell md5sum ${SYSTEM})
 .variant.%:
@@ -48,7 +47,25 @@ MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
+ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 LIBVMM_DIR ?= ${LionsOS}/dep/libvmm
+
+ifeq ($(ARCH),aarch64)
+	CFLAGS_ARCH := -mcpu=$(CPU)
+	TARGET := aarch64-none-elf
+else ifeq ($(ARCH),riscv64)
+	CFLAGS_ARCH := -march=rv64imafdc
+	TARGET := riscv64-none-elf
+else
+$(error Unsupported ARCH given)
+endif
+
+ifeq ($(strip $(TOOLCHAIN)), clang)
+	CFLAGS_ARCH += -target $(TARGET)
+endif
+
+# Use sDDF custom libc for sDDF components
+SDDF_CUSTOM_LIBC := 1
 
 VMM_IMAGE_DIR := ${EXAMPLE_DIR}/vmm
 LINUX := $(VMM_IMAGE_DIR)/Linux
@@ -66,7 +83,7 @@ CFLAGS := \
 	-Wno-unused-function \
 	-I. \
 	-I$(BOARD_DIR)/include \
-	-target $(TARGET) \
+	$(CFLAGS_ARCH) \
 	-I$(LIBVMM_DIR)/src/arch/aarch64 \
 	-I$(LIBVMM_DIR)/src \
 	-I$(LIBVMM_DIR)/src/util \
