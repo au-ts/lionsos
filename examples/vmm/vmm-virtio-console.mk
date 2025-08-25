@@ -10,11 +10,6 @@ ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
 
-ifeq ($(strip $(LIBRT)),)
-CLANG_RESOURCE_DIR := $(shell clang --print-resource-dir)
-export LIBRT := $(CLANG_RESOURCE_DIR)/../../baremetal
-endif
-
 ifeq ($(strip $(LionsOS)),)
 $(error LionsOS should point to the root of the LionOS source tree)
 endif
