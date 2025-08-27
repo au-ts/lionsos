@@ -12,7 +12,7 @@ on:
 env:
   MICROKIT_VERSION: 2.0.1
   MICROKIT_URL: https://github.com/seL4/microkit/releases/download/2.0.1/microkit-sdk-2.0.1
-  SDFGEN_VERSION: 0.23.1
+  SDFGEN_VERSION: 0.26.0
 
 jobs:
   build_examples_linux_x86_64:
