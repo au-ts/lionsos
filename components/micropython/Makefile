@@ -67,7 +67,6 @@ SRC_C = \
 	modtime.c \
 	mpfirewallport.c \
 	modfs_raw.c \
-	newlibc_stubs.c \
 	vfs_fs_file.c \
 	vfs_fs.c \
 	fs_helpers.c \

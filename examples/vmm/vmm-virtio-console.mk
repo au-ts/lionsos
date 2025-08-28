@@ -60,9 +60,6 @@ ifeq ($(strip $(TOOLCHAIN)), clang)
 	CFLAGS_ARCH += -target $(TARGET)
 endif
 
-# Use sDDF custom libc for sDDF components
-SDDF_CUSTOM_LIBC := 1
-
 VMM_IMAGE_DIR := ${EXAMPLE_DIR}/vmm
 LINUX := $(VMM_IMAGE_DIR)/Linux
 INITRD := $(VMM_IMAGE_DIR)/initrd.img
@@ -86,6 +83,7 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
+	-I$(MUSL)/include \
 	-MD \
 	-DMAC_BASE_ADDRESS=$(MAC_BASE_ADDRESS)
 
@@ -93,8 +91,8 @@ VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}
 # we have only one client
 SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=1
 
-LDFLAGS := -L$(BOARD_DIR)/lib
-LIBS := -lmicrokit -Tmicrokit.ld
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
+LIBS := -lmicrokit -Tmicrokit.ld -lc
 
 IMAGE_FILE := $(BUILD_DIR)/vmdev.img
 REPORT_FILE := $(BUILD_DIR)/report.txt

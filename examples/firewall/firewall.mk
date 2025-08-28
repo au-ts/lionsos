@@ -45,9 +45,6 @@ ifeq ($(strip $(TOOLCHAIN)), clang)
 	CFLAGS_ARCH += -target $(TARGET)
 endif
 
-# Use sDDF custom libc for sDDF components
-SDDF_CUSTOM_LIBC := 1
-
 MICRODOT := $(LIONSOS)/dep/microdot/src
 FIREWALL_NET_COMPONENTS := $(FIREWALL_SRC_DIR)/net_components
 FIREWALL_FILTERS := $(FIREWALL_SRC_DIR)/filters
@@ -92,10 +89,11 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	-I$(MUSL)/include
 
-LDFLAGS := -L$(BOARD_DIR)/lib
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
+LIBS := -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a
 
 IMAGE_FILE := firewall.img
 REPORT_FILE := report.txt
@@ -131,7 +129,7 @@ $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
 	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" ${MUSL_SRC}/configure CROSS_COMPILE=llvm- --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=$(TARGET) --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
 	${MAKE} -C ${MUSL} install
 
-%.o: %.c
+%.o: %.c | $(MUSL)/include
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 %.elf: %.o

@@ -59,9 +59,6 @@ ifeq ($(strip $(TOOLCHAIN)), clang)
 	CFLAGS_ARCH += -target $(TARGET)
 endif
 
-# Use sDDF custom libc for sDDF components
-SDDF_CUSTOM_LIBC := 1
-
 VMM_IMAGE_DIR := ${EXAMPLE_DIR}/vmm
 LINUX := 1e6f245cabe25aabf179448e41dea5fe5550c98d-linux
 INITRD := 1ef035ae59438f6df6c596a6de7cc36d6a3368ac-initrd.img
@@ -82,12 +79,13 @@ CFLAGS := \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
 	-I$(LIBVMM)/include \
+	-I$(MUSL)/include \
 	-MD
 
 VPATH := ${LIBVMM}:${VMM_IMAGE_DIR}
 
-LDFLAGS := -L$(BOARD_DIR)/lib
-LIBS := -lmicrokit -Tmicrokit.ld
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
+LIBS := -lmicrokit -Tmicrokit.ld -lc
 
 IMAGE_FILE := $(BUILD_DIR)/vmdev.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
@@ -149,4 +147,3 @@ include ${LIBVMM}/vmm.mk
 
 ${SDDF}/include ${LIBVMM}/vmm.mk:
 	cd ${LIONSOS}; git submodule update --init $(dir $@)
-
