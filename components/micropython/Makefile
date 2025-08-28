@@ -63,6 +63,7 @@ SRC_C = \
 	micropython.c \
 	mphalport.c \
 	modtime.c \
+	mpfirewallport.c \
 	modfs_raw.c \
 	newlibc_stubs.c \
 	vfs_fs_file.c \
@@ -89,10 +90,11 @@ SRC_C = \
 	shared/libc/printf.c \
 	shared/libc/__errno.c \
 	shared/timeutils/timeutils.c \
-	shared/netutils/netutils.c
+	shared/netutils/netutils.c \
+	$(USER_C_MODULES)
 
 # Define source files containung qstrs.
-SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c vfs_fs_file.c vfs_fs.c modfs_raw.c
+SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c vfs_fs_file.c vfs_fs.c modfs_raw.c $(USER_C_MODULES)
 
 # Frozen module to execute; otherwise run REPL
 ifdef EXEC_MODULE
@@ -117,6 +119,8 @@ ifdef ENABLE_SERIAL_STDIO
 SRC_C += shared/runtime/sys_stdio_mphal.c
 CFLAGS += -DENABLE_SERIAL_STDIO
 endif
+
+# $(error $(CFLAGS))
 
 # Define the required object files.
 OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))

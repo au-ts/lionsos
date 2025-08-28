@@ -24,8 +24,13 @@
 #include <sddf/network/config.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/lib_sddf_lwip.h>
+#include <lions/firewall/arp.h>
 #include <lions/fs/config.h>
+#include <lions/firewall/common.h>
+#include <lions/firewall/config.h>
+#include <lions/firewall/queue.h>
 #include "mpconfigport.h"
+#include "mpfirewallport.h"
 #include "fs_helpers.h"
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
@@ -34,12 +39,15 @@ __attribute__((__section__(".net_client_config"))) net_client_config_t net_confi
 __attribute__((__section__(".lib_sddf_lwip_config"))) lib_sddf_lwip_config_t lib_sddf_lwip_config;
 __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
 __attribute__((__section__(".i2c_client_config"))) i2c_client_config_t i2c_config;
+__attribute__((__section__(".fw_webserver_config"))) fw_webserver_config_t fw_config;
 
 /* MicroPython is always built with networking and I2C support, but whether we
  * actually do anything with it depends on how the user has connected the MicroPython PD,
  * that is what these globals are for. */
 bool net_enabled;
 bool i2c_enabled;
+bool fs_enabled;
+bool firewall_enabled;
 
 // Allocate memory for the MicroPython GC heap.
 static char heap[MICROPY_HEAP_SIZE];
@@ -56,6 +64,13 @@ serial_queue_handle_t serial_tx_queue_handle;
 
 net_queue_handle_t net_rx_handle;
 net_queue_handle_t net_tx_handle;
+
+fw_queue_t rx_active;
+fw_queue_t rx_free;
+fw_queue_t arp_req_queue;
+fw_queue_t arp_resp_queue;
+
+static char fw_ip_string[IPV4_ADDR_BUFLEN];
 
 int mp_mod_network_prefer_dns_use_ip_version = 4;
 
@@ -98,6 +113,34 @@ start_repl:
     gc_init(heap, heap + sizeof(heap));
     mp_init();
 
+    char *ip_string_arg = NULL;
+    sddf_lwip_tx_intercept_condition_fn fw_intercept_arp = NULL;
+    sddf_lwip_tx_handle_intercept_fn fw_handle_arp = NULL;
+    if (firewall_enabled) {
+        assert(net_enabled);
+        // Active Rx packets are received from routing component
+        fw_queue_init(&rx_active, fw_config.rx_active.queue.vaddr,
+            sizeof(net_buff_desc_t), fw_config.rx_active.capacity);
+        // Free Rx buffers are returned to the Rx virtualiser
+        fw_queue_init(&rx_free, fw_config.rx_free.queue.vaddr,
+            sizeof(net_buff_desc_t), fw_config.rx_free.capacity);
+        // ARP queue is used to transmit ARP requests to the ARP requestor component
+        fw_queue_init(&arp_req_queue, fw_config.arp_queue.request.vaddr,
+            sizeof(fw_arp_request_t), fw_config.arp_queue.capacity);
+        fw_queue_init(&arp_resp_queue, fw_config.arp_queue.response.vaddr,
+            sizeof(fw_arp_request_t), fw_config.arp_queue.capacity);
+        
+        // lib sDDF LWIP requires ipv4 string for static ip configuration
+        ipaddr_to_string(fw_config.interfaces[fw_config.interface].ip, fw_ip_string);
+
+        // lib sDDF LWIP firewall arguments
+        ip_string_arg = fw_ip_string;
+        fw_intercept_arp = mpfirewall_intercept_arp;
+        fw_handle_arp = mpfirewall_handle_arp;
+
+        init_firewall_webserver();
+    }
+
     if (net_enabled) {
         if (net_config.rx.num_buffers) {
             net_queue_init(&net_rx_handle, net_config.rx.free_queue.vaddr,
@@ -110,15 +153,21 @@ start_repl:
         }
 
         sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, net_rx_handle,
-            net_tx_handle, NULL, printf, netif_status_callback, NULL,
-            NULL, NULL);
+            net_tx_handle, ip_string_arg, printf, netif_status_callback, NULL,
+            fw_intercept_arp, fw_handle_arp);
 
         sddf_lwip_maybe_notify();
+    }
+
+    if (firewall_enabled) {
+        mpfirewall_handle_notify();
     }
     // initialisation of the filesystem utilises the event loop and the event
     // loop unconditionally tries to process incoming network buffers; therefore
     // the networking needs to be initialised before initialising the fs
-    init_vfs();
+    if (fs_enabled) {
+        init_vfs();
+    }
 
     // Start a normal REPL; will exit when ctrl-D is entered on a blank line.
 #ifndef EXEC_MODULE
@@ -144,18 +193,21 @@ void init(void) {
     // to real serial instead of microkit_dbg_puts
     assert(serial_config_check_magic(&serial_config));
     assert(timer_config_check_magic(&timer_config));
-    assert(fs_config_check_magic(&fs_config));
-
     net_enabled = net_config_check_magic(&net_config);
+    fs_enabled = fs_config_check_magic(&fs_config);
 
     if (serial_config.rx.queue.vaddr != NULL) {
         serial_queue_init(&serial_rx_queue_handle, serial_config.rx.queue.vaddr, serial_config.rx.data.size, serial_config.rx.data.vaddr);
     }
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 
-    fs_command_queue = fs_config.server.command_queue.vaddr;
-    fs_completion_queue = fs_config.server.completion_queue.vaddr;
-    fs_share = fs_config.server.share.vaddr;
+    firewall_enabled = (fw_config.rx_active.queue.vaddr != NULL);
+
+    if (fs_enabled) {
+        fs_command_queue = fs_config.server.command_queue.vaddr;
+        fs_completion_queue = fs_config.server.completion_queue.vaddr;
+        fs_share = fs_config.server.share.vaddr;
+    }
 
     i2c_enabled = i2c_config_check_magic(&i2c_config);
     if (i2c_enabled) {
@@ -175,17 +227,29 @@ void init(void) {
 }
 
 void notified(microkit_channel ch) {
+    if (firewall_enabled) {
+        mpfirewall_process_arp();
+        mpfirewall_process_rx();
+    }
+
     if (net_enabled) {
         sddf_lwip_process_rx();
         sddf_lwip_process_timeout();
     }
-    fs_process_completions();
+
+    if (fs_enabled) {
+        fs_process_completions();
+    }
 
     // We ignore errors because notified can be invoked without the MP cothread awaiting in cases such as an async I/O completing.
     microkit_cothread_recv_ntfn(ch);
 
     if (net_enabled) {
         sddf_lwip_maybe_notify();
+    }
+
+    if (firewall_enabled) {
+        mpfirewall_handle_notify();
     }
 }
 
