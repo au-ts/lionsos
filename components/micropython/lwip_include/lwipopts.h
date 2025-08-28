@@ -50,13 +50,6 @@
 #define LWIP_DNS 1
 
 /**
- * Since we do not currently have an implementation of rand, we disable the
- * LWIP_DNS_SECURE_RAND_XID functionality of the LWIP DNS module as it requires
- * a random number generator LWIP_RAND.
- */
-#define LWIP_DNS_SECURE (LWIP_DNS_SECURE_NO_MULTIPLE_OUTSTANDING | LWIP_DNS_SECURE_RAND_SRC_PORT)
-
-/**
  * Enable DHCP module.
  */
 #define LWIP_DHCP 1
