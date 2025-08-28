@@ -54,9 +54,6 @@ ifeq ($(strip $(TOOLCHAIN)), clang)
 	CFLAGS_ARCH += -target $(TARGET)
 endif
 
-# Use sDDF custom libc for sDDF components
-SDDF_CUSTOM_LIBC := 1
-
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL_SRC := $(LIONSOS)/dep/musllibc
 MUSL := musllibc
@@ -86,10 +83,11 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	-I$(MUSL)/include
 
-LDFLAGS := -L$(BOARD_DIR)/lib
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
+LIBS := -lmicrokit -Tmicrokit.ld  -lc libsddf_util_debug.a
 
 IMAGE_FILE := webserver.img
 REPORT_FILE := report.txt
@@ -134,6 +132,8 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 		  ${SDDF}/network/components/network_components.mk \
 		  ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
 		  ${SDDF}/serial/components/serial_components.mk
+
+timer/timer.o lib_sddf_lwip.a: $(MUSL)/include $(MUSL)/lib/libc.a
 
 include ${SDDF_MAKEFILES}
 include $(NFS)/nfs.mk

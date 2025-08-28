@@ -53,9 +53,6 @@ ifeq ($(strip $(TOOLCHAIN)), clang)
 	CFLAGS_ARCH += -target $(TARGET)
 endif
 
-# Use sDDF custom libc for sDDF components
-SDDF_CUSTOM_LIBC := 1
-
 # If the KITTY_CONFIG is in deploy, then we will set the exec module
 # of Micropython to be the "deploy.py" file resident in the client directory.
 ifeq ($(strip $(DEPLOY)),1)
@@ -107,10 +104,11 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	-I$(MUSL)/include
 
-LDFLAGS := -L$(BOARD_DIR)/lib
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
+LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
 
 SYSTEM_FILE := kitty.system
 IMAGE_FILE := kitty.img
@@ -136,6 +134,8 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 	${SDDF}/serial/components/serial_components.mk \
 	${SDDF}/i2c/components/i2c_virt.mk \
 	${SDDF}/libco/libco.mk
+
+timer/timer.o lib_sddf_lwip.a: $(MUSL)/include $(MUSL)/lib/libc.a
 
 # We can build the kitty system without the I2C Driver
 ifneq ($(I2C_DRIV_DIR), )
