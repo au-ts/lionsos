@@ -170,6 +170,13 @@ long sys_write(va_list ap)
     return -1;
 }
 
+long sys_read(va_list ap)
+{
+    int fd = va_arg(ap, int);
+    assert(fd == SERVICES_FD);
+    return 0;
+}
+
 long sys_clock_gettime(va_list ap)
 {
     clockid_t clk_id = va_arg(ap, clockid_t);
@@ -271,8 +278,13 @@ long sys_writev(va_list ap)
 
 long sys_openat(va_list ap)
 {
-    (void)ap;
-    return ENOSYS;
+    int dirfd = va_arg(ap, int);
+    assert(dirfd == AT_FDCWD);
+    const char *pathname = va_arg(ap, const char *);
+    if (strcmp(pathname, "/etc/services") == 0) {
+        return SERVICES_FD;
+    }
+    return -ENOENT;
 }
 
 long sys_getuid(va_list ap)
@@ -357,6 +369,10 @@ long sys_socket_connect(va_list ap)
 long sys_close(va_list ap)
 {
     long fd = va_arg(ap, int);
+
+    if (fd == SERVICES_FD) {
+        return 0;
+    }
 
     assert(fd_active[fd]);
 
@@ -517,11 +533,12 @@ void syscalls_init(void)
     syscall_table[__NR_getuid] = (muslcsys_syscall_t)sys_getuid;
     syscall_table[__NR_getgid] = (muslcsys_syscall_t)sys_getgid;
     syscall_table[__NR_setsockopt] = (muslcsys_syscall_t)sys_setsockopt;
-    syscall_table[__NR_getsockopt] = (muslcsys_syscall_t)sys_setsockopt;
+    syscall_table[__NR_getsockopt] = (muslcsys_syscall_t)sys_getsockopt;
     syscall_table[__NR_sendto] = (muslcsys_syscall_t)sys_sendto;
     syscall_table[__NR_recvfrom] = (muslcsys_syscall_t)sys_recvfrom;
     syscall_table[__NR_close] = (muslcsys_syscall_t)sys_close;
     syscall_table[__NR_dup3] = (muslcsys_syscall_t)sys_dup3;
+    syscall_table[__NR_read] = (muslcsys_syscall_t)sys_read;
 }
 
 int socket_index_of_fd(int fd) {

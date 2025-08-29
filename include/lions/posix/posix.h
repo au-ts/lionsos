@@ -4,6 +4,7 @@
  */
 
 #define MAX_SOCKET_FDS 100
+#define SERVICES_FD 101
 
 void syscalls_init(void);
 int socket_index_of_fd(int fd);
