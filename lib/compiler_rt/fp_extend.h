@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2025 LLVM Project
  */
 
-//===-lib/fp_extend.h - low precision -> high precision conversion -*- C
+//===-lib/compiler_rt_extend.h - low precision -> high precision conversion -*- C
 //-*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.

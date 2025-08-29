@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2025 LLVM Project
  */
 
-//===----- lib/fp_add_impl.inc - floaing point addition -----------*- C -*-===//
+//===----- lib/compiler_rt_add_impl.inc - floaing point addition -----------*- C -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
