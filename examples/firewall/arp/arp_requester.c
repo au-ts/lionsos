@@ -102,7 +102,7 @@ static void process_requests()
                 entry->client |= BIT(client);
                 continue;
             }
-            
+
 
             /* Generate ARP request */
             net_buff_desc_t buffer = {};

@@ -94,7 +94,7 @@ static void tx_provide(void)
             int err = fw_dequeue(&fw_active_clients[client], &buffer);
             assert(!err);
 
-            assert(buffer.io_or_offset % NET_BUFFER_SIZE == 0 && 
+            assert(buffer.io_or_offset % NET_BUFFER_SIZE == 0 &&
                    buffer.io_or_offset < NET_BUFFER_SIZE * fw_active_clients[client].capacity);
 
             uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)fw_config.active_clients[client].data.region.vaddr;

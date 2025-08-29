@@ -159,11 +159,11 @@ typedef enum {
  * @param instances_capacity capacity of instance tables.
  * @param default_action default action of filter.
  */
-static void fw_filter_state_init(fw_filter_state_t *state, 
-                                 void *rules, 
+static void fw_filter_state_init(fw_filter_state_t *state,
+                                 void *rules,
                                  uint16_t rules_capacity,
-                                 void *internal_instances, 
-                                 void *external_instances, 
+                                 void *internal_instances,
+                                 void *external_instances,
                                  uint16_t instances_capacity,
                                  fw_action_t default_action)
 {
@@ -189,7 +189,7 @@ static void fw_filter_state_init(fw_filter_state_t *state,
  * @param dst_port_any whether rule applies to any destination port.
  * @param action action to be applied to traffic matching rule.
  * @param rule_id address of rule id to be set upon successful rule creation.
- * 
+ *
  * @return error status.
  */
 static fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
@@ -285,7 +285,7 @@ static fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
  * @param dst_port destination port of instance traffic.
  * @param default_action whether connect rule was matched via filter's default action.
  * @param rule_id id of connect rule.
- * 
+ *
  * @return error status.
  */
 static fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state,
@@ -345,7 +345,7 @@ static fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state,
  * @param dst_ip destination ip to match.
  * @param dst_port destination port to match.
  * @param rule_id id of matching rule. Unmodified if no match.
- * 
+ *
  * @return filter action to be applied. None is returned if no match is found.
  */
 static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
@@ -433,7 +433,7 @@ static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
 /**
  * Remove instances associated with a rule. To be used when a rule is
  * deleted or default action is changed.
- * 
+ *
  * @param state address of filter state.
  * @param default_action whether instances of the default action should be removed.
  * @param rule_id ID of rule that has been deleted.
@@ -449,11 +449,11 @@ static fw_filter_err_t fw_filter_remove_instances(fw_filter_state_t *state,
         if (!instance->valid) {
             continue;
         }
-        
+
         if (default_action && (default_action != instance->default_action)) {
             continue;
         }
-        
+
         if (!default_action && (rule_id != instance->rule_id)) {
             continue;
         }
@@ -466,7 +466,7 @@ static fw_filter_err_t fw_filter_remove_instances(fw_filter_state_t *state,
 
 /**
  * Update filter's default action.
- * 
+ *
  * @param state address of filter state.
  * @param new_action new default action.
  *
@@ -484,7 +484,7 @@ static fw_filter_err_t fw_filter_update_default_action(fw_filter_state_t *state,
         fw_filter_err_t err = fw_filter_remove_instances(state, true, 0);
         assert(err == FILTER_ERR_OKAY);
     }
-    
+
     state->default_action = new_action;
 
     return FILTER_ERR_OKAY;
@@ -492,7 +492,7 @@ static fw_filter_err_t fw_filter_update_default_action(fw_filter_state_t *state,
 
 /**
  * Remove a filter rule.
- * 
+ *
  * @param state address of filter state.
  * @param rule_id ID of rule to be deleted.
  *
@@ -511,7 +511,7 @@ static fw_filter_err_t fw_filter_remove_rule(fw_filter_state_t *state,
         fw_filter_err_t err = fw_filter_remove_instances(state, false, rule_id);
         assert(err == FILTER_ERR_OKAY);
     }
-    
+
     rule->valid = false;
 
     return FILTER_ERR_OKAY;

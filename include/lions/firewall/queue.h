@@ -12,7 +12,7 @@
 #include <string.h>
 #include <sddf/util/fence.h>
 #include <sddf/util/util.h>
- 
+
 typedef struct fw_queue_indeces {
     /* index to insert at */
     uint64_t tail;
@@ -81,7 +81,7 @@ static inline int fw_enqueue(fw_queue_t *queue,
     if (fw_queue_full(queue)) {
         return -1;
     }
-    
+
     size_t offset = (queue->idx->tail % queue->capacity) * queue->entry_size;
     uintptr_t dest = queue->entries + offset;
     memcpy((void *)dest, entry, queue->entry_size);

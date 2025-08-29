@@ -59,7 +59,7 @@ static void filter(void)
                         ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), tcp_hdr->dst_port);
                 }
             }
-            
+
             /* Add an established connection in shared memory for corresponding filter */
             if (action == FILTER_ACT_CONNECT) {
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_pkt->src_ip, tcp_hdr->src_port,
@@ -84,7 +84,7 @@ static void filter(void)
             if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED || action == FILTER_ACT_ALLOW) {
                 /* Reset the checksum as it's recalculated in hardware */
                 tcp_hdr->check = 0;
-                
+
                 err = fw_enqueue(&router_queue, &buffer);
                 assert(!err);
                 transmitted = true;
@@ -215,7 +215,7 @@ void init(void)
 
     net_queue_init(&rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
         net_config.rx.num_buffers);
-    
+
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr,
         sizeof(net_buff_desc_t), filter_config.router.capacity);
 

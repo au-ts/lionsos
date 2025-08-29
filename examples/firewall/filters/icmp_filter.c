@@ -60,7 +60,7 @@ static void filter(void)
                         ipaddr_to_string(icmp_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                 }
             }
-            
+
             /* Add an established connection in shared memory for corresponding filter */
             if (action == FILTER_ACT_CONNECT) {
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, icmp_hdr->src_ip, ICMP_FILTER_DUMMY_PORT,
@@ -83,7 +83,7 @@ static void filter(void)
 
             /* Transmit the packet to the routing component */
             if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED || action == FILTER_ACT_ALLOW) {
-                
+
                 /* Reset the checksum as it's recalculated in hardware */
                 icmp_hdr->checksum = 0;
 
@@ -213,7 +213,7 @@ void init(void)
 
     net_queue_init(&rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
         net_config.rx.num_buffers);
-    
+
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr,
         sizeof(net_buff_desc_t), filter_config.router.capacity);
 

@@ -87,7 +87,7 @@ bool mpfirewall_intercept_arp(struct pbuf *p) {
     return true;
 }
 
-/** 
+/**
  * Only invoked if p holds an ARP packet (i.e. firewall_catch_arp(p) == true).
  * ARP packets are not transmitted directly, instead they are converted to ARP
  * requests and passed to the ARP requester to handle.
@@ -95,7 +95,7 @@ bool mpfirewall_intercept_arp(struct pbuf *p) {
 net_sddf_err_t mpfirewall_handle_arp(struct pbuf *p) {
     /**
      * Check if the destination ip is ours - if so, this packet is most likely
-     * an ARP probe. We should discard. 
+     * an ARP probe. We should discard.
     */
     arp_packet_t *arp = (arp_packet_t *)p->payload;
     if (arp->ipdst_addr == fw_config.interfaces[fw_config.interface].ip) {

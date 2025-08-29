@@ -45,7 +45,7 @@ static void generate_icmp(void)
             memcpy(&icmp_resp->ethdst_addr, &req.hdr.ethsrc_addr, ETH_HWADDR_LEN);
             memcpy(&icmp_resp->ethsrc_addr, &req.hdr.ethdst_addr, ETH_HWADDR_LEN);
             icmp_resp->eth_type = HTONS(ETH_TYPE_IP);
-            
+
             /* Construct IP packet */
             icmp_resp->ihl_version = (4 << 4) | (5);
             /* The differentiated services code 48 is for network control traffic. */
@@ -94,7 +94,7 @@ static void generate_icmp(void)
         }
     }
 
-    for (uint8_t out_int = 0; out_int < icmp_config.num_interfaces; out_int++) { 
+    for (uint8_t out_int = 0; out_int < icmp_config.num_interfaces; out_int++) {
         if (transmitted[out_int]) {
             microkit_deferred_notify(net_configs[out_int]->tx.id);
         }

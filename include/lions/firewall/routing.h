@@ -273,7 +273,7 @@ static fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting,
     /* Update counts */
     pkts_waiting->length++;
     pkts_waiting->size++;
-    
+
     return ROUTING_ERR_OKAY;
 }
 
@@ -482,7 +482,7 @@ static fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table,
  * @param extern_subnet subnet bits of external interface.
  */
 static void fw_routing_table_init(fw_routing_table_t **table,
-                                  void *table_vaddr, 
+                                  void *table_vaddr,
                                   uint16_t capacity,
                                   uint32_t extern_ip,
                                   uint8_t extern_subnet)
@@ -494,7 +494,7 @@ static void fw_routing_table_init(fw_routing_table_t **table,
     /* Add a route for external network */
     fw_routing_err_t err = fw_routing_table_add_route(*table,
                                            ROUTING_OUT_EXTERNAL,
-                                                  extern_ip, 
+                                                  extern_ip,
                                               extern_subnet,
                                             FW_ROUTING_NONEXTHOP);
     assert(err == ROUTING_ERR_OKAY);

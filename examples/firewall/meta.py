@@ -48,14 +48,14 @@ class FirewallMemoryRegions():
         # Size of region calculated using region_size_formula
         self.region_size = region_size
         FirewallMemoryRegions.all_mrs.append(self)
-        
+
     def region_size(self):
         property
         if self.region_size == 0:
             print("Extracted region size of memory region {self.c_name} was 0!")
             sys.exit()
         return self.region_size
-    
+
     def calculate_size(self):
         if self.entry_size == 0:
             print("Entry size of memory region {self.c_name} was 0 during region size calculation!")
@@ -111,7 +111,7 @@ FILTER_ACTION_CONNECT = 3
 
 def ip_to_int(ipString: str):
     ipaddress.IPv4Address(ipString)
-     
+
     # Switch little to big endian
     ipSplit = ipString.split(".")
     ipSplit.reverse()
@@ -188,7 +188,7 @@ BOARDS: List[Board] = [
 # be created and mapped separately
 def fw_connection(pd1: SystemDescription.ProtectionDomain ,
                   pd2: SystemDescription.ProtectionDomain,
-                  capacity: int, 
+                  capacity: int,
                   region_size: int):
     queue_name = "fw_queue_" + pd1.name + "_" + pd2.name
     queue = MemoryRegion(sdf, queue_name, region_size)
@@ -256,7 +256,7 @@ def fw_region(pd: SystemDescription.ProtectionDomain,
     pd_map = Map(mr, pd.get_map_vaddr(mr), perms=perms)
     pd.add_map(pd_map)
     region_resource = RegionResource(pd_map.vaddr, region_size)
-    
+
     return region_resource
 
 # Map a physical mr into a pd to create a firewall device region
@@ -274,7 +274,7 @@ def fw_data_connection(pd1: SystemDescription.ProtectionDomain ,
                        pd2: SystemDescription.ProtectionDomain,
                        capacity: int,
                        queue_size: int,
-                       data: SystemDescription.MemoryRegion, 
+                       data: SystemDescription.MemoryRegion,
                        data_perms1: str,
                        data_perms2: str):
     connection = fw_connection(pd1, pd2, capacity, queue_size)
@@ -295,7 +295,7 @@ def fw_data_connection(pd1: SystemDescription.ProtectionDomain ,
 
 # Create a shared memory region between two pds from a mr
 def fw_shared_region(pd1: SystemDescription.ProtectionDomain,
-                     pd2: SystemDescription.ProtectionDomain, 
+                     pd2: SystemDescription.ProtectionDomain,
                      perms1: str,
                      perms2: str,
                      name_prefix: str,
@@ -431,7 +431,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
 
     # Webserver is a tx client of the internal network
     networks[int_net]["in_net"].add_client_with_copier(webserver, rx=False)
-    
+
     # Webserver uses lib sDDF LWIP
     webserver_lib_sddf_lwip = Sddf.Lwip(sdf, networks[int_net]["in_net"], webserver)
 
@@ -492,7 +492,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
         # Create a firewall data connection between router and output virt with
         # the rx dma region as data region
         router_out_virt_conn = fw_data_connection(router, out_virt, dma_buffer_queue_region.capacity,
-                                                  dma_buffer_queue_region.region_size, 
+                                                  dma_buffer_queue_region.region_size,
                                                   network["rx_dma_region"], "rw", "r")
 
         # Create a firewall connection for output virt to return buffers to
@@ -609,7 +609,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
             network["icmp_module"],
             []
         )
-        
+
         webserver_interface_config = FwWebserverInterfaceConfig(
             network["mac"],
             network["ip"],
@@ -669,7 +669,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
 
             network["configs"][router].filters.append((filter_router_conn[1]))
             webserver_interface_config.filters.append(webserver_filter_config)
-        
+
         webserver_config.interfaces.append(webserver_interface_config)
 
         # Make router and arp components serial clients
@@ -763,25 +763,25 @@ if __name__ == '__main__':
 
     global obj_copy
     obj_copy = args.objcopy
-    
+
     global obj_dump
     obj_dump = args.objdump
 
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
-    
+
     # For memory regions holding arrays of firewall structs, we require the size
     # of these structs to ensure our memory regions are the correct size. The
     # elf file for the routing component defines a set of const size_t variables
     # holding these sizes. We us objdump to extract these values.
-    
+
     # Dump the elf file of the routing component
     objdump_process = subprocess.run([obj_dump, "-DlSx", entry_size_extraction_elf],
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE,
                                      check=True)
     assert objdump_process.returncode == 0
-    
+
     for mem_region in FirewallMemoryRegions.all_mrs:
         entry_size = mem_region.entry_size
         if entry_size == 0:
@@ -803,7 +803,7 @@ if __name__ == '__main__':
                                               input=size_line.stdout,
                                               capture_output=True,
                                               check=True)
-            
+
             size_hex_string = str(size_bytes.stdout[:-1])[2:-1]
             entry_size = int(size_hex_string, 16)
             mem_region.entry_size = entry_size

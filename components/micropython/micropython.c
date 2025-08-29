@@ -129,7 +129,7 @@ start_repl:
             sizeof(fw_arp_request_t), fw_config.arp_queue.capacity);
         fw_queue_init(&arp_resp_queue, fw_config.arp_queue.response.vaddr,
             sizeof(fw_arp_request_t), fw_config.arp_queue.capacity);
-        
+
         // lib sDDF LWIP requires ipv4 string for static ip configuration
         ipaddr_to_string(fw_config.interfaces[fw_config.interface].ip, fw_ip_string);
 

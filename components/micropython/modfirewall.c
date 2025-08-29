@@ -228,7 +228,7 @@ static mp_obj_t route_get_nth(mp_obj_t interface_idx_in,
     fw_routing_entry_t *entry =
             (fw_routing_entry_t
                 *)(webserver_state[interface_idx].routing_table->entries + route_idx);
-     
+
     mp_obj_t tuple[4];
     tuple[0] = mp_obj_new_int_from_uint(route_idx);
     tuple[1] = mp_obj_new_int_from_uint(entry->ip);

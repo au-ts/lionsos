@@ -25,7 +25,7 @@ extern fw_webserver_config_t fw_config;
  */
 typedef struct fw_webserver_interface_state {
     fw_routing_table_t *routing_table;
-  
+
     fw_filter_state_t filter_states[FW_MAX_FILTERS];
     uint16_t num_rules[FW_MAX_FILTERS];
 } fw_webserver_interface_state_t;
@@ -41,7 +41,7 @@ extern fw_webserver_interface_state_t webserver_state[FW_NUM_INTERFACES];
  *
  * @param p pbuf to check.
  *
- * @return whether pbuf contains an outgoing ARP request packet. 
+ * @return whether pbuf contains an outgoing ARP request packet.
  */
 bool mpfirewall_intercept_arp(struct pbuf *p);
 
@@ -55,7 +55,7 @@ bool mpfirewall_intercept_arp(struct pbuf *p);
  *
  * @param p pbuf containing ARP request packet.
  *
- * @return error status of operation. 
+ * @return error status of operation.
  */
 net_sddf_err_t mpfirewall_handle_arp(struct pbuf *p);
 

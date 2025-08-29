@@ -59,7 +59,7 @@ static void filter(void)
                         ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), udp_hdr->dst_port);
                 }
             }
-            
+
             /* Add an established connection in shared memory for corresponding filter */
             if (action == FILTER_ACT_CONNECT) {
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_pkt->src_ip, udp_hdr->src_port,
@@ -83,7 +83,7 @@ static void filter(void)
 
             /* Transmit the packet to the routing component */
             if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED || action == FILTER_ACT_ALLOW) {
-                
+
                 /* Reset the checksum as it's recalculated in hardware */
                 udp_hdr->check = 0;
                 err = fw_enqueue(&router_queue, &buffer);
@@ -111,7 +111,7 @@ static void filter(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sUDP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[filter_config.webserver.interface], rule_id, 
+                        fw_frmt_str[filter_config.webserver.interface], rule_id,
                         ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), udp_hdr->src_port,
                         ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), udp_hdr->dst_port);
                 }
@@ -173,7 +173,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
                 ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet, src_port, src_port_any, fw_filter_action_str[action],
                 ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, dst_port, dst_port_any, fw_filter_err_str[err]);
         }
-    
+
         seL4_SetMR(FILTER_RET_ERR, err);
         seL4_SetMR(FILTER_RET_RULE_ID, rule_id);
         return microkit_msginfo_new(0, 2);
