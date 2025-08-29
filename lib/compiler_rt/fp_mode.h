@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2025 LLVM Project
  */
 
-//===----- lib/fp_mode.h - Floaing-point environment mode utilities --C -*-===//
+//===----- lib/compiler_rt_mode.h - Floaing-point environment mode utilities --C -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
