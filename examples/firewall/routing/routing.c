@@ -110,7 +110,7 @@ static void transmit_packet(net_buff_desc_t buffer,
 static void process_arp_waiting(void)
 {
     while (!fw_queue_empty(&arp_resp_queue)) {
-        fw_arp_request_t response; 
+        fw_arp_request_t response;
         int err = fw_dequeue(&arp_resp_queue, &response);
         assert(!err);
 
@@ -221,8 +221,8 @@ static void route(void)
                 assert(!err);
                 returned = true;
                 continue;
-            } 
-            
+            }
+
             /* Packet destined for webserver */
             if (router_config.interface == FW_INTERNAL_INTERFACE_ID &&
                 interface == ROUTING_OUT_SELF) {
@@ -275,7 +275,7 @@ static void route(void)
                 returned = true;
                 continue;
             }
-            
+
             /* no entry in ARP table or request still pending, store packet
             and send ARP request or await ARP response */
             if (arp == NULL || arp->state == ARP_STATE_PENDING) {
@@ -354,7 +354,7 @@ void init(void)
     if (router_config.interface == FW_INTERNAL_INTERFACE_ID) {
         fw_queue_init(&webserver, router_config.rx_active.queue.vaddr,
             sizeof(net_buff_desc_t), router_config.rx_active.capacity);
-        
+
         /* Add an entry for the webserver */
         fw_routing_table_add_route(routing_table,
                                    ROUTING_OUT_SELF,

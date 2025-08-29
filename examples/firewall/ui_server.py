@@ -135,7 +135,7 @@ def tupleToMac(macList):
 
     mac = ":".join(hexList)
     return mac
-    
+
 def interfaceStringToInt(componentType, interfaceStr):
   if componentType == "router":
       for i in range(numInterfaces):
@@ -237,7 +237,7 @@ def addRoute(request):
         if subnet < 0 or subnet > maxSubnetMask:
             print(f"UI SERVER|ERR: Supplied subnet mask {subnet} is invalid.")
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
-        
+
         # No IP needed for subnet == 0: route matches all IP
         if subnet == 0:
             ip = 0
@@ -356,7 +356,7 @@ def addRule(request, protocolStr):
         if interfaceInt < 0 or interfaceInt >= numInterfaces:
             print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
-        
+
         srcSubnet = newRule.get("src_subnet")
         if srcSubnet < 0 or srcSubnet > maxSubnetMask:
             print(f"UI SERVER|ERR: Supplied source subnet mask {srcSubnet} is invalid.")
@@ -402,14 +402,14 @@ def addRule(request, protocolStr):
 
         if protocol == protocolNums["icmp"] or srcPort is None:
             srcPortAny = True
-        else:            
+        else:
             if srcPort < 0 or srcPort > maxPortNum:
                 print(f"UI SERVER|ERR: Supplied invalid source port {srcPort}.")
                 raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
 
         if protocol == protocolNums["icmp"] or destPort is None:
             destPortAny = True
-        else:            
+        else:
             if destPort < 0 or destPort > maxPortNum:
                 print(f"UI SERVER|ERR: Supplied invalid destination port {destPort}.")
                 raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])

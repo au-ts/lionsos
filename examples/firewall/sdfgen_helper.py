@@ -26,12 +26,12 @@ from os import path
 # the script as arguments. If a C type is unknown and defined in another header, either include this
 # header in the files passed to the script, or temporarily add the definition to one of the config
 # files passed to generate the the python classes, then remove before building your system.
-# 
+#
 # The script assumes that config headers are passed in order of dependencies, so be sure to pass
 # files containing definitions that are used in other files first.
 #
 # The script assumes that all comments are across entire lines.
-# 
+#
 # Currently the script only supports simple single value macro substitutions and will fail to
 # recognise more complex expressions.
 #
@@ -139,7 +139,7 @@ class Struct():
         self.c_name = c_name + "_t"
         self.fields = dict()
         Struct.all_structs[self.c_name] = self
-    
+
     def addField(self, field):
         if field.c_name in self.fields:
             print(f"Duplicate field {field.c_name} for type {self.c_name}")
@@ -172,7 +172,7 @@ class Field():
         else:
             Struct.unknown_types[c_type].append((struct, self))
             self.p_class = None
-    
+
     def cSizeToPandNSize(self, struct, c_size):
         self.p_size = []
         self.n_size = []
@@ -206,26 +206,26 @@ def cNameToPName(c_name):
     p_name = ""
     for word in c_name.lower().split("_"):
         p_name += word.capitalize()
-    
+
     return p_name
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    
+
     # Accept values for unknown Macros
     parser.add_argument("--output", required=True)
     parser.add_argument("--configs", required=True)
     parser.add_argument("--macros", required=False)
     args = parser.parse_args()
-    
+
     p_classes_out = args.output
-    
+
     # Store argument passed macros
     if args.macros:
         for macro_def in args.macros.split(" "):
             macro_val = macro_def.split("=")
             Macro(macro_val[0], macro_val[1])
-    
+
     # Extract struct files
     c_headers = args.configs.split(" ")
 
@@ -241,7 +241,7 @@ if __name__ == '__main__':
                     value = match.group(2)
                     macro = Macro(c_name, value)
                     continue;
-                    
+
                 # Match on struct typedef
                 match = re.match(r"typedef[ \t]+struct[ \t]+(" + c_name_regex + ")[ \t]*{", line)
                 if not match:
@@ -294,9 +294,9 @@ if __name__ == '__main__':
                                     next_c_size.append(arg.strip())
                                     next_c_size.append(op)
                                 next_c_size.append(args[-1].strip())
-                        
+
                         c_size = next_c_size
-                    
+
                     field = Field(struct, c_name, c_type, c_size)
 
                     # This was the last field
@@ -332,7 +332,7 @@ if __name__ == '__main__':
                     out.write(f"# - {missing_struct.c_name}: {field.c_name}\n")
                 out.write("\n")
             out.write("\n")
-        
+
         if Macro.unknown_macros or Struct.unknown_types:
             sys.exit()
 

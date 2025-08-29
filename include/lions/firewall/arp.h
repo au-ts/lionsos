@@ -71,7 +71,7 @@ typedef struct fw_arp_request {
  * @param capacity capacity of arp table.
  */
 static void fw_arp_table_init(fw_arp_table_t *table,
-                              void *entries, 
+                              void *entries,
                               uint16_t capacity)
 {
     table->entries = (fw_arp_entry_t *)entries;
