@@ -15,7 +15,7 @@
 	branch = sel4
 [submodule "libnfs"]
 	path = dep/libnfs
-	url = https://github.com/au-ts/libnfs.git
+	url = https://github.com/sahlberg/libnfs.git
 [submodule "microdot"]
 	path = dep/microdot
 	url = https://github.com/miguelgrinberg/microdot.git

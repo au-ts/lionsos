@@ -38,7 +38,12 @@ $(LIBNFS)/CMakeLists.txt $(LIBNFS)/include:
 	cd $(LIONSOS); git submodule update --init dep/libnfs
 
 libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt $(MUSL)/lib/libc.a
-	MUSL=$(abspath $(MUSL)) CC=$(CC) CXX=$(CC) CPU=$(CPU) TARGET=$(TARGET) cmake -S $(LIBNFS) -B libnfs
+	MUSL=$(abspath $(MUSL)) CC=$(CC) CPU=$(CPU) TARGET=$(TARGET) \
+		cmake -S $(LIBNFS) -B libnfs \
+		-DCMAKE_TOOLCHAIN_FILE=$(NFS_DIR)/toolchain.cmake \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DBUILD_SHARED_LIBS=OFF \
+		-DHAVE_SIGNAL_H=0
 	cmake --build libnfs
 
 LIB_FS_SERVER_LIBC_INCLUDE := $(MUSL)/include
