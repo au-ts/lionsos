@@ -367,7 +367,7 @@ def addRule(request, protocolStr):
             srcIp = 0
         else:
             srcIp = ipToInt(newRule.get("src_ip"))
-            
+
         destSubnet = newRule.get("dest_subnet")
         if destSubnet < 0 or destSubnet > maxSubnetMask:
             print(f"UI SERVER|ERR: Supplied destination subnet mask {destSubnet} is invalid.")
