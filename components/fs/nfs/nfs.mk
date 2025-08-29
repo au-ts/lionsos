@@ -47,10 +47,10 @@ include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
 LIB_POSIX_LIBC_INCLUDE := $(MUSL)/include
 include $(LIONSOS)/lib/posix/lib_posix.mk
 
-LIB_FP_LIBC_INCLUDE := $(MUSL)/include
-include $(LIONSOS)/lib/fp/lib_fp.mk
+LIB_COMPILER_RT_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/compiler_rt/lib_compiler_rt.mk
 
-nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_fs_server.a lib_sddf_lwip_nfs.a lib_posix.a lib_fp.a
+nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_fs_server.a lib_sddf_lwip_nfs.a lib_posix.a lib_compiler_rt.a
 	$(LD) $(LDFLAGS) -o $@ $(LIBS) $^
 
 nfs:
