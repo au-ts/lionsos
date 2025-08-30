@@ -27,6 +27,7 @@
 #include <lions/fs/config.h>
 #include "mpconfigport.h"
 #include "fs_helpers.h"
+#include "mphalport.h"
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
@@ -179,6 +180,11 @@ void notified(microkit_channel ch) {
         sddf_lwip_process_rx();
         sddf_lwip_process_timeout();
     }
+    // Process serial rx into our internal serial buffers.
+    if (ch == serial_config.rx.id) {
+        process_sddf_rx_char();
+    }
+
     fs_process_completions();
 
     // We ignore errors because notified can be invoked without the MP cothread awaiting in cases such as an async I/O completing.
