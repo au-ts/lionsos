@@ -17,6 +17,7 @@ include $(MICROPYTHON_SRC)/py/mkenv.mk
 # Override mkenv.mk settings.
 CC = clang
 LD = ld.lld
+SIZE := llvm-size
 TARGET := aarch64-none-elf
 
 # Include py core make definitions.
