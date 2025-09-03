@@ -18,7 +18,7 @@ include $(MICROPYTHON_SRC)/py/mkenv.mk
 CC = clang
 LD = ld.lld
 SIZE := llvm-size
-TARGET := aarch64-none-elf
+TARGET ?= aarch64-none-elf
 
 # Include py core make definitions.
 include $(TOP)/py/py.mk
@@ -30,6 +30,7 @@ BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 # Set CFLAGS and libraries.
 CFLAGS += \
 	-O2 \
+	-g3 \
 	-I. \
 	-Ilwip_include \
 	-I$(BUILD) \
@@ -45,7 +46,9 @@ CFLAGS += \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU) \
-	-target $(TARGET)
+	-target $(TARGET) \
+	-DMPZ_DIG_SIZE=16 \
+	-fomit-frame-pointer
 
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(MUSL)/lib
 LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
@@ -123,7 +126,7 @@ OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
 all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ) $(BUILD)/lib_sddf_lwip_mp.a
+$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ) $(BUILD)/lib_sddf_lwip_mp.a $(BUILD)/lib_compiler_rt.a
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
