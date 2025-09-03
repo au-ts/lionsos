@@ -287,6 +287,17 @@ long sys_openat(va_list ap)
     return -ENOENT;
 }
 
+long sys_open(va_list ap)
+{
+    const char *pathname = va_arg(ap, const char *);
+    int flags = va_arg(ap, int);
+    int mode = va_arg(ap, int);
+    if (strcmp(pathname, "/etc/services") == 0) {
+        return SERVICES_FD;
+    }
+    return -ENOENT;
+}
+
 long sys_getuid(va_list ap)
 {
     (void)ap;
@@ -539,6 +550,9 @@ void syscalls_init(void)
     syscall_table[__NR_close] = (muslcsys_syscall_t)sys_close;
     syscall_table[__NR_dup3] = (muslcsys_syscall_t)sys_dup3;
     syscall_table[__NR_read] = (muslcsys_syscall_t)sys_read;
+#ifdef CONFIG_ARCH_X86_64
+    syscall_table[__NR_open] = (muslcsys_syscall_t)sys_open;
+#endif
 }
 
 int socket_index_of_fd(int fd) {
