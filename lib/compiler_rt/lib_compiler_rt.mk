@@ -19,6 +19,7 @@ LIB_COMPILER_RT_CFLAGS := -I$(LIB_COMPILER_RT_LIBC_INCLUDE)
 LIB_COMPILER_RT_FILES := addtf3.c \
 				comparetf2.c \
 				divtf3.c \
+				extendhfsf2.c \
 				extenddftf2.c \
 				fixtfsi.c \
 				fixunstfsi.c \
@@ -26,7 +27,8 @@ LIB_COMPILER_RT_FILES := addtf3.c \
 				floatunsitf.c \
 				fp_mode.c \
 				multf3.c \
-				subtf3.c
+				subtf3.c \
+				truncsfhf2.c
 LIB_COMPILER_RT_OBJ := $(addprefix lib/compiler_rt/, $(LIB_COMPILER_RT_FILES:.c=.o))
 
 lib_compiler_rt.a: $(LIB_COMPILER_RT_OBJ)
