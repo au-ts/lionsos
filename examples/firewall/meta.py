@@ -12,7 +12,6 @@ import ipaddress
 assert version('sdfgen').split(".")[1] == "25", "Unexpected sdfgen version"
 
 from sdfgen_helper import *
-from config_structs import *
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
@@ -755,6 +754,10 @@ if __name__ == '__main__':
     parser.add_argument("--objdump", required=True)
     parser.add_argument("--iotgate_idx", required=True)
     args = parser.parse_args()
+
+    # Import the config structs module from the build directory
+    sys.path.append(args.output)
+    from config_structs import *
 
     board = next(filter(lambda b: b.name == args.board, BOARDS))
 
