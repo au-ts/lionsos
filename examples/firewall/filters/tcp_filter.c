@@ -55,8 +55,8 @@ static void filter(void)
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sTCP filter found no match, performing default action %s: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.webserver.interface], fw_filter_action_str[action],
-                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), tcp_hdr->src_port,
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), tcp_hdr->dst_port);
+                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), HTONS(tcp_hdr->src_port),
+                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), HTONS(tcp_hdr->dst_port));
                 }
             }
 
@@ -68,15 +68,15 @@ static void filter(void)
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
                     sddf_printf("%sTCP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.webserver.interface], rule_id,
-                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), tcp_hdr->src_port,
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), tcp_hdr->dst_port);
+                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), HTONS(tcp_hdr->src_port),
+                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), HTONS(tcp_hdr->dst_port));
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
                     sddf_printf("%sTCP FILTER LOG: could not establish connection for rule %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
                         fw_frmt_str[filter_config.webserver.interface],
-                        rule_id, ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), tcp_hdr->src_port,
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), tcp_hdr->dst_port, fw_filter_err_str[fw_err]);
+                        rule_id, ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), HTONS(tcp_hdr->src_port),
+                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), HTONS(tcp_hdr->dst_port), fw_filter_err_str[fw_err]);
                 }
             }
 
@@ -93,13 +93,13 @@ static void filter(void)
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
                         sddf_printf("%sTCP filter transmitting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                             fw_frmt_str[filter_config.webserver.interface], rule_id,
-                            ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), tcp_hdr->src_port,
-                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), tcp_hdr->dst_port);
+                            ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), HTONS(tcp_hdr->src_port),
+                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), HTONS(tcp_hdr->dst_port));
                     } else if (action == FILTER_ACT_ESTABLISHED) {
                         sddf_printf("%sTCP filter transmitting via external rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                             fw_frmt_str[filter_config.webserver.interface], rule_id,
-                            ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), tcp_hdr->src_port,
-                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), tcp_hdr->dst_port);
+                            ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), HTONS(tcp_hdr->src_port),
+                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), HTONS(tcp_hdr->dst_port));
                     }
                 }
             } else if (action == FILTER_ACT_DROP) {
@@ -111,8 +111,8 @@ static void filter(void)
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sTCP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.webserver.interface], rule_id,
-                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), tcp_hdr->src_port,
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), tcp_hdr->dst_port);
+                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), HTONS(tcp_hdr->src_port),
+                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), HTONS(tcp_hdr->dst_port));
                 }
             }
         }
@@ -169,8 +169,8 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sTCP filter create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> (ip %s, mask %u, port %u, any_port %u): %s\n",
                 fw_frmt_str[filter_config.webserver.interface], rule_id,
-                ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet, src_port, src_port_any, fw_filter_action_str[action],
-                ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, dst_port, dst_port_any, fw_filter_err_str[err]);
+                ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet, HTONS(src_port), src_port_any, fw_filter_action_str[action],
+                ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, HTONS(dst_port), dst_port_any, fw_filter_err_str[err]);
         }
 
         seL4_SetMR(FILTER_RET_ERR, err);
