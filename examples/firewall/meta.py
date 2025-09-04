@@ -18,6 +18,42 @@ MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Channel = SystemDescription.Channel
 
+# System network constants
+ext_net = 0
+int_net = 1
+
+macs = [[0x00, 0x01, 0xc0, 0x39, 0xd5, 0x18], # External network
+        [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x10]] # Internal network
+
+subnet_bits = [12, # External network
+               24] # Internal network
+
+ips = ["172.16.2.1",  # External network
+       "192.168.1.1"] # Internal network
+
+@dataclass
+class Board:
+    name: str
+    arch: SystemDescription.Arch
+    paddr_top: int
+    serial: str
+    timer: str
+    ethernet0: str
+    ethernet1: str
+
+BOARDS: List[Board] = [
+    Board(
+        name="imx8mp_iotgate",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x70_000_000,
+        serial="soc@0/bus@30800000/serial@30890000",
+        timer="soc@0/bus@30000000/timer@302d0000",
+        ethernet0="soc@0/bus@30800000/ethernet@30be0000", #IMX
+        ethernet1="soc@0/bus@30800000/ethernet@30bf0000" #DWMAC
+    ),
+]
+
+# Memory region size helper functions
 page_size = 0x1000
 
 def round_up_to_Page(region_size: int) -> int:
@@ -28,8 +64,8 @@ def round_up_to_Page(region_size: int) -> int:
     else:
         return region_size + (page_size - (region_size % page_size))
 
-# Name of the elf file which contains const variables holding the size of memory
-# region entries
+# Elf file containing variables holding the size of structs required for
+# calculating memory region sizes
 entry_size_extraction_elf = "routing.elf"
 class FirewallMemoryRegions():
     # Store all config structs
@@ -64,6 +100,7 @@ class FirewallMemoryRegions():
             print("Calculate region size of memory region {self.c_name} was 0!")
             sys.exit()
 
+# Firewall memory region object declarations, update region capacities here
 dma_buffer_queue_region = FirewallMemoryRegions("fw_buffer_queue_entry_size",
                                                 512,
                                                 lambda x: 16 + x.capacity * x.entry_size)
@@ -101,13 +138,16 @@ filter_instances_region = FirewallMemoryRegions("fw_instance_size",
                                          512,
                                          lambda x: x.capacity * x.entry_size)
 
-ext_net = 0
-int_net = 1
-
+# Filter action encodings
 FILTER_ACTION_ALLOW = 1
 FILTER_ACTION_DROP = 2
 FILTER_ACTION_CONNECT = 3
 
+# ARP ethernet type numbers
+arp_responder_protocol = 0x92
+arp_requester_protocol = 0x93
+
+# Helper functions used to generate firewall structures
 def ip_to_int(ipString: str):
     ipaddress.IPv4Address(ipString)
 
@@ -116,63 +156,6 @@ def ip_to_int(ipString: str):
     ipSplit.reverse()
     reversedIp = ".".join(ipSplit)
     return int(ipaddress.IPv4Address(reversedIp))
-
-macs = [
-    # IOTGATE1:
-    [[0x00, 0x01, 0xc0, 0x39, 0xd5, 0x18], # External network, ETH1
-    [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x10]], # Internal network, ETH2
-    # IOTGATE2:
-    [[0x00, 0x01, 0xc0, 0x39, 0xd5, 0x1d], # External network, ETH1
-    [0x00, 0x01, 0xc0, 0x39, 0xd5, 0x15]], # Internal network, ETH2
-    # IOTGATE3:
-    [[0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x8c], # External network, ETH1
-    [0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x83]], # Internal network, ETH2
-    # IOTGATE4:
-    [[0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x8a], # External network, ETH1
-    [0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x85]], # Internal network, ETH2
-    # IOTGATE1:
-    [[0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x80], # External network, ETH1
-    [0x00, 0x01, 0xc0, 0x3b, 0x3b, 0x79]], # Internal network, ETH2
-]
-
-subnet_bits = [12, 24]
-ips = [
-    # IOTGATE1: EXT = 16912556, INT = 18983104
-    [ip_to_int("172.16.2.1"), ip_to_int("192.168.1.1")],
-    # IOTGATE2
-    [ip_to_int("172.16.2.2"), ip_to_int("192.168.2.1")],
-    # IOTGATE3
-    [ip_to_int("172.16.2.3"), ip_to_int("192.168.3.1")],
-    # IOTGATE4
-    [ip_to_int("172.16.2.4"), ip_to_int("192.168.4.1")],
-    # IOTGATE5
-    [ip_to_int("172.16.2.5"), ip_to_int("192.168.5.1")],
-]
-
-arp_responder_protocol = 0x92
-arp_requester_protocol = 0x93
-
-@dataclass
-class Board:
-    name: str
-    arch: SystemDescription.Arch
-    paddr_top: int
-    serial: str
-    timer: str
-    ethernet0: str
-    ethernet1: str
-
-BOARDS: List[Board] = [
-    Board(
-        name="imx8mp_iotgate",
-        arch=SystemDescription.Arch.AARCH64,
-        paddr_top=0x70_000_000,
-        serial="soc@0/bus@30800000/serial@30890000",
-        timer="soc@0/bus@30000000/timer@302d0000",
-        ethernet0="soc@0/bus@30800000/ethernet@30be0000", #IMX
-        ethernet1="soc@0/bus@30800000/ethernet@30bf0000" #DWMAC
-    ),
-]
 
 # Create a firewall connection, which is a single queue and a channel. Data must
 # be created and mapped separately
@@ -303,7 +286,7 @@ def fw_shared_region(pd1: SystemDescription.ProtectionDomain,
 
     return [region1, region2]
 
-def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
+def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     serial_node = dtb.node(board.serial)
     assert serial_node is not None
     ethernet_node0 = dtb.node(board.ethernet0)
@@ -312,7 +295,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
     assert ethernet_node1 is not None
     timer_node = dtb.node(board.timer)
     assert serial_node is not None
-    assert iotgate_idx is not None and iotgate_idx < 5 and iotgate_idx >= 0
 
     common_pds = []
 
@@ -322,8 +304,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
         networks.append({
             "num": i,
             "out_num": (i + 1) % 2,
-            "mac": macs[iotgate_idx][i],
-            "ip": ips[iotgate_idx][i],
+            "mac": macs[i],
+            "ip": ip_to_int(ips[i]),
             "out_dir": output_dir + "/net_data" + str(i),
             "configs":{},
             })
@@ -454,7 +436,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
                                         icmp_queue_region.capacity, icmp_queue_region.region_size)
 
     icmp_module_config = FwIcmpModuleConfig(
-        ips[iotgate_idx],
+        list(ip_to_int(ip) for ip in ips),
         [icmp_ext_router_conn[1], icmp_int_router_conn[1]],
         2
     )
@@ -585,7 +567,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
             network["num"],
             network["mac"],
             network["ip"],
-            ips[iotgate_idx][network["out_num"]],
+            ip_to_int(ips[network["out_num"]]),
             subnet_bits[network["out_num"]],
             router_in_virt_conn[0],
             None,
@@ -743,7 +725,6 @@ if __name__ == '__main__':
     parser.add_argument("--sdf", required=True)
     parser.add_argument("--objcopy", required=True)
     parser.add_argument("--objdump", required=True)
-    parser.add_argument("--iotgate_idx", required=True)
     args = parser.parse_args()
 
     # Import the config structs module from the build directory
@@ -804,4 +785,4 @@ if __name__ == '__main__':
 
         mem_region.calculate_size()
 
-    generate(args.sdf, args.output, dtb, (int(args.iotgate_idx) - 1))
+    generate(args.sdf, args.output, dtb)

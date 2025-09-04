@@ -9,10 +9,6 @@ $(error MICROKIT_SDK must be specified)
 endif
 override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
-ifeq ($(strip $(FW_IOTGATE_IDX)),)
-$(error FW_IOTGATE_IDX must be specified within range 1-5)
-endif
-
 ifeq ($(strip $(LIBGCC)),)
 export LIBGCC:=$(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libgcc.a)))
 endif
