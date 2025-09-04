@@ -173,10 +173,10 @@ BOARDS: List[Board] = [
         ethernet1="virtio_mmio@a002300"
     ),
     Board(
-        name="imx8mp_evk",
+        name="imx8mp_iotgate",
         arch=SystemDescription.Arch.AARCH64,
         paddr_top=0x70_000_000,
-        serial="soc@0/bus@30800000/spba-bus@30800000/serial@30890000",
+        serial="soc@0/bus@30800000/serial@30890000",
         timer="soc@0/bus@30000000/timer@302d0000",
         ethernet0="soc@0/bus@30800000/ethernet@30be0000", #IMX
         ethernet1="soc@0/bus@30800000/ethernet@30bf0000" #DWMAC

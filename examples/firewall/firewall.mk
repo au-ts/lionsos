@@ -10,7 +10,7 @@ BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
 
-ifeq ($(strip $(MICROKIT_BOARD)), imx8mp_evk)
+ifeq ($(strip $(MICROKIT_BOARD)), imx8mp_iotgate)
 	ETH_DRIV_DIR0 := imx
 	ETH_DRIV_DIR1 := dwmac-5.10a
 	SERIAL_DRIV_DIR := imx
