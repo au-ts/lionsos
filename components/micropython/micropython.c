@@ -116,6 +116,7 @@ start_repl:
     char *ip_string_arg = NULL;
     sddf_lwip_tx_intercept_condition_fn fw_intercept_arp = NULL;
     sddf_lwip_tx_handle_intercept_fn fw_handle_arp = NULL;
+    sddf_lwip_netif_status_callback_fn netif_callback = netif_status_callback;
     if (firewall_enabled) {
         assert(net_enabled);
         // Active Rx packets are received from routing component
@@ -137,6 +138,7 @@ start_repl:
         ip_string_arg = fw_ip_string;
         fw_intercept_arp = mpfirewall_intercept_arp;
         fw_handle_arp = mpfirewall_handle_arp;
+        netif_callback = fw_netif_status_callback;
 
         init_firewall_webserver();
     }
@@ -153,7 +155,7 @@ start_repl:
         }
 
         sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, net_rx_handle,
-            net_tx_handle, ip_string_arg, printf, netif_status_callback, NULL,
+            net_tx_handle, ip_string_arg, printf, netif_callback, NULL,
             fw_intercept_arp, fw_handle_arp);
 
         sddf_lwip_maybe_notify();

@@ -76,6 +76,11 @@ static void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN]) {
     memset(&arp_response_pkt.padding, 0, 10);
 }
 
+void fw_netif_status_callback(char *ip_addr) {
+    printf("%s: %s:%d:%s: IP address for %s is: %s\r\n",
+           microkit_name, __FILE__, __LINE__, __func__, microkit_name, ip_addr);
+}
+
 bool mpfirewall_intercept_arp(struct pbuf *p) {
     /* Check if this is an ARP request before transmitting through NIC */
     arp_packet_t *arp = (arp_packet_t *)p->payload;
