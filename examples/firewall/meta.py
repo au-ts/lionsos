@@ -9,7 +9,7 @@ from ctypes import *
 from importlib.metadata import version
 import ipaddress
 
-assert version('sdfgen').split(".")[1] == "25", "Unexpected sdfgen version"
+assert version('sdfgen').split(".")[1] == "26", "Unexpected sdfgen version"
 
 from sdfgen_helper import *
 
@@ -418,11 +418,11 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
                 # Drivers and routers do not need to be copied
                 if maybe_pd != network["driver"]:
                     # remove x.elf suffix from elf
-                    copy_elf(maybe_pd.elf[:-5], maybe_pd.elf[:-5], network["num"])
+                    copy_elf(maybe_pd.program_image[:-5], maybe_pd.program_image[:-5], network["num"])
                 sdf.add_pd(maybe_pd)
 
         for filter_pd in network["filters"].values():
-            copy_elf(filter_pd.elf[:-5], filter_pd.elf[:-5], network["num"])
+            copy_elf(filter_pd.program_image[:-5], filter_pd.program_image[:-5], network["num"])
             sdf.add_pd(filter_pd)
 
         # Ensure arp requester is client 0 for each network
@@ -721,21 +721,21 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, iotgate_idx: int):
             data_path = network["out_dir"] + "/firewall_config_" + pd.name + ".data"
             with open(data_path, "wb+") as f:
                 f.write(config.serialise())
-            update_elf_section(obj_copy, pd.elf,
+            update_elf_section(obj_copy, pd.program_image,
                                config.section_name,
                                data_path)
 
     data_path = output_dir + "/firewall_config_webserver.data"
     with open(data_path, "wb+") as f:
         f.write(webserver_config.serialise())
-    update_elf_section(obj_copy, webserver.elf,
+    update_elf_section(obj_copy, webserver.program_image,
                        webserver_config.section_name,
                        data_path)
 
     data_path = output_dir + "/firewall_icmp_module_config.data"
     with open(data_path, "wb+") as f:
         f.write(icmp_module_config.serialise())
-    update_elf_section(obj_copy, icmp_module.elf,
+    update_elf_section(obj_copy, icmp_module.program_image,
                        icmp_module_config.section_name,
                        data_path)
 
