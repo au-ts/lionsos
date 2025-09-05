@@ -45,15 +45,14 @@ ifeq ($(strip $(TOOLCHAIN)), clang)
 	CFLAGS_ARCH += -target $(TARGET)
 endif
 
-# Use sDDF custom libc for sDDF components
-SDDF_CUSTOM_LIBC := 1
-
 MICRODOT := $(LIONSOS)/dep/microdot/src
 FIREWALL_NET_COMPONENTS := $(FIREWALL_SRC_DIR)/net_components
 FIREWALL_FILTERS := $(FIREWALL_SRC_DIR)/filters
 FIREWALL_ICMP := $(FIREWALL_SRC_DIR)/icmp
 FIREWALL_ROUTING := $(FIREWALL_SRC_DIR)/routing
 FIREWALL_ARP := $(FIREWALL_SRC_DIR)/arp
+MUSL_SRC := $(LIONSOS)/dep/musllibc
+MUSL := musllibc
 
 METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
 DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
@@ -90,10 +89,11 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	-I$(MUSL)/include
 
-LDFLAGS := -L$(BOARD_DIR)/lib
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
+LIBS := -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a
 
 IMAGE_FILE := firewall.img
 REPORT_FILE := report.txt
@@ -121,6 +121,13 @@ include $(LIONSOS)/components/micropython/micropython.mk
 
 %.py: $(FIREWALL_SRC_DIR)/%.py
 	cp $< $@
+
+$(MUSL):
+	mkdir -p $@
+
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
+	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" ${MUSL_SRC}/configure CROSS_COMPILE=llvm- --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=$(TARGET) --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
+	${MAKE} -C ${MUSL} install
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -207,7 +214,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester1.data arp_requester1.elf
 
-$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(MUSL)/include $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu: $(IMAGE_FILE)
