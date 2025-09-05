@@ -762,7 +762,7 @@ if __name__ == '__main__':
         if entry_size == 0:
             # Extract lines that hold the value of the size variable. NOTE: we
             # assume the value is < UINT32_MAX
-            entry_size_lines = subprocess.run(["grep", "-A", "1", f"<{mem_region.c_name}>"],
+            entry_size_lines = subprocess.run(["grep", "-A", "1", "-E", f"^[0-9a-f]+ <{mem_region.c_name}>"],
                                               input=objdump_process.stdout,
                                               stdout=subprocess.PIPE,
                                               stderr=subprocess.PIPE,
