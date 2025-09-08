@@ -6,7 +6,7 @@
   description = "A flake for building LionsOS";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     zig-overlay.url = "github:mitchellh/zig-overlay";
     sdfgen.url = "github:au-ts/microkit_sdf_gen/0.26.0";
     sdfgen.inputs.nixpkgs.follows = "nixpkgs";
@@ -38,9 +38,9 @@
               llvm = pkgs.llvmPackages_18;
               zig = zig-overlay.packages.${system}."0.15.1";
 
-              pysdfgen = sdfgen.packages.${system}.pysdfgen.override { zig = zig; pythonPackages = pkgs.python39Packages; };
+              pysdfgen = sdfgen.packages.${system}.pysdfgen.override { zig = zig; pythonPackages = pkgs.python312Packages; };
 
-              pythonTool = pkgs.python39.withPackages (ps: [
+              pythonTool = pkgs.python312.withPackages (ps: [
                 pysdfgen
               ]);
             in
@@ -74,7 +74,7 @@
                 pythonTool
                 # for mypy-cross
                 gcc
-                # for musllibc
+                # for libnfs
                 cmake
                 # for git-clang-format.
                 llvm.libclang.python
