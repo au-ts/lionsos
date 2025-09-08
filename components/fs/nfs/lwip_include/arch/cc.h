@@ -20,16 +20,6 @@ typedef int64_t  s64_t;
 
 typedef uintptr_t mem_ptr_t;
 
-#ifndef SSIZE_MAX
-/* Whilst ssize_t is defined by sys/types.h, at least on aarch64-none-elf GCC
-   version 14.2.1 SSIZE_MAX is not defined.
-
-   If SSIZE_MAX is not defined then we take (SIZE_MAX - 1)/2 under the
-   assumption that ssize_t and size_t are related in the standard way.
-*/
-#define SSIZE_MAX ((SIZE_MAX - 1) >> 1)
-#endif
-
 #define U16_F "u"
 #define S16_F "d"
 #define X16_F "x"
@@ -81,5 +71,3 @@ typedef uintptr_t mem_ptr_t;
                 while(1);                                                      \
             }                                                                  \
         } while(0)
-
-#define LWIP_NO_LIMITS_H 1
