@@ -85,6 +85,8 @@ CFLAGS := \
 	-MP \
 	-Wall \
 	-Wno-unused-function \
+	-Wno-bitwise-op-parentheses \
+	-Wno-shift-op-parentheses \
 	-I$(BOARD_DIR)/include \
 	$(CFLAGS_ARCH) \
 	-DBOARD_$(MICROKIT_BOARD) \

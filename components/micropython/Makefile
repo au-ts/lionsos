@@ -42,6 +42,7 @@ CFLAGS += \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
 	-I$(MUSL)/include \
+	-Wno-shift-op-parentheses \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU) \
