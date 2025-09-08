@@ -29,6 +29,7 @@ LIB_SDDF_LWIP_CFLAGS_mp := \
 	-I$(MICROPYTHON_LIBC_INCLUDE) \
 	-I$(MICROPYTHON_DIR)/lwip_include \
 	-I$(SDDF)/network/ipstacks/lwip/src/include \
+	-Wno-shift-op-parentheses \
 	-Wno-tautological-constant-out-of-range-compare
 
 include $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.mk
