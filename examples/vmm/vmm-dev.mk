@@ -71,8 +71,8 @@ CFLAGS := \
 	-mtune=$(CPU) \
 	-mstrict-align \
 	-ffreestanding \
-	-g \
 	-O2 \
+	-g3 \
 	-Wall \
 	-Wno-unused-function \
 	-I. \
