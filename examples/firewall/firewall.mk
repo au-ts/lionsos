@@ -81,6 +81,7 @@ CFLAGS := \
 	-mstrict-align \
 	-ffreestanding \
 	-O2 \
+	-g3 \
 	-MD \
 	-MP \
 	-Wall \
