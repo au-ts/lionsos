@@ -42,8 +42,7 @@ libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt $(MUSL)/lib/libc.a
 		cmake -S $(LIBNFS) -B libnfs \
 		-DCMAKE_TOOLCHAIN_FILE=$(NFS_DIR)/toolchain.cmake \
 		-DCMAKE_BUILD_TYPE=Release \
-		-DBUILD_SHARED_LIBS=OFF \
-		-DHAVE_SIGNAL_H=0
+		-DBUILD_SHARED_LIBS=OFF
 	cmake --build libnfs
 
 LIB_FS_SERVER_LIBC_INCLUDE := $(MUSL)/include
