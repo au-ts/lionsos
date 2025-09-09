@@ -121,8 +121,6 @@ SRC_C += shared/runtime/sys_stdio_mphal.c
 CFLAGS += -DENABLE_SERIAL_STDIO
 endif
 
-# $(error $(CFLAGS))
-
 # Define the required object files.
 OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
