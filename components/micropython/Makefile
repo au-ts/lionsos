@@ -44,10 +44,12 @@ CFLAGS += \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU) \
-	-target $(TARGET)
+	-target $(TARGET) \
+	-DMPZ_DIG_SIZE=16 \
+	-fomit-frame-pointer
 
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(MICROPYTHON_LIBC)/lib
-LIBS += -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a
+LIBS += -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a $(BUILD)/lib_compiler_rt.a
 
 # Include libmicrokitco for blocking in Micropython
 BUILD_DIR=$(BUILD)
