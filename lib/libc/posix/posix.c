@@ -81,12 +81,13 @@ static size_t output(void *data, size_t count)
     while (sent < count)
     {
         char *nl = memchr(src, '\n', count - sent);
-        uint32_t stop = (nl == NULL)? count - sent: nl - src;
+        uint32_t stop = (nl == NULL) ? count - sent : nl - src;
         /* Enqueue to the first '\n' character, end of string
            or until queue is full */
         uint32_t enq = serial_enqueue_batch(&serial_tx_queue_handle, stop, src);
         sent += enq;
-        if (sent == count || serial_queue_free(&serial_tx_queue_handle) < 2) {
+        if (sent == count || serial_queue_free(&serial_tx_queue_handle) < 2)
+        {
             break;
         }
 
@@ -96,7 +97,8 @@ static size_t output(void *data, size_t count)
         src += enq + 1;
     }
 
-    if (sent) {
+    if (sent)
+    {
         microkit_notify(serial_config.tx.id);
     }
 
@@ -108,9 +110,12 @@ long sys_brk(va_list ap)
     uintptr_t newbrk = va_arg(ap, uintptr_t);
 
     /* if the newbrk is 0, return the bottom of the heap */
-    if (!newbrk) {
+    if (!newbrk)
+    {
         return morecore_base;
-    } else if (newbrk < morecore_top && newbrk > (uintptr_t)&morecore_area[0]) {
+    }
+    else if (newbrk < morecore_top && newbrk > (uintptr_t)&morecore_area[0])
+    {
         return morecore_base = newbrk;
     }
     return 0;
@@ -160,7 +165,8 @@ long sys_write(va_list ap)
     {
         uint32_t n = serial_enqueue_batch(&serial_tx_queue_handle, count, buf);
 
-        if (n) {
+        if (n)
+        {
             microkit_notify(serial_config.tx.id);
         }
 
@@ -251,7 +257,9 @@ long sys_writev(va_list ap)
         {
             ret += output(iov[i].iov_base, iov[i].iov_len);
         }
-    } else {
+    }
+    else
+    {
         // fildes must refer to socket
         int socket_handle = fd_socket[fildes];
 
@@ -259,13 +267,19 @@ long sys_writev(va_list ap)
         assert(socket_handle < MAX_SOCKETS);
         assert(socket_refcount[socket_handle] != 0);
 
-        for (int i = 0; i < iovcnt; i++) {
+        for (int i = 0; i < iovcnt; i++)
+        {
             int wrote = tcp_socket_write(socket_handle, iov[i].iov_base, iov[i].iov_len);
-            if (wrote < 0) {
-                if (ret == 0) {
-                    if (wrote == -2) {
+            if (wrote < 0)
+            {
+                if (ret == 0)
+                {
+                    if (wrote == -2)
+                    {
                         ret = -EAGAIN;
-                    } else {
+                    }
+                    else
+                    {
                         ret = -1;
                     }
                 }
@@ -282,7 +296,20 @@ long sys_openat(va_list ap)
     int dirfd = va_arg(ap, int);
     assert(dirfd == AT_FDCWD);
     const char *pathname = va_arg(ap, const char *);
-    if (strcmp(pathname, "/etc/services") == 0) {
+    if (strcmp(pathname, "/etc/services") == 0)
+    {
+        return SERVICES_FD;
+    }
+    return -ENOENT;
+}
+
+long sys_open(va_list ap)
+{
+    const char *pathname = va_arg(ap, const char *);
+    int flags = va_arg(ap, int);
+    int mode = va_arg(ap, int);
+    if (strcmp(pathname, "/etc/services") == 0)
+    {
         return SERVICES_FD;
     }
     return -ENOENT;
@@ -318,24 +345,30 @@ long sys_getsockopt(va_list ap)
 long sys_socket(va_list ap)
 {
     long fd = -1;
-    for (int i = LWIP_FD_START; i < MAX_SOCKET_FDS; i++) {
-        if (!fd_active[i]) {
+    for (int i = LWIP_FD_START; i < MAX_SOCKET_FDS; i++)
+    {
+        if (!fd_active[i])
+        {
             fd = i;
             break;
         }
     }
-    if (fd == -1) {
+    if (fd == -1)
+    {
         dlog("couldn't find available fd");
         return -1;
     }
 
     int socket_handle = tcp_socket_create();
-    if (socket_handle != -1) {
+    if (socket_handle != -1)
+    {
         socket_refcount[socket_handle]++;
         fd_active[fd] = true;
         fd_socket[fd] = socket_handle;
         return fd;
-    } else {
+    }
+    else
+    {
         dlog("sys_socket could not create socket!\n");
         return -1;
     }
@@ -360,9 +393,8 @@ long sys_socket_connect(va_list ap)
 
     const struct sockaddr *sockaddr = va_arg(ap, const struct sockaddr *);
 
-    uint16_t port = sockaddr->sa_data[0] << 8 | sockaddr->sa_data[1];
-    uint32_t addr = sockaddr->sa_data[2] | sockaddr->sa_data[3] << 8 | sockaddr->sa_data[4] << 16
-                  | sockaddr->sa_data[5] << 24;
+    uint16_t port = ((uint8_t)sockaddr->sa_data[0]) << 8 | ((uint8_t)sockaddr->sa_data[1]);
+    uint32_t addr = ((uint8_t)sockaddr->sa_data[2]) | ((uint8_t)sockaddr->sa_data[3]) << 8 | ((uint8_t)sockaddr->sa_data[4]) << 16 | ((uint8_t)sockaddr->sa_data[5]) << 24;
 
     return (long)tcp_socket_connect(socket_handle, port, addr);
 }
@@ -371,7 +403,8 @@ long sys_close(va_list ap)
 {
     long fd = va_arg(ap, int);
 
-    if (fd == SERVICES_FD) {
+    if (fd == SERVICES_FD)
+    {
         return 0;
     }
 
@@ -387,20 +420,16 @@ long sys_close(va_list ap)
     fd_active[fd] = 0;
 
     socket_refcount[socket_handle]--;
-    if (socket_refcount[socket_handle] == 0) {
+    if (socket_refcount[socket_handle] == 0)
+    {
         return (long)tcp_socket_close(socket_handle);
     }
 
     return 0;
 }
 
-long sys_dup3(va_list ap)
+long dup_helper(int oldfd, int newfd)
 {
-    int oldfd = va_arg(ap, int);
-    int newfd = va_arg(ap, int);
-    int flags = va_arg(ap, int);
-    (void)flags;
-
     assert(fd_active[oldfd]);
     int oldfd_socket_handle = fd_socket[oldfd];
 
@@ -408,10 +437,12 @@ long sys_dup3(va_list ap)
     assert(oldfd_socket_handle < MAX_SOCKETS);
     assert(socket_refcount[oldfd_socket_handle] != 0);
 
-    if (fd_active[newfd]) {
+    if (fd_active[newfd])
+    {
         int newfd_socket_handle = fd_socket[newfd];
         socket_refcount[newfd_socket_handle]--;
-        if (socket_refcount[newfd_socket_handle] == 0) {
+        if (socket_refcount[newfd_socket_handle] == 0)
+        {
             tcp_socket_close(newfd_socket_handle);
         }
     }
@@ -422,6 +453,24 @@ long sys_dup3(va_list ap)
     socket_refcount[oldfd_socket_handle]++;
 
     return newfd;
+}
+
+long sys_dup2(va_list ap)
+{
+    int oldfd = va_arg(ap, int);
+    int newfd = va_arg(ap, int);
+
+    return dup_helper(oldfd, newfd);
+}
+
+long sys_dup3(va_list ap)
+{
+    int oldfd = va_arg(ap, int);
+    int newfd = va_arg(ap, int);
+    int flags = va_arg(ap, int);
+    (void)flags;
+
+    return dup_helper(oldfd, newfd);
 }
 
 long sys_sendto(va_list ap)
@@ -441,7 +490,8 @@ long sys_sendto(va_list ap)
     assert(socket_refcount[socket_handle] != 0);
 
     int wrote = tcp_socket_write(socket_handle, buf, len);
-    if (wrote == -2) {
+    if (wrote == -2)
+    {
         return -EAGAIN;
     }
 
@@ -469,10 +519,12 @@ long sys_recvfrom(va_list ap)
 
     int read = tcp_socket_recv(socket_handle, buf, len);
 
-    if (read == 0 && flags & MSG_DONTWAIT) {
+    if (read == 0 && flags & MSG_DONTWAIT)
+    {
         return -EAGAIN;
     }
-    if (read == -1) {
+    if (read == -1)
+    {
         return -ENOTCONN;
     }
 
@@ -543,9 +595,14 @@ void libc_init(void)
     syscall_table[__NR_close] = (muslcsys_syscall_t)sys_close;
     syscall_table[__NR_dup3] = (muslcsys_syscall_t)sys_dup3;
     syscall_table[__NR_read] = (muslcsys_syscall_t)sys_read;
+#ifdef CONFIG_ARCH_X86_64
+    syscall_table[__NR_open] = (muslcsys_syscall_t)sys_open;
+    syscall_table[__NR_dup2] = (muslcsys_syscall_t)sys_dup2;
+#endif
 }
 
-int socket_index_of_fd(int fd) {
+int socket_index_of_fd(int fd)
+{
     assert(fd_active[fd]);
     return fd_socket[fd];
 }
