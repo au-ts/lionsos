@@ -14,6 +14,11 @@ set(CMAKE_C_FLAGS "-nostdlib -mtune=${CPU} -Wno-shift-op-parentheses -Wno-bitwis
 set(CMAKE_C_COMPILER_TARGET ${TGT})
 set(CMAKE_CROSSCOMPILING TRUE)
 
+set(_LINK_BASE "-fuse-ld=lld --target=${TGT} --sysroot=${MUSL}")
+set(CMAKE_EXE_LINKER_FLAGS_INIT    "${_LINK_BASE}")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "${_LINK_BASE}")
+set(CMAKE_MODULE_LINKER_FLAGS_INIT "${_LINK_BASE}")
+
 # Prevent CMake from finding and using libraries or programs from the host system.
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
