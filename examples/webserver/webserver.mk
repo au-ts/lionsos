@@ -23,10 +23,31 @@ else ifeq (${MICROKIT_BOARD},maaxboard)
 	CPU := cortex-a53
 else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
 	TIMER_DRIVER_DIR := arm
-	ETHERNET_DRIVER_DIR := virtio
+	ETHERNET_DRIVER_DIR := virtio/mmio
 	SERIAL_DRIVER_DIR := arm
 	CPU := cortex-a53
 	QEMU := qemu-system-aarch64
+	ARCH_QEMU_FLAGS = -machine virt,virtualization=on \
+					   -cpu cortex-a53 \
+					   -device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
+					   -device virtio-net-device,netdev=netdev0 \
+					   -global virtio-mmio.force-legacy=false
+else ifeq (${MICROKIT_BOARD},x86_64_generic)
+	TIMER_DRIVER_DIR := hpet
+	ETHERNET_DRIVER_DIR := virtio/pci
+	SERIAL_DRIVER_DIR := pc99
+	CPU := generic
+
+	DTS=
+	SEL4_64B = $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)/elf/sel4.elf
+	SEL4_32B := sel4.elf	
+
+	QEMU := qemu-system-x86_64
+	ARCH_QEMU_FLAGS = -machine q35 \
+					   -cpu qemu64,+fsgsbase,+pdpe1gb,+pcid,+invpcid,+xsave,+xsaves,+xsaveopt,+vmx,+vme \
+					   -device virtio-net-pci,netdev=netdev0 \
+					   -kernel $(SEL4_32B) \
+					   -initrd $(IMAGE_FILE)
 else
 $(error Unsupported MICROKIT_BOARD given)
 endif
@@ -42,11 +63,14 @@ PYTHON ?= python3
 DTC := dtc
 
 ifeq ($(ARCH),aarch64)
-	CFLAGS_ARCH := -mcpu=$(CPU)
+	CFLAGS_ARCH := -mcpu=$(CPU) -mstrict-align
 	TARGET := aarch64-none-elf
 else ifeq ($(ARCH),riscv64)
-	CFLAGS_ARCH := -march=rv64imafdc
+	CFLAGS_ARCH := -march=rv64imafdc -mstrict-align
 	TARGET := riscv64-none-elf
+else ifeq ($(ARCH),x86_64)
+	CFLAGS_ARCH := -mtune=$(CPU)
+	TARGET := x86_64-unknown-linux-musl
 else
 $(error Unsupported ARCH given)
 endif
@@ -59,7 +83,7 @@ NFS=$(LIONSOS)/components/fs/nfs
 MICRODOT := ${LIONSOS}/dep/microdot/src
 
 METAPROGRAM := $(WEBSERVER_SRC_DIR)/meta.py
-DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
+DTS ?= $(SDDF)/dts/$(MICROKIT_BOARD).dts
 DTB := $(MICROKIT_BOARD).dtb
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
@@ -70,16 +94,12 @@ SYSTEM_FILE := webserver.system
 
 CFLAGS := \
 	-mtune=$(CPU) \
-	-mstrict-align \
 	-ffreestanding \
 	-O2 \
-	-g3 \
 	-MD \
 	-MP \
 	-Wall \
 	-Wno-unused-function \
-	-Wno-bitwise-op-parentheses \
-	-Wno-shift-op-parentheses \
 	-I$(BOARD_DIR)/include \
 	$(CFLAGS_ARCH) \
 	-DBOARD_$(MICROKIT_BOARD) \
@@ -133,13 +153,21 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 		  ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
 		  ${SDDF}/serial/components/serial_components.mk
 
+timer/timer.o lib_sddf_lwip.a: $(MUSL)/include $(MUSL)/lib/libc.a
+
 include ${SDDF_MAKEFILES}
 
-$(DTB): $(DTS)
-	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
+# $(DTB): $(DTS)
+# 	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
 
-$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTS)
+ifneq ($(strip $(DTS)),)
+	dtc -q -I dts -O dtb $(DTS) > $(DTB)
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY)
+else
+	$(OBJCOPY) -O elf32-i386 $(SEL4_64B) $(SEL4_32B)
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY)
+endif
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
@@ -166,15 +194,11 @@ $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu: ${IMAGE_FILE}
-	$(QEMU) -machine virt,virtualization=on \
-			-cpu cortex-a53 \
+	$(QEMU) $(ARCH_QEMU_FLAGS) \
 			-serial mon:stdio \
-			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
 			-m size=2G \
 			-nographic \
-			-device virtio-net-device,netdev=netdev0 \
 			-netdev user,id=netdev0,hostfwd=tcp::5555-10.0.2.16:80 \
-			-global virtio-mmio.force-legacy=false
 
 FORCE: ;
 
