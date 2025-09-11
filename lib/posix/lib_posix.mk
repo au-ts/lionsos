@@ -16,11 +16,7 @@ LIB_POSIX_DIR := $(LIONSOS)/lib/posix
 
 LIB_POSIX_CFLAGS := -I$(LIB_POSIX_LIBC_INCLUDE) \
 					-I$(LIB_POSIX_DIR)/lwip_include \
-					-I$(LWIP)/include \
-					-I$(LWIP)/include/ipv4
-
-LIB_SDDF_LWIP_CFLAGS_posix := ${LIB_POSIX_CFLAGS}
-include $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.mk
+					-I$(LWIP)/include
 
 LIB_POSIX_FILES := posix.c tcp.c
 LIB_POSIX_OBJ := $(addprefix lib/posix/, $(LIB_POSIX_FILES:.c=.o))

@@ -118,6 +118,8 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 %.py: ${WEBSERVER_SRC_DIR}/%.py
 	cp $< $@
 
+include $(NFS)/nfs.mk
+
 $(MUSL):
 	mkdir -p $@
 
@@ -137,7 +139,6 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 		  ${SDDF}/serial/components/serial_components.mk
 
 include ${SDDF_MAKEFILES}
-include $(NFS)/nfs.mk
 
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)

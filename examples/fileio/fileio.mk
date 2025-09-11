@@ -109,6 +109,7 @@ include ${SDDF}/util/util.mk
 include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
 include ${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk
 include ${SDDF}/serial/components/serial_components.mk
+include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
 include ${SDDF}/libco/libco.mk
 include ${BLK_DRIVER}/blk_driver.mk
 include ${BLK_COMPONENTS}/blk_components.mk

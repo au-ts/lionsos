@@ -154,6 +154,7 @@ SDDF_MAKEFILES := $(SDDF)/util/util.mk \
 		  $(SDDF)/drivers/serial/$(SERIAL_DRIV_DIR)/serial_driver.mk \
 		  $(SDDF)/drivers/timer/$(TIMER_DRV_DIR)/timer_driver.mk \
 		  $(SDDF)/network/components/network_components.mk \
+		  ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
 		  $(SDDF)/serial/components/serial_components.mk
 
 include $(SDDF_MAKEFILES)

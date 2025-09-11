@@ -23,7 +23,6 @@ CFLAGS_nfs := \
 	-Wno-tautological-constant-out-of-range-compare
 
 LIB_SDDF_LWIP_CFLAGS_nfs := ${CFLAGS_nfs}
-include $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.mk
 
 NFS_FILES := nfs.c op.c
 NFS_OBJ := $(addprefix nfs/, $(NFS_FILES:.c=.o))
