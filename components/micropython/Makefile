@@ -15,16 +15,14 @@ FROZEN_MANIFEST ?= $(MICROPYTHON_SRC)/extmod/asyncio/manifest.py
 include $(MICROPYTHON_SRC)/py/mkenv.mk
 
 # Override mkenv.mk settings.
-CC = clang
-LD = ld.lld
-SIZE := llvm-size
-TARGET := aarch64-none-elf
+CC = $(USE_CC)
+LD = $(USE_LD)
+SIZE := $(USE_SIZE)
 
 # Include py core make definitions.
 include $(TOP)/py/py.mk
 include $(TOP)/extmod/extmod.mk
 
-CPU ?= cortex-a55
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 
 # Set CFLAGS and libraries.

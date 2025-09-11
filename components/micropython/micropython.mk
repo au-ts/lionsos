@@ -40,6 +40,11 @@ micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPY
 		MICROKIT_SDK=$(MICROKIT_SDK) \
 		MICROKIT_BOARD=$(MICROKIT_BOARD) \
 		MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
+		CPU=$(CPU) \
+		TARGET=$(TARGET) \
+		USE_CC=$(CC) \
+		USE_LD=$(LD) \
+		USE_SIZE=llvm-size \
 		MICROPY_MPYCROSS=$(abspath mpy_cross/mpy-cross) \
 		MICROPY_MPYCROSS_DEPENDENCY=$(abspath mpy_cross/mpy-cross) \
 		BUILD=$(abspath .) \
