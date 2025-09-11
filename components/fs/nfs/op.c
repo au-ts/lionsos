@@ -142,7 +142,7 @@ void continuation_free(struct continuation *cont) {
 
 char *get_path_buffer(int slot) {
     assert(slot == 0 || slot == 1);
-    return &path_buffer[slot];
+    return path_buffer[slot];
 }
 
 static void initialise_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
@@ -280,7 +280,7 @@ void handle_file_size(fs_cmd_t cmd) {
     fs_cmd_params_file_size_t params = cmd.params.file_size;
 
     struct nfsfh *file_handle = NULL;
-    int err = fd_begin_op_file(params.fd, &file_handle);
+    int err = fd_begin_op_file(params.fd, (void **)&file_handle);
     if (err) {
         dlog("invalid fd: %d", params.fd);
         status = FS_STATUS_INVALID_FD;
@@ -402,7 +402,7 @@ void handle_file_close(fs_cmd_t cmd) {
     fs_cmd_params_file_close_t params = cmd.params.file_close;
 
     struct nfsfh *file_handle = NULL;
-    int err = fd_begin_op_file(params.fd, &file_handle);
+    int err = fd_begin_op_file(params.fd, (void **)&file_handle);
     if (err) {
         dlog("invalid fd: %d", params.fd);
         status = FS_STATUS_INVALID_FD;
@@ -468,7 +468,7 @@ void handle_file_read(fs_cmd_t cmd) {
     }
 
     struct nfsfh *file_handle = NULL;
-    int err = fd_begin_op_file(params.fd, &file_handle);
+    int err = fd_begin_op_file(params.fd, (void **)&file_handle);
     if (err) {
         dlog("invalid fd: %d", params.fd);
         status = FS_STATUS_INVALID_FD;
@@ -526,7 +526,7 @@ void handle_file_write(fs_cmd_t cmd) {
     }
 
     struct nfsfh *file_handle = NULL;
-    int err = fd_begin_op_file(params.fd, &file_handle);
+    int err = fd_begin_op_file(params.fd, (void **)&file_handle);
     if (err) {
         dlog("invalid fd: %d", params.fd);
         status = FS_STATUS_INVALID_FD;
@@ -659,7 +659,7 @@ void handle_file_sync(fs_cmd_t cmd) {
     fs_cmd_params_file_sync_t params = cmd.params.file_sync;
 
     struct nfsfh *file_handle = NULL;
-    int err = fd_begin_op_file(params.fd, &file_handle);
+    int err = fd_begin_op_file(params.fd, (void **)&file_handle);
     if (err) {
         dlog("invalid fd (%d)", params.fd);
         status = FS_STATUS_INVALID_FD;
@@ -704,7 +704,7 @@ void handle_file_truncate(fs_cmd_t cmd) {
     fs_cmd_params_file_truncate_t params = cmd.params.file_truncate;
 
     struct nfsfh *file_handle = NULL;
-    int err = fd_begin_op_file(params.fd, &file_handle);
+    int err = fd_begin_op_file(params.fd, (void **)&file_handle);
     if (err) {
         dlog("invalid fd");
         status = FS_STATUS_INVALID_FD;
@@ -880,7 +880,7 @@ void handle_dir_close(fs_cmd_t cmd) {
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
-    int err = fd_begin_op_dir(params.fd, &dir_handle);
+    int err = fd_begin_op_dir(params.fd, (void **)&dir_handle);
     if (err) {
         dlog("invalid fd (%d)", params.fd);
         cmpl.status = FS_STATUS_INVALID_FD;
@@ -913,7 +913,7 @@ void handle_dir_read(fs_cmd_t cmd) {
     }
 
     struct nfsdir *dir_handle = NULL;
-    int status = fd_begin_op_dir(params.fd, &dir_handle);
+    int status = fd_begin_op_dir(params.fd, (void **)&dir_handle);
     if (status) {
         dlog("invalid fd (%d)", params.fd);
         cmpl.status = FS_STATUS_INVALID_FD;
@@ -943,7 +943,7 @@ void handle_dir_seek(fs_cmd_t cmd) {
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
-    int err = fd_begin_op_dir(params.fd, &dir_handle);
+    int err = fd_begin_op_dir(params.fd, (void **)&dir_handle);
     if (err) {
         dlog("invalid fd (%d)", params.fd);
         cmpl.status = FS_STATUS_INVALID_FD;
@@ -961,7 +961,7 @@ void handle_dir_tell(fs_cmd_t cmd) {
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
-    int err = fd_begin_op_dir(params.fd, &dir_handle);
+    int err = fd_begin_op_dir(params.fd, (void **)&dir_handle);
     if (err) {
         dlog("invalid fd (%d)", params.fd);
         cmpl.status = FS_STATUS_INVALID_FD;
@@ -979,7 +979,7 @@ void handle_dir_rewind(fs_cmd_t cmd) {
     fs_cmpl_t cmpl = { .id = cmd.id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     struct nfsdir *dir_handle = NULL;
-    int err = fd_begin_op_dir(params.fd, &dir_handle);
+    int err = fd_begin_op_dir(params.fd, (void **)&dir_handle);
     if (err) {
         dlog("invalid fd (%d)", params.fd);
         cmpl.status = FS_STATUS_INVALID_FD;
