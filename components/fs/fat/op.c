@@ -188,7 +188,7 @@ void handle_file_write(void) {
     }
 
     FIL *file = NULL;
-    int err = fd_begin_op_file(fd, &file);
+    int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd: %d\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -236,7 +236,7 @@ void handle_file_read(void) {
     }
 
     FIL *file = NULL;
-    int err = fd_begin_op_file(fd, &file);
+    int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd: %d\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -275,7 +275,7 @@ void handle_file_close(void) {
     fd_t fd = args->params.file_close.fd;
 
     FIL *file;
-    int err = fd_begin_op_file(fd, &file);
+    int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("fat_close: Invalid file descriptor\n");
         args->status = FS_STATUS_INVALID_FD;
@@ -370,7 +370,7 @@ void handle_file_size(void) {
     fd_t fd = args->params.file_size.fd;
 
     FIL *file = NULL;
-    int err = fd_begin_op_file(fd, &file);
+    int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd: %d\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -433,7 +433,7 @@ void handle_file_truncate(void) {
     uint64_t len = args->params.file_truncate.length;
 
     FIL *file = NULL;
-    int err = fd_begin_op_file(fd, &file);
+    int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd");
         args->status = FS_STATUS_INVALID_FD;
@@ -550,7 +550,7 @@ void handle_dir_read(void) {
     }
 
     DIR *dir = NULL;
-    int err = fd_begin_op_dir(fd, &dir);
+    int err = fd_begin_op_dir(fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -587,7 +587,7 @@ void handle_dir_tell(void){
     fd_t fd = args->params.dir_tell.fd;
 
     DIR *dir = NULL;
-    int err = fd_begin_op_dir(fd, &dir);
+    int err = fd_begin_op_dir(fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -606,7 +606,7 @@ void handle_dir_rewind(void) {
     fd_t fd = args->params.dir_rewind.fd;
 
     DIR *dir = NULL;
-    int err = fd_begin_op_dir(fd, &dir);
+    int err = fd_begin_op_dir(fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -624,7 +624,7 @@ void handle_file_sync(void) {
     fd_t fd = args->params.file_sync.fd;
 
     FIL *file = NULL;
-    int err = fd_begin_op_file(fd, &file);
+    int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -643,7 +643,7 @@ void handle_dir_close(void) {
     fd_t fd = args->params.dir_close.fd;
 
     DIR *dir = NULL;
-    int err = fd_begin_op_dir(fd, &dir);
+    int err = fd_begin_op_dir(fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -679,7 +679,7 @@ void handle_dir_seek(void) {
     int64_t loc = args->params.dir_seek.loc;
 
     DIR *dir = NULL;
-    int err = fd_begin_op_dir(fd, &dir);
+    int err = fd_begin_op_dir(fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -695,7 +695,7 @@ void handle_dir_seek(void) {
             fd_end_op(fd);
             return;
         }
-        RET = f_readdir(&dir, &fno);
+        RET = f_readdir(dir, &fno);
     }
     fd_end_op(fd);
 
