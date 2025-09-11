@@ -1,3 +1,5 @@
+# Copyright 2025, UNSW
+# SPDX-License-Identifier: BSD-2-Clause
 import argparse
 import struct
 from random import randint
@@ -31,6 +33,22 @@ BOARDS: List[Board] = [
         serial="pl011@9000000",
         timer="timer",
         ethernet="virtio_mmio@a003e00"
+    ),
+    Board(
+        name="odroidc4",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x60000000,
+        serial="soc/bus@ff800000/serial@3000",
+        timer="soc/bus@ffd00000/watchdog@f0d0",
+        ethernet="soc/ethernet@ff3f0000"
+    ),
+    Board(
+        name="maaxboard",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x70000000,
+        serial="soc@0/bus@30800000/serial@30860000",
+        timer="soc@0/bus@30000000/timer@302d0000",
+        ethernet="soc@0/bus@30800000/ethernet@30be0000"
     )
 ]
 
@@ -43,13 +61,12 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     timer_node = dtb.node(board.timer)
     assert timer_node is not None
 
-    timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=254)
+    timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=101)
     timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
 
     serial_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
     serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
-    serial_virt_rx = ProtectionDomain("serial_virt_rx", "serial_virt_rx.elf", priority=99)
-    serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx, virt_rx=serial_virt_rx)
+    serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx)
 
     ethernet_driver = ProtectionDomain("ethernet_driver", "eth_driver.elf", priority=101, budget=100, period=400)
     net_virt_tx = ProtectionDomain("net_virt_tx", "network_virt_tx.elf", priority=100, budget=20000)
@@ -67,15 +84,13 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     pds = [
         serial_driver,
         serial_virt_tx,
-        serial_virt_rx,
         ethernet_driver,
         net_virt_tx,
         net_virt_rx,
-        timer_driver,
         wamr,
-        wamr_net_copier
+        wamr_net_copier,
+        timer_driver,
     ]
-
     for pd in pds:
         sdf.add_pd(pd)
 
