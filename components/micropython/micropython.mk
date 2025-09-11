@@ -32,8 +32,6 @@ LIB_SDDF_LWIP_CFLAGS_mp := \
 	-Wno-shift-op-parentheses \
 	-Wno-tautological-constant-out-of-range-compare
 
-include $(SDDF)/network/lib_sddf_lwip/lib_sddf_lwip.mk
-
 lib_sddf_lwip_mp.a: |$(MUSL)/include
 
 micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE) $(MICROPYTHON_USER_C_MODULES_PATH) lib_sddf_lwip_mp.a $(MUSL)/lib/libc.a
