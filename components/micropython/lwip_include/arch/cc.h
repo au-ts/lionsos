@@ -5,7 +5,6 @@
 #pragma once
 
 #include <stdint.h>
-#include <sys/types.h>
 #include <sddf/util/printf.h>
 
 typedef  uint8_t  u8_t;
