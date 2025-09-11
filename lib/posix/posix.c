@@ -180,6 +180,7 @@ long sys_read(va_list ap)
 long sys_clock_gettime(va_list ap)
 {
     clockid_t clk_id = va_arg(ap, clockid_t);
+    (void)clk_id;
     struct timespec *tp = va_arg(ap, struct timespec *);
 
     uint64_t rtc = 0;
@@ -429,6 +430,7 @@ long sys_sendto(va_list ap)
     const void *buf = va_arg(ap, const void *);
     size_t len = va_arg(ap, size_t);
     int flags = va_arg(ap, int);
+    (void)flags;
 
     assert(fd_active[sockfd]);
 
@@ -453,7 +455,9 @@ long sys_recvfrom(va_list ap)
     ssize_t len = va_arg(ap, int);
     int flags = va_arg(ap, int);
     struct sockaddr *src_addr = va_arg(ap, struct sockaddr *);
+    (void)src_addr;
     socklen_t *addrlen = va_arg(ap, socklen_t *);
+    (void)addrlen;
 
     assert(fd_active[sockfd]);
 
