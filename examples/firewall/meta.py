@@ -358,7 +358,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     networks[int_net]["arp_req"] = ProtectionDomain("arp_requester1", "arp_requester1.elf", priority=95, budget=20000)
 
     # Create the webserver component
-    webserver = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000)
+    webserver = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000, stack_size=0x10000)
     common_pds.append(webserver)
 
     # Webserver is a serial and timer client

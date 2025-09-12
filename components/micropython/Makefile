@@ -47,7 +47,7 @@ CFLAGS += \
 	-target $(TARGET)
 
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(MUSL)/lib
-LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
+LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a $(BUILD)/lib_posix.a $(BUILD)/lib_compiler_rt.a
 
 # Include libmicrokitco for blocking in Micropython
 BUILD_DIR=$(BUILD)
@@ -87,7 +87,6 @@ SRC_C = \
 	shared/runtime/pyexec.c \
 	shared/runtime/stdout_helpers.c \
 	shared/runtime/sys_stdio_mphal.c \
-	shared/libc/printf.c \
 	shared/timeutils/timeutils.c \
 	shared/netutils/netutils.c \
 	$(USER_C_MODULES)
@@ -124,7 +123,7 @@ OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
 all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ) $(BUILD)/lib_sddf_lwip_mp.a
+$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ)
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
