@@ -11,7 +11,6 @@
 # Requires ${SDDF}/util/util.mk to build the utility library for debug output
 
 NFS_DIR := $(LIONSOS)/components/fs/nfs
-LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBNFS := $(LIONSOS)/dep/libnfs
 
 CFLAGS_nfs := \
@@ -45,12 +44,6 @@ libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt $(MUSL)/lib/libc.a
 
 LIB_FS_SERVER_LIBC_INCLUDE := $(MUSL)/include
 include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
-
-LIB_POSIX_LIBC_INCLUDE := $(MUSL)/include
-include $(LIONSOS)/lib/posix/lib_posix.mk
-
-LIB_COMPILER_RT_LIBC_INCLUDE := $(MUSL)/include
-include $(LIONSOS)/lib/compiler_rt/lib_compiler_rt.mk
 
 nfs.elf: $(NFS_OBJ) $(MUSL)/lib/libc.a libnfs/lib/libnfs.a lib_fs_server.a lib_sddf_lwip_nfs.a lib_posix.a lib_compiler_rt.a
 	$(LD) $(LDFLAGS) -o $@ $(LIBS) $^
