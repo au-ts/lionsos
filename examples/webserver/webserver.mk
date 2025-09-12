@@ -9,6 +9,7 @@
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
+LWIP := $(SDDF)/network/ipstacks/lwip/src
 
 ifeq (${MICROKIT_BOARD},odroidc4)
 	TIMER_DRIVER_DIR := meson
@@ -96,13 +97,19 @@ IMAGE_FILE := webserver.img
 REPORT_FILE := report.txt
 
 all: $(IMAGE_FILE)
-${IMAGES}: libsddf_util_debug.a
+${IMAGES}: libsddf_util_debug.a lib_posix.a lib_compiler_rt.a
 
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 
 ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
+
+LIB_POSIX_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/posix/lib_posix.mk
+
+LIB_COMPILER_RT_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/compiler_rt/lib_compiler_rt.mk
 
 MICROPYTHON_LIBMATH := $(LIBMATH)
 MICROPYTHON_EXEC_MODULE := webserver.py

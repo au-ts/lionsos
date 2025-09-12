@@ -17,6 +17,7 @@ DTC := dtc
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
+LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 
 ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
@@ -123,6 +124,11 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
+LIB_POSIX_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/posix/lib_posix.mk
+
+LIB_COMPILER_RT_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/compiler_rt/lib_compiler_rt.mk
 
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
@@ -198,7 +204,7 @@ manifest.py: ${KITTY_DIR}/manifest.py kitty.py pn532.py font_height50.py font_he
 %.py: ${KITTY_DIR}/client/font/%.py
 	cp $< $@
 
-${IMAGES}: libsddf_util_debug.a
+${IMAGES}: libsddf_util_debug.a lib_posix.a lib_compiler_rt.a
 
 %.o: %.c ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<

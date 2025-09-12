@@ -29,6 +29,7 @@
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
+#include <lions/posix/posix.h>
 #include "mpconfigport.h"
 #include "mphalport.h"
 #include "mpfirewallport.h"
@@ -221,6 +222,8 @@ void init(void) {
 
     stack_ptrs_arg_array_t costacks = { (uintptr_t) mp_stack };
     microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, costacks);
+
+    syscalls_init();
 
     if (microkit_cothread_spawn(t_mp_entrypoint, NULL) == LIBMICROKITCO_NULL_HANDLE) {
         printf("MP|ERROR: Cannot initialise Micropython cothread\n");

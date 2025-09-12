@@ -9,6 +9,7 @@
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
+LWIP := $(SDDF)/network/ipstacks/lwip/src
 
 ifeq ($(strip $(MICROKIT_BOARD)), imx8mp_iotgate)
 	ETH_DRIV_DIR0 := imx
@@ -102,13 +103,19 @@ IMAGE_FILE := firewall.img
 REPORT_FILE := report.txt
 
 all: $(IMAGE_FILE)
-$(IMAGES): libsddf_util_debug.a
+$(IMAGES): libsddf_util_debug.a lib_posix.a lib_compiler_rt.a
 
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- $(CFLAGS) $(BOARD) $(MICROKIT_CONFIG) | shasum | sed 's/ *-//')
 
 $(CHECK_FLAGS_BOARD_MD5):
 	-rm -f .board_cflags-*
 	touch $@
+
+LIB_POSIX_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/posix/lib_posix.mk
+
+LIB_COMPILER_RT_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/compiler_rt/lib_compiler_rt.mk
 
 vpath %.c $(SDDF) $(FIREWALL_SRC_DIR) $(FIREWALL_NET_COMPONENTS) $(FIREWALL_FILTERS) $(FIREWALL_ICMP) $(FIREWALL_ROUTING) $(FIREWALL_ARP)
 

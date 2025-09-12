@@ -30,7 +30,12 @@ LIB_SDDF_LWIP_CFLAGS_mp := \
 
 lib_sddf_lwip_mp.a: |$(MUSL)/include
 
-micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE) $(MICROPYTHON_USER_C_MODULES_PATH) lib_sddf_lwip_mp.a $(MUSL)/lib/libc.a
+micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile \
+		$(MICROPYTHON_FROZEN_MANIFEST) \
+		$(MICROPYTHON_EXEC_MODULE) \
+		$(MICROPYTHON_USER_C_MODULES_PATH) \
+		$(MUSL)/lib/libc.a \
+		lib_sddf_lwip_mp.a lib_posix.a lib_compiler_rt.a
 	$(MAKE) -C $(MICROPYTHON_DIR) \
 		-j$(nproc) \
 		MICROKIT_SDK=$(MICROKIT_SDK) \
