@@ -43,6 +43,7 @@ PYTHON ?= python3
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
+LWIP := $(SDDF)/network/ipstacks/lwip/src
 
 ifeq ($(ARCH),aarch64)
 	CFLAGS_ARCH := -mcpu=$(CPU)
@@ -98,6 +99,11 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
+LIB_POSIX_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/posix/lib_posix.mk
+
+LIB_COMPILER_RT_LIBC_INCLUDE := $(MUSL)/include
+include $(LIONSOS)/lib/compiler_rt/lib_compiler_rt.mk
 
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
@@ -130,11 +136,13 @@ include $(LIONSOS)/components/fs/fat/fat.mk
 $(MUSL):
 	mkdir -p $@
 
-$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
-	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" ${MUSL_SRC}/configure CROSS_COMPILE=llvm- --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=$(TARGET) --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile |${MUSL}
+	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" CROSS_COMPILE=llvm- \
+		${MUSL_SRC}/configure --target=$(TARGET) --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} \
+		--with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
 	${MAKE} -C ${MUSL} install
 
-${IMAGES}: libsddf_util_debug.a
+${IMAGES}: libsddf_util_debug.a lib_posix.a lib_compiler_rt.a
 
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
