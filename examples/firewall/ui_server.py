@@ -858,6 +858,7 @@ def rules(request, protocol):
           })
           .then(function(result) {
             alert("Updated default action successfully.");
+            loadRules("external");
           })
           .catch(function(err) {
             alert("Error updating default action");
@@ -874,6 +875,7 @@ def rules(request, protocol):
             return response.json();
           })
           .then(function(result) {
+            loadRules("internal");
             alert("Updated default action successfully.");
           })
           .catch(function(err) {
