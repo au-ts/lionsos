@@ -89,11 +89,10 @@ SRC_C = \
 	shared/runtime/sys_stdio_mphal.c \
 	shared/libc/printf.c \
 	shared/timeutils/timeutils.c \
-	shared/netutils/netutils.c \
-	$(USER_C_MODULES)
+	shared/netutils/netutils.c
 
 # Define source files containung qstrs.
-SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c vfs_fs_file.c vfs_fs.c modfs_raw.c $(USER_C_MODULES)
+SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c vfs_fs_file.c vfs_fs.c modfs_raw.c
 
 # Frozen module to execute; otherwise run REPL
 ifdef EXEC_MODULE
@@ -103,6 +102,11 @@ endif
 # I2C setup
 SRC_C += modmachine.c machine_i2c.c extmod/machine_i2c.c
 SRC_QSTR += modmachine.c machine_i2c.c
+
+ifdef ENABLE_FIREWALL
+SRC_C += modfirewall.c
+SRC_QSTR += modfirewall.c
+endif
 
 ifdef ENABLE_FRAMEBUFFER
 SRC_C += modfb.c extmod/modframebuf.c

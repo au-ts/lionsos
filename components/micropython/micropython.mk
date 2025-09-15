@@ -19,10 +19,6 @@
 
 MICROPYTHON_DIR := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 
-ifneq ($(strip $(MICROPYTHON_USER_C_MODULES)),)
-	MICROPYTHON_USER_C_MODULES_PATH := $(MICROPYTHON_DIR)/$(MICROPYTHON_USER_C_MODULES)
-endif
-
 MICROPYTHON_LIBC_INCLUDE := $(abspath $(MUSL))/include
 
 LIB_SDDF_LWIP_CFLAGS_mp := \
@@ -34,7 +30,7 @@ LIB_SDDF_LWIP_CFLAGS_mp := \
 
 lib_sddf_lwip_mp.a: |$(MUSL)/include
 
-micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE) $(MICROPYTHON_USER_C_MODULES_PATH) lib_sddf_lwip_mp.a $(MUSL)/lib/libc.a
+micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE) lib_sddf_lwip_mp.a $(MUSL)/lib/libc.a
 	$(MAKE) -C $(MICROPYTHON_DIR) \
 		-j$(nproc) \
 		MICROKIT_SDK=$(MICROKIT_SDK) \
@@ -52,9 +48,9 @@ micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPY
 		FROZEN_MANIFEST=$(abspath $(MICROPYTHON_FROZEN_MANIFEST)) \
 		EXEC_MODULE=$(MICROPYTHON_EXEC_MODULE) \
 		ENABLE_FRAMEBUFFER=$(MICROPYTHON_ENABLE_FRAMEBUFFER) \
+		ENABLE_FIREWALL=$(MICROPYTHON_ENABLE_FIREWALL) \
 		ENABLE_VFS_STDIO=$(MICROPYTHON_ENABLE_VFS_STDIO) \
 		ENABLE_SERIAL_STDIO=$(MICROPYTHON_ENABLE_SERIAL_STDIO) \
-		USER_C_MODULES=$(MICROPYTHON_USER_C_MODULES) \
 		MUSL=$(abspath $(MUSL))
 
 mpy-cross: FORCE $(LIONSOS)/dep/micropython/mpy-cross
