@@ -49,9 +49,9 @@ static void filter(void)
                                                                    ip_pkt->dst_ip, udp_hdr->dst_port, &rule_id);
 
             /* Perform the default action */
-            if (action == FILTER_ACT_NONE) {
+            if (action == FILTER_ACT_NONE || rule_id == 0) {
                 default_action = true;
-                action = filter_state.default_action;
+                action = filter_state.rule_table->rules->action;
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sUDP filter found no match, performing default action %s: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.webserver.interface], fw_filter_action_str[action],
@@ -144,7 +144,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sUDP filter changing default action from %u to %u\n",
-                fw_frmt_str[filter_config.webserver.interface], filter_state.default_action, action);
+                fw_frmt_str[filter_config.webserver.interface], filter_state.rule_table->rules->action, action);
         }
 
         fw_filter_err_t err = fw_filter_update_default_action(&filter_state, action);

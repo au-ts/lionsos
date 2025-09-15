@@ -304,7 +304,6 @@ static mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
     }
 
     uint16_t rule_id = seL4_GetMR(FILTER_RET_RULE_ID);
-    webserver_state[interface_idx].num_rules[protocol_match] += 1;
     return mp_obj_new_int_from_uint(rule_id);
 }
 
@@ -348,7 +347,6 @@ static mp_obj_t rule_delete(mp_obj_t interface_idx_in, mp_obj_t rule_id_in,
         return mp_obj_new_int_from_uint(os_err);
     }
 
-    webserver_state[interface_idx].num_rules[protocol_match] -= 1;
     return mp_obj_new_int_from_uint(rule_id);
 }
 
@@ -367,7 +365,7 @@ static mp_obj_t rule_count(mp_obj_t interface_idx_in, mp_obj_t protocol_in) {
     uint16_t protocol = mp_obj_get_int(protocol_in);
     for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
         if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
-            return mp_obj_new_int_from_uint(webserver_state[interface_idx].num_rules[i]);
+            return mp_obj_new_int_from_uint(webserver_state[interface_idx].filter_states[i].rule_table->size);
         }
     }
 
@@ -417,7 +415,6 @@ static mp_obj_t filter_set_default_action(mp_obj_t interface_idx_in,
         return mp_obj_new_int_from_uint(os_err);
     }
 
-    webserver_state[interface_idx].filter_states[protocol_match].default_action = action;
     return mp_obj_new_int_from_uint(os_err);
 }
 
@@ -439,7 +436,7 @@ static mp_obj_t filter_get_default_action(mp_obj_t interface_idx_in,
     for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
         if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
             return mp_obj_new_int_from_uint(
-                webserver_state[interface_idx].filter_states[i].default_action);
+                webserver_state[interface_idx].filter_states[i].rule_table->rules->action);
         }
     }
 
