@@ -132,11 +132,13 @@ routing_table_region = FirewallMemoryRegions("fw_routing_entry_size",
 
 filter_rules_region = FirewallMemoryRegions("fw_rule_size",
                                          256,
-                                         lambda x: x.capacity * x.entry_size)
+                                         lambda x: x.entry_size + x.capacity * x.entry_size)
 
 filter_instances_region = FirewallMemoryRegions("fw_instance_size",
                                          512,
-                                         lambda x: x.capacity * x.entry_size)
+                                         lambda x: x.entry_size + x.capacity * x.entry_size)
+filter_rule_bitmap_capacity = (filter_rules_region.capacity + 63) // 64
+filter_rule_bitmap_region_size = round_up_to_Page(8 + filter_rule_bitmap_capacity * 8)
 
 # Filter action encodings
 FILTER_ACTION_ALLOW = 1
@@ -598,6 +600,11 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             network["in_net"].add_client_with_copier(filter_pd, tx=False)
             network["configs"][in_virt].active_client_protocols.append(protocol)
 
+             # create bitmap
+            mr = MemoryRegion(sdf, "rules_id_bitmap" + "_" + filter_pd.name, filter_rule_bitmap_region_size);
+            sdf.add_mr(mr);
+            rule_bitmap_region = fw_region(filter_pd, mr, "rw",filter_rule_bitmap_region_size);
+
             # Create rule region
             filter_rules = fw_shared_region(filter_pd, webserver, "rw",
                                             "r", "filter_rules",
@@ -631,7 +638,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 filter_router_conn[0],
                 filter_webserver_config,
                 None,
-                None
+                None,
+                rule_bitmap_region
             )
 
             network["configs"][router].filters.append((filter_router_conn[1]))

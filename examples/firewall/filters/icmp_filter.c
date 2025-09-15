@@ -50,9 +50,9 @@ static void filter(void)
                                                                    icmp_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, &rule_id);
 
             /* Perform the default action */
-            if (action == FILTER_ACT_NONE) {
+            if (action == FILTER_ACT_NONE || rule_id == 0) {
                 default_action = true;
-                action = filter_state.default_action;
+                action = filter_state.rule_table->rules->action;
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter found no match, performing default action %s: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.interface], fw_filter_action_str[action],
@@ -145,7 +145,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sICMP filter changing default action from %u to %u\n",
-                fw_frmt_str[filter_config.interface], filter_state.default_action, action);
+                fw_frmt_str[filter_config.interface], filter_state.rule_table->rules->action, action);
         }
 
         fw_filter_err_t err = fw_filter_update_default_action(&filter_state, action);
@@ -217,7 +217,7 @@ void init(void)
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr,
         sizeof(net_buff_desc_t), filter_config.router.capacity);
 
-    fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.webserver.rules_capacity,
+    fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr, filter_config.webserver.rules_capacity,
         filter_config.internal_instances.vaddr, filter_config.external_instances.vaddr, filter_config.instances_capacity,
         (fw_action_t)filter_config.webserver.default_action);
 }
