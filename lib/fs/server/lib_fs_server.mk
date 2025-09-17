@@ -22,7 +22,7 @@ lib_fs_server.a: $(LIB_FS_SERVER_OBJ)
 	$(RANLIB) $@
 
 lib/fs/server/%.o: CFLAGS += $(LIB_FS_SERVER_CFLAGS)
-lib/fs/server/%.o: $(LIB_FS_SERVER_DIR)/%.c $(LIB_FS_SERVER_LIBC_INCLUDE) |lib/fs/server
+lib/fs/server/%.o: $(LIB_FS_SERVER_DIR)/%.c $(LIB_FS_SERVER_LIBC_INCLUDE) |lib/fs/server $(LIONS_LIBC)/include
 	$(CC) -c $(CFLAGS) $< -o $@
 
 lib/fs/server:
