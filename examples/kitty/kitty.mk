@@ -3,54 +3,23 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
-
+SUPPORTED_BOARDS := odroidc4 qemu_virt_aarch64
 TOOLCHAIN := clang
-CC := clang
-LD := ld.lld
-RANLIB := llvm-ranlib
-AR := llvm-ar
-OBJCOPY := llvm-objcopy
-MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
-PYTHON ?= python3
-DTC := dtc
 
-BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
+include ${LIONSOS}/boards/common
+include ${LIONSOS}/toolchain/${TOOLCHAIN}
+
 SDDF := $(LIONSOS)/dep/sddf
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 
 ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
-	NET_DRIV_DIR := meson
-	SERIAL_DRIVER_DIR := meson
-	TIMER_DRIV_DIR := meson
-	I2C_DRIV_DIR := meson
-	CPU := cortex-a55
 	INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
 	LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
-	NET_DRIV_DIR := virtio
-	SERIAL_DRIVER_DIR := arm
-	TIMER_DRIV_DIR := arm
-	CPU := cortex-a53
-	QEMU := qemu-system-aarch64
 	INITRD := 8d4a14e2c92a638d68f04832580a57b94e8a4f6b-rootfs.cpio.gz
 	LINUX := 75757e2972d5dc528d98cab377e2c74a9e02d6f9-linux
 else
 $(error Unsupported MICROKIT_BOARD given)
-endif
-
-ifeq ($(ARCH),aarch64)
-	CFLAGS_ARCH := -mcpu=$(CPU)
-	TARGET := aarch64-none-elf
-else ifeq ($(ARCH),riscv64)
-	CFLAGS_ARCH := -march=rv64imafdc
-	TARGET := riscv64-none-elf
-else
-$(error Unsupported ARCH given)
-endif
-
-ifeq ($(strip $(TOOLCHAIN)), clang)
-	CFLAGS_ARCH += -target $(TARGET)
 endif
 
 # If the KITTY_CONFIG is in deploy, then we will set the exec module
@@ -65,8 +34,6 @@ LINUX_DTS := $(VMM_IMAGE_DIR)/linux.dts
 LINUX_DTB := linux.dtb
 
 METAPROGRAM := $(KITTY_DIR)/meta.py
-DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
-DTB := $(MICROKIT_BOARD).dtb
 
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 NFS := $(LIONSOS)/components/fs/nfs
@@ -91,16 +58,7 @@ IMAGES := timer_driver.elf \
 	  i2c_virt.elf \
 	  i2c_driver.elf
 
-CFLAGS := \
-	-mtune=$(CPU) \
-	-mstrict-align \
-	-ffreestanding \
-	-O2 \
-	-g3 \
-	-Wall \
-	-Wno-unused-function \
-	-Wno-bitwise-op-parentheses \
-	-Wno-shift-op-parentheses \
+CFLAGS += \
 	-I$(BOARD_DIR)/include \
 	$(CFLAGS_ARCH) \
 	-DBOARD_$(MICROKIT_BOARD) \
@@ -124,13 +82,10 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	touch $@
 
 
-%.elf: %.o
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
-
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 	${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
-	${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
-	${SDDF}/drivers/serial/${SERIAL_DRIVER_DIR}/serial_driver.mk \
+	${SDDF}/drivers/network/${ETH_DRIV_DIR}/eth_driver.mk \
+	${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk \
 	${SDDF}/network/components/network_components.mk \
 	${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
 	${SDDF}/serial/components/serial_components.mk \
@@ -149,7 +104,7 @@ include ${NFS}/nfs.mk
 $(MUSL):
 	mkdir -p $@
 
-$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
+$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile |${MUSL}
 	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" ${MUSL_SRC}/configure CROSS_COMPILE=llvm- --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=$(TARGET) --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
 	${MAKE} -C ${MUSL} install
 
@@ -158,9 +113,6 @@ VMM_OBJS := vmm.o package_guest_images.o
 VPATH := ${LIBVMM_DIR}:${VMM_IMAGE_DIR}:${VMM_SRC_DIR}
 
 $(LINUX_DTB): $(LINUX_DTS)
-	$(DTC) -q -I dts -O dtb $< > $@
-
-$(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $< > $@
 
 package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
@@ -187,7 +139,8 @@ include $(MICROPYTHON)/micropython.mk
 config.py: ${KITTY_DIR}/board/$(MICROKIT_BOARD)/config.py
 	cp $< $@
 
-manifest.py: ${KITTY_DIR}/manifest.py kitty.py pn532.py font_height50.py font_height35.py writer.py config.py deploy.py
+manifest.py: ${KITTY_DIR}/manifest.py kitty.py pn532.py font_height50.py \
+	     font_height35.py writer.py config.py deploy.py
 	cp $< $@
 
 %.py: ${KITTY_DIR}/client/%.py
@@ -201,8 +154,11 @@ ${IMAGES}: libsddf_util_debug.a
 %.o: %.c ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
-$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY) --guest-dtb $(LINUX_DTB)
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) eth_driver.elf
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) \
+	  --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) \
+	  --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY) \
+	  --guest-dtb $(LINUX_DTB)
 	if [ "$(I2C_DRIV_DIR)" != "" ]; then \
 		$(OBJCOPY) --update-section .device_resources=i2c_driver_device_resources.data i2c_driver.elf; \
 		$(OBJCOPY) --update-section .i2c_driver_config=i2c_driver.data i2c_driver.elf; \
@@ -213,8 +169,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
 	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
-	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf
-	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver.elf
+	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data ${ETH_DRIV}
+	$(OBJCOPY) --update-section .net_driver_config=net_driver.data ${ETH_DRIV}
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_virt_rx.data network_virt_rx.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
 	$(OBJCOPY) --update-section .net_copy_config=net_copy_micropython_net_copier.data network_copy.elf network_copy_micropython.elf

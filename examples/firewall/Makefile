@@ -21,7 +21,7 @@ nproc:= $(shell sh -c "if test -f /proc/cpuinfo; then grep processor /proc/cpuin
 
 all: ${IMAGE_FILE}
 
-qemu ${IMAGE_FILE}: ${BUILD_DIR}/Makefile FORCE
+clean clobber qemu ${IMAGE_FILE}: ${BUILD_DIR}/Makefile FORCE
 	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} $(notdir $@)
 
 ${BUILD_DIR}/Makefile: firewall.mk
@@ -29,3 +29,4 @@ ${BUILD_DIR}/Makefile: firewall.mk
 	cp firewall.mk $@
 
 FORCE:
+.PHONY: clean clobber

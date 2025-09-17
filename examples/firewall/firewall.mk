@@ -6,44 +6,17 @@
 #
 # This makefile will be copied into the Build directory and used from there.
 #
-BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
-SDDF := $(LIONSOS)/dep/sddf
 
-ifeq ($(strip $(MICROKIT_BOARD)), imx8mp_iotgate)
-	ETH_DRIV_DIR0 := imx
-	ETH_DRIV_DIR1 := dwmac-5.10a
-	SERIAL_DRIV_DIR := imx
-	TIMER_DRV_DIR := imx
-	CPU := cortex-a53
-else
-$(error Unsupported MICROKIT_BOARD given)
+SUPPORTED_BOARDS := imx8mp_iotgate
+
+ifndef MICROKIT_BOARD
+$(error MICROKIT_BOARD is not defined)
 endif
+
+include ${LIONSOS}/boards/common
 
 TOOLCHAIN := clang
-CC := clang
-LD := ld.lld
-AR := llvm-ar
-RANLIB := llvm-ranlib
-OBJCOPY := llvm-objcopy
-OBJDUMP := llvm-objdump
-MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
-PYTHON ?= python3
-DTC := dtc
-
-ifeq ($(ARCH),aarch64)
-	CFLAGS_ARCH := -mcpu=$(CPU)
-	TARGET := aarch64-none-elf
-else ifeq ($(ARCH),riscv64)
-	CFLAGS_ARCH := -march=rv64imafdc
-	TARGET := riscv64-none-elf
-else
-$(error Unsupported ARCH given)
-endif
-
-ifeq ($(strip $(TOOLCHAIN)), clang)
-	CFLAGS_ARCH += -target $(TARGET)
-endif
+include ${LIONSOS}/toolchain/${TOOLCHAIN}
 
 MICRODOT := $(LIONSOS)/dep/microdot/src
 FIREWALL_NET_COMPONENTS := $(FIREWALL_SRC_DIR)/net_components
@@ -55,41 +28,36 @@ MUSL_SRC := $(LIONSOS)/dep/musllibc
 MUSL := musllibc
 
 METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
-DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
-DTB := $(MICROKIT_BOARD).dtb
 
 SDFGEN_HELPER := $(FIREWALL_SRC_DIR)/sdfgen_helper.py
 # Macros needed by sdfgen helper to calculate config struct sizes
 SDFGEN_UNKOWN_MACROS := ETH_HWADDR_LEN=6 SDDF_NET_MAX_CLIENTS=64
 # Headers containing config structs and dependencies
 FIREWALL_CONFIG_HEADERS := $(SDDF)/include/sddf/resources/common.h \
-							$(SDDF)/include/sddf/resources/device.h \
-							$(LIONSOS)/include/lions/firewall/config.h
+			   $(SDDF)/include/sddf/resources/device.h \
+			   $(LIONSOS)/include/lions/firewall/config.h
 
-IMAGES := arp_requester.elf arp_responder.elf routing.elf micropython.elf \
-		  eth_driver_imx.elf firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
-		  eth_driver_dwmac-5.10a.elf timer_driver.elf serial_driver.elf serial_virt_tx.elf \
-		  icmp_filter.elf udp_filter.elf tcp_filter.elf icmp_module.elf
+IMAGES := arp_requester.elf\
+	  arp_responder.elf \
+	  routing.elf \
+	  micropython.elf \
+	  eth_driver_${ETH_DRIV_DIR0}.elf \
+	  firewall_network_virt_rx.elf \
+	  firewall_network_virt_tx.elf \
+	  eth_driver_${ETH_DRIV_DIR1}.elf \
+	  timer_driver.elf \
+	  serial_driver.elf \
+	  serial_virt_tx.elf \
+	  icmp_filter.elf \
+	  udp_filter.elf \
+	  tcp_filter.elf \
+	  icmp_module.elf
 
 DEPS := $(IMAGES:.elf=.d)
 
 SYSTEM_FILE := firewall.system
 
-CFLAGS := \
-	-mtune=$(CPU) \
-	-mstrict-align \
-	-ffreestanding \
-	-O2 \
-	-g3 \
-	-MD \
-	-MP \
-	-Wall \
-	-Wno-unused-function \
-	-Wno-bitwise-op-parentheses \
-	-Wno-shift-op-parentheses \
-	-I$(BOARD_DIR)/include \
-	$(CFLAGS_ARCH) \
-	-DBOARD_$(MICROKIT_BOARD) \
+CFLAGS += \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
@@ -132,12 +100,6 @@ $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
 	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" ${MUSL_SRC}/configure CROSS_COMPILE=llvm- --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=$(TARGET) --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
 	${MAKE} -C ${MUSL} install
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-%.elf: %.o
-	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
-
 # Components that print to serial require libsddf_util.a
 arp_requester.elf: arp_requester.o libsddf_util.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
@@ -160,16 +122,21 @@ SDDF_MAKEFILES := $(SDDF)/util/util.mk \
 include $(SDDF_MAKEFILES)
 include $(FIREWALL_NET_COMPONENTS)/firewall_network_components.mk
 
-$(DTB): $(DTS)
-	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
-
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
-	$(PYTHON) $(SDFGEN_HELPER) --macros "$(SDFGEN_UNKOWN_MACROS)" --configs "$(FIREWALL_CONFIG_HEADERS)" --output $(BUILD_DIR)/config_structs.py
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --objcopy $(OBJCOPY) --objdump $(OBJDUMP)
-	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
-	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
-	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
-	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
+	$(PYTHON) $(SDFGEN_HELPER) --macros "$(SDFGEN_UNKOWN_MACROS)"\
+	    --configs "$(FIREWALL_CONFIG_HEADERS)" \
+	    --output $(BUILD_DIR)/config_structs.py
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) \
+	    --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) \
+	    --objcopy $(OBJCOPY) --objdump $(OBJDUMP)
+	$(OBJCOPY) --update-section \
+	.device_resources=serial_driver_device_resources.data serial_driver.elf
+	$(OBJCOPY) --update-section \
+	.serial_driver_config=serial_driver_config.data serial_driver.elf
+	$(OBJCOPY) --update-section \
+	.serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
+	$(OBJCOPY) --update-section \
+	.device_resources=timer_driver_device_resources.data timer_driver.elf
 
 # Components receiving from or transmitting out net0
 	$(OBJCOPY) --update-section .device_resources=net_data0/ethernet_driver_dwmac-5.10a_device_resources.data eth_driver_dwmac-5.10a.elf
@@ -251,3 +218,11 @@ $(SDDF_MAKEFILES) &:
 	cd $(LIONSOS); git submodule update --init dep/sddf
 
 -include $(DEPS)
+
+clean::
+	${RM} -f *.elf .depend* $
+	find . -name \*.[do] |xargs --no-run-if-empty rm
+
+clobber:: clean
+	rm -f *.a
+	rm -f ${IMAGE_FILE} ${REPORT_FILE}

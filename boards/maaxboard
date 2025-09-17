@@ -1,0 +1,13 @@
+#
+# Copyright 2025, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# MAAXboard definitions.
+# 
+BLK_DRIV_DIR := mmc/imx
+SERIAL_DRIV_DIR := imx
+TIMER_DRIV_DIR := imx
+ETH_DRIV_DIR := imx
+ETH_DRIV := eth_driver_imx.elf
+CPU := cortex-a53

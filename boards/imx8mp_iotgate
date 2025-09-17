@@ -1,0 +1,15 @@
+#
+# Copyright 2025 UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Definitions for the IOTgate --- an imx8mp based board.
+# with Two ethernet interfaces
+ETH_DRIV_DIR := imx
+ETH_DRIV := eth_driver_imx.elf
+ETH_DRIV_DIR1 := dwmac-5.10a
+ETH_DRIV_1 := eth_driver_dwmac-5.10a.elf
+SERIAL_DRIV_DIR := imx
+TIMER_DRV_DIR := imx
+CPU := cortex-a53
+BLK_DRIV_DIR := mmc/imx

@@ -1,0 +1,15 @@
+#
+# Copyright 2025, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Definitions for 64-bit ARM QEMU
+# 
+BLK_DRIV_DIR := virtio
+SERIAL_DRIV_DIR := arm
+TIMER_DRIV_DIR := arm
+ETH_DRIV_DIR := virtio
+ETH_DRIV := eth_driver_virtio.elf
+
+CPU := cortex-a53
+QEMU := qemu-system-aarch64

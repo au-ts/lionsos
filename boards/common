@@ -1,0 +1,52 @@
+#
+# Copyright 2025, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
+# Board-related common defines.
+BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
+
+# Sanity checking:
+# The board name must be supported for the project (i.e., in the
+# SUPPORTED_BOARDS list); must have a corresponding board
+# directory in the microkit SDK, and must have a makefile snippet
+# in ${LIONSOS}/boards
+
+ifeq ($(findstring $(strip ${MICROKIT_BOARD}),${SUPPORTED_BOARDS}),)
+  $(error ${MICROKIT_BOARD} not (yet) supported for this project)
+endif
+
+ifeq ($(wildcard ${BOARD_DIR}),)
+  $(error ${MICROKIT_BOARD} not supported by ${MICROKIT_SDK})
+endif
+
+ifeq ($(wildcard ${LIONSOS}/boards/${MICROKIT_BOARD}),)
+  $(error No Make snippet in ${LIONSOS}/boards for ${MICROKIT_BAORD})
+endif
+
+include ${LIONSOS}/boards/${MICROKIT_BOARD}
+
+SDDF := $(LIONSOS)/dep/sddf
+MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
+
+DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
+DTB := $(MICROKIT_BOARD).dtb
+DTC := dtc
+
+PYTHON ?= python3
+
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
+
+# Common Make rules
+%.elf: %.o
+	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
+
+$(DTB): $(DTS)
+	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
+
+# Some boards have more than one ethernet port.  The first is always called
+# $(ETH_DRIV); projects that expect only one use eth_driver.elf
+
+eth_driver.elf: ${ETH_DRIV}
+	cp $< $@

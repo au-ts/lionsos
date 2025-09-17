@@ -18,6 +18,8 @@
 #   MICROPYTHON_USER_C_MODULES (assumed to be located in MICROPYTHON_DIR)
 
 MICROPYTHON_DIR := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
+MICROPYTHON_SRC := $(LIONSOS)/dep/micropython
+MPY_LIB_DIR	:= ${MICROPYTHON_DIR}/lib/micropython-lib
 
 ifneq ($(strip $(MICROPYTHON_USER_C_MODULES)),)
 	MICROPYTHON_USER_C_MODULES_PATH := $(MICROPYTHON_DIR)/$(MICROPYTHON_USER_C_MODULES)
@@ -32,9 +34,18 @@ LIB_SDDF_LWIP_CFLAGS_mp := \
 	-Wno-shift-op-parentheses \
 	-Wno-tautological-constant-out-of-range-compare
 
+# for .../py/eminitinlinethumb.c
+CFLAGS_EXTRA := -Wno-unterminated-string-initialization
+export CFLAGS_EXTRA
+
 lib_sddf_lwip_mp.a: |$(MUSL)/include
 
-micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPYTHON_FROZEN_MANIFEST) $(MICROPYTHON_EXEC_MODULE) $(MICROPYTHON_USER_C_MODULES_PATH) lib_sddf_lwip_mp.a $(MUSL)/lib/libc.a
+micropython.elf: FORCE mpy-cross \
+		${LIONSOS}/dep/libmicrokitco/Makefile\
+		$(MICROPYTHON_FROZEN_MANIFEST) \
+		$(MICROPYTHON_EXEC_MODULE) \
+		$(MICROPYTHON_USER_C_MODULES_PATH) \
+		lib_sddf_lwip_mp.a $(MUSL)/lib/libc.a
 	$(MAKE) -C $(MICROPYTHON_DIR) \
 		-j$(nproc) \
 		MICROKIT_SDK=$(MICROKIT_SDK) \
@@ -57,7 +68,10 @@ micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPY
 		USER_C_MODULES=$(MICROPYTHON_USER_C_MODULES) \
 		MUSL=$(abspath $(MUSL))
 
-mpy-cross: FORCE $(LIONSOS)/dep/micropython/mpy-cross
-	make -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
+mpy-cross: FORCE $(LIONSOS)/dep/micropython/mpy-cross |$(MPY_LIB_DIR)/README.md
+	${MAKE} -C ${MICROPYTHON_SRC}/mpy-cross BUILD=$(abspath ./mpy_cross)
+
+$(MPY_LIB_DIR)/README.md:
+	${MAKE} -C $(MICROPYTHON_DIR) submodules
 
 FORCE: ;

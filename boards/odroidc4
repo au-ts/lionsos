@@ -1,0 +1,15 @@
+#
+# Copyright 2025 UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Definitions for the Odroid C4
+ETH_DRIV_DIR := meson
+ETH_DRIV := eth_driver_meson.elf
+SERIAL_DRIV_DIR := meson
+TIMER_DRIV_DIR := meson
+I2C_DRIV_DIR := meson
+
+CPU := cortex-a55
+
+

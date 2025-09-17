@@ -3,6 +3,8 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
+SUPPORTED_BOARDS := maaxboard qemu_virt_aarch64
+
 IMAGES := \
 	timer_driver.elf \
 	eth_driver.elf \
@@ -14,77 +16,28 @@ IMAGES := \
 	blk_virt.elf \
 	blk_driver.elf
 
-ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
-	BLK_DRIV_DIR := mmc/imx
-	SERIAL_DRIV_DIR := imx
-	TIMER_DRIV_DIR := imx
-	CPU := cortex-a53
-else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
-	BLK_DRIV_DIR := virtio
-	SERIAL_DRIV_DIR := arm
-	TIMER_DRIV_DIR := arm
-	IMAGES += blk_driver.elf
-	CPU := cortex-a53
-	QEMU := qemu-system-aarch64
-else
-$(error Unsupported MICROKIT_BOARD given)
-endif
-
+include ${LIONSOS}/boards/common
+include ${LIONSOS}/boards/${MICROKIT_BOARD}
 TOOLCHAIN := clang
-CC := clang
-LD := ld.lld
-RANLIB := llvm-ranlib
-AR := llvm-ar
-OBJCOPY := llvm-objcopy
-MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
-DTC := dtc
-PYTHON ?= python3
+include ${LIONSOS}/toolchain/${TOOLCHAIN}
 
-BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
-SDDF := $(LIONSOS)/dep/sddf
-
-ifeq ($(ARCH),aarch64)
-	CFLAGS_ARCH := -mcpu=$(CPU)
-	TARGET := aarch64-none-elf
-else ifeq ($(ARCH),riscv64)
-	CFLAGS_ARCH := -march=rv64imafdc
-	TARGET := riscv64-none-elf
-else
-$(error Unsupported ARCH given)
-endif
-
-ifeq ($(strip $(TOOLCHAIN)), clang)
-	CFLAGS_ARCH += -target $(TARGET)
-endif
 
 METAPROGRAM := $(FILEIO_DIR)/meta.py
-DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
-DTB := $(MICROKIT_BOARD).dtb
 
 FAT := $(LIONSOS)/components/fs/fat
 MUSL_SRC := $(LIONSOS)/dep/musllibc
 MUSL := musllibc
+LDFLAGS += -L${MUSL}/lib
 
-CFLAGS := \
-	-mtune=$(CPU) \
-	-mstrict-align \
-	-ffreestanding \
-	-O2 \
-	-g3 \
-	-Wall \
+CFLAGS += \
 	-Wno-unused-function \
 	-Wno-bitwise-op-parentheses \
 	-Wno-shift-op-parentheses \
-	-I$(BOARD_DIR)/include \
-	$(CFLAGS_ARCH) \
-	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
 	-I$(MUSL)/include
 
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
 
 SYSTEM_FILE := fileio.system
@@ -97,10 +50,6 @@ CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROK
 ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
-
-
-%.elf: %.o
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
 BLK_COMPONENTS := $(SDDF)/blk/components
@@ -136,19 +85,10 @@ $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
 
 ${IMAGES}: libsddf_util_debug.a
 
-%.o: %.c
-	${CC} ${CFLAGS} -c -o $@ $<
-
 FORCE:
 
-%.elf: %.o
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
-
-mpy-cross: FORCE
-	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
-
-$(DTB): $(DTS)
-	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
+#mpy-cross: FORCE
+#	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
