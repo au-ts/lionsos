@@ -56,8 +56,6 @@ ifeq ($(strip $(TOOLCHAIN)), clang)
 endif
 
 NFS=$(LIONSOS)/components/fs/nfs
-MUSL_SRC := $(LIONSOS)/dep/musllibc
-MUSL := musllibc
 MICRODOT := ${LIONSOS}/dep/microdot/src
 
 METAPROGRAM := $(WEBSERVER_SRC_DIR)/meta.py
@@ -87,29 +85,24 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit \
-	-I$(MUSL)/include
+	-I$(SDDF)/include/microkit
 
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
-LIBS := -lmicrokit -Tmicrokit.ld  -lc libsddf_util_debug.a
+include $(LIONSOS)/lib/libc/libc.mk
+
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
+LIBS := -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a
 
 IMAGE_FILE := webserver.img
 REPORT_FILE := report.txt
 
 all: $(IMAGE_FILE)
-${IMAGES}: libsddf_util_debug.a lib_posix.a lib_compiler_rt.a
+${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 
 ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
-
-LIB_POSIX_LIBC_INCLUDE := $(MUSL)/include
-include $(LIONSOS)/lib/posix/lib_posix.mk
-
-LIB_COMPILER_RT_LIBC_INCLUDE := $(MUSL)/include
-include $(LIONSOS)/lib/compiler_rt/lib_compiler_rt.mk
 
 MICROPYTHON_LIBMATH := $(LIBMATH)
 MICROPYTHON_EXEC_MODULE := webserver.py
@@ -127,17 +120,10 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 
 include $(NFS)/nfs.mk
 
-$(MUSL):
-	mkdir -p $@
-
-$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile |${MUSL}
-	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" CROSS_COMPILE=llvm- \
-		${MUSL_SRC}/configure --target=$(TARGET) --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} \
-		--with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
-	${MAKE} -C ${MUSL} install
-
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
+
+SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 		  ${SDDF}/drivers/timer/${TIMER_DRIVER_DIR}/timer_driver.mk \
@@ -176,7 +162,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_micropython.data micropython.elf
 
-$(IMAGE_FILE) $(REPORT_FILE): $(MUSL)/include $(IMAGES) $(SYSTEM_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu: ${IMAGE_FILE}
@@ -200,9 +186,6 @@ ${LIONSOS}/dep/libmicrokitco/Makefile:
 
 ${MICRODOT}:
 	cd ${LIONSOS}; git submodule update --init dep/microdot
-
-${MUSL_SRC}/Makefile:
-	cd ${LIONSOS}; git submodule update --init dep/musllibc
 
 ${SDDF_MAKEFILES} &:
 	cd ${LIONSOS}; git submodule update --init dep/sddf

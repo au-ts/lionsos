@@ -39,15 +39,15 @@ CFLAGS += \
 	-I$(LIONSOS)/include \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
-	-I$(MUSL)/include \
+	-I$(MICROPYTHON_LIBC)/include \
 	-Wno-shift-op-parentheses \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU) \
 	-target $(TARGET)
 
-LDFLAGS += -L$(BOARD_DIR)/lib -L$(MUSL)/lib
-LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a $(BUILD)/lib_posix.a $(BUILD)/lib_compiler_rt.a
+LDFLAGS += -L$(BOARD_DIR)/lib -L$(MICROPYTHON_LIBC)/lib
+LIBS += -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a
 
 # Include libmicrokitco for blocking in Micropython
 BUILD_DIR=$(BUILD)

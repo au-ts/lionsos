@@ -52,8 +52,6 @@ FIREWALL_FILTERS := $(FIREWALL_SRC_DIR)/filters
 FIREWALL_ICMP := $(FIREWALL_SRC_DIR)/icmp
 FIREWALL_ROUTING := $(FIREWALL_SRC_DIR)/routing
 FIREWALL_ARP := $(FIREWALL_SRC_DIR)/arp
-MUSL_SRC := $(LIONSOS)/dep/musllibc
-MUSL := musllibc
 
 METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
 DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
@@ -93,29 +91,24 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit \
-	-I$(MUSL)/include
+	-I$(SDDF)/include/microkit
 
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
+include $(LIONSOS)/lib/libc/libc.mk
+
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS := -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a
 
 IMAGE_FILE := firewall.img
 REPORT_FILE := report.txt
 
 all: $(IMAGE_FILE)
-$(IMAGES): libsddf_util_debug.a lib_posix.a lib_compiler_rt.a
+$(IMAGES): $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- $(CFLAGS) $(BOARD) $(MICROKIT_CONFIG) | shasum | sed 's/ *-//')
 
 $(CHECK_FLAGS_BOARD_MD5):
 	-rm -f .board_cflags-*
 	touch $@
-
-LIB_POSIX_LIBC_INCLUDE := $(MUSL)/include
-include $(LIONSOS)/lib/posix/lib_posix.mk
-
-LIB_COMPILER_RT_LIBC_INCLUDE := $(MUSL)/include
-include $(LIONSOS)/lib/compiler_rt/lib_compiler_rt.mk
 
 vpath %.c $(SDDF) $(FIREWALL_SRC_DIR) $(FIREWALL_NET_COMPONENTS) $(FIREWALL_FILTERS) $(FIREWALL_ICMP) $(FIREWALL_ROUTING) $(FIREWALL_ARP)
 
@@ -132,16 +125,7 @@ include $(LIONSOS)/components/micropython/micropython.mk
 %.py: $(FIREWALL_SRC_DIR)/%.py
 	cp $< $@
 
-$(MUSL):
-	mkdir -p $@
-
-$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile |${MUSL}
-	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" CROSS_COMPILE=llvm- \
-		${MUSL_SRC}/configure --target=$(TARGET) --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} \
-		--with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
-	${MAKE} -C ${MUSL} install
-
-%.o: %.c
+%.o: %.c | $(LIONS_LIBC)/include
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 %.elf: %.o
@@ -156,6 +140,8 @@ arp_responder.elf: arp_responder.o libsddf_util.a
 
 routing.elf: routing.o libsddf_util.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 
 SDDF_MAKEFILES := $(SDDF)/util/util.mk \
 		  $(SDDF)/drivers/network/$(ETH_DRIV_DIR0)/eth_driver.mk \
@@ -227,7 +213,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester1.data arp_requester1.elf
 
-$(IMAGE_FILE) $(REPORT_FILE): $(MUSL)/include $(IMAGES) $(SYSTEM_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu: $(IMAGE_FILE)
@@ -252,9 +238,6 @@ $(LIONSOS)/dep/libmicrokitco/Makefile:
 
 $(MICRODOT):
 	cd $(LIONSOS); git submodule update --init dep/microdot
-
-$(MUSL_SRC)/Makefile:
-	cd $(LIONSOS); git submodule update --init dep/musllibc
 
 $(SDDF_MAKEFILES) &:
 	cd $(LIONSOS); git submodule update --init dep/sddf
