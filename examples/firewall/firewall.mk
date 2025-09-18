@@ -41,7 +41,7 @@ IMAGES := arp_requester.elf\
 	  arp_responder.elf \
 	  routing.elf \
 	  micropython.elf \
-	  eth_driver_${ETH_DRIV_DIR0}.elf \
+	  eth_driver_${ETH_DRIV_DIR}.elf \
 	  firewall_network_virt_rx.elf \
 	  firewall_network_virt_tx.elf \
 	  eth_driver_${ETH_DRIV_DIR1}.elf \
@@ -111,7 +111,7 @@ routing.elf: routing.o libsddf_util.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 SDDF_MAKEFILES := $(SDDF)/util/util.mk \
-		  $(SDDF)/drivers/network/$(ETH_DRIV_DIR0)/eth_driver.mk \
+		  $(SDDF)/drivers/network/$(ETH_DRIV_DIR)/eth_driver.mk \
 		  $(SDDF)/drivers/network/$(ETH_DRIV_DIR1)/eth_driver.mk \
 		  $(SDDF)/drivers/serial/$(SERIAL_DRIV_DIR)/serial_driver.mk \
 		  $(SDDF)/drivers/timer/$(TIMER_DRV_DIR)/timer_driver.mk \

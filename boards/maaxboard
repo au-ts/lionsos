@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 # MAAXboard definitions.
-# 
+#
 BLK_DRIV_DIR := mmc/imx
 SERIAL_DRIV_DIR := imx
 TIMER_DRIV_DIR := imx

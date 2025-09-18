@@ -11,5 +11,3 @@ TIMER_DRIV_DIR := meson
 I2C_DRIV_DIR := meson
 
 CPU := cortex-a55
-
-

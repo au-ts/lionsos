@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 # Definitions for 64-bit ARM QEMU
-# 
+#
 BLK_DRIV_DIR := virtio
 SERIAL_DRIV_DIR := arm
 TIMER_DRIV_DIR := arm

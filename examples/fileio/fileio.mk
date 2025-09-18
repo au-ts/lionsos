@@ -7,7 +7,6 @@ SUPPORTED_BOARDS := maaxboard qemu_virt_aarch64
 
 IMAGES := \
 	timer_driver.elf \
-	eth_driver.elf \
 	micropython.elf \
 	fat.elf \
 	serial_driver.elf \
