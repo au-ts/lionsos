@@ -26,7 +26,7 @@ void mp_cothread_wait(microkit_channel ch,
     if (mp_channels[ch].type == MP_WAIT_DROP_UNTIL_WAIT) {
         mp_channels[ch].drop = false;
     }
-    
+
     mp_channels[ch].type = handle_interrupt;
     mp_curr_wait_ch = ch;
     microkit_cothread_wait_on_channel(ch);
@@ -42,7 +42,7 @@ void mp_cothread_interrupt(void)
     if (mp_channels[mp_curr_wait_ch].type == MP_WAIT_NO_INTERRUPT) {
         return;
     }
-    
+
     if (mp_channels[mp_curr_wait_ch].type == MP_WAIT_DROP ||
         mp_channels[mp_curr_wait_ch].type == MP_WAIT_DROP_UNTIL_WAIT) {
         mp_channels[mp_curr_wait_ch].drop = true;
