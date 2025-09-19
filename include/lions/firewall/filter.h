@@ -140,8 +140,16 @@ typedef struct fw_filter_state {
     fw_action_t default_action;
 } fw_filter_state_t;
 
-/* Functions for the bitmap*/
-/* Finds the first rule that is not in use, and marks it as used */
+/**
+ * Reserve an unused rule ID from the bitmap and mark it as allocated.
+ * Searches circularly starting from the last allocated ID position.
+ *
+ * @param bitmap pointer to the rule ID bitmap structure.
+ * @param rules_table_capacity total number of rule IDs available.
+ * @param res pointer to store the allocated rule ID.
+ *
+ * @return FILTER_ERR_OKAY if ID allocated successfully, FILTER_ERR_FULL if no IDs available.
+ */
 static fw_filter_err_t rules_reserve_id(fw_rule_id_bitmap_t *bitmap, uint16_t rules_table_capacity, uint16_t* res) {
     uint16_t total_ids = rules_table_capacity;
     for (uint16_t i = 0; i < total_ids; i++) {
@@ -161,8 +169,13 @@ static fw_filter_err_t rules_reserve_id(fw_rule_id_bitmap_t *bitmap, uint16_t ru
     }
     return FILTER_ERR_FULL;
 }
-
-/* Sets the bit for the inputted id rule to 0, will never free the default rule id (0) */
+/**
+ * Free a previously allocated rule ID by clearing its bit in the bitmap.
+ * The default rule (ID 0) cannot be freed and attempts to free it are ignored.
+ *
+ * @param bitmap pointer to the rule ID bitmap structure.
+ * @param id rule ID to free.
+ */
 static void rules_free_id(fw_rule_id_bitmap_t *bitmap, uint16_t id) {
     if (id == DEFAULT_RULE) {
         return;
