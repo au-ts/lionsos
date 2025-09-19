@@ -15,8 +15,8 @@
 #include <lions/firewall/protocols.h>
 
 #include <stdlib.h>
-
-#define MAX_CUCKOO_RETRIES 10
+#include "common.h"
+#define MAX_CUCKOO_RETRIES 5 
 #define RANDOM_PRIME 11
 #define MAP_BUCKET_SIZE 4
 
@@ -70,16 +70,26 @@ typedef struct fw_arp_request {
 } fw_arp_request_t;
 
 static uint32_t hash1(fw_arp_table_t* table, uint32_t ip) {
-    return ip*RANDOM_PRIME*3 % (table->capacity/4);
+    return ip*RANDOM_PRIME*3 % (table->capacity/MAP_BUCKET_SIZE);
 }
 
 static uint32_t hash2(fw_arp_table_t* table, uint32_t ip) {
-    return ip*RANDOM_PRIME % (table->capacity/4);
+    return ip*RANDOM_PRIME % (table->capacity/MAP_BUCKET_SIZE);
 }
 
-/*
-This loops over a bucket in the map and inserts in a free slot
-*/
+
+/**
+ * Insert an entry into a specific bucket if a free slot is available.
+ *
+ * @param table address of arp table.
+ * @param bucket starting index of the bucket in the entries array.
+ * @param ip ip address to insert.
+ * @param mac_addr mac address to insert or NULL.
+ * @param client client identifier for this entry.
+ * @param state state of the arp entry.
+ *
+ * @return true if insertion successful, false if bucket is full.
+ */
 static bool map_bucket_insert(fw_arp_table_t* table,
                         uint32_t bucket,
                         uint32_t ip,
@@ -96,21 +106,37 @@ static bool map_bucket_insert(fw_arp_table_t* table,
             entry->state = state;
             entry->num_retries = 0;
             entry->client = BIT(client);
+            if (FW_DEBUG_OUTPUT) {
+                char ip_addr_buf0[16];
+                sddf_printf(" inserting ip %s into bucket %d, index %d \n",
+                    ipaddr_to_string(entry->ip, ip_addr_buf0), bucket, i);
+            }
             return true;
         }
     }
     return false;                    
 }
 
-// make space in b1 by moving the value into b2
-// if fails randomly evict something from bucket 2
+/**
+ * Perform cuckoo hashing step to make space by relocating entries between buckets.
+ * Moves a given index into their 2nd bucket, recursively if needed.
+ * If maximum retries reached, evicts an entry.
+ * Will evict an item from the table iff no free slot is found before hitting max cuckoo_retries
+ *
+ * @param table address of arp table.
+ * @param move_item_idx index of the entry to move or evict.
+ * @param cuckoo_retries current number of cuckoo relocation attempts.
+ */
 static void map_cuckoo_step(fw_arp_table_t* table, uint32_t move_item_idx, uint8_t cuckoo_retries) {
     if (cuckoo_retries == MAX_CUCKOO_RETRIES) {
         table->entries[move_item_idx].state = ARP_STATE_INVALID;
-        // when you reach the limit you loose the data of that last item
+        if (FW_DEBUG_OUTPUT) {
+            char ip_addr_buf0[16];
+            sddf_printf("cuckoo table has evicted %s\n",
+                ipaddr_to_string(table->entries[move_item_idx].ip, ip_addr_buf0));
+        }
         return;
     }
-    
     fw_arp_entry_t entry_to_move = table->entries[move_item_idx];
 
     uint32_t b2 = hash2(table, entry_to_move.ip) * MAP_BUCKET_SIZE;
@@ -125,6 +151,17 @@ static void map_cuckoo_step(fw_arp_table_t* table, uint32_t move_item_idx, uint8
     table->entries[move_item_idx].state = ARP_STATE_INVALID;
 }
 
+/**
+ * Insert an entry into the hash table using cuckoo hashing.
+ * Attempts to insert into primary bucket, uses cuckoo hashing if full.
+ *
+ * @param table address of arp table.
+ * @param ip ip address to insert.
+ * @param mac_addr mac address to insert or NULL.
+ * @param client client identifier for this entry.
+ * @param cuckoo_retries unused parameter (kept for compatibility).
+ * @param state state of the arp entry.
+ */
 static void map_insert(fw_arp_table_t* table, 
                         uint32_t ip,
                         uint8_t *mac_addr,
@@ -139,6 +176,16 @@ static void map_insert(fw_arp_table_t* table,
     }
     map_bucket_insert(table, b1, ip, mac_addr, client, state);
 }
+
+/**
+ * Search for an entry with matching IP in a specific bucket.
+ *
+ * @param table address of arp table.
+ * @param ip ip address to search for.
+ * @param bucket starting index of the bucket in the entries array.
+ *
+ * @return pointer to the entry if found, NULL otherwise.
+ */
 static fw_arp_entry_t* map_bucket_search(fw_arp_table_t* table, uint32_t ip, uint32_t bucket) {
     for (int i = 0; i < MAP_BUCKET_SIZE; i++) {
         fw_arp_entry_t* entry = &table->entries[bucket + i];
@@ -149,15 +196,23 @@ static fw_arp_entry_t* map_bucket_search(fw_arp_table_t* table, uint32_t ip, uin
     return NULL;
 } 
 
+/**
+ * Search for an entry in the hash table by IP address.
+ * Checks both primary and secondary hash buckets.
+ *
+ * @param table address of arp table.
+ * @param ip ip address to search for.
+ * @param res pointer to store the result entry if found.
+ *
+ * @return true if entry found, false otherwise.
+ */
 static bool map_search(fw_arp_table_t* table, uint32_t ip, fw_arp_entry_t** res) {
     uint32_t b1 = hash1(table, ip)*MAP_BUCKET_SIZE;
-    // search b1
     *res = map_bucket_search(table, ip, b1);
     if (*res != NULL) {
         return true;
     } 
     uint32_t b2 = hash2(table, ip)*MAP_BUCKET_SIZE;
-    // search b2
     *res = map_bucket_search(table, ip, b2);
     if (*res != NULL) {
         return true;
