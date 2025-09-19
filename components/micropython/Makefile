@@ -65,6 +65,7 @@ SRC_C = \
 	micropython.c \
 	mphalport.c \
 	modtime.c \
+	modinterrupt.c \
 	mpfirewallport.c \
 	modfs_raw.c \
 	vfs_fs_file.c \
@@ -86,6 +87,7 @@ SRC_C = \
 	shared/runtime/gchelper_generic.c \
 	shared/runtime/pyexec.c \
 	shared/runtime/stdout_helpers.c \
+	shared/runtime/interrupt_char.c \
 	shared/runtime/sys_stdio_mphal.c \
 	shared/libc/printf.c \
 	shared/timeutils/timeutils.c \

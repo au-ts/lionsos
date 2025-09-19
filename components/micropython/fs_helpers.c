@@ -120,7 +120,7 @@ int fs_command_blocking(fs_cmpl_t *completion, fs_cmd_t cmd) {
 
     fs_command_issue(cmd);
     while (!request_metadata[request_id].complete) {
-        microkit_cothread_wait_on_channel(fs_config.server.id);
+        mp_cothread_wait(fs_config.server.id, MP_WAIT_NO_INTERRUPT);
     }
 
     fs_command_complete(request_id, NULL, completion);
