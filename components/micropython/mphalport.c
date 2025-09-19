@@ -7,13 +7,43 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <assert.h>
-#include "micropython.h"
-#include "py/mpconfig.h"
 #include <sddf/serial/config.h>
 #include <sddf/serial/queue.h>
 #include "py/stream.h"
+#include "py/mpconfig.h"
+#include "shared/runtime/interrupt_char.h"
+#include "micropython.h"
+#include "mphalport.h"
 
 extern serial_client_config_t serial_config;
+
+bool intercept_serial_rx_interrupt(void) {
+    uint32_t search_head = serial_rx_queue_handle.queue->head;
+    while(!serial_queue_empty(&serial_rx_queue_handle,
+                             search_head)) {
+        uint32_t search_head_prev = search_head;
+        char c;
+        int ret = serial_dequeue_local(&serial_rx_queue_handle, &search_head, &c);
+        assert(!ret);
+
+        /* Check for interrupt character */
+        if (c == mp_interrupt_char) {
+            /* If Micropython is not waiting on serial input, discard earlier characters and schedule interrupt */
+            if (mp_curr_wait_ch != serial_config.rx.id) {
+                serial_update_shared_head(&serial_rx_queue_handle, search_head);
+                mp_sched_keyboard_interrupt();
+                return true;
+            }
+            /* Otherwise discard earlier characters but keep interrupt character */
+            else {
+                serial_update_shared_head(&serial_rx_queue_handle, search_head_prev);
+                return false;
+            }
+        }
+    }
+
+    return false;
+}
 
 // Receive single character, blocking until one is available.
 int mp_hal_stdin_rx_chr(void) {
@@ -26,7 +56,7 @@ int mp_hal_stdin_rx_chr(void) {
     // string may only be delivered after we have already consumed it.
     while(serial_queue_empty(&serial_rx_queue_handle,
                              serial_rx_queue_handle.queue->head)) {
-        microkit_cothread_wait_on_channel(serial_config.rx.id);
+        mp_cothread_wait(serial_config.rx.id, MP_WAIT_NO_INTERRUPT);
     }
 
     // Dequeue and return character
@@ -52,7 +82,7 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len)
 
         serial_request_consumer_signal(&serial_tx_queue_handle);
         if (serial_queue_full(&serial_tx_queue_handle, serial_tx_queue_handle.queue->tail)) {
-            microkit_cothread_wait_on_channel(serial_config.tx.id);
+            mp_cothread_wait(serial_config.tx.id, MP_WAIT_RECV);
         } else {
             serial_cancel_consumer_signal(&serial_tx_queue_handle);
         }
