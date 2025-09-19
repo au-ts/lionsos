@@ -37,7 +37,7 @@ fw_queue_t arp_req_queue[FW_NUM_ARP_REQUESTER_CLIENTS];
 fw_queue_t arp_resp_queue[FW_NUM_ARP_REQUESTER_CLIENTS];
 
 /* ARP table caches ARP request responses */
-fw_arp_table_t arp_table;
+fw_arp_table_t *arp_table;
 
 /* Keep track of whether the tx virt requires notification */
 static bool transmitted;
@@ -89,7 +89,7 @@ static void process_requests()
             assert(!err);
 
             /* Check if an arp entry already exists */
-            fw_arp_entry_t *entry = fw_arp_table_find_entry(&arp_table, request.ip);
+            fw_arp_entry_t *entry = fw_arp_table_find_entry(arp_table, request.ip);
             if (entry != NULL && entry->state != ARP_STATE_PENDING) {
                 /* Reply immediately */
                 fw_arp_request_t response = fw_arp_response_from_entry(entry);
@@ -120,7 +120,7 @@ static void process_requests()
             }
 
             /* Create arp entry for request to store associated client */
-            fw_arp_error_t arp_err = fw_arp_table_add_entry(&arp_table, ARP_STATE_PENDING, request.ip, NULL, client);
+            fw_arp_error_t arp_err = fw_arp_table_add_entry(arp_table, ARP_STATE_PENDING, request.ip, NULL, client);
             if (arp_err == ARP_ERR_FULL) {
                 sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n",
                 fw_frmt_str[arp_config.interface]);
@@ -147,7 +147,7 @@ static void process_responses()
                 /* Check if it's a probe, ignore announcements */
                 if (pkt->opcode == HTONS(ETHARP_OPCODE_REPLY)) {
                     /* Find the arp entry */
-                    fw_arp_entry_t *entry = fw_arp_table_find_entry(&arp_table, pkt->ipsrc_addr);
+                    fw_arp_entry_t *entry = fw_arp_table_find_entry(arp_table, pkt->ipsrc_addr);
                     if (entry != NULL) {
                         /* This was a response to a request we sent, update entry */
                         entry->state = ARP_STATE_REACHABLE;
@@ -168,7 +168,7 @@ static void process_responses()
                         }
                     } else {
                         /* Create a new entry */
-                        fw_arp_error_t arp_err = fw_arp_table_add_entry(&arp_table, ARP_STATE_REACHABLE, pkt->ipsrc_addr, pkt->hwsrc_addr, 0);
+                        fw_arp_error_t arp_err = fw_arp_table_add_entry(arp_table, ARP_STATE_REACHABLE, pkt->ipsrc_addr, pkt->hwsrc_addr, 0);
                         if (arp_err == ARP_ERR_FULL) {
                             sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n", fw_frmt_str[arp_config.interface]);
                         }
@@ -201,8 +201,8 @@ static void process_responses()
 static uint16_t process_retries(void)
 {
     uint16_t pending_requests = 0;
-    for (uint16_t i = 0; i < arp_table.capacity; i++) {
-        fw_arp_entry_t *entry = arp_table.entries + i;
+    for (uint16_t i = 0; i < arp_table->capacity; i++) {
+        fw_arp_entry_t *entry = arp_table->entries + i;
         if (entry->state != ARP_STATE_PENDING) {
             continue;
         }
@@ -257,8 +257,8 @@ static uint16_t process_retries(void)
 /* Flush all non pending cache entries */
 static uint16_t arp_table_flush(void) {
     uint16_t flushed = 0;
-    for (uint16_t i = 0; i < arp_table.capacity; i++) {
-        fw_arp_entry_t *entry = arp_table.entries + i;
+    for (uint16_t i = 0; i < arp_table->capacity; i++) {
+        fw_arp_entry_t *entry = arp_table->entries + i;
         if (entry->state == ARP_STATE_INVALID || entry->state == ARP_STATE_PENDING) {
             continue;
         }
@@ -291,7 +291,7 @@ void init(void)
             sizeof(fw_arp_request_t), arp_config.arp_clients[client].capacity);
     }
 
-    fw_arp_table_init(&arp_table, (fw_arp_entry_t *)arp_config.arp_cache.vaddr, arp_config.arp_cache_capacity);
+    fw_arp_table_init(&arp_table, (fw_arp_table_t *)arp_config.arp_cache.vaddr, arp_config.arp_cache_capacity);
 
     /* Set the first tick */
     sddf_timer_set_timeout(timer_config.driver_id, ARP_RETRY_TIMER_NS);

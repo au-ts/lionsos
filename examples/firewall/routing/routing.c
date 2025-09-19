@@ -46,7 +46,7 @@ fw_queue_t icmp_queue; /* Queue to transmit ICMP requests to
 /* Arp request/entry data structures */
 fw_queue_t arp_req_queue;
 fw_queue_t arp_resp_queue;
-fw_arp_table_t arp_table; /* ARP table holding all known ARP entries */
+fw_arp_table_t* arp_table; /* ARP table holding all known ARP entries */
 pkts_waiting_t pkt_waiting_queue; /* Queue holding packets awaiting
                                    * arp responses */
 
@@ -252,7 +252,7 @@ static void route(void)
 
             }
 
-            fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
+            fw_arp_entry_t *arp = fw_arp_table_find_entry(arp_table, next_hop);
             /* destination unreachable or no space to store packet or send ARP request, drop packet */
             if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) ||
                 (pkt_waiting_full(&pkt_waiting_queue) &&
@@ -337,9 +337,9 @@ void init(void)
         sizeof(fw_arp_request_t), router_config.arp_queue.capacity);
     fw_queue_init(&arp_resp_queue, router_config.arp_queue.response.vaddr,
         sizeof(fw_arp_request_t), router_config.arp_queue.capacity);
-    fw_arp_table_init(&arp_table, (fw_arp_entry_t *)router_config.arp_cache.vaddr,
-        router_config.arp_cache_capacity);
-
+    
+    arp_table = router_config.arp_cache.vaddr;
+    
     fw_queue_init(&icmp_queue, router_config.icmp_module.queue.vaddr, sizeof(icmp_req_t),
                     router_config.icmp_module.capacity);
 

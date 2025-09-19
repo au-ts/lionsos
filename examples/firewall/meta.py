@@ -120,7 +120,7 @@ icmp_queue_region = FirewallMemoryRegions("fw_icmp_queue_entry_size",
 
 arp_cache_region = FirewallMemoryRegions("fw_arp_entry_size",
                                          512,
-                                         lambda x: x.capacity * x.entry_size)
+                                         lambda x: x.entry_size + x.capacity * x.entry_size)
 
 arp_packet_queue_region = FirewallMemoryRegions("fw_arp_pkt_node_size",
                                          dma_buffer_queue_region.capacity,
