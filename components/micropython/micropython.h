@@ -80,6 +80,6 @@ void mp_cothread_interrupt(void);
  * to be awoken if it is waiting on a channel, unless the next notification on
  * this channel is to be ignored.
  *
- * @param ch 
+ * @param ch channel the Micropython cothread receives on.
  */
 void mp_cothread_maybe_recv(microkit_channel ch);
