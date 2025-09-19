@@ -33,7 +33,7 @@ mp_uint_t mp_hal_ticks_cpu(void) {
 
 void mp_hal_delay_us(mp_uint_t delay) {
     sddf_timer_set_timeout(timer_config.driver_id, delay * 1000);
-    microkit_cothread_wait_on_channel(timer_config.driver_id);
+    mp_cothread_wait(timer_config.driver_id, MP_WAIT_DROP_UNTIL_WAIT);
 }
 
 void mp_hal_delay_ms(mp_uint_t delay) {

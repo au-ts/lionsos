@@ -30,6 +30,7 @@
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
 #include "mpconfigport.h"
+#include "mphalport.h"
 #include "mpfirewallport.h"
 #include "fs_helpers.h"
 
@@ -243,8 +244,16 @@ void notified(microkit_channel ch) {
         fs_process_completions();
     }
 
+    if (ch == serial_config.rx.id) {
+        /* Check for keyboard interrupts */
+        if (intercept_serial_rx_interrupt()) {
+            /* Interrupt found, awaken Micropython thread early */
+            mp_cothread_interrupt();
+        }
+    }
+
     // We ignore errors because notified can be invoked without the MP cothread awaiting in cases such as an async I/O completing.
-    microkit_cothread_recv_ntfn(ch);
+    mp_cothread_maybe_recv(ch);
 
     if (net_enabled) {
         sddf_lwip_maybe_notify();
