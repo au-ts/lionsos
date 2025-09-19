@@ -44,7 +44,7 @@ mp_obj_t mp_time_time_get(void) {
     return mp_obj_new_int(sddf_timer_time_now(timer_config.driver_id) / 1000 / 1000);
 }
 
-mp_obj_t mp_time_localtime_get(void) {
+mp_obj_t mp_time_localtime_get(timeutils_struct_time_t *tm) {
     mp_raise_NotImplementedError(MP_ERROR_TEXT("real-time clock not available"));
     return mp_const_none;
 }

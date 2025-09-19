@@ -24,6 +24,8 @@ ifneq ($(strip $(MICROPYTHON_USER_C_MODULES)),)
 endif
 
 MICROPYTHON_LIBC_INCLUDE := $(abspath $(MUSL))/include
+MICROPYTHON_SRC := $(LIONSOS)/dep/micropython
+MPY_LIB_DIR	:= ${MICROPYTHON_DIR}/lib/micropython-lib
 
 LIB_SDDF_LWIP_CFLAGS_mp := \
 	-I$(MICROPYTHON_LIBC_INCLUDE) \
@@ -57,7 +59,9 @@ micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile $(MICROPY
 		USER_C_MODULES=$(MICROPYTHON_USER_C_MODULES) \
 		MUSL=$(abspath $(MUSL))
 
-mpy-cross: FORCE $(LIONSOS)/dep/micropython/mpy-cross
+mpy-cross: FORCE $(LIONSOS)/dep/micropython/mpy-cross |$(MPY_LIB_DIR)/README.md
 	make -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 FORCE: ;
+$(MPY_LIB_DIR)/README.md:
+	${MAKE} -C $(MICROPYTHON_DIR) submodules

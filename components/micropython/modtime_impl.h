@@ -8,6 +8,7 @@
 #include "micropython.h"
 #include "py/obj.h"
 #include "py/mphal.h"
+#include "shared/timeutils/timeutils.h" /* for timeutils_struct_time_t */
 
 uint64_t mp_hal_ticks_ns(void);
 
@@ -23,4 +24,4 @@ void mp_hal_delay_ms(mp_uint_t delay);
 
 mp_obj_t mp_time_time_get(void);
 
-mp_obj_t mp_time_localtime_get(void);
+mp_obj_t mp_time_localtime_get(timeutils_struct_time_t *tm);
