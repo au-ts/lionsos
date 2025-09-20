@@ -107,8 +107,9 @@ void slideshow_worker(void) {
     int cur_slide = 0;
     fs_dir_seek_blocking(dir_fd, slide_dir_locations[cur_slide]);
     
-    sddf_printf("slideshow: slideshow_worker(): initialising video.\n");
+    sddf_printf("slideshow: slideshow_worker(): initialising video...\n");
     init_video();
+    sddf_printf("slideshow: slideshow_worker(): video initialised!\n");
 
     sddf_printf("slideshow: slideshow_worker(): READY TO RECEIVE COMMANDS.\n");
     sddf_printf("Press 'a' to go backward, 'd' to go forward. Make sure CAPS LOCK is off.\n");
