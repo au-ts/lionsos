@@ -3,7 +3,6 @@
 #include "dma_offsets.h"
 #include "context_loader.h"
 #include "dma.h"
-#include "timer.h"
 #include "hdmi_data.h"
 #include "write_register.h"
 
@@ -57,7 +56,7 @@ void init_context_loader(uintptr_t dma_base, uintptr_t dcss_base, struct hdmi_da
 void run_context_loader(uintptr_t dma_base, uintptr_t dcss_base, struct hdmi_data *hdmi_config, uint32_t* active_frame_buffer_offset, uint32_t* cache_frame_buffer_offset){
 	
 	// Steps 3,4,5 and 12 of 15.4.2.2 Display state loading sequence
-	start_timer();
+	// start_timer();
 
 	uint32_t* enable_status = (uint32_t*)(dcss_base + CTXLD_CTRL_STATUS);
 	
@@ -98,12 +97,12 @@ void run_context_loader(uintptr_t dma_base, uintptr_t dcss_base, struct hdmi_dat
 
 	// Notify the client to draw the frame buffer
 	microkit_notify(52);
-	int time_elapsed = stop_timer();
+	// int time_elapsed = stop_timer();
 
-	if (hdmi_config->ms_delay != NO_DELAY) {
-		int delay_time = hdmi_config->ms_delay - time_elapsed;
-		if (delay_time > 0) {
-			ms_delay(delay_time);
-		}
-	}
+	// if (hdmi_config->ms_delay != NO_DELAY) {
+	// 	int delay_time = hdmi_config->ms_delay - time_elapsed;
+	// 	if (delay_time > 0) {
+	// 		ms_delay(delay_time);
+	// 	}
+	// }
 }

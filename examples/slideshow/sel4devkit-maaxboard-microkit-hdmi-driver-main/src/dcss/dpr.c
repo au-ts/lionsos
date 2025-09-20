@@ -5,7 +5,6 @@
 #include "dma.h"
 #include "dma_offsets.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 
 // 15.7.3.1.2 System Control 0 (SYSTEM_CTRL0)

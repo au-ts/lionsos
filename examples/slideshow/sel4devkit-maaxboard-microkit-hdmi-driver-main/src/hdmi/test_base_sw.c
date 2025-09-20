@@ -22,7 +22,7 @@
 #include "write_register.h"
 
 
-uintptr_t hdmi_base;
+uintptr_t hdmi_base = 0x32c00000;
 
 int cdn_apb_read(unsigned int addr, unsigned int *value)
 {

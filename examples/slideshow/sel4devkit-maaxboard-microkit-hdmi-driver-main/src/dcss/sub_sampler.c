@@ -3,7 +3,6 @@
 #include "sub_sampler.h"
 #include "write_register.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 

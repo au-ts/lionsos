@@ -3,7 +3,6 @@
 #include "dtg.h"
 #include "write_register.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 
 // 15.3.3.1.2 Timing Controller Control Register (TC_CONTROL_STATUS)

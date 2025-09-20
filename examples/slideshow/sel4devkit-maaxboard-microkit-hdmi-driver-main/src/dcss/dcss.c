@@ -1,9 +1,10 @@
 /* This work is Crown Copyright NCSC, 2024. */
 
-#include <stdio.h>
 #include <stdlib.h>
 
 #include <microkit.h>
+
+#include <sddf/util/printf.h>
 
 #include "dcss.h"
 #include "dma.h"
@@ -19,23 +20,18 @@
 
 #include "write_register.h"
 
-#include "timer.h"
-
-uintptr_t dcss_base;
-uintptr_t dcss_blk_base;
-uintptr_t gpc_base;
-uintptr_t ccm_base;
-uintptr_t dma_base;
-uintptr_t dma_base_paddr;
-uintptr_t timer_base;
+uintptr_t dcss_base = 0x32e00000;
+uintptr_t dcss_blk_base = 0x32e2f000;
+uintptr_t gpc_base = 0x303a0000;
+uintptr_t ccm_base = 0x30380000;
+uintptr_t dma_base = 0x50000000;
+uintptr_t dma_base_paddr = 0x50000000;
 uint32_t* active_frame_buffer_offset;
 uint32_t* cache_frame_buffer_offset;
 
 struct hdmi_data *hdmi_config = NULL;
 
 void init(void) {
-	
-	initialise_and_start_timer(timer_base);
 	sel4_dma_init(dma_base_paddr, dma_base, dma_base + DMA_SIZE);
 
 	active_frame_buffer_offset = (uint32_t*)(dma_base + ACTIVE_FRAME_BUFFER_ADDR_OFFSET);	
@@ -45,6 +41,7 @@ void init(void) {
 	*cache_frame_buffer_offset = FRAME_BUFFER_TWO_OFFSET; 
 
 	init_gpc();
+	sddf_printf("Display Controller Subsystem (DCSS) Driver: Ready!\n");
 }
 
 void
@@ -58,7 +55,7 @@ notified(microkit_channel ch) {
 			reset_dcss();
 			break;
 		default:
-			printf("Unexpected channel id: %d in dcss::notified() \n", ch);
+			sddf_printf("Unexpected channel id: %d in dcss::notified() \n", ch);
 	}
 }
 
@@ -71,12 +68,12 @@ protected(microkit_channel ch, microkit_msginfo msginfo) {
 				init_dcss();
 			}
 			else {
-				printf("hdmi_data not configured properly in client PD\n");
+				sddf_printf("hdmi_data not configured properly in client PD\n");
 			}
 			return seL4_MessageInfo_new((uint64_t)hdmi_config,1,0,0);
 			break;
 		default:
-			printf("Unexpected channel id: %d in dcss::protected() \n", ch);
+			sddf_printf("Unexpected channel id: %d in dcss::protected() \n", ch);
 	}
 }
 

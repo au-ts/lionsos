@@ -3,7 +3,6 @@
 #include "scaler.h"
 #include "write_register.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 
 // 15.8.3.1.2 Scale Control Register (SCALE_CTRL)

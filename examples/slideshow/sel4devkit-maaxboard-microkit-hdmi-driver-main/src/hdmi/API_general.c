@@ -247,7 +247,7 @@ CDN_API_STATUS cdn_api_checkalive(void)
 		return CDN_ERR;
 
 	while (retries_left--) {
-		udelay(1);
+		seL4_Yield();
 
 		if (cdn_apb_read(KEEP_ALIVE << 2, &newalive))
 			return CDN_ERR;
