@@ -152,9 +152,9 @@ fs_client_helpers.o: $(SLIDESHOW_DIR)/fs_client_helpers.c
 	${CC} ${CFLAGS} -I${LIBMICROKITCO_PATH} -I${LIBMICROKITCO_OPT_PATH} -c -o $@ $<
 
 slideshow.o: $(SLIDESHOW_DIR)/slideshow.c
-	${CC} ${CFLAGS} -I${LIBMICROKITCO_PATH} -I${LIBMICROKITCO_OPT_PATH} -c -o $@ $<
+	${CC} ${CFLAGS} -I${LIBMICROKITCO_PATH} -I${LIBMICROKITCO_OPT_PATH} -I$(VENDORED_VIDEO_DRIVER_DIR)/include  -c -o $@ $<
 
-slideshow.elf: slideshow.o fs_blocking_calls.o fs_client_helpers.o $(LIBMICROKITCO_OBJ) lib_compiler_rt.a
+slideshow.elf: slideshow.o vic_table.o fs_blocking_calls.o fs_client_helpers.o $(LIBMICROKITCO_OBJ) lib_compiler_rt.a
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 # =====================
 
