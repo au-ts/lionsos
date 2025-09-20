@@ -19,7 +19,7 @@
 #include <microkit.h>
 
 #ifdef TIMER_DEBUG
-#define timer_print(...) printf(__VA_ARGS__)
+#define timer_print(...) sddf_printf(__VA_ARGS__)
 #else
 #define timer_print(...) 0
 #endif

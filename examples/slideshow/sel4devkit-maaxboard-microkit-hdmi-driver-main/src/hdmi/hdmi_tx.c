@@ -16,6 +16,8 @@
 #include <API_AVI.h>
 #include <API_AFE_t28hpc_hdmitx.h>
 
+#include <sddf/util/printf.h>
+
 void init_hdmi(struct hdmi_data *hdmi_config) {
 	
 	uint8_t bits_per_pixel = 8;
@@ -29,6 +31,7 @@ void init_hdmi(struct hdmi_data *hdmi_config) {
 	api_status = call_api(phy_frequency, pixel_encoding_format, bits_per_pixel, hdmi_config);
 	handle_api_status(api_status, "call_api()");	
 
+	print_fw_ver();
 }
 
 CDN_API_STATUS init_api() {
@@ -74,10 +77,10 @@ CDN_API_STATUS call_api(uint32_t phy_frequency, VIC_PXL_ENCODING_FORMAT pixel_en
 void handle_api_status(CDN_API_STATUS status, char* function_name) {
 	
 	if (status != CDN_OK){
-		printf("%s returned non 0 status %d\n", function_name, status);
+		sddf_printf("%s returned non 0 status %d\n", function_name, status);
 		abort();
 	}
 	else {
-		printf("%s returned successfully\n", function_name);
+		sddf_printf("%s returned successfully\n", function_name);
 	}
 }

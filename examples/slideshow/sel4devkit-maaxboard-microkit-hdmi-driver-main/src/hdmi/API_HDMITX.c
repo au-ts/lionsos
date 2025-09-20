@@ -58,6 +58,8 @@
 #include "source_vif.h"
 #include "general_handler.h"
 
+#include <sddf/util/printf.h>
+
 CDN_API_STATUS CDN_API_HDMITX_DDC_READ(HDMITX_TRANS_DATA *data_in,
 				       HDMITX_TRANS_DATA *data_out)
 {
@@ -86,7 +88,7 @@ CDN_API_STATUS CDN_API_HDMITX_DDC_READ_blocking(HDMITX_TRANS_DATA *data_in,
 CDN_API_STATUS CDN_API_HDMITX_DDC_WRITE(HDMITX_TRANS_DATA *data_in,
 					HDMITX_TRANS_DATA *data_out)
 {
-	printf("foo: %x\n", data_in->buff[0]);
+	sddf_printf("foo: %x\n", data_in->buff[0]);
 	internal_macro_command_txrx(MB_MODULE_ID_HDMI_TX, HDMI_TX_WRITE,
 				    CDN_BUS_TYPE_APB, 4,
 				    1, data_in->slave,

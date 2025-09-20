@@ -52,6 +52,7 @@
 #endif
 
 #include "uboot_conversions.h"
+#include <sddf/util/printf.h>
 
 void afe_write(unsigned int offset, unsigned short val)
 {
@@ -64,7 +65,7 @@ void afe_write(unsigned int offset, unsigned short val)
 		ADDR_AFE + (offset << 2), val);
 
 	if (sts != CDN_OK) {
-		printf("CDN_API_General_Write_Register_blocking(0x%.8X, 0x%.8X) returned %d\n",
+		sddf_printf("CDN_API_General_Write_Register_blocking(0x%.8X, 0x%.8X) returned %d\n",
 		       offset,
 		       val,
 		       (int)sts);
@@ -85,7 +86,7 @@ unsigned short afe_read(unsigned int offset)
 		ADDR_AFE + (offset << 2), &resp);
 
 	if (sts != CDN_OK) {
-		printf("CDN_API_General_Read_Register_blocking(0x%.8X) returned %d\n",
+		sddf_printf("CDN_API_General_Read_Register_blocking(0x%.8X) returned %d\n",
 		       offset,
 		       (int)sts);
 	}
@@ -104,7 +105,7 @@ void set_field_value(reg_field_t *reg_field, u32 value)
 	if (value > max_value) {
 		trunc_val = value;
 		trunc_val &= (1 << length) - 1;
-		printf("set_field_value() Error! Specified value (0x%0X) exceeds field capacity - it will by truncated to 0x%0X (%0d-bit field - max value: %0d dec)\n",
+		sddf_printf("set_field_value() Error! Specified value (0x%0X) exceeds field capacity - it will by truncated to 0x%0X (%0d-bit field - max value: %0d dec)\n",
 		       value, trunc_val, length, max_value);
 	} else {
 		reg_field->value = value;

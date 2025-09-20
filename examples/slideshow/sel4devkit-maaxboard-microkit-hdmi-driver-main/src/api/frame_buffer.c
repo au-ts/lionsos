@@ -51,7 +51,7 @@ void clear_current_frame_buffer(struct hdmi_data* hd) {
 	uint64_t* frame_buffer_addr = get_active_frame_buffer_uint64();
 
 	if (hd == NULL){
-		printf("hdmi data not yet set, cannot write frame buffer.\n;");
+		sddf_printf("hdmi data not yet set, cannot write frame buffer.\n;");
 		return;
 	}
 	
@@ -71,7 +71,7 @@ void clear_current_cache_buffer(struct hdmi_data* hd) {
 	uint64_t* frame_buffer_addr = get_cache_frame_buffer_uint64();
 
 	if (hd == NULL){
-		printf("hdmi data not yet set, cannot write frame buffer.\n;");
+		sddf_printf("hdmi data not yet set, cannot write frame buffer.\n;");
 		return;
 	}
 	

@@ -30,6 +30,7 @@
 #endif
 
 #include "uboot_conversions.h"
+#include <sddf/util/printf.h>
 
 extern state_struct state;
 
@@ -198,7 +199,7 @@ CDN_API_STATUS cdn_api_get_event(uint32_t *events)
 	u32 evt[4] = { 0 };
 
 	if (!events) {
-		printf("events pointer is NULL!\n");
+		sddf_printf("events pointer is NULL!\n");
 		return CDN_ERR;
 	}
 
@@ -206,7 +207,7 @@ CDN_API_STATUS cdn_api_get_event(uint32_t *events)
 	    cdn_apb_read(SW_EVENTS1 << 2, &evt[1]) ||
 	    cdn_apb_read(SW_EVENTS2 << 2, &evt[2]) ||
 	    cdn_apb_read(SW_EVENTS3 << 2, &evt[3])) {
-		printf("Failed to read events registers.\n");
+		sddf_printf("Failed to read events registers.\n");
 		return CDN_ERR;
 	}
 
@@ -223,13 +224,13 @@ CDN_API_STATUS cdn_api_get_debug_reg_val(uint16_t *val)
 	u32 dbg[2] = { 0 };
 
 	if (!val) {
-		printf("val pointer is NULL!\n");
+		sddf_printf("val pointer is NULL!\n");
 		return CDN_ERR;
 	}
 
 	if (cdn_apb_read(SW_DEBUG_L << 2, &dbg[0]) ||
 	    cdn_apb_read(SW_DEBUG_H << 2, &dbg[1])) {
-		printf("Failed to read debug registers.\n");
+		sddf_printf("Failed to read debug registers.\n");
 		return CDN_ERR;
 	}
 
@@ -258,7 +259,7 @@ CDN_API_STATUS cdn_api_checkalive(void)
 		return CDN_OK;
 	}
 
-	printf("%s: keep-alive counter did not increment for 10us...\n", __func__);
+	sddf_printf("%s: keep-alive counter did not increment for 10us...\n", __func__);
 
 	return CDN_BSY;
 }

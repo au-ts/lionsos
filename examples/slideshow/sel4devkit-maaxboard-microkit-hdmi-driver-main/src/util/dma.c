@@ -19,7 +19,7 @@ uintptr_t allocated_dma;
 /* #define DMA_DEBUG */
 
 #ifdef DMA_DEBUG
-#define dma_print(...) printf(__VA_ARGS__)
+#define dma_print(...) sddf_printf(__VA_ARGS__)
 #else
 #define dma_print(...) 0
 #endif

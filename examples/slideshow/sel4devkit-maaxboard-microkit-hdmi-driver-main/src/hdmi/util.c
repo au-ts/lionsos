@@ -55,6 +55,8 @@
 #ifndef __UBOOT__
 #include <stdio.h>
 
+#include <sddf/util/printf.h>
+
 #endif
 state_struct state;
 
@@ -85,7 +87,7 @@ uint32_t internal_betoi(volatile uint8_t const *src, uint8_t bytes)
 	int i;
 
 	if (bytes > sizeof(ret)) {
-		printf("Warning. Read request for payload larger then supported.\n");
+		sddf_printf("Warning. Read request for payload larger then supported.\n");
 		bytes = sizeof(ret);
 	}
 
@@ -181,7 +183,7 @@ void internal_vreadmsg(int valno, va_list vl)
 				*((uint32_t *)ptr) = internal_betoi(src, size);
 				break;
 			default:
-				printf("Warning. Unsupported variable size.\n");
+				sddf_printf("Warning. Unsupported variable size.\n");
 				memcpy(ptr, src, size);
 			};
 
@@ -319,7 +321,7 @@ void print_fw_ver(void)
 {
 	unsigned short ver, verlib;
 	cdn_api_general_getcurversion(&ver, &verlib);
-	printf("FIRMWARE VERSION: %d, LIB VERSION: %d\n", ver, verlib);
+	sddf_printf("HDMI FIRMWARE VERSION: %d, LIB VERSION: %d\n", ver, verlib);
 }
 
 unsigned short internal_get_msg_len(void)

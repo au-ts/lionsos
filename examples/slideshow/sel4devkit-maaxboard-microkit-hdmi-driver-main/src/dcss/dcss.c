@@ -29,7 +29,7 @@ uintptr_t dma_base_paddr = 0x50000000;
 uint32_t* active_frame_buffer_offset;
 uint32_t* cache_frame_buffer_offset;
 
-struct hdmi_data *hdmi_config = NULL;
+struct hdmi_data *hdmi_config = (struct hdmi_data *) 0x60000000;
 
 void init(void) {
 	sel4_dma_init(dma_base_paddr, dma_base, dma_base + DMA_SIZE);
@@ -63,18 +63,12 @@ microkit_msginfo
 protected(microkit_channel ch, microkit_msginfo msginfo) {
 	switch (ch) {
 		case 0:
-		    hdmi_config = (struct hdmi_data *) microkit_msginfo_get_label(msginfo);
-			if (hdmi_config != NULL) {
-				init_dcss();
-			}
-			else {
-				sddf_printf("hdmi_data not configured properly in client PD\n");
-			}
-			return seL4_MessageInfo_new((uint64_t)hdmi_config,1,0,0);
+			init_dcss();
 			break;
 		default:
 			sddf_printf("Unexpected channel id: %d in dcss::protected() \n", ch);
 	}
+	return seL4_MessageInfo_new(0,0,0,0);
 }
 
 void init_dcss() {
