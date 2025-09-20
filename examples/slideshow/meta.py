@@ -77,6 +77,29 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     if board.name == "maaxboard":
         timer_system.add_client(blk_driver)
 
+    video_dma_pool_mr = MemoryRegion(sdf, "video_dma_pool", 0x4000000, paddr=0x5000_0000)
+    dcss_mr = MemoryRegion(sdf, "dcss", 0x2d000, paddr=0x32e0_0000)
+    dcss_blk_mr = MemoryRegion(sdf, "dcss_blk", 0x1000, paddr=0x32e2_f000)
+    gpc_mr = MemoryRegion(sdf, "gpc", 0x10000, paddr=0x303a_0000)
+    ccm_mr = MemoryRegion(sdf, "ccm", 0x10000, paddr=0x3038_0000)
+    hdmi_mr = MemoryRegion(sdf, "hdmi", 0x100000, paddr=0x32c0_0000)
+    sdf.add_mr(video_dma_pool_mr)
+    sdf.add_mr(dcss_mr)
+    sdf.add_mr(dcss_blk_mr)
+    sdf.add_mr(gpc_mr)
+    sdf.add_mr(ccm_mr)
+    sdf.add_mr(hdmi_mr)
+
+    dcss = ProtectionDomain("dcss", "dcss.elf", priority=50)
+    dcss.add_map(Map(video_dma_pool_mr, 0x5000_0000, "rw", cached=False))
+    dcss.add_map(Map(dcss_mr, 0x32e0_0000, "rw", cached=False))
+    dcss.add_map(Map(dcss_blk_mr, 0x32e2_f000, "rw", cached=False))
+    dcss.add_map(Map(gpc_mr, 0x303a_0000, "rw", cached=False))
+    dcss.add_map(Map(ccm_mr, 0x3038_0000, "rw", cached=False))
+    dcss.add_map(Map(hdmi_mr, 0x32c0_0000, "rw", cached=False))
+
+    slideshow.add_map(Map(video_dma_pool_mr, 0x5000_0000, "rw", cached=False))
+
     pds = [
         serial_driver,
         serial_virt_tx,
@@ -86,6 +109,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         timer_driver,
         blk_driver,
         blk_virt,
+        dcss
     ]
     for pd in pds:
         sdf.add_pd(pd)

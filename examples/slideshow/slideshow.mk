@@ -11,8 +11,8 @@ IMAGES := \
 	serial_virt_tx.elf \
 	blk_virt.elf \
 	blk_driver.elf \
-	slideshow.elf
-# 	dcss.elf
+	slideshow.elf \
+ 	dcss.elf
 
 ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
 	BLK_DRIV_DIR := mmc/imx
@@ -114,6 +114,28 @@ $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
 
 ${IMAGES}: libsddf_util_debug.a
 
+# === Video driver ===
+VENDORED_VIDEO_DRIVER_DIR = $(SLIDESHOW_DIR)/sel4devkit-maaxboard-microkit-hdmi-driver-main
+
+DCSS_OBJS = dcss.o dma.o vic_table.o API_general.o test_base_sw.o util.o write_register.o API_AFE_t28hpc_hdmitx.o API_AFE.o vic_table.o API_HDMITX.o API_AVI.o API_Infoframe.o hdmi_tx.o context_loader.o dpr.o dtg.o scaler.o sub_sampler.o
+DCSS_INC := $(VENDORED_VIDEO_DRIVER_DIR)/include $(VENDORED_VIDEO_DRIVER_DIR)/include/hdmi $(VENDORED_VIDEO_DRIVER_DIR)/include/dcss $(VENDORED_VIDEO_DRIVER_DIR)/include/util
+DCSS_INC_FLAGS=$(foreach d, $(DCSS_INC), -I$d)
+
+%.o: $(VENDORED_VIDEO_DRIVER_DIR)/src/hdmi/%.c
+	${CC} ${CFLAGS} ${DCSS_INC_FLAGS} -c -o $@ $<
+
+%.o: $(VENDORED_VIDEO_DRIVER_DIR)/src/dcss/%.c
+	${CC} ${CFLAGS} ${DCSS_INC_FLAGS} -c -o $@ $<
+
+%.o: $(VENDORED_VIDEO_DRIVER_DIR)/src/util/%.c
+	${CC} ${CFLAGS}${DCSS_INC_FLAGS} -c -o $@ $<
+
+dcss.elf: $(DCSS_OBJS) lib_compiler_rt.a
+	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
+
+# ====================
+
+# === Slideshow PD ===
 LLVM=1
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LIBMICROKITCO_OPT_PATH := $(SLIDESHOW_DIR)
@@ -134,6 +156,7 @@ slideshow.o: $(SLIDESHOW_DIR)/slideshow.c
 
 slideshow.elf: slideshow.o fs_blocking_calls.o fs_client_helpers.o $(LIBMICROKITCO_OBJ) lib_compiler_rt.a
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
+# =====================
 
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
