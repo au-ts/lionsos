@@ -136,3 +136,87 @@ void fs_file_close_blocking(uint64_t fd) {
     });
     assert(!err && completion.status == FS_STATUS_SUCCESS);
 }
+
+uint64_t fs_dir_open_blocking(char *path, uint64_t path_len) {
+    if (path[0] == '\0') {
+        path = ".";
+    }
+
+    ptrdiff_t buf_off;
+    assert(fs_buffer_allocate(&buf_off) == 0);
+    char *buf = (char *) fs_buffer_ptr(buf_off);
+    strcpy(buf, path);
+
+    fs_cmpl_t completion;
+    int err = fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_DIR_OPEN,
+        .params.dir_open = {
+            .path.offset = (uint64_t) buf_off,
+            .path.size = path_len,
+        }
+    });
+    fs_buffer_free(buf_off);
+    assert(!err && completion.status == FS_STATUS_SUCCESS);
+    return completion.data.dir_open.fd;
+}
+
+uint64_t fs_dir_read_blocking(uint64_t fd, void* data) {
+    ptrdiff_t buf_off;
+    assert(fs_buffer_allocate(&buf_off) == 0);
+
+    fs_cmpl_t completion;
+    int err = fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_DIR_READ,
+        .params.dir_read = {
+            .fd = fd,
+            .buf.offset = (uint64_t) buf_off,
+            .buf.size = FS_BUFFER_SIZE,
+        }
+    });
+    fs_buffer_free(buf_off);
+    assert(!err);
+
+    // @billn why does FATFS not return FS_STATUS_END_OF_DIRECTORY?????
+    // assert(completion.status == FS_STATUS_SUCCESS || completion.status == FS_STATUS_END_OF_DIRECTORY);
+
+    uint64_t str_len = completion.data.dir_read.path_len;
+    strcpy(data, (char *) fs_buffer_ptr(buf_off));
+    ((char *) data)[str_len] = '\0';
+
+    return str_len;
+}
+
+uint64_t fs_dir_tell_blocking(uint64_t fd) {
+    fs_cmpl_t completion;
+    int err = fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_DIR_TELL,
+        .params.dir_tell = {
+            .fd = fd,
+        }
+    });
+    assert(!err && completion.status == FS_STATUS_SUCCESS);
+    return completion.data.dir_tell.location;
+}
+
+void fs_dir_close_blocking(uint64_t fd) {
+    fs_cmpl_t completion;
+    int err = fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_DIR_CLOSE,
+        .params.dir_close = {
+            .fd = fd,
+        }
+    });
+    assert(!err && completion.status == FS_STATUS_SUCCESS);
+}
+
+void fs_dir_seek_blocking(uint64_t fd, uint64_t loc) {
+    fs_cmpl_t completion;
+    int err = fs_command_blocking(&completion, (fs_cmd_t){
+        .type = FS_CMD_DIR_SEEK,
+        .params.dir_seek = {
+            .fd = fd,
+            .loc = loc,
+        }
+    });
+    assert(!err && completion.status == FS_STATUS_SUCCESS);
+}
