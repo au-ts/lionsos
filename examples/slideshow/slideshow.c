@@ -16,6 +16,7 @@
 
 #include <hdmi/hdmi_data.h>
 #include <hdmi/vic_table.h>
+#include <api/frame_buffer.h>
 
 #include "fs_blocking_calls.h"
 #include "fs_client_helpers.h"
@@ -75,6 +76,57 @@ void init_video(void) {
 	shared_hdmi_config->alpha_enable = ALPHA_OFF;
 	shared_hdmi_config->mode = MOVING_IMAGE;
 	shared_hdmi_config->ms_delay = NO_DELAY;
+
+	uint8_t* frame_buffer_addr = get_active_frame_buffer_uint8();
+	
+	int height = shared_hdmi_config->v_active;
+	int width = shared_hdmi_config->h_active;
+	int first_quarter = width * 0.25;
+	int second_quarter = width * 0.5;
+	int third_quarter = width * 0.75;
+	int alpha = 0;
+
+	for (int i = 0; i < height; i++) { 
+		for (int j = 0; j < width; j++) {
+			
+			// reset alpha for each colour bar
+			if (j % first_quarter == 0) {
+				alpha = 0;
+			}
+
+			if (j < first_quarter)
+			{
+				*(frame_buffer_addr++) = 0xff; 
+				*(frame_buffer_addr++) = 0x00;
+				*(frame_buffer_addr++) = 0x00;
+				*(frame_buffer_addr++) = alpha;
+			}
+			else if (j < second_quarter)
+			{
+				*(frame_buffer_addr++) = 0x00;
+				*(frame_buffer_addr++) = 0xff;
+				*(frame_buffer_addr++) = 0x00;
+				*(frame_buffer_addr++) = alpha;
+			}
+			else if (j < third_quarter)
+			{
+				*(frame_buffer_addr++) = 0x00;
+				*(frame_buffer_addr++) = 0x00;
+				*(frame_buffer_addr++) = 0xff;
+				*(frame_buffer_addr++) = alpha;
+			}
+			else {
+				*(frame_buffer_addr++) = 0xff;
+				*(frame_buffer_addr++) = 0xff;
+				*(frame_buffer_addr++) = 0xff;
+				*(frame_buffer_addr++) = alpha;
+			}
+
+			if (j %3 == 0) {
+				alpha++;
+			}
+		}
+	}
 
     microkit_ppcall(DCSS_INIT_CH, seL4_MessageInfo_new(0, 0, 0, 0));
 }
