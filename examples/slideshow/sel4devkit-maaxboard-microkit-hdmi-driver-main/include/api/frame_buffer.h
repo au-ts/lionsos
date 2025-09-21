@@ -4,7 +4,7 @@
 #define __FRAME_BUFFER_H__
 
 #include <stdint.h>
-#include "hdmi_data.h"
+#include <hdmi/hdmi_data.h>
 
 uint8_t* get_active_frame_buffer_uint8();
 uint32_t* get_active_frame_buffer_uint32();

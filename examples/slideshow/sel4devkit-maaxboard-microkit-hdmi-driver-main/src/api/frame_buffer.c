@@ -1,13 +1,15 @@
 /* This work is Crown Copyright NCSC, 2024. */
 
-#include "frame_buffer.h"
+#include <api/frame_buffer.h>
 #include <microkit.h>
-#include "dma_offsets.h"
+#include <dma_offsets.h>
+
+#include <sddf/util/printf.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 
-uintptr_t dma_base; 
+uintptr_t dma_base= 0x50000000;
 
 uint8_t* get_active_frame_buffer_uint8(){
 	uintptr_t* frame_buffer_addr_offset = (uintptr_t*)(dma_base + ACTIVE_FRAME_BUFFER_ADDR_OFFSET);
