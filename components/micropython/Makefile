@@ -90,10 +90,10 @@ SRC_C = \
 	shared/libc/printf.c \
 	shared/timeutils/timeutils.c \
 	shared/netutils/netutils.c \
-	$(USER_C_MODULES)
+	$(MICROPYTHON_USER_C_MODULES)
 
 # Define source files containung qstrs.
-SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c vfs_fs_file.c vfs_fs.c modfs_raw.c $(USER_C_MODULES)
+SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c vfs_fs_file.c vfs_fs.c modfs_raw.c $(MICROPYTHON_USER_C_MODULES)
 
 # Frozen module to execute; otherwise run REPL
 ifdef EXEC_MODULE
