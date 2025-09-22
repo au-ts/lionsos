@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <microkit.h>
+#include <libmicrokitco.h>
 
 #define MICROPY_CONFIG_ROM_LEVEL (MICROPY_CONFIG_ROM_LEVEL_CORE_FEATURES)
 
@@ -112,24 +113,17 @@ typedef long mp_off_t;
 #define MP_STATE_PORT MP_STATE_VM
 
 void mp_hal_delay_us(mp_uint_t delay);
-#define MICROPY_EVENT_POLL_HOOK \
-    do { \
-        mp_hal_delay_us(1); \
-        extern void mp_handle_pending(bool); \
-        mp_handle_pending(true); \
-    } while (0);
+#define MICROPY_EVENT_POLL_HOOK do { mp_hal_delay_us(1); } while (0);
 
 typedef uint32_t sys_prot_t;
 
 #define MICROPY_PY_TIME_INCLUDEFILE "modtime_impl.h"
 
-#define MICROPY_VM_HOOK_COUNT (10)
+#define MICROPY_VM_HOOK_COUNT (100)
 #define MICROPY_VM_HOOK_INIT static uint vm_hook_divisor = MICROPY_VM_HOOK_COUNT;
-#define MICROPY_VM_HOOK_POLL if (--vm_hook_divisor == 0) { \
+#define MICROPY_VM_HOOK_POLL if (microkit_cothread_my_handle() && --vm_hook_divisor == 0) { \
         vm_hook_divisor = MICROPY_VM_HOOK_COUNT; \
         mp_hal_delay_us(1); \
-        extern void mp_handle_pending(bool); \
-        mp_handle_pending(true); \
 }
 #define MICROPY_VM_HOOK_LOOP MICROPY_VM_HOOK_POLL
 #define MICROPY_VM_HOOK_RETURN MICROPY_VM_HOOK_POLL
