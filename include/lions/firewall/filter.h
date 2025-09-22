@@ -501,7 +501,7 @@ static fw_filter_err_t fw_filter_remove_instances(fw_filter_state_t *state,
     while (i < state->internal_instances_table->size) {
         fw_instance_t *instance = state->internal_instances_table->instances + i;
 
-        if (default_action && instance->rule_id == DEFAULT_RULE) {
+        if (default_action && instance->rule_id != DEFAULT_RULE) {
             i++;
             continue;
         }
