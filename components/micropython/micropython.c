@@ -48,6 +48,7 @@ __attribute__((__section__(".fw_webserver_config"))) fw_webserver_config_t fw_co
 bool net_enabled;
 bool i2c_enabled;
 bool fs_enabled;
+bool serial_rx_enabled;
 bool firewall_enabled;
 
 // Allocate memory for the MicroPython GC heap.
@@ -198,8 +199,9 @@ void init(void) {
     assert(timer_config_check_magic(&timer_config));
     net_enabled = net_config_check_magic(&net_config);
     fs_enabled = fs_config_check_magic(&fs_config);
+    serial_rx_enabled = (serial_config.rx.queue.vaddr != NULL);
 
-    if (serial_config.rx.queue.vaddr != NULL) {
+    if (serial_rx_enabled) {
         serial_queue_init(&serial_rx_queue_handle, serial_config.rx.queue.vaddr, serial_config.rx.data.size, serial_config.rx.data.vaddr);
     }
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
@@ -244,7 +246,7 @@ void notified(microkit_channel ch) {
         fs_process_completions();
     }
 
-    if (ch == serial_config.rx.id) {
+    if (serial_rx_enabled && ch == serial_config.rx.id) {
         /* Check for keyboard interrupts */
         if (intercept_serial_rx_interrupt()) {
             /* Interrupt found, awaken Micropython thread early */
