@@ -39,7 +39,8 @@ serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
 
 #define DCSS_INIT_CH 42
-struct hdmi_data *shared_hdmi_config = (struct hdmi_data *) 0x60000000;
+#define DCSS_DRAW_CH 43
+volatile struct hdmi_data *shared_hdmi_config = (struct hdmi_data *) 0x60000000;
 
 #define MAX_NUM_SLIDES 100
 uint64_t slide_dir_locations[MAX_NUM_SLIDES];
@@ -53,30 +54,7 @@ void read_slide(char *filename) {
     uint64_t fd = fs_file_open_blocking(path, strlen(path), FS_OPEN_FLAGS_READ_ONLY);
 }
 
-void init_video(void) {
-    int vic_mode = VIC_MODE_16_60Hz;
-
-	shared_hdmi_config->h_front_porch = vic_table[vic_mode][FRONT_PORCH];
-	shared_hdmi_config->h_back_porch= vic_table[vic_mode][BACK_PORCH];
-	shared_hdmi_config->hsync = vic_table[vic_mode][HSYNC];
-	shared_hdmi_config->v_front_porch = vic_table[vic_mode][TYPE_EOF];
-	shared_hdmi_config->v_back_porch = vic_table[vic_mode][SOF];
-	shared_hdmi_config->vsync= vic_table[vic_mode][VSYNC];
-	shared_hdmi_config->h_active = vic_table[vic_mode][H_ACTIVE];
-	shared_hdmi_config->v_active = vic_table[vic_mode][V_ACTIVE]; 
-	shared_hdmi_config->hsync_pol = vic_table[vic_mode][HSYNC_POL];
-	shared_hdmi_config->vsync_pol = vic_table[vic_mode][VSYNC_POL];
-	shared_hdmi_config->pixel_frequency_khz = vic_table[vic_mode][PIXEL_FREQ_KHZ];
-	shared_hdmi_config->h_blank = vic_table[vic_mode][H_BLANK];
-	shared_hdmi_config->h_total = vic_table[vic_mode][H_TOTAL];
-	shared_hdmi_config->vic_r3 = vic_table[vic_mode][VIC_R3_0];
-	shared_hdmi_config->vic_pr = vic_table[vic_mode][VIC_PR];
-	shared_hdmi_config->v_total = vic_table[vic_mode][V_TOTAL];
-	shared_hdmi_config->rgb_format = RGBA;
-	shared_hdmi_config->alpha_enable = ALPHA_OFF;
-	shared_hdmi_config->mode = MOVING_IMAGE;
-	shared_hdmi_config->ms_delay = NO_DELAY;
-
+void framebuffer_draw_test_pattern(void) {
 	uint8_t* frame_buffer_addr = get_active_frame_buffer_uint8();
 	
 	int height = shared_hdmi_config->v_active;
@@ -127,11 +105,51 @@ void init_video(void) {
 			}
 		}
 	}
+}
+
+void framebuffer_kick(void) {
+    microkit_notify(DCSS_DRAW_CH);
+    microkit_cothread_wait_on_channel(DCSS_DRAW_CH);
+}
+
+void video_init(void) {
+    // 1920 x 1080, 60hz, progressive scan
+    int vic_mode = VIC_MODE_16_60Hz;
+
+	shared_hdmi_config->h_front_porch = vic_table[vic_mode][FRONT_PORCH];
+	shared_hdmi_config->h_back_porch= vic_table[vic_mode][BACK_PORCH];
+	shared_hdmi_config->hsync = vic_table[vic_mode][HSYNC];
+	shared_hdmi_config->v_front_porch = vic_table[vic_mode][TYPE_EOF];
+	shared_hdmi_config->v_back_porch = vic_table[vic_mode][SOF];
+	shared_hdmi_config->vsync= vic_table[vic_mode][VSYNC];
+	shared_hdmi_config->h_active = vic_table[vic_mode][H_ACTIVE];
+	shared_hdmi_config->v_active = vic_table[vic_mode][V_ACTIVE]; 
+	shared_hdmi_config->hsync_pol = vic_table[vic_mode][HSYNC_POL];
+	shared_hdmi_config->vsync_pol = vic_table[vic_mode][VSYNC_POL];
+	shared_hdmi_config->pixel_frequency_khz = vic_table[vic_mode][PIXEL_FREQ_KHZ];
+	shared_hdmi_config->h_blank = vic_table[vic_mode][H_BLANK];
+	shared_hdmi_config->h_total = vic_table[vic_mode][H_TOTAL];
+	shared_hdmi_config->vic_r3 = vic_table[vic_mode][VIC_R3_0];
+	shared_hdmi_config->vic_pr = vic_table[vic_mode][VIC_PR];
+	shared_hdmi_config->v_total = vic_table[vic_mode][V_TOTAL];
+	shared_hdmi_config->rgb_format = RGBA;
+	shared_hdmi_config->alpha_enable = ALPHA_OFF;
+	shared_hdmi_config->mode = MOVING_IMAGE;
+	shared_hdmi_config->ms_delay = NO_DELAY;
+
+    framebuffer_draw_test_pattern();
 
     microkit_ppcall(DCSS_INIT_CH, seL4_MessageInfo_new(0, 0, 0, 0));
+
+    // wait for DCSS to be ready
+    microkit_cothread_wait_on_channel(DCSS_DRAW_CH);
 }
 
 void slideshow_worker(void) {
+    sddf_printf("slideshow: slideshow_worker(): initialising video...\n");
+    video_init();
+    sddf_printf("slideshow: slideshow_worker(): video initialised!\n");
+
     sddf_printf("slideshow: slideshow_worker(): mounting filesystem...");
     fs_cmpl_t completion;
     int err = fs_command_blocking(&completion, (fs_cmd_t){ .type = FS_CMD_INITIALISE });
@@ -158,10 +176,6 @@ void slideshow_worker(void) {
     sddf_printf("slideshow: slideshow_worker(): reading first slide into memory.\n");
     int cur_slide = 0;
     fs_dir_seek_blocking(dir_fd, slide_dir_locations[cur_slide]);
-    
-    sddf_printf("slideshow: slideshow_worker(): initialising video...\n");
-    init_video();
-    sddf_printf("slideshow: slideshow_worker(): video initialised!\n");
 
     sddf_printf("slideshow: slideshow_worker(): READY TO RECEIVE COMMANDS.\n");
     sddf_printf("Press 'a' to go backward, 'd' to go forward. Make sure CAPS LOCK is off.\n");
@@ -169,7 +183,9 @@ void slideshow_worker(void) {
         microkit_cothread_wait_on_channel(serial_config.rx.id);
 
         char c;
-        assert(serial_dequeue(&serial_rx_queue_handle, &c) == 0);
+        if (serial_dequeue(&serial_rx_queue_handle, &c) != 0) {
+            continue;
+        }
 
         int new_slide;
         if (c == 'a') {
@@ -181,6 +197,15 @@ void slideshow_worker(void) {
         }
         cur_slide = new_slide;
 
+        
+
+        if (cur_slide % 2) {
+            framebuffer_draw_test_pattern();
+            framebuffer_kick();
+        } else {
+            clear_current_frame_buffer(shared_hdmi_config);
+            framebuffer_kick();
+        }
     }
 }
 

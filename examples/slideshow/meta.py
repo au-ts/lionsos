@@ -108,6 +108,8 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     slideshow.add_map(Map(dcss_shared_data_mr, 0x6000_0000, "rw", cached=False))
 
     sdf.add_channel(Channel(slideshow, dcss, a_id=42, b_id=0, pp_a=True))
+    sdf.add_channel(Channel(slideshow, dcss, a_id=43, b_id=52, pp_a=True))
+
 
     pds = [
         serial_driver,
