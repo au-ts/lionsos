@@ -44,9 +44,7 @@ jobs:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
       - name: Install Nix
-        uses: cachix/install-nix-action@v25
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
+        uses: cachix/install-nix-action@v31
       - name: Run examples script
         run: nix develop --ignore-environment -c bash -c './ci/examples.sh $(pwd) $MICROKIT_SDK'
   build_examples_macos_aarch64_nix:
