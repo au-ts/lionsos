@@ -6,53 +6,10 @@
 #
 # This makefile will be copied into the Build directory and used from there.
 #
-BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
-SDDF := $(LIONSOS)/dep/sddf
-
-ifeq (${MICROKIT_BOARD},odroidc4)
-	TIMER_DRIVER_DIR := meson
-	ETHERNET_DRIVER_DIR := meson
-	SERIAL_DRIVER_DIR := meson
-	CPU := cortex-a55
-else ifeq (${MICROKIT_BOARD},maaxboard)
-	TIMER_DRIVER_DIR := imx
-	ETHERNET_DRIVER_DIR := imx
-	SERIAL_DRIVER_DIR := imx
-	CPU := cortex-a53
-else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
-	TIMER_DRIVER_DIR := arm
-	ETHERNET_DRIVER_DIR := virtio
-	SERIAL_DRIVER_DIR := arm
-	CPU := cortex-a53
-	QEMU := qemu-system-aarch64
-else
-$(error Unsupported MICROKIT_BOARD given)
-endif
-
+SUPPORTED_BOARDS := odroidc4 maaxboard qemu_virt_aarch64
+include ${LIONSOS}/boards/common
 TOOLCHAIN := clang
-CC := clang
-LD := ld.lld
-AR := llvm-ar
-RANLIB := llvm-ranlib
-OBJCOPY := llvm-objcopy
-MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
-PYTHON ?= python3
-DTC := dtc
-
-ifeq ($(ARCH),aarch64)
-	CFLAGS_ARCH := -mcpu=$(CPU)
-	TARGET := aarch64-none-elf
-else ifeq ($(ARCH),riscv64)
-	CFLAGS_ARCH := -march=rv64imafdc
-	TARGET := riscv64-none-elf
-else
-$(error Unsupported ARCH given)
-endif
-
-ifeq ($(strip $(TOOLCHAIN)), clang)
-	CFLAGS_ARCH += -target $(TARGET)
-endif
+include ${LIONSOS}/toolchain/${TOOLCHAIN}
 
 NFS=$(LIONSOS)/components/fs/nfs
 MUSL_SRC := $(LIONSOS)/dep/musllibc
@@ -60,8 +17,6 @@ MUSL := musllibc
 MICRODOT := ${LIONSOS}/dep/microdot/src
 
 METAPROGRAM := $(WEBSERVER_SRC_DIR)/meta.py
-DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
-DTB := $(MICROKIT_BOARD).dtb
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  network_copy.elf network_virt_rx.elf network_virt_tx.elf \
@@ -69,18 +24,7 @@ IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 
 SYSTEM_FILE := webserver.system
 
-CFLAGS := \
-	-mtune=$(CPU) \
-	-mstrict-align \
-	-ffreestanding \
-	-O2 \
-	-g3 \
-	-MD \
-	-MP \
-	-Wall \
-	-Wno-unused-function \
-	-Wno-bitwise-op-parentheses \
-	-Wno-shift-op-parentheses \
+CFLAGS += \
 	-I$(BOARD_DIR)/include \
 	$(CFLAGS_ARCH) \
 	-DBOARD_$(MICROKIT_BOARD) \
@@ -127,21 +71,15 @@ $(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
 	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" ${MUSL_SRC}/configure CROSS_COMPILE=llvm- --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=$(TARGET) --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
 	${MAKE} -C ${MUSL} install
 
-%.o: %.c
-	${CC} ${CFLAGS} -c -o $@ $<
-
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
-		  ${SDDF}/drivers/timer/${TIMER_DRIVER_DIR}/timer_driver.mk \
-		  ${SDDF}/drivers/network/${ETHERNET_DRIVER_DIR}/eth_driver.mk \
-		  ${SDDF}/drivers/serial/${SERIAL_DRIVER_DIR}/serial_driver.mk \
+		  ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
+		  ${SDDF}/drivers/network/${ETH_DRIV_DIR}/eth_driver.mk \
+		  ${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk \
 		  ${SDDF}/network/components/network_components.mk \
 		  ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
 		  ${SDDF}/serial/components/serial_components.mk
 
 include ${SDDF_MAKEFILES}
-
-$(DTB): $(DTS)
-	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY)

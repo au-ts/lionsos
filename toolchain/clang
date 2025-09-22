@@ -1,0 +1,53 @@
+#
+# Copyright 2025, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Common definitions for LLVM/Clang
+
+CC := clang
+LD := ld.lld
+RANLIB := llvm-ranlib
+AR := llvm-ar
+OBJCOPY := llvm-objcopy
+OBJDUMP := llvm-objdump
+
+ifndef BOARD_DIR
+$(error BOARD_DIR not defined)
+endif
+
+ARCH := $(shell sed -n 's/#define *CONFIG_SEL4_ARCH  *\([^ ]*\).*$$/\1/p'  $(BOARD_DIR)/include/kernel/gen_config.h)
+
+ifndef CPU
+$(error CPU is undefined: is should be in the board file)
+endif
+
+ifeq ($(ARCH),aarch64)
+	CFLAGS_ARCH := -mcpu=$(CPU)
+	TARGET := aarch64-none-elf
+else ifeq ($(ARCH),riscv64)
+	CFLAGS_ARCH := -march=rv64imafdc
+	TARGET := riscv64-none-elf
+else
+$(error Unsupported ARCH given)
+endif
+
+CFLAGS_ARCH += -target $(TARGET)
+
+ifdef CPU
+ CFLAGS_ARCH += \
+	-mcpu=$(CPU) \
+	-mtune=$(CPU)
+endif
+
+# These are the basic flags;
+# augment with project-specific ones.
+CFLAGS :=  \
+	-mstrict-align \
+	-ffreestanding \
+	-O2 \
+	-g3 \
+	-Wall \
+	-DBOARD_$(MICROKIT_BOARD) \
+	-I$(BOARD_DIR)/include \
+	$(CFLAGS_ARCH)
