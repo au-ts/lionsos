@@ -65,6 +65,7 @@
                 qemu
                 gnumake
                 dosfstools
+                gptfdisk
                 curl
                 which
                 unzip
