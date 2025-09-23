@@ -9,13 +9,12 @@ from PIL import Image, ImageFilter
 TARGET_W, TARGET_H = 1920, 1080
 
 def render_pdf_to_rgba_stream_hq(pdf_path: str, out_path: str,
-                                 oversample: float = 4.0):
+                                 oversample: float = 8.0):
     pdf_path = Path(pdf_path)
     out_path = Path(out_path)
 
     # anti-alias to not make ur text look fuzzy
     fitz.TOOLS.set_aa_level(8)
-    fitz.TOOLS.set_graphics_aa_level(8)
 
     with fitz.open(pdf_path) as doc, open(out_path, "wb") as out:
         for page in doc:
