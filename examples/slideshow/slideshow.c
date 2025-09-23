@@ -187,6 +187,12 @@ void slideshow_worker(void) {
 
     sddf_printf("slideshow: slideshow_worker(): READY TO RECEIVE COMMANDS.\n");
     sddf_printf("Press 'a' to go backward, 'd' to go forward. Make sure CAPS LOCK is off.\n");
+    sddf_printf("Shortcuts:\n");
+    sddf_printf("- '1' go to the start\n");
+    sddf_printf("- '2' go to the 25 percent point\n");
+    sddf_printf("- '3' go to the 50 percent point\n");
+    sddf_printf("- '4' go to the 75 percent point\n");
+    sddf_printf("- '5' go to the end\n");
     while (true) {
         microkit_cothread_wait_on_channel(serial_config.rx.id);
 
@@ -202,6 +208,21 @@ void slideshow_worker(void) {
         } else if (c == 'd') {
             new_slide = (cur_slide_idx + 1) % num_slides;
             sddf_printf("Going forward from slide #%d to #%d.\n", cur_slide_idx, new_slide);
+        } else if (c == '1') {
+            new_slide = 0;
+            sddf_printf("Going to the start.\n");
+        } else if (c == '2') {
+            new_slide = (num_slides - 1) * 0.25;
+            sddf_printf("Going to the 25 percent point.\n");
+        } else if (c == '3') {
+            new_slide = (num_slides - 1) * 0.50;
+            sddf_printf("Going to the 50 percent point.\n");
+        } else if (c == '4') {
+            new_slide = (num_slides - 1) * 0.75;
+            sddf_printf("Going to the 75 percent point.\n");
+        } else if (c == '5') {
+            new_slide = num_slides - 1;
+            sddf_printf("Going to the end.\n");
         } else {
             continue;
         }
