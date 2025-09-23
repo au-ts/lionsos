@@ -43,6 +43,14 @@ jobs:
     steps:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
+        with:
+          submodules: true
+      # Because we use self-hosted actions and the checkout action does not clean submodules
+      # we need to manually clean the submodules of the repo.
+      - name: Clean submodules
+        run: |
+          git submodule foreach --recursive git clean -ffdx
+          git submodule foreach --recursive git reset --hard
       - name: Run examples script
         run: HOME=/opt/ts_ci nix develop --ignore-environment -c bash -c './ci/examples.sh $(pwd) $MICROKIT_SDK'
   build_examples_macos_aarch64_nix:
