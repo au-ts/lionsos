@@ -202,10 +202,14 @@ void slideshow_worker(void) {
         } else if (c == 'd') {
             new_slide = (cur_slide_idx + 1) % num_slides;
             sddf_printf("Going forward from slide #%d to #%d.\n", cur_slide_idx, new_slide);
+        } else {
+            continue;
         }
         cur_slide_idx = new_slide;
 
         read_and_draw_slide(slides_fd, cur_slide_idx);
+
+        while (serial_dequeue(&serial_rx_queue_handle, &c) == 0);
     }
 }
 
