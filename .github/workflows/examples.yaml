@@ -44,7 +44,7 @@ jobs:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
       - name: Run examples script
-        run: nix develop --ignore-environment -c bash -c './ci/examples.sh $(pwd) $MICROKIT_SDK'
+        run: HOME=/opt/ts_ci nix develop --ignore-environment -c bash -c './ci/examples.sh $(pwd) $MICROKIT_SDK'
   build_examples_macos_aarch64_nix:
     name: Build example systems (macOS ARM64 via Nix)
     runs-on: [self-hosted, macos, ARM64]
