@@ -39,12 +39,10 @@ jobs:
           PYTHON: ${{ github.workspace }}/venv/bin/python
   build_examples_linux_x86_64_nix:
     name: Build example systems (Linux x86-64 via Nix)
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Checkout LionsOS repository
         uses: actions/checkout@v4
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
       - name: Run examples script
         run: nix develop --ignore-environment -c bash -c './ci/examples.sh $(pwd) $MICROKIT_SDK'
   build_examples_macos_aarch64_nix:
