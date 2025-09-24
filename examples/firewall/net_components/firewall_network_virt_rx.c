@@ -24,11 +24,6 @@
 __attribute__((__section__(".net_virt_rx_config"))) net_virt_rx_config_t config;
 __attribute__((__section__(".fw_net_virt_rx_config"))) fw_net_virt_rx_config_t fw_config;
 
-/* In order to handle broadcast packets where the same buffer is given to multiple clients
-  * we keep track of a reference count of each buffer and only hand it back to the driver once
-  * all clients have returned the buffer. */
-uint32_t *buffer_refs;
-
 net_queue_handle_t rx_queue_drv;
 net_queue_handle_t rx_queue_clients[SDDF_NET_MAX_CLIENTS];
 
@@ -36,35 +31,6 @@ fw_queue_t fw_free_clients[FW_MAX_FW_CLIENTS];
 
 /* Boolean to indicate whether a packet has been enqueued into the driver's free queue during notification handling */
 static bool notify_drv;
-
-/* Return the client ID if the Mac address is a match to a client, return the broadcast ID if MAC address
-  is a broadcast address. */
-static int get_mac_addr_match(struct ethernet_header *buffer)
-{
-    for (int client = 0; client < config.num_clients; client++) {
-        bool match = true;
-        for (int i = 0; (i < ETH_HWADDR_LEN) && match; i++) {
-            if (buffer->dest.addr[i] != config.clients[client].mac_addr[i]) {
-                match = false;
-            }
-        }
-        if (match) {
-            return client;
-        }
-    }
-
-    bool broadcast_match = true;
-    for (int i = 0; (i < ETH_HWADDR_LEN) && broadcast_match; i++) {
-        if (buffer->dest.addr[i] != 0xFF) {
-            broadcast_match = false;
-        }
-    }
-    if (broadcast_match) {
-        return BROADCAST_ID;
-    }
-
-    return -1;
-}
 
 /* Returns the client ID if the protocol number is a match to the client. Handles ARP cases specially
 for requests/responses and does not use the standardised EthType protocol ID for these. */
@@ -131,25 +97,7 @@ static void rx_return(void)
             cache_clean_and_invalidate(buffer_vaddr, buffer_vaddr + buffer.len);
             uint16_t protocol = 0;
             int client = get_protocol_match((struct ethernet_header *) buffer_vaddr, &protocol);
-            if (client == BROADCAST_ID) {
-                int ref_index = buffer.io_or_offset / NET_BUFFER_SIZE;
-                assert(buffer_refs[ref_index] == 0);
-                // For broadcast packets, set the refcount to number of clients
-                // in the system. Only enqueue buffer back to driver if
-                // all clients have consumed the buffer.
-                buffer_refs[ref_index] = config.num_clients;
-
-                for (int i = 0; i < config.num_clients; i++) {
-                    err = net_enqueue_active(&rx_queue_clients[i], buffer);
-                    assert(!err);
-                    notify_clients[i] = true;
-                }
-                continue;
-            } else if (client >= 0) {
-                int ref_index = buffer.io_or_offset / NET_BUFFER_SIZE;
-                assert(buffer_refs[ref_index] == 0);
-                buffer_refs[ref_index] = 1;
-
+            if (client >= 0) {
                 err = net_enqueue_active(&rx_queue_clients[client], buffer);
                 assert(!err);
                 notify_clients[client] = true;
@@ -190,15 +138,6 @@ static void rx_provide(void)
                 assert(!(buffer.io_or_offset % NET_BUFFER_SIZE)
                        && (buffer.io_or_offset < NET_BUFFER_SIZE * rx_queue_clients[client].capacity));
 
-                int ref_index = buffer.io_or_offset / NET_BUFFER_SIZE;
-                assert(buffer_refs[ref_index] != 0);
-
-                buffer_refs[ref_index]--;
-
-                if (buffer_refs[ref_index] != 0) {
-                    continue;
-                }
-
                 // To avoid having to perform a cache clean here we ensure that
                 // the DMA region is only mapped in read only. This avoids the
                 // case where pending writes are only written to the buffer
@@ -227,15 +166,6 @@ static void rx_provide(void)
             assert(!(buffer.io_or_offset % NET_BUFFER_SIZE)
                     && (buffer.io_or_offset < NET_BUFFER_SIZE * fw_free_clients[client].capacity));
 
-            int ref_index = buffer.io_or_offset / NET_BUFFER_SIZE;
-            assert(buffer_refs[ref_index] != 0);
-
-            buffer_refs[ref_index]--;
-
-            if (buffer_refs[ref_index] != 0) {
-                continue;
-            }
-
             // To avoid having to perform a cache clean here we ensure that
             // the DMA region is only mapped in read only. This avoids the
             // case where pending writes are only written to the buffer
@@ -263,8 +193,6 @@ void notified(microkit_channel ch)
 void init(void)
 {
     assert(net_config_check_magic((void *)&config));
-
-    buffer_refs = config.buffer_metadata.vaddr;
 
     /* Set up driver queues */
     net_queue_init(&rx_queue_drv, config.driver.free_queue.vaddr, config.driver.active_queue.vaddr,
