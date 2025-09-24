@@ -105,7 +105,7 @@ void init(void)
 
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 
-    syscalls_init();
+    libc_init();
     continuation_pool_init();
     tcp_init_0();
     sddf_timer_set_timeout(timer_config.driver_id, TIMEOUT);
