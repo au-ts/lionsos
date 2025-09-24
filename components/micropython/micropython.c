@@ -223,7 +223,7 @@ void init(void) {
     stack_ptrs_arg_array_t costacks = { (uintptr_t) mp_stack };
     microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, costacks);
 
-    syscalls_init();
+    libc_init();
 
     if (microkit_cothread_spawn(t_mp_entrypoint, NULL) == LIBMICROKITCO_NULL_HANDLE) {
         printf("MP|ERROR: Cannot initialise Micropython cothread\n");
