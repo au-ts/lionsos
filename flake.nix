@@ -60,6 +60,11 @@
                 }.${system} or (throw "Unsupported system: ${system}");
               };
 
+              env.WASI_SDK = pkgs.fetchzip {
+                url = "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-27/wasi-sdk-27.0-x86_64-linux.tar.gz";
+                hash = "sha256-yu0SExP5zd3AfPMVAhHognwDFBLThlKHLIK8Mxfa000=";
+              };
+
               nativeBuildInputs = with pkgs; [
                 git
                 qemu
