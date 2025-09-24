@@ -145,6 +145,25 @@ long sys_mmap(va_list ap)
     return -ENOMEM;
 }
 
+long sys_munmap(va_list ap)
+{
+    void *addr = va_arg(ap, void *);
+    size_t len = va_arg(ap, size_t);
+    (void)addr, (void)len;
+
+    return 0;
+}
+
+long sys_mprotect(va_list ap) 
+{
+    void *addr = va_arg(ap, void *);
+    size_t size = va_arg(ap, size_t);
+    int prot = va_arg(ap, int);
+    (void)addr, (void)size, (void)prot;
+
+    return 0;
+}
+
 long sys_madvise(va_list ap)
 {
     return 0;
@@ -525,6 +544,8 @@ void libc_init(void)
     syscall_table[__NR_brk] = (muslcsys_syscall_t)sys_brk;
     syscall_table[__NR_write] = (muslcsys_syscall_t)sys_write;
     syscall_table[__NR_mmap] = (muslcsys_syscall_t)sys_mmap;
+    syscall_table[__NR_munmap] = (muslcsys_syscall_t)sys_munmap;
+    syscall_table[__NR_mprotect] = (muslcsys_syscall_t)sys_mprotect;
     syscall_table[__NR_getpid] = (muslcsys_syscall_t)sys_getpid;
     syscall_table[__NR_clock_gettime] = (muslcsys_syscall_t)sys_clock_gettime;
     syscall_table[__NR_ioctl] = (muslcsys_syscall_t)sys_ioctl;
