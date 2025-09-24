@@ -25,20 +25,11 @@ extern fw_webserver_config_t fw_config;
  */
 typedef struct fw_webserver_interface_state {
     fw_routing_table_t *routing_table;
-
     fw_filter_state_t filter_states[FW_MAX_FILTERS];
     uint16_t num_rules[FW_MAX_FILTERS];
 } fw_webserver_interface_state_t;
 
 extern fw_webserver_interface_state_t webserver_state[FW_NUM_INTERFACES];
-
-/**
- * Netif callback function used by the firewall for lib sDDF LWIP. Prints the ip
- * address of the host.
- *
- * @param ip_addr IP address to print.
- */
-void fw_netif_status_callback(char *ip_addr);
 
 /**
  * Checks whether the pbuf contains an ARP request. All ARP requests and
