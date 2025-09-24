@@ -141,7 +141,7 @@ start_repl:
         ip_string_arg = fw_ip_string;
         fw_intercept_arp = mpfirewall_intercept_arp;
         fw_handle_arp = mpfirewall_handle_arp;
-        netif_callback = fw_netif_status_callback;
+        netif_callback = NULL;
 
         init_firewall_webserver();
     }
