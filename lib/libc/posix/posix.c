@@ -518,7 +518,7 @@ long sel4_vsyscall(long sysnum, ...)
     return ret;
 }
 
-void syscalls_init(void)
+void libc_init(void)
 {
     /* Syscall table init */
     __sysinfo = sel4_vsyscall;

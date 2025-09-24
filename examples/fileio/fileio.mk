@@ -43,6 +43,7 @@ PYTHON ?= python3
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
+LWIP := $(SDDF)/network/ipstacks/lwip/src
 
 ifeq ($(ARCH),aarch64)
 	CFLAGS_ARCH := -mcpu=$(CPU)
@@ -63,8 +64,6 @@ DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
 DTB := $(MICROKIT_BOARD).dtb
 
 FAT := $(LIONSOS)/components/fs/fat
-MUSL_SRC := $(LIONSOS)/dep/musllibc
-MUSL := musllibc
 
 CFLAGS := \
 	-mtune=$(CPU) \
@@ -81,10 +80,11 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit \
-	-I$(MUSL)/include
+	-I$(SDDF)/include/microkit
 
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
+include $(LIONSOS)/lib/libc/libc.mk
+
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
 
 SYSTEM_FILE := fileio.system
@@ -98,13 +98,13 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
 BLK_COMPONENTS := $(SDDF)/blk/components
 
+SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include ${SDDF}/util/util.mk
 include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
 include ${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk
@@ -123,18 +123,11 @@ manifest.py: fs_test.py bench.py
 %.py: ${FILEIO_DIR}/%.py
 	cp $< $@
 
-FAT_LIBC_LIB := musllibc/lib/libc.a
-FAT_LIBC_INCLUDE := musllibc/include
+FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
+FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIONSOS)/components/fs/fat/fat.mk
 
-$(MUSL):
-	mkdir -p $@
-
-$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
-	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" ${MUSL_SRC}/configure CROSS_COMPILE=llvm- --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=$(TARGET) --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
-	${MAKE} -C ${MUSL} install
-
-${IMAGES}: libsddf_util_debug.a
+${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
@@ -143,9 +136,6 @@ FORCE:
 
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
-
-mpy-cross: FORCE
-	${MAKE} -C ${LIONSOS}/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
@@ -166,7 +156,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .blk_client_config=blk_client_fatfs.data fat.elf
 	$(OBJCOPY) --update-section .fs_server_config=fs_server_fatfs.data fat.elf
 
-$(IMAGE_FILE) $(REPORT_FILE): $(MUSL)/include $(IMAGES) $(SYSTEM_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu_disk:

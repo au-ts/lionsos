@@ -17,6 +17,7 @@ DTC := dtc
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
+LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 
 ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
@@ -71,9 +72,8 @@ DTB := $(MICROKIT_BOARD).dtb
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 NFS := $(LIONSOS)/components/fs/nfs
 MICROPYTHON := $(LIONSOS)/components/micropython
-MUSL_SRC := $(LIONSOS)/dep/musllibc
-MUSL := musllibc
 LIONSOS_DOWNLOADS := https://lionsos.org/downloads/examples/kitty
+
 # I2C config
 I2C_BUS_NUM=2
 
@@ -106,10 +106,11 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit \
-	-I$(MUSL)/include
+	-I$(SDDF)/include/microkit
 
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSL)/lib
+include $(LIONSOS)/lib/libc/libc.mk
+
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
 
 SYSTEM_FILE := kitty.system
@@ -123,9 +124,10 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
+
+SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 	${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
@@ -143,15 +145,12 @@ SDDF_MAKEFILES += ${SDDF}/drivers/i2c/${I2C_DRIV_DIR}/i2c_driver.mk
 endif
 
 include ${SDDF_MAKEFILES}
+
+LIBVMM_LIBC_INCLUDE := $(LIONS_LIBC)/include
+
 include ${LIBVMM_DIR}/vmm.mk
+
 include ${NFS}/nfs.mk
-
-$(MUSL):
-	mkdir -p $@
-
-$(MUSL)/lib/libc.a $(MUSL)/include: ${MUSL_SRC}/Makefile ${MUSL}
-	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" ${MUSL_SRC}/configure CROSS_COMPILE=llvm- --srcdir=${MUSL_SRC} --prefix=${abspath ${MUSL}} --target=$(TARGET) --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
-	${MAKE} -C ${MUSL} install
 
 # Build the VMM for graphics
 VMM_OBJS := vmm.o package_guest_images.o
@@ -196,7 +195,7 @@ manifest.py: ${KITTY_DIR}/manifest.py kitty.py pn532.py font_height50.py font_he
 %.py: ${KITTY_DIR}/client/font/%.py
 	cp $< $@
 
-${IMAGES}: libsddf_util_debug.a
+${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
 %.o: %.c ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<
@@ -233,7 +232,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_micropython.data micropython.elf
 
-$(IMAGE_FILE) $(REPORT_FILE): $(MUSL)/include $(IMAGES) $(SYSTEM_FILE)
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 FORCE:
@@ -259,9 +258,6 @@ $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
 
 ${LIONSOS}/dep/libmicrokitco/Makefile:
 	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
-
-${MUSL_SRC}/Makefile:
-	cd ${LIONSOS}; git submodule update --init dep/musllibc
 
 ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
 	cd ${LIONSOS}; git submodule update --init dep/sddf

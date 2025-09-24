@@ -39,15 +39,15 @@ CFLAGS += \
 	-I$(LIONSOS)/include \
 	-I$(LWIP)/src/include \
 	-I$(LWIP)/src/include/ipv4 \
-	-I$(MUSL)/include \
+	-I$(MICROPYTHON_LIBC)/include \
 	-Wno-shift-op-parentheses \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	-mtune=$(CPU) \
 	-target $(TARGET)
 
-LDFLAGS += -L$(BOARD_DIR)/lib -L$(MUSL)/lib
-LIBS += -lm -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a
+LDFLAGS += -L$(BOARD_DIR)/lib -L$(MICROPYTHON_LIBC)/lib
+LIBS += -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a
 
 # Include libmicrokitco for blocking in Micropython
 BUILD_DIR=$(BUILD)
@@ -89,7 +89,6 @@ SRC_C = \
 	shared/runtime/stdout_helpers.c \
 	shared/runtime/interrupt_char.c \
 	shared/runtime/sys_stdio_mphal.c \
-	shared/libc/printf.c \
 	shared/timeutils/timeutils.c \
 	shared/netutils/netutils.c \
 	$(MICROPYTHON_USER_C_MODULES)
@@ -126,7 +125,7 @@ OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
 all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ) $(BUILD)/lib_sddf_lwip_mp.a
+$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ)
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
