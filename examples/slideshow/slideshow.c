@@ -44,6 +44,7 @@ volatile struct hdmi_data *shared_hdmi_config = (struct hdmi_data *) 0x60000000;
 
 // Red-Green-Blue-Alpha pixel format, 1 byte per channel 
 #define SLIDE_SIZE_BYTES (1920 * 1080 * 4)
+uint8_t cached_slide_fb[SLIDE_SIZE_BYTES];
 
 void framebuffer_draw_test_pattern(void) {
 	uint8_t* frame_buffer_addr = get_active_frame_buffer_uint8();
@@ -137,10 +138,8 @@ void video_init(void) {
     microkit_cothread_wait_on_channel(DCSS_DRAW_CH);
 }
 
-void read_and_draw_slide(uint64_t slides_fd, int index) {
-    uint8_t* frame_buffer_addr = get_active_frame_buffer_uint8();
-
-    sddf_printf("slideshow: read_and_draw_slide(): reading slide #%d into framebuffer...\n");
+void read_slide_into_buf(uint64_t slides_fd, int index, uint8_t *buf) {
+    sddf_printf("slideshow: read_and_draw_slide(): reading slide #%d into buffer...\n", index);
     uint64_t file_off = SLIDE_SIZE_BYTES * index;
     uint64_t remaining_bytes = SLIDE_SIZE_BYTES;
     while (remaining_bytes) {
@@ -149,14 +148,24 @@ void read_and_draw_slide(uint64_t slides_fd, int index) {
             bytes_to_read = remaining_bytes;
         }
 
-        uint64_t bytes_read = fs_file_read_blocking(slides_fd, file_off, frame_buffer_addr, bytes_to_read);
-        frame_buffer_addr += bytes_read;
+        uint64_t bytes_read = fs_file_read_blocking(slides_fd, file_off, buf, bytes_to_read);
+        buf += bytes_read;
         remaining_bytes -= bytes_read;
         file_off += bytes_read;
     }
+    sddf_printf("read done\n");
+}
 
-    framebuffer_kick();
-    sddf_printf("DONE\n");
+int next_slide_idx(int cur_slide, int num_slides) {
+    return (cur_slide + 1) % num_slides;
+}
+
+int prev_slide_idx(int cur_slide, int num_slides) {
+    if (cur_slide == 0) {
+        return num_slides - 1;
+    } else {
+        return (cur_slide - 1) % num_slides;
+    }
 }
 
 void slideshow_worker(void) {
@@ -183,7 +192,11 @@ void slideshow_worker(void) {
 
     sddf_printf("slideshow: slideshow_worker(): displaying first slide.\n");
     int cur_slide_idx = 0;
-    read_and_draw_slide(slides_fd, cur_slide_idx);
+    int cached_slide_idx = 1;
+    read_slide_into_buf(slides_fd, cur_slide_idx, get_active_frame_buffer_uint8());
+    framebuffer_kick();
+
+    read_slide_into_buf(slides_fd, cached_slide_idx, cached_slide_fb);
 
     sddf_printf("slideshow: slideshow_worker(): READY TO RECEIVE COMMANDS.\n");
     sddf_printf("Press 'a' to go backward, 'd' to go forward. Make sure CAPS LOCK is off.\n");
@@ -203,10 +216,10 @@ void slideshow_worker(void) {
 
         int new_slide;
         if (c == 'a') {
-            new_slide = (cur_slide_idx - 1) % num_slides;
+            new_slide = prev_slide_idx(cur_slide_idx, num_slides);
             sddf_printf("Going backward from slide #%d to #%d.\n", cur_slide_idx, new_slide);
         } else if (c == 'd') {
-            new_slide = (cur_slide_idx + 1) % num_slides;
+            new_slide = next_slide_idx(cur_slide_idx, num_slides);
             sddf_printf("Going forward from slide #%d to #%d.\n", cur_slide_idx, new_slide);
         } else if (c == '1') {
             new_slide = 0;
@@ -228,9 +241,22 @@ void slideshow_worker(void) {
         }
         cur_slide_idx = new_slide;
 
-        read_and_draw_slide(slides_fd, cur_slide_idx);
+        if (cur_slide_idx == cached_slide_idx) {
+            sddf_printf("Reading from cache.\n");
+            memcpy(get_active_frame_buffer_uint8(), cached_slide_fb, SLIDE_SIZE_BYTES);
+        } else {
+            sddf_printf("Reading from filesystem.\n");
+            read_slide_into_buf(slides_fd, cur_slide_idx, get_active_frame_buffer_uint8());
+        }
+        framebuffer_kick();
+
+        cached_slide_idx = next_slide_idx(cur_slide_idx, num_slides);
+        sddf_printf("Caching slide #%d.\n", cached_slide_idx);
+        read_slide_into_buf(slides_fd, cached_slide_idx, cached_slide_fb);
+        
 
         while (serial_dequeue(&serial_rx_queue_handle, &c) == 0);
+        sddf_printf("READY FOR NEXT COMMAND\n");
     }
 }
 
