@@ -121,6 +121,7 @@ typedef struct fw_filter_config {
     fw_webserver_filter_config_t webserver;
     region_resource_t internal_instances;
     region_resource_t external_instances;
+    region_resource_t rule_id_bitmap;
 } fw_filter_config_t;
 
 typedef struct fw_webserver_interface_config {
