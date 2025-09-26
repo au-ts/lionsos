@@ -277,7 +277,8 @@ def getRules(request, protocolStr, interfaceStr):
 
         defaultAction = lions_firewall.filter_get_default_action(interface, protocol)
         rules = []
-        for i in range(lions_firewall.rule_count(interface, protocol)):
+        # ignore default rule at position 0
+        for i in range(1,lions_firewall.rule_count(interface, protocol)):
             rule = lions_firewall.rule_get_nth(interface, protocol, i)
             rules.append({
                 "id": rule[0],
