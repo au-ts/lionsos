@@ -48,18 +48,6 @@ static void filter(void)
             fw_action_t action = fw_filter_find_action(&filter_state, ip_pkt->src_ip, tcp_hdr->src_port,
                                                                    ip_pkt->dst_ip, tcp_hdr->dst_port, &rule_id);
 
-            /* Perform the default action */
-            if (action == FILTER_ACT_NONE || rule_id == 0) {
-                default_action = true;
-                action = filter_state.rule_table->rules->action;
-                if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("%sTCP filter found no match, performing default action %s: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[filter_config.interface], fw_filter_action_str[action],
-                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), HTONS(tcp_hdr->src_port),
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), HTONS(tcp_hdr->dst_port));
-                }
-            }
-
             /* Add an established connection in shared memory for corresponding filter */
             if (action == FILTER_ACT_CONNECT) {
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_pkt->src_ip, tcp_hdr->src_port,

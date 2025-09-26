@@ -442,8 +442,8 @@ static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
     }
 
     /* Check rules */
-    fw_rule_t *match = NULL;
-    for (uint16_t i = 0; i < state->rule_table->size; i++) {
+    fw_rule_t *match = state->rule_table->rules;
+    for (uint16_t i = 1; i < state->rule_table->size; i++) {
         fw_rule_t *rule = state->rule_table->rules + i;
 
         /* Check port numbers first */
@@ -568,7 +568,8 @@ static fw_filter_err_t fw_filter_remove_rule(fw_filter_state_t *state,
     }
 
     fw_rule_t *rule = NULL;
-    for (uint16_t i = 0; i < state->rule_table->size; i++) {
+    /* skip the first slot which is reserved for the default rule */
+    for (uint16_t i = 1; i < state->rule_table->size; i++) {
         if (state->rule_table->rules[i].rule_id == rule_id) {
             rule = state->rule_table->rules + i;
             break;
