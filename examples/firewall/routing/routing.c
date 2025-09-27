@@ -180,7 +180,7 @@ static void route(void)
                 continue;
             }
 
-            ip_pkt->ttl -= 1;
+            // ip_pkt->ttl -= 1;
 
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("%sRouter received packet for ip %s with buffer number %lu\n",
