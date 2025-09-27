@@ -17,6 +17,13 @@ ifeq ($(strip $(MICROKIT_BOARD)), imx8mp_iotgate)
 	SERIAL_DRIV_DIR := imx
 	TIMER_DRV_DIR := imx
 	CPU := cortex-a53
+else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
+	ETH_DRIV_DIR0 := virtio
+	ETH_DRIV_DIR1 := virtio
+	SERIAL_DRIV_DIR := arm
+	TIMER_DRV_DIR := arm
+	CPU := cortex-a53
+	QEMU := qemu-system-aarch64
 else
 $(error Unsupported MICROKIT_BOARD given)
 endif
@@ -223,8 +230,10 @@ qemu: $(IMAGE_FILE)
 			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
 			-m size=2G \
 			-nographic \
-			-device virtio-net-device,netdev=netdev0 \
-			-netdev user,id=netdev0,hostfwd=tcp::5555-10.0.2.16:80 \
+			-netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+			-device virtio-net-device,netdev=net0,mac=00:01:c0:39:d5:18 \
+			-netdev tap,id=net1,ifname=tap1,script=no,downscript=no \
+			-device virtio-net-device,netdev=net1,mac=00:01:c0:39:d5:10 \
 			-global virtio-mmio.force-legacy=false
 
 FORCE: ;

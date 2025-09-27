@@ -43,6 +43,15 @@ class Board:
 
 BOARDS: List[Board] = [
     Board(
+        name="qemu_virt_aarch64",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x6_0000_000,
+        serial="pl011@9000000",
+        timer="timer",
+        ethernet0="virtio_mmio@a003c00",
+        ethernet1="virtio_mmio@a003e00"
+    ),
+    Board(
         name="imx8mp_iotgate",
         arch=SystemDescription.Arch.AARCH64,
         paddr_top=0x70_000_000,
