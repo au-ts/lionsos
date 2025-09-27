@@ -85,7 +85,7 @@ static void filter(void)
             if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED || action == FILTER_ACT_ALLOW) {
 
                 /* Reset the checksum as it's recalculated in hardware */
-                icmp_hdr->checksum = 0;
+                // icmp_hdr->checksum = 0;
 
                 err = fw_enqueue(&router_queue, &buffer);
                 assert(!err);

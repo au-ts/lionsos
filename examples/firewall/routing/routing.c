@@ -92,7 +92,7 @@ static void transmit_packet(net_buff_desc_t buffer,
 
     memcpy(&ip_pkt->ethdst_addr, mac_addr, ETH_HWADDR_LEN);
     memcpy(&ip_pkt->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
-    ip_pkt->check = 0;
+    // ip_pkt->check = 0;
 
     /* Transmit packet out the NIC */
     if (FW_DEBUG_OUTPUT) {
