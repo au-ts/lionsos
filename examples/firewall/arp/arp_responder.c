@@ -104,7 +104,6 @@ static void receive(void)
                 }
             }
 
-            buffer.len = 0;
             err = net_enqueue_free(&rx_queue, buffer);
             assert(!err);
             returned = true;
