@@ -113,7 +113,7 @@ typedef long mp_off_t;
 #define MP_STATE_PORT MP_STATE_VM
 
 void mp_hal_delay_us(mp_uint_t delay);
-#define MICROPY_EVENT_POLL_HOOK do { mp_hal_delay_us(1); } while (0);
+#define MICROPY_EVENT_POLL_HOOK do { mp_hal_delay_us(500); } while (0);
 
 typedef uint32_t sys_prot_t;
 
@@ -123,7 +123,7 @@ typedef uint32_t sys_prot_t;
 #define MICROPY_VM_HOOK_INIT static uint vm_hook_divisor = MICROPY_VM_HOOK_COUNT;
 #define MICROPY_VM_HOOK_POLL if (microkit_cothread_my_handle() && --vm_hook_divisor == 0) { \
         vm_hook_divisor = MICROPY_VM_HOOK_COUNT; \
-        mp_hal_delay_us(1); \
+        mp_hal_delay_us(500); \
 }
 #define MICROPY_VM_HOOK_LOOP MICROPY_VM_HOOK_POLL
 #define MICROPY_VM_HOOK_RETURN MICROPY_VM_HOOK_POLL
