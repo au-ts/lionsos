@@ -83,7 +83,9 @@ static void rx_return(void)
             uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.data.region.vaddr;
 
             /* Remove additional 4 byte ethernet header from NIC promiscuous mode */
+#if MICROKIT_BOARD != qemu_virt_aarch64
             buffer.len -= 4;
+#endif
 
             // Cache invalidate after DMA write, so we don't read stale data.
             // This must be performed after the DMA write to avoid reading
