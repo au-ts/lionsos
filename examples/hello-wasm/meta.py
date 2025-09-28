@@ -23,6 +23,8 @@ class Board:
     serial: str
     timer: str
     ethernet: str
+    blk: str
+    blk_partition: int
 
 
 BOARDS: List[Board] = [
@@ -32,15 +34,9 @@ BOARDS: List[Board] = [
         paddr_top=0x6_0000_000,
         serial="pl011@9000000",
         timer="timer",
-        ethernet="virtio_mmio@a003e00"
-    ),
-    Board(
-        name="odroidc4",
-        arch=SystemDescription.Arch.AARCH64,
-        paddr_top=0x60000000,
-        serial="soc/bus@ff800000/serial@3000",
-        timer="soc/bus@ffd00000/watchdog@f0d0",
-        ethernet="soc/ethernet@ff3f0000"
+        ethernet="virtio_mmio@a003e00",
+        blk="virtio_mmio@a003e00",
+        blk_partition=0,
     ),
     Board(
         name="maaxboard",
@@ -48,14 +44,18 @@ BOARDS: List[Board] = [
         paddr_top=0x70000000,
         serial="soc@0/bus@30800000/serial@30860000",
         timer="soc@0/bus@30000000/timer@302d0000",
-        ethernet="soc@0/bus@30800000/ethernet@30be0000"
-    )
+        ethernet="soc@0/bus@30800000/ethernet@30be0000",
+        blk="soc@0/bus@30800000/mmc@30b40000",
+        blk_partition=3,
+    ),
 ]
 
 
 def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     serial_node = dtb.node(board.serial)
     assert serial_node is not None
+    blk_node = dtb.node(board.blk)
+    assert blk_node is not None
     ethernet_node = dtb.node(board.ethernet)
     assert ethernet_node is not None
     timer_node = dtb.node(board.timer)
@@ -68,23 +68,45 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
     serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx)
 
+    blk_driver = ProtectionDomain("blk_driver", "blk_driver.elf", priority=200)
+    blk_virt = ProtectionDomain("blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000)
+    blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
+
     wamr = ProtectionDomain("wamr", "wamr.elf", priority=1, budget=20000, stack_size=0x10000)
 
     serial_system.add_client(wamr)
     timer_system.add_client(wamr)
+
+    fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
+
+    fs = LionsOs.FileSystem.Fat(
+        sdf,
+        fatfs,
+        wamr,
+        blk=blk_system,
+        partition=board.blk_partition
+    )
+
     pds = [
         serial_driver,
         serial_virt_tx,
         wamr,
+        fatfs,
         timer_driver,
+        blk_driver,
+        blk_virt,
     ]
     for pd in pds:
         sdf.add_pd(pd)
 
+    assert fs.connect()
+    assert fs.serialise_config(output_dir)
     assert serial_system.connect()
     assert serial_system.serialise_config(output_dir)
     assert timer_system.connect()
     assert timer_system.serialise_config(output_dir)
+    assert blk_system.connect()
+    assert blk_system.serialise_config(output_dir)
 
     with open(f"{output_dir}/{sdf_path}", "w+") as f:
         f.write(sdf.render())

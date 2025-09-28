@@ -3,17 +3,14 @@ ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config
 SDDF := $(LIONSOS)/dep/sddf
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 
-ifeq (${MICROKIT_BOARD},odroidc4)
-	TIMER_DRIVER_DIR := meson
-	ETHERNET_DRIVER_DIR := meson
-	SERIAL_DRIVER_DIR := meson
-	CPU := cortex-a55
-else ifeq (${MICROKIT_BOARD},maaxboard)
+ifeq (${MICROKIT_BOARD},maaxboard)
+	BLK_DRIV_DIR := mmc/imx
 	TIMER_DRIVER_DIR := imx
 	ETHERNET_DRIVER_DIR := imx
 	SERIAL_DRIVER_DIR := imx
 	CPU := cortex-a53
 else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
+	BLK_DRIV_DIR := virtio
 	TIMER_DRIVER_DIR := arm
 	ETHERNET_DRIVER_DIR := virtio
 	SERIAL_DRIVER_DIR := arm
@@ -54,7 +51,8 @@ DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
 DTB := $(MICROKIT_BOARD).dtb
 
 IMAGES := timer_driver.elf  wamr.elf \
-	  serial_driver.elf serial_virt_tx.elf
+	  serial_driver.elf serial_virt_tx.elf \
+	  fat.elf blk_virt.elf blk_driver.elf
 
 SYSTEM_FILE := hello-wasm.system
 
@@ -86,6 +84,11 @@ IMAGE_FILE := hello-wasm.img
 REPORT_FILE := report.txt
 
 all: $(IMAGE_FILE)
+
+FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
+FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
+include $(LIONSOS)/components/fs/fat/fat.mk
+
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
@@ -108,7 +111,9 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 		  ${SDDF}/drivers/timer/${TIMER_DRIVER_DIR}/timer_driver.mk \
 		  ${SDDF}/drivers/serial/${SERIAL_DRIVER_DIR}/serial_driver.mk \
 		  ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
-		  ${SDDF}/serial/components/serial_components.mk
+		  ${SDDF}/serial/components/serial_components.mk \
+		  $(SDDF)/drivers/blk/${BLK_DRIV_DIR}/blk_driver.mk \
+		  $(SDDF)/blk/components/blk_components.mk
 
 include ${SDDF_MAKEFILES}
 
@@ -123,18 +128,30 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_wamr.data wamr.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_wamr.data wamr.elf
+	$(OBJCOPY) --update-section .fs_client_config=fs_client_wamr.data wamr.elf
+	$(OBJCOPY) --update-section .device_resources=blk_driver_device_resources.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_driver_config=blk_driver.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_virt_config=blk_virt.data blk_virt.elf
+	$(OBJCOPY) --update-section .blk_client_config=blk_client_fatfs.data fat.elf
+	$(OBJCOPY) --update-section .fs_server_config=fs_server_fatfs.data fat.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
-qemu: ${IMAGE_FILE}
+qemu_disk:
+	$(LIONSOS)/dep/sddf/tools/mkvirtdisk $@ 1 512 16777216 GPT
+
+qemu: ${IMAGE_FILE} qemu_disk
 	$(QEMU) -machine virt,virtualization=on \
 		-cpu cortex-a53 \
 		-serial mon:stdio \
 		-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
 		-m size=2G \
 		-nographic \
-		-global virtio-mmio.force-legacy=false
+		-global virtio-mmio.force-legacy=false \
+		-d guest_errors \
+		-drive file=qemu_disk,if=none,format=raw,id=hd \
+		-device virtio-blk-device,drive=hd
 
 FORCE: ;
 
