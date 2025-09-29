@@ -1,13 +1,24 @@
 WAMR_DIR := $(LIONSOS)/components/wamr
 WAMR_ROOT := $(LIONSOS)/dep/wasm-micro-runtime
 
+LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
+LIBMICROKITCO_OPT_PATH := $(LIONSOS)/components/wamr
+LIBMICROKITCO_OBJ := $(BUILD_DIR)/libmicrokitco/libmicrokitco.a
+
+export LIBMICROKITCO_PATH TARGET MICROKIT_SDK BUILD_DIR MICROKIT_BOARD MICROKIT_CONFIG CPU LLVM
+$(LIBMICROKITCO_OBJ):
+	make -f $(LIBMICROKITCO_PATH)/Makefile LIBMICROKITCO_OPT_PATH=$(LIBMICROKITCO_OPT_PATH)
+
+
 CFLAGS_wamr := \
 	-I$(LWIP)/include \
 	-I$(WAMR_DIR)/lwip_include \
 	-I$(WAMR_DIR)/platform \
 	-I$(WAMR_ROOT)/core/iwasm/include \
 	-I$(WAMR_ROOT)/core/shared/platform/include \
-	-I$(BUILD_DIR) #for app_wasm.h
+	-I$(BUILD_DIR) \
+	-I$(LIBMICROKITCO_PATH) \
+	-I$(LIBMICROKITCO_OPT_PATH)
 
 LIB_SDDF_LWIP_CFLAGS_wamr := ${CFLAGS_wamr}
 
@@ -35,7 +46,7 @@ wamr/libvmlib.a: wamr | $(LIONS_LIBC)/include
 		-DWAMR_BUILD_REF_TYPES=1
 	cmake --build wamr
 
-wamr.elf: $(WAMR_OBJ) lib_sddf_lwip_wamr.a wamr/libvmlib.a
+wamr.elf: $(WAMR_OBJ) lib_sddf_lwip_wamr.a wamr/libvmlib.a $(LIBMICROKITCO_OBJ)
 	$(LD) $(LDFLAGS) -o $@ $(LIBS) $^
 
 wamr:

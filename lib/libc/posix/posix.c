@@ -32,6 +32,8 @@
 #include <lions/posix/tcp.h>
 #include <lions/util.h>
 
+#include <lions/fs/helpers.h>
+
 #define MUSLC_HIGHEST_SYSCALL SYS_pkey_free
 #define MUSLC_NUM_SYSCALLS (MUSLC_HIGHEST_SYSCALL + 1)
 #define MAP_ANON 0x20
@@ -74,14 +76,12 @@ int fd_socket[MAX_SOCKET_FDS];
 int fd_active[MAX_SOCKET_FDS];
 int socket_refcount[MAX_SOCKETS];
 
-static size_t output(void *data, size_t count)
-{
+static size_t output(void *data, size_t count) {
     char *src = data;
     uint32_t sent = 0;
-    while (sent < count)
-    {
+    while (sent < count) {
         char *nl = memchr(src, '\n', count - sent);
-        uint32_t stop = (nl == NULL)? count - sent: nl - src;
+        uint32_t stop = (nl == NULL) ? count - sent : nl - src;
         /* Enqueue to the first '\n' character, end of string
            or until queue is full */
         uint32_t enq = serial_enqueue_batch(&serial_tx_queue_handle, stop, src);
@@ -103,8 +103,7 @@ static size_t output(void *data, size_t count)
     return sent;
 }
 
-long sys_brk(va_list ap)
-{
+long sys_brk(va_list ap) {
     uintptr_t newbrk = va_arg(ap, uintptr_t);
 
     /* if the newbrk is 0, return the bottom of the heap */
@@ -116,13 +115,9 @@ long sys_brk(va_list ap)
     return 0;
 }
 
-uintptr_t align_addr(uintptr_t addr)
-{
-    return (addr + 0xfff) & ~0xfff;
-}
+uintptr_t align_addr(uintptr_t addr) { return (addr + 0xfff) & ~0xfff; }
 
-long sys_mmap(va_list ap)
-{
+long sys_mmap(va_list ap) {
     void *addr = va_arg(ap, void *);
     size_t length = va_arg(ap, size_t);
     int prot = va_arg(ap, int);
@@ -131,11 +126,9 @@ long sys_mmap(va_list ap)
     off_t offset = va_arg(ap, off_t);
     (void)fd, (void)offset, (void)prot, (void)addr;
 
-    if (flags & MAP_ANONYMOUS)
-    {
+    if (flags & MAP_ANONYMOUS) {
         /* Check that we don't try and allocate more than exists */
-        if (length > morecore_top - morecore_base)
-        {
+        if (length > morecore_top - morecore_base) {
             return -ENOMEM;
         }
         /* Steal from the top */
@@ -145,8 +138,7 @@ long sys_mmap(va_list ap)
     return -ENOMEM;
 }
 
-long sys_munmap(va_list ap)
-{
+long sys_munmap(va_list ap) {
     void *addr = va_arg(ap, void *);
     size_t len = va_arg(ap, size_t);
     (void)addr, (void)len;
@@ -154,8 +146,7 @@ long sys_munmap(va_list ap)
     return 0;
 }
 
-long sys_mprotect(va_list ap) 
-{
+long sys_mprotect(va_list ap) {
     void *addr = va_arg(ap, void *);
     size_t size = va_arg(ap, size_t);
     int prot = va_arg(ap, int);
@@ -164,19 +155,14 @@ long sys_mprotect(va_list ap)
     return 0;
 }
 
-long sys_madvise(va_list ap)
-{
-    return 0;
-}
+long sys_madvise(va_list ap) { return 0; }
 
-long sys_write(va_list ap)
-{
+long sys_write(va_list ap) {
     int fd = va_arg(ap, int);
     const void *buf = va_arg(ap, const void *);
     size_t count = va_arg(ap, size_t);
 
-    if (fd == 1 || fd == 2)
-    {
+    if (fd == 1 || fd == 2) {
         uint32_t n = serial_enqueue_batch(&serial_tx_queue_handle, count, buf);
 
         if (n) {
@@ -189,15 +175,13 @@ long sys_write(va_list ap)
     return -1;
 }
 
-long sys_read(va_list ap)
-{
+long sys_read(va_list ap) {
     int fd = va_arg(ap, int);
     assert(fd == SERVICES_FD);
     return 0;
 }
 
-long sys_clock_gettime(va_list ap)
-{
+long sys_clock_gettime(va_list ap) {
     clockid_t clk_id = va_arg(ap, clockid_t);
     (void)clk_id;
     struct timespec *tp = va_arg(ap, struct timespec *);
@@ -210,29 +194,23 @@ long sys_clock_gettime(va_list ap)
     return 0;
 }
 
-long sys_getpid(va_list ap)
-{
-    return 0;
-}
+long sys_getpid(va_list ap) { return 0; }
 
-long sys_ioctl(va_list ap)
-{
+long sys_ioctl(va_list ap) {
     int fd = va_arg(ap, int);
     int request = va_arg(ap, int);
     (void)request;
     dlog("musl called ioctl on fd %d", fd);
     /* muslc does some ioctls to stdout, so just allow these to silently
        go through */
-    if (fd == STDOUT_FD)
-    {
+    if (fd == STDOUT_FD) {
         return 0;
     }
 
     return 0;
 }
 
-long sys_writev(va_list ap)
-{
+long sys_writev(va_list ap) {
     int fildes = va_arg(ap, int);
     struct iovec *iov = va_arg(ap, struct iovec *);
     int iovcnt = va_arg(ap, int);
@@ -241,33 +219,27 @@ long sys_writev(va_list ap)
     ssize_t ret = 0;
 
     /* The iovcnt argument is valid if greater than 0 and less than or equal to IOV_MAX. */
-    if (iovcnt <= 0 || iovcnt > IOV_MAX)
-    {
+    if (iovcnt <= 0 || iovcnt > IOV_MAX) {
         return -EINVAL;
     }
 
     /* The sum of iov_len is valid if less than or equal to SSIZE_MAX i.e. cannot overflow
        a ssize_t. */
-    for (int i = 0; i < iovcnt; i++)
-    {
+    for (int i = 0; i < iovcnt; i++) {
         sum += (long long)iov[i].iov_len;
-        if (sum > SSIZE_MAX)
-        {
+        if (sum > SSIZE_MAX) {
             return -EINVAL;
         }
     }
 
     /* If all the iov_len members in the array are 0, return 0. */
-    if (!sum)
-    {
+    if (!sum) {
         return 0;
     }
 
     /* Write the buffer to console if the fd is for stdout or stderr. */
-    if (fildes == STDOUT_FD || fildes == STDERR_FD)
-    {
-        for (int i = 0; i < iovcnt; i++)
-        {
+    if (fildes == STDOUT_FD || fildes == STDERR_FD) {
+        for (int i = 0; i < iovcnt; i++) {
             ret += output(iov[i].iov_base, iov[i].iov_len);
         }
     } else {
@@ -296,46 +268,66 @@ long sys_writev(va_list ap)
     return ret;
 }
 
-long sys_openat(va_list ap)
-{
+int request_flags[FS_QUEUE_CAPACITY];
+
+void fs_request_flag_set(uint64_t request_id) {
+    int flag = request_flags[request_id];
+    printf("fs_request_flag_set: flag = %d\n", flag);
+    request_flags[request_id] = 0;
+}
+
+long sys_openat(va_list ap) {
     int dirfd = va_arg(ap, int);
     assert(dirfd == AT_FDCWD);
-    const char *pathname = va_arg(ap, const char *);
-    if (strcmp(pathname, "/etc/services") == 0) {
+    const char *path = va_arg(ap, const char *);
+
+    if (strcmp(path, "/etc/services") == 0) {
         return SERVICES_FD;
     }
+
+    // ptrdiff_t path_buffer;
+    // int err = fs_buffer_allocate(&path_buffer);
+    // if (err) {
+    //     return -err;
+    // }
+
+    // uint64_t path_len = strlen(path);
+    // memcpy(fs_buffer_ptr(path_buffer), path, path_len);
+
+    // fs_cmpl_t completion;
+    // err = fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_DIR_OPEN,
+    //                                                   .params.dir_open = {.path = {
+    //                                                                           .offset = path_buffer,
+    //                                                                           .size = path_len,
+    //                                                                       }}});
+
+    // fs_buffer_free(path_buffer);
+    // if (err || completion.status != FS_STATUS_SUCCESS) {
+    //     // FIXME: check error codes / completion status
+    //     return -ENOENT;
+    // }
+
+    // return completion.data.dir_open.fd;
     return -ENOENT;
 }
 
-long sys_getuid(va_list ap)
-{
+long sys_getuid(va_list ap) {
     (void)ap;
     return 501;
 }
 
-long sys_getgid(va_list ap)
-{
+long sys_getgid(va_list ap) {
     (void)ap;
     return 501;
 }
 
-long sys_fcntl(va_list ap)
-{
-    return 0;
-}
+long sys_fcntl(va_list ap) { return 0; }
 
-long sys_setsockopt(va_list ap)
-{
-    return 0;
-}
+long sys_setsockopt(va_list ap) { return 0; }
 
-long sys_getsockopt(va_list ap)
-{
-    return 0;
-}
+long sys_getsockopt(va_list ap) { return 0; }
 
-long sys_socket(va_list ap)
-{
+long sys_socket(va_list ap) {
     long fd = -1;
     for (int i = LWIP_FD_START; i < MAX_SOCKET_FDS; i++) {
         if (!fd_active[i]) {
@@ -360,13 +352,9 @@ long sys_socket(va_list ap)
     }
 }
 
-long sys_bind(va_list ap)
-{
-    return 0;
-}
+long sys_bind(va_list ap) { return 0; }
 
-long sys_socket_connect(va_list ap)
-{
+long sys_socket_connect(va_list ap) {
     long fd = va_arg(ap, int);
 
     assert(fd_active[fd]);
@@ -380,14 +368,13 @@ long sys_socket_connect(va_list ap)
     const struct sockaddr *sockaddr = va_arg(ap, const struct sockaddr *);
 
     uint16_t port = sockaddr->sa_data[0] << 8 | sockaddr->sa_data[1];
-    uint32_t addr = sockaddr->sa_data[2] | sockaddr->sa_data[3] << 8 | sockaddr->sa_data[4] << 16
-                  | sockaddr->sa_data[5] << 24;
+    uint32_t addr =
+        sockaddr->sa_data[2] | sockaddr->sa_data[3] << 8 | sockaddr->sa_data[4] << 16 | sockaddr->sa_data[5] << 24;
 
     return (long)tcp_socket_connect(socket_handle, port, addr);
 }
 
-long sys_close(va_list ap)
-{
+long sys_close(va_list ap) {
     long fd = va_arg(ap, int);
 
     if (fd == SERVICES_FD) {
@@ -413,8 +400,7 @@ long sys_close(va_list ap)
     return 0;
 }
 
-long sys_dup3(va_list ap)
-{
+long sys_dup3(va_list ap) {
     int oldfd = va_arg(ap, int);
     int newfd = va_arg(ap, int);
     int flags = va_arg(ap, int);
@@ -443,8 +429,7 @@ long sys_dup3(va_list ap)
     return newfd;
 }
 
-long sys_sendto(va_list ap)
-{
+long sys_sendto(va_list ap) {
     int sockfd = va_arg(ap, int);
     const void *buf = va_arg(ap, const void *);
     size_t len = va_arg(ap, size_t);
@@ -467,8 +452,7 @@ long sys_sendto(va_list ap)
     return (long)wrote;
 }
 
-long sys_recvfrom(va_list ap)
-{
+long sys_recvfrom(va_list ap) {
     int sockfd = va_arg(ap, int);
     void *buf = va_arg(ap, void *);
     ssize_t len = va_arg(ap, int);
@@ -498,36 +482,27 @@ long sys_recvfrom(va_list ap)
     return (long)read;
 }
 
-void debug_error(long num)
-{
-    dlog("error doing syscall: %d", num);
-}
+void debug_error(long num) { dlog("error doing syscall: %d", num); }
 
-int pthread_setcancelstate(int state, int *oldstate)
-{
+int pthread_setcancelstate(int state, int *oldstate) {
     (void)state;
     (void)oldstate;
     return 0;
 }
 
-long sel4_vsyscall(long sysnum, ...)
-{
+long sel4_vsyscall(long sysnum, ...) {
     va_list al;
     va_start(al, sysnum);
     muslcsys_syscall_t syscall;
 
-    if (sysnum < 0 || sysnum >= ARRAY_SIZE(syscall_table))
-    {
+    if (sysnum < 0 || sysnum >= ARRAY_SIZE(syscall_table)) {
         debug_error(sysnum);
         return -ENOSYS;
-    }
-    else
-    {
+    } else {
         syscall = syscall_table[sysnum];
     }
     /* Check a syscall is implemented there */
-    if (!syscall)
-    {
+    if (!syscall) {
         debug_error(sysnum);
         return -ENOSYS;
     }
@@ -537,8 +512,7 @@ long sel4_vsyscall(long sysnum, ...)
     return ret;
 }
 
-void libc_init(void)
-{
+void libc_init(void) {
     /* Syscall table init */
     __sysinfo = sel4_vsyscall;
     syscall_table[__NR_brk] = (muslcsys_syscall_t)sys_brk;

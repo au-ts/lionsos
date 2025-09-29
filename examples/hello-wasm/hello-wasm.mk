@@ -98,7 +98,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	touch $@
 
 #wasm app
-include ${HELLO_WASM_DIR}/hello-fs/hello-fs.mk
+include ${HELLO_WASM_DIR}/hello-world/hello-world.mk
 
 include $(WAMR)/wamr.mk
 

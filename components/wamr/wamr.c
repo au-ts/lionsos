@@ -1,4 +1,5 @@
 #include <microkit.h>
+#include <libmicrokitco.h>
 
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
@@ -17,6 +18,8 @@
 #include <lions/posix/posix.h>
 #include <lions/util.h>
 
+#include <lions/fs/helpers.h>
+
 #include <stdlib.h>
 
 #include "platform_common.h"
@@ -27,6 +30,10 @@
 #include "app_wasm.h"
 
 #define TIMEOUT (1 * NS_IN_MS)
+
+static char wamr_stack[WAMR_STACK_SIZE];
+static co_control_t co_controller_mem;
+static void blocking_wait(microkit_channel ch) { microkit_cothread_wait_on_channel(ch); }
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
@@ -66,27 +73,24 @@ static const void *app_instance_main(wasm_module_inst_t module_inst) {
     return exception;
 }
 
-static int wamr_main() {
+static void wamr_main() {
     char error_buf[128] = {0};
 
     printf("WAMR | Initialising runtime...\n");
     if (!wasm_runtime_init()) {
         printf("Init runtime environment failed.\n");
-        return -1;
     }
 
     wasm_module_t wasm_module = NULL;
     printf("WAMR | Loading module...\n");
     if (!(wasm_module = wasm_runtime_load(app_wasm, app_wasm_len, error_buf, sizeof(error_buf)))) {
         printf("%s\n", error_buf);
-        return -1;
     }
 
     struct InstantiationArgs2 *inst_args;
     printf("WAMR | Creating instantiate args...\n");
     if (!wasm_runtime_instantiation_args_create(&inst_args)) {
         printf("failed to create instantiate args\n");
-        return -1;
     }
 
     uint32 stack_size = 8192;
@@ -94,15 +98,14 @@ static int wamr_main() {
     printf("WAMR | Setting stack and heap size for instantiate args...\n");
     wasm_runtime_instantiation_args_set_default_stack_size(inst_args, stack_size);
     wasm_runtime_instantiation_args_set_host_managed_heap_size(inst_args, heap_size);
-    
-    const char *dir = "/";
-    wasm_runtime_set_wasi_args(wasm_module, &dir, 1, &dir, 1, NULL, 0, NULL, 0);
+
+    // const char *dir = "/";
+    // wasm_runtime_set_wasi_args(wasm_module, &dir, 1, &dir, 1, NULL, 0, NULL, 0);
 
     wasm_module_inst_t wasm_module_inst = NULL;
     printf("WAMR | Instantiating module...\n");
     if (!(wasm_module_inst = wasm_runtime_instantiate_ex2(wasm_module, inst_args, error_buf, sizeof(error_buf)))) {
         printf("%s\n", error_buf);
-        return -1;
     }
 
     printf("WAMR | Destroying instantiate args...\n");
@@ -112,10 +115,7 @@ static int wamr_main() {
     printf("WAMR | Running module...\n");
     if ((exception = app_instance_main(wasm_module_inst))) {
         printf("%s\n", exception);
-        return -1;
     }
-
-    return 0;
 }
 
 void notified(microkit_channel ch) {}
@@ -136,6 +136,7 @@ void init(void) {
     firewall_enabled = (fw_config.rx_active.queue.vaddr != NULL);
 
     if (fs_enabled) {
+        fs_set_blocking_wait(blocking_wait);
         fs_command_queue = fs_config.server.command_queue.vaddr;
         fs_completion_queue = fs_config.server.completion_queue.vaddr;
         fs_share = fs_config.server.share.vaddr;
@@ -146,7 +147,15 @@ void init(void) {
         i2c_queue_handle = i2c_queue_init(i2c_config.virt.req_queue.vaddr, i2c_config.virt.resp_queue.vaddr);
     }
 
+    stack_ptrs_arg_array_t costacks = {(uintptr_t)wamr_stack};
+    microkit_cothread_init(&co_controller_mem, WAMR_STACK_SIZE, costacks);
+
     libc_init();
-    int wamr_ret = wamr_main();
-    printf("WAMR exited with %d\n", wamr_ret);
+
+    if (microkit_cothread_spawn(wamr_main, NULL) == LIBMICROKITCO_NULL_HANDLE) {
+        printf("WAMR|ERROR: Cannot initialise WAMR cothread\n");
+        assert(false);
+    };
+
+    microkit_cothread_yield();
 }
