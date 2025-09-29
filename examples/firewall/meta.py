@@ -517,8 +517,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         # Create arp req config
         network["configs"][arp_req] = FwArpRequesterConfig(
             network["num"],
-            network["mac"],
-            network["ip"],
+            macs[network["out_num"]],
+            ip_to_int(ips[network["out_num"]]),
             [router_arp_conn[1]],
             arp_cache[0],
             arp_cache_region.capacity
@@ -549,14 +549,12 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         # Create router webserver config
         router_webserver_config = FwWebserverRouterConfig(
-            network["num"],
             router_update_ch.pd_b_id,
             routing_table[0],
             routing_table_region.capacity
         )
 
         webserver_router_config = FwWebserverRouterConfig(
-            network["num"],
             router_update_ch.pd_a_id,
             routing_table[1],
             routing_table_region.capacity
@@ -565,10 +563,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         # Create router config
         network["configs"][router] = FwRouterConfig(
             network["num"],
-            network["mac"],
-            network["ip"],
+            macs[network["out_num"]],
             ip_to_int(ips[network["out_num"]]),
             subnet_bits[network["out_num"]],
+            network["ip"],
             router_in_virt_conn[0],
             None,
             router_out_virt_conn[0].conn,
@@ -611,7 +609,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
             # Create webserver configs
             filter_webserver_config = FwWebserverFilterConfig(
-                network["num"],
                 protocol,
                 filter_update_ch.pd_b_id,
                 FILTER_ACTION_ALLOW,
@@ -620,7 +617,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             )
 
             webserver_filter_config = FwWebserverFilterConfig(
-                network["num"],
                 protocol,
                 filter_update_ch.pd_a_id,
                 FILTER_ACTION_ALLOW,
@@ -630,8 +626,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
             # Create filter config
             network["configs"][filter_pd] = FwFilterConfig(
-                network["mac"],
-                network["ip"],
+                network["num"],
                 filter_instances_region.capacity,
                 filter_router_conn[0],
                 filter_webserver_config,

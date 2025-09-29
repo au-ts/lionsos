@@ -97,7 +97,7 @@ static void transmit_packet(net_buff_desc_t buffer,
     /* Transmit packet out the NIC */
     if (FW_DEBUG_OUTPUT) {
         sddf_printf("%sRouter sending packet for ip %s with buffer number %lu\n",
-            fw_frmt_str[router_config.webserver.interface],
+            fw_frmt_str[router_config.interface],
             ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0),
             buffer.io_or_offset/NET_BUFFER_SIZE);
     }
@@ -116,7 +116,7 @@ static void process_arp_waiting(void)
 
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sRouter dequeuing response for ip %s and MAC[0] = %x, MAC[5] = %x\n",
-                fw_frmt_str[router_config.webserver.interface],
+                fw_frmt_str[router_config.interface],
                 ipaddr_to_string(response.ip, ip_addr_buf0),
                         response.mac_addr[0], response.mac_addr[5]);
         }
@@ -135,7 +135,7 @@ static void process_arp_waiting(void)
                 err = enqueue_icmp_unreachable(node->buffer);
                 if (FW_DEBUG_OUTPUT && err) {
                     sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP unreachable!\n",
-                        fw_frmt_str[router_config.webserver.interface]);
+                        fw_frmt_str[router_config.interface]);
                 }
                 err = fw_enqueue(&rx_free, &node->buffer);
                 assert(!err);
@@ -184,7 +184,7 @@ static void route(void)
 
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("%sRouter received packet for ip %s with buffer number %lu\n",
-                    fw_frmt_str[router_config.webserver.interface],
+                    fw_frmt_str[router_config.interface],
                     ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0),
                             buffer.io_or_offset/NET_BUFFER_SIZE);
             }
@@ -201,7 +201,7 @@ static void route(void)
 
             if (FW_DEBUG_OUTPUT && interface != ROUTING_OUT_NONE) {
                 sddf_printf("%sRouter converted ip %s to next hop ip %s out interface %u\n",
-                    fw_frmt_str[router_config.webserver.interface],
+                    fw_frmt_str[router_config.interface],
                     ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0),
                     ipaddr_to_string(next_hop, ip_addr_buf1), interface);
             }
@@ -213,8 +213,8 @@ static void route(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sRouter found no route for ip %s, dropping packet\n",
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0),
-                        fw_frmt_str[router_config.webserver.interface]);
+                        fw_frmt_str[router_config.interface],
+                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0));
                 }
 
                 err = fw_enqueue(&rx_free, &buffer);
@@ -245,7 +245,7 @@ static void route(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sRouter transmitted packet to webserver\n",
-                    fw_frmt_str[router_config.webserver.interface]);
+                    fw_frmt_str[router_config.interface]);
                 }
 
                 continue;
@@ -263,11 +263,11 @@ static void route(void)
                     int icmp_err = enqueue_icmp_unreachable(buffer);
                     if (icmp_err) {
                         sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP unreachable!\n",
-                            fw_frmt_str[router_config.webserver.interface]);
+                            fw_frmt_str[router_config.interface]);
                     }
                 } else {
                     sddf_dprintf("%sROUTING LOG: Waiting packet or ARP request queue full, dropping packet!\n",
-                        fw_frmt_str[router_config.webserver.interface]);
+                        fw_frmt_str[router_config.interface]);
                 }
 
                 err = fw_enqueue(&rx_free, &buffer);
@@ -347,8 +347,8 @@ void init(void)
     fw_routing_table_init(&routing_table,
                           router_config.webserver.routing_table.vaddr,
                           router_config.webserver.routing_table_capacity,
-                          router_config.out_ip,
-                          router_config.out_subnet);
+                          router_config.ip,
+                          router_config.subnet);
 
     /* Set up router --> webserver queue. */
     if (router_config.interface == FW_INTERNAL_INTERFACE_ID) {
@@ -358,9 +358,9 @@ void init(void)
         /* Add an entry for the webserver */
         fw_routing_table_add_route(routing_table,
                                    ROUTING_OUT_SELF,
-                                   router_config.ip,
+                                   router_config.in_ip,
                                    32,
-                                   router_config.ip);
+                                   router_config.in_ip);
     }
 
     assert(router_config.packet_queue.vaddr != 0);
@@ -387,7 +387,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sRouter add route. (ip %s, mask %u, next hop %s): %s\n",
-                fw_frmt_str[router_config.webserver.interface],
+                fw_frmt_str[router_config.interface],
                 ipaddr_to_string(ip, ip_addr_buf0), subnet,
                 ipaddr_to_string(next_hop, ip_addr_buf1),
                         fw_routing_err_str[err]);
@@ -401,7 +401,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sRouter delete route %u: %s\n",
-                fw_frmt_str[router_config.webserver.interface],
+                fw_frmt_str[router_config.interface],
                 route_id, fw_routing_err_str[err]);
         }
 
@@ -410,7 +410,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
     }
     default:
         sddf_printf("%sROUTING LOG: unknown request %lu on channel %u\n",
-            fw_frmt_str[router_config.webserver.interface],
+            fw_frmt_str[router_config.interface],
             microkit_msginfo_get_label(msginfo), ch);
         break;
     }
