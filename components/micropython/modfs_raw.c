@@ -6,7 +6,7 @@
 #include <microkit.h>
 #include "py/runtime.h"
 #include "micropython.h"
-#include "fs_helpers.h"
+#include <lions/fs/helpers.h>
 #include <fcntl.h>
 #include <string.h>
 
