@@ -328,7 +328,13 @@ void handle_stat(void) {
 
     FILINFO fileinfo;
     FRESULT RET = f_stat(filepath, &fileinfo);
-    if (RET != FR_OK) {
+    if (RET == FR_NO_FILE) {
+        args->status = FS_STATUS_NO_FILE;
+        return;
+    } else if (RET == FR_INVALID_NAME) {
+        args->status = FS_STATUS_INVALID_NAME;
+        return;
+    } else if (RET != FR_OK) {
         args->status = FS_STATUS_ERROR;
         return;
     }
