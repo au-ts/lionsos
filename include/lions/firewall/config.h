@@ -34,6 +34,7 @@ typedef struct fw_data_connection_resource {
 } fw_data_connection_resource_t;
 
 typedef struct fw_net_virt_tx_config {
+    /* Interface traffic is transmitted out of */
     uint8_t interface;
     fw_data_connection_resource_t active_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_active_clients;
@@ -42,6 +43,7 @@ typedef struct fw_net_virt_tx_config {
 } fw_net_virt_tx_config_t;
 
 typedef struct fw_net_virt_rx_config {
+    /* Interface traffic is received from */
     uint8_t interface;
     uint16_t active_client_protocols[SDDF_NET_MAX_CLIENTS];
     fw_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
@@ -56,8 +58,11 @@ typedef struct fw_arp_connection {
 } fw_arp_connection_t;
 
 typedef struct fw_arp_requester_config {
+    /* Interface traffic is received from */
     uint8_t interface;
+    /* MAC address of output interface */
     uint8_t mac_addr[ETH_HWADDR_LEN];
+    /* IP address of output interface */
     uint32_t ip;
     fw_arp_connection_t arp_clients[FW_NUM_ARP_REQUESTER_CLIENTS];
     uint8_t num_arp_clients;
@@ -66,24 +71,31 @@ typedef struct fw_arp_requester_config {
 } fw_arp_requester_config_t;
 
 typedef struct fw_arp_responder_config {
+    /* Interface traffic is received from */
     uint8_t interface;
+    /* MAC address of input and output interface */
     uint8_t mac_addr[ETH_HWADDR_LEN];
+    /* IP address of input and output interface */
     uint32_t ip;
 } fw_arp_responder_config_t;
 
 typedef struct fw_webserver_router_config {
-    uint8_t interface;
     uint8_t routing_ch;
     region_resource_t routing_table;
     uint16_t routing_table_capacity;
 } fw_webserver_router_config_t;
 
 typedef struct fw_router_config {
+    /* Interface traffic is received from */
     uint8_t interface;
+    /* MAC address of output interface */
     uint8_t mac_addr[ETH_HWADDR_LEN];
+    /* IP address of output interface */
     uint32_t ip;
-    uint32_t out_ip;
-    uint8_t out_subnet;
+    /* Subnet bits of output interface */
+    uint32_t subnet;
+    /* IP address of input interface */
+    uint32_t in_ip;
     fw_connection_resource_t rx_free;
     fw_connection_resource_t rx_active;
     fw_connection_resource_t tx_active;
@@ -99,13 +111,13 @@ typedef struct fw_router_config {
 } fw_router_config_t;
 
 typedef struct fw_icmp_module_config {
+    /* IP address of interfaces */
     uint32_t ips[FW_NUM_INTERFACES];
     fw_connection_resource_t routers[FW_NUM_INTERFACES];
     uint8_t num_interfaces;
 } fw_icmp_module_config_t;
 
 typedef struct fw_webserver_filter_config {
-    uint8_t interface;
     uint16_t protocol;
     uint8_t ch;
     uint8_t default_action;
@@ -114,8 +126,8 @@ typedef struct fw_webserver_filter_config {
 } fw_webserver_filter_config_t;
 
 typedef struct fw_filter_config {
-    uint8_t mac_addr[ETH_HWADDR_LEN];
-    uint32_t ip;
+    /* Interface traffic is received from */
+    uint8_t interface;
     uint16_t instances_capacity;
     fw_connection_resource_t router;
     fw_webserver_filter_config_t webserver;
@@ -124,7 +136,9 @@ typedef struct fw_filter_config {
 } fw_filter_config_t;
 
 typedef struct fw_webserver_interface_config {
+    /* MAC address of interface */
     uint8_t mac_addr[ETH_HWADDR_LEN];
+    /* IP address of interface */
     uint32_t ip;
     fw_webserver_router_config_t router;
     fw_webserver_filter_config_t filters[FW_MAX_FILTERS];
@@ -132,6 +146,7 @@ typedef struct fw_webserver_interface_config {
 } fw_webserver_interface_config_t;
 
 typedef struct fw_webserver_config {
+    /* Interface traffic is received from */
     uint8_t interface;
     fw_connection_resource_t rx_active;
     region_resource_t data;
