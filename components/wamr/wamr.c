@@ -94,6 +94,9 @@ static int wamr_main() {
     printf("WAMR | Setting stack and heap size for instantiate args...\n");
     wasm_runtime_instantiation_args_set_default_stack_size(inst_args, stack_size);
     wasm_runtime_instantiation_args_set_host_managed_heap_size(inst_args, heap_size);
+    
+    const char *dir = "/";
+    wasm_runtime_set_wasi_args(wasm_module, &dir, 1, &dir, 1, NULL, 0, NULL, 0);
 
     wasm_module_inst_t wasm_module_inst = NULL;
     printf("WAMR | Instantiating module...\n");
