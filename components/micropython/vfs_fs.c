@@ -11,7 +11,7 @@
 #include "extmod/vfs.h"
 #include "vfs_fs.h"
 #include "micropython.h"
-#include "fs_helpers.h"
+#include <lions/fs/helpers.h>
 
 #include <stdio.h>
 #include <string.h>
