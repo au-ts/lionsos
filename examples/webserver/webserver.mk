@@ -153,8 +153,6 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 		  ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
 		  ${SDDF}/serial/components/serial_components.mk
 
-timer/timer.o lib_sddf_lwip.a: $(MUSL)/include $(MUSL)/lib/libc.a
-
 include ${SDDF_MAKEFILES}
 
 # $(DTB): $(DTS)
