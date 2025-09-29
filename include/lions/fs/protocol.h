@@ -68,6 +68,9 @@ enum {
 
     // end of directory
     FS_STATUS_END_OF_DIRECTORY = 14,
+
+    // file does not exist
+    FS_STATUS_NO_FILE = 15,
 };
 
 // these constants each represent a type of command that may be issued by the client to the server

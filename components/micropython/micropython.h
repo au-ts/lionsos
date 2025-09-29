@@ -83,3 +83,5 @@ void mp_cothread_interrupt(void);
  * @param ch channel the Micropython cothread receives on.
  */
 void mp_cothread_maybe_recv(microkit_channel ch);
+
+void mp_fs_request_flag_set(uint64_t request_id);
