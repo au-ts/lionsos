@@ -328,7 +328,14 @@ void handle_stat(void) {
 
     FILINFO fileinfo;
     FRESULT RET = f_stat(filepath, &fileinfo);
-    if (RET != FR_OK) {
+    if (RET == FR_NO_FILE) {
+        args->status = FS_STATUS_NO_FILE;
+        return;
+    } else if (RET == FR_INVALID_NAME) {
+        args->status = FS_STATUS_INVALID_NAME;
+        return;
+    }else if (RET != FR_OK) {
+        LOG_FATFS("fat_stat: RET = %d\n", RET);
         args->status = FS_STATUS_ERROR;
         return;
     }
@@ -517,6 +524,7 @@ void handle_dir_open(void) {
 
     // Error handling
     if (RET != FR_OK) {
+        LOG_FATFS("FRESULT: %d\n", RET);
         args->status = FS_STATUS_ERROR;
         // Free this Dir structure
         dir_free(dir);

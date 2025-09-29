@@ -29,7 +29,7 @@ LIB_SDDF_LWIP_CFLAGS_mp := \
 	-Wno-shift-op-parentheses \
 	-Wno-tautological-constant-out-of-range-compare
 
-micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile \
+micropython.elf: FORCE mpy-cross \
 		$(MICROPYTHON_FROZEN_MANIFEST) \
 		$(MICROPYTHON_EXEC_MODULE) \
 		$(MICROPYTHON_USER_C_MODULES_PATH) \
