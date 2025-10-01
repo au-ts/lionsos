@@ -74,6 +74,13 @@ static const void *app_instance_main(wasm_module_inst_t module_inst) {
 }
 
 static void wamr_main() {
+    fs_cmpl_t completion;
+    int err = fs_command_blocking(&completion, (fs_cmd_t){ .type = FS_CMD_INITIALISE });
+    if (err || completion.status != FS_STATUS_SUCCESS) {
+        printf("WAMR|ERROR: Failed to mount\n");
+        return;
+    }
+
     char error_buf[128] = {0};
 
     printf("WAMR | Initialising runtime...\n");
@@ -99,8 +106,8 @@ static void wamr_main() {
     wasm_runtime_instantiation_args_set_default_stack_size(inst_args, stack_size);
     wasm_runtime_instantiation_args_set_host_managed_heap_size(inst_args, heap_size);
 
-    // const char *dir = "/";
-    // wasm_runtime_set_wasi_args(wasm_module, &dir, 1, &dir, 1, NULL, 0, NULL, 0);
+    const char *dir = "/";
+    wasm_runtime_set_wasi_args(wasm_module, &dir, 1, NULL, 0, NULL, 0, NULL, 0);
 
     wasm_module_inst_t wasm_module_inst = NULL;
     printf("WAMR | Instantiating module...\n");
@@ -118,7 +125,12 @@ static void wamr_main() {
     }
 }
 
-void notified(microkit_channel ch) {}
+void notified(microkit_channel ch) {
+    if (fs_enabled) {
+        fs_process_completions();
+    }
+    microkit_cothread_recv_ntfn(ch);
+}
 
 void init(void) {
     assert(serial_config_check_magic(&serial_config));
@@ -150,7 +162,7 @@ void init(void) {
     stack_ptrs_arg_array_t costacks = {(uintptr_t)wamr_stack};
     microkit_cothread_init(&co_controller_mem, WAMR_STACK_SIZE, costacks);
 
-    libc_init();
+    libc_init(blocking_wait);
 
     if (microkit_cothread_spawn(wamr_main, NULL) == LIBMICROKITCO_NULL_HANDLE) {
         printf("WAMR|ERROR: Cannot initialise WAMR cothread\n");

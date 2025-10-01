@@ -56,8 +56,6 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     assert serial_node is not None
     blk_node = dtb.node(board.blk)
     assert blk_node is not None
-    ethernet_node = dtb.node(board.ethernet)
-    assert ethernet_node is not None
     timer_node = dtb.node(board.timer)
     assert timer_node is not None
 

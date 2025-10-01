@@ -24,6 +24,7 @@
 #include <sys/uio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
@@ -33,6 +34,7 @@
 #include <lions/util.h>
 
 #include <lions/fs/helpers.h>
+#include <lions/fs/config.h>
 
 #define MUSLC_HIGHEST_SYSCALL SYS_pkey_free
 #define MUSLC_NUM_SYSCALLS (MUSLC_HIGHEST_SYSCALL + 1)
@@ -75,6 +77,8 @@ static uintptr_t morecore_top = (uintptr_t)&morecore_area[MORECORE_AREA_BYTE_SIZ
 int fd_socket[MAX_SOCKET_FDS];
 int fd_active[MAX_SOCKET_FDS];
 int socket_refcount[MAX_SOCKETS];
+
+char fd_path[MAX_SOCKET_FDS][100];
 
 static size_t output(void *data, size_t count) {
     char *src = data;
@@ -218,6 +222,11 @@ long sys_writev(va_list ap) {
     long long sum = 0;
     ssize_t ret = 0;
 
+    // char buf[80];
+    // int n = sprintf(buf, "writev request on fd %d\n", fildes);
+    // serial_enqueue_batch(&serial_tx_queue_handle, n, buf);
+    // microkit_notify(serial_config.tx.id);
+
     /* The iovcnt argument is valid if greater than 0 and less than or equal to IOV_MAX. */
     if (iovcnt <= 0 || iovcnt > IOV_MAX) {
         return -EINVAL;
@@ -270,45 +279,75 @@ long sys_writev(va_list ap) {
 
 int request_flags[FS_QUEUE_CAPACITY];
 
-void fs_request_flag_set(uint64_t request_id) {
-    int flag = request_flags[request_id];
-    printf("fs_request_flag_set: flag = %d\n", flag);
-    request_flags[request_id] = 0;
-}
+void fs_request_flag_set(uint64_t request_id) { request_flags[request_id] = 0; }
 
 long sys_openat(va_list ap) {
     int dirfd = va_arg(ap, int);
-    assert(dirfd == AT_FDCWD);
     const char *path = va_arg(ap, const char *);
+    int flags = va_arg(ap, int);
+
+    printf("open %s at dir %d with flags %#x\n", path, dirfd, flags);
 
     if (strcmp(path, "/etc/services") == 0) {
         return SERVICES_FD;
     }
 
-    // ptrdiff_t path_buffer;
-    // int err = fs_buffer_allocate(&path_buffer);
-    // if (err) {
-    //     return -err;
-    // }
+    ptrdiff_t path_buffer;
+    int err = fs_buffer_allocate(&path_buffer);
+    assert(!err);
 
-    // uint64_t path_len = strlen(path);
-    // memcpy(fs_buffer_ptr(path_buffer), path, path_len);
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
-    // fs_cmpl_t completion;
-    // err = fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_DIR_OPEN,
-    //                                                   .params.dir_open = {.path = {
-    //                                                                           .offset = path_buffer,
-    //                                                                           .size = path_len,
-    //                                                                       }}});
+    uint64_t fs_flags = 0;
+    if (flags & O_RDONLY) {
+        fs_flags |= FS_OPEN_FLAGS_READ_ONLY;
+    }
+    if (flags & O_WRONLY) {
+        fs_flags |= FS_OPEN_FLAGS_WRITE_ONLY;
+    }
+    if (flags & O_RDWR) {
+        fs_flags |= FS_OPEN_FLAGS_READ_WRITE;
+    }
+    if (flags & O_CREAT) {
+        fs_flags |= FS_OPEN_FLAGS_CREATE;
+    }
 
-    // fs_buffer_free(path_buffer);
-    // if (err || completion.status != FS_STATUS_SUCCESS) {
-    //     // FIXME: check error codes / completion status
-    //     return -ENOENT;
-    // }
+    fs_cmpl_t completion;
+    if (flags & O_DIRECTORY) {
+        fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_DIR_OPEN,
+                                                    .params.dir_open = {
+                                                        .path.offset = path_buffer,
+                                                        .path.size = path_len,
+                                                    }});
+    } else {
+        fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_OPEN,
+                                                    .params.file_open = {
+                                                        .path.offset = path_buffer,
+                                                        .path.size = path_len,
+                                                        .flags = fs_flags,
+                                                    }});
+    }
 
-    // return completion.data.dir_open.fd;
-    return -ENOENT;
+    fs_buffer_free(path_buffer);
+
+    if (completion.status != FS_STATUS_SUCCESS) {
+        return -completion.status;
+    }
+
+    uint64_t fd;
+    if (flags & O_DIRECTORY) {
+        printf("directory opened at fd %d\n", completion.data.dir_open.fd);
+        fd_active[completion.data.dir_open.fd] = true;
+        fd = completion.data.dir_open.fd;
+    } else {
+        printf("file opened at fd %d\n", completion.data.file_open.fd);
+        fd_active[completion.data.file_open.fd] = true;
+        fd = completion.data.file_open.fd;
+    }
+
+    strcpy(fd_path[fd], path);
+    return fd;
 }
 
 long sys_getuid(va_list ap) {
@@ -321,7 +360,15 @@ long sys_getgid(va_list ap) {
     return 501;
 }
 
-long sys_fcntl(va_list ap) { return 0; }
+long sys_fcntl(va_list ap) {
+    int fd = va_arg(ap, int);
+    int op = va_arg(ap, int);
+
+    printf("fcntl: fd %d, op %d\n", fd, op);
+
+    return O_WRONLY | O_CREAT;
+    return 0;
+}
 
 long sys_setsockopt(va_list ap) { return 0; }
 
@@ -376,6 +423,7 @@ long sys_socket_connect(va_list ap) {
 
 long sys_close(va_list ap) {
     long fd = va_arg(ap, int);
+    printf("close fd: %d\n", fd);
 
     if (fd == SERVICES_FD) {
         return 0;
@@ -387,14 +435,23 @@ long sys_close(va_list ap) {
 
     assert(socket_handle >= 0);
     assert(socket_handle < MAX_SOCKETS);
-    assert(socket_refcount[socket_handle] != 0);
 
-    fd_socket[fd] = 0;
-    fd_active[fd] = 0;
+    if (socket_refcount[socket_handle] != 0) {
+        fd_socket[fd] = 0;
+        fd_active[fd] = 0;
 
-    socket_refcount[socket_handle]--;
-    if (socket_refcount[socket_handle] == 0) {
-        return (long)tcp_socket_close(socket_handle);
+        socket_refcount[socket_handle]--;
+        if (socket_refcount[socket_handle] == 0) {
+            return (long)tcp_socket_close(socket_handle);
+        }
+    } else {
+        fs_cmpl_t completion;
+        fs_command_blocking(&completion, (fs_cmd_t){
+                                             .type = FS_CMD_DIR_CLOSE,
+                                             .params.dir_close.fd = fd,
+                                         });
+        assert(completion.status == FS_STATUS_SUCCESS);
+        fd_active[fd] = false;
     }
 
     return 0;
@@ -482,6 +539,79 @@ long sys_recvfrom(va_list ap) {
     return (long)read;
 }
 
+static int fstat_int(const char *path, struct stat *statbuf) {
+    ptrdiff_t path_buffer;
+    int err = fs_buffer_allocate(&path_buffer);
+    assert(!err);
+
+    ptrdiff_t output_buffer;
+    err = fs_buffer_allocate(&output_buffer);
+    assert(!err);
+
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
+
+    fs_cmpl_t completion;
+    fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_STAT,
+                                                .params.stat = {
+                                                    .path.offset = path_buffer,
+                                                    .path.size = path_len,
+                                                    .buf.offset = output_buffer,
+                                                    .buf.size = FS_BUFFER_SIZE,
+                                                }});
+
+    fs_buffer_free(path_buffer);
+
+    if (completion.status == FS_STATUS_NO_FILE) {
+        return -ENOENT;
+    } else if (completion.status == FS_STATUS_INVALID_NAME) {
+        return 0;
+    } else if (completion.status != FS_STATUS_SUCCESS) {
+        printf("fstat: %s\n", fs_status_to_str(completion.status));
+        return -completion.status;
+    }
+
+    fs_stat_t *sb = fs_buffer_ptr(output_buffer);
+    printf("fstat: st_dev = %#x\n", statbuf->st_dev = sb->dev);
+    printf("fstat: st_ino = %#x\n", statbuf->st_ino = sb->ino);
+    printf("fstat: st_mode = %o\n",  statbuf->st_mode = sb->mode);
+    printf("fstat: st_nlink = %#x\n", statbuf->st_nlink = sb->nlink);
+    printf("fstat: st_uid = %#x\n", statbuf->st_uid = sb->uid);
+    printf("fstat: st_gid = %#x\n", statbuf->st_gid = sb->gid);
+    printf("fstat: st_rdev = %#x\n", statbuf->st_rdev = sb->rdev);
+    printf("fstat: st_size = %#x\n", statbuf->st_size = sb->size);
+    printf("fstat: st_blksize = %#x\n", statbuf->st_blksize = sb->blksize);
+    printf("fstat: st_blocks = %#x\n", statbuf->st_blocks = sb->blocks);
+    printf("fstat: st_atime = %#x\n", statbuf->st_atime = sb->atime);
+    printf("fstat: st_mtime = %#x\n", statbuf->st_mtime = sb->mtime);
+    printf("fstat: st_ctime = %#x\n", statbuf->st_ctime = sb->ctime);
+
+    fs_buffer_free(output_buffer);
+
+    return 0;
+}
+
+long sys_fstat(va_list ap) { 
+    int fd = va_arg(ap, int);
+    struct stat *statbuf = va_arg(ap, struct stat *);
+
+    char *path = fd_path[fd];
+
+    return fstat_int(path, statbuf);
+}
+
+long sys_fstatat(va_list ap) {
+    int dirfd = va_arg(ap, int);
+    const char *path = va_arg(ap, const char *);
+    struct stat *statbuf = va_arg(ap, struct stat *);
+
+    (void)dirfd;
+
+    return fstat_int(path, statbuf);
+}
+
+long sys_readlinkat(va_list ap) { return -EINVAL; }
+
 void debug_error(long num) { dlog("error doing syscall: %d", num); }
 
 int pthread_setcancelstate(int state, int *oldstate) {
@@ -507,12 +637,17 @@ long sel4_vsyscall(long sysnum, ...) {
         return -ENOSYS;
     }
     /* Call it */
+    // char buf[20];
+    // int n = sprintf(buf, "Syscall %d\n", sysnum);
+    // serial_enqueue_batch(&serial_tx_queue_handle, n, buf);
+    // microkit_notify(serial_config.tx.id);
+    
     long ret = syscall(al);
     va_end(al);
     return ret;
 }
 
-void libc_init(void) {
+void libc_init(void (*f)(microkit_channel)) {
     /* Syscall table init */
     __sysinfo = sel4_vsyscall;
     syscall_table[__NR_brk] = (muslcsys_syscall_t)sys_brk;
@@ -538,6 +673,9 @@ void libc_init(void) {
     syscall_table[__NR_close] = (muslcsys_syscall_t)sys_close;
     syscall_table[__NR_dup3] = (muslcsys_syscall_t)sys_dup3;
     syscall_table[__NR_read] = (muslcsys_syscall_t)sys_read;
+    syscall_table[__NR_fstat] = (muslcsys_syscall_t)sys_fstat;
+    syscall_table[__NR_newfstatat] = (muslcsys_syscall_t)sys_fstatat;
+    syscall_table[__NR_readlinkat] = (muslcsys_syscall_t)sys_readlinkat;
 }
 
 int socket_index_of_fd(int fd) {

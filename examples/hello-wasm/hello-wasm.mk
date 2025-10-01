@@ -73,7 +73,8 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	-DFAT_DEBUG_PRINT
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -98,7 +99,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	touch $@
 
 #wasm app
-include ${HELLO_WASM_DIR}/hello-world/hello-world.mk
+include ${HELLO_WASM_DIR}/hello-fs/hello-fs.mk
 
 include $(WAMR)/wamr.mk
 

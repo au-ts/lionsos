@@ -24,7 +24,17 @@ struct oftable_slot {
     uint64_t generation;
 };
 
-struct oftable_slot oftable[MAX_OPEN_FILES];
+struct oftable_slot oftable[MAX_OPEN_FILES] = {
+    (struct oftable_slot){
+        .state = state_allocated,
+    },
+    (struct oftable_slot){
+        .state = state_allocated,
+    },
+    (struct oftable_slot){
+        .state = state_allocated,
+    },
+};
 
 static int of_alloc(struct oftable_slot **slot) {
     for (uint64_t i = 0; i < MAX_OPEN_FILES; i++) {
@@ -87,34 +97,26 @@ static int of_unset(struct oftable_slot *of) {
     }
 }
 
-static int of_begin_op_file(struct oftable_slot *of, void **file_handle_p) {
+static int of_begin_op(struct oftable_slot *of, void **handle_p) {
     assert(of);
     switch (of->state) {
     case state_open_file:
         of->state = state_busy_file;
         of->busy_count = 1;
-        *file_handle_p = of->handle;
+        *handle_p = of->handle;
         return 0;
     case state_busy_file:
         of->busy_count++;
-        *file_handle_p = of->handle;
+        *handle_p = of->handle;
         return 0;
-    default:
-        return -1;
-    }
-}
-
-static int of_begin_op_dir(struct oftable_slot *of, void **dir_handle_p) {
-    assert(of);
-    switch (of->state) {
     case state_open_dir:
         of->state = state_busy_dir;
         of->busy_count = 1;
-        *dir_handle_p = of->handle;
+        *handle_p = of->handle;
         return 0;
     case state_busy_dir:
         of->busy_count++;
-        *dir_handle_p = of->handle;
+        *handle_p = of->handle;
         return 0;
     default:
         return -1;
@@ -204,7 +206,7 @@ int fd_begin_op_file(fd_t fd, void **file) {
     if (of == NULL) {
         return -1;
     }
-    return of_begin_op_file(of, file);
+    return of_begin_op(of, file);
 }
 
 int fd_begin_op_dir(fd_t fd, void **dir) {
@@ -212,7 +214,7 @@ int fd_begin_op_dir(fd_t fd, void **dir) {
     if (of == NULL) {
         return -1;
     }
-    return of_begin_op_dir(of, dir);
+    return of_begin_op(of, dir);
 }
 
 void fd_end_op(fd_t fd) {
