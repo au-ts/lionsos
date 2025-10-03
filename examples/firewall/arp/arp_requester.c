@@ -10,12 +10,12 @@
 #include <sddf/util/printf.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
-#include <sddf/network/util.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
 #include <lions/firewall/arp.h>
+#include <lions/firewall/checksum.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/protocols.h>
@@ -64,12 +64,12 @@ static void generate_arp(net_buff_desc_t *buffer, uint32_t ip)
     memcpy(&pkt->ethsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
     memcpy(&pkt->hwsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
 
-    pkt->type = HTONS(ETH_TYPE_ARP);
-    pkt->hwtype = HTONS(ETH_HWTYPE);
-    pkt->proto = HTONS(ETH_TYPE_IP);
+    pkt->type = htons(ETH_TYPE_ARP);
+    pkt->hwtype = htons(ETH_HWTYPE);
+    pkt->proto = htons(ETH_TYPE_IP);
     pkt->hwlen = ETH_HWADDR_LEN;
     pkt->protolen = IPV4_PROTO_LEN;
-    pkt->opcode = HTONS(ETHARP_OPCODE_REQUEST);
+    pkt->opcode = htons(ETHARP_OPCODE_REQUEST);
 
     /* Memset the hardware src addr to 0 for ARP requests */
     memset(&pkt->hwdst_addr, 0, ETH_HWADDR_LEN);
@@ -143,9 +143,9 @@ static void process_responses()
 
             arp_packet_t *pkt = (arp_packet_t *)(net_config.rx_data.vaddr + buffer.io_or_offset);
             /* Check if packet is an ARP request */
-            if (pkt->type == HTONS(ETH_TYPE_ARP)) {
+            if (pkt->type == htons(ETH_TYPE_ARP)) {
                 /* Check if it's a probe, ignore announcements */
-                if (pkt->opcode == HTONS(ETHARP_OPCODE_REPLY)) {
+                if (pkt->opcode == htons(ETHARP_OPCODE_REPLY)) {
                     /* Find the arp entry */
                     fw_arp_entry_t *entry = fw_arp_table_find_entry(&arp_table, pkt->ipsrc_addr);
                     if (entry != NULL) {

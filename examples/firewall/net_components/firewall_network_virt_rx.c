@@ -8,11 +8,11 @@
 #include <os/sddf.h>
 #include <sddf/network/constants.h>
 #include <sddf/network/queue.h>
-#include <sddf/network/util.h>
 #include <sddf/network/config.h>
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
 #include <sddf/util/cache.h>
+#include <lions/firewall/checksum.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/protocols.h>
 #include <lions/firewall/queue.h>
@@ -41,17 +41,17 @@ static int get_protocol_match(struct ethernet_header *buffer, uint16_t *protocol
     IDs in our client info structs as these are currently unused in the IP standard.
     Maybe change this to something more robust in the future. */
     uint16_t ethtype = buffer->type;
-    if (ethtype == HTONS(ETH_TYPE_ARP)) {
+    if (ethtype == htons(ETH_TYPE_ARP)) {
         /* filter based on arp opcode */
         arp_packet_t *pkt = (arp_packet_t *) buffer;
-        if (pkt->opcode == HTONS(ETHARP_OPCODE_REQUEST)) {
+        if (pkt->opcode == htons(ETHARP_OPCODE_REQUEST)) {
             /* Requests go to the arp responder component */
             *protocol = 0x92;
-        } else if (pkt->opcode == HTONS(ETHARP_OPCODE_REPLY)) {
+        } else if (pkt->opcode == htons(ETHARP_OPCODE_REPLY)) {
             /* Responses go to the arp requester component */
             *protocol = 0x93;
         }
-    } else if (ethtype == HTONS(ETH_TYPE_IP)) {
+    } else if (ethtype == htons(ETH_TYPE_IP)) {
         /* filter based on IP protocol */
         ipv4_packet_t *pkt = (ipv4_packet_t *) buffer;
         *protocol = pkt->protocol;
@@ -83,7 +83,9 @@ static void rx_return(void)
             uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.data.region.vaddr;
 
             /* Remove additional 4 byte ethernet header from NIC promiscuous mode */
+            #if !defined(CONFIG_PLAT_QEMU_ARM_VIRT)
             buffer.len -= 4;
+            #endif
 
             // Cache invalidate after DMA write, so we don't read stale data.
             // This must be performed after the DMA write to avoid reading

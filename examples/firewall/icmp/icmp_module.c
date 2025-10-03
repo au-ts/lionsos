@@ -11,7 +11,7 @@
 #include <sddf/util/printf.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
-#include <sddf/network/util.h>
+#include <lions/firewall/checksum.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/icmp.h>
@@ -44,7 +44,7 @@ static void generate_icmp(void)
             /* Construct ethernet header */
             memcpy(&icmp_resp->ethdst_addr, &req.hdr.ethsrc_addr, ETH_HWADDR_LEN);
             memcpy(&icmp_resp->ethsrc_addr, &req.hdr.ethdst_addr, ETH_HWADDR_LEN);
-            icmp_resp->eth_type = HTONS(ETH_TYPE_IP);
+            icmp_resp->eth_type = htons(ETH_TYPE_IP);
 
             /* Construct IP packet */
             icmp_resp->ihl_version = (4 << 4) | (5);
@@ -56,18 +56,17 @@ static void generate_icmp(void)
              * here. The total length of the IP packet and the ICMP packet,
              * therefore we subtract the size of the ethernet header.
              */
-             icmp_resp->tot_len = HTONS(sizeof(icmp_packet_t) - sizeof(struct ethernet_header));
+            icmp_resp->tot_len = htons(sizeof(icmp_packet_t) - sizeof(struct ethernet_header));
 
             /* Not fragmenting this IP packet. */
-            icmp_resp->id = HTONS(0);
+            icmp_resp->id = htons(0);
 
             /* 0x4000 sets the "Don't Fragment" Bit */
-            icmp_resp->frag_off = HTONS(0x4000);
+            icmp_resp->frag_off = htons(0x4000);
 
             /* Recommended inital value of ttl is 64 hops according to the TCP/IP spec. */
             icmp_resp->ttl = 64;
             icmp_resp->protocol = IPV4_PROTO_ICMP;
-            icmp_resp->check = 0;
 
             /* Source of IP packet is the firewall */
             icmp_resp->src_ip = icmp_config.ips[out_int];
@@ -75,12 +74,24 @@ static void generate_icmp(void)
             icmp_resp->type = req.type;
             icmp_resp->code = req.code;
 
-            /* Set checksum to 0 for hardware calculation */
-            icmp_resp->checksum = 0;
+            /* Unused must be set to 0 */
+            icmp_resp->_unused = 0;
 
             /* IP header starts from ihl_version field */
             memcpy(&icmp_resp->old_ip_hdr, &req.hdr.ihl_version, sizeof(ipv4hdr_t));
             memcpy(&icmp_resp->old_data, req.data, FW_ICMP_OLD_DATA_LEN);
+
+            /* If hardware supports checksum calculation, set checksums to 0.
+            Else, calculate checksum in software */
+            icmp_resp->check = 0;
+            icmp_resp->checksum = 0;
+            #ifndef NETWORK_HW_HAS_CHECKSUM
+            /* ICMP checksum is calculated only over the ICMP packet */
+            uint32_t icmp_pkt_len = sizeof(icmp_packet_t) - sizeof(ipv4_packet_t);
+            icmp_resp->checksum = fw_internet_checksum(&icmp_resp->type, icmp_pkt_len);
+            /* IP checksum is calculated only over IP header */
+            icmp_resp->check = fw_internet_checksum(&icmp_resp->ihl_version, sizeof(ipv4hdr_t));
+            #endif
 
             buffer.len = sizeof(icmp_packet_t);
             err = net_enqueue_active(&net_queue[out_int], buffer);

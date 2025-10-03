@@ -43,6 +43,15 @@ class Board:
 
 BOARDS: List[Board] = [
     Board(
+        name="qemu_virt_aarch64",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x6_0000_000,
+        serial="pl011@9000000",
+        timer="timer",
+        ethernet0="virtio_mmio@a003c00",
+        ethernet1="virtio_mmio@a003e00"
+    ),
+    Board(
         name="imx8mp_iotgate",
         arch=SystemDescription.Arch.AARCH64,
         paddr_top=0x70_000_000,
@@ -322,7 +331,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     serial_system = Sddf.Serial(sdf, serial_node, common_pds[-2], common_pds[-1])
 
     # Create network 0 pds
-    networks[ext_net]["driver"] = ProtectionDomain("ethernet_driver_dwmac-5.10a", "eth_driver_dwmac-5.10a.elf", priority=101, budget=100, period=400)
+    networks[ext_net]["driver"] = ProtectionDomain("ethernet_driver0", "eth_driver0.elf", priority=101, budget=100, period=400)
     networks[int_net]["out_virt"] = ProtectionDomain("net_virt_tx0", "firewall_network_virt_tx0.elf", priority=100, budget=20000)
     networks[ext_net]["in_virt"] = ProtectionDomain("net_virt_rx0", "firewall_network_virt_rx0.elf", priority=99)
 
@@ -330,7 +339,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     sdf.add_mr(networks[ext_net]["rx_dma_region"])
 
     # Create network 1 subsystem pds
-    networks[int_net]["driver"] = ProtectionDomain("ethernet_driver_imx", "eth_driver_imx.elf", priority=101, budget=100, period=400)
+    networks[int_net]["driver"] = ProtectionDomain("ethernet_driver1", "eth_driver1.elf", priority=101, budget=100, period=400)
     networks[ext_net]["out_virt"] = ProtectionDomain("net_virt_tx1", "firewall_network_virt_tx1.elf", priority=100, budget=20000)
     networks[int_net]["in_virt"] = ProtectionDomain("net_virt_rx1", "firewall_network_virt_rx1.elf", priority=99)
 

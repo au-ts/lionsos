@@ -10,7 +10,6 @@
 #include <sddf/util/printf.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
-#include <sddf/network/util.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/filter.h>
@@ -84,8 +83,10 @@ static void filter(void)
             /* Transmit the packet to the routing component */
             if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED || action == FILTER_ACT_ALLOW) {
 
+                #ifdef NETWORK_HW_HAS_CHECKSUM
                 /* Reset the checksum as it's recalculated in hardware */
                 icmp_hdr->checksum = 0;
+                #endif
 
                 err = fw_enqueue(&router_queue, &buffer);
                 assert(!err);

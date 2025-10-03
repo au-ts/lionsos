@@ -5,24 +5,23 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 #include <os/sddf.h>
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
-#include <sddf/network/util.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 #include <lions/firewall/arp.h>
+#include <lions/firewall/checksum.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/filter.h>
+#include <lions/firewall/icmp.h>
 #include <lions/firewall/protocols.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/routing.h>
-#include <lions/firewall/common.h>
-#include <lions/firewall/icmp.h>
-#include <string.h>
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".fw_router_config"))) fw_router_config_t router_config;
@@ -92,7 +91,6 @@ static void transmit_packet(net_buff_desc_t buffer,
 
     memcpy(&ip_pkt->ethdst_addr, mac_addr, ETH_HWADDR_LEN);
     memcpy(&ip_pkt->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
-    ip_pkt->check = 0;
 
     /* Transmit packet out the NIC */
     if (FW_DEBUG_OUTPUT) {
@@ -101,6 +99,13 @@ static void transmit_packet(net_buff_desc_t buffer,
             ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0),
             buffer.io_or_offset/NET_BUFFER_SIZE);
     }
+
+    /* Checksum needs to be re-calculated as header has been modified */
+    ip_pkt->check = 0;
+#ifndef NETWORK_HW_HAS_CHECKSUM
+    /* Recalculate IP packet checksum in software */
+    ip_pkt->check = fw_internet_checksum(&ip_pkt->ihl_version, sizeof(ipv4hdr_t));
+#endif
 
     int err = fw_enqueue(&tx_active, &buffer);
     assert(!err);
@@ -173,7 +178,7 @@ static void route(void)
              * NOTE: We drop non-IPv4 packets. This case should be
              * handled by the protocol virtualiser.
              */
-            if (ip_pkt->type != HTONS(ETH_TYPE_IP) || ip_pkt->ttl <= 1) {
+            if (ip_pkt->type != htons(ETH_TYPE_IP) || ip_pkt->ttl <= 1) {
                 err = fw_enqueue(&rx_free, &buffer);
                 assert(!err);
                 returned = true;
@@ -231,7 +236,7 @@ static void route(void)
 
                 /* Webserver only accepts TCP traffic on webserver port */
                 if (ip_pkt->protocol != WEBSERVER_PROTOCOL ||
-                    tcp_pkt->dst_port != HTONS(WEBSERVER_PORT)) {
+                    tcp_pkt->dst_port != htons(WEBSERVER_PORT)) {
                     err = fw_enqueue(&rx_free, &buffer);
                     assert(!err);
                     returned = true;

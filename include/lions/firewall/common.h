@@ -9,9 +9,34 @@
 #include <stdint.h>
 #include <sddf/util/util.h>
 
+/**
+ * Convert a 16 bit unsigned from host byte order to network byte order.
+ *
+ * @param n Integer represented in host byte order.
+ * @return Integer represented in network byte order.
+ */
+static inline uint16_t htons(uint16_t n)
+{
+#if BYTE_ORDER == BIG_ENDIAN
+    return n;
+#else
+    return (n & 0xff) << 8 | (n & 0xff00) >> 8;
+#endif
+}
+
+/**
+ * Convert a 32 bit unsigned from host byte order to network byte order.
+ *
+ * @param n Integer represented in host byte order.
+ * @return Integer represented in network byte order.
+ */
 static inline uint32_t htonl(uint32_t n)
 {
+#if BYTE_ORDER == BIG_ENDIAN
+    return n;
+#else
     return (n & 0xff) << 24 | (n & 0xff00) << 8 | ((n >> 8) & 0xff00) | n >> 24;
+#endif
 }
 
 /* Subnet value of N means IPs must match on highest N bits. IP addresses

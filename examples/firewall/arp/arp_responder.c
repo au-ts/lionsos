@@ -10,11 +10,11 @@
 #include <sddf/util/printf.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
-#include <sddf/network/util.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
+#include <lions/firewall/checksum.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/protocols.h>
@@ -50,12 +50,12 @@ static int arp_reply(const uint8_t ethsrc_addr[ETH_HWADDR_LEN],
     memcpy(&reply->ethdst_addr, ethdst_addr, ETH_HWADDR_LEN);
     memcpy(&reply->ethsrc_addr, ethsrc_addr, ETH_HWADDR_LEN);
 
-    reply->type = HTONS(ETH_TYPE_ARP);
-    reply->hwtype = HTONS(ETH_HWTYPE);
-    reply->proto = HTONS(ETH_TYPE_IP);
+    reply->type = htons(ETH_TYPE_ARP);
+    reply->hwtype = htons(ETH_HWTYPE);
+    reply->proto = htons(ETH_TYPE_IP);
     reply->hwlen = ETH_HWADDR_LEN;
     reply->protolen = IPV4_PROTO_LEN;
-    reply->opcode = HTONS(ETHARP_OPCODE_REPLY);
+    reply->opcode = htons(ETHARP_OPCODE_REPLY);
 
     memcpy(&reply->hwsrc_addr, hwsrc_addr, ETH_HWADDR_LEN);
     reply->ipsrc_addr = ipsrc_addr;
@@ -83,10 +83,10 @@ static void receive(void)
 
             /* Check if packet is an ARP request */
             struct ethernet_header *ethhdr = (struct ethernet_header *)(net_config.rx_data.vaddr + buffer.io_or_offset);
-            if (ethhdr->type == HTONS(ETH_TYPE_ARP)) {
+            if (ethhdr->type == htons(ETH_TYPE_ARP)) {
                 arp_packet_t *pkt = (arp_packet_t *)ethhdr;
                 /* Check if it's a probe, ignore announcements */
-                if (pkt->opcode == HTONS(ETHARP_OPCODE_REQUEST)) {
+                if (pkt->opcode == htons(ETHARP_OPCODE_REQUEST)) {
                     /* Check the destination IP address */
                     if (pkt->ipdst_addr == arp_config.ip) {
 

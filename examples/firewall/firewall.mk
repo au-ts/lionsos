@@ -12,11 +12,22 @@ SDDF := $(LIONSOS)/dep/sddf
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 
 ifeq ($(strip $(MICROKIT_BOARD)), imx8mp_iotgate)
-	ETH_DRIV_DIR0 := imx
-	ETH_DRIV_DIR1 := dwmac-5.10a
+	ETH_DRIV_DIR0 := dwmac-5.10a
+	ETH_DRIV0 := eth_driver_dwmac-5.10a.elf
+	ETH_DRIV_DIR1 := imx
+	ETH_DRIV1 := eth_driver_imx.elf
 	SERIAL_DRIV_DIR := imx
 	TIMER_DRV_DIR := imx
 	CPU := cortex-a53
+else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
+	ETH_DRIV_DIR0 := virtio
+	ETH_DRIV0 := eth_driver_virtio.elf
+	ETH_DRIV_DIR1 := virtio
+	ETH_DRIV1 := eth_driver_virtio.elf
+	SERIAL_DRIV_DIR := arm
+	TIMER_DRV_DIR := arm
+	CPU := cortex-a53
+	QEMU := qemu-system-aarch64
 else
 $(error Unsupported MICROKIT_BOARD given)
 endif
@@ -66,9 +77,10 @@ FIREWALL_CONFIG_HEADERS := $(SDDF)/include/sddf/resources/common.h \
 							$(LIONSOS)/include/lions/firewall/config.h
 
 IMAGES := arp_requester.elf arp_responder.elf routing.elf micropython.elf \
-		  eth_driver_imx.elf firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
-		  eth_driver_dwmac-5.10a.elf timer_driver.elf serial_driver.elf serial_virt_tx.elf \
-		  icmp_filter.elf udp_filter.elf tcp_filter.elf icmp_module.elf
+		  firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
+		  timer_driver.elf serial_driver.elf serial_virt_tx.elf \
+		  icmp_filter.elf udp_filter.elf tcp_filter.elf icmp_module.elf \
+		  $(ETH_DRIV0) $(ETH_DRIV1) eth_driver0.elf eth_driver1.elf
 
 DEPS := $(IMAGES:.elf=.d)
 
@@ -131,6 +143,12 @@ include $(LIONSOS)/components/micropython/micropython.mk
 %.elf: %.o
 	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
 
+eth_driver0.elf: $(ETH_DRIV0)
+	cp $< $@
+
+eth_driver1.elf: $(ETH_DRIV1)
+	cp $< $@
+
 # Components that print to serial require libsddf_util.a
 arp_requester.elf: arp_requester.o libsddf_util.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
@@ -167,8 +185,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 
 # Components receiving from or transmitting out net0
-	$(OBJCOPY) --update-section .device_resources=net_data0/ethernet_driver_dwmac-5.10a_device_resources.data eth_driver_dwmac-5.10a.elf
-	$(OBJCOPY) --update-section .net_driver_config=net_data0/net_driver.data eth_driver_dwmac-5.10a.elf
+	$(OBJCOPY) --update-section .device_resources=net_data0/ethernet_driver0_device_resources.data eth_driver0.elf
+	$(OBJCOPY) --update-section .net_driver_config=net_data0/net_driver.data eth_driver0.elf
 
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data0/net_virt_rx.data firewall_network_virt_rx0.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data0/net_virt_tx.data firewall_network_virt_tx0.elf
@@ -188,8 +206,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester0.data arp_requester0.elf
 
 # Components receiving from or transmitting out net1
-	$(OBJCOPY) --update-section .device_resources=net_data1/ethernet_driver_imx_device_resources.data eth_driver_imx.elf
-	$(OBJCOPY) --update-section .net_driver_config=net_data1/net_driver.data eth_driver_imx.elf
+	$(OBJCOPY) --update-section .device_resources=net_data1/ethernet_driver1_device_resources.data eth_driver1.elf
+	$(OBJCOPY) --update-section .net_driver_config=net_data1/net_driver.data eth_driver1.elf
 
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data1/net_virt_rx.data firewall_network_virt_rx1.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data1/net_virt_tx.data firewall_network_virt_tx1.elf
@@ -223,8 +241,10 @@ qemu: $(IMAGE_FILE)
 			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
 			-m size=2G \
 			-nographic \
-			-device virtio-net-device,netdev=netdev0 \
-			-netdev user,id=netdev0,hostfwd=tcp::5555-10.0.2.16:80 \
+			-netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+			-device virtio-net-device,netdev=net0,mac=00:01:c0:39:d5:18 \
+			-netdev tap,id=net1,ifname=tap1,script=no,downscript=no \
+			-device virtio-net-device,netdev=net1,mac=00:01:c0:39:d5:10 \
 			-global virtio-mmio.force-legacy=false
 
 FORCE: ;
