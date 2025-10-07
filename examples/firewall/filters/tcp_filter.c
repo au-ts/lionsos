@@ -44,7 +44,6 @@ static void filter(void)
             ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
             tcp_hdr_t *tcp_hdr = (tcp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
 
-            bool default_action = false;
             uint16_t rule_id = 0;
             fw_action_t action = fw_filter_find_action(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port,
                                                                    ip_hdr->dst_ip, tcp_hdr->dst_port, &rule_id);
@@ -52,7 +51,7 @@ static void filter(void)
             /* Add an established connection in shared memory for corresponding filter */
             if (action == FILTER_ACT_CONNECT) {
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port,
-                                                                                ip_hdr->dst_ip, tcp_hdr->dst_port, default_action, rule_id);
+                                                                                ip_hdr->dst_ip, tcp_hdr->dst_port, rule_id);
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
                     sddf_printf("%sTCP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",

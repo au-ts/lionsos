@@ -44,7 +44,6 @@ static void filter(void)
             ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
             udp_hdr_t *udp_hdr = (udp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
 
-            bool default_action = false;
             uint16_t rule_id = 0;
             fw_action_t action = fw_filter_find_action(&filter_state, ip_hdr->src_ip, udp_hdr->src_port,
                                                                    ip_hdr->dst_ip, udp_hdr->dst_port, &rule_id);
@@ -52,7 +51,7 @@ static void filter(void)
             /* Add an established connection in shared memory for corresponding filter */
             if (action == FILTER_ACT_CONNECT) {
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_hdr->src_ip, udp_hdr->src_port,
-                                                                                ip_hdr->dst_ip, udp_hdr->dst_port, default_action, rule_id);
+                                                                                ip_hdr->dst_ip, udp_hdr->dst_port, rule_id);
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
                     sddf_printf("%sUDP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
@@ -62,10 +61,8 @@ static void filter(void)
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
-                    sddf_printf("%sUDP FILTER LOG: could not establish connection for rule %u or default action %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
-                        fw_frmt_str[filter_config.interface],
-                        rule_id, default_action,
-                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
+                    sddf_printf("%sUDP FILTER LOG: could not establish connection for rule %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
+                        fw_frmt_str[filter_config.interface], rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
                         ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port), fw_filter_err_str[fw_err]);
                 }
             }
