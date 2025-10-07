@@ -12,6 +12,11 @@
 #include <sddf/util/util.h>
 #include <sddf/network/util.h>
 #include <lions/firewall/common.h>
+#include <lions/firewall/array_functions.h>
+
+#define MOD64 0x3F
+#define BITMAP_BLOCK_SIZE 64
+#define DEFAULT_RULE 0
 
 typedef enum {
     /* no error */
@@ -35,10 +40,8 @@ static const char *fw_filter_err_str[] = {
 };
 
 typedef enum {
-    /* no rule exists */
-    FILTER_ACT_NONE,
     /* allow traffic */
-	FILTER_ACT_ALLOW,
+	FILTER_ACT_ALLOW = 1,
     /* drop traffic */
 	FILTER_ACT_DROP,
     /* allow traffic, and additionally any return traffic */
@@ -56,8 +59,6 @@ static const char *fw_filter_action_str[] = {
 };
 
 typedef struct fw_rule {
-    /* whether this is a valid rule */
-    bool valid;
     /* action to be applied to traffic matching rule */
     uint8_t action;
     /* source IP */
@@ -76,6 +77,8 @@ typedef struct fw_rule {
     bool src_port_any;
     /* rule applies to any destination port */
     bool dst_port_any;
+    /* rule id assigned */
+    uint16_t rule_id;
 } fw_rule_t;
 
 /**
@@ -96,29 +99,86 @@ typedef struct fw_instance {
     /* ID of the rule this instance was created from. Allows instances
     to be removed upon rule removal */
     uint16_t rule_id;
-    /* instance was created after matching with the filter's default action */
-    bool default_action;
-    /* whether this is a valid instance */
-    bool valid;
 } fw_instance_t;
+
+typedef struct fw_instances_table {
+    uint16_t size;
+    fw_instance_t instances[];
+} fw_instances_table_t;
+
+typedef struct fw_rule_table {
+    uint16_t size;
+    fw_rule_t rules[];
+} fw_rule_table_t;
+
+typedef struct fw_rule_id_bitmap {
+    uint16_t last_allocated_rule_id;
+    uint64_t id_bitmap[];
+} fw_rule_id_bitmap_t;
 
 typedef struct fw_filter_state {
     /* filter rules */
-    fw_rule_t *rules;
+    fw_rule_table_t *rule_table;
     /* capacity of filter rules */
     uint16_t rules_capacity;
+    /* bitmap to track filter rule ids */
+    fw_rule_id_bitmap_t *rule_id_bitmap;
     /* instances created by this filter,
     to be searched by neighbour filter */
-    fw_instance_t *internal_instances;
+    fw_instances_table_t *internal_instances_table;
     /* instances created by neighbour filter,
     to be searched by this filter */
-    fw_instance_t *external_instances;
+    fw_instances_table_t *external_instances_table;
     /* capacity of both instance tables */
     uint16_t instances_capacity;
-    /* default action of filter to be applied
-    if no other matches */
-    fw_action_t default_action;
 } fw_filter_state_t;
+
+/**
+ * Reserve an unused rule ID from the bitmap and mark it as allocated.
+ * Searches circularly starting from the last allocated ID position.
+ *
+ * @param state pointer to the filter state.
+ * @param res pointer to store the allocated rule ID.
+ *
+ * @return FILTER_ERR_OKAY if ID allocated successfully, FILTER_ERR_FULL if no IDs available.
+ */
+static fw_filter_err_t rules_reserve_id(fw_filter_state_t* state, uint16_t* res) {
+    if (state->rule_table->size >= state->rules_capacity) {
+        return FILTER_ERR_FULL;
+    }
+
+    for (uint16_t i = 0; i < state->rules_capacity; i++) {
+        uint16_t id_to_check = (state->rule_id_bitmap->last_allocated_rule_id + i) % state->rules_capacity;
+
+        uint16_t block_idx = id_to_check / BITMAP_BLOCK_SIZE;
+        uint8_t bit_pos = id_to_check & MOD64;
+
+        uint64_t mask = 1ULL << bit_pos;
+
+        if (!(state->rule_id_bitmap->id_bitmap[block_idx] & mask)) {
+            state->rule_id_bitmap->id_bitmap[block_idx] |= mask;
+            state->rule_id_bitmap->last_allocated_rule_id = id_to_check;
+            *res = id_to_check;
+            return FILTER_ERR_OKAY;
+        }
+    }
+    return FILTER_ERR_FULL;
+}
+/**
+ * Free a previously allocated rule ID by clearing its bit in the bitmap.
+ * The default rule (ID 0) cannot be freed and attempts to free it are ignored.
+ *
+ * @param state pointer to the filter state
+ * @param id rule ID to free.
+ */
+static void rules_free_id(fw_filter_state_t* state, uint16_t id) {
+    if (id == DEFAULT_RULE) {
+        return;
+    }
+    uint16_t block = id / BITMAP_BLOCK_SIZE;
+    uint64_t idx = 1ull << (id & MOD64);
+    state->rule_id_bitmap->id_bitmap[block] &= ~idx;
+}
 
 /* PP call parameters for webserver to call filters and update rules */
 #define FW_SET_DEFAULT_ACTION 0
@@ -162,18 +222,35 @@ typedef enum {
  */
 static void fw_filter_state_init(fw_filter_state_t *state,
                                  void *rules,
+                                 void* rule_id_bitmap,
                                  uint16_t rules_capacity,
                                  void *internal_instances,
                                  void *external_instances,
                                  uint16_t instances_capacity,
                                  fw_action_t default_action)
 {
-    state->rules = (fw_rule_t *)rules;
-    state->rules_capacity = rules_capacity;
-    state->internal_instances = (fw_instance_t *)internal_instances;
-    state->external_instances = (fw_instance_t *)external_instances;
+    state->rule_table = (fw_rule_table_t *)rules;
+    state->rules_capacity= rules_capacity;
+    state->rule_id_bitmap = (fw_rule_id_bitmap_t *) rule_id_bitmap;
     state->instances_capacity = instances_capacity;
-    state->default_action = default_action;
+    state->internal_instances_table = (fw_instances_table_t *)internal_instances;
+    state->external_instances_table = (fw_instances_table_t *)external_instances;
+
+    uint64_t mask = 1ULL;
+    assert((state->rule_id_bitmap->id_bitmap[DEFAULT_RULE] & mask) == 0);
+    state->rule_id_bitmap->id_bitmap[DEFAULT_RULE] |= mask;
+    state->rule_id_bitmap->last_allocated_rule_id = DEFAULT_RULE;
+
+    assert(state->rule_table->size == 0);
+    fw_rule_t default_rule = {
+        .src_ip = 0, .src_port = 0, .dst_ip = 0, .dst_port = 0,
+        .src_subnet = 0, .dst_subnet = 0, .src_port_any = true, .dst_port_any = true,
+        .action = default_action, .rule_id = DEFAULT_RULE
+    };
+    state->rule_table->rules[DEFAULT_RULE] = default_rule;
+    state->rule_table->size++;
+
+    assert(state->rule_table->rules[DEFAULT_RULE].rule_id == DEFAULT_RULE);
 }
 
 /**
@@ -205,16 +282,12 @@ static fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
                                           fw_action_t action,
                                           uint16_t *rule_id)
 {
-    fw_rule_t *empty_slot = NULL;
-    for (uint16_t i = 0; i < state->rules_capacity; i++) {
-        fw_rule_t *rule = (fw_rule_t *)(state->rules + i);
+    if (state->rule_table->size >= state->rules_capacity) {
+        return FILTER_ERR_FULL;
+    }
 
-        if (!rule->valid) {
-            if (empty_slot == NULL) {
-                empty_slot = rule;
-            }
-            continue;
-        }
+    for (uint16_t i = 0; i < state->rule_table->size; i++) {
+        fw_rule_t *rule = (fw_rule_t *)(state->rule_table->rules + i);
 
         /* Check that this entry won't cause clashes */
 
@@ -256,11 +329,7 @@ static fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
         }
     }
 
-    if (empty_slot == NULL) {
-        return FILTER_ERR_FULL;
-    }
-
-    empty_slot->valid = true;
+    fw_rule_t *empty_slot = state->rule_table->rules + state->rule_table->size;
     empty_slot->src_ip = subnet_mask(src_subnet) & src_ip;
     empty_slot->src_port = src_port;
     empty_slot->dst_ip = subnet_mask(dst_subnet) & dst_ip;
@@ -270,8 +339,11 @@ static fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
     empty_slot->src_port_any = src_port_any;
     empty_slot->dst_port_any = dst_port_any;
     empty_slot->action = action;
-    *rule_id = empty_slot - state->rules;
 
+    assert(rules_reserve_id(state, rule_id) == FILTER_ERR_OKAY);
+
+    empty_slot->rule_id = *rule_id;
+    state->rule_table->size++;
     return FILTER_ERR_OKAY;
 }
 
@@ -294,22 +366,16 @@ static fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state,
                                               uint16_t src_port,
                                               uint32_t dst_ip,
                                               uint16_t dst_port,
-                                              bool default_action,
                                               uint16_t rule_id)
 {
-    fw_instance_t *empty_slot = NULL;
-    for (uint16_t i = 0; i < state->instances_capacity; i++) {
-        fw_instance_t *instance = state->internal_instances + i;
-
-        if (!instance->valid) {
-            if (empty_slot == NULL) {
-                empty_slot = instance;
-            }
-            continue;
-        }
+    if (state->internal_instances_table->size >= state->instances_capacity) {
+        return FILTER_ERR_FULL;
+    }
+    for (uint16_t i = 0; i < state->internal_instances_table->size; i++) {
+        fw_instance_t *instance = state->internal_instances_table->instances + i;
 
         /* Connection has already been established */
-        if (((instance->default_action && default_action) || (instance->rule_id == rule_id)) &&
+        if (instance->rule_id == rule_id &&
             instance->src_ip == src_ip &&
             instance->src_port == src_port &&
             instance->dst_ip == dst_ip &&
@@ -319,17 +385,13 @@ static fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state,
         }
     }
 
-    if (empty_slot == NULL) {
-        return FILTER_ERR_FULL;
-    }
-
-    empty_slot->valid = true;
-    empty_slot->default_action = default_action;
+    fw_instance_t *empty_slot = state->internal_instances_table->instances + state->internal_instances_table->size;
     empty_slot->rule_id = rule_id;
     empty_slot->src_ip = src_ip;
     empty_slot->src_port = src_port;
     empty_slot->dst_ip = dst_ip;
     empty_slot->dst_port = dst_port;
+    state->internal_instances_table->size++;
 
     return FILTER_ERR_OKAY;
 }
@@ -357,12 +419,8 @@ static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
                                          uint16_t *rule_id)
 {
     /* Fist check external instances */
-    for (uint16_t i = 0; i < state->instances_capacity; i++) {
-        fw_instance_t *instance = state->external_instances + i;
-
-        if (!instance->valid) {
-            continue;
-        }
+    for (uint16_t i = 0; i < state->external_instances_table->size; i++) {
+        fw_instance_t *instance = state->external_instances_table->instances + i;
 
         if (instance->src_port != dst_port || instance->dst_port != src_port) {
             continue;
@@ -376,14 +434,10 @@ static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
         return FILTER_ACT_ESTABLISHED;
     }
 
-    /* Check rules */
-    fw_rule_t *match = NULL;
-    for (uint16_t i = 0; i < state->rules_capacity; i++) {
-        fw_rule_t *rule = state->rules + i;
-
-        if (!rule->valid) {
-            continue;
-        }
+    /* Check rules for best match otherwise we match with the default rule */
+    fw_rule_t *match = &state->rule_table->rules[DEFAULT_RULE];
+    for (uint16_t i = 1; i < state->rule_table->size; i++) {
+        fw_rule_t *rule = state->rule_table->rules + i;
 
         /* Check port numbers first */
         if ((!rule->src_port_any && HTONS(rule->src_port) != src_port) || (!rule->dst_port_any && HTONS(rule->dst_port) != dst_port)) {
@@ -423,12 +477,8 @@ static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
         }
     }
 
-    if (match) {
-        *rule_id = match - state->rules;
-        return match->action;
-    }
-
-    return FILTER_ACT_NONE;
+    *rule_id = match->rule_id;
+    return match->action;
 }
 
 /**
@@ -436,30 +486,24 @@ static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
  * deleted or default action is changed.
  *
  * @param state address of filter state.
- * @param default_action whether instances of the default action should be removed.
  * @param rule_id ID of rule that has been deleted.
  *
  * @return error status.
  */
 static fw_filter_err_t fw_filter_remove_instances(fw_filter_state_t *state,
-                                                  bool default_action,
                                                   uint16_t rule_id)
 {
-    for (uint16_t i = 0; i < state->instances_capacity; i++) {
-        fw_instance_t *instance = state->internal_instances + i;
-        if (!instance->valid) {
+    uint16_t i = 0;
+    while (i < state->internal_instances_table->size) {
+        fw_instance_t *instance = state->internal_instances_table->instances + i;
+
+        if (rule_id != instance->rule_id) {
+            i++;
             continue;
         }
 
-        if (default_action && (default_action != instance->default_action)) {
-            continue;
-        }
-
-        if (!default_action && (rule_id != instance->rule_id)) {
-            continue;
-        }
-
-        instance->valid = false;
+        state->internal_instances_table->instances[i] = state->internal_instances_table->instances[state->internal_instances_table->size - 1];
+        state->internal_instances_table->size--;
     }
 
     return FILTER_ERR_OKAY;
@@ -476,17 +520,17 @@ static fw_filter_err_t fw_filter_remove_instances(fw_filter_state_t *state,
 static fw_filter_err_t fw_filter_update_default_action(fw_filter_state_t *state,
                                                        fw_action_t new_action)
 {
-    fw_action_t old_action = state->default_action;
+    fw_action_t old_action = state->rule_table->rules->action;
     if (new_action == old_action) {
         return FILTER_ERR_OKAY;
     }
 
     if (old_action == FILTER_ACT_CONNECT) {
-        fw_filter_err_t err = fw_filter_remove_instances(state, true, 0);
+        fw_filter_err_t err = fw_filter_remove_instances(state, DEFAULT_RULE);
         assert(err == FILTER_ERR_OKAY);
     }
 
-    state->default_action = new_action;
+    state->rule_table->rules->action = new_action;
 
     return FILTER_ERR_OKAY;
 }
@@ -502,18 +546,36 @@ static fw_filter_err_t fw_filter_update_default_action(fw_filter_state_t *state,
 static fw_filter_err_t fw_filter_remove_rule(fw_filter_state_t *state,
                                              uint16_t rule_id)
 {
-    fw_rule_t *rule = state->rules + rule_id;
-    if (rule_id >= state->rules_capacity || !rule->valid) {
+    if (rule_id == DEFAULT_RULE) {
         return FILTER_ERR_INVALID_RULE_ID;
     }
 
+    fw_rule_t *rule = NULL;
+    /* skip the first slot which is reserved for the default rule */
+    for (uint16_t i = 1; i < state->rule_table->size; i++) {
+        if (state->rule_table->rules[i].rule_id == rule_id) {
+            rule = state->rule_table->rules + i;
+            break;
+        }
+    }
+
+    if (!rule) {
+        return FILTER_ERR_INVALID_RULE_ID;
+    }
+
+    uint16_t block = rule_id / BITMAP_BLOCK_SIZE;
+    uint64_t idx = 1ull << (rule_id & MOD64);
+    assert(state->rule_id_bitmap->id_bitmap[block] & idx);
+
     fw_action_t rule_action = rule->action;
     if (rule_action == FILTER_ACT_CONNECT) {
-        fw_filter_err_t err = fw_filter_remove_instances(state, false, rule_id);
+        fw_filter_err_t err = fw_filter_remove_instances(state,rule_id);
         assert(err == FILTER_ERR_OKAY);
     }
 
-    rule->valid = false;
-
+    rules_free_id(state, rule_id);
+    generic_array_shift(state->rule_table->rules,
+        sizeof(fw_rule_t), state->rule_table->size, rule - state->rule_table->rules);
+    state->rule_table->size--;
     return FILTER_ERR_OKAY;
 }
