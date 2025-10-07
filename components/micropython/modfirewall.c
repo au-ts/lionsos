@@ -474,8 +474,8 @@ static mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in,
         mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
         return mp_const_none;
     }
-    if (rule_idx >= webserver_state[interface_idx].filter_states[protocol_match].rule_table->size ||
-        rule_idx >= fw_config.interfaces[interface_idx].filters[protocol_match].rules_capacity) {
+
+    if (rule_idx == 0 || rule_idx >= webserver_state[interface_idx].filter_states[protocol_match].rule_table->size) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_RULE_NUM]);
         mp_raise_OSError(OS_ERR_INVALID_RULE_NUM);
         return mp_const_none;

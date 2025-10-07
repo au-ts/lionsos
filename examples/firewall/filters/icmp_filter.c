@@ -44,7 +44,6 @@ static void filter(void)
             void *pkt_vaddr = net_config.rx_data.vaddr + buffer.io_or_offset;
             icmp_packet_t *icmp_hdr = (icmp_packet_t *)pkt_vaddr;
 
-            bool default_action = false;
             uint16_t rule_id = 0;
             fw_action_t action = fw_filter_find_action(&filter_state, icmp_hdr->src_ip, ICMP_FILTER_DUMMY_PORT,
                                                                    icmp_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, &rule_id);
@@ -52,7 +51,7 @@ static void filter(void)
             /* Add an established connection in shared memory for corresponding filter */
             if (action == FILTER_ACT_CONNECT) {
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, icmp_hdr->src_ip, ICMP_FILTER_DUMMY_PORT,
-                                                                                icmp_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, default_action, rule_id);
+                                                                                icmp_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, rule_id);
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
@@ -62,9 +61,9 @@ static void filter(void)
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
-                    sddf_printf("%sICMP FILTER LOG: could not establish connection for rule %u or default action %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
+                    sddf_printf("%sICMP FILTER LOG: could not establish connection for rule %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
                         fw_frmt_str[filter_config.interface],
-                        rule_id, default_action, ipaddr_to_string(icmp_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
+                        rule_id, ipaddr_to_string(icmp_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
                         ipaddr_to_string(icmp_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT, fw_filter_err_str[fw_err]);
                 }
             }
