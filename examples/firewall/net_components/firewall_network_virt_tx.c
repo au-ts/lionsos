@@ -126,8 +126,6 @@ static void tx_return(void)
 
             int client = extract_offset_net_client(&buffer.io_or_offset);
             if (client >= 0) {
-
-
                 err = net_enqueue_free(&tx_queue_clients[client], buffer);
                 assert(!err);
                 notify_net_clients[client] = true;

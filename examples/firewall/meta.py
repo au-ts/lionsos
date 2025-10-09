@@ -152,9 +152,18 @@ FILTER_ACTION_ALLOW = 1
 FILTER_ACTION_DROP = 2
 FILTER_ACTION_CONNECT = 3
 
-# ARP ethernet type numbers
-arp_responder_protocol = 0x92
-arp_requester_protocol = 0x93
+# Ethernet types of Rx components
+eththype_ip = 0x0800
+ethtype_arp = 0x0806
+
+# IP protocol numbers of filters
+ip_protocol_icmp = 0x01
+ip_protocol_tcp = 0x06
+ip_protocol_udp = 0x11
+
+# ARP ethernet opcodes of ARP components
+arp_eth_opcode_request = 1
+arp_eth_opcode_response = 2
 
 # Helper functions used to generate firewall structures
 def ip_to_int(ipString: str):
@@ -501,19 +510,22 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         network["configs"][in_virt] = FwNetVirtRxConfig(
             network["num"],
             [],
+            [],
             [router_in_virt_conn[1], output_in_virt_conn[1]]
         )
 
         # Add arp requester protocol for input virt client 0 - this is for the
         # previously added arp requester which is always client 0
-        network["configs"][in_virt].active_client_protocols.append(arp_requester_protocol)
+        network["configs"][in_virt].active_client_ethtypes.append(ethtype_arp)
+        network["configs"][in_virt].active_client_subtypes.append(arp_eth_opcode_response)
 
         # Arp requester needs timer access to handle arp timeouts
         timer_system.add_client(arp_req)
 
         # Add arp responder filter pd as a network client
         network["in_net"].add_client_with_copier(arp_resp)
-        network["configs"][in_virt].active_client_protocols.append(arp_responder_protocol)
+        network["configs"][in_virt].active_client_ethtypes.append(ethtype_arp)
+        network["configs"][in_virt].active_client_subtypes.append(arp_eth_opcode_request)
 
         # Create arp queue firewall connection
         router_arp_conn = fw_arp_connection(router, arp_req, arp_queue_region.capacity,
@@ -605,7 +617,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
             # Connect filter as rx only network client
             network["in_net"].add_client_with_copier(filter_pd, tx=False)
-            network["configs"][in_virt].active_client_protocols.append(protocol)
+            network["configs"][in_virt].active_client_ethtypes.append(eththype_ip)
+            network["configs"][in_virt].active_client_subtypes.append(protocol)
 
             # Create rule region
             filter_rules = fw_shared_region(filter_pd, webserver, "rw",

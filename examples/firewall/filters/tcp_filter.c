@@ -14,7 +14,8 @@
 #include <lions/firewall/config.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/filter.h>
-#include <lions/firewall/protocols.h>
+#include <lions/firewall/ip.h>
+#include <lions/firewall/tcp.h>
 #include <lions/firewall/queue.h>
 
 __attribute__((__section__(".fw_filter_config"))) fw_filter_config_t filter_config;
@@ -39,14 +40,14 @@ static void filter(void)
             int err = net_dequeue_active(&rx_queue, &buffer);
             assert(!err);
 
-            void *pkt_vaddr = net_config.rx_data.vaddr + buffer.io_or_offset;
-            ipv4_packet_t *ip_pkt = (ipv4_packet_t *)pkt_vaddr;
-            tcphdr_t *tcp_hdr = (tcphdr_t *)(pkt_vaddr + transport_layer_offset(ip_pkt));
+            uintptr_t pkt_vaddr = (uintptr_t)(net_config.rx_data.vaddr + buffer.io_or_offset);
+            ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
+            tcp_hdr_t *tcp_hdr = (tcp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
 
             bool default_action = false;
             uint16_t rule_id = 0;
-            fw_action_t action = fw_filter_find_action(&filter_state, ip_pkt->src_ip, tcp_hdr->src_port,
-                                                                   ip_pkt->dst_ip, tcp_hdr->dst_port, &rule_id);
+            fw_action_t action = fw_filter_find_action(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port,
+                                                                   ip_hdr->dst_ip, tcp_hdr->dst_port, &rule_id);
 
             /* Perform the default action */
             if (action == FILTER_ACT_NONE) {
@@ -55,28 +56,28 @@ static void filter(void)
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sTCP filter found no match, performing default action %s: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.interface], fw_filter_action_str[action],
-                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
+                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
+                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                 }
             }
 
             /* Add an established connection in shared memory for corresponding filter */
             if (action == FILTER_ACT_CONNECT) {
-                fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_pkt->src_ip, tcp_hdr->src_port,
-                                                                                ip_pkt->dst_ip, tcp_hdr->dst_port, default_action, rule_id);
+                fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port,
+                                                                                ip_hdr->dst_ip, tcp_hdr->dst_port, default_action, rule_id);
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
                     sddf_printf("%sTCP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.interface], rule_id,
-                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
+                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
+                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
                     sddf_printf("%sTCP FILTER LOG: could not establish connection for rule %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
                         fw_frmt_str[filter_config.interface],
-                        rule_id, ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port), fw_filter_err_str[fw_err]);
+                        rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
+                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port), fw_filter_err_str[fw_err]);
                 }
             }
 
@@ -95,13 +96,13 @@ static void filter(void)
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
                         sddf_printf("%sTCP filter transmitting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                             fw_frmt_str[filter_config.interface], rule_id,
-                            ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
+                            ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
+                            ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                     } else if (action == FILTER_ACT_ESTABLISHED) {
                         sddf_printf("%sTCP filter transmitting via external rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                             fw_frmt_str[filter_config.interface], rule_id,
-                            ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
+                            ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
+                            ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                     }
                 }
             } else if (action == FILTER_ACT_DROP) {
@@ -113,8 +114,8 @@ static void filter(void)
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sTCP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.interface], rule_id,
-                        ipaddr_to_string(ip_pkt->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
+                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
+                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                 }
             }
         }

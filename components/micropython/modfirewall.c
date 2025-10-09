@@ -10,7 +10,6 @@
 #include <sddf/util/printf.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/filter.h>
-#include <lions/firewall/protocols.h>
 #include <lions/firewall/routing.h>
 
 #include "mpfirewallport.h"
