@@ -76,7 +76,7 @@ static void generate_arp(net_buff_desc_t *buffer, uint32_t ip)
 
     /* Memset the hardware src addr to 0 for ARP requests */
     memset(&request->hwdst_addr, 0, ETH_HWADDR_LEN);
-    request->ipsrc_addr = arp_config.ip;
+    request->ipdst_addr = ip;
 
     buffer->len = ARP_PKT_LEN;
 }

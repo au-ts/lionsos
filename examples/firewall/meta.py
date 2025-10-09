@@ -416,7 +416,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             copy_elf(filter_pd.program_image[:-5], filter_pd.program_image[:-5], network["num"])
             sdf.add_pd(filter_pd)
 
-        # Ensure arp requester is client 0 for each network
+        # Since arp requesters are net clients of the output network, we add
+        # them as network clients here first. This ensures that we do not
+        # process and serialise any networks before the corresponding arp
+        # requester has been added
         network["out_net"].add_client_with_copier(network["arp_req"])
 
     # Webserver is a tx client of the internal network
