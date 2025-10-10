@@ -9,7 +9,7 @@ from ctypes import *
 from importlib.metadata import version
 import ipaddress
 
-assert version('sdfgen').split(".")[1] == "26", "Unexpected sdfgen version"
+assert version('sdfgen').split(".")[1] == "27", "Unexpected sdfgen version"
 
 from sdfgen_helper import *
 
