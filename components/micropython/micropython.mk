@@ -23,11 +23,14 @@ ifneq ($(strip $(MICROPYTHON_USER_C_MODULES)),)
 	MICROPYTHON_USER_C_MODULES_PATH := $(MICROPYTHON_DIR)/$(MICROPYTHON_USER_C_MODULES)
 endif
 
-LIB_SDDF_LWIP_CFLAGS_mp := \
+CFLAGS_mp := \
 	-I$(MICROPYTHON_DIR)/lwip_include \
 	-I$(SDDF)/network/ipstacks/lwip/src/include \
 	-Wno-shift-op-parentheses \
 	-Wno-tautological-constant-out-of-range-compare
+
+LIB_SDDF_LWIP_CFLAGS_mp := $(CFLAGS_mp)
+LIBMICROKITCO_CFLAGS_mp := $(CFLAGS_mp)
 
 micropython.elf: FORCE mpy-cross \
 		$(MICROPYTHON_FROZEN_MANIFEST) \
