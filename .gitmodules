@@ -22,3 +22,6 @@
 [submodule "libmicrokitco"]
 	path = dep/libmicrokitco
 	url = https://github.com/au-ts/libmicrokitco.git
+[submodule "libgdb"]
+	path = dep/libgdb
+	url = git@github.com:au-ts/libgdb.git
