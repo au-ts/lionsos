@@ -213,10 +213,7 @@ void init_firewall_webserver(void) {
         webserver_state[i].routing_table = fw_config.interfaces[i].router.routing_table.vaddr;
 
         for (uint8_t j = 0; j < fw_config.interfaces[i].num_filters; j++) {
-            fw_filter_state_init(&webserver_state[i].filter_states[j],
-                                    fw_config.interfaces[i].filters[j].rules.vaddr,
-                                    fw_config.interfaces[i].filters[j].rules_capacity, 0, 0, 0,
-                                    fw_config.interfaces[i].filters[j].default_action);
+            webserver_state[i].filter_states[j].rule_table = fw_config.interfaces[i].filters[j].rules.vaddr;
         }
     }
 }
