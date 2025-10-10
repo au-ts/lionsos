@@ -25,3 +25,6 @@
 [submodule "dep/wasm-micro-runtime"]
 	path = dep/wasm-micro-runtime
 	url = https://github.com/au-ts/wasm-micro-runtime
+[submodule "libgdb"]
+	path = dep/libgdb
+	url = git@github.com:au-ts/libgdb.git
