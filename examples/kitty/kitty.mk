@@ -73,6 +73,7 @@ LWIP := $(SDDF)/network/ipstacks/lwip/src
 NFS := $(LIONSOS)/components/fs/nfs
 MICROPYTHON := $(LIONSOS)/components/micropython
 LIONSOS_DOWNLOADS := https://lionsos.org/downloads/examples/kitty
+LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 
 # I2C config
 I2C_BUS_NUM=2
@@ -183,6 +184,9 @@ MICROPYTHON_FROZEN_MANIFEST := manifest.py
 MICROPYTHON_ENABLE_FRAMEBUFFER := 1
 include $(MICROPYTHON)/micropython.mk
 
+LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
+include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
+
 config.py: ${KITTY_DIR}/board/$(MICROKIT_BOARD)/config.py
 	cp $< $@
 
@@ -256,7 +260,7 @@ $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
 	cd ${LIONSOS}; git submodule update --init dep/micropython
 	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
-${LIONSOS}/dep/libmicrokitco/Makefile:
+${LIONSOS}/dep/libmicrokitco/libmicrokitco.mk:
 	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
 
 ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
