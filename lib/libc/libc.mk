@@ -26,12 +26,18 @@ LIB_C_POSIX_OBJ := $(addprefix $(LIBC)/posix/, $(notdir $(LIB_C_POSIX_FILES:.c=.
 LIB_C_COMPILER_RT_FILES := $(wildcard $(LIB_C_DIR)/compiler_rt/*.c)
 LIB_C_COMPILER_RT_OBJ := $(addprefix $(LIBC)/compiler_rt/, $(notdir $(LIB_C_COMPILER_RT_FILES:.c=.o)))
 
+BUILD := $(BUILD_DIR)
+LIB_FS_HELPER_OBJ := $(BUILD)/fs/helpers.o
+
+FS_HELPERS_LIBC := $(LIONS_LIBC)
+include $(LIONSOS)/lib/fs/helpers/fs_helpers.mk
+
 $(LIBC) $(LIBC)/lib $(LIBC)/posix $(LIBC)/compiler_rt:
 	mkdir -p $@
 
-$(LIONS_LIBC)/lib/libc.a: $(MUSL)/lib/libc.a $(LIB_C_POSIX_OBJ) $(LIB_C_COMPILER_RT_OBJ) | $(LIBC)/lib
+$(LIONS_LIBC)/lib/libc.a: $(MUSL)/lib/libc.a $(LIB_C_POSIX_OBJ) $(LIB_C_COMPILER_RT_OBJ) $(LIB_FS_HELPER_OBJ) | $(LIBC)/lib
 	cp $< $@
-	$(AR) rcs $@ $(LIB_C_POSIX_OBJ) $(LIB_C_COMPILER_RT_OBJ)
+	$(AR) rcs $@ $(LIB_C_POSIX_OBJ) $(LIB_C_COMPILER_RT_OBJ) $(LIB_FS_HELPER_OBJ)
 	$(RANLIB) $@
 
 $(LIBC)/posix/tcp.o: CFLAGS += -I$(LWIP)/include -I$(LIB_C_DIR)/posix/lwip_include

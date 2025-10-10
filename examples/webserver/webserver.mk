@@ -10,6 +10,7 @@ BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
 LWIP := $(SDDF)/network/ipstacks/lwip/src
+LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 
 ifeq (${MICROKIT_BOARD},odroidc4)
 	TIMER_DRIVER_DIR := meson
@@ -134,6 +135,9 @@ SDDF_MAKEFILES := ${SDDF}/util/util.mk \
 		  ${SDDF}/serial/components/serial_components.mk
 
 include ${SDDF_MAKEFILES}
+
+LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
+include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 $(DTB): $(DTS)
 	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)

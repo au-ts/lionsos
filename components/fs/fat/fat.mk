@@ -19,13 +19,14 @@
 
 FAT_SRC_DIR := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 FAT_FF15_SRC_DIR := $(LIONSOS)/dep/ff15
-FAT_LIBMICROKITCO_DIR := $(LIONSOS)/dep/libmicrokitco
 
 FAT_CFLAGS := \
 	-I$(FAT_LIBC_INCLUDE) \
-	-I$(FAT_LIBMICROKITCO_DIR) \
+	-I$(LIBMICROKITCO_PATH) \
 	-I$(FAT_FF15_SRC_DIR) \
 	-I$(FAT_SRC_DIR)/config
+
+LIBMICROKITCO_CFLAGS_fat := ${FAT_CFLAGS}
 
 FAT_OBJ := \
 	fat/ff15/ff.o \
@@ -39,21 +40,6 @@ CHECK_FAT_FLAGS_MD5 := .fat_cflags-$(shell echo -- $(CFLAGS) $(FAT_CFLAGS) | sha
 $(CHECK_FAT_FLAGS_MD5):
 	-rm -f .fat_cflags-*
 	touch $@
-
-FAT_LIBMICROKITCO_OBJ := libmicrokitco/libmicrokitco.a
-FAT_LIBMICROKITCO_OPT_PATH := $(FAT_SRC_DIR)/config
-
-fat/$(FAT_LIBMICROKITCO_OBJ): fat
-	make -f $(FAT_LIBMICROKITCO_DIR)/Makefile \
-			LIBMICROKITCO_PATH=$(FAT_LIBMICROKITCO_DIR) \
-			TARGET=$(TARGET) \
-			MICROKIT_SDK:=$(MICROKIT_SDK) \
-			BUILD_DIR:=fat \
-			MICROKIT_BOARD:=$(MICROKIT_BOARD) \
-			MICROKIT_CONFIG:=$(MICROKIT_CONFIG) \
-			CPU:=$(CPU) \
-			LLVM:=1 \
-			LIBMICROKITCO_OPT_PATH=$(FAT_LIBMICROKITCO_OPT_PATH)
 
 LIB_FS_SERVER_LIBC_INCLUDE := $(FAT_LIBC_INCLUDE)
 include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
@@ -73,7 +59,7 @@ fat/%.o: CFLAGS += $(FAT_CFLAGS)
 fat/%.o: $(FAT_SRC_DIR)/%.c $(FAT_LIBC_INCLUDE) $(CHECK_FAT_FLAGS_MD5) |fat
 	$(CC) -c $(CFLAGS) $< -o $@
 
-fat.elf: $(FAT_OBJ) fat/$(FAT_LIBMICROKITCO_OBJ) $(FAT_LIBC_LIB) lib_fs_server.a
+fat.elf: $(FAT_OBJ) libmicrokitco_fat.a $(FAT_LIBC_LIB) lib_fs_server.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 -include $(FAT_OBJ:.o=.d)

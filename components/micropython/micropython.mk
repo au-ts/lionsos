@@ -23,17 +23,22 @@ ifneq ($(strip $(MICROPYTHON_USER_C_MODULES)),)
 	MICROPYTHON_USER_C_MODULES_PATH := $(MICROPYTHON_DIR)/$(MICROPYTHON_USER_C_MODULES)
 endif
 
-LIB_SDDF_LWIP_CFLAGS_mp := \
+CFLAGS_mp := \
 	-I$(MICROPYTHON_DIR)/lwip_include \
 	-I$(SDDF)/network/ipstacks/lwip/src/include \
 	-Wno-shift-op-parentheses \
-	-Wno-tautological-constant-out-of-range-compare
+	-Wno-tautological-constant-out-of-range-compare \
+	-I$(MICROPYTHON_DIR)
 
-micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile \
+LIB_SDDF_LWIP_CFLAGS_mp := $(CFLAGS_mp)
+LIBMICROKITCO_CFLAGS_mp := $(CFLAGS_mp)
+
+micropython.elf: FORCE mpy-cross \
 		$(MICROPYTHON_FROZEN_MANIFEST) \
 		$(MICROPYTHON_EXEC_MODULE) \
 		$(MICROPYTHON_USER_C_MODULES_PATH) \
 		lib_sddf_lwip_mp.a \
+		libmicrokitco_mp.a \
 		| $(LIONS_LIBC)/include
 	$(MAKE) -C $(MICROPYTHON_DIR) \
 		-j$(nproc) \
@@ -55,7 +60,8 @@ micropython.elf: FORCE mpy-cross ${LIONSOS}/dep/libmicrokitco/Makefile \
 		ENABLE_VFS_STDIO=$(MICROPYTHON_ENABLE_VFS_STDIO) \
 		ENABLE_SERIAL_STDIO=$(MICROPYTHON_ENABLE_SERIAL_STDIO) \
 		MICROPYTHON_USER_C_MODULES=$(MICROPYTHON_USER_C_MODULES) \
-		MICROPYTHON_LIBC=$(LIONS_LIBC)
+		MICROPYTHON_LIBC=$(LIONS_LIBC) \
+		LIBMICROKITCO_PATH=$(LIBMICROKITCO_PATH)
 
 mpy-cross: FORCE $(LIONSOS)/dep/micropython/mpy-cross
 	make -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)

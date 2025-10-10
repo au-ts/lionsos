@@ -6,5 +6,8 @@
 # This Makefile snippet builds the FS helpers library
 #
 
-$(BUILD)/fs/helpers.o: $(LIONSOS)/lib/fs/helpers/helpers.c
+$(BUILD)/fs:
+	mkdir -p $@
+
+$(BUILD)/fs/helpers.o: $(LIONSOS)/lib/fs/helpers/helpers.c | $(BUILD)/fs $(FS_HELPERS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
