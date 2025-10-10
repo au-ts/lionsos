@@ -5,7 +5,6 @@
 
 LIONSOS := $(abspath ../../)
 SDDF := $(LIONSOS)/dep/sddf
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LWIP := $(SDDF)/network/ipstacks/lwip
 # Path to micropython source code
 MICROPYTHON_SRC := $(LIONSOS)/dep/micropython
@@ -47,18 +46,7 @@ CFLAGS += \
 	-target $(TARGET)
 
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(MICROPYTHON_LIBC)/lib
-LIBS += -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a
-
-# Include libmicrokitco for blocking in Micropython
-BUILD_DIR=$(BUILD)
-LLVM=1
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
-LIBMICROKITCO_OPT_PATH := $(LIONSOS)/components/micropython
-LIBMICROKITCO_OBJ := $(BUILD_DIR)/libmicrokitco/libmicrokitco.a
-
-export LIBMICROKITCO_PATH TARGET MICROKIT_SDK BUILD_DIR MICROKIT_BOARD MICROKIT_CONFIG CPU LLVM
-$(LIBMICROKITCO_OBJ):
-	make -f $(LIBMICROKITCO_PATH)/Makefile LIBMICROKITCO_OPT_PATH=$(LIBMICROKITCO_OPT_PATH)
+LIBS += -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a $(BUILD)/libmicrokitco_mp.a
 
 # Define the required source files.
 SRC_C = \
@@ -123,11 +111,12 @@ endif
 # Define the required object files.
 OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
+FS_HELPERS_LIBC := $(MICROPYTHON_LIBC)
 include $(LIONSOS)/lib/fs/helpers/fs_helpers.mk
 
 all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ)
+$(BUILD)/micropython.elf: $(OBJ)
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
