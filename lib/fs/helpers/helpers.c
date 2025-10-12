@@ -3,19 +3,19 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <microkit.h>
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
 #include <lions/fs/protocol.h>
 #include <lions/fs/config.h>
-#include "micropython.h"
-#include "fs_helpers.h"
+#include <lions/fs/helpers.h>
 
 extern fs_client_config_t fs_config;
 extern fs_queue_t *fs_command_queue;
 extern fs_queue_t *fs_completion_queue;
 extern char *fs_share;
+
+void (*blocking_wait)(microkit_channel ch) = NULL;
 
 #define REQUEST_ID_MAXIMUM (FS_QUEUE_CAPACITY - 1)
 struct request_metadata {
@@ -110,7 +110,12 @@ void fs_command_complete(uint64_t request_id, fs_cmd_t *command, fs_cmpl_t *comp
     }
 }
 
+void fs_set_blocking_wait(void(*f)(microkit_channel)) {
+    blocking_wait = f;
+}
+
 int fs_command_blocking(fs_cmpl_t *completion, fs_cmd_t cmd) {
+    assert(blocking_wait);
     uint64_t request_id;
     int err = fs_request_allocate(&request_id);
     if (err) {
@@ -120,7 +125,7 @@ int fs_command_blocking(fs_cmpl_t *completion, fs_cmd_t cmd) {
 
     fs_command_issue(cmd);
     while (!request_metadata[request_id].complete) {
-        mp_cothread_wait(fs_config.server.id, MP_WAIT_NO_INTERRUPT);
+        blocking_wait(fs_config.server.id);
     }
 
     fs_command_complete(request_id, NULL, completion);

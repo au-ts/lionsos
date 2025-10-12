@@ -7,7 +7,7 @@
 #include "py/mpthread.h"
 #include "py/runtime.h"
 #include "py/stream.h"
-#include "fs_helpers.h"
+#include <lions/fs/helpers.h>
 #include "micropython.h"
 #include <fcntl.h>
 #include <unistd.h>

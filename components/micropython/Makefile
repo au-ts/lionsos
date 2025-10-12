@@ -70,7 +70,7 @@ SRC_C = \
 	modfs_raw.c \
 	vfs_fs_file.c \
 	vfs_fs.c \
-	fs_helpers.c \
+	fs/helpers.c \
 	frozen_content.c \
 	extmod/modtime.c \
 	extmod/vfs.c \
@@ -122,6 +122,8 @@ endif
 
 # Define the required object files.
 OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
+
+include $(LIONSOS)/lib/fs/helpers/fs_helpers.mk
 
 all: $(BUILD)/micropython.elf
 

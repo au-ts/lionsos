@@ -33,7 +33,7 @@
 #include "mpconfigport.h"
 #include "mphalport.h"
 #include "mpfirewallport.h"
-#include "fs_helpers.h"
+#include <lions/fs/helpers.h>
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
@@ -82,6 +82,10 @@ i2c_queue_handle_t i2c_queue_handle;
 #ifdef ENABLE_FRAMEBUFFER
 uintptr_t framebuffer_data_region = 0x30000000;
 #endif
+
+static void blocking_wait(microkit_channel ch) {
+    mp_cothread_wait(ch, MP_WAIT_NO_INTERRUPT);
+}
 
 static bool init_vfs(void) {
     mp_obj_t args[2] = {
@@ -210,6 +214,7 @@ void init(void) {
     firewall_enabled = (fw_config.rx_active.queue.vaddr != NULL);
 
     if (fs_enabled) {
+        fs_set_blocking_wait(blocking_wait);
         fs_command_queue = fs_config.server.command_queue.vaddr;
         fs_completion_queue = fs_config.server.completion_queue.vaddr;
         fs_share = fs_config.server.share.vaddr;
