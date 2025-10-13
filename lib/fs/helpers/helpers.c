@@ -71,7 +71,6 @@ void *fs_buffer_ptr(ptrdiff_t buffer) {
 }
 
 void fs_process_completions(void (*fs_request_flag_set)(uint64_t)) {
-    fs_msg_t message;
     uint64_t to_consume = fs_queue_length_consumer(fs_completion_queue);
     for (uint64_t i = 0; i < to_consume; i++) {
         fs_cmpl_t completion = fs_queue_idx_filled(fs_completion_queue, i)->cmpl;

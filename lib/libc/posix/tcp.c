@@ -61,34 +61,31 @@ socket_t sockets[MAX_SOCKETS] = {0};
 
 static bool network_ready;
 
-int tcp_ready(void) {
-    return network_ready;
-}
+int tcp_ready(void) { return network_ready; }
 
 static void netif_status_callback(char *ip_addr) {
-    printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n",
-           microkit_name, __FILE__, __LINE__, __func__, microkit_name, ip_addr);
+    printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n", microkit_name, __FILE__, __LINE__,
+           __func__, microkit_name, ip_addr);
 
     network_ready = true;
 }
 
-void tcp_init_0(void)
-{
-    net_queue_init(&rx_handle, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr, net_config.rx.num_buffers);
-    net_queue_init(&tx_handle, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
+void tcp_init_0(void) {
+    net_queue_init(&rx_handle, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
+                   net_config.rx.num_buffers);
+    net_queue_init(&tx_handle, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
+                   net_config.tx.num_buffers);
     net_buffers_init(&tx_handle, 0);
 
-    sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, rx_handle, tx_handle, NULL, printf, netif_status_callback, NULL, NULL, NULL);
+    sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, rx_handle, tx_handle, NULL, printf,
+                   netif_status_callback, NULL, NULL, NULL);
 
     sddf_lwip_maybe_notify();
 }
 
-int socket_id(socket_t *socket) {
-    return (int)(socket - sockets);
-}
+int socket_id(socket_t *socket) { return (int)(socket - sockets); }
 
-void socket_err_func(void *arg, err_t err)
-{
+void socket_err_func(void *arg, err_t err) {
     socket_t *socket = arg;
     if (socket == NULL) {
         dlog("error %d with closed socket", err);
@@ -98,8 +95,7 @@ void socket_err_func(void *arg, err_t err)
     }
 }
 
-static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
-{
+static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
     dlogp(err, "error %d", err);
 
     socket_t *socket = arg;
@@ -108,59 +104,54 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
     dlogp(err, "error %d with socket %d", err, socket_index);
 
     switch (socket->state) {
+        case socket_state_connected: {
+            if (p != NULL) {
+                int capacity = SOCKET_BUF_SIZE - socket->rx_len;
+                if (capacity < p->tot_len) {
+                    return ERR_MEM;
+                }
 
-    case socket_state_connected: {
-        if (p != NULL) {
-            int capacity = SOCKET_BUF_SIZE - socket->rx_len;
-            if (capacity < p->tot_len) {
-                return ERR_MEM;
+                int copied = 0, remaining = p->tot_len;
+                while (remaining != 0) {
+                    int rx_tail = (socket->rx_head + socket->rx_len) % SOCKET_BUF_SIZE;
+                    int to_copy = MIN(remaining, SOCKET_BUF_SIZE - MAX(socket->rx_len, rx_tail));
+                    pbuf_copy_partial(p, socket->rx_buf + rx_tail, to_copy, copied);
+                    socket->rx_len += to_copy;
+                    copied += to_copy;
+                    remaining -= to_copy;
+                }
+                pbuf_free(p);
+            } else {
+                socket->state = socket_state_closed_by_peer;
+                tcp_close(tpcb);
+                tcp_arg(socket->sock_tpcb, NULL);
             }
+            return ERR_OK;
+        }
 
-            int copied = 0, remaining = p->tot_len;
-            while (remaining != 0) {
-                int rx_tail = (socket->rx_head + socket->rx_len) % SOCKET_BUF_SIZE;
-                int to_copy = MIN(remaining, SOCKET_BUF_SIZE - MAX(socket->rx_len, rx_tail));
-                pbuf_copy_partial(p, socket->rx_buf + rx_tail, to_copy, copied);
-                socket->rx_len += to_copy;
-                copied += to_copy;
-                remaining -= to_copy;
+        case socket_state_closing: {
+            if (p != NULL) {
+                pbuf_free(p);
+            } else {
+                tcp_arg(socket->sock_tpcb, NULL);
+                socket->state = socket_state_unallocated;
+                socket->sock_tpcb = NULL;
+                socket->rx_head = 0;
+                socket->rx_len = 0;
             }
-            pbuf_free(p);
-        } else {
-            socket->state = socket_state_closed_by_peer;
-            tcp_close(tpcb);
-            tcp_arg(socket->sock_tpcb, NULL);
+            return ERR_OK;
         }
-        return ERR_OK;
-    }
 
-    case socket_state_closing: {
-        if (p != NULL) {
-            pbuf_free(p);
-        } else {
-            tcp_arg(socket->sock_tpcb, NULL);
-            socket->state = socket_state_unallocated;
-            socket->sock_tpcb = NULL;
-            socket->rx_head = 0;
-            socket->rx_len = 0;
-        }
-        return ERR_OK;
-    }
-
-    default:
-        dlog("called on invalid socket state: %d (socket=%d)", socket->state, socket_index);
-        assert(false);
-        return ERR_OK;
+        default:
+            dlog("called on invalid socket state: %d (socket=%d)", socket->state, socket_index);
+            assert(false);
+            return ERR_OK;
     }
 }
 
-static err_t socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len)
-{
-    return ERR_OK;
-}
+static err_t socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len) { return ERR_OK; }
 
-err_t socket_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
-{
+err_t socket_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
     socket_t *socket = arg;
     assert(socket != NULL);
     assert(socket->state == socket_state_connecting);
@@ -204,7 +195,7 @@ int tcp_socket_create(void) {
     tcp_err(socket->sock_tpcb, socket_err_func);
     tcp_arg(socket->sock_tpcb, socket);
 
-    for (int i = 512; ; i++) {
+    for (int i = 512;; i++) {
         if (tcp_bind(socket->sock_tpcb, IP_ADDR_ANY, i) == ERR_OK) {
             socket->state = socket_state_bound;
             return free_index;
@@ -214,8 +205,7 @@ int tcp_socket_create(void) {
     return -1;
 }
 
-int tcp_socket_connect(int index, uint16_t port, uint32_t addr)
-{
+int tcp_socket_connect(int index, uint16_t port, uint32_t addr) {
     socket_t *sock = &sockets[index];
     assert(sock->state == socket_state_bound);
 
@@ -232,34 +222,32 @@ int tcp_socket_connect(int index, uint16_t port, uint32_t addr)
     return 0;
 }
 
-int tcp_socket_close(int index)
-{
+int tcp_socket_close(int index) {
     socket_t *socket = &sockets[index];
 
     switch (socket->state) {
+        case socket_state_connected: {
+            socket->state = socket_state_closing;
+            int err = tcp_close(socket->sock_tpcb);
+            dlogp(err != ERR_OK, "error closing socket (%d)", err);
+            return err != ERR_OK;
+        }
 
-    case socket_state_connected: {
-        socket->state = socket_state_closing;
-        int err = tcp_close(socket->sock_tpcb);
-        dlogp(err != ERR_OK, "error closing socket (%d)", err);
-        return err != ERR_OK;
-    }
+        case socket_state_bound:
+        case socket_state_error:
+        case socket_state_closed_by_peer: {
+            socket->state = socket_state_unallocated;
+            socket->sock_tpcb = NULL;
+            socket->rx_head = 0;
+            socket->rx_len = 0;
 
-    case socket_state_bound:
-    case socket_state_error:
-    case socket_state_closed_by_peer: {
-        socket->state = socket_state_unallocated;
-        socket->sock_tpcb = NULL;
-        socket->rx_head = 0;
-        socket->rx_len = 0;
+            return 0;
+        }
 
-        return 0;
-    }
-
-    default:
-        dlog("called on invalid socket state: %d", socket->state);
-        assert(false);
-        return 0;
+        default:
+            dlog("called on invalid socket state: %d", socket->state);
+            assert(false);
+            return 0;
     }
 }
 
@@ -313,14 +301,8 @@ int tcp_socket_readable(int index) {
     return socket->rx_len;
 }
 
-int tcp_socket_writable(int index) {
-    return !net_queue_empty_free(&tx_handle);
-}
+int tcp_socket_writable(int index) { return !net_queue_empty_free(&tx_handle); }
 
-int tcp_socket_hup(int index) {
-    return sockets[index].state == socket_state_closed_by_peer;
-}
+int tcp_socket_hup(int index) { return sockets[index].state == socket_state_closed_by_peer; }
 
-int tcp_socket_err(int index) {
-    return sockets[index].state == socket_state_error;
-}
+int tcp_socket_err(int index) { return sockets[index].state == socket_state_error; }
