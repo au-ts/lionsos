@@ -340,7 +340,6 @@ void init(void)
     setup_tcp_socket();
 
     sddf_lwip_maybe_notify();
-    microkit_dbg_puts("In debugger.c, setting up the mapping regions!\n");
 
     // Setup the mapping regions for libvspace to use.
     libvspace_set_small_mapping_region(small_mapping_mr);

@@ -34,18 +34,9 @@ METAPROGRAM := $(TOP)/meta.py
 vpath %.c ${SDDF} ${DEBUGGER}
 
 # The base images for this example
-IMAGES := ping.elf pong.elf debugger.elf serial_driver.elf serial_virt_tx.elf
-
-ifeq ($(LIONSOS_GDB_CONN_NET),1)
-	IMAGES += eth_driver.elf network_virt_rx.elf \
-	  network_virt_tx.elf network_copy.elf timer_driver.elf
-	  LIONSOS_GDB_CONN_SERIAL := 0
-else ifeq ($(LIONSOS_GDB_CONN_SERIAL),1)
-	IMAGES += debugger.elf serial_virt_rx.elf
-	LIONSOS_GDB_CONN_NET := 0
-else
-$(error LIONSOS_GDB_CONN_(NET/SERIAL) has not been defined)
-endif
+IMAGES := ping.elf pong.elf debugger.elf serial_driver.elf \
+		serial_virt_tx.elf eth_driver.elf network_virt_rx.elf \
+		network_virt_tx.elf network_copy.elf timer_driver.elf
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -100,17 +91,8 @@ pong.o: $(TOP)/pong.c libsddf_util_debug.a
 $(DTB): $(DTS)
 	dtc -q -I dts -O dtb $(DTS) > $(DTB)
 
-# # @kwinter: Find a better way to handle these two cases of objcopying
-# $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(LIONSOS_GDB_CONN_SERIAL)
-# 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
-# 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
-# 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
-# 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
-# 	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
-# 	$(OBJCOPY) --update-section .serial_client_config=serial_client_debugger.data debugger.elf
-
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --net_conn $(LIONSOS_GDB_CONN_NET) --serial_conn $(LIONSOS_GDB_CONN_SERIAL)
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
@@ -141,14 +123,8 @@ include ${SDDF}/network/components/network_components.mk
 include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
 include ${SDDF}/libco/libco.mk
 include ${TIMER_DRIVER}/timer_driver.mk
-
-# @kwinter: Not sure if this is the best way to do this.
-# ifdef ($(LIONSOS_GDB_CONN_NET))
 include $(TOP)/net_debugger/debugger.mk
 include ${ETHERNET_DRIVER}/eth_driver.mk
-#else ifdef ($(LIONSOS_GDB_CONN_SERIAL))
-#include $(TOP)/serial_debugger/debugger.mk
-#endif
 
 qemu: $(IMAGE_FILE)
 	$(QEMU) -machine virt,virtualization=on \
