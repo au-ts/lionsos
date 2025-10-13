@@ -1,32 +1,42 @@
-// /*
-//  * SPDX-License-Identifier: BSD-3-Clause
-//  * Copyright (c) 2001-2003 Swedish Institute of Computer Science.
-//  */
-// #pragma once
+/*
+ * SPDX-License-Identifier: BSD-3-Clause
+ * Copyright (c) 2001-2003 Swedish Institute of Computer Science.
+ */
+#pragma once
 
 #include <stdint.h>
+#include <sys/types.h>
 #include <sddf/util/printf.h>
 
-// typedef  uint8_t  u8_t;
-// typedef uint16_t u16_t;
-// typedef uint32_t u32_t;
-// typedef uint64_t u64_t;
+typedef  uint8_t  u8_t;
+typedef uint16_t u16_t;
+typedef uint32_t u32_t;
+typedef uint64_t u64_t;
 
-// typedef  int8_t   s8_t;
-// typedef int16_t  s16_t;
-// typedef int32_t  s32_t;
-// typedef int64_t  s64_t;
+typedef  int8_t   s8_t;
+typedef int16_t  s16_t;
+typedef int32_t  s32_t;
+typedef int64_t  s64_t;
 
-// typedef uintptr_t mem_ptr_t;
+typedef uintptr_t mem_ptr_t;
 
+#ifndef SSIZE_MAX
+/* Whilst ssize_t is defined by sys/types.h, at least on aarch64-none-elf GCC
+   version 14.2.1 SSIZE_MAX is not defined.
 
-// #define U16_F "hu"
-// #define S16_F "d"
-// #define X16_F "hx"
-// #define U32_F "u"
-// #define S32_F "d"
-// #define X32_F "x"
-// #define SZT_F "lu"
+   If SSIZE_MAX is not defined then we take (SIZE_MAX - 1)/2 under the
+   assumption that ssize_t and size_t are related in the standard way.
+*/
+#define SSIZE_MAX ((SIZE_MAX - 1) >> 1)
+#endif
+
+#define U16_F "hu"
+#define S16_F "d"
+#define X16_F "hx"
+#define U32_F "u"
+#define S32_F "d"
+#define X32_F "x"
+#define SZT_F "lu"
 
 
 // BYTE_ORDER might be defined by the architecture
@@ -55,10 +65,6 @@
 #define LWIP_PLATFORM_HTONL(x) ( (((u32_t)(x))>>24) | (((x)&0xFF0000)>>8) \
                                | (((x)&0xFF00)<<8) | (((x)&0xFF)<<24) )
 
-typedef _ssize_t ssize_t;
-
-#define LWIP_RAND                       rand
-
 /* Plaform specific diagnostic output */
 #define LWIP_PLATFORM_DIAG(x)           \
         do {                            \
@@ -70,3 +76,5 @@ typedef _ssize_t ssize_t;
             sddf_printf("Assertion failed: %s\n", #x);              \
             while(1);                                           \
         } while(0)
+
+#define LWIP_NO_CTYPE_H 1
