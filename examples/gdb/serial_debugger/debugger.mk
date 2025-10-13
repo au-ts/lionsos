@@ -1,32 +1,20 @@
 #
-# Copyright 2024, UNSW (ABN 57 195 873 179)
+# Copyright 2025, UNSW (ABN 57 195 873 179)
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-ifeq ($(strip $(MICROKIT_SDK)),)
-    $(error libGDB requires a MICROKIT_SDK)
-endif
+# @kwinter: Clean this up, this is taken straight from the libgdb examples
 
-ifeq ($(strip $(BOARD)),)
-    $(error libGDB requires a BOARD)
-endif
+LIBS := --start-group -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a libvspace.a --end-group
 
-ifeq ($(strip $(BUILD_DIR)),)
-    $(error libGDB requires a BUILD_DIR)
-endif
+debugger.o: $(TOP)/apps/debugger/debugger.c | $(SDDF_LIBC_INCLUDE)
+    $(CC) -c $(CFLAGS) $(TOP)/apps/debugger/debugger.c -o $@ # There is something weird with $@ on the second build here???
 
-ifeq ($(strip $(MICROKIT_CONFIG)),)
-    $(error libGDB requires a MICROKIT_CONFIG)
-endif
+DEBUGGER_OBJS := debugger.o
 
-CFLAGS += -I$(MICROKIT_SDK)/board/$(BOARD)/$(MICROKIT_CONFIG)/include \
-LDFLAGS += $(BUILD_DIR)/nfs/nfs.a
+export DEPS := $(DEBUGGER_OBJS:.o=.d)
 
-CFILES := debugger.c
-OFILES := $(SRCS:.c=.o)
-
-NAME := $(BUILD_DIR)/debugger.elf
-
-$(NAME): $(BUILD_DIR)/debugger.o $(BUILD_DIR)/libgdb.a
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+${DEBUGGER_OBJS}: ${CHECK_FLAGS_BOARD_MD5}
+debugger.elf: $(DEBUGGER_OBJS) libsddf_util.a libvspace.a libgdb.a libco.a
+    $(LD) $(LDFLAGS) $(DEBUGGER_OBJS) libsddf_util.a libvspace.a libgdb.a libco.a $(LIBS) -o $@

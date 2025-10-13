@@ -214,9 +214,9 @@ static inline uint32_t char_queue_enqueue_batch(char_queue_t *queue_handle, uint
     num_prewrap = MIN(num, num_prewrap);
     num_postwrap = num - num_prewrap;
 
-    sddf_memcpy(dst, src, num_prewrap);
+    memcpy(dst, src, num_prewrap);
     if (num_postwrap) {
-        sddf_memcpy(queue_handle->buf, src + num_prewrap, num_postwrap);
+        memcpy(queue_handle->buf, src + num_prewrap, num_postwrap);
     }
 
     char_queue_update_shared_tail(queue_handle, queue_handle->tail + num);
