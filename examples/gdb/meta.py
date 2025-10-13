@@ -86,73 +86,37 @@ BOARDS: List[Board] = [
 ]
 
 
-def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, net_conn: bool, serial_conn: bool):
+def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     uart_node = dtb.node(board.serial)
     assert uart_node is not None
-    pds = []
+    ethernet_node = dtb.node(board.ethernet)
+    assert ethernet_node is not None
+    timer_node = dtb.node(board.timer)
+    assert uart_node is not None
+
+    timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=101)
+    timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
+    ethernet_driver = ProtectionDomain(
+        "ethernet_driver", "eth_driver.elf", priority=101, budget=100, period=400
+    )
+    net_virt_tx = ProtectionDomain("net_virt_tx", "network_virt_tx.elf", priority=100, budget=20000)
+    net_virt_rx = ProtectionDomain("net_virt_rx", "network_virt_rx.elf", priority=99)
+    net_system = Sddf.Net(sdf, ethernet_node, ethernet_driver, net_virt_tx, net_virt_rx)
+
+    uart_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
+    serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
+    serial_system = Sddf.Serial(sdf, uart_node, uart_driver, serial_virt_tx)
 
     debugger = ProtectionDomain("debugger", "debugger.elf", priority=97, budget=20000, stack_size=0x20000, child_pts=True)
+    debugger_net_copier = ProtectionDomain(
+        "debugger_net_copier", "network_copy.elf", priority=98, budget=20000
+    )
 
-    if net_conn:
-        print("SETTING UP THE NET CONN WAY IN THE METAPROGRAM!!")
-        ethernet_node = dtb.node(board.ethernet)
-        assert ethernet_node is not None
-        timer_node = dtb.node(board.timer)
-        assert uart_node is not None
+    serial_system.add_client(debugger)
+    timer_system.add_client(debugger)
+    net_system.add_client_with_copier(debugger, debugger_net_copier)
 
-        timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=101)
-        timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
-        ethernet_driver = ProtectionDomain(
-            "ethernet_driver", "eth_driver.elf", priority=101, budget=100, period=400
-        )
-        net_virt_tx = ProtectionDomain("net_virt_tx", "network_virt_tx.elf", priority=100, budget=20000)
-        net_virt_rx = ProtectionDomain("net_virt_rx", "network_virt_rx.elf", priority=99)
-        net_system = Sddf.Net(sdf, ethernet_node, ethernet_driver, net_virt_tx, net_virt_rx)
-
-        uart_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
-        serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
-        serial_system = Sddf.Serial(sdf, uart_node, uart_driver, serial_virt_tx)
-
-
-        debugger_net_copier = ProtectionDomain(
-            "debugger_net_copier", "network_copy.elf", priority=98, budget=20000
-        )
-
-        serial_system.add_client(debugger)
-        timer_system.add_client(debugger)
-        net_system.add_client_with_copier(debugger, debugger_net_copier)
-
-        debugger_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, debugger)
-
-
-        pds = [
-            debugger,
-            uart_driver,
-            serial_virt_tx,
-            ethernet_driver,
-            net_virt_tx,
-            net_virt_rx,
-            debugger_net_copier,
-            timer_driver,
-        ]
-        for pd in pds:
-            sdf.add_pd(pd)
-
-    elif serial_conn:
-        serial_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
-        serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
-        serial_virt_rx = ProtectionDomain("serial_virt_rx", "serial_virt_rx.elf", priority=99)
-        serial_system = Sddf.Serial(sdf, uart_node, uart_driver, serial_virt_tx, virt_rx=serial_virt_rx, enable_color=False)
-        serial_system.add_client(debugger)
-
-        pds = [
-            serial_driver,
-            serial_virt_tx,
-            serial_virt_rx,
-            debugger,
-        ]
-        for pd in pds:
-            sdf.add_pd(pd)
+    debugger_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, debugger)
 
     small_mapping_region = MemoryRegion(sdf, "small_region", 0x1000)
     sdf.add_mr(small_mapping_region)
@@ -167,35 +131,38 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, net_conn: bool, se
     ping = ProtectionDomain("ping", "ping.elf", priority=1)
     pong = ProtectionDomain("pong", "pong.elf", priority=1)
 
-    #ping_large_page = MemoryRegion(sdf, "ping_large_page", 0x200000, page_size=MemoryRegion.PageSize.LargePage)
-    #sdf.add_mr(ping_large_page)
-    #ping_large_page_map = Map(ping_large_page, 0x800000, "rw", setvar_vaddr="mr")
-    #ping.add_map(ping_large_page_map)
-
     debug_pds = [
         ping,
         pong
     ]
 
+    pds = [
+        debugger,
+        uart_driver,
+        serial_virt_tx,
+        ethernet_driver,
+        net_virt_tx,
+        net_virt_rx,
+        debugger_net_copier,
+        timer_driver,
+    ]
     for pd in debug_pds:
         child_id = debugger.add_child_pd(pd)
 
-#    for pd in pds:
-#        sdf.add_pd(pd)
+    for pd in pds:
+       sdf.add_pd(pd)
 
     ping_pong_channel = Channel(ping, pong)
     sdf.add_channel(ping_pong_channel)
 
     assert serial_system.connect()
     assert serial_system.serialise_config(output_dir)
-
-    if net_conn:
-        assert net_system.connect()
-        assert net_system.serialise_config(output_dir)
-        assert timer_system.connect()
-        assert timer_system.serialise_config(output_dir)
-        assert debugger_lib_sddf_lwip.connect()
-        assert debugger_lib_sddf_lwip.serialise_config(output_dir)
+    assert net_system.connect()
+    assert net_system.serialise_config(output_dir)
+    assert timer_system.connect()
+    assert timer_system.serialise_config(output_dir)
+    assert debugger_lib_sddf_lwip.connect()
+    assert debugger_lib_sddf_lwip.serialise_config(output_dir)
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
         f.write(sdf.render())
@@ -208,8 +175,6 @@ if __name__ == '__main__':
     parser.add_argument("--board", required=True, choices=[b.name for b in BOARDS])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
-    parser.add_argument("--net_conn", required=True)
-    parser.add_argument("--serial_conn", required=True)
 
     args = parser.parse_args()
 
@@ -221,4 +186,4 @@ if __name__ == '__main__':
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
 
-    generate(args.sdf, args.output, dtb, args.net_conn, args.serial_conn)
+    generate(args.sdf, args.output, dtb)
