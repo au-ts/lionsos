@@ -91,7 +91,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, net_conn: bool, se
     assert uart_node is not None
     pds = []
 
+    debugger = ProtectionDomain("debugger", "debugger.elf", priority=97, budget=20000, stack_size=0x20000, child_pts=True)
+
     if net_conn:
+        print("SETTING UP THE NET CONN WAY IN THE METAPROGRAM!!")
         ethernet_node = dtb.node(board.ethernet)
         assert ethernet_node is not None
         timer_node = dtb.node(board.timer)
@@ -110,7 +113,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, net_conn: bool, se
         serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
         serial_system = Sddf.Serial(sdf, uart_node, uart_driver, serial_virt_tx)
 
-        debugger = ProtectionDomain("debugger", "debugger.elf", priority=97, budget=20000, stack_size=0x20000, child_pts=False)
 
         debugger_net_copier = ProtectionDomain(
             "debugger_net_copier", "network_copy.elf", priority=98, budget=20000
@@ -133,13 +135,14 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, net_conn: bool, se
             debugger_net_copier,
             timer_driver,
         ]
+        for pd in pds:
+            sdf.add_pd(pd)
 
-    if serial_conn:
+    elif serial_conn:
         serial_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
         serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
         serial_virt_rx = ProtectionDomain("serial_virt_rx", "serial_virt_rx.elf", priority=99)
-        debugger = ProtectionDomain("debugger", "debugger.elf", priority=97)
-        serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx, virt_rx=serial_virt_rx, enable_color=False)
+        serial_system = Sddf.Serial(sdf, uart_node, uart_driver, serial_virt_tx, virt_rx=serial_virt_rx, enable_color=False)
         serial_system.add_client(debugger)
 
         pds = [
@@ -148,13 +151,15 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, net_conn: bool, se
             serial_virt_rx,
             debugger,
         ]
+        for pd in pds:
+            sdf.add_pd(pd)
 
-    small_mapping_region = MemoryRegion("small_region", 0x1000)
+    small_mapping_region = MemoryRegion(sdf, "small_region", 0x1000)
     sdf.add_mr(small_mapping_region)
     small_map = Map(small_mapping_region, 0x900000, "rw", setvar_vaddr="small_mapping_mr")
     debugger.add_map(small_map)
 
-    large_mapping_region = MemoryRegion("large_region", 0x200000, page_size=MemoryRegion.PageSize.LargePage)
+    large_mapping_region = MemoryRegion(sdf, "large_region", 0x200000, page_size=MemoryRegion.PageSize.LargePage)
     sdf.add_mr(large_mapping_region)
     large_map = Map(large_mapping_region, 0xa00000, "rw", setvar_vaddr="large_mapping_mr")
     debugger.add_map(large_map)
@@ -162,10 +167,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, net_conn: bool, se
     ping = ProtectionDomain("ping", "ping.elf", priority=1)
     pong = ProtectionDomain("pong", "pong.elf", priority=1)
 
-    ping_large_page = MemoryRegion("ping_large_page", 0x200000, page_size=MemoryRegion.PageSize.LargePage)
-    sdf.add_mr(ping_large_page)
-    ping_large_page_map = Map(ping_large_page, 0x800000, "rw", setvar_vaddr="mr")
-    ping.add_map(ping_large_page_map)
+    #ping_large_page = MemoryRegion(sdf, "ping_large_page", 0x200000, page_size=MemoryRegion.PageSize.LargePage)
+    #sdf.add_mr(ping_large_page)
+    #ping_large_page_map = Map(ping_large_page, 0x800000, "rw", setvar_vaddr="mr")
+    #ping.add_map(ping_large_page_map)
 
     debug_pds = [
         ping,
@@ -175,15 +180,14 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree, net_conn: bool, se
     for pd in debug_pds:
         child_id = debugger.add_child_pd(pd)
 
-    for pd in pds:
-        sdf.add_pd(pd)
+#    for pd in pds:
+#        sdf.add_pd(pd)
 
     ping_pong_channel = Channel(ping, pong)
     sdf.add_channel(ping_pong_channel)
 
-    if serial_conn:
-        assert serial_system.connect()
-        assert serial_system.serialise_config(output_dir)
+    assert serial_system.connect()
+    assert serial_system.serialise_config(output_dir)
 
     if net_conn:
         assert net_system.connect()
