@@ -113,7 +113,6 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --net_conn $(LIONSOS_GDB_CONN_NET) --serial_conn $(LIONSOS_GDB_CONN_SERIAL)
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
-	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
 	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf
 	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver.elf
@@ -141,27 +140,27 @@ include $(TOP)/net_debugger/debugger.mk
 include ${SDDF}/network/components/network_components.mk
 include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
 include ${SDDF}/libco/libco.mk
+include ${TIMER_DRIVER}/timer_driver.mk
 
 # @kwinter: Not sure if this is the best way to do this.
-ifdef ($(LIONSOS_GDB_CONN_NET))
+# ifdef ($(LIONSOS_GDB_CONN_NET))
 include $(TOP)/net_debugger/debugger.mk
 include ${ETHERNET_DRIVER}/eth_driver.mk
-else ifdef ($(LIONSOS_GDB_CONN_SERIAL))
-include $(TOP)/serial_debugger/debugger.mk
-endif
+#else ifdef ($(LIONSOS_GDB_CONN_SERIAL))
+#include $(TOP)/serial_debugger/debugger.mk
+#endif
 
 qemu: $(IMAGE_FILE)
 	$(QEMU) -machine virt,virtualization=on \
-              -cpu cortex-a53 \
-              -serial mon:stdio \
-              -device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
-              -m size=2G \
-              -nographic \
-              -device virtio-serial-device \
-              -chardev pty,id=virtcon \
-              -device virtconsole,chardev=virtcon \
-              -global virtio-mmio.force-legacy=false \
-              -d guest_errors
+			-cpu cortex-a53 \
+			-serial mon:stdio \
+			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
+			-m size=2G \
+			-nographic \
+			-device virtio-net-device,netdev=netdev0 \
+			-netdev user,id=netdev0,hostfwd=tcp::1234-:1234 \
+			-global virtio-mmio.force-legacy=false \
+			-d guest_errors
 
 clean::
 	${RM} -f *.elf .depend* $
