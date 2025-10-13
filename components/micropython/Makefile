@@ -46,7 +46,7 @@ CFLAGS += \
 	-target $(TARGET)
 
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(MICROPYTHON_LIBC)/lib
-LIBS += -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a
+LIBS += -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a $(BUILD)/libmicrokitco_mp.a
 
 
 # Define the required source files.
@@ -112,11 +112,12 @@ endif
 # Define the required object files.
 OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
+FS_HELPERS_LIBC := $(MICROPYTHON_LIBC)
 include $(LIONSOS)/lib/fs/helpers/fs_helpers.mk
 
 all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython.elf: $(OBJ) libmicrokitco_mp.a
+$(BUILD)/micropython.elf: $(OBJ)
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@

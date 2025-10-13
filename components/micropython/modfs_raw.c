@@ -10,9 +10,9 @@
 #include <fcntl.h>
 #include <string.h>
 
-mp_obj_t request_flags[FS_QUEUE_CAPACITY];
+static mp_obj_t request_flags[FS_QUEUE_CAPACITY];
 
-void fs_request_flag_set(uint64_t request_id) {
+void mp_fs_request_flag_set(uint64_t request_id) {
     mp_obj_t flag = request_flags[request_id];
     if (flag != NULL) {
         mp_obj_t set_method[2];

@@ -251,7 +251,7 @@ void notified(microkit_channel ch) {
     }
 
     if (fs_enabled) {
-        fs_process_completions();
+        fs_process_completions(mp_fs_request_flag_set);
     }
 
     if (serial_rx_enabled && ch == serial_config.rx.id) {

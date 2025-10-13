@@ -29,6 +29,7 @@ LIB_C_COMPILER_RT_OBJ := $(addprefix $(LIBC)/compiler_rt/, $(notdir $(LIB_C_COMP
 BUILD := $(BUILD_DIR)
 LIB_FS_HELPER_OBJ := $(BUILD)/fs/helpers.o
 
+FS_HELPERS_LIBC := $(LIONS_LIBC)
 include $(LIONSOS)/lib/fs/helpers/fs_helpers.mk
 
 $(LIBC) $(LIBC)/lib $(LIBC)/posix $(LIBC)/compiler_rt:
