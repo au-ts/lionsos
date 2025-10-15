@@ -17,8 +17,8 @@
 #include <lions/fs/helpers.h>
 #include <lions/fs/config.h>
 
-#define MAX_FDS 128
-#define MAX_PATH_LEN 128
+#define MAX_FDS 1024
+#define MAX_PATH_LEN 1024
 
 static int fd_active[MAX_FDS];
 static int fd_flags[MAX_FDS];
