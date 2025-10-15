@@ -133,3 +133,16 @@ int fs_command_blocking(fs_cmpl_t *completion, fs_cmd_t cmd) {
     fs_request_free(request_id);
     return 0;
 }
+
+int fs_init() {
+    fs_cmd_t cmd = (fs_cmd_t){.type = FS_CMD_INITIALISE };
+
+    uint64_t request_id;
+    int err = fs_request_allocate(&request_id);
+    if (err) {
+        return -1;
+    }
+    cmd.id = request_id;
+
+    fs_command_issue(cmd);
+}
