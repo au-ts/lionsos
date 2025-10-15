@@ -12,7 +12,7 @@
  * This is rather terrible, but is the simplest option without a
  * huge amount of infrastructure.
  */
-#define MORECORE_AREA_BYTE_SIZE 0x100000
+#define MORECORE_AREA_BYTE_SIZE (1024 * 1024 * 10)
 static alignas(8) char morecore_area[MORECORE_AREA_BYTE_SIZE];
 
 /* Pointer to free space in the morecore area. */
