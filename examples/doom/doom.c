@@ -183,6 +183,13 @@ void doom_main(void) {
         return;
     }
 
+    FILE *fp = fopen("./doom1.wad", "r");
+    if (fp == NULL) {
+        printf("DOOM|ERROR: failed to open doom1.wad");
+    } else {
+        fclose(fp);
+    }
+
     // Simulate commandline arguments
     int argc = 3;
     const char *argv[3] = {"doom", "-iwad", "./doom1.wad"};
