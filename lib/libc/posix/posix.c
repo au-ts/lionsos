@@ -53,20 +53,6 @@ long sys_clock_gettime(va_list ap) {
 
 long sys_getpid(va_list ap) { return 0; }
 
-long sys_ioctl(va_list ap) {
-    int fd = va_arg(ap, int);
-    int request = va_arg(ap, int);
-    (void)request;
-    dlog("musl called ioctl on fd %d", fd);
-    /* muslc does some ioctls to stdout, so just allow these to silently
-       go through */
-    if (fd == STDOUT_FD) {
-        return 0;
-    }
-
-    return 0;
-}
-
 long sys_getuid(va_list ap) {
     (void)ap;
     return 501;
@@ -138,6 +124,7 @@ void libc_define_syscall(int syscall_num, muslcsys_syscall_t syscall_func) {
 }
 
 void libc_init_mem();
+void libc_init_io();
 void libc_init_file();
 void libc_init_sock();
 
@@ -145,13 +132,13 @@ void libc_init() {
     /* Syscall table init */
     __sysinfo = sel4_vsyscall;
     libc_init_mem();
+    libc_init_io();
     libc_init_file();
     libc_init_sock();
 
-    syscall_table[__NR_getpid] = (muslcsys_syscall_t)sys_getpid;
-    syscall_table[__NR_clock_gettime] = (muslcsys_syscall_t)sys_clock_gettime;
-    syscall_table[__NR_ioctl] = (muslcsys_syscall_t)sys_ioctl;
-    syscall_table[__NR_getuid] = (muslcsys_syscall_t)sys_getuid;
-    syscall_table[__NR_getgid] = (muslcsys_syscall_t)sys_getgid;
-    syscall_table[__NR_getrandom] = (muslcsys_syscall_t)sys_getrandom;
+    syscall_table[__NR_getpid] = sys_getpid;
+    syscall_table[__NR_clock_gettime] = sys_clock_gettime;
+    syscall_table[__NR_getuid] = sys_getuid;
+    syscall_table[__NR_getgid] = sys_getgid;
+    syscall_table[__NR_getrandom] = sys_getrandom;
 }

@@ -75,8 +75,8 @@ static long sys_mprotect(va_list ap) {
 static long sys_madvise(va_list ap) { return 0; }
 
 void libc_init_mem() {
-    libc_define_syscall(__NR_brk, (muslcsys_syscall_t)sys_brk);
-    libc_define_syscall(__NR_mmap, (muslcsys_syscall_t)sys_mmap);
-    libc_define_syscall(__NR_munmap, (muslcsys_syscall_t)sys_munmap);
-    libc_define_syscall(__NR_mprotect, (muslcsys_syscall_t)sys_mprotect);
+    libc_define_syscall(__NR_brk, sys_brk);
+    libc_define_syscall(__NR_mmap, sys_mmap);
+    libc_define_syscall(__NR_munmap, sys_munmap);
+    libc_define_syscall(__NR_mprotect, sys_mprotect);
 }
