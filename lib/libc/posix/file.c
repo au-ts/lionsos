@@ -319,6 +319,17 @@ long sys_lseek(va_list ap) {
     case SEEK_CUR:
         new_fp = curr_fp + offset;
         break;
+    case SEEK_END: {
+        fs_cmpl_t completion;
+        int err = fs_command_blocking(&completion, (fs_cmd_t){
+            .type = FS_CMD_FILE_SIZE,
+            .params.file_size = {
+                .fd = fd,
+            }
+        });
+        assert(!err && completion.status == FS_STATUS_SUCCESS);
+        new_fp = completion.data.file_size.size + offset;
+    }
     default:
         printf("POSIX ERROR: lseek got unsupported whence %d\n", whence);
         // TODO: correct error
