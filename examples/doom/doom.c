@@ -219,6 +219,7 @@ void doom_main(void) {
   */
 void DG_Init() {
     video_init();
+    printf("DG_Init: video_init finished\n");
 }
 
 /**
@@ -226,20 +227,21 @@ void DG_Init() {
  * Kick frame buffer to update from doom frame buffer
  */
 void DG_DrawFrame() {
+    printf("DG_DrawFrame called\n");
     uint8_t* frame_buffer_addr = get_active_frame_buffer_uint8();
-    memcpy((char *)DG_ScreenBuffer, frame_buffer_addr, DOOMGENERIC_RESX*DOOMGENERIC_RESY*4);
+    memcpy(frame_buffer_addr, (char *)DG_ScreenBuffer, DOOMGENERIC_RESX*DOOMGENERIC_RESY*4);
     framebuffer_kick();
 }
 
 void DG_SleepMs(uint32_t ms) {
     // Convert to ns
-    sddf_timer_set_timeout(timer_config.driver_id, (uint64_t) ms * 1000);
+    sddf_timer_set_timeout(timer_config.driver_id, (uint64_t) ms * NS_IN_MS);
     microkit_cothread_wait_on_channel(timer_config.driver_id);
 }
 
 uint32_t DG_GetTicksMs() {
     // Return current time in microseconds
-    return (uint32_t) (sddf_timer_time_now(timer_config.driver_id) / 1000);
+    return (uint32_t) (sddf_timer_time_now(timer_config.driver_id) / NS_IN_MS);
 }
 
 int DG_GetKey(int *pressed, unsigned char *doomKey) {
