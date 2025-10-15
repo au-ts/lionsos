@@ -118,6 +118,32 @@ long sys_readv(va_list ap) {
     return ret;
 }
 
+long sys_mkdirat(va_list ap) {
+    // TODO: actually make use of dirfd
+    int dirfd = va_arg(ap, int);
+    const char *pathname = va_arg(ap, const char *);
+    // TODO: actually handle mode
+    mode_t mode = va_arg(ap, mode_t);
+
+    ptrdiff_t path_buffer;
+    int err = fs_buffer_allocate(&path_buffer);
+    assert(!err);
+
+    uint64_t path_len = strlen(pathname);
+    memcpy(fs_buffer_ptr(path_buffer), pathname, path_len);
+
+    fs_cmpl_t completion;
+    fs_command_blocking(&completion, (fs_cmd_t){ .type = FS_CMD_DIR_CREATE, .params.dir_create = {
+        .path.offset = path_buffer,
+        .path.size = path_len,
+    }});
+    fs_buffer_free(path_buffer);
+
+    if (completion.status != FS_STATUS_SUCCESS) {
+        return -completion.status;
+    }
+}
+
 long sys_writev(va_list ap) {
     int fildes = va_arg(ap, int);
     struct iovec *iov = va_arg(ap, struct iovec *);
@@ -418,6 +444,7 @@ long sys_fstatat(va_list ap) {
 long sys_readlinkat(va_list ap) { return -EINVAL; }
 
 void libc_init_file() {
+    libc_define_syscall(__NR_mkdirat, (muslcsys_syscall_t)sys_mkdirat);
     libc_define_syscall(__NR_write, (muslcsys_syscall_t)sys_write);
     libc_define_syscall(__NR_writev, (muslcsys_syscall_t)sys_writev);
     libc_define_syscall(__NR_openat, (muslcsys_syscall_t)sys_openat);
