@@ -4,6 +4,14 @@
  */
 
 #include <microkit.h>
+#include <sddf/serial/queue.h>
+#include <sddf/serial/config.h>
+#include <sddf/timer/config.h>
+#include <lions/fs/helpers.h>
+#include <lions/fs/config.h>
+#include <lions/fs/protocol.h>
+#include <lions/posix/posix.h>
+#include <libmicrokitco.h>
 #include "serialkeyboard.h"
 #include "usb_hid_keys.h"
 #include "doom.h"
@@ -20,6 +28,8 @@ __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
 
 static char worker_stack[WORKER_STACK_SIZE];
 static co_control_t co_controller_mem;
+
+static void blocking_wait(microkit_channel ch) { microkit_cothread_wait_on_channel(ch); }
 
 fs_queue_t *fs_command_queue;
 fs_queue_t *fs_completion_queue;
