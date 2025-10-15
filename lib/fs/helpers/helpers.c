@@ -82,7 +82,9 @@ void fs_process_completions(void (*fs_request_flag_set)(uint64_t)) {
 
         request_metadata[completion.id].completion = completion;
         request_metadata[completion.id].complete = true;
-        fs_request_flag_set(completion.id);
+        if (fs_request_flag_set != NULL) {
+            fs_request_flag_set(completion.id);
+        }
     }
     fs_queue_publish_consumption(fs_completion_queue, to_consume);
 }
