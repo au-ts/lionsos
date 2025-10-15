@@ -19,134 +19,141 @@ static long sys_setsockopt(va_list ap) { return 0; }
 static long sys_getsockopt(va_list ap) { return 0; }
 
 static long sys_socket(va_list ap) {
-    long fd = -1;
-    for (int i = LWIP_FD_START; i < MAX_SOCKET_FDS; i++) {
-        if (!fd_active[i]) {
-            fd = i;
-            break;
-        }
-    }
-    if (fd == -1) {
-        dlog("couldn't find available fd");
-        return -1;
-    }
+    return -1;
+    // long fd = -1;
+    // for (int i = LWIP_FD_START; i < MAX_SOCKET_FDS; i++) {
+    //     if (!fd_active[i]) {
+    //         fd = i;
+    //         break;
+    //     }
+    // }
+    // if (fd == -1) {
+    //     dlog("couldn't find available fd");
+    //     return -1;
+    // }
 
-    int socket_handle = tcp_socket_create();
-    if (socket_handle != -1) {
-        socket_refcount[socket_handle]++;
-        fd_active[fd] = true;
-        fd_socket[fd] = socket_handle;
-        return fd;
-    } else {
-        dlog("sys_socket could not create socket!\n");
-        return -1;
-    }
+    // int socket_handle = tcp_socket_create();
+    // if (socket_handle != -1) {
+    //     socket_refcount[socket_handle]++;
+    //     fd_active[fd] = true;
+    //     fd_socket[fd] = socket_handle;
+    //     return fd;
+    // } else {
+    //     dlog("sys_socket could not create socket!\n");
+    //     return -1;
+    // }
 }
 
 static long sys_bind(va_list ap) { return 0; }
 
 static long sys_socket_connect(va_list ap) {
-    long fd = va_arg(ap, int);
+    return -1;
+    // long fd = va_arg(ap, int);
 
-    assert(fd_active[fd]);
+    // assert(fd_active[fd]);
 
-    int socket_handle = fd_socket[fd];
+    // int socket_handle = fd_socket[fd];
 
-    assert(socket_handle >= 0);
-    assert(socket_handle < MAX_SOCKETS);
-    assert(socket_refcount[socket_handle] != 0);
+    // assert(socket_handle >= 0);
+    // assert(socket_handle < MAX_SOCKETS);
+    // assert(socket_refcount[socket_handle] != 0);
 
-    const struct sockaddr *sockaddr = va_arg(ap, const struct sockaddr *);
+    // const struct sockaddr *sockaddr = va_arg(ap, const struct sockaddr *);
 
-    uint16_t port = sockaddr->sa_data[0] << 8 | sockaddr->sa_data[1];
-    uint32_t addr =
-        sockaddr->sa_data[2] | sockaddr->sa_data[3] << 8 | sockaddr->sa_data[4] << 16 | sockaddr->sa_data[5] << 24;
+    // uint16_t port = sockaddr->sa_data[0] << 8 | sockaddr->sa_data[1];
+    // uint32_t addr =
+    //     sockaddr->sa_data[2] | sockaddr->sa_data[3] << 8 | sockaddr->sa_data[4] << 16 | sockaddr->sa_data[5] << 24;
 
-    return (long)tcp_socket_connect(socket_handle, port, addr);
+    // return (long)tcp_socket_connect(socket_handle, port, addr);
 }
 
 
 static long sys_sendto(va_list ap) {
-    int sockfd = va_arg(ap, int);
-    const void *buf = va_arg(ap, const void *);
-    size_t len = va_arg(ap, size_t);
-    int flags = va_arg(ap, int);
-    (void)flags;
+    // int sockfd = va_arg(ap, int);
+    // const void *buf = va_arg(ap, const void *);
+    // size_t len = va_arg(ap, size_t);
+    // int flags = va_arg(ap, int);
+    // (void)flags;
 
-    assert(fd_active[sockfd]);
+    // assert(fd_active[sockfd]);
 
-    int socket_handle = fd_socket[sockfd];
+    // int socket_handle = fd_socket[sockfd];
 
-    assert(socket_handle >= 0);
-    assert(socket_handle < MAX_SOCKETS);
-    assert(socket_refcount[socket_handle] != 0);
+    // assert(socket_handle >= 0);
+    // assert(socket_handle < MAX_SOCKETS);
+    // assert(socket_refcount[socket_handle] != 0);
 
-    int wrote = tcp_socket_write(socket_handle, buf, len);
-    if (wrote == -2) {
-        return -EAGAIN;
-    }
+    // int wrote = tcp_socket_write(socket_handle, buf, len);
+    // if (wrote == -2) {
+    //     return -EAGAIN;
+    // }
 
-    return (long)wrote;
+    // return (long)wrote;
+
+    return -1;
 }
 
 static long sys_recvfrom(va_list ap) {
-    int sockfd = va_arg(ap, int);
-    void *buf = va_arg(ap, void *);
-    ssize_t len = va_arg(ap, int);
-    int flags = va_arg(ap, int);
-    struct sockaddr *src_addr = va_arg(ap, struct sockaddr *);
-    (void)src_addr;
-    socklen_t *addrlen = va_arg(ap, socklen_t *);
-    (void)addrlen;
+    // int sockfd = va_arg(ap, int);
+    // void *buf = va_arg(ap, void *);
+    // ssize_t len = va_arg(ap, int);
+    // int flags = va_arg(ap, int);
+    // struct sockaddr *src_addr = va_arg(ap, struct sockaddr *);
+    // (void)src_addr;
+    // socklen_t *addrlen = va_arg(ap, socklen_t *);
+    // (void)addrlen;
 
-    assert(fd_active[sockfd]);
+    // assert(fd_active[sockfd]);
 
-    int socket_handle = fd_socket[sockfd];
+    // int socket_handle = fd_socket[sockfd];
 
-    assert(socket_handle >= 0);
-    assert(socket_handle < MAX_SOCKETS);
-    assert(socket_refcount[socket_handle] != 0);
+    // assert(socket_handle >= 0);
+    // assert(socket_handle < MAX_SOCKETS);
+    // assert(socket_refcount[socket_handle] != 0);
 
-    int read = tcp_socket_recv(socket_handle, buf, len);
+    // int read = tcp_socket_recv(socket_handle, buf, len);
 
-    if (read == 0 && flags & MSG_DONTWAIT) {
-        return -EAGAIN;
-    }
-    if (read == -1) {
-        return -ENOTCONN;
-    }
+    // if (read == 0 && flags & MSG_DONTWAIT) {
+    //     return -EAGAIN;
+    // }
+    // if (read == -1) {
+    //     return -ENOTCONN;
+    // }
 
-    return (long)read;
+    // return (long)read;
+
+    return -1;
 }
 
 //FIXME: needs generic file/socket implementation
 static long sys_dup3(va_list ap) {
-    int oldfd = va_arg(ap, int);
-    int newfd = va_arg(ap, int);
-    int flags = va_arg(ap, int);
-    (void)flags;
+    // int oldfd = va_arg(ap, int);
+    // int newfd = va_arg(ap, int);
+    // int flags = va_arg(ap, int);
+    // (void)flags;
 
-    assert(fd_active[oldfd]);
-    int oldfd_socket_handle = fd_socket[oldfd];
+    // assert(fd_active[oldfd]);
+    // int oldfd_socket_handle = fd_socket[oldfd];
 
-    assert(oldfd_socket_handle >= 0);
-    assert(oldfd_socket_handle < MAX_SOCKETS);
-    assert(socket_refcount[oldfd_socket_handle] != 0);
+    // assert(oldfd_socket_handle >= 0);
+    // assert(oldfd_socket_handle < MAX_SOCKETS);
+    // assert(socket_refcount[oldfd_socket_handle] != 0);
 
-    if (fd_active[newfd]) {
-        int newfd_socket_handle = fd_socket[newfd];
-        socket_refcount[newfd_socket_handle]--;
-        if (socket_refcount[newfd_socket_handle] == 0) {
-            tcp_socket_close(newfd_socket_handle);
-        }
-    }
+    // if (fd_active[newfd]) {
+    //     int newfd_socket_handle = fd_socket[newfd];
+    //     socket_refcount[newfd_socket_handle]--;
+    //     if (socket_refcount[newfd_socket_handle] == 0) {
+    //         tcp_socket_close(newfd_socket_handle);
+    //     }
+    // }
 
-    fd_active[newfd] = true;
-    fd_socket[newfd] = oldfd_socket_handle;
+    // fd_active[newfd] = true;
+    // fd_socket[newfd] = oldfd_socket_handle;
 
-    socket_refcount[oldfd_socket_handle]++;
+    // socket_refcount[oldfd_socket_handle]++;
 
-    return newfd;
+    // return newfd;
+    return -1;
 }
 
 void libc_init_sock() {
