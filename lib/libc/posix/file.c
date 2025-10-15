@@ -329,6 +329,7 @@ long sys_lseek(va_list ap) {
         });
         assert(!err && completion.status == FS_STATUS_SUCCESS);
         new_fp = completion.data.file_size.size + offset;
+        break;
     }
     default:
         printf("POSIX ERROR: lseek got unsupported whence %d\n", whence);
