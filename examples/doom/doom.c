@@ -166,6 +166,13 @@ void doom_main(void) {
     /*assert(file_size % FRAME_SZ_BYTES == 0);*/
     /*sddf_printf("doom: doom_main(): loaded %s. %lu bytes.\n", DOOM_FILE_PATH, file_size);*/
 
+    fs_cmpl_t completion;
+    int err = fs_command_blocking(&completion, (fs_cmd_t){ .type = FS_CMD_INITIALISE });
+    if (err || completion.status != FS_STATUS_SUCCESS) {
+        printf("DOOM|ERROR: Failed to mount\n");
+        return;
+    }
+
     // Simulate commandline arguments
     int argc = 3;
     const char *argv[3] = {"doom", "-iwad", "./doom1.wad"};
@@ -247,9 +254,12 @@ void init(void) {
     fs_command_queue = fs_config.server.command_queue.vaddr;
     fs_completion_queue = fs_config.server.completion_queue.vaddr;
     fs_share = fs_config.server.share.vaddr;
+    fs_set_blocking_wait(blocking_wait);
 
     stack_ptrs_arg_array_t costacks = { (uintptr_t) worker_stack };
     microkit_cothread_init(&co_controller_mem, WORKER_STACK_SIZE, costacks);
+
+    libc_init();
 
     if (microkit_cothread_spawn(doom_main, NULL) == LIBMICROKITCO_NULL_HANDLE) {
         sddf_printf("doom: init(): ERROR: cannot spawn the doom worker coroutine.\n");
@@ -261,8 +271,6 @@ void init(void) {
 }
 
 void notified(microkit_channel ch) {
-    /*if (ch == fs_config.server.id) {*/
-    /*    fs_process_completions();*/
-    /*}*/
+    fs_process_completions(NULL);
     microkit_cothread_recv_ntfn(ch);
 }
