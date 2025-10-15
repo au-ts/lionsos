@@ -8,6 +8,7 @@
 #include <sys/uio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <stdio.h>
 
 #include <lions/posix/posix.h>
 
@@ -28,6 +29,8 @@ static char fd_path[MAX_FDS][MAX_PATH_LEN];
 
 extern serial_queue_handle_t serial_tx_queue_handle;
 extern serial_client_config_t serial_config;
+
+size_t file_ptrs[MAX_FDS];
 
 static size_t output(void *data, size_t count) {
     char *src = data;
@@ -94,7 +97,7 @@ long sys_readv(va_list ap) {
         fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_READ,
                                                     .params.file_read = {
                                                         .fd = fd,
-                                                        .offset = ret,
+                                                        .offset = file_ptrs[fd],
                                                         .buf.offset = read_buffer,
                                                         .buf.size = iov[i].iov_len,
                                                     }});
@@ -107,6 +110,9 @@ long sys_readv(va_list ap) {
         memcpy(iov[i].iov_base, fs_buffer_ptr(read_buffer), read);
         fs_buffer_free(read_buffer);
         ret += read;
+
+        assert(fd < MAX_FDS);
+        file_ptrs[fd] += read;
     }
 
     return ret;
@@ -146,6 +152,9 @@ long sys_writev(va_list ap) {
         }
     } else {
         for (int i = 0; i < iovcnt; i++) {
+            if (iov[i].iov_len == 0) {
+                continue;
+            }
             ptrdiff_t write_buffer;
             fs_buffer_allocate(&write_buffer);
 
@@ -155,7 +164,7 @@ long sys_writev(va_list ap) {
             fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_WRITE,
                                                               .params.file_write = {
                                                                   .fd = fildes,
-                                                                  .offset = ret,
+                                                                  .offset = file_ptrs[fildes],
                                                                   .buf.offset = write_buffer,
                                                                   .buf.size = iov[i].iov_len,
                                                               }});
@@ -177,6 +186,8 @@ long sys_writev(va_list ap) {
                 return ret;
             }
             ret += wrote;
+            assert(fildes < MAX_FDS);
+            file_ptrs[fildes] += wrote;
         }
     }
     return ret;
@@ -293,6 +304,32 @@ long sys_close(va_list ap) {
     return 0;
 }
 
+long sys_lseek(va_list ap) {
+    long fd = va_arg(ap, int);
+    off_t offset = va_arg(ap, off_t);
+    int whence = va_arg(ap, int);
+
+    /* TODO: need to sanitise input */
+    size_t curr_fp = file_ptrs[fd];
+    size_t new_fp;
+    switch (whence) {
+    case SEEK_SET:
+        new_fp = offset;
+        break;
+    case SEEK_CUR:
+        new_fp = curr_fp + offset;
+        break;
+    default:
+        printf("POSIX ERROR: lseek got unsupported whence %d\n", whence);
+        // TODO: correct error
+        return -1;
+    }
+
+    file_ptrs[fd] = new_fp;
+
+    return 0;
+}
+
 static int fstat_int(const char *path, struct stat *statbuf) {
     ptrdiff_t path_buffer;
     int err = fs_buffer_allocate(&path_buffer);
@@ -374,6 +411,7 @@ void libc_init_file() {
     libc_define_syscall(__NR_openat, (muslcsys_syscall_t)sys_openat);
     libc_define_syscall(__NR_fcntl, (muslcsys_syscall_t)sys_fcntl);
     libc_define_syscall(__NR_close, (muslcsys_syscall_t)sys_close);
+    libc_define_syscall(__NR_lseek, (muslcsys_syscall_t)sys_lseek);
     libc_define_syscall(__NR_read, (muslcsys_syscall_t)sys_read);
     libc_define_syscall(__NR_readv, (muslcsys_syscall_t)sys_readv);
     libc_define_syscall(__NR_fstat, (muslcsys_syscall_t)sys_fstat);
