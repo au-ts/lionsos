@@ -187,6 +187,7 @@ void doom_main(void) {
     if (fp == NULL) {
         printf("DOOM|ERROR: failed to open doom1.wad");
     } else {
+        printf("DOOM|INFO: found doom1.wad!\n");
         fclose(fp);
     }
 
