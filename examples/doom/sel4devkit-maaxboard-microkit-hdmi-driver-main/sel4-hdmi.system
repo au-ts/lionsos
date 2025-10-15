@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- This work is Crown Copyright NCSC, 2024. -->
+<system>
+    
+    <!-- Frame buffer memory -->
+    <memory_region name="dma_pool" size="0x4000000"/>
+
+    <!-- <memory_region name="shared_heap_dcss" size="0x200_000"/>
+    <memory_region name="shared_heap_dcss_end" size="0x1000"/> -->
+
+    <memory_region name="shared_heap_client" size="0x200_000"/>
+    <memory_region name="shared_heap_client_end" size="0x1000"/>
+    
+    <!-- modify THESE physical addresses and sizes to match desired device.
+    Default values are associated with the avnet MaaXBoard (This size needs to reflect what is in the document)-->
+    <memory_region name="dcss_mem" size="0x2d000" phys_addr="0x32e00000"/> 
+    <memory_region name="dcss_blk_mem" size="0x1000" phys_addr="0x32e2f000"/> 
+    <memory_region name="gpc_mem" size="0x10000" phys_addr="0x303a0000"/>
+    <memory_region name="ccm_mem" size="0x10000" phys_addr="0x30380000"/>
+    <memory_region name="hdmi_mem" size="0x100000" phys_addr="0x32c00000"/>
+    <memory_region name="timer_mem" size="0x20_000" phys_addr="0x306c0000"/>
+
+    <!-- DCSS -->
+    <protection_domain name="dcss" pp="true" priority="249">
+        <map mr="dma_pool" vaddr="0x50000000" perms="rw" cached="false" setvar_vaddr="dma_base"/>
+        <map mr="dcss_mem" vaddr="0x32e00000" perms="rw" cached="false" setvar_vaddr="dcss_base"/>
+        <map mr="dcss_blk_mem" vaddr="0x32e2f000" perms="rw" cached="false" setvar_vaddr="dcss_blk_base"/>
+        <map mr="gpc_mem" vaddr="0x303a0000" perms="rw" cached="false" setvar_vaddr="gpc_base"/>
+        <map mr="ccm_mem" vaddr="0x30380000" perms="rw" cached="false" setvar_vaddr="ccm_base"/>
+        <map mr="hdmi_mem" vaddr="0x32c00000" perms="rw" cached="false" setvar_vaddr="hdmi_base"/>
+        <map mr="timer_mem" vaddr="0x306c0000" perms="rw" cached="false" setvar_vaddr="timer_base"/>
+        <map mr="shared_heap_client" vaddr="0x5c00000" perms="rw" cached="false"/>
+        <!-- <map mr="shared_heap_dcss" vaddr="0x5a00000" perms="rw" cached="true" setvar_vaddr="__heap_start"/>
+        <map mr="shared_heap_dcss_end" vaddr="0x5bf0000" perms="rw" cached="true" setvar_vaddr="__heap_end"/> -->
+        <setvar symbol="dma_base_paddr" region_paddr="dma_pool" />
+        <program_image path="dcss.elf" />
+    </protection_domain>
+
+
+    <!-- Example Client -->
+    <protection_domain name="client" pp="true" priority="248">
+        <map mr="dma_pool" vaddr="0x50000000" perms="rw" cached="false" setvar_vaddr="dma_base"/>
+        <map mr="timer_mem" vaddr="0x306c0000" perms="rw" cached="false" setvar_vaddr="timer_base"/>
+        <map mr="shared_heap_client" vaddr="0x5c00000" perms="rw" cached="false" setvar_vaddr="__heap_start"/>
+        <map mr="shared_heap_client_end" vaddr="0x5ff0000" perms="rw" cached="false" setvar_vaddr="__heap_end"/>
+        <program_image path="client.elf" />
+    </protection_domain>
+
+    <!-- Reset the dcss from the example client -->
+    <channel>
+        <end pd="dcss" id="55"/>
+        <end pd="client" id="55"/>
+    </channel>
+
+    <!-- Run the context loader in the dcss sent from the example client.
+         Write the frame buffer in the example client sent from the dcss. -->
+    <channel>
+        <end pd="dcss" id="52"/> 
+        <end pd="client" id="52"/>
+    </channel>
+
+    <!-- Initialise the dcss hdmi_data structure to initialise the dcss, from the example client using a protected procedure.-->
+    <channel>
+        <end pd="client" id="0"/> 
+        <end pd="dcss" id="0"/>
+    </channel>
+
+
+</system>

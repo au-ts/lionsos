@@ -22,3 +22,8 @@
 [submodule "libmicrokitco"]
 	path = dep/libmicrokitco
 	url = https://github.com/au-ts/libmicrokitco.git
+[submodule "examples/doom/doomgeneric"]
+	path = examples/doom/doomgeneric
+	url = https://github.com/ozkl/doomgeneric.git
+[submodule "doomgeneric"]
+	url = https://github.com/omeh-a/doomgeneric_lionsos
