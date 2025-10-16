@@ -4,8 +4,10 @@
  */
 
 #include <microkit.h>
+#include <libmicrokitco.h>
 
 #include <string.h>
+#include <arpa/inet.h>
 
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
@@ -30,15 +32,26 @@
 #include <lions/util.h>
 #include <lions/posix/tcp.h>
 
+#define MAX_LISTEN_BACKLOG 10
+
 enum socket_state {
     socket_state_unallocated,
+    socket_state_allocated,
     socket_state_bound,
     socket_state_connecting,
     socket_state_connected,
     socket_state_closing,
     socket_state_closed_by_peer,
     socket_state_error,
+    socket_state_listening,
 };
+
+typedef struct {
+    struct tcp_pcb *pending_pcbs[MAX_LISTEN_BACKLOG];
+    int head;
+    int tail;
+    microkit_cothread_sem_t accept_sem;
+} accept_queue_t;
 
 typedef struct {
     struct tcp_pcb *sock_tpcb;
@@ -47,6 +60,8 @@ typedef struct {
     char rx_buf[SOCKET_BUF_SIZE];
     ssize_t rx_head;
     ssize_t rx_len;
+
+    accept_queue_t accept_queue;
 } socket_t;
 
 extern timer_client_config_t timer_config;
@@ -129,6 +144,7 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
             return ERR_OK;
         }
 
+        case socket_state_allocated:
         case socket_state_closing: {
             if (p != NULL) {
                 pbuf_free(p);
@@ -166,7 +182,7 @@ err_t socket_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
     return ERR_OK;
 }
 
-int tcp_socket_create(void) {
+int tcp_socket_allocate() {
     int free_index;
     socket_t *socket = NULL;
     for (free_index = 0; free_index < MAX_SOCKETS; free_index++) {
@@ -184,9 +200,19 @@ int tcp_socket_create(void) {
     assert(socket->rx_head == 0);
     assert(socket->rx_len == 0);
 
+    socket->state = socket_state_allocated;
+
+    return free_index;
+}
+
+int tcp_socket_init(int index) {
+    socket_t *socket = &sockets[index];
+
+    assert(socket->state == socket_state_allocated);
     socket->sock_tpcb = tcp_new_ip_type(IPADDR_TYPE_V4);
+
     if (socket->sock_tpcb == NULL) {
-        dlog("couldn't create socket");
+        dlog("couldn't init socket");
         return -1;
     }
 
@@ -195,17 +221,10 @@ int tcp_socket_create(void) {
     tcp_err(socket->sock_tpcb, socket_err_func);
     tcp_arg(socket->sock_tpcb, socket);
 
-    for (int i = 512;; i++) {
-        if (tcp_bind(socket->sock_tpcb, IP_ADDR_ANY, i) == ERR_OK) {
-            socket->state = socket_state_bound;
-            return free_index;
-        }
-    }
-
-    return -1;
+    return 0;
 }
 
-int tcp_socket_connect(int index, uint16_t port, uint32_t addr) {
+int tcp_socket_connect(int index, uint32_t addr, uint16_t port) {
     socket_t *sock = &sockets[index];
     assert(sock->state == socket_state_bound);
 
@@ -226,6 +245,7 @@ int tcp_socket_close(int index) {
     socket_t *socket = &sockets[index];
 
     switch (socket->state) {
+        case socket_state_listening:
         case socket_state_connected: {
             socket->state = socket_state_closing;
             int err = tcp_close(socket->sock_tpcb);
@@ -306,3 +326,124 @@ int tcp_socket_writable(int index) { return !net_queue_empty_free(&tx_handle); }
 int tcp_socket_hup(int index) { return sockets[index].state == socket_state_closed_by_peer; }
 
 int tcp_socket_err(int index) { return sockets[index].state == socket_state_error; }
+
+static err_t tcp_socket_accept_cb(void *arg, struct tcp_pcb *newpcb, err_t err) {
+    socket_t *listen_socket = (socket_t *)arg;
+    assert(listen_socket->state == socket_state_listening);
+
+    if (err != ERR_OK) {
+        return -1;
+    }
+
+    accept_queue_t *q = &listen_socket->accept_queue;
+
+    int next_head = (q->head + 1) % MAX_BACKLOG;
+
+    if (next_head == q->tail) {
+        tcp_close(newpcb);
+        return ERR_MEM;
+    }
+
+    printf("tcp_socket_accept_cb: enqueuing new connection from socket %d\n", socket_id(listen_socket));
+
+    q->pending_pcbs[q->head] = newpcb;
+    q->head = next_head;
+
+    microkit_cothread_semaphore_signal(&listen_socket->accept_queue.accept_sem);
+
+    return ERR_OK;
+}
+
+int tcp_socket_listen(int index, int backlog) {
+    socket_t *socket = &sockets[index];
+
+    // lwIP docs: The tcp_listen() function returns a new connection identifier,
+    // and the one passed as an argument to the function will be deallocated.
+    struct tcp_pcb *newpcb = tcp_listen_with_backlog(socket->sock_tpcb, backlog);
+    assert(newpcb != NULL);
+    socket->sock_tpcb = newpcb;
+    socket->state = socket_state_listening;
+    assert(socket->sock_tpcb->state == LISTEN);
+
+    socket->accept_queue.head = 0;
+    socket->accept_queue.tail = 0;
+    microkit_cothread_semaphore_init(&socket->accept_queue.accept_sem);
+
+    tcp_accept(socket->sock_tpcb, tcp_socket_accept_cb);
+
+    return 0;
+}
+
+int tcp_socket_accept(int index) {
+    socket_t *listen_socket = &sockets[index];
+    assert(listen_socket->state == socket_state_listening);
+
+    accept_queue_t *q = &listen_socket->accept_queue;
+    printf("tcp_socket_accept: waiting on socket %d\n", index);
+    microkit_cothread_semaphore_wait(&(q->accept_sem));
+    printf("tcp_socket_accept: got connection on socket %d\n", index);
+
+    assert(q->head != q->tail);
+
+    struct tcp_pcb *new_conn_pcb = q->pending_pcbs[q->tail];
+    q->tail = (q->tail + 1) % MAX_BACKLOG;
+
+    char ipstr[INET_ADDRSTRLEN] = {0};
+    inet_ntop(AF_INET, &new_conn_pcb->local_ip.addr, ipstr, sizeof(ipstr));
+    printf("tcp_socket_accept: listen socket %d, local_ip %s, local_port %d\n", index, ipstr,
+           new_conn_pcb->local_port);
+    inet_ntop(AF_INET, &new_conn_pcb->remote_ip.addr, ipstr, sizeof(ipstr));
+    printf("tcp_socket_accept: listen socket %d, remote_ip %s, remote_port %d\n", index, ipstr,
+           new_conn_pcb->remote_port);
+
+    int new_socket_index = tcp_socket_allocate();
+    if (new_socket_index < 0) {
+        tcp_close(new_conn_pcb);
+        return -1;
+    }
+
+    socket_t *socket = &sockets[new_socket_index];
+
+    socket->sock_tpcb = new_conn_pcb;
+    tcp_err(socket->sock_tpcb, socket_err_func);
+    tcp_arg(socket->sock_tpcb, socket);
+    tcp_sent(new_conn_pcb, socket_sent_callback);
+    tcp_recv(new_conn_pcb, socket_recv_callback);
+
+    return new_socket_index;
+}
+
+int tcp_socket_bind(int index, uint32_t addr, uint16_t port) {
+    socket_t *sock = &sockets[index];
+
+    ip_addr_t ipaddr;
+    ip4_addr_set_u32(&ipaddr, addr);
+
+    err_t err = tcp_bind(sock->sock_tpcb, &ipaddr, port);
+    if (err != ERR_OK) {
+        dlog("error binding (%d)", err);
+        return 1;
+    }
+
+    sock->state = socket_state_bound;
+
+    return 0;
+}
+
+int tcp_socket_getsockname(int index, uint32_t *addr, uint16_t *port) {
+    socket_t *socket = &sockets[index];
+
+    *addr = ip4_addr_get_u32(&socket->sock_tpcb->local_ip);
+    *port = socket->sock_tpcb->local_port;
+
+    return 0;
+}
+
+int tcp_socket_getpeername(int index, uint32_t *addr, uint16_t *port) {
+    socket_t *socket = &sockets[index];
+
+    *addr = ip4_addr_get_u32(&socket->sock_tpcb->remote_ip);
+    *port = socket->sock_tpcb->remote_port;
+
+    return 0;
+}
