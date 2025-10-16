@@ -146,6 +146,9 @@ static void wamr_main() {
     // const char *dir = "/";
     // wasm_runtime_set_wasi_args(wasm_module, &dir, 1, NULL, 0, NULL, 0, NULL, 0);
 
+    const char *addr_pool_str[1] = {"0.0.0.0/0"};
+    wasm_runtime_set_wasi_addr_pool(wasm_module, addr_pool_str, 1);
+
     wasm_module_inst_t wasm_module_inst = NULL;
     printf("WAMR | Instantiating module...\n");
     if (!(wasm_module_inst = wasm_runtime_instantiate_ex2(wasm_module, inst_args, error_buf, sizeof(error_buf)))) {
