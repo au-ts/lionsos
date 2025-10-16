@@ -124,10 +124,15 @@ static int file_dup3(int oldfd, int newfd) {
 static long sys_fcntl(va_list ap) {
     int fd = va_arg(ap, int);
     int op = va_arg(ap, int);
+    int arg = va_arg(ap, int);
 
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
     switch (op) {
+        case F_SETFD: {
+            fd_entry->flags = arg;
+            break;
+        }
         case F_GETFL: {
-            fd_entry_t *fd_entry = posix_fd_entry(fd);
             return fd_entry->flags;
         }
     }
