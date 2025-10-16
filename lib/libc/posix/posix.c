@@ -30,7 +30,6 @@
 #include <sddf/serial/config.h>
 
 #include <lions/posix/posix.h>
-#include <lions/posix/tcp.h>
 #include <lions/util.h>
 
 extern void *__sysinfo;

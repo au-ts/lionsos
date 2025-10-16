@@ -21,6 +21,7 @@ CFLAGS_nfs := \
 	-Wno-tautological-constant-out-of-range-compare
 
 LIB_SDDF_LWIP_CFLAGS_nfs := ${CFLAGS_nfs}
+LIBMICROKITCO_CFLAGS_nfs := ${CFLAGS_nfs}
 
 NFS_FILES := nfs.c op.c
 NFS_OBJ := $(addprefix nfs/, $(NFS_FILES:.c=.o))
@@ -44,7 +45,7 @@ libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt | $(LIONS_LIBC)/include
 LIB_FS_SERVER_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
 
-nfs.elf: $(NFS_OBJ) libnfs/lib/libnfs.a lib_fs_server.a lib_sddf_lwip_nfs.a
+nfs.elf: $(NFS_OBJ) libnfs/lib/libnfs.a lib_fs_server.a lib_sddf_lwip_nfs.a libmicrokitco_nfs.a
 	$(LD) $(LDFLAGS) -o $@ $(LIBS) $^
 
 nfs:
