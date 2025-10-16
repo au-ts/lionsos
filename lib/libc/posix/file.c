@@ -76,8 +76,28 @@ static size_t file_read(void *buf, size_t len, int fd) {
     return read;
 }
 
-// TODO: implement
-static int file_close(int fd) { return 0; }
+static int file_close(int fd) {
+    fs_cmpl_t completion;
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
+    
+    if (fd_entry->flags & O_DIRECTORY) {
+        fs_command_blocking(&completion, (fs_cmd_t){
+                                             .type = FS_CMD_DIR_CLOSE,
+                                             .params.dir_close.fd = fs_server_fd_map[fd],
+                                         });
+    } else {
+        fs_command_blocking(&completion, (fs_cmd_t){
+                                             .type = FS_CMD_FILE_CLOSE,
+                                             .params.file_close.fd = fs_server_fd_map[fd],
+                                         });
+    }
+    
+    if (completion.status != FS_STATUS_SUCCESS) {
+        return -1;
+    }
+
+    return 0;
+}
 
 static int file_dup3(int oldfd, int newfd) {
     fs_server_fd_map[newfd] = fs_server_fd_map[oldfd];
@@ -225,7 +245,7 @@ static long sys_openat(va_list ap) {
     fs_buffer_free(path_buffer);
 
     if (completion.status != FS_STATUS_SUCCESS) {
-        return -completion.status;
+        return -1;
     }
 
     uint64_t fs_fd;
