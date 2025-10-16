@@ -66,19 +66,16 @@ static int sock_dup3(int oldfd, int newfd) {
     return 0;
 }
 
+static int sock_fstat(int fd, struct stat *statbuf) {
+    statbuf->st_mode = S_IFSOCK | 0777;
+    return 0;
+}
+
 static long sys_setsockopt(va_list ap) { return 0; }
 
 static long sys_getsockopt(va_list ap) { return 0; }
 
-static long sys_socket(va_list ap) {
-    int domain = va_arg(ap, int);
-    int type = va_arg(ap, int);
-    int protocol = va_arg(ap, int);
-
-    (void)domain;
-    (void)type;
-    (void)protocol;
-
+static int socket_int() {
     int socket_handle = tcp_socket_create();
     if (socket_handle != -1) {
         socket_refcount[socket_handle]++;
@@ -91,6 +88,7 @@ static long sys_socket(va_list ap) {
                 .write = sock_write,
                 .close = sock_close,
                 .dup3 = sock_dup3,
+                .fstat = sock_fstat,
             };
         } else {
             // TODO: cleanup socket
@@ -98,18 +96,54 @@ static long sys_socket(va_list ap) {
         }
 
         fd_socket[fd] = socket_handle;
+        printf("socket created with fd %d and socket handle %d\n", fd, socket_handle);
         return fd;
     } else {
-        dlog("sys_socket could not create socket!\n");
+        dlog("socket_int could not create socket!\n");
         return -1;
     }
 }
 
-static long sys_bind(va_list ap) { return 0; }
+static long sys_socket(va_list ap) {
+    int domain = va_arg(ap, int);
+    int type = va_arg(ap, int);
+    int protocol = va_arg(ap, int);
+
+    (void)domain;
+    (void)type;
+    (void)protocol;
+
+    return (long)socket_int();
+}
+
+static uint16_t socket_port[MAX_FDS];
+static uint32_t socket_addr[MAX_FDS];
+
+static long sys_bind(va_list ap) {
+    long fd = va_arg(ap, int);
+    const struct sockaddr *addr = va_arg(ap, const struct sockaddr *);
+    socklen_t addrlen = va_arg(ap, socklen_t);
+
+    uint16_t port = addr->sa_data[0] << 8 | addr->sa_data[1];
+    uint32_t bind_addr =
+        addr->sa_data[2] | addr->sa_data[3] << 8 | addr->sa_data[4] << 16 | addr->sa_data[5] << 24;
+
+    printf("Binding socket fd %d to port %d addr %d.%d.%d.%d\n", fd, port, addr->sa_data[2],
+           addr->sa_data[3], addr->sa_data[4], addr->sa_data[5]);
+
+    socket_port[fd] = port;
+    socket_addr[fd] = bind_addr;
+
+    return 0;
+}
 
 static long sys_socket_connect(va_list ap) {
     long fd = va_arg(ap, int);
     const struct sockaddr *sockaddr = va_arg(ap, const struct sockaddr *);
+
+    printf("Connecting socket fd %d to port %d addr %d.%d.%d.%d\n", fd,
+           sockaddr->sa_data[0] << 8 | sockaddr->sa_data[1],
+           sockaddr->sa_data[2], sockaddr->sa_data[3], sockaddr->sa_data[4], sockaddr->sa_data[5]);
 
     int socket_handle = fd_socket[fd];
 
@@ -174,6 +208,64 @@ static long sys_recvfrom(va_list ap) {
     return (long)read;
 }
 
+static long sys_listen(va_list ap) { return 0; }
+
+static long sys_accept(va_list ap) {
+    int sockfd = va_arg(ap, int);
+    struct sockaddr *addr = va_arg(ap, struct sockaddr *);
+    socklen_t *addrlen = va_arg(ap, socklen_t *);
+
+    printf("sys_accept called on sockfd %d with addr %p and addrlen %p\n", sockfd, addr, addrlen);
+    return (long)socket_int();
+}
+
+static long sys_getsockname(va_list ap) {
+    int sockfd = va_arg(ap, int);
+    struct sockaddr *addr = va_arg(ap, struct sockaddr *);
+    socklen_t *addrlen = va_arg(ap, socklen_t *);
+
+    printf("sys_getsockname called on sockfd %d with addrlen %d\n", sockfd, *addrlen);
+
+    if (*addrlen < sizeof(struct sockaddr)) {
+        printf("sys_getsockname: addrlen %d too small\n", *addrlen);
+        return -EINVAL;
+    }
+
+    addr->sa_family = AF_INET;
+    addr->sa_data[0] = (socket_port[sockfd] >> 8) & 0xFF;
+    addr->sa_data[1] = (socket_port[sockfd] >> 0) & 0xFF;
+    addr->sa_data[2] = (socket_addr[sockfd] >> 0) & 0xFF;
+    addr->sa_data[3] = (socket_addr[sockfd] >> 8) & 0xFF;
+    addr->sa_data[4] = (socket_addr[sockfd] >> 16) & 0xFF;
+    addr->sa_data[5] = (socket_addr[sockfd] >> 24) & 0xFF;
+
+    return 0;
+}
+
+static long sys_getpeername(va_list ap) {
+    int sockfd = va_arg(ap, int);
+    struct sockaddr *addr = va_arg(ap, struct sockaddr *);
+    socklen_t *addrlen = va_arg(ap, socklen_t *);
+
+    printf("sys_getpeername called on sockfd %d with addrlen %d\n", sockfd, *addrlen);
+
+
+    if (*addrlen < sizeof(struct sockaddr)) {
+        printf("sys_getpeername: addrlen %d too small\n", *addrlen);
+        return -EINVAL;
+    }
+
+    addr->sa_family = AF_INET;
+    addr->sa_data[0] = 0; // port high byte
+    addr->sa_data[1] = 0; // port low byte
+    addr->sa_data[2] = 127; // addr byte 0
+    addr->sa_data[3] = 0; // addr byte 1
+    addr->sa_data[4] = 0; // addr byte 2
+    addr->sa_data[5] = 1; // addr byte 3
+
+    return 0;
+}
+
 void libc_init_sock() {
     libc_define_syscall(__NR_socket, sys_socket);
     libc_define_syscall(__NR_bind, sys_bind);
@@ -182,6 +274,10 @@ void libc_init_sock() {
     libc_define_syscall(__NR_getsockopt, sys_getsockopt);
     libc_define_syscall(__NR_sendto, sys_sendto);
     libc_define_syscall(__NR_recvfrom, sys_recvfrom);
+    libc_define_syscall(__NR_listen, sys_listen);
+    libc_define_syscall(__NR_accept, sys_accept);
+    libc_define_syscall(__NR_getsockname, sys_getsockname);
+    libc_define_syscall(__NR_getpeername, sys_getpeername);
 }
 
 int socket_index_of_fd(int fd) { return fd_socket[fd]; }

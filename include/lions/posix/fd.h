@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #define MAX_FDS 128
 
@@ -7,14 +8,16 @@
 
 typedef size_t (*fd_write_func)(const void *, size_t, int);
 typedef size_t (*fd_read_func)(void *, size_t, int);
-typedef int (*fd_dup3_func)(int, int);
 typedef int (*fd_close_func)(int);
+typedef int (*fd_dup3_func)(int, int);
+typedef int (*fd_fstat_func)(int, struct stat*);
 
 typedef struct fd_entry {
     fd_write_func write;
     fd_read_func read;
     fd_close_func close;
     fd_dup3_func dup3;
+    fd_fstat_func fstat;
     int flags;
     //TODO: implement file pointer
 } fd_entry_t;
