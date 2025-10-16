@@ -12,6 +12,7 @@
 #include <lions/fs/protocol.h>
 #include <lions/posix/posix.h>
 #include <libmicrokitco.h>
+#include "doomgeneric/doomgeneric/doomgeneric.h"
 #include "serialkeyboard.h"
 #include "usb_hid_keys.h"
 #include "doom.h"
@@ -44,15 +45,20 @@ uint8_t cached_framebuffer[FRAME_SZ_BYTES];
 
 // Keyboard event queue for DOOM
 #define KEY_QUEUE_SZ 32
-uint8_t kq[KEY_QUEUE_SZ];
+uint16_t kq[KEY_QUEUE_SZ];
 unsigned kq_tail = 0;
 unsigned kq_head = 0;
 
-static void addKeyToQueue(int pressed, unsigned int keyCode)
+static void addKeyToQueue(hid_key_t key)
 {
-    uint8_t key = convertToDoomKey(keyCode);
+    uint16_t doomkey = convertToDoomKey(HID_KEYCODE(key));
+    uint16_t pressed = (key > 255);
+    if (doomkey == 0) {
+        sddf_printf("Bad key %u!\n", doomkey);
+        return;
+    }
 
-    uint8_t keyData = (pressed << 8) | key;
+    uint16_t keyData = (pressed << 8) | doomkey;
 
     kq[kq_tail] = keyData;
     kq_tail++;
@@ -143,13 +149,14 @@ void video_init(void) {
     shared_hdmi_config->vic_r3 = vic_table[vic_mode][VIC_R3_0];
     shared_hdmi_config->vic_pr = vic_table[vic_mode][VIC_PR];
     shared_hdmi_config->v_total = vic_table[vic_mode][V_TOTAL];
-    shared_hdmi_config->rgb_format = RGBA;
+    shared_hdmi_config->rgb_format = BGRA;
     shared_hdmi_config->alpha_enable = ALPHA_OFF;
     shared_hdmi_config->mode = MOVING_IMAGE;
     shared_hdmi_config->ms_delay = NO_DELAY;
 
     framebuffer_draw_test_pattern();
 
+    memset(get_active_frame_buffer_uint8(), 0, shared_hdmi_config->h_active * shared_hdmi_config->v_active * 4);
     // initialise video hardware (Display Controller Subsystem + HDMI TX)
     microkit_ppcall(DCSS_INIT_CH, seL4_MessageInfo_new(0, 0, 0, 0));
 
@@ -159,22 +166,6 @@ void video_init(void) {
 
 
 void doom_main(void) {
-
-    /*sddf_printf("doom: doom_main(): mounting filesystem...");*/
-    /*fs_cmpl_t completion;*/
-    /*int err = fs_command_blocking(&completion, (fs_cmd_t){ .type = FS_CMD_INITIALISE });*/
-    /*if (err || completion.status != FS_STATUS_SUCCESS) {*/
-    /*    sddf_printf("FAIL\n");*/
-    /*    return;*/
-    /*} else {*/
-    /*    sddf_printf("OK\n");*/
-    /*}*/
-    /**/
-    /*sddf_printf("doom: doom_main(): opening doom1.wad.\n");*/
-    /*uint64_t wad_fd = fs_file_open_blocking(DOOM_FILE_PATH, strlen(doom_FILE_PATH), FS_OPEN_FLAGS_READ_ONLY);*/
-    /*uint64_t file_size = fs_file_size_blocking(wad_fd);*/
-    /*assert(file_size % FRAME_SZ_BYTES == 0);*/
-    /*sddf_printf("doom: doom_main(): loaded %s. %lu bytes.\n", DOOM_FILE_PATH, file_size);*/
 
     fs_cmpl_t completion;
     int err = fs_command_blocking(&completion, (fs_cmd_t){ .type = FS_CMD_INITIALISE });
@@ -203,13 +194,13 @@ void doom_main(void) {
         while (serial_dequeue(&serial_rx_queue_handle, &c) == 0 &&
             !keyQueueFull()) {
             hid_key_t key = serialkb_input_serial_char(c);
-            int pressed = HID_KEY_PRESS(key);
-            addKeyToQueue(pressed, key);
+            if (key != HID_KEY_NONE) {
+                addKeyToQueue(key);
+            }
         }
-
         // Advance doom engine
         doomgeneric_Tick();
-        sddf_printf("doom: doom_main(): loop completed\n");
+        /*sddf_printf("doom: doom_main(): loop completed\n");*/
     }
 }
 
@@ -227,9 +218,45 @@ void DG_Init() {
  * Kick frame buffer to update from doom frame buffer
  */
 void DG_DrawFrame() {
-    printf("DG_DrawFrame called\n");
-    uint8_t* frame_buffer_addr = get_active_frame_buffer_uint8();
-    memcpy(frame_buffer_addr, (char *)DG_ScreenBuffer, DOOMGENERIC_RESX*DOOMGENERIC_RESY*4);
+    /*uint8_t *fb= get_active_frame_buffer_uint8();*/
+    // Copy into framebuffer. DOOM outputs RGBA8888 - i.e. uniform 8-bit depth RGBA.
+    // The transparency channel is never set.
+    size_t fb_offset = 0;
+    uint8_t *doom_fb = (uint8_t *) DG_ScreenBuffer;
+    size_t screen_h_pixels = shared_hdmi_config->h_active;
+
+    uint32_t *fb = get_active_frame_buffer_uint32();
+
+    // Crop all pixel values to 5 bits and remove alpha
+    // Each pixel gets cropped as 0b11111XXX= 0xf8
+    uint32_t shave_mask = 0x00f8f8f8;
+
+    for (int y = 0; y < DOOMGENERIC_RESY; y++) {
+        for (int x = 0; x < DOOMGENERIC_RESX; x++) {
+            // HDMI uses RGBA, but the driver is broken so we need to
+            // squeeze everything down with a shift to avoid hypersaturation
+            // B: doom offset = 0
+            uint32_t pixel = DG_ScreenBuffer[(y*DOOMGENERIC_RESX) + x];
+            fb[fb_offset] = (pixel & shave_mask) >> 3;
+
+            /*fb[fb_offset + 0] = (pixel & 0xFF) >> 3;*/
+            /**/
+            /*// G: doom offset = 8*/
+            /*fb[fb_offset + 1] = ((pixel >> 8)  & 0xFF) >> 3;*/
+            /**/
+            /*// R: doom offset = 16*/
+            /*fb[fb_offset + 2] = ((pixel >> 16) & 0xFF) >> 3;*/
+
+            // A: always 0 (implicit)
+            /*fb_offset += 4;*/
+            fb_offset++;
+        }
+        // Jump to next line of pixels
+        fb_offset = y * screen_h_pixels;
+    }
+
+
+
     framebuffer_kick();
 }
 
@@ -247,7 +274,8 @@ uint32_t DG_GetTicksMs() {
 int DG_GetKey(int *pressed, unsigned char *doomKey) {
     // Return keys from the key queue until none are left.
     if (kq_head == kq_tail) return 0;
-    uint8_t keyData = kq[kq_head];
+    uint16_t keyData = kq[kq_head];
+    sddf_printf("Ate key %u (press=%d)\n", keyData&0xFF, keyData>>8);
     kq_head++;
     kq_head %= KEY_QUEUE_SZ;
 

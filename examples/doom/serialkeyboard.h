@@ -39,8 +39,8 @@
 // Only needs 8 bit for key, we reserve high bits for metadata
 typedef uint16_t hid_key_t;
 #define HID_KEY_PRESSED_BIT (1 << 9)
-#define HID_KEY_PRESS(x)    (x & HID_KEY_PRESSED_BIT)
-#define HID_KEY_RELEASE(x)    (!(x & HID_KEY_PRESSED_BIT))
+#define HID_KEY_PRESS(x)    ((x & HID_KEY_PRESSED_BIT) != 0)
+#define HID_KEYCODE(x)  (x & 0xff)
 
 typedef enum hid_state {
     State_Reset = 0,

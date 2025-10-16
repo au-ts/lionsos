@@ -65,12 +65,42 @@ static inline uint8_t convertToDoomKey(unsigned int key)
         case HID_KEY_U:
             key = KEY_USE;
             break;
+        case HID_KEY_1:
+            key = '1';
+            break;
+        case HID_KEY_2:
+            key = '2';
+            break;
+        case HID_KEY_3:
+            key = '3';
+            break;
+        case HID_KEY_4:
+            key = '4';
+            break;
+        case HID_KEY_5:
+            key = '5';
+            break;
+        case HID_KEY_6:
+            key = '6';
+            break;
+        case HID_KEY_7:
+            key = '7';
+            break;
+        case HID_KEY_8:
+            key = '8';
+            break;
+        case HID_KEY_9:
+            key = '9';
+            break;
+        case HID_KEY_0:
+            key = 0;
+            break;
         // Hack: we don't support modifiers yet...
         case HID_KEY_SLASH:
             key = KEY_RSHIFT;
             break;
         default:
-            key = tolower(key);
+            key = 0;
             break;
         }
 
