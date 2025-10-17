@@ -13,4 +13,3 @@ container.
 
 Further building and testing information can be found on the lionsos
 [website](https://https://lionsos.org/docs/examples/firewall/).
-

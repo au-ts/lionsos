@@ -55,7 +55,7 @@ static int get_protocol_match(uintptr_t pkt)
             }
         }
     }
-    
+
     return -1;
 }
 
