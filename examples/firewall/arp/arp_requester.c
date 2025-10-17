@@ -10,7 +10,6 @@
 #include <sddf/util/printf.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
-#include <sddf/network/util.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 #include <sddf/timer/client.h>
@@ -18,7 +17,7 @@
 #include <lions/firewall/arp.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
-#include <lions/firewall/protocols.h>
+#include <lions/firewall/ethernet.h>
 #include <lions/firewall/queue.h>
 #include <string.h>
 
@@ -57,27 +56,29 @@ uint64_t ticks_to_flush = ARP_TICKS_PER_FLUSH;
 
 static void generate_arp(net_buff_desc_t *buffer, uint32_t ip)
 {
-    arp_packet_t *pkt = (arp_packet_t *)(net_config.tx_data.vaddr + buffer->io_or_offset);
+    uintptr_t pkt_vaddr = (uintptr_t)(net_config.tx_data.vaddr + buffer->io_or_offset);
+    eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
 
     /* Set the destination MAC address as the broadcast MAC address */
-    memset(&pkt->ethdst_addr, 0xFF, ETH_HWADDR_LEN);
-    memcpy(&pkt->ethsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
-    memcpy(&pkt->hwsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
+    memset(&eth_hdr->ethdst_addr, 0xFF, ETH_HWADDR_LEN);
+    memcpy(&eth_hdr->ethsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
+    eth_hdr->ethtype = htons(ETH_TYPE_ARP);
 
-    pkt->type = HTONS(ETH_TYPE_ARP);
-    pkt->hwtype = HTONS(ETH_HWTYPE);
-    pkt->proto = HTONS(ETH_TYPE_IP);
-    pkt->hwlen = ETH_HWADDR_LEN;
-    pkt->protolen = IPV4_PROTO_LEN;
-    pkt->opcode = HTONS(ETHARP_OPCODE_REQUEST);
+    arp_pkt_t *request = (arp_pkt_t *)(pkt_vaddr + ARP_PKT_OFFSET);
+    request->hwtype = htons(ARP_HWTYPE_ETH);
+    request->protocol = htons(ETH_TYPE_IP);
+    request->hwlen = ETH_HWADDR_LEN;
+    request->protolen = ARP_PROTO_LEN_IPV4;
+    request->opcode = htons(ARP_ETH_OPCODE_REQUEST);
+
+    memcpy(&request->hwsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
+    request->ipsrc_addr = arp_config.ip;
 
     /* Memset the hardware src addr to 0 for ARP requests */
-    memset(&pkt->hwdst_addr, 0, ETH_HWADDR_LEN);
-    pkt->ipdst_addr = ip;
-    pkt->ipsrc_addr = arp_config.ip;
-    memset(&pkt->padding, 0, 10);
+    memset(&request->hwdst_addr, 0, ETH_HWADDR_LEN);
+    request->ipdst_addr = ip;
 
-    buffer->len = 56;
+    buffer->len = ARP_PKT_LEN;
 }
 
 static void process_requests()
@@ -141,42 +142,46 @@ static void process_responses()
             int err = net_dequeue_active(&rx_queue, &buffer);
             assert(!err);
 
-            arp_packet_t *pkt = (arp_packet_t *)(net_config.rx_data.vaddr + buffer.io_or_offset);
+            uintptr_t pkt_vaddr = (uintptr_t)(net_config.rx_data.vaddr + buffer.io_or_offset);
+            eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
+
             /* Check if packet is an ARP request */
-            if (pkt->type == HTONS(ETH_TYPE_ARP)) {
+            if (eth_hdr->ethtype == htons(ETH_TYPE_ARP)) {
+                arp_pkt_t *arp_resp = (arp_pkt_t *)(pkt_vaddr + ARP_PKT_OFFSET);
                 /* Check if it's a probe, ignore announcements */
-                if (pkt->opcode == HTONS(ETHARP_OPCODE_REPLY)) {
+                if (arp_resp->opcode == htons(ARP_ETH_OPCODE_REPLY)) {
                     /* Find the arp entry */
-                    fw_arp_entry_t *entry = fw_arp_table_find_entry(&arp_table, pkt->ipsrc_addr);
+                    fw_arp_entry_t *entry = fw_arp_table_find_entry(&arp_table, arp_resp->ipsrc_addr);
                     if (entry != NULL) {
                         /* This was a response to a request we sent, update entry */
                         entry->state = ARP_STATE_REACHABLE;
-                        memcpy(&entry->mac_addr, &pkt->hwsrc_addr, ETH_HWADDR_LEN);
+                        memcpy(&entry->mac_addr, &arp_resp->hwsrc_addr, ETH_HWADDR_LEN);
 
                         /* Send to clients */
-                        for (uint8_t client = 0; client < arp_config.num_arp_clients; client++) {
+                        for (uint8_t client = 0; entry->client && client < arp_config.num_arp_clients; client++) {
                             if (BIT(client) & entry->client) {
                                 fw_arp_request_t response = fw_arp_response_from_entry(entry);
                                 fw_enqueue(&arp_resp_queue[client], &response);
                                 notify_client[client] = true;
                                 if (FW_DEBUG_OUTPUT) {
                                     sddf_printf("%sARP requester received response for client %u, ip %s. MAC[0] = %x, MAC[5] = %x\n",
-                                        fw_frmt_str[arp_config.interface], client, ipaddr_to_string(pkt->ipsrc_addr, ip_addr_buf0),
-                                        pkt->hwsrc_addr[0], pkt->hwsrc_addr[5]);
+                                        fw_frmt_str[arp_config.interface], client, ipaddr_to_string(arp_resp->ipsrc_addr, ip_addr_buf0),
+                                        arp_resp->hwsrc_addr[0], arp_resp->hwsrc_addr[5]);
                                 }
                             }
                         }
                     } else {
                         /* Create a new entry */
-                        fw_arp_error_t arp_err = fw_arp_table_add_entry(&arp_table, ARP_STATE_REACHABLE, pkt->ipsrc_addr, pkt->hwsrc_addr, 0);
+                        fw_arp_error_t arp_err = fw_arp_table_add_entry(&arp_table, ARP_STATE_REACHABLE,
+                            arp_resp->ipsrc_addr, arp_resp->hwsrc_addr, 0);
                         if (arp_err == ARP_ERR_FULL) {
-                            sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n", fw_frmt_str[arp_config.interface]);
+                            sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n",
+                                fw_frmt_str[arp_config.interface]);
                         }
                     }
                 }
             }
 
-            buffer.len = 0;
             err = net_enqueue_free(&rx_queue, buffer);
             assert(!err);
             returned = true;

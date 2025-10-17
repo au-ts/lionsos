@@ -80,6 +80,12 @@ actionNums = {
 
 ############ Helper Functions ############
 
+def htons(portNum):
+  if portNum < 0 or portNum > maxPortNum:
+    print(f"UI SERVER|ERR: Supplied port number {portNum} is negative or too large.")
+    raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+  return ((portNum & 0xFF) << 8) | ((portNum & 0xFF00) >> 8)
+
 def ipToInt(ipString):
     ipSplit = ipString.split(".")
     if not len(ipSplit) == 4:
@@ -282,10 +288,10 @@ def getRules(request, protocolStr, interfaceStr):
             rules.append({
                 "id": rule[0],
                 "src_ip": intToIp(rule[1]),
-                "src_port": rule[2],
+                "src_port": htons(rule[2]),
                 "src_port_any": rule[3],
                 "dest_ip": intToIp(rule[4]),
-                "dest_port": rule[5],
+                "dest_port": htons(rule[5]),
                 "dest_port_any": rule[6],
                 "src_subnet": rule[7],
                 "dest_subnet": rule[8],
@@ -385,34 +391,20 @@ def addRule(request, protocolStr):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
 
         srcPort = newRule.get("src_port")
-        if not srcPort:
+        if not srcPort or protocol == protocolNums["icmp"]:
             srcPort = 0
             srcPortAny = True
         else:
-            srcPort = int(srcPort)
+            srcPort = htons(int(srcPort))
             srcPortAny = False
 
         destPort = newRule.get("dest_port")
-        if not destPort:
+        if not destPort or protocol == protocolNums["icmp"]:
             destPort = 0
             destPortAny = True
         else:
-            destPort = int(destPort)
+            destPort = htons(int(destPort))
             destPortAny = False
-
-        if protocol == protocolNums["icmp"] or srcPort is None:
-            srcPortAny = True
-        else:
-            if srcPort < 0 or srcPort > maxPortNum:
-                print(f"UI SERVER|ERR: Supplied invalid source port {srcPort}.")
-                raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
-
-        if protocol == protocolNums["icmp"] or destPort is None:
-            destPortAny = True
-        else:
-            if destPort < 0 or destPort > maxPortNum:
-                print(f"UI SERVER|ERR: Supplied invalid destination port {destPort}.")
-                raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
 
         ruleId = lions_firewall.rule_add(interfaceInt, protocol, srcIp, srcPort, srcPortAny,
                                          srcSubnet, destIp, destPort, destPortAny, destSubnet, action)

@@ -386,7 +386,7 @@ static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
         }
 
         /* Check port numbers first */
-        if ((!rule->src_port_any && HTONS(rule->src_port) != src_port) || (!rule->dst_port_any && HTONS(rule->dst_port) != dst_port)) {
+        if ((!rule->src_port_any && rule->src_port != src_port) || (!rule->dst_port_any && rule->dst_port != dst_port)) {
             continue;
         }
 
