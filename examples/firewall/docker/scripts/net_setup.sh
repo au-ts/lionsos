@@ -1,6 +1,9 @@
 # Copyright 2025, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 
+#!/bin/bash
+
+
 # -- Container script for setting up the network -- #
 
 # Create bridges to connect namespaces to taps
