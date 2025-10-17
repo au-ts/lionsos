@@ -1,3 +1,11 @@
+/*
+ * Copyright 2025, UNSW
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+#pragma once
+
 #include <stdint.h>
 #include <lions/firewall/common.h>
 
