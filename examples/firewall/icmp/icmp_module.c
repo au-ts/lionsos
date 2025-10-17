@@ -11,11 +11,12 @@
 #include <sddf/util/printf.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
-#include <sddf/network/util.h>
+#include <lions/firewall/checksum.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
+#include <lions/firewall/ethernet.h>
 #include <lions/firewall/icmp.h>
-#include <lions/firewall/protocols.h>
+#include <lions/firewall/ip.h>
 #include <lions/firewall/queue.h>
 
 __attribute__((__section__(".fw_icmp_module_config"))) fw_icmp_module_config_t icmp_config;
@@ -36,60 +37,106 @@ static void generate_icmp(void)
             int err = fw_dequeue(&icmp_queue[out_int], &req);
             assert(!err);
 
+            /* Currently we only support destination unreachable ICMP traffic */
+            if (req.type != ICMP_DEST_UNREACHABLE) {
+                sddf_printf("ICMP module: Interface %u requested unsupported ICMP type %u!\n", out_int, req.type);
+                continue;
+            }
+
             net_buff_desc_t buffer = {};
             err = net_dequeue_free(&net_queue[out_int], &buffer);
             assert(!err);
 
-            icmp_packet_t *icmp_resp = (icmp_packet_t *) (net_configs[out_int]->tx_data.vaddr + buffer.io_or_offset);
+            uintptr_t pkt_vaddr = (uintptr_t)(net_configs[out_int]->tx_data.vaddr + buffer.io_or_offset);
+
             /* Construct ethernet header */
-            memcpy(&icmp_resp->ethdst_addr, &req.hdr.ethsrc_addr, ETH_HWADDR_LEN);
-            memcpy(&icmp_resp->ethsrc_addr, &req.hdr.ethdst_addr, ETH_HWADDR_LEN);
-            icmp_resp->eth_type = HTONS(ETH_TYPE_IP);
+            eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
+            memcpy(&eth_hdr->ethdst_addr, &req.eth_hdr.ethsrc_addr, ETH_HWADDR_LEN);
+            memcpy(&eth_hdr->ethsrc_addr, &req.eth_hdr.ethdst_addr, ETH_HWADDR_LEN);
+            eth_hdr->ethtype = htons(ETH_TYPE_IP);
 
             /* Construct IP packet */
-            icmp_resp->ihl_version = (4 << 4) | (5);
-            /* The differentiated services code 48 is for network control traffic. */
-            icmp_resp->tos = 48;
+            ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
+            ip_hdr->version = 4;
+            ip_hdr->ihl = IPV4_HDR_LEN_MIN / 4;
+            ip_hdr->dscp = IPV4_DSCP_NET_CTRL;
+            ip_hdr->ecn = 0;
 
-            /**
-             * Hardcode the total length of a destination unreachable packet
-             * here. The total length of the IP packet and the ICMP packet,
-             * therefore we subtract the size of the ethernet header.
-             */
-             icmp_resp->tot_len = HTONS(sizeof(icmp_packet_t) - sizeof(struct ethernet_header));
+            /* Not fragmenting this IP packet, set all other fields to 0 */
+            ip_hdr->id = 0;
+            ip_hdr->frag_offset1 = 0;
+            ip_hdr->frag_offset2 = 0;
+            ip_hdr->more_frag = 0;
+            ip_hdr->no_frag = 1;
+            ip_hdr->reserved = 0;
 
-            /* Not fragmenting this IP packet. */
-            icmp_resp->id = HTONS(0);
-
-            /* 0x4000 sets the "Don't Fragment" Bit */
-            icmp_resp->frag_off = HTONS(0x4000);
-
-            /* Recommended inital value of ttl is 64 hops according to the TCP/IP spec. */
-            icmp_resp->ttl = 64;
-            icmp_resp->protocol = IPV4_PROTO_ICMP;
-            icmp_resp->check = 0;
+            /* Recommended inital value of ttl is 64 hops according to the TCP/IP spec */
+            ip_hdr->ttl = 64;
+            ip_hdr->protocol = IPV4_PROTO_ICMP;
 
             /* Source of IP packet is the firewall */
-            icmp_resp->src_ip = icmp_config.ips[out_int];
-            icmp_resp->dst_ip = req.hdr.src_ip;
-            icmp_resp->type = req.type;
-            icmp_resp->code = req.code;
+            ip_hdr->src_ip = icmp_config.ips[out_int];
+            ip_hdr->dst_ip = req.ip_hdr.src_ip;
 
-            /* Set checksum to 0 for hardware calculation */
-            icmp_resp->checksum = 0;
+            /* Construct ICMP packet */
+            icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
+            icmp_hdr->type = req.type;
+            icmp_hdr->code = req.code;
 
-            /* IP header starts from ihl_version field */
-            memcpy(&icmp_resp->old_ip_hdr, &req.hdr.ihl_version, sizeof(ipv4hdr_t));
-            memcpy(&icmp_resp->old_data, req.data, FW_ICMP_OLD_DATA_LEN);
+            /* Handle each ICMP type separately */
+            switch (req.type) {
+                case ICMP_DEST_UNREACHABLE:
 
-            buffer.len = sizeof(icmp_packet_t);
+                    /* Total length of ICMP destination unreachable IP packet */
+                    // TODO: Should this be less if the source packet did not
+                    // contain 8 bytes of data?
+                    ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_DEST_LEN);
+
+                    /* Construct ICMP destination unreachable packet */
+                    icmp_dest_t *icmp_dest = (icmp_dest_t *)(pkt_vaddr + ICMP_DEST_OFFSET);
+
+                    /* Unused must be set to 0, as well as optional fields we
+                    are not currently using */
+                    icmp_dest->unused = 0;
+                    icmp_dest->len = 0;
+                    icmp_dest->nexthop_mtu = 0;
+
+                    /* Copy IP header */
+                    memcpy(&icmp_dest->ip_hdr, &req.ip_hdr, IPV4_HDR_LEN_MIN);
+
+                    /* Copy first bytes of data if applicable */
+                    // TODO: If the source packet did not contain 8 bytes of
+                    // data, should the rest be zero-filled?
+                    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(req.ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
+                    memcpy(&icmp_dest->data, req.data, to_copy);
+                    break;
+
+                default:
+                    sddf_printf("ICMP module tried to construct an unsupported ICMP type %u packet for interface %u!\n",
+                                req.type, out_int);
+                    break;
+            }
+
+            /* Set checksum to 0 and leave calculation to hardware. If this is
+            no supported, calculate IP and ICMP checksums here */
+            icmp_hdr->check = 0;
+            ip_hdr->check = 0;
+
+            #ifndef NETWORK_HW_HAS_CHECKSUM
+            /* ICMP checksum is calculated over entire ICMP packet */
+            icmp_hdr->check = fw_internet_checksum(icmp_hdr, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
+            /* IP checksum is calculated only over IP header */
+            ip_hdr->check = fw_internet_checksum(ip_hdr, IPV4_HDR_LEN_MIN);
+            #endif
+
+            buffer.len = htons(ip_hdr->tot_len) + ETH_HDR_LEN;
             err = net_enqueue_active(&net_queue[out_int], buffer);
             transmitted[out_int] = true;
             assert(!err);
 
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("ICMP module sending packet for ip %s with type %u, code %u\n",
-                    ipaddr_to_string(icmp_resp->dst_ip, ip_addr_buf0), icmp_resp->type, icmp_resp->code);
+                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0), icmp_hdr->type, icmp_hdr->code);
             }
         }
     }

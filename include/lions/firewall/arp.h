@@ -10,9 +10,53 @@
 #include <string.h>
 #include <os/sddf.h>
 #include <sddf/util/util.h>
-#include <sddf/timer/client.h>
-#include <lions/firewall/config.h>
-#include <lions/firewall/protocols.h>
+#include <lions/firewall/ethernet.h>
+
+/* ----------------- ARP Protocol Definitions ---------------------------*/
+
+typedef struct __attribute__((__packed__)) arp_pkt {
+    /* hardware type (network link layer protocol) */
+    uint16_t hwtype;
+    /* internetwork protocol for which the ARP request is intended */
+    uint16_t protocol;
+    /* length in bytes of a hardware address */
+    uint8_t hwlen;
+    /* length in bytes of internetwork addresses */
+    uint8_t protolen;
+    /* operation the sender is performing */
+    uint16_t opcode;
+    /* sender hardware address. In requests this is the address of the host
+    sending the request. In a replies this is the address of the host the
+    request was looking for */
+    uint8_t hwsrc_addr[ETH_HWADDR_LEN];
+    /* sender protocol address */
+    uint32_t ipsrc_addr;
+    /* target hardware address. In requests this is ignored. In replies this is
+    the address of the host that originated the request */
+    uint8_t hwdst_addr[ETH_HWADDR_LEN];
+    /* target protocol address */
+    uint32_t ipdst_addr;
+    /* padding to reach the ethernet frame minimum payload */
+    uint8_t padding[18];
+} arp_pkt_t;
+
+/* Offset of the start of the ARP packet */
+#define ARP_PKT_OFFSET ETH_HDR_LEN
+
+/* Length of ARP packet, including ethernet header */
+#define ARP_PKT_LEN (ETH_HDR_LEN + sizeof(arp_pkt_t))
+
+/* ARP hardware types*/
+#define ARP_HWTYPE_ETH 1
+
+/* ARP protocol address lengths */
+#define ARP_PROTO_LEN_IPV4 4
+
+/* ARP operation codes */
+#define ARP_ETH_OPCODE_REQUEST 1
+#define ARP_ETH_OPCODE_REPLY 2
+
+/* ----------------- Firewall Data Types ---------------------------*/
 
 typedef enum {
     /* no error */
@@ -130,7 +174,6 @@ static fw_arp_request_t fw_arp_response_from_entry(fw_arp_entry_t *entry)
  * Add an entry to the arp table.
  *
  * @param table address of arp table.
- * @param timer_ch channel to sddf timer subsystem.
  * @param state state of arp entry.
  * @param ip ip address of arp entry.
  * @param mac_addr mac address of arp entry or NULL.

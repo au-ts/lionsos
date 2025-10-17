@@ -14,6 +14,7 @@
 #include <lions/firewall/arp.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
+#include <lions/firewall/ethernet.h>
 #include <lions/firewall/queue.h>
 #include <lwip/ip.h>
 #include <lwip/pbuf.h>
@@ -33,7 +34,12 @@ extern fw_queue_t rx_free;
 extern fw_queue_t arp_req_queue;
 extern fw_queue_t arp_resp_queue;
 
-arp_packet_t arp_response_pkt = {0};
+typedef struct __attribute__((__packed__)) arp_frame {
+    eth_hdr_t eth_hdr;
+    arp_pkt_t arp_pkt;
+} arp_frame_t;
+
+arp_frame_t arp_response_pkt = {0};
 
 static bool notify_rx = false;
 static bool notify_arp = false;
@@ -60,26 +66,26 @@ static void firewall_interface_free_buffer(struct pbuf *buf) {
 
 static void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN]) {
     /* Fill ethernet header */
-    memcpy(arp_response_pkt.ethdst_addr, fw_config.interfaces[fw_config.interface].mac_addr, ETH_HWADDR_LEN);
-    memcpy(arp_response_pkt.ethsrc_addr, mac, ETH_HWADDR_LEN);
-    arp_response_pkt.type = HTONS(ETH_TYPE_ARP);
+    memcpy(arp_response_pkt.eth_hdr.ethdst_addr, fw_config.interfaces[fw_config.interface].mac_addr, ETH_HWADDR_LEN);
+    memcpy(arp_response_pkt.eth_hdr.ethsrc_addr, mac, ETH_HWADDR_LEN);
+    arp_response_pkt.eth_hdr.ethtype = HTONS(ETH_TYPE_ARP);
     /* Fill ARP Packet */
-    arp_response_pkt.hwtype = HTONS(ETH_HWTYPE);
-    arp_response_pkt.proto = HTONS(ETH_TYPE_IP);
-    arp_response_pkt.hwlen = ETH_HWADDR_LEN;
-    arp_response_pkt.protolen = IPV4_PROTO_LEN;
-    arp_response_pkt.opcode = HTONS(ETHARP_OPCODE_REPLY);
-    memcpy(arp_response_pkt.hwsrc_addr, mac, ETH_HWADDR_LEN);
-    arp_response_pkt.ipsrc_addr = ip;
-    memcpy(arp_response_pkt.hwdst_addr, fw_config.interfaces[fw_config.interface].mac_addr, ETH_HWADDR_LEN);
-    arp_response_pkt.ipdst_addr = fw_config.interfaces[fw_config.interface].ip;
-    memset(&arp_response_pkt.padding, 0, 10);
+    arp_response_pkt.arp_pkt.hwtype = HTONS(ARP_HWTYPE_ETH);
+    arp_response_pkt.arp_pkt.protocol = HTONS(ETH_TYPE_IP);
+    arp_response_pkt.arp_pkt.hwlen = ETH_HWADDR_LEN;
+    arp_response_pkt.arp_pkt.protolen = ARP_PROTO_LEN_IPV4;
+    arp_response_pkt.arp_pkt.opcode = HTONS(ARP_ETH_OPCODE_REPLY);
+    memcpy(arp_response_pkt.arp_pkt.hwsrc_addr, mac, ETH_HWADDR_LEN);
+    arp_response_pkt.arp_pkt.ipsrc_addr = ip;
+    memcpy(arp_response_pkt.arp_pkt.hwdst_addr, fw_config.interfaces[fw_config.interface].mac_addr, ETH_HWADDR_LEN);
+    arp_response_pkt.arp_pkt.ipdst_addr = fw_config.interfaces[fw_config.interface].ip;
 }
 
 bool mpfirewall_intercept_arp(struct pbuf *p) {
     /* Check if this is an ARP request before transmitting through NIC */
-    arp_packet_t *arp = (arp_packet_t *)p->payload;
-    if (arp->type != HTONS(ETH_TYPE_ARP) || arp->opcode != HTONS(ETHARP_OPCODE_REQUEST)) {
+    eth_hdr_t *eth_hdr = (eth_hdr_t *)p->payload;
+    arp_pkt_t *arp_pkt = (arp_pkt_t *)(p->payload + ARP_PKT_OFFSET);
+    if (eth_hdr->ethtype != HTONS(ETH_TYPE_ARP) || arp_pkt->opcode != HTONS(ARP_ETH_OPCODE_REQUEST)) {
         return false;
     }
 
@@ -97,12 +103,12 @@ net_sddf_err_t mpfirewall_handle_arp(struct pbuf *p) {
      * Check if the destination ip is ours - if so, this packet is most likely
      * an ARP probe. We should discard.
     */
-    arp_packet_t *arp = (arp_packet_t *)p->payload;
-    if (arp->ipdst_addr == fw_config.interfaces[fw_config.interface].ip) {
+    arp_pkt_t *arp_pkt = (arp_pkt_t *)(p->payload + ARP_PKT_OFFSET);
+    if (arp_pkt->ipdst_addr == fw_config.interfaces[fw_config.interface].ip) {
         return SDDF_LWIP_ERR_OK;
     }
 
-    fw_arp_request_t request = {arp->ipdst_addr, {0}, ARP_STATE_INVALID};
+    fw_arp_request_t request = {arp_pkt->ipdst_addr, {0}, ARP_STATE_INVALID};
     int err = fw_enqueue(&arp_req_queue, &request);
     if (err) {
         dlog("Could not enqueue arp request, queue is full");
@@ -135,11 +141,11 @@ void mpfirewall_process_arp(void) {
 
             struct pbuf *p = pbuf_alloced_custom(
                 PBUF_RAW,
-                sizeof(arp_packet_t),
+                ARP_PKT_LEN,
                 PBUF_REF,
                 &pbuf->custom,
                 &arp_response_pkt,
-                sizeof(arp_packet_t)
+                ARP_PKT_LEN
             );
 
             net_sddf_err_t net_err = sddf_lwip_input_pbuf(p);

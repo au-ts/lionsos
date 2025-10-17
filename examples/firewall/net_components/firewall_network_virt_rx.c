@@ -8,18 +8,16 @@
 #include <os/sddf.h>
 #include <sddf/network/constants.h>
 #include <sddf/network/queue.h>
-#include <sddf/network/util.h>
 #include <sddf/network/config.h>
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
 #include <sddf/util/cache.h>
+#include <lions/firewall/arp.h>
+#include <lions/firewall/checksum.h>
 #include <lions/firewall/config.h>
-#include <lions/firewall/protocols.h>
+#include <lions/firewall/ethernet.h>
+#include <lions/firewall/ip.h>
 #include <lions/firewall/queue.h>
-
-/* Used to signify that a packet has come in for the broadcast address and does not match with
- * any particular client. */
-#define BROADCAST_ID (-2)
 
 __attribute__((__section__(".net_virt_rx_config"))) net_virt_rx_config_t config;
 __attribute__((__section__(".fw_net_virt_rx_config"))) fw_net_virt_rx_config_t fw_config;
@@ -32,37 +30,29 @@ fw_queue_t fw_free_clients[FW_MAX_FW_CLIENTS];
 /* Boolean to indicate whether a packet has been enqueued into the driver's free queue during notification handling */
 static bool notify_drv;
 
-/* Returns the client ID if the protocol number is a match to the client. Handles ARP cases specially
-for requests/responses and does not use the standardised EthType protocol ID for these. */
-static int get_protocol_match(struct ethernet_header *buffer, uint16_t *protocol)
+/* Returns the net client ID of the matching filter if the IP protocol number is
+found. ARP requests and responses are handled as a special case. */
+static int get_protocol_match(uintptr_t pkt)
 {
-
-    /* @kwinter: For now we are using the range 0f 0x92 - 0xFC for non IP protocol
-    IDs in our client info structs as these are currently unused in the IP standard.
-    Maybe change this to something more robust in the future. */
-    uint16_t ethtype = buffer->type;
-    if (ethtype == HTONS(ETH_TYPE_ARP)) {
-        /* filter based on arp opcode */
-        arp_packet_t *pkt = (arp_packet_t *) buffer;
-        if (pkt->opcode == HTONS(ETHARP_OPCODE_REQUEST)) {
-            /* Requests go to the arp responder component */
-            *protocol = 0x92;
-        } else if (pkt->opcode == HTONS(ETHARP_OPCODE_REPLY)) {
-            /* Responses go to the arp requester component */
-            *protocol = 0x93;
+    uint16_t ethtype = htons(((eth_hdr_t *)pkt)->ethtype);
+    for (uint8_t client = 0; client < config.num_clients; client++) {
+        /* First check for ethtype match */
+        if (fw_config.active_client_ethtypes[client] != ethtype) {
+            continue;
         }
-    } else if (ethtype == HTONS(ETH_TYPE_IP)) {
-        /* filter based on IP protocol */
-        ipv4_packet_t *pkt = (ipv4_packet_t *) buffer;
-        *protocol = pkt->protocol;
-    } else {
-        /* @kwinter: TODO: remove this, this should match with the router component for now. */
-        return -1;
-    }
 
-    for (int client = 0; client < config.num_clients; client++) {
-        if (fw_config.active_client_protocols[client] == *protocol) {
-            return client;
+        if (ethtype == ETH_TYPE_ARP) {
+            /* If ARP traffic, check for opcode match */
+            arp_pkt_t *arp = (arp_pkt_t *)(pkt + ARP_PKT_OFFSET);
+            if (fw_config.active_client_subtypes[client] == htons(arp->opcode)) {
+                return client;
+            }
+        } else if (ethtype == ETH_TYPE_IP) {
+            /* If IPv4 traffic, check for IPv4 protocol match */
+            ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt + IPV4_HDR_OFFSET);
+            if (fw_config.active_client_subtypes[client] == ip_hdr->protocol) {
+                return client;
+            }
         }
     }
 
@@ -83,7 +73,9 @@ static void rx_return(void)
             uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.data.region.vaddr;
 
             /* Remove additional 4 byte ethernet header from NIC promiscuous mode */
+            #if !defined(CONFIG_PLAT_QEMU_ARM_VIRT)
             buffer.len -= 4;
+            #endif
 
             // Cache invalidate after DMA write, so we don't read stale data.
             // This must be performed after the DMA write to avoid reading
@@ -95,8 +87,7 @@ static void rx_return(void)
             //
             // [1]: https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Instructions/DC-IVAC--Data-or-unified-Cache-line-Invalidate-by-VA-to-PoC
             cache_clean_and_invalidate(buffer_vaddr, buffer_vaddr + buffer.len);
-            uint16_t protocol = 0;
-            int client = get_protocol_match((struct ethernet_header *) buffer_vaddr, &protocol);
+            int client = get_protocol_match(buffer_vaddr);
             if (client >= 0) {
                 err = net_enqueue_active(&rx_queue_clients[client], buffer);
                 assert(!err);

@@ -5,24 +5,24 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 #include <os/sddf.h>
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
-#include <sddf/network/util.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 #include <lions/firewall/arp.h>
+#include <lions/firewall/checksum.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/filter.h>
-#include <lions/firewall/protocols.h>
+#include <lions/firewall/icmp.h>
+#include <lions/firewall/ip.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/routing.h>
-#include <lions/firewall/common.h>
-#include <lions/firewall/icmp.h>
-#include <string.h>
+#include <lions/firewall/tcp.h>
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".fw_router_config"))) fw_router_config_t router_config;
@@ -65,17 +65,22 @@ static bool notify_icmp; /* Request has been enqueued to ICMP module */
 packet back to source */
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
-    uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
-    ipv4_packet_t *ip_pkt = (ipv4_packet_t *)(pkt_vaddr);
     icmp_req_t req = {0};
     req.type = ICMP_DEST_UNREACHABLE;
     req.code = ICMP_DEST_HOST_UNREACHABLE;
 
-    /* copy packet and 8 bytes of data */
-    memcpy(&req.hdr, ip_pkt, sizeof(ipv4_packet_t));
-    if (buffer.len >= (sizeof(ipv4_packet_t) + FW_ICMP_OLD_DATA_LEN)) {
-        memcpy(req.data, (void *)(pkt_vaddr + sizeof(ipv4_packet_t)), FW_ICMP_OLD_DATA_LEN);
-    }
+    /* Copy ethernet header into ICMP request */
+    uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
+    memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
+
+    /* Copy IP header into ICMP request */
+    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
+    memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
+
+    /* Copy first bytes of data if applicable */
+    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
+    memcpy(req.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
+
     int err = fw_enqueue(&icmp_queue, &req);
     if (!err) {
         notify_icmp = true;
@@ -85,22 +90,29 @@ static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
 }
 
 static void transmit_packet(net_buff_desc_t buffer,
-                           uint8_t *mac_addr)
+                            uint8_t *mac_addr)
 {
     uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
-    ipv4_packet_t *ip_pkt = (ipv4_packet_t *)(pkt_vaddr);
+    eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
+    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
-    memcpy(&ip_pkt->ethdst_addr, mac_addr, ETH_HWADDR_LEN);
-    memcpy(&ip_pkt->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
-    ip_pkt->check = 0;
+    memcpy(&eth_hdr->ethdst_addr, mac_addr, ETH_HWADDR_LEN);
+    memcpy(&eth_hdr->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
 
     /* Transmit packet out the NIC */
     if (FW_DEBUG_OUTPUT) {
         sddf_printf("%sRouter sending packet for ip %s with buffer number %lu\n",
             fw_frmt_str[router_config.interface],
-            ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0),
+            ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
             buffer.io_or_offset/NET_BUFFER_SIZE);
     }
+
+    /* Checksum needs to be re-calculated as header has been modified */
+    ip_hdr->check = 0;
+#ifndef NETWORK_HW_HAS_CHECKSUM
+    /* Recalculate IP packet checksum in software */
+    ip_hdr->check = fw_internet_checksum(ip_hdr, ipv4_header_length(ip_hdr));
+#endif
 
     int err = fw_enqueue(&tx_active, &buffer);
     assert(!err);
@@ -131,7 +143,7 @@ static void process_arp_waiting(void)
         if (response.state == ARP_STATE_UNREACHABLE) {
             /* Invalid response, drop packet associated with the IP address */
             pkt_waiting_node_t *node = root;
-            for (uint16_t i = 0; i < root->num_children; i++) {
+            for (uint16_t i = 0; i < root->num_children + 1; i++) {
                 err = enqueue_icmp_unreachable(node->buffer);
                 if (FW_DEBUG_OUTPUT && err) {
                     sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP unreachable!\n",
@@ -164,7 +176,8 @@ static void route(void)
             assert(!err);
 
             uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
-            ipv4_packet_t *ip_pkt = (ipv4_packet_t *)(pkt_vaddr);
+            eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
+            ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
             /*
              * Decrement the TTL field. If it reaches 0 protocol is
@@ -173,19 +186,19 @@ static void route(void)
              * NOTE: We drop non-IPv4 packets. This case should be
              * handled by the protocol virtualiser.
              */
-            if (ip_pkt->type != HTONS(ETH_TYPE_IP) || ip_pkt->ttl <= 1) {
+            if (eth_hdr->ethtype != htons(ETH_TYPE_IP) || ip_hdr->ttl <= 1) {
                 err = fw_enqueue(&rx_free, &buffer);
                 assert(!err);
                 returned = true;
                 continue;
             }
 
-            ip_pkt->ttl -= 1;
+            ip_hdr->ttl -= 1;
 
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("%sRouter received packet for ip %s with buffer number %lu\n",
                     fw_frmt_str[router_config.interface],
-                    ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0),
+                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
                             buffer.io_or_offset/NET_BUFFER_SIZE);
             }
 
@@ -193,7 +206,7 @@ static void route(void)
             uint32_t next_hop;
             fw_routing_interfaces_t interface;
             fw_routing_err_t fw_err = fw_routing_find_route(routing_table,
-                                                            ip_pkt->dst_ip,
+                                                            ip_hdr->dst_ip,
                                                             &next_hop,
                                                             &interface,
                                                             0);
@@ -202,7 +215,7 @@ static void route(void)
             if (FW_DEBUG_OUTPUT && interface != ROUTING_OUT_NONE) {
                 sddf_printf("%sRouter converted ip %s to next hop ip %s out interface %u\n",
                     fw_frmt_str[router_config.interface],
-                    ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0),
+                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
                     ipaddr_to_string(next_hop, ip_addr_buf1), interface);
             }
 
@@ -214,7 +227,7 @@ static void route(void)
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sRouter found no route for ip %s, dropping packet\n",
                         fw_frmt_str[router_config.interface],
-                        ipaddr_to_string(ip_pkt->dst_ip, ip_addr_buf0));
+                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0));
                 }
 
                 err = fw_enqueue(&rx_free, &buffer);
@@ -226,12 +239,12 @@ static void route(void)
             /* Packet destined for webserver */
             if (router_config.interface == FW_INTERNAL_INTERFACE_ID &&
                 interface == ROUTING_OUT_SELF) {
-                tcphdr_t *tcp_pkt = (tcphdr_t *)(pkt_vaddr +
-                                        transport_layer_offset(ip_pkt));
+                tcp_hdr_t *tcp_pkt = (tcp_hdr_t *)(pkt_vaddr +
+                                        transport_layer_offset(ip_hdr));
 
                 /* Webserver only accepts TCP traffic on webserver port */
-                if (ip_pkt->protocol != WEBSERVER_PROTOCOL ||
-                    tcp_pkt->dst_port != HTONS(WEBSERVER_PORT)) {
+                if (ip_hdr->protocol != WEBSERVER_PROTOCOL ||
+                    tcp_pkt->dst_port != htons(WEBSERVER_PORT)) {
                     err = fw_enqueue(&rx_free, &buffer);
                     assert(!err);
                     returned = true;

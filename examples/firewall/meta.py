@@ -43,6 +43,15 @@ class Board:
 
 BOARDS: List[Board] = [
     Board(
+        name="qemu_virt_aarch64",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x6_0000_000,
+        serial="pl011@9000000",
+        timer="timer",
+        ethernet0="virtio_mmio@a003c00",
+        ethernet1="virtio_mmio@a003e00"
+    ),
+    Board(
         name="imx8mp_iotgate",
         arch=SystemDescription.Arch.AARCH64,
         paddr_top=0x70_000_000,
@@ -143,9 +152,18 @@ FILTER_ACTION_ALLOW = 1
 FILTER_ACTION_DROP = 2
 FILTER_ACTION_CONNECT = 3
 
-# ARP ethernet type numbers
-arp_responder_protocol = 0x92
-arp_requester_protocol = 0x93
+# Ethernet types of Rx components
+eththype_ip = 0x0800
+ethtype_arp = 0x0806
+
+# IP protocol numbers of filters
+ip_protocol_icmp = 0x01
+ip_protocol_tcp = 0x06
+ip_protocol_udp = 0x11
+
+# ARP ethernet opcodes of ARP components
+arp_eth_opcode_request = 1
+arp_eth_opcode_response = 2
 
 # Helper functions used to generate firewall structures
 def ip_to_int(ipString: str):
@@ -322,7 +340,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     serial_system = Sddf.Serial(sdf, serial_node, common_pds[-2], common_pds[-1])
 
     # Create network 0 pds
-    networks[ext_net]["driver"] = ProtectionDomain("ethernet_driver_dwmac-5.10a", "eth_driver_dwmac-5.10a.elf", priority=101, budget=100, period=400)
+    networks[ext_net]["driver"] = ProtectionDomain("ethernet_driver0", "eth_driver0.elf", priority=101, budget=100, period=400)
     networks[int_net]["out_virt"] = ProtectionDomain("net_virt_tx0", "firewall_network_virt_tx0.elf", priority=100, budget=20000)
     networks[ext_net]["in_virt"] = ProtectionDomain("net_virt_rx0", "firewall_network_virt_rx0.elf", priority=99)
 
@@ -330,7 +348,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     sdf.add_mr(networks[ext_net]["rx_dma_region"])
 
     # Create network 1 subsystem pds
-    networks[int_net]["driver"] = ProtectionDomain("ethernet_driver_imx", "eth_driver_imx.elf", priority=101, budget=100, period=400)
+    networks[int_net]["driver"] = ProtectionDomain("ethernet_driver1", "eth_driver1.elf", priority=101, budget=100, period=400)
     networks[ext_net]["out_virt"] = ProtectionDomain("net_virt_tx1", "firewall_network_virt_tx1.elf", priority=100, budget=20000)
     networks[int_net]["in_virt"] = ProtectionDomain("net_virt_rx1", "firewall_network_virt_rx1.elf", priority=99)
 
@@ -398,7 +416,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             copy_elf(filter_pd.program_image[:-5], filter_pd.program_image[:-5], network["num"])
             sdf.add_pd(filter_pd)
 
-        # Ensure arp requester is client 0 for each network
+        # Since arp requesters are net clients of the output network, we add
+        # them as network clients here first. This ensures that we do not
+        # process and serialise any networks before the corresponding arp
+        # requester has been added
         network["out_net"].add_client_with_copier(network["arp_req"])
 
     # Webserver is a tx client of the internal network
@@ -492,19 +513,22 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         network["configs"][in_virt] = FwNetVirtRxConfig(
             network["num"],
             [],
+            [],
             [router_in_virt_conn[1], output_in_virt_conn[1]]
         )
 
         # Add arp requester protocol for input virt client 0 - this is for the
         # previously added arp requester which is always client 0
-        network["configs"][in_virt].active_client_protocols.append(arp_requester_protocol)
+        network["configs"][in_virt].active_client_ethtypes.append(ethtype_arp)
+        network["configs"][in_virt].active_client_subtypes.append(arp_eth_opcode_response)
 
         # Arp requester needs timer access to handle arp timeouts
         timer_system.add_client(arp_req)
 
         # Add arp responder filter pd as a network client
         network["in_net"].add_client_with_copier(arp_resp)
-        network["configs"][in_virt].active_client_protocols.append(arp_responder_protocol)
+        network["configs"][in_virt].active_client_ethtypes.append(ethtype_arp)
+        network["configs"][in_virt].active_client_subtypes.append(arp_eth_opcode_request)
 
         # Create arp queue firewall connection
         router_arp_conn = fw_arp_connection(router, arp_req, arp_queue_region.capacity,
@@ -596,7 +620,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
             # Connect filter as rx only network client
             network["in_net"].add_client_with_copier(filter_pd, tx=False)
-            network["configs"][in_virt].active_client_protocols.append(protocol)
+            network["configs"][in_virt].active_client_ethtypes.append(eththype_ip)
+            network["configs"][in_virt].active_client_subtypes.append(protocol)
 
             # Create rule region
             filter_rules = fw_shared_region(filter_pd, webserver, "rw",

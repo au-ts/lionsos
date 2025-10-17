@@ -45,7 +45,12 @@ typedef struct fw_net_virt_tx_config {
 typedef struct fw_net_virt_rx_config {
     /* Interface traffic is received from */
     uint8_t interface;
-    uint16_t active_client_protocols[SDDF_NET_MAX_CLIENTS];
+    /* Eth-type of traffic to be routed to each client */
+    uint16_t active_client_ethtypes[SDDF_NET_MAX_CLIENTS];
+    /* Sub-type of traffic to be routed to each client. If ethtype == IPv4, this
+    field holds IPv4 protocol numbers. If ethtype == ARP, this field holds ARP
+    opcodes */
+    uint16_t active_client_subtypes[SDDF_NET_MAX_CLIENTS];
     fw_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_free_clients;
 } fw_net_virt_rx_config_t;
