@@ -1,7 +1,7 @@
 # Copyright 2025, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 
-FROM ubuntu:latest
+FROM ubuntu:24.04
 
 RUN DEBIAN_FRONTEND=noninteractive
 
