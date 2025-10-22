@@ -106,7 +106,7 @@ class FirewallMemoryRegions():
             sys.exit()
         self.region_size = round_up_to_Page(self.region_size_formula(self))
         if self.region_size == 0:
-            print("Calculate region size of memory region {self.c_name} was 0!")
+            print("Calculated region size of memory region {self.c_name} was 0!")
             sys.exit()
 
 # Firewall memory region object declarations, update region capacities here
@@ -778,6 +778,8 @@ if __name__ == '__main__':
     assert objdump_process.returncode == 0
 
     for mem_region in FirewallMemoryRegions.all_mrs:
+        if mem_region.region_size != 0:
+            continue
         entry_size = mem_region.entry_size
         if entry_size == 0:
             # Extract lines that hold the value of the size variable. NOTE: we
