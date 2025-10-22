@@ -19,19 +19,19 @@ ip netns exec ext ping ${INT_HOST_IP}
 # ICMP: int --> ext
 ip netns exec int ping ${EXT_HOST_IP}
 
-# TCP: ext --> int
+# TCP: ext listens, int initiates
 ip netns exec int nc -l ${TEST_PORT}
 ip netns exec ext nc ${INT_HOST_IP} ${TEST_PORT}
 
-# TCP: int --> ext
+# TCP: int listens --> ext initiates
 ip netns exec ext nc -l ${TEST_PORT}
 ip netns exec int nc ${EXT_HOST_IP} ${TEST_PORT}
 
-# UDP: ext --> int
+# UDP: ext listens, int initiates
 ip netns exec int nc -ul ${TEST_PORT}
 ip netns exec ext nc -u ${INT_HOST_IP} ${TEST_PORT}
 
-# UDP: int --> ext
+# UDP: int listens --> ext initiates
 ip netns exec ext nc -ul ${TEST_PORT}
 ip netns exec int nc -u ${EXT_HOST_IP} ${TEST_PORT}
 
@@ -40,15 +40,22 @@ ip netns exec ext ping ${INT_BAD_HOST_IP}
 ip netns exec int ping ${EXT_BAD_HOST_IP}
 
 # TCP dump interfaces (e - include ethernet, x - hexdump packet, -i interface)
-# External namespace interface - only accessible within ext namespace
+
+# veth attached to the external namespace
 ip netns exec ext tcpdump -ex -i ext-br0
+# veth attached to the external bridge
 tcpdump -ex -i br0-ext
+# external bridge
 tcpdump -ex -i br0
+# external tap of the firewall
 tcpdump -ex -i tap0
+# internal tap of the firewall
 tcpdump -ex -i tap1
+# internal bridge
 tcpdump -ex -i br1
+# veth attached to the internal bridge
 tcpdump -ex -i br1-int
-# Internal namespace interface - only accessible within int namespace
+# veth attached to the internal namespace
 ip netns exec int tcpdump -eX -i int-br1
 
 # Display routes of a network namespace

@@ -31,25 +31,25 @@ export HOST_HTTP_PORT=8080
 # Firewall internal IP address
 export FW_EXT_IP=172.16.2.1
 
-# Firewall external subnet size
+# Firewall external subnet network bits
 export FW_EXT_SUBNET=12
 
 # External root IP address
 export EXT_ROOT_IP=172.16.2.2
 
-# External host IP address
+# External forwarding host IP address
 export EXT_HOST_IP=172.16.2.200
 
 # Firewall internal IP address
 export FW_INT_IP=192.168.1.1
 
-# Firewall internal subnet size
+# Firewall internal subnet network bits
 export FW_INT_SUBNET=24
 
 # Internal root IP address
 export INT_ROOT_IP=192.168.1.2
 
-# Internal host IP address
+# Internal forwarding host IP address
 export INT_HOST_IP=192.168.1.100
 
 # External non-existant host IP address

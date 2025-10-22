@@ -26,9 +26,7 @@ RUN apt-get install -y ca-certificates \
 
 # Install SSH server
 RUN apt-get install -y openssh-server \
-  && mkdir /var/run/sshd \
-  && apt-get update \
-  && apt-get install -y systemctl
+  && mkdir /var/run/sshd
 
 EXPOSE 22
 
