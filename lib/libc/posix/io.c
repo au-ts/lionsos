@@ -169,6 +169,14 @@ static long sys_dup3(va_list ap) {
     return newfd;
 }
 
+static long sys_fstat(va_list ap) {
+    int fd = va_arg(ap, int);
+    struct stat *statbuf = va_arg(ap, struct stat *);
+
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
+    return fd_entry->fstat(fd, statbuf);
+}
+
 void libc_init_io() {
     libc_define_syscall(__NR_write, sys_write);
     libc_define_syscall(__NR_read, sys_read);
@@ -177,4 +185,5 @@ void libc_init_io() {
     libc_define_syscall(__NR_close, sys_close);
     libc_define_syscall(__NR_ioctl, sys_ioctl);
     libc_define_syscall(__NR_dup3, sys_dup3);
+    libc_define_syscall(__NR_fstat, sys_fstat);
 }
