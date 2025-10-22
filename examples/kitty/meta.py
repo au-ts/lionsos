@@ -8,7 +8,7 @@ from typing import List, Tuple, Optional
 from sdfgen import SystemDescription, Sddf, Vmm, DeviceTree, LionsOs
 from importlib.metadata import version
 
-assert version('sdfgen').split(".")[1] == "26", "Unexpected sdfgen version"
+assert version('sdfgen').split(".")[1] == "27", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 VirtualMachine = SystemDescription.VirtualMachine
@@ -16,6 +16,7 @@ MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Irq = SystemDescription.Irq
 Channel = SystemDescription.Channel
+
 
 @dataclass
 class Board:
@@ -63,33 +64,47 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         assert i2c_node is not None
 
         # TODO: sort out priorities
-        i2c_driver = ProtectionDomain("i2c_driver", "i2c_driver.elf", priority=100)
+        i2c_driver = ProtectionDomain(
+            "i2c_driver", "i2c_driver.elf", priority=100)
         i2c_virt = ProtectionDomain("i2c_virt", "i2c_virt.elf", priority=2)
         # Right now we do not have separate clk and GPIO drivers and so our I2C driver does manual
         # clk/GPIO setup for I2C.
-        clk_mr = MemoryRegion(sdf, "clk", 0x2000, paddr=0xff63c000) # @alwin: Changed this to 0x2000 so that it is equal to vmm bus2
-        gpio_mr = MemoryRegion(sdf, "gpio", 0x3000, paddr=0xff634000) # @alwin: The VM touches SOMETHING at 0xff6346ec
+        # @alwin: Changed this to 0x2000 so that it is equal to vmm bus2
+        clk_mr = MemoryRegion(sdf, "clk", 0x2000, paddr=0xff63c000)
+        # @alwin: The VM touches SOMETHING at 0xff6346ec
+        gpio_mr = MemoryRegion(sdf, "gpio", 0x3000, paddr=0xff634000)
         sdf.add_mr(clk_mr)
         sdf.add_mr(gpio_mr)
         i2c_driver.add_map(Map(clk_mr, 0x30_000_000, "rw", cached=False))
         i2c_driver.add_map(Map(gpio_mr, 0x30_100_000, "rw", cached=False))
         i2c_system = Sddf.I2c(sdf, i2c_node, i2c_driver, i2c_virt)
 
-    timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=101)
+    timer_driver = ProtectionDomain(
+        "timer_driver", "timer_driver.elf", priority=101)
     timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
 
-    serial_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
-    serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
-    serial_virt_rx = ProtectionDomain("serial_virt_rx", "serial_virt_rx.elf", priority=99)
-    serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx, virt_rx=serial_virt_rx)
+    serial_driver = ProtectionDomain(
+        "serial_driver", "serial_driver.elf", priority=100)
+    serial_virt_tx = ProtectionDomain(
+        "serial_virt_tx", "serial_virt_tx.elf", priority=99)
+    serial_virt_rx = ProtectionDomain(
+        "serial_virt_rx", "serial_virt_rx.elf", priority=99)
+    serial_system = Sddf.Serial(
+        sdf, serial_node, serial_driver, serial_virt_tx, virt_rx=serial_virt_rx)
 
-    ethernet_driver = ProtectionDomain("ethernet_driver", "eth_driver.elf", priority=101, budget=100, period=400)
-    net_virt_tx = ProtectionDomain("net_virt_tx", "network_virt_tx.elf", priority=100, budget=20000)
-    net_virt_rx = ProtectionDomain("net_virt_rx", "network_virt_rx.elf", priority=99)
-    net_system = Sddf.Net(sdf, ethernet_node, ethernet_driver, net_virt_tx, net_virt_rx)
+    ethernet_driver = ProtectionDomain(
+        "ethernet_driver", "eth_driver_meson.elf", priority=101, budget=100, period=400)
+    net_virt_tx = ProtectionDomain(
+        "net_virt_tx", "network_virt_tx.elf", priority=100, budget=20000)
+    net_virt_rx = ProtectionDomain(
+        "net_virt_rx", "network_virt_rx.elf", priority=99)
+    net_system = Sddf.Net(sdf, ethernet_node,
+                          ethernet_driver, net_virt_tx, net_virt_rx)
 
-    micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000, stack_size=0x10000)
-    micropython_net_copier = ProtectionDomain("micropython_net_copier", "network_copy_micropython.elf", priority=97, budget=20000)
+    micropython = ProtectionDomain(
+        "micropython", "micropython.elf", priority=1, budget=20000, stack_size=0x10000)
+    micropython_net_copier = ProtectionDomain(
+        "micropython_net_copier", "network_copy_micropython.elf", priority=97, budget=20000)
 
     serial_system.add_client(micropython)
     timer_system.add_client(micropython)
@@ -98,7 +113,8 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     if board.i2c:
         i2c_system.add_client(micropython)
 
-    nfs_net_copier = ProtectionDomain("nfs_net_copier", "network_copy_nfs.elf", priority=97, budget=20000)
+    nfs_net_copier = ProtectionDomain(
+        "nfs_net_copier", "network_copy_nfs.elf", priority=97, budget=20000)
 
     nfs = ProtectionDomain("nfs", "nfs.elf", priority=96, stack_size=0x10000)
 
@@ -128,10 +144,11 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     sdf.add_channel(Channel(micropython, vmm, a_id=0, b_id=0))
 
     if board.name == "qemu_virt_aarch64":
-        passthrough_irqs = [Irq(x) for x in [35, 36, 37, 38] ]
+        passthrough_irqs = [Irq(x) for x in [35, 36, 37, 38]]
         vmm_system.add_passthrough_device(dtb.node("intc@8000000/v2m@8020000"))
         for addr in range(0xa000000, 0xa004000, 0x200):
-            vmm_system.add_passthrough_device(dtb.node(f"virtio_mmio@{hex(addr)[2:]}"), irqs = [])
+            vmm_system.add_passthrough_device(
+                dtb.node(f"virtio_mmio@{hex(addr)[2:]}"), irqs=[])
 
         # Other pass-through devices
         devices = [
@@ -145,45 +162,73 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
         # This is quite a lot of passthrough devices, which we can cleanup with
         # https://github.com/au-ts/lionsos/pull/134.
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/hdmi-tx@0"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/bus@30000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/audio-controller@32000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/bus@38000/video-lut@48"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/phy@3a000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/phy@46000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/mdio-multiplexer@4c000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/bus@60000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff600000/audio-controller@61000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff600000/hdmi-tx@0"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff600000/bus@30000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff600000/audio-controller@32000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff600000/bus@38000/video-lut@48"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff600000/phy@3a000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff600000/phy@46000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff600000/mdio-multiplexer@4c000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff600000/bus@60000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff600000/audio-controller@61000"))
 
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff800000/sys-ctrl@0"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff800000/cec@100"), irqs = [])
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff800000/ao-secure@140"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff800000/cec@280"), irqs = [])
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff800000/pwm@2000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff800000/sys-ctrl@0"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff800000/cec@100"), irqs=[])
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff800000/ao-secure@140"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff800000/cec@280"), irqs=[])
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff800000/pwm@2000"))
         vmm_system.add_passthrough_device(dtb.node("soc/bus@ff800000/ir@8000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff800000/adc@9000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ff800000/i2c@5000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff800000/adc@9000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ff800000/i2c@5000"))
 
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ffd00000/reset-controller@1004"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ffd00000/spi@13000"), irqs = [])
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ffd00000/spi@14000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ffd00000/spi@15000"), irqs = [])
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ffd00000/pwm@19000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ffd00000/pwm@1a000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ffd00000/pwm@1b000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ffd00000/i2c@1c000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ffd00000/i2c@1e000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/bus@ffd00000/i2c@1f000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ffd00000/reset-controller@1004"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ffd00000/spi@13000"), irqs=[])
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ffd00000/spi@14000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ffd00000/spi@15000"), irqs=[])
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ffd00000/pwm@19000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ffd00000/pwm@1a000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ffd00000/pwm@1b000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ffd00000/i2c@1c000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ffd00000/i2c@1e000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/bus@ffd00000/i2c@1f000"))
 
         vmm_system.add_passthrough_device(dtb.node("soc/usb@ffe09000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/usb@ffe09000/usb@ff400000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/usb@ffe09000/usb@ff500000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/usb@ffe09000/usb@ff400000"))
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/usb@ffe09000/usb@ff500000"))
         vmm_system.add_passthrough_device(dtb.node("soc/gpu@ffe40000"))
-        vmm_system.add_passthrough_device(dtb.node("soc/vpu@ff900000"), regions = [0])
+        vmm_system.add_passthrough_device(
+            dtb.node("soc/vpu@ff900000"), regions=[0])
 
-        vm.add_map(Map(gpio_mr, gpio_mr.paddr, "rw", cached=False));
-        vm.add_map(Map(clk_mr, clk_mr.paddr, "rw", cached=False));
-
+        vm.add_map(Map(gpio_mr, gpio_mr.paddr, "rw", cached=False))
+        vm.add_map(Map(clk_mr, clk_mr.paddr, "rw", cached=False))
 
     for irq in passthrough_irqs:
         vmm_system.add_passthrough_irq(irq)
@@ -238,7 +283,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--dtb", required=True)
     parser.add_argument("--sddf", required=True)
-    parser.add_argument("--board", required=True, choices=[b.name for b in BOARDS])
+    parser.add_argument("--board", required=True,
+                        choices=[b.name for b in BOARDS])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
     parser.add_argument("--nfs-server", required=True)

@@ -4,9 +4,12 @@
  */
 
 #include <microkit.h>
+#include <stdint.h>
+#include <string.h>
 #include <sddf/i2c/queue.h>
 #include <sddf/i2c/config.h>
 #include <sddf/i2c/client.h>
+#include <sddf/i2c/libi2c.h>
 #include <string.h>
 #include "micropython.h"
 
@@ -20,6 +23,7 @@
 extern bool i2c_enabled;
 extern i2c_client_config_t i2c_config;
 extern i2c_queue_handle_t i2c_queue_handle;
+extern libi2c_conf_t libi2c_config;
 
 #define I2C_AVAILABLE_BUSES 1
 #define I2C_MAX_BUSES 4
@@ -34,105 +38,72 @@ machine_i2c_obj_t i2c_bus_objs[I2C_MAX_BUSES] = {};
 
 #define I2C_DEFAULT_TIMEOUT_US (50000) // 50ms
 
-int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, bool stop) {
-    /* TODO: check that len is within the data region */
-    /* TODO: this code makes assumptions about there being only a single i2c device */
-    uint8_t *i2c_data = (uint8_t *) i2c_config.virt.data.vaddr;
-    i2c_data[0] = I2C_TOKEN_START;
-    i2c_data[1] = I2C_TOKEN_ADDR_READ;
-    i2c_data[2] = len;
-    for (int i = 0; i < len; i++) {
-        /* We have to pad out the request in order to have a response of correct length. */
-        /* This is a limitation with the sDDF I2C protocol that we intend to fix. */
-        i2c_data[i + 3] = 0;
-    }
-    size_t request_data_end = len + 3;
-    /* The MicroPython API allows the caller to decide whether to add a STOP token to the request. */
-    if (stop) {
-        i2c_data[request_data_end++] = I2C_TOKEN_STOP;
-    }
-    i2c_data[request_data_end++] = I2C_TOKEN_END;
-
-    int ret = i2c_enqueue_request(i2c_queue_handle, addr, 0, request_data_end);
-    if (ret) {
+static int mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, uint8_t flag_mask) {
+    if (addr >= (1 << 7)) {
         mp_raise_msg_varg(&mp_type_RuntimeError,
-                          MP_ERROR_TEXT("i2c_read: I2C(%d)'s request queue is full"), self->port);
-        return -MP_ENOMEM;
+                          MP_ERROR_TEXT("I2C only supports 7-bit addresses."),
+                          self->port);
+        return -MP_EFAULT;
+    }
+
+    // Check length of buffer is sane. libi2c read max is UINT16_MAX.
+    // We leave the function header as a size_t to keep micropython happy
+    if (len >= UINT16_MAX) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("Length is too long. Max = UINT16_MAX"),
+                          self->port);
+        return -MP_EINVAL;
+    }
+
+    // Copy buffer into data region. We assume that nobody else touches the i2c
+    // data region in this PD.
+    uint8_t *i2c_data = (uint8_t *) i2c_config.data.vaddr;
+    memcpy(buf, i2c_data, len);
+
+    // Perform read
+    int ret = sddf_i2c_nb_dispatch(&libi2c_config, (i2c_addr_t) addr,
+                                i2c_data, (uint16_t) len, flag_mask);
+
+    if (ret != I2C_ERR_OK) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("i2c_read: failed to read!"), self->port);
+        return -MP_EFAULT;
     }
 
     microkit_notify(i2c_config.virt.id);
     mp_cothread_wait(i2c_config.virt.id, MP_WAIT_NO_INTERRUPT);
 
     /* Now process the response */
-    size_t bus_address = 0;
-    size_t response_data_offset = 0;
-    unsigned int response_data_len = 0;
-    ret = i2c_dequeue_response(i2c_queue_handle, &bus_address, &response_data_offset, &response_data_len);
-    if (ret) {
-        /* This should be unreacahble, as we should never be signalled unless there is a response
-         * available.
-         */
-        mp_raise_msg_varg(&mp_type_RuntimeError,
-                          MP_ERROR_TEXT("i2c_read: I2C(%d)'s response queue is empty"), self->port);
-        return -MP_ENOMEM;
+    size_t err_cmd_idx = 0;
+    i2c_addr_t returned_addr = 0;
+    i2c_err_t err = sddf_i2c_nb_return(&libi2c_config, &returned_addr, &err_cmd_idx);
+    assert(returned_addr == (i2c_addr_t)addr);
+    /* If we were reading, copy out response data */
+    if (flag_mask & I2C_FLAG_READ) {
+        if (err == I2C_ERR_OK) {
+            memcpy(buf, i2c_data, len);
+            // @lesleyr: is this right? old code always returns 0 on success.
+            return 0;
+        }
     }
+    return err;
+}
 
-    uint8_t *response = (uint8_t *) i2c_config.virt.data.vaddr + response_data_offset;
-    uint8_t *response_data = (uint8_t *) i2c_config.virt.data.vaddr + response_data_offset + RESPONSE_DATA_OFFSET;
-
-    if (response[RESPONSE_ERR] == I2C_ERR_OK) {
-        memcpy(buf, response_data, response_data_len - RESPONSE_DATA_OFFSET);
-    }
-
-    return 0;
+/**
+ *  Perform a read to I2C bus address `addr` with data from `buf`. This function
+ *  will automatically copy the supplied data into the I2C data region.
+ *
+ *  NOTE: we only support 7-bit addressing currently.
+ */
+int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, bool stop) {
+    uint8_t flag_mask = stop ? I2C_FLAG_READ|I2C_FLAG_STOP : I2C_FLAG_READ;
+    return mp_i2c_dispatch(self, addr, buf, len, flag_mask);
 }
 
 int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
-    // TODO: check that len < 256
-    uint8_t *i2c_data = (uint8_t *) i2c_config.virt.data.vaddr;
-    i2c_data[0] = I2C_TOKEN_START;
-    i2c_data[1] = I2C_TOKEN_ADDR_WRITE;
-    i2c_data[2] = len;
-    for (int i = 0; i < len; i++) {
-        i2c_data[i + 3] = buf[i];
-    }
-    size_t request_data_end = len + 3;
-    i2c_data[request_data_end++] = I2C_TOKEN_STOP;
-    i2c_data[request_data_end++] = I2C_TOKEN_END;
-
-    int ret = i2c_enqueue_request(i2c_queue_handle, addr, 0, request_data_end);
-    if (ret) {
-        mp_raise_msg_varg(&mp_type_RuntimeError,
-                          MP_ERROR_TEXT("i2c_write: I2C(%d)'s request queue is full"), self->port);
-        return -MP_ENOMEM;
-    }
-
-    microkit_notify(i2c_config.virt.id);
-    /* Now that we've enqueued our request, wait for the event signalling the I2C response. */
-    mp_cothread_wait(i2c_config.virt.id, MP_WAIT_NO_INTERRUPT);
-
-    /* Now process the response */
-    size_t bus_address = 0;
-    size_t response_data_offset = 0;
-    unsigned int response_data_len = 0;
-    ret = i2c_dequeue_response(i2c_queue_handle, &bus_address, &response_data_offset, &response_data_len);
-    if (ret) {
-        /* This should be unreacahble, as we should never be signalled unless there is a response
-         * available.
-         */
-        mp_raise_msg_varg(&mp_type_RuntimeError,
-                          MP_ERROR_TEXT("I2C(%d)'s response is empty"), self->port);
-        return -MP_ENOMEM;
-    }
-
-    uint8_t *response_data = (uint8_t *) i2c_config.virt.data.vaddr + response_data_offset;
-
-    if (response_data[RESPONSE_ERR] != I2C_ERR_OK) {
-        /* @ivanv: it should be noted that this does not adhere to the MicroPython API for 'write' currently. */
-        return response_data[RESPONSE_ERR_TOKEN];
-    }
-
-    return len;
+    // Write is implied by lack of a read flag
+    uint8_t flag_mask = 0;
+    return mp_i2c_dispatch(self, addr, buf, len, flag_mask);
 }
 
 static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_machine_i2c_buf_t *bufs, unsigned int flags) {

@@ -79,7 +79,7 @@ I2C_BUS_NUM=2
 
 IMAGES := timer_driver.elf \
 	  vmm.elf \
-	  eth_driver.elf \
+	  eth_driver_meson.elf \
 	  micropython.elf \
 	  nfs.elf \
 	  network_copy.elf \
@@ -200,6 +200,7 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 %.o: %.c ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
+
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY) --guest-dtb $(LINUX_DTB)
 	if [ "$(I2C_DRIV_DIR)" != "" ]; then \
@@ -212,8 +213,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
 	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
-	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf
-	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver.elf
+	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver_meson.elf
+	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver_meson.elf
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_virt_rx.data network_virt_rx.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
 	$(OBJCOPY) --update-section .net_copy_config=net_copy_micropython_net_copier.data network_copy.elf network_copy_micropython.elf
