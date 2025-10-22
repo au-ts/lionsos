@@ -71,6 +71,11 @@ static int sock_dup3(int oldfd, int newfd) {
     return 0;
 }
 
+static int sock_fstat(int fd, struct stat *statbuf) {
+    statbuf->st_mode = S_IFSOCK | 0777;
+    return 0;
+}
+
 static long sys_setsockopt(va_list ap) { return 0; }
 
 static long sys_getsockopt(va_list ap) { return 0; }
@@ -96,6 +101,7 @@ static long sys_socket(va_list ap) {
                 .write = sock_write,
                 .close = sock_close,
                 .dup3 = sock_dup3,
+                .fstat = sock_fstat,
             };
         } else {
             // TODO: cleanup socket
