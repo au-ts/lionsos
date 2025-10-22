@@ -7,6 +7,7 @@
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 #include <sddf/timer/config.h>
+#include <sddf/util/cache.h>
 #include <lions/fs/helpers.h>
 #include <lions/fs/config.h>
 #include <lions/fs/protocol.h>
@@ -218,7 +219,6 @@ void DG_Init() {
  * Kick frame buffer to update from doom frame buffer
  */
 void DG_DrawFrame() {
-    /*uint8_t *fb= get_active_frame_buffer_uint8();*/
     // Copy into framebuffer. DOOM outputs RGBA8888 - i.e. uniform 8-bit depth RGBA.
     // The transparency channel is never set.
     size_t fb_offset = 0;
@@ -238,26 +238,15 @@ void DG_DrawFrame() {
             // B: doom offset = 0
             uint32_t pixel = DG_ScreenBuffer[(y*DOOMGENERIC_RESX) + x];
             fb[fb_offset] = (pixel & shave_mask) >> 3;
-
-            /*fb[fb_offset + 0] = (pixel & 0xFF) >> 3;*/
-            /**/
-            /*// G: doom offset = 8*/
-            /*fb[fb_offset + 1] = ((pixel >> 8)  & 0xFF) >> 3;*/
-            /**/
-            /*// R: doom offset = 16*/
-            /*fb[fb_offset + 2] = ((pixel >> 16) & 0xFF) >> 3;*/
-
-            // A: always 0 (implicit)
-            /*fb_offset += 4;*/
             fb_offset++;
         }
         // Jump to next line of pixels
         fb_offset = y * screen_h_pixels;
     }
 
-
-
     framebuffer_kick();
+    cache_clean_and_invalidate((uintptr_t)fb, (uintptr_t)(fb + (shared_hdmi_config->h_active *
+                               shared_hdmi_config->v_active)*4));
 }
 
 void DG_SleepMs(uint32_t ms) {

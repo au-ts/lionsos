@@ -112,9 +112,9 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     dcss.add_map(Map(ccm_mr, 0x3038_0000, "rw", cached=False))
     dcss.add_map(Map(hdmi_mr, 0x32c0_0000, "rw", cached=False))
 
-    doom.add_map(Map(video_dma_pool_mr, 0x5000_0000, "rw", cached=False))
+    doom.add_map(Map(video_dma_pool_mr, 0x5000_0000, "rw", cached=True))
     doom.add_map(
-        Map(dcss_shared_data_mr, 0x6000_0000, "rw", cached=False))
+        Map(dcss_shared_data_mr, 0x6000_0000, "rw", cached=True))
 
     sdf.add_channel(Channel(doom, dcss, a_id=42, b_id=0, pp_a=True))
     sdf.add_channel(Channel(doom, dcss, a_id=43, b_id=52, pp_a=True))
