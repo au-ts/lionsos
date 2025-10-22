@@ -73,9 +73,9 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     net_virt_rx = ProtectionDomain("net_virt_rx", "network_virt_rx.elf", priority=99)
     net_system = Sddf.Net(sdf, ethernet_node, ethernet_driver, net_virt_tx, net_virt_rx)
 
-    blk_driver = ProtectionDomain("blk_driver", "blk_driver.elf", priority=100)
-    blk_virt = ProtectionDomain("blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000)
-    blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
+    # blk_driver = ProtectionDomain("blk_driver", "blk_driver.elf", priority=100)
+    # blk_virt = ProtectionDomain("blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000)
+    # blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
 
     wamr = ProtectionDomain("wamr", "wamr.elf", priority=1, budget=20000, stack_size=0x10000)
     wamr_net_copier = ProtectionDomain("wamr_net_copier", "network_copy_wamr.elf", priority=97, budget=20000)
@@ -85,15 +85,15 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     net_system.add_client_with_copier(wamr, wamr_net_copier)
     wamr_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, wamr)
 
-    fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
+    # fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
 
-    fs = LionsOs.FileSystem.Fat(
-        sdf,
-        fatfs,
-        wamr,
-        blk=blk_system,
-        partition=board.blk_partition
-    )
+    # fs = LionsOs.FileSystem.Fat(
+    #     sdf,
+    #     fatfs,
+    #     wamr,
+    #     blk=blk_system,
+    #     partition=board.blk_partition
+    # )
 
     pds = [
         serial_driver,

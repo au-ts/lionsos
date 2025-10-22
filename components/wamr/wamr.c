@@ -16,6 +16,7 @@
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
 #include <lions/posix/posix.h>
+#include <lions/posix/tcp.h>
 #include <lions/util.h>
 
 #include <lions/fs/helpers.h>
@@ -56,9 +57,6 @@ char *fs_share;
 serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
 
-net_queue_handle_t net_rx_handle;
-net_queue_handle_t net_tx_handle;
-
 fw_queue_t rx_active;
 fw_queue_t rx_free;
 fw_queue_t arp_req_queue;
@@ -75,34 +73,17 @@ static const void *app_instance_main(wasm_module_inst_t module_inst) {
 }
 
 static void netif_status_callback(char *ip_addr) {
-    printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n",
-           microkit_name, __FILE__, __LINE__, __func__, microkit_name, ip_addr);
+    printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n", microkit_name, __FILE__, __LINE__,
+           __func__, microkit_name, ip_addr);
 }
 
 static void wamr_main() {
-    char *ip_string_arg = NULL;
-    sddf_lwip_tx_intercept_condition_fn fw_intercept_arp = NULL;
-    sddf_lwip_tx_handle_intercept_fn fw_handle_arp = NULL;
-    sddf_lwip_netif_status_callback_fn netif_callback = netif_status_callback;
-
+    libc_init();
     printf("WAMR | Starting WAMR...\n");
 
     if (net_enabled) {
         printf("WAMR | Initialising network...\n");
-        if (net_config.rx.num_buffers) {
-            net_queue_init(&net_rx_handle, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
-                           net_config.rx.num_buffers);
-        }
-        if (net_config.tx.num_buffers) {
-            net_queue_init(&net_tx_handle, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
-                           net_config.tx.num_buffers);
-            net_buffers_init(&net_tx_handle, 0);
-        }
-
-        sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, net_rx_handle, net_tx_handle, ip_string_arg,
-                       printf, netif_callback, NULL, fw_intercept_arp, fw_handle_arp);
-
-        sddf_lwip_maybe_notify();
+        tcp_init_0();
     }
 
     if (fs_enabled) {
@@ -146,8 +127,8 @@ static void wamr_main() {
     // const char *dir = "/";
     // wasm_runtime_set_wasi_args(wasm_module, &dir, 1, NULL, 0, NULL, 0, NULL, 0);
 
-    const char *addr_pool_str[1] = {"0.0.0.0/0"};
-    wasm_runtime_set_wasi_addr_pool(wasm_module, addr_pool_str, 1);
+    const char *addr_pool_str[] = {"0.0.0.0/0", "::/0"};
+    wasm_runtime_set_wasi_addr_pool(wasm_module, addr_pool_str, 2);
 
     wasm_module_inst_t wasm_module_inst = NULL;
     printf("WAMR | Instantiating module...\n");
@@ -167,10 +148,17 @@ static void wamr_main() {
 }
 
 void notified(microkit_channel ch) {
-    printf("WAMR | Notified on channel %d\n", ch);
-    if (net_enabled) {
-        sddf_lwip_process_rx();
-        sddf_lwip_process_timeout();
+    if (ch == timer_config.driver_id) {
+        if (net_enabled) {
+            sddf_lwip_process_rx();
+            sddf_lwip_process_timeout();
+
+            sddf_timer_set_timeout(timer_config.driver_id, TIMEOUT);
+        }
+    } else if (ch == net_config.rx.id) {
+        if (net_enabled) {
+            sddf_lwip_process_rx();
+        }
     }
 
     if (fs_enabled) {
@@ -178,7 +166,7 @@ void notified(microkit_channel ch) {
     }
 
     microkit_cothread_recv_ntfn(ch);
-    
+
     if (net_enabled) {
         sddf_lwip_maybe_notify();
     }
@@ -215,12 +203,12 @@ void init(void) {
     stack_ptrs_arg_array_t costacks = {(uintptr_t)wamr_stack};
     microkit_cothread_init(&co_controller_mem, WAMR_STACK_SIZE, costacks);
 
-    libc_init();
-
     if (microkit_cothread_spawn(wamr_main, NULL) == LIBMICROKITCO_NULL_HANDLE) {
         printf("WAMR|ERROR: Cannot initialise WAMR cothread\n");
         assert(false);
     };
+
+    sddf_timer_set_timeout(timer_config.driver_id, TIMEOUT);
 
     microkit_cothread_yield();
 }

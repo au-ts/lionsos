@@ -75,8 +75,11 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	-I$(LIBMICROKITCO_PATH) \
+	-I$(WAMR) # hack for libmicrokitco_opts.h
 
+LWIP_INCLUDE_DIR := $(LIONSOS)/components/wamr/lwip_include
 include $(LIONSOS)/lib/libc/libc.mk
 
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
@@ -157,7 +160,7 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
 		-device virtio-net-device,netdev=netdev0 \
-		-netdev user,id=netdev0,hostfwd=tcp::5555-10.0.2.16:80
+		-netdev user,id=netdev0,hostfwd=tcp::5555-:1234
 
 FORCE: ;
 

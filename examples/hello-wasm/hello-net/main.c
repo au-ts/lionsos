@@ -21,7 +21,7 @@ static void init_sockaddr_inet(struct sockaddr_in *addr) {
     /* 0.0.0.0:1234 */
     addr->sin_family = AF_INET;
     addr->sin_port = htons(1234);
-    addr->sin_addr.s_addr = htonl(INADDR_ANY);
+    inet_pton(AF_INET, "0.0.0.0", &(addr->sin_addr.s_addr));
 }
 
 int main(int argc, char *argv[]) {
@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
     char ip_string[64];
 
     af = AF_INET;
-    addrlen = sizeof(struct sockaddr_in6);
+    addrlen = sizeof(struct sockaddr_in);
     init_sockaddr_inet((struct sockaddr_in *)&addr);
 
     printf("[Server] Create socket\n");
@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
     }
 
     printf("[Server] Listening on socket\n");
-    if (listen(socket_fd, 3) < 0) {
+    if (listen(socket_fd, 10) < 0) {
         perror("Listen failed");
         goto fail;
     }
@@ -56,39 +56,36 @@ int main(int argc, char *argv[]) {
     printf("[Server] Wait for clients to connect ..\n");
     addrlen = sizeof(struct sockaddr);
 
-    for (int i = 0; i < 3; i++) {
-        int new_socket = accept(socket_fd, (struct sockaddr *)&addr, (socklen_t *)&addrlen);
-        if (new_socket < 0) {
-            perror("Accept failed");
-        }
-
-        if (sockaddr_to_string((struct sockaddr *)&addr, ip_string, sizeof(ip_string) / sizeof(ip_string[0])) != 0) {
-            printf("[Server] failed to parse client address\n");
-            goto fail;
-        }
-
-        printf("[Server] Client connected (%s)\n", ip_string);
-
-        const char *message = "Say Hi from the Server\n";
-        int i;
-
-        if (send(new_socket, message, strlen(message), 0) < 0) {
-            perror("Send failed");
-        }
-
-        printf("[Server] Shutting down the new connection #%u ..\n", new_socket);
-        shutdown(new_socket, SHUT_RDWR);
+    int new_socket = accept(socket_fd, (struct sockaddr *)&addr, (socklen_t *)&addrlen);
+    if (new_socket < 0) {
+        perror("Accept failed");
+        goto fail;
     }
+
+    if (sockaddr_to_string((struct sockaddr *)&addr, ip_string, sizeof(ip_string) / sizeof(ip_string[0])) != 0) {
+        printf("[Server] failed to parse client address\n");
+        goto fail;
+    }
+
+    printf("[Server] Client connected (%s), fd %d\n", ip_string, new_socket);
+
+    const char *message = "Say Hi from the Server\n";
+    int i;
+
+    if (send(new_socket, message, strlen(message), 0) < 0) {
+        perror("Send failed");
+    }
+
+    printf("[Server] Shutting down the new connection #%u ..\n", new_socket);
+    shutdown(new_socket, SHUT_RDWR);
 
     printf("[Server] Shutting down ..\n");
     shutdown(socket_fd, SHUT_RDWR);
-    sleep(3);
     printf("[Server] BYE \n");
     return EXIT_SUCCESS;
 
 fail:
     printf("[Server] Shutting down ..\n");
     if (socket_fd >= 0) close(socket_fd);
-    sleep(3);
     return EXIT_FAILURE;
 }

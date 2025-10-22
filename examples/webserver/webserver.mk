@@ -86,7 +86,9 @@ CFLAGS := \
 	-DBOARD_$(MICROKIT_BOARD) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	-I$(LIBMICROKITCO_PATH) \
+	-I$(LIONSOS)/components/micropython/
 
 include $(LIONSOS)/lib/libc/libc.mk
 
