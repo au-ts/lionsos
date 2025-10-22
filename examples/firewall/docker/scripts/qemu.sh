@@ -3,8 +3,8 @@
 
 #!/bin/bash
 
-QEMU=${1}
-IMAGE_FILE=${2}
+IMAGE_FILE=${1}
+QEMU=${2}
 
 ${QEMU:-qemu-system-aarch64} -machine virt,virtualization=on \
         -cpu cortex-a53 \

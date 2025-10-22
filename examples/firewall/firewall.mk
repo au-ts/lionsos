@@ -234,7 +234,7 @@ $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu: $(IMAGE_FILE)
-	$(FIREWALL_SRC_DIR)/docker/scripts/qemu.sh $(QEMU) $(IMAGE_FILE)
+	$(FIREWALL_SRC_DIR)/docker/scripts/qemu.sh $(IMAGE_FILE) $(QEMU)
 
 FORCE: ;
 
