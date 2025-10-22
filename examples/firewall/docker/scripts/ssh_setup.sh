@@ -10,8 +10,7 @@ chmod 700 ~/.ssh
 touch ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
 echo ${HOST_SSH_PUB_KEY} > ~/.ssh/authorized_keys
-systemctl enable ssh
-systemctl start ssh
+service ssh start
 
 # Check running
 service ssh status
