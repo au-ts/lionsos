@@ -16,7 +16,6 @@ docker run -it \
     --privileged --cap-add=NET_ADMIN --cap-add=NET_RAW \
     -v ${LIONSOS_REPO}:/mnt/lionsOS \
     -p ${HOST_SSH_PORT}:22 \
-    --device /dev/net/tun \
     --name ${DOCKER_CONTAINER} \
     ${DOCKER_IMAGE}
 
