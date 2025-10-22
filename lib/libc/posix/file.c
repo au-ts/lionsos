@@ -74,7 +74,7 @@ static size_t file_read(void *buf, size_t len, int fd) {
 static int file_close(int fd) {
     fs_cmpl_t completion;
     fd_entry_t *fd_entry = posix_fd_entry(fd);
-    
+
     if (fd_entry->flags & O_DIRECTORY) {
         fs_command_blocking(&completion, (fs_cmd_t){
                                              .type = FS_CMD_DIR_CLOSE,
@@ -86,7 +86,7 @@ static int file_close(int fd) {
                                              .params.file_close.fd = fs_server_fd_map[fd],
                                          });
     }
-    
+
     if (completion.status != FS_STATUS_SUCCESS) {
         return -1;
     }
@@ -168,12 +168,8 @@ static int fstat_int(const char *path, struct stat *statbuf) {
     return 0;
 }
 
-static long sys_fstat(va_list ap) {
-    int fd = va_arg(ap, int);
-    struct stat *statbuf = va_arg(ap, struct stat *);
-
+static int file_fstat(int fd, struct stat *statbuf) {
     char *path = fd_path[fd];
-
     return fstat_int(path, statbuf);
 }
 
@@ -254,7 +250,12 @@ static long sys_openat(va_list ap) {
     fd_entry_t *fd_entry = posix_fd_entry(fd);
 
     if (fd_entry != NULL) {
-        *fd_entry = (fd_entry_t){.read = file_read, .write = file_write, .close = file_close, .flags = flags};
+        *fd_entry = (fd_entry_t){.read = file_read,
+                                 .write = file_write,
+                                 .close = file_close,
+                                 .dup3 = file_dup3,
+                                 .fstat = file_fstat,
+                                 .flags = flags};
 
         fs_server_fd_map[fd] = fs_fd;
     } else {
@@ -267,7 +268,6 @@ static long sys_openat(va_list ap) {
 
 void libc_init_file() {
     libc_define_syscall(__NR_fcntl, sys_fcntl);
-    libc_define_syscall(__NR_fstat, sys_fstat);
     libc_define_syscall(__NR_newfstatat, sys_fstatat);
     libc_define_syscall(__NR_readlinkat, sys_readlinkat);
     libc_define_syscall(__NR_openat, sys_openat);
