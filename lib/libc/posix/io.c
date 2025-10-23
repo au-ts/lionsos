@@ -65,10 +65,15 @@ long sys_writev(va_list ap) {
 
     ssize_t ret = 0;
     for (int i = 0; i < iovcnt; i++) {
+        if (iov[i].iov_len == 0) {
+            continue;
+        }
         fd_entry_t *fd_entry = posix_fd_entry(fd);
         size_t written = fd_entry->write(iov[i].iov_base, iov[i].iov_len, fd);
 
-        // TODO: check written
+        if (written < 0) {
+            return -1;
+        }
 
         ret += written;
     }

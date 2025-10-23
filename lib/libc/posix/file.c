@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/uio.h>
 #include <sys/stat.h>
@@ -34,21 +35,25 @@ static size_t file_write(const void *buf, size_t len, int fd) {
     memcpy(fs_buffer_ptr(write_buffer), buf, len);
 
     fs_cmpl_t completion;
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
     fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_WRITE,
                                                 .params.file_write = {
                                                     .fd = fs_server_fd_map[fd],
-                                                    // TODO: implement file pointer
-                                                    .offset = 0,
+                                                    .offset = fd_entry->file_ptr,
                                                     .buf.offset = write_buffer,
                                                     .buf.size = len,
                                                 }});
+
     fs_buffer_free(write_buffer);
 
     if (completion.status != FS_STATUS_SUCCESS) {
         return -1;
     }
 
-    return completion.data.file_write.len_written;
+    size_t written = completion.data.file_write.len_written;
+    fd_entry->file_ptr += written;
+
+    return written;
 }
 
 static size_t file_read(void *buf, size_t len, int fd) {
@@ -56,11 +61,11 @@ static size_t file_read(void *buf, size_t len, int fd) {
     fs_buffer_allocate(&read_buffer);
 
     fs_cmpl_t completion;
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
     fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_READ,
                                                 .params.file_read = {
                                                     .fd = fs_server_fd_map[fd],
-                                                    // TODO: implement file pointer
-                                                    .offset = 0,
+                                                    .offset = fd_entry->file_ptr,
                                                     .buf.offset = read_buffer,
                                                     .buf.size = len,
                                                 }});
@@ -69,9 +74,12 @@ static size_t file_read(void *buf, size_t len, int fd) {
         fs_buffer_free(read_buffer);
         return -1;
     }
-    int read = completion.data.file_read.len_read;
+
+    size_t read = completion.data.file_read.len_read;
     memcpy(buf, fs_buffer_ptr(read_buffer), read);
     fs_buffer_free(read_buffer);
+
+    fd_entry->file_ptr += read;
 
     return read;
 }
@@ -96,6 +104,8 @@ static int file_close(int fd) {
         return -1;
     }
 
+    fs_server_fd_map[fd] = -1;
+
     return 0;
 }
 
@@ -109,10 +119,10 @@ static long sys_fcntl(va_list ap) {
     int op = va_arg(ap, int);
 
     switch (op) {
-        case F_GETFL:
+        case F_GETFL: {
             fd_entry_t *fd_entry = posix_fd_entry(fd);
             return fd_entry->flags;
-            break;
+        }
     }
 
     return 0;
@@ -249,9 +259,19 @@ static long sys_openat(va_list ap) {
         fs_fd = completion.data.dir_open.fd;
     } else {
         fs_fd = completion.data.file_open.fd;
+
+        if (flags & O_TRUNC) {
+            fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_TRUNCATE,
+                                                        .params.file_truncate = {.fd = fs_fd, .length = 0}});
+        }
+
+        if (completion.status != FS_STATUS_SUCCESS) {
+            return -1;
+        }
     }
 
     int fd = posix_fd_allocate();
+    assert(fs_server_fd_map[fd] == -1);
     fd_entry_t *fd_entry = posix_fd_entry(fd);
 
     if (fd_entry != NULL) {
@@ -260,7 +280,8 @@ static long sys_openat(va_list ap) {
                                  .close = file_close,
                                  .dup3 = file_dup3,
                                  .fstat = file_fstat,
-                                 .flags = flags};
+                                 .flags = flags,
+                                 .file_ptr = 0};
 
         fs_server_fd_map[fd] = fs_fd;
     } else {
@@ -271,9 +292,51 @@ static long sys_openat(va_list ap) {
     return fd;
 }
 
+static long sys_lseek(va_list ap) {
+    long fd = va_arg(ap, int);
+    off_t offset = va_arg(ap, off_t);
+    int whence = va_arg(ap, int);
+
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
+
+    /* TODO: need to sanitise input */
+    size_t curr_fp = fd_entry->file_ptr;
+    size_t new_fp;
+    switch (whence) {
+        case SEEK_SET:
+            new_fp = offset;
+            break;
+        case SEEK_CUR:
+            new_fp = curr_fp + offset;
+            break;
+        case SEEK_END: {
+            fs_cmpl_t completion;
+            int err = fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_SIZE,
+                                                                  .params.file_size = {
+                                                                      .fd = fs_server_fd_map[fd],
+                                                                  }});
+            if (err || completion.status != FS_STATUS_SUCCESS) {
+                return -1;
+            }
+            new_fp = completion.data.file_size.size + offset;
+            break;
+        }
+        default:
+            printf("POSIX ERROR: lseek got unsupported whence %d\n", whence);
+            // TODO: correct error
+            return -1;
+    }
+
+    fd_entry->file_ptr = new_fp;
+    return new_fp;
+}
+
 void libc_init_file() {
     libc_define_syscall(__NR_fcntl, sys_fcntl);
     libc_define_syscall(__NR_newfstatat, sys_fstatat);
     libc_define_syscall(__NR_readlinkat, sys_readlinkat);
     libc_define_syscall(__NR_openat, sys_openat);
+    libc_define_syscall(__NR_lseek, sys_lseek);
+
+    memset(fs_server_fd_map, -1, sizeof(fs_server_fd_map));
 }
