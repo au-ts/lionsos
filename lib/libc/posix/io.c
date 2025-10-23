@@ -14,7 +14,16 @@ long sys_write(va_list ap) {
     const void *buf = va_arg(ap, const void *);
     size_t count = va_arg(ap, size_t);
 
+    if (fd < 0) {
+        return -EBADFD;
+    }
+
     fd_entry_t *fd_entry = posix_fd_entry(fd);
+
+    if (fd_entry == NULL) {
+        return -EBADFD;
+    }
+    
     return fd_entry->write(buf, count, fd);
 }
 
