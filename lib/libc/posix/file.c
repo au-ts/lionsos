@@ -105,6 +105,7 @@ static int file_close(int fd) {
     }
 
     fs_server_fd_map[fd] = -1;
+    memset(fd_path[fd], 0, MAX_PATH_LEN);
 
     return 0;
 }
@@ -202,10 +203,23 @@ static long sys_readlinkat(va_list ap) { return -EINVAL; }
 
 static long sys_openat(va_list ap) {
     int dirfd = va_arg(ap, int);
-    const char *path = va_arg(ap, const char *);
+    const char *pathname = va_arg(ap, const char *);
     int flags = va_arg(ap, int);
 
-    (void)dirfd;
+    char path[MAX_PATH_LEN] = {0};
+
+    // if pathname is absolute, the dirfd is ignored.
+    if (pathname[0] != '/') {
+        if (dirfd == AT_FDCWD) {
+            // TODO: once we have cwd impl, use that instead
+            path[0] = '/';
+        } else {
+            strncat(path, fd_path[dirfd], MAX_PATH_LEN);
+            strncat(path, "/", 1);
+        }
+    }
+
+    strncat(path, pathname, MAX_PATH_LEN);
 
     if (strcmp(path, "/etc/services") == 0) {
         return SERVICES_FD;
@@ -289,6 +303,7 @@ static long sys_openat(va_list ap) {
     }
 
     strcpy(fd_path[fd], path);
+
     return fd;
 }
 
@@ -331,12 +346,60 @@ static long sys_lseek(va_list ap) {
     return new_fp;
 }
 
+static long sys_mkdirat(va_list ap) {
+    int dirfd = va_arg(ap, int);
+    const char *pathname = va_arg(ap, const char *);
+    mode_t mode = va_arg(ap, mode_t);
+
+    //TODO
+    (void)mode;
+
+    ptrdiff_t path_buffer;
+    int err = fs_buffer_allocate(&path_buffer);
+    assert(!err);
+
+    // TODO: factor out path resolution common between this and openat
+    char path[MAX_PATH_LEN] = {0};
+
+    // if pathname is absolute, the dirfd is ignored.
+    if (pathname[0] != '/') {
+        if (dirfd == AT_FDCWD) {
+            // TODO: once we have cwd impl, use that instead
+            path[0] = '/';
+        } else {
+            strncat(path, fd_path[dirfd], MAX_PATH_LEN);
+            strncat(path, "/", 1);
+        }
+    }
+
+    strncat(path, pathname, MAX_PATH_LEN);
+    
+    uint64_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len + 1);
+
+    fs_cmpl_t completion;
+    fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_DIR_CREATE,
+                                                .params.dir_create = {
+                                                    .path.offset = path_buffer,
+                                                    .path.size = path_len,
+                                                }});
+    fs_buffer_free(path_buffer);
+
+    if (completion.status != FS_STATUS_SUCCESS) {
+        return -1;
+    }
+
+    return 0;
+}
+
 void libc_init_file() {
     libc_define_syscall(__NR_fcntl, sys_fcntl);
     libc_define_syscall(__NR_newfstatat, sys_fstatat);
     libc_define_syscall(__NR_readlinkat, sys_readlinkat);
     libc_define_syscall(__NR_openat, sys_openat);
     libc_define_syscall(__NR_lseek, sys_lseek);
+    libc_define_syscall(__NR_mkdirat, sys_mkdirat);
 
     memset(fs_server_fd_map, -1, sizeof(fs_server_fd_map));
+    memset(fd_path, 0, sizeof(fd_path));
 }
