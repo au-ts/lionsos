@@ -24,7 +24,7 @@ typedef struct fd_entry {
     fd_dup3_func dup3;
     fd_fstat_func fstat;
     int flags;
-    //TODO: implement file pointer
+    size_t file_ptr;
 } fd_entry_t;
 
 int posix_fd_allocate();
