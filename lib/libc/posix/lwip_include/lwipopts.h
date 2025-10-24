@@ -5,7 +5,6 @@
 
 #pragma once
 
-
 #include <stdlib.h>
 #include <stdbool.h>
 #include <sddf/network/constants.h>

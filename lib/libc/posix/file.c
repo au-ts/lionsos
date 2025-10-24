@@ -126,6 +126,11 @@ static long sys_fcntl(va_list ap) {
     int op = va_arg(ap, int);
     int arg = va_arg(ap, int);
 
+    //FIXME: handle properly
+    if (fd == SERVICES_FD) {
+        return 0;
+    }
+
     fd_entry_t *fd_entry = posix_fd_entry(fd);
     switch (op) {
         case F_SETFD: {
