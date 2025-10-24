@@ -15,7 +15,6 @@
 #include <autoconf.h>
 #include <assert.h>
 #include <fcntl.h>
-#include <limits.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -123,15 +122,18 @@ void libc_define_syscall(int syscall_num, muslcsys_syscall_t syscall_func) {
 void libc_init_mem();
 void libc_init_io();
 void libc_init_file();
-void libc_init_sock();
+void libc_init_sock(libc_socket_config_t *);
 
-void libc_init() {
+void libc_init(libc_socket_config_t *socket_config) {
     /* Syscall table init */
     __sysinfo = sel4_vsyscall;
     libc_init_mem();
     libc_init_io();
     libc_init_file();
-    libc_init_sock();
+
+    if (socket_config != NULL) {
+        libc_init_sock(socket_config);
+    }
 
     syscall_table[__NR_getpid] = sys_getpid;
     syscall_table[__NR_clock_gettime] = sys_clock_gettime;

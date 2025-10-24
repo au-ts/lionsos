@@ -81,6 +81,8 @@ int mp_mod_network_prefer_dns_use_ip_version = 4;
 i2c_queue_handle_t i2c_queue_handle;
 libi2c_conf_t libi2c_config;
 
+extern libc_socket_config_t socket_config;
+
 #ifdef ENABLE_FRAMEBUFFER
 uintptr_t framebuffer_data_region = 0x30000000;
 #endif
@@ -232,7 +234,7 @@ void init(void) {
     stack_ptrs_arg_array_t costacks = { (uintptr_t) mp_stack };
     microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, costacks);
 
-    libc_init();
+    libc_init(&socket_config);
 
     if (microkit_cothread_spawn(t_mp_entrypoint, NULL) == LIBMICROKITCO_NULL_HANDLE) {
         printf("MP|ERROR: Cannot initialise Micropython cothread\n");

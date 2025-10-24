@@ -40,8 +40,6 @@ $(LIONS_LIBC)/lib/libc.a: $(MUSL)/lib/libc.a $(LIB_C_POSIX_OBJ) $(LIB_C_COMPILER
 	$(AR) rcs $@ $(LIB_C_POSIX_OBJ) $(LIB_C_COMPILER_RT_OBJ) $(LIB_FS_HELPER_OBJ)
 	$(RANLIB) $@
 
-$(LIBC)/posix/tcp.o: CFLAGS += -I$(LWIP)/include -I$(LIB_C_DIR)/posix/lwip_include
-
 $(LIBC)/posix/%.o: $(LIB_C_DIR)/posix/%.c | $(LIONS_LIBC)/include $(LIBC)/posix
 	$(CC) -c $(CFLAGS) $< -o $@
 
