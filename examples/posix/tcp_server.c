@@ -24,7 +24,7 @@
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
-#include <lions/posix/tcp.h>
+#include <lions/sock/tcp.h>
 #include <lions/util.h>
 
 #include <lions/fs/helpers.h>
@@ -48,6 +48,11 @@ char *fs_share;
 serial_queue_handle_t serial_tx_queue_handle;
 serial_queue_handle_t serial_rx_queue_handle;
 
+net_queue_handle_t net_rx_handle;
+net_queue_handle_t net_tx_handle;
+
+extern libc_socket_config_t socket_config;
+
 bool fs_enabled;
 bool serial_rx_enabled;
 bool net_enabled;
@@ -58,6 +63,11 @@ static char libc_cothread_stack[LIBC_COTHREAD_STACK_SIZE];
 static co_control_t co_controller_mem;
 
 static void blocking_wait(microkit_channel ch) { microkit_cothread_wait_on_channel(ch); }
+
+static void netif_status_callback(char *ip_addr) {
+    printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n", microkit_name, __FILE__, __LINE__,
+           __func__, microkit_name, ip_addr);
+}
 
 void notified(microkit_channel ch) {
     if (ch == timer_config.driver_id) {
@@ -86,26 +96,23 @@ static int sockaddr_to_string(struct sockaddr *addr, char *str, size_t len) {
     int ret;
 
     switch (addr->sa_family) {
-        case AF_INET:
-        {
-            struct sockaddr_in *addr_in = (struct sockaddr_in *)addr;
-            port = addr_in->sin_port;
-            addr_buf = &addr_in->sin_addr;
-            break;
-        }
-        case AF_INET6:
-        {
-            struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6 *)addr;
-            port = addr_in6->sin6_port;
-            addr_buf = &addr_in6->sin6_addr;
-            break;
-        }
-        default:
-            return -1;
+    case AF_INET: {
+        struct sockaddr_in *addr_in = (struct sockaddr_in *)addr;
+        port = addr_in->sin_port;
+        addr_buf = &addr_in->sin_addr;
+        break;
+    }
+    case AF_INET6: {
+        struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6 *)addr;
+        port = addr_in6->sin6_port;
+        addr_buf = &addr_in6->sin6_addr;
+        break;
+    }
+    default:
+        return -1;
     }
 
-    inet_ntop(addr->sa_family, addr_buf, ip_string,
-              sizeof(ip_string) / sizeof(ip_string[0]));
+    inet_ntop(addr->sa_family, addr_buf, ip_string, sizeof(ip_string) / sizeof(ip_string[0]));
 
     ret = snprintf(str, len, "%s:%d", ip_string, ntohs(port));
 
@@ -119,14 +126,24 @@ static void init_sockaddr_inet(struct sockaddr_in *addr) {
 }
 
 void cont() {
-    libc_init();
+    libc_init(&socket_config);
 
     if (net_enabled) {
         printf("TCP_SERVER|INFO: init\n");
-        tcp_init_0();
+
+        net_queue_init(&net_rx_handle, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
+                       net_config.rx.num_buffers);
+        net_queue_init(&net_tx_handle, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
+                       net_config.tx.num_buffers);
+        net_buffers_init(&net_tx_handle, 0);
+
+        sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, net_rx_handle, net_tx_handle, NULL, printf,
+                       netif_status_callback, NULL, NULL, NULL);
+
+        sddf_lwip_maybe_notify();
 
         int socket_fd = -1, addrlen = 0, af;
-        struct sockaddr_storage addr = {0};
+        struct sockaddr_storage addr = { 0 };
         char ip_string[64];
 
         af = AF_INET;
@@ -184,7 +201,8 @@ void cont() {
 
     fail:
         printf("TCP_SERVER|INFO: Shutting down ..\n");
-        if (socket_fd >= 0) close(socket_fd);
+        if (socket_fd >= 0)
+            close(socket_fd);
         return;
     }
 }
@@ -210,7 +228,7 @@ void init() {
         fs_share = fs_config.server.share.vaddr;
     }
 
-    stack_ptrs_arg_array_t costacks = {(uintptr_t)libc_cothread_stack};
+    stack_ptrs_arg_array_t costacks = { (uintptr_t)libc_cothread_stack };
     microkit_cothread_init(&co_controller_mem, LIBC_COTHREAD_STACK_SIZE, costacks);
 
     if (microkit_cothread_spawn(cont, NULL) == LIBMICROKITCO_NULL_HANDLE) {

@@ -7,8 +7,8 @@
 #include <microkit.h>
 #include <libmicrokitco.h>
 
+#include <limits.h>
 #include <string.h>
-#include <arpa/inet.h>
 #include <errno.h>
 
 #include <sddf/timer/client.h>
@@ -32,11 +32,14 @@
 #include <netif/etharp.h>
 
 #include <lions/util.h>
-#include <lions/posix/tcp.h>
 
+#define MAX_SOCKETS 10
 #define MAX_LISTEN_BACKLOG 10
+#define SOCKET_BUF_SIZE 0x200000ll
 
-enum socket_state {
+static int socket_refcount[MAX_SOCKETS];
+
+typedef enum {
     socket_state_unallocated,
     socket_state_allocated,
     socket_state_bound,
@@ -46,7 +49,7 @@ enum socket_state {
     socket_state_closed_by_peer,
     socket_state_error,
     socket_state_listening,
-};
+} socket_state_t;
 
 typedef struct {
     struct tcp_pcb *pending_pcbs[MAX_LISTEN_BACKLOG];
@@ -57,7 +60,7 @@ typedef struct {
 
 typedef struct {
     struct tcp_pcb *sock_tpcb;
-    enum socket_state state;
+    socket_state_t state;
 
     char rx_buf[SOCKET_BUF_SIZE];
     ssize_t rx_head;
@@ -69,39 +72,14 @@ typedef struct {
 extern timer_client_config_t timer_config;
 extern net_client_config_t net_config;
 extern lib_sddf_lwip_config_t lib_sddf_lwip_config;
-
-net_queue_handle_t rx_handle;
-net_queue_handle_t tx_handle;
+extern net_queue_handle_t net_rx_handle;
+extern net_queue_handle_t net_tx_handle;
 
 socket_t sockets[MAX_SOCKETS] = { 0 };
 
-static bool network_ready;
+static int socket_id(socket_t *socket) { return (int)(socket - sockets); }
 
-int tcp_ready(void) { return network_ready; }
-
-static void netif_status_callback(char *ip_addr) {
-    printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n", microkit_name, __FILE__, __LINE__,
-           __func__, microkit_name, ip_addr);
-
-    network_ready = true;
-}
-
-void tcp_init_0(void) {
-    net_queue_init(&rx_handle, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
-                   net_config.rx.num_buffers);
-    net_queue_init(&tx_handle, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
-                   net_config.tx.num_buffers);
-    net_buffers_init(&tx_handle, 0);
-
-    sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, rx_handle, tx_handle, NULL, printf,
-                   netif_status_callback, NULL, NULL, NULL);
-
-    sddf_lwip_maybe_notify();
-}
-
-int socket_id(socket_t *socket) { return (int)(socket - sockets); }
-
-void socket_err_func(void *arg, err_t err) {
+static void socket_err_func(void *arg, err_t err) {
     socket_t *socket = arg;
     if (socket == NULL) {
         dlog("error %d with closed socket", err);
@@ -168,7 +146,7 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
 
 static err_t socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len) { return ERR_OK; }
 
-err_t socket_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
+static err_t socket_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
     socket_t *socket = arg;
     assert(socket != NULL);
     assert(socket->state == socket_state_connecting);
@@ -183,7 +161,7 @@ err_t socket_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
     return ERR_OK;
 }
 
-int tcp_socket_allocate() {
+static int socket_allocate() {
     int free_index;
     socket_t *socket = NULL;
     for (free_index = 0; free_index < MAX_SOCKETS; free_index++) {
@@ -206,7 +184,7 @@ int tcp_socket_allocate() {
     return free_index;
 }
 
-int tcp_socket_init(int index) {
+static int tcp_socket_init(int index) {
     socket_t *socket = &sockets[index];
 
     assert(socket->state == socket_state_allocated);
@@ -222,10 +200,12 @@ int tcp_socket_init(int index) {
     tcp_err(socket->sock_tpcb, socket_err_func);
     tcp_arg(socket->sock_tpcb, socket);
 
+    socket_refcount[index]++;
+
     return 0;
 }
 
-int tcp_socket_connect(int index, uint32_t addr, uint16_t port) {
+static int tcp_socket_connect(int index, uint32_t addr, uint16_t port) {
     socket_t *sock = &sockets[index];
     assert(sock->state == socket_state_bound);
 
@@ -242,7 +222,7 @@ int tcp_socket_connect(int index, uint32_t addr, uint16_t port) {
     return 0;
 }
 
-int tcp_socket_close(int index) {
+static int tcp_socket_close_int(int index) {
     socket_t *socket = &sockets[index];
 
     switch (socket->state) {
@@ -272,7 +252,22 @@ int tcp_socket_close(int index) {
     }
 }
 
-int tcp_socket_write(int index, const char *buf, size_t len) {
+static int tcp_socket_close(int index) {
+    socket_refcount[index]--;
+    if (socket_refcount[index] == 0) {
+        return tcp_socket_close_int(index);
+    }
+
+    return 0;
+}
+
+static int tcp_socket_dup(int index) {
+    assert(socket_refcount[index] > 0);
+    socket_refcount[index]++;
+    return 0;
+}
+
+static ssize_t tcp_socket_write(int index, const char *buf, size_t len) {
     socket_t *sock = &sockets[index];
     int available = tcp_sndbuf(sock->sock_tpcb);
 
@@ -280,8 +275,10 @@ int tcp_socket_write(int index, const char *buf, size_t len) {
         dlog("no space available");
         return -2;
     }
-    int to_write = MIN(len, available);
-    int err = tcp_write(sock->sock_tpcb, (void *)buf, to_write, 1);
+    ssize_t to_write = MIN(len, available);
+
+    assert(to_write >= 0 && to_write <= USHRT_MAX);
+    err_t err = tcp_write(sock->sock_tpcb, (void *)buf, (u16_t)to_write, 1);
     if (err == ERR_MEM) {
         dlog("tcp_write returned ERR_MEM");
         return -2;
@@ -297,7 +294,7 @@ int tcp_socket_write(int index, const char *buf, size_t len) {
     return to_write;
 }
 
-ssize_t tcp_socket_recv(int index, char *buf, ssize_t len) {
+static ssize_t tcp_socket_recv(int index, char *buf, size_t len) {
     socket_t *sock = &sockets[index];
     if (sock->state != socket_state_connected) {
         return -1;
@@ -317,16 +314,16 @@ ssize_t tcp_socket_recv(int index, char *buf, ssize_t len) {
     return copied;
 }
 
-int tcp_socket_readable(int index) {
+static int tcp_socket_readable(int index) {
     socket_t *socket = &sockets[index];
     return socket->rx_len;
 }
 
-int tcp_socket_writable(int index) { return !net_queue_empty_free(&tx_handle); }
+static int tcp_socket_writable(int index) { return !net_queue_empty_free(&net_tx_handle); }
 
-int tcp_socket_hup(int index) { return sockets[index].state == socket_state_closed_by_peer; }
+static int tcp_socket_hup(int index) { return sockets[index].state == socket_state_closed_by_peer; }
 
-int tcp_socket_err(int index) { return sockets[index].state == socket_state_error; }
+static int tcp_socket_err(int index) { return sockets[index].state == socket_state_error; }
 
 static err_t tcp_socket_accept_cb(void *arg, struct tcp_pcb *newpcb, err_t err) {
     socket_t *listen_socket = (socket_t *)arg;
@@ -356,7 +353,7 @@ static err_t tcp_socket_accept_cb(void *arg, struct tcp_pcb *newpcb, err_t err) 
     return ERR_OK;
 }
 
-int tcp_socket_listen(int index, int backlog) {
+static int tcp_socket_listen(int index, int backlog) {
     socket_t *socket = &sockets[index];
 
     // lwIP docs: The tcp_listen() function returns a new connection identifier,
@@ -376,8 +373,9 @@ int tcp_socket_listen(int index, int backlog) {
     return 0;
 }
 
-int tcp_socket_accept(int index) {
-    socket_t *listen_socket = &sockets[index];
+static int tcp_socket_accept(int listen_index) {
+    assert(listen_index >= 0 && listen_index < MAX_SOCKETS);
+    socket_t *listen_socket = &sockets[listen_index];
     assert(listen_socket->state == socket_state_listening);
 
     accept_queue_t *q = &listen_socket->accept_queue;
@@ -393,13 +391,9 @@ int tcp_socket_accept(int index) {
     struct tcp_pcb *new_conn_pcb = q->pending_pcbs[q->tail];
     q->tail = (q->tail + 1) % MAX_LISTEN_BACKLOG;
 
-    int new_socket_index = tcp_socket_allocate();
-    if (new_socket_index < 0) {
-        tcp_close(new_conn_pcb);
-        return -1;
-    }
-
-    socket_t *socket = &sockets[new_socket_index];
+    int new_index = socket_allocate();
+    assert(new_index > 0 && new_index < MAX_SOCKETS);
+    socket_t *socket = &sockets[new_index];
 
     socket->sock_tpcb = new_conn_pcb;
     tcp_err(socket->sock_tpcb, socket_err_func);
@@ -407,10 +401,12 @@ int tcp_socket_accept(int index) {
     tcp_sent(new_conn_pcb, socket_sent_callback);
     tcp_recv(new_conn_pcb, socket_recv_callback);
 
-    return new_socket_index;
+    socket_refcount[new_index]++;
+
+    return new_index;
 }
 
-int tcp_socket_bind(int index, uint32_t addr, uint16_t port) {
+static int tcp_socket_bind(int index, uint32_t addr, uint16_t port) {
     socket_t *sock = &sockets[index];
 
     ip_addr_t ipaddr;
@@ -427,7 +423,7 @@ int tcp_socket_bind(int index, uint32_t addr, uint16_t port) {
     return 0;
 }
 
-int tcp_socket_getsockname(int index, uint32_t *addr, uint16_t *port) {
+static int tcp_socket_getsockname(int index, uint32_t *addr, uint16_t *port) {
     socket_t *socket = &sockets[index];
 
     *addr = ip4_addr_get_u32(&socket->sock_tpcb->local_ip);
@@ -436,7 +432,7 @@ int tcp_socket_getsockname(int index, uint32_t *addr, uint16_t *port) {
     return 0;
 }
 
-int tcp_socket_getpeername(int index, uint32_t *addr, uint16_t *port) {
+static int tcp_socket_getpeername(int index, uint32_t *addr, uint16_t *port) {
     socket_t *socket = &sockets[index];
 
     *addr = ip4_addr_get_u32(&socket->sock_tpcb->remote_ip);
@@ -444,3 +440,22 @@ int tcp_socket_getpeername(int index, uint32_t *addr, uint16_t *port) {
 
     return 0;
 }
+
+libc_socket_config_t socket_config = (libc_socket_config_t) {
+    .socket_allocate = socket_allocate,
+    .tcp_socket_init = tcp_socket_init,
+    .tcp_socket_connect= tcp_socket_connect,
+    .tcp_socket_close = tcp_socket_close,
+    .tcp_socket_dup = tcp_socket_dup,
+    .tcp_socket_write = tcp_socket_write,
+    .tcp_socket_recv = tcp_socket_recv,
+    .tcp_socket_readable = tcp_socket_readable,
+    .tcp_socket_writable = tcp_socket_writable,
+    .tcp_socket_hup= tcp_socket_hup,
+    .tcp_socket_err= tcp_socket_err,
+    .tcp_socket_listen= tcp_socket_listen,
+    .tcp_socket_accept= tcp_socket_accept,
+    .tcp_socket_bind= tcp_socket_bind,
+    .tcp_socket_getsockname= tcp_socket_getsockname,
+    .tcp_socket_getpeername= tcp_socket_getpeername,
+};

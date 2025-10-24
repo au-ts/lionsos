@@ -11,7 +11,6 @@
 #include <sddf/timer/config.h>
 #include <sddf/network/config.h>
 #include <sddf/network/queue.h>
-#include <sddf/network/lib_sddf_lwip.h>
 #include <lions/fs/helpers.h>
 #include <lions/fs/config.h>
 #include <lions/fs/protocol.h>
@@ -24,7 +23,6 @@
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
-__attribute__((__section__(".lib_sddf_lwip_config"))) lib_sddf_lwip_config_t lib_sddf_lwip_config;
 __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
 
 fs_queue_t *fs_command_queue;
@@ -33,6 +31,9 @@ char *fs_share;
 
 serial_queue_handle_t serial_tx_queue_handle;
 serial_queue_handle_t serial_rx_queue_handle;
+
+net_queue_handle_t net_tx_handle;
+net_queue_handle_t net_rx_handle;
 
 bool fs_enabled;
 bool serial_rx_enabled;
@@ -51,7 +52,7 @@ void notified(microkit_channel ch) {
 }
 
 void cont() {
-    libc_init();
+    libc_init(NULL);
 
     if (fs_enabled) {
         fs_cmpl_t completion;
