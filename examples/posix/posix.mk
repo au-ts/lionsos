@@ -49,9 +49,7 @@ CFLAGS += \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
 	-I$(LIBMICROKITCO_PATH) \
-	-I$(POSIX_DIR) \
-	-I$(LWIP)/include \
-	-I$(LIONSOS)/lib/libc/posix/lwip_include
+	-I$(LWIP)/include
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -69,6 +67,7 @@ include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/network/components/network_components.mk
 
+LIB_SDDF_LWIP_CFLAGS := -I${POSIX_DIR}/lwip_include
 include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
 
 include ${SDDF}/libco/libco.mk
@@ -79,24 +78,30 @@ FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
 FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIONSOS)/components/fs/fat/fat.mk
 
-LIBMICROKITCO_CFLAGS_fileio := -I$(POSIX_DIR)/libmicrokitco_opts.h
-LIBMICROKITCO_CFLAGS_tcp_server := -I$(POSIX_DIR)/libmicrokitco_opts.h
+LIBMICROKITCO_CFLAGS_posix := -I$(POSIX_DIR)
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
+# for libmicrokitco_opts.h and lwipopts.h
+tcp.o fileio.o tcp_server.o: CFLAGS += $(LIBMICROKITCO_CFLAGS_posix)
+tcp.o tcp_server.o: CFLAGS += $(LIB_SDDF_LWIP_CFLAGS)
+
+tcp.o: $(LIONSOS)/lib/sock/tcp.c | $(LIONS_LIBC)/include
+	${CC} ${CFLAGS} -c -o $@ $<
+
 fileio.o: $(POSIX_DIR)/fileio.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
-fileio.elf: fileio.o libmicrokitco_fileio.a lib_sddf_lwip.a
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS} libmicrokitco_fileio.a lib_sddf_lwip.a
+fileio.elf: fileio.o libmicrokitco_posix.a
+	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
 tcp_server.o: $(POSIX_DIR)/tcp_server.c | $(LIONS_LIBC)/include
-	${CC} ${CFLAGS} -c -o $@ $<
+	${CC} ${CFLAGS}  -c -o $@ $<
 
-tcp_server.elf: tcp_server.o libmicrokitco_tcp_server.a lib_sddf_lwip.a
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS} libmicrokitco_tcp_server.a lib_sddf_lwip.a
+tcp_server.elf: tcp_server.o libmicrokitco_posix.a tcp.o lib_sddf_lwip.a
+	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
 FORCE:
 
