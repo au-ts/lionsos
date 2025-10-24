@@ -11,7 +11,8 @@ SUPPORTED_BOARDS := \
 
 IMAGES := \
 	timer_driver.elf \
-	client.elf \
+	fileio.elf \
+	tcp_server.elf \
 	fat.elf \
 	serial_driver.elf \
 	serial_virt_rx.elf \
@@ -67,7 +68,9 @@ include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk
 include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/network/components/network_components.mk
+
 include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
+
 include ${SDDF}/libco/libco.mk
 include ${BLK_DRIVER}/blk_driver.mk
 include ${BLK_COMPONENTS}/blk_components.mk
@@ -76,17 +79,24 @@ FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
 FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIONSOS)/components/fs/fat/fat.mk
 
-LIBMICROKITCO_CFLAGS_client = -I$(POSIX_DIR)/libmicrokitco_opts.h
+LIBMICROKITCO_CFLAGS_fileio := -I$(POSIX_DIR)/libmicrokitco_opts.h
+LIBMICROKITCO_CFLAGS_tcp_server := -I$(POSIX_DIR)/libmicrokitco_opts.h
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
-client.o: $(POSIX_DIR)/client.c | $(LIONS_LIBC)/include
+fileio.o: $(POSIX_DIR)/fileio.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
-client.elf: client.o libmicrokitco_client.a lib_sddf_lwip.a
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS} libmicrokitco_client.a lib_sddf_lwip.a
+fileio.elf: fileio.o libmicrokitco_fileio.a lib_sddf_lwip.a
+	${LD} ${LDFLAGS} -o $@ $< ${LIBS} libmicrokitco_fileio.a lib_sddf_lwip.a
+
+tcp_server.o: $(POSIX_DIR)/tcp_server.c | $(LIONS_LIBC)/include
+	${CC} ${CFLAGS} -c -o $@ $<
+
+tcp_server.elf: tcp_server.o libmicrokitco_tcp_server.a lib_sddf_lwip.a
+	${LD} ${LDFLAGS} -o $@ $< ${LIBS} libmicrokitco_tcp_server.a lib_sddf_lwip.a
 
 FORCE:
 
@@ -100,19 +110,20 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver.elf
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_virt_rx.data network_virt_rx.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
-	$(OBJCOPY) --update-section .net_copy_config=net_copy_client_net_copier.data network_copy.elf network_copy_client.elf
+	$(OBJCOPY) --update-section .net_copy_config=net_copy_tcp_server_net_copier.data network_copy.elf network_copy_tcp_server.elf
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 	$(OBJCOPY) --update-section .device_resources=blk_driver_device_resources.data blk_driver.elf
 	$(OBJCOPY) --update-section .blk_driver_config=blk_driver.data blk_driver.elf
 	$(OBJCOPY) --update-section .blk_virt_config=blk_virt.data blk_virt.elf
 	$(OBJCOPY) --update-section .blk_client_config=blk_client_fatfs.data fat.elf
 	$(OBJCOPY) --update-section .fs_server_config=fs_server_fatfs.data fat.elf
-	$(OBJCOPY) --update-section .timer_client_config=timer_client_client.data client.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_client.data client.elf
-	$(OBJCOPY) --update-section .fs_client_config=fs_client_client.data client.elf
-	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_client.data client.elf
-	$(OBJCOPY) --update-section .net_client_config=net_client_client.data client.elf
-	touch $@
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_fileio.data fileio.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_fileio.data fileio.elf
+	$(OBJCOPY) --update-section .fs_client_config=fs_client_fileio.data fileio.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_tcp_server.data tcp_server.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_tcp_server.data tcp_server.elf
+	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_tcp_server.data tcp_server.elf
+	$(OBJCOPY) --update-section .net_client_config=net_client_tcp_server.data tcp_server.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)

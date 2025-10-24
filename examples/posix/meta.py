@@ -78,20 +78,23 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     blk_virt = ProtectionDomain("blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000)
     blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
 
-    client = ProtectionDomain("client", "client.elf", priority=1, stack_size=0x10000)
-    client_net_copier = ProtectionDomain("client_net_copier", "network_copy_client.elf", priority=97, budget=20000)
+    fileio = ProtectionDomain("fileio", "fileio.elf", priority=1, stack_size=0x10000)
+    tcp_server = ProtectionDomain("tcp_server", "tcp_server.elf", priority=1, stack_size=0x10000)
+    tcp_server_net_copier = ProtectionDomain("tcp_server_net_copier", "network_copy_tcp_server.elf", priority=97, budget=20000)
 
-    serial_system.add_client(client)
-    timer_system.add_client(client)
-    net_system.add_client_with_copier(client, client_net_copier)
-    client_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, client)
+    serial_system.add_client(fileio)
+    serial_system.add_client(tcp_server)
+    timer_system.add_client(fileio)
+    timer_system.add_client(tcp_server)
+    net_system.add_client_with_copier(tcp_server, tcp_server_net_copier)
+    tcp_server_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, tcp_server)
 
     fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
 
     fs = LionsOs.FileSystem.Fat(
         sdf,
         fatfs,
-        client,
+        fileio,
         blk=blk_system,
         partition=board.blk_partition
     )
@@ -106,8 +109,9 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         ethernet_driver,
         net_virt_tx,
         net_virt_rx,
-        client,
-        client_net_copier,
+        fileio,
+        tcp_server,
+        tcp_server_net_copier,
         fatfs,
         timer_driver,
         blk_driver,
@@ -122,8 +126,8 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     assert serial_system.serialise_config(output_dir)
     assert net_system.connect()
     assert net_system.serialise_config(output_dir)
-    assert client_lib_sddf_lwip.connect()
-    assert client_lib_sddf_lwip.serialise_config(output_dir)
+    assert tcp_server_lib_sddf_lwip.connect()
+    assert tcp_server_lib_sddf_lwip.serialise_config(output_dir)
     assert timer_system.connect()
     assert timer_system.serialise_config(output_dir)
     assert blk_system.connect()
