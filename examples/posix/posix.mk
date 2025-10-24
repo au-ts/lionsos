@@ -89,9 +89,8 @@ CFLAGS := \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
 	-I$(LIBMICROKITCO_PATH) \
-	-I$(POSIX_DIR) \
 	-I$(LWIP)/include \
-	-I$(LIONSOS)/lib/libc/posix/lwip_include
+	-I$(POSIX_DIR)/lwip_include
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -133,24 +132,29 @@ FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
 FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIONSOS)/components/fs/fat/fat.mk
 
-LIBMICROKITCO_CFLAGS_fileio := -I$(POSIX_DIR)/libmicrokitco_opts.h
-LIBMICROKITCO_CFLAGS_tcp_server := -I$(POSIX_DIR)/libmicrokitco_opts.h
+LIBMICROKITCO_CFLAGS_posix := -I$(POSIX_DIR)
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
+# for libmicrokit_opts.h
+CFLAGS += -I$(POSIX_DIR)
+
+tcp.o: $(LIONSOS)/lib/sock/tcp.c | $(LIONS_LIBC)/include
+	${CC} ${CFLAGS} -c -o $@ $<
+
 fileio.o: $(POSIX_DIR)/fileio.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
 	
-fileio.elf: fileio.o libmicrokitco_fileio.a lib_sddf_lwip.a
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS} libmicrokitco_fileio.a lib_sddf_lwip.a
-
+fileio.elf: fileio.o tcp.o libmicrokitco_posix.a lib_sddf_lwip.a
+	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
+	
 tcp_server.o: $(POSIX_DIR)/tcp_server.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
 	
-tcp_server.elf: tcp_server.o libmicrokitco_tcp_server.a lib_sddf_lwip.a
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS} libmicrokitco_tcp_server.a lib_sddf_lwip.a
+tcp_server.elf: tcp_server.o tcp.o libmicrokitco_posix.a lib_sddf_lwip.a
+	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<

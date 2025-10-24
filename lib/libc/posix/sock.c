@@ -9,7 +9,8 @@
 
 #include <lions/posix/posix.h>
 #include <lions/posix/fd.h>
-#include <lions/posix/tcp.h>
+
+#include <lions/sock/tcp.h>
 #include <lions/util.h>
 
 #include <sddf/serial/queue.h>
