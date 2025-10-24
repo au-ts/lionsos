@@ -18,7 +18,8 @@
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
 #include <lions/posix/posix.h>
-#include <lions/posix/tcp.h>
+
+#include <lions/sock/tcp.h>
 #include <lions/util.h>
 
 #include <lions/fs/helpers.h>

@@ -5,7 +5,9 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 #define SOCKET_BUF_SIZE 0x200000ll
 #define MAX_SOCKETS 10

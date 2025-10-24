@@ -7,7 +7,6 @@
 #include <libmicrokitco.h>
 
 #include <string.h>
-#include <arpa/inet.h>
 
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
@@ -30,7 +29,7 @@
 #include <netif/etharp.h>
 
 #include <lions/util.h>
-#include <lions/posix/tcp.h>
+#include <lions/sock/tcp.h>
 
 #define MAX_LISTEN_BACKLOG 10
 
@@ -337,7 +336,7 @@ static err_t tcp_socket_accept_cb(void *arg, struct tcp_pcb *newpcb, err_t err) 
 
     accept_queue_t *q = &listen_socket->accept_queue;
 
-    int next_head = (q->head + 1) % MAX_BACKLOG;
+    int next_head = (q->head + 1) % MAX_LISTEN_BACKLOG;
 
     if (next_head == q->tail) {
         tcp_close(newpcb);
@@ -386,15 +385,7 @@ int tcp_socket_accept(int index) {
     assert(q->head != q->tail);
 
     struct tcp_pcb *new_conn_pcb = q->pending_pcbs[q->tail];
-    q->tail = (q->tail + 1) % MAX_BACKLOG;
-
-    char ipstr[INET_ADDRSTRLEN] = {0};
-    inet_ntop(AF_INET, &new_conn_pcb->local_ip.addr, ipstr, sizeof(ipstr));
-    printf("tcp_socket_accept: listen socket %d, local_ip %s, local_port %d\n", index, ipstr,
-           new_conn_pcb->local_port);
-    inet_ntop(AF_INET, &new_conn_pcb->remote_ip.addr, ipstr, sizeof(ipstr));
-    printf("tcp_socket_accept: listen socket %d, remote_ip %s, remote_port %d\n", index, ipstr,
-           new_conn_pcb->remote_port);
+    q->tail = (q->tail + 1) % MAX_LISTEN_BACKLOG;
 
     int new_socket_index = tcp_socket_allocate();
     if (new_socket_index < 0) {
