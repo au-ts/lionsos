@@ -373,7 +373,7 @@ static long sys_mkdirat(va_list ap) {
     }
 
     strncat(path, pathname, MAX_PATH_LEN);
-    
+
     uint64_t path_len = strlen(path);
     memcpy(fs_buffer_ptr(path_buffer), path, path_len + 1);
 

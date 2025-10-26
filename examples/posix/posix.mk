@@ -139,7 +139,7 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
 client.o: $(POSIX_DIR)/client.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
-	
+
 client.elf: client.o libmicrokitco_client.a lib_sddf_lwip.a
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS} libmicrokitco_client.a lib_sddf_lwip.a
 
