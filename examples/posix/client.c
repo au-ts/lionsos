@@ -103,7 +103,7 @@ void cont() {
 
         file = fopen("hello.txt", "r");
         assert(file);
-        
+
         fd = fileno(file);
 
         printf("CLIENT|INFO: opened on fd %d\n", fd);
@@ -136,7 +136,7 @@ void cont() {
         } else {
             printf("Error creating subdirectory\n");
         }
-        
+
         char *example = "example.txt";
         if ((fd = openat(dirfd, example, O_RDWR | O_CREAT)) > 0) {
             printf("CLIENT|INFO: opened %s at %s with fd %d\n", example, dir, fd);
@@ -159,7 +159,7 @@ void cont() {
                 close(fd);
             }
         }
-        
+
         close(dirfd);
     }
 }
