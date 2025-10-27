@@ -68,7 +68,7 @@ CFLAGS := \
 	-I$(LWIP)/include/ipv4 \
 
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
-LIBS :=  -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a
+LIBS :=  -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a libvspace.a
 
 CHECK_FLAGS_BOARD_MD5 := .board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 
@@ -77,7 +77,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	touch $@
 
 all: $(IMAGE_FILE)
-$(IMAGES): $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a ${CHECK_FLAGS_BOARD_MD5}
+$(IMAGES): $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a libvspace.a ${CHECK_FLAGS_BOARD_MD5}
 
 %.elf: %.o
 	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
