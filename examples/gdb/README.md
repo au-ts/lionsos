@@ -1,3 +1,8 @@
+<!--
+     Copyright 2025, UNSW
+     SPDX-License-Identifier: CC-BY-SA-4.0
+-->
+
 # LionsOS GDB Example
 
 This is a showcase of using `libgdb` within a LionsOS system. This is currently
