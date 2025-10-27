@@ -72,14 +72,6 @@ ifeq ($(strip $(TOOLCHAIN)), clang)
 	CFLAGS_ARCH += -target $(TARGET)
 endif
 
-ifeq ($(strip $(LIONSOS_GDB_CONN)), net)
-	export LIONSOS_GDB_CONN_NET := 1
-else ifeq ($(strip $(LIONSOS_GDB_CONN)), serial)
-	export LIONSOS_GDB_CONN_SERIAL := 1
-else
-$(error LIONSOS_GDB_CONN must be set to either \"net\" or \"serial\")
-endif
-
 export BUILD_DIR:=$(abspath ${BUILD_DIR})
 export MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 export TOP := $(abspath .)
