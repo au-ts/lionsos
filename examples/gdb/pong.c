@@ -1,5 +1,5 @@
 /*
- * Copyright 2024, UNSW
+ * Copyright 2025, UNSW
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -22,4 +22,3 @@ void notified(microkit_channel ch) {
 void init() {
 	microkit_dbg_puts("Hi! I'm PONG!\n");
 }
-

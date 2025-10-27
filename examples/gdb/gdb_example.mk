@@ -63,7 +63,7 @@ CFLAGS := \
 	-I$(LIBGDB_DIR)/arch_include \
 	-I$(LIONS_LIBC)/include \
 	-I$(LIBVSPACE_DIR) \
-  	-I${DEBUGGER_INCLUDE}/lwip \
+	-I${DEBUGGER_INCLUDE}/lwip \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4 \
 

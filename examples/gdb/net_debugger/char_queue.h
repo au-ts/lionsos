@@ -1,3 +1,9 @@
+/*
+ * Copyright 2025, UNSW
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 #define QUEUE_CAPACITY BUFSIZE
 
 struct char_queue {
@@ -223,5 +229,3 @@ static inline uint32_t char_queue_enqueue_batch(char_queue_t *queue_handle, uint
 
     return num;
 }
-
-
