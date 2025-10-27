@@ -46,7 +46,7 @@ $(MUSL):
 	mkdir -p $@
 
 $(MUSL)/lib/libc.a $(LIONS_LIBC)/include: ${MUSL_SRC}/Makefile | $(MUSL) $(LIBC)
-	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU)" CROSS_COMPILE=llvm- \
+	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU) $(RISCV_MARCH)" CROSS_COMPILE=llvm- \
 		${MUSL_SRC}/configure --target=$(TARGET) --srcdir=${MUSL_SRC} --prefix=$(MUSL) \
 		--includedir=$(LIONS_LIBC)/include --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
 	${MAKE} -C $(MUSL) install
