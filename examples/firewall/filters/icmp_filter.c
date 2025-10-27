@@ -44,27 +44,14 @@ static void filter(void)
             uintptr_t pkt_vaddr = (uintptr_t)(net_config.rx_data.vaddr + buffer.io_or_offset);
             ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
-            bool default_action = false;
             uint16_t rule_id = 0;
             fw_action_t action = fw_filter_find_action(&filter_state, ip_hdr->src_ip, ICMP_FILTER_DUMMY_PORT,
                                                                    ip_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, &rule_id);
 
-            /* Perform the default action */
-            if (action == FILTER_ACT_NONE) {
-                default_action = true;
-                action = filter_state.default_action;
-                if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("%sICMP filter found no match, performing default action %s: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[filter_config.interface], fw_filter_action_str[action],
-                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
-                }
-            }
-
             /* Add an established connection in shared memory for corresponding filter */
             if (action == FILTER_ACT_CONNECT) {
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_hdr->src_ip, ICMP_FILTER_DUMMY_PORT,
-                                                                                ip_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, default_action, rule_id);
+                                                                                ip_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, rule_id);
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
                     sddf_printf("%sICMP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
@@ -74,9 +61,8 @@ static void filter(void)
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
-                    sddf_printf("%sICMP FILTER LOG: could not establish connection for rule %u or default action %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
-                        fw_frmt_str[filter_config.interface],
-                        rule_id, default_action, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
+                    sddf_printf("%sICMP FILTER LOG: could not establish connection for rule %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
+                        fw_frmt_str[filter_config.interface], rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
                         ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT, fw_filter_err_str[fw_err]);
                 }
             }
@@ -148,7 +134,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sICMP filter changing default action from %u to %u\n",
-                fw_frmt_str[filter_config.interface], filter_state.default_action, action);
+                fw_frmt_str[filter_config.interface], filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
         }
 
         fw_filter_err_t err = fw_filter_update_default_action(&filter_state, action);
@@ -220,7 +206,7 @@ void init(void)
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr,
         sizeof(net_buff_desc_t), filter_config.router.capacity);
 
-    fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.webserver.rules_capacity,
+    fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr, filter_config.webserver.rules_capacity,
         filter_config.internal_instances.vaddr, filter_config.external_instances.vaddr, filter_config.instances_capacity,
         (fw_action_t)filter_config.webserver.default_action);
 }
