@@ -1,3 +1,9 @@
+#
+# Copyright 2025, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
 debugger.o: $(TOP)/net_debugger/debugger.c libsddf_util.a
 	$(CC) -c $(CFLAGS) $(TOP)/net_debugger/debugger.c -o $@ # There is something weird with $@ on the second build here???
 
