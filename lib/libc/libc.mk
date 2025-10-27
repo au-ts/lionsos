@@ -53,8 +53,8 @@ $(MUSL):
 # At the "checking compiler works" step, without this it tries to create /dev/null.d
 $(MUSL)/lib/libc.a $(LIONS_LIBC)/include &: CFLAGS += -MF musl.d
 
-$(MUSL)/lib/libc.a $(LIONS_LIBC)/include &: ${MUSL_SRC}/Makefile | $(MUSL) $(LIBC)
-	cd ${MUSL} && CC=$(CC) CFLAGS="$(CFLAGS)" AR=$(AR) RANLIB=$(RANLIB) \
+$(MUSL)/lib/libc.a $(LIONS_LIBC)/include: ${MUSL_SRC}/Makefile | $(MUSL) $(LIBC)
+	cd ${MUSL} && CC=$(CC) CFLAGS="-target $(TARGET) -mtune=$(CPU) $(RISCV_MARCH)" CROSS_COMPILE=llvm- \
 		${MUSL_SRC}/configure --target=$(TARGET) --srcdir=${MUSL_SRC} --prefix=$(MUSL) \
 		--includedir=$(LIONS_LIBC)/include --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
 	${MAKE} -C $(MUSL) install
