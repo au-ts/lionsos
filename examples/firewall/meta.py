@@ -147,7 +147,10 @@ filter_instances_region = FirewallMemoryRegions("fw_instance_size",
                                          512,
                                          lambda x: 4 + x.capacity * x.entry_size)
 
-filter_rule_bitmap_region = FirewallMemoryRegions(None, (filter_rules_region.capacity + 63) // 64, lambda x: 8 + x.capacity * x.entry_size,64)
+filter_rule_bitmap_region = FirewallMemoryRegions(None,
+                                        (filter_rules_region.capacity + 63) // 64,
+                                        lambda x: 8 + x.capacity * x.entry_size,
+                                        8)
 
 # Filter action encodings
 FILTER_ACTION_ALLOW = 1

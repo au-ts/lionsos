@@ -36,13 +36,13 @@ static const char *fw_os_err_str[] = {
     "Invalid interface ID supplied.",
     "No matching filter for supplied protocol number.",
     "No route matching supplied route ID.",
-    "No rule matching supplied rule ID.",
+    "No rule matching supplied rule ID, or rule ID is for default action.",
     "Invalid arguments supplied to add route.",
     "Route or rule supplied already exists.",
     "Route or rule supplied clashes with an existing route or rule.",
     "Too many or too few arguments supplied.",
     "Route number supplied is greater than the number of routes.",
-    "Rule number supplied is greater than the number of rules.",
+    "Rule number supplied is the default action rule index, or greater than the number of rules.",
     "Internal data structures are already at capacity.",
     "Unknown internal error."
 };
@@ -435,7 +435,7 @@ static mp_obj_t filter_get_default_action(mp_obj_t interface_idx_in,
     for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
         if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
             return mp_obj_new_int_from_uint(
-                webserver_state[interface_idx].filter_states[i].rule_table->rules->action);
+                webserver_state[interface_idx].filter_states[i].rule_table->rules[DEFAULT_ACTION_IDX].action);
         }
     }
 
@@ -474,7 +474,7 @@ static mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in,
         return mp_const_none;
     }
 
-    if (rule_idx == 0 || rule_idx >= webserver_state[interface_idx].filter_states[protocol_match].rule_table->size) {
+    if (rule_idx == DEFAULT_ACTION_IDX || rule_idx >= webserver_state[interface_idx].filter_states[protocol_match].rule_table->size) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_RULE_NUM]);
         mp_raise_OSError(OS_ERR_INVALID_RULE_NUM);
         return mp_const_none;

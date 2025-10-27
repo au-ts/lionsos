@@ -133,7 +133,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sTCP filter changing default action from %u to %u\n",
-                fw_frmt_str[filter_config.interface], filter_state.rule_table->rules->action, action);
+                fw_frmt_str[filter_config.interface], filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
         }
 
         fw_filter_err_t err = fw_filter_update_default_action(&filter_state, action);
