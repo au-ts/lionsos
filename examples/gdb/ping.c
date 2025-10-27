@@ -25,7 +25,7 @@ void init() {
 void notified(microkit_channel ch) {
 	switch (ch) {
 	case PINGPONG_CHANNEL:
-		microkit_dbg_puts("Ping! We are going to crash now!\n");
+		microkit_dbg_puts("Ping!\n");
         volatile uintptr_t *null_ptr = 0;
         volatile int denull = (volatile int) *null_ptr;
         // For some reason our dereference is getting re-ordered
