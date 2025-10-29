@@ -18,7 +18,7 @@ typedef struct nfs_config {
     char export[LIONS_NFS_EXPORT_PATH_LEN_MAX];
 } nfs_config_t;
 
-static bool nfs_config_check_magic(nfs_config_t *config)
+static inline bool nfs_config_check_magic(nfs_config_t *config)
 {
     for (int i = 0; i < LIONS_NFS_MAGIC_LEN; i++) {
         if (config->magic[i] != LIONS_NFS_MAGIC[i]) {

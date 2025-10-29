@@ -68,7 +68,7 @@ static char ip_addr_buf1[IPV4_ADDR_BUFLEN];
  *
  * @return buffer or NULL upon failure.
  */
-static char *ipaddr_to_string(uint32_t ip,
+static inline char *ipaddr_to_string(uint32_t ip,
                               char *buf)
 {
     char inv[3], *rp;

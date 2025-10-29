@@ -28,7 +28,7 @@ typedef struct fs_client_config {
     fs_connection_resource_t server;
 } fs_client_config_t;
 
-static bool fs_config_check_magic(void *config)
+static inline bool fs_config_check_magic(void *config)
 {
     char *magic = (char *)config;
     for (int i = 0; i < LIONS_FS_MAGIC_LEN; i++) {
