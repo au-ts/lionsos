@@ -238,7 +238,7 @@ static fw_filter_err_t rules_free_id(fw_filter_state_t *state,
  * @param instances_capacity capacity of instance tables.
  * @param default_action default action of filter.
  */
-static void fw_filter_state_init(fw_filter_state_t *state,
+static inline void fw_filter_state_init(fw_filter_state_t *state,
                                  void *rules,
                                  void* rule_id_bitmap,
                                  uint16_t rules_capacity,
@@ -289,7 +289,7 @@ static void fw_filter_state_init(fw_filter_state_t *state,
  *
  * @return error status.
  */
-static fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
+static inline fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
                                           uint32_t src_ip,
                                           uint16_t src_port,
                                           uint32_t dst_ip,
@@ -380,7 +380,7 @@ static fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state,
  *
  * @return error status.
  */
-static fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state,
+static inline fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state,
                                               uint32_t src_ip,
                                               uint16_t src_port,
                                               uint32_t dst_ip,
@@ -432,7 +432,7 @@ static fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state,
  *
  * @return filter action to be applied. None is returned if no match is found.
  */
-static fw_action_t fw_filter_find_action(fw_filter_state_t *state,
+static inline fw_action_t fw_filter_find_action(fw_filter_state_t *state,
                                          uint32_t src_ip,
                                          uint16_t src_port,
                                          uint32_t dst_ip,
@@ -538,7 +538,7 @@ static fw_filter_err_t fw_filter_remove_instances(fw_filter_state_t *state,
  *
  * @return error status.
  */
-static fw_filter_err_t fw_filter_update_default_action(fw_filter_state_t *state,
+static inline fw_filter_err_t fw_filter_update_default_action(fw_filter_state_t *state,
                                                        fw_action_t new_action)
 {
     fw_action_t old_action = state->rule_table->rules[DEFAULT_ACTION_IDX].action;
@@ -564,7 +564,7 @@ static fw_filter_err_t fw_filter_update_default_action(fw_filter_state_t *state,
  *
  * @return error status.
  */
-static fw_filter_err_t fw_filter_remove_rule(fw_filter_state_t *state,
+static inline fw_filter_err_t fw_filter_remove_rule(fw_filter_state_t *state,
                                              uint16_t rule_id)
 {
     fw_filter_err_t err = rules_free_id(state, rule_id);

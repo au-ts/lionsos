@@ -20,7 +20,7 @@
  * @param len Number of bytes of the packet to include in checksum calculation.
  * @return The calculated 16-bit Internet Checksum.
  */
-static uint16_t fw_internet_checksum(void *pkt,
+static inline uint16_t fw_internet_checksum(void *pkt,
                                      uint16_t len)
 {
     uint32_t sum = 0;
