@@ -33,6 +33,16 @@ qemu ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
 
 ${BUILD_DIR}/Makefile: kitty.mk
 	mkdir -p ${BUILD_DIR}
-	cp kitty.mk $@
+	echo "export LIONSOS := ${LIONSOS}" > $@
+	echo "export KITTY_DIR := ${KITTY_DIR}" >> $@
+	echo "export MICROKIT_SDK ?= ${MICROKIT_SDK}" >> $@
+	echo "export NFS_SERVER ?= ${NFS_SERVER}" >> $@
+	echo "export NFS_DIRECTORY ?= ${NFS_DIRECTORY}" >> $@
+	echo "export MICROKIT_CONFIG ?= ${MICROKIT_CONFIG}" >> $@
+	echo "export MICROKIT_BOARD ?= ${MICROKIT_BOARD}" >> $@
+	echo "export BUILD_DIR := ${BUILD_DIR}" >> $@
+	echo "export KITTY_GRAPHICS_VM_ROOTFS ?= ${KITTY_GRAPHICS_VM_ROOTFS}" >> $@
+	echo "export KITTY_GRAPHICS_VM_LINUX ?= ${KITTY_GRAPHICS_VM_LINUX}" >> $@
+	cat kitty.mk >> $@
 
 FORCE:

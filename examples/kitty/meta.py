@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import List, Tuple, Optional
 from sdfgen import SystemDescription, Sddf, Vmm, DeviceTree, LionsOs
 from importlib.metadata import version
-
+from board import BOARDS
 assert version('sdfgen').split(".")[1] == "26", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
@@ -16,39 +16,6 @@ MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Irq = SystemDescription.Irq
 Channel = SystemDescription.Channel
-
-@dataclass
-class Board:
-    name: str
-    arch: SystemDescription.Arch
-    paddr_top: int
-    serial: str
-    timer: str
-    ethernet: str
-    i2c: Optional[str]
-
-
-BOARDS: List[Board] = [
-    Board(
-        name="qemu_virt_aarch64",
-        arch=SystemDescription.Arch.AARCH64,
-        paddr_top=0x6_0000_000,
-        serial="pl011@9000000",
-        timer="timer",
-        ethernet="virtio_mmio@a003e00",
-        # No I2C device on QEMU
-        i2c=None,
-    ),
-    Board(
-        name="odroidc4",
-        arch=SystemDescription.Arch.AARCH64,
-        paddr_top=0x60000000,
-        serial="soc/bus@ff800000/serial@3000",
-        timer="soc/bus@ffd00000/watchdog@f0d0",
-        ethernet="soc/ethernet@ff3f0000",
-        i2c="soc/bus@ffd00000/i2c@1d000",
-    ),
-]
 
 
 def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):

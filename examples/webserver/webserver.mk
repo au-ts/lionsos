@@ -6,62 +6,28 @@
 #
 # This makefile will be copied into the Build directory and used from there.
 #
-BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 
-ifeq (${MICROKIT_BOARD},odroidc4)
-	TIMER_DRIVER_DIR := meson
-	ETHERNET_DRIVER_DIR := meson
-	SERIAL_DRIVER_DIR := meson
-	CPU := cortex-a55
-else ifeq (${MICROKIT_BOARD},maaxboard)
-	TIMER_DRIVER_DIR := imx
-	ETHERNET_DRIVER_DIR := imx
-	SERIAL_DRIVER_DIR := imx
-	CPU := cortex-a53
-else ifeq (${MICROKIT_BOARD},qemu_virt_aarch64)
-	TIMER_DRIVER_DIR := arm
-	ETHERNET_DRIVER_DIR := virtio
-	SERIAL_DRIVER_DIR := arm
-	CPU := cortex-a53
-	QEMU := qemu-system-aarch64
-else
-$(error Unsupported MICROKIT_BOARD given)
-endif
+SUPPORTED_BOARDS := \
+	odroidc4 \
+	maaxboard \
+	qemu_virt_aarch64
 
-TOOLCHAIN := clang
-CC := clang
-LD := ld.lld
-AR := llvm-ar
-RANLIB := llvm-ranlib
-OBJCOPY := llvm-objcopy
-MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
-PYTHON ?= python3
-DTC := dtc
+TOOLCHAIN ?= clang
 
-ifeq ($(ARCH),aarch64)
-	CFLAGS_ARCH := -mcpu=$(CPU)
-	TARGET := aarch64-none-elf
-else ifeq ($(ARCH),riscv64)
-	CFLAGS_ARCH := -march=rv64imafdc
-	TARGET := riscv64-none-elf
-else
-$(error Unsupported ARCH given)
-endif
+IMAGE_FILE := webserver.img
+REPORT_FILE := report.txt
 
-ifeq ($(strip $(TOOLCHAIN)), clang)
-	CFLAGS_ARCH += -target $(TARGET)
-endif
+all: $(IMAGE_FILE)
+
+include ${SDDF}/tools/make/board/common.mk
 
 NFS=$(LIONSOS)/components/fs/nfs
 MICRODOT := ${LIONSOS}/dep/microdot/src
 
 METAPROGRAM := $(WEBSERVER_SRC_DIR)/meta.py
-DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
-DTB := $(MICROKIT_BOARD).dtb
 
 IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 	  network_copy.elf network_virt_rx.elf network_virt_tx.elf \
@@ -69,41 +35,16 @@ IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 
 SYSTEM_FILE := webserver.system
 
-CFLAGS := \
-	-mtune=$(CPU) \
-	-mstrict-align \
-	-ffreestanding \
-	-O2 \
-	-g3 \
-	-MD \
-	-MP \
-	-Wall \
-	-Wno-unused-function \
-	-Wno-bitwise-op-parentheses \
-	-Wno-shift-op-parentheses \
-	-I$(BOARD_DIR)/include \
-	$(CFLAGS_ARCH) \
-	-DBOARD_$(MICROKIT_BOARD) \
+CFLAGS += \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit
-
 include $(LIONSOS)/lib/libc/libc.mk
 
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS := -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a
-
-IMAGE_FILE := webserver.img
-REPORT_FILE := report.txt
-
-all: $(IMAGE_FILE)
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
-CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
-
-${CHECK_FLAGS_BOARD_MD5}:
-	-rm -f .board_cflags-*
-	touch $@
 
 MICROPYTHON_LIBMATH := $(LIBMATH)
 MICROPYTHON_EXEC_MODULE := webserver.py
@@ -121,15 +62,12 @@ config.py: ${CHECK_FLAGS_BOARD_MD5}
 
 include $(NFS)/nfs.mk
 
-%.o: %.c
-	${CC} ${CFLAGS} -c -o $@ $<
-
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 
 SDDF_MAKEFILES := ${SDDF}/util/util.mk \
-		  ${SDDF}/drivers/timer/${TIMER_DRIVER_DIR}/timer_driver.mk \
-		  ${SDDF}/drivers/network/${ETHERNET_DRIVER_DIR}/eth_driver.mk \
-		  ${SDDF}/drivers/serial/${SERIAL_DRIVER_DIR}/serial_driver.mk \
+		  ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
+		  ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
+		  ${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk \
 		  ${SDDF}/network/components/network_components.mk \
 		  ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
 		  ${SDDF}/serial/components/serial_components.mk
@@ -139,11 +77,8 @@ include ${SDDF_MAKEFILES}
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
-$(DTB): $(DTS)
-	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
-
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY)
+	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY)
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
@@ -165,6 +100,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .nfs_config=nfs_config.data nfs.elf
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_nfs.data nfs.elf
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_micropython.data micropython.elf
+	touch $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
@@ -182,9 +118,10 @@ qemu: ${IMAGE_FILE}
 
 FORCE: ;
 
-$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
-	cd ${LIONSOS}; git submodule update --init dep/micropython
-	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+#$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
+#	cd ${LIONSOS}; git submodule update --init dep/micropython
+#	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+
 ${LIONSOS}/dep/libmicrokitco/libmicrokitco.mk:
 	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
 

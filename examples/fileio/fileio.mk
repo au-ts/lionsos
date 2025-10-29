@@ -5,7 +5,6 @@
 #
 IMAGES := \
 	timer_driver.elf \
-	eth_driver.elf \
 	micropython.elf \
 	fat.elf \
 	serial_driver.elf \
@@ -14,71 +13,27 @@ IMAGES := \
 	blk_virt.elf \
 	blk_driver.elf
 
-ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
-	BLK_DRIV_DIR := mmc/imx
-	SERIAL_DRIV_DIR := imx
-	TIMER_DRIV_DIR := imx
-	CPU := cortex-a53
-else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
-	BLK_DRIV_DIR := virtio
-	SERIAL_DRIV_DIR := arm
-	TIMER_DRIV_DIR := arm
-	IMAGES += blk_driver.elf
-	CPU := cortex-a53
-	QEMU := qemu-system-aarch64
-else
-$(error Unsupported MICROKIT_BOARD given)
-endif
+SUPPORTED_BOARDS:= \
+	maaxboard \
+	qemu_virt_aarch64
 
-TOOLCHAIN := clang
-CC := clang
-LD := ld.lld
-RANLIB := llvm-ranlib
-AR := llvm-ar
-OBJCOPY := llvm-objcopy
+TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
-DTC := dtc
-PYTHON ?= python3
-
-BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
+SYSTEM_FILE := fileio.system
+IMAGE_FILE := fileio.img
+REPORT_FILE := report.txt
 
-ifeq ($(ARCH),aarch64)
-	CFLAGS_ARCH := -mcpu=$(CPU)
-	TARGET := aarch64-none-elf
-else ifeq ($(ARCH),riscv64)
-	CFLAGS_ARCH := -march=rv64imafdc
-	TARGET := riscv64-none-elf
-else
-$(error Unsupported ARCH given)
-endif
+all: ${IMAGE_FILE}
 
-ifeq ($(strip $(TOOLCHAIN)), clang)
-	CFLAGS_ARCH += -target $(TARGET)
-endif
+include ${SDDF}/tools/make/board/common.mk
 
 METAPROGRAM := $(FILEIO_DIR)/meta.py
-DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
-DTB := $(MICROKIT_BOARD).dtb
-
 FAT := $(LIONSOS)/components/fs/fat
 
-CFLAGS := \
-	-mtune=$(CPU) \
-	-mstrict-align \
-	-ffreestanding \
-	-O2 \
-	-g3 \
-	-Wall \
-	-Wno-unused-function \
-	-Wno-bitwise-op-parentheses \
-	-Wno-shift-op-parentheses \
-	-I$(BOARD_DIR)/include \
-	$(CFLAGS_ARCH) \
-	-DBOARD_$(MICROKIT_BOARD) \
+CFLAGS += \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit
@@ -88,27 +43,13 @@ include $(LIONSOS)/lib/libc/libc.mk
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
 
-SYSTEM_FILE := fileio.system
-IMAGE_FILE := fileio.img
-REPORT_FILE := report.txt
-
-all: cache.o
-CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
-
-${CHECK_FLAGS_BOARD_MD5}:
-	-rm -f .board_cflags-*
-	touch $@
-
-%.elf: %.o
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
-
 BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
 BLK_COMPONENTS := $(SDDF)/blk/components
 
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include ${SDDF}/util/util.mk
 include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
-include ${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk
+include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
 include ${SDDF}/libco/libco.mk
@@ -133,19 +74,10 @@ include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
-%.o: %.c
-	${CC} ${CFLAGS} -c -o $@ $<
-
 FORCE:
 
-%.elf: %.o
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
-
-$(DTB): $(DTS)
-	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
-
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
+	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
@@ -159,6 +91,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .blk_virt_config=blk_virt.data blk_virt.elf
 	$(OBJCOPY) --update-section .blk_client_config=blk_client_fatfs.data fat.elf
 	$(OBJCOPY) --update-section .fs_server_config=fs_server_fatfs.data fat.elf
+	touch $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
