@@ -6,6 +6,7 @@
 LIONSOS := $(abspath ../../)
 SDDF := $(LIONSOS)/dep/sddf
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
+LIBI2C_DIR := $(SDDF)/i2c
 LWIP := $(SDDF)/network/ipstacks/lwip
 # Path to micropython source code
 MICROPYTHON_SRC := $(LIONSOS)/dep/micropython
@@ -34,6 +35,7 @@ CFLAGS += \
 	-I$(TOP) \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
+	-I$(SDDF)/include/i2c \
 	-I$(BOARD_DIR)/include \
 	-I$(LIBMICROKITCO_PATH) \
 	-I$(LIONSOS)/include \
@@ -105,6 +107,13 @@ endif
 SRC_C += modmachine.c machine_i2c.c extmod/machine_i2c.c
 SRC_QSTR += modmachine.c machine_i2c.c
 
+# libi2c
+$(BUILD)/libi2c.a: $(LIBI2C_DIR)/libi2c.c | $(BUILD)
+	$(ECHO) "CC $<"
+	$(Q)cd $(BUILD) && $(CC) $(CFLAGS) -I$(LIBMICROKITCO_PATH) -I$(LIBMICROKITCO_OPT_PATH) -c $<
+	$(ECHO) "AR $@"
+	$(Q)cd $(BUILD) && $(AR) rcs libi2c.a libi2c.o
+
 ifdef ENABLE_FRAMEBUFFER
 SRC_C += modfb.c extmod/modframebuf.c
 SRC_QSTR += modfb.c
@@ -125,7 +134,7 @@ OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
 all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ)
+$(BUILD)/micropython.elf: $(OBJ) $(LIBMICROKITCO_OBJ) $(BUILD)/libi2c.a
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
