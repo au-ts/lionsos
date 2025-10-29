@@ -41,6 +41,16 @@ qemu ${IMAGE_FILE}: ${BUILD_DIR}/Makefile FORCE
 
 ${BUILD_DIR}/Makefile: webserver.mk
 	mkdir -p ${BUILD_DIR}
-	cp webserver.mk $@
+	echo "MICROKIT_SDK ?= ${MICROKIT_SDK}" > $@
+	echo "MICROKIT_BOARD ?= ${MICROKIT_BOARD}" >> $@
+	echo "MICROKIT_CONFIG ?= ${MICROKIT_CONFIG}" >> $@
+	echo "BUILD_DIR := ${BUILD_DIR}" >> $@
+	echo "WEBSERVER_SRC_DIR ?= ${WEBSERVER_SRC_DIR}" >> $@
+	echo "LIONSOS := ${LIONSOS}" >> $@
+	echo "NFS_SERVER := ${NFS_SERVER}" >> $@
+	echo "NFS_DIRECTORY := ${NFS_DIRECTORY}" >> $@
+	echo "WEBSITE_DIR := ${WEBSITE_DIR}" >> $@
+	cat webserver.mk >> $@
+
 
 FORCE:

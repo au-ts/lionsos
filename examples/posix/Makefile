@@ -23,9 +23,16 @@ all: ${IMAGE_FILE}
 qemu ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
 	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} $(notdir $@)
 
-${BUILD_DIR}/Makefile: posix.mk
+${BUILD_DIR}/Makefile: posix.mk Makefile
 	mkdir -p ${BUILD_DIR}
 	cp posix.mk $@
+	echo "export LIONSOS ?= ${LIONSOS}" > $@
+	echo "export POSIX_DIR ?= ${POSIX_DIR}" >> $@
+	echo "export BUILD_DIR := ${BUILD_DIR}" >> $@
+	echo "export MICROKIT_BOARD ?= ${MICROKIT_BOARD}" >> $@
+	echo "export MICROKIT_SDK ?= ${MICROKIT_SDK}" >> $@
+	echo "export MICROKIT_CONFIG ?= ${MICROKIT_CONFIG}" >> $@
+	cat posix.mk >> $@
 
 submodules:
 	git submodule update --init $(LIONSOS)/dep/libnfs
