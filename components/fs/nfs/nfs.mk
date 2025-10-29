@@ -31,7 +31,7 @@ $(CHECK_NFS_FLAGS_MD5):
 	-rm -f .nfs_cflags-*
 	touch $@
 
-$(LIBNFS)/CMakeLists.txt $(LIBNFS)/include:
+$(LIBNFS)/CMakeLists.txt $(LIBNFS)/include &:
 	cd $(LIONSOS); git submodule update --init dep/libnfs
 
 libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt | $(LIONS_LIBC)/include
@@ -54,7 +54,7 @@ $(NFS_OBJ): $(CHECK_NFS_FLAGS_MD5)
 $(NFS_OBJ): $(LIBNFS)/include
 $(NFS_OBJ): nfs
 $(NFS_OBJ): CFLAGS := $(CFLAGS_nfs) \
-					  $(CFLAGS)
+		      $(CFLAGS)
 
 nfs/%.o: $(NFS_DIR)/%.c | $(LIONS_LIBC)/include
 	$(CC) -c $(CFLAGS) $< -o $@

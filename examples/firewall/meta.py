@@ -8,8 +8,8 @@ from sdfgen import SystemDescription, Sddf, DeviceTree
 from ctypes import *
 from importlib.metadata import version
 import ipaddress
-
-assert version('sdfgen').split(".")[1] == "26", "Unexpected sdfgen version"
+from board import BOARDS
+assert version('sdfgen').split(".")[1] == "27", "Unexpected sdfgen version"
 
 from sdfgen_helper import *
 

@@ -114,7 +114,7 @@ typedef struct fw_arp_request {
  * @param entries virtual address of arp entries.
  * @param capacity capacity of arp table.
  */
-static void fw_arp_table_init(fw_arp_table_t *table,
+static inline void fw_arp_table_init(fw_arp_table_t *table,
                               void *entries,
                               uint16_t capacity)
 {
@@ -130,7 +130,7 @@ static void fw_arp_table_init(fw_arp_table_t *table,
  *
  * @return address of arp entry of NULL.
  */
-static fw_arp_entry_t *fw_arp_table_find_entry(fw_arp_table_t *table,
+static inline fw_arp_entry_t *fw_arp_table_find_entry(fw_arp_table_t *table,
                                                uint32_t ip)
 {
     for (uint16_t i = 0; i < table->capacity; i++) {
@@ -154,7 +154,7 @@ static fw_arp_entry_t *fw_arp_table_find_entry(fw_arp_table_t *table,
  *
  * @return arp response from entry.
  */
-static fw_arp_request_t fw_arp_response_from_entry(fw_arp_entry_t *entry)
+static inline fw_arp_request_t fw_arp_response_from_entry(fw_arp_entry_t *entry)
 {
     fw_arp_request_t response = { 0 };
     if (entry == NULL) {
@@ -181,7 +181,7 @@ static fw_arp_request_t fw_arp_response_from_entry(fw_arp_entry_t *entry)
  *
  * @return error status.
  */
-static fw_arp_error_t fw_arp_table_add_entry(fw_arp_table_t *table,
+static inline fw_arp_error_t fw_arp_table_add_entry(fw_arp_table_t *table,
                                        fw_arp_entry_state_t state,
                                        uint32_t ip,
                                        uint8_t *mac_addr,
