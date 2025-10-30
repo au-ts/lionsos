@@ -60,4 +60,5 @@ $(MUSL)/lib/libc.a $(LIONS_LIBC)/include: ${MUSL_SRC}/Makefile | $(MUSL) $(LIBC)
 ${MUSL_SRC}/Makefile:
 	cd ${LIONSOS}; git submodule update --init dep/musllibc
 
--include $(LIB_C_OBJ:.o=.d)
+-include $(LIB_C_POSIX_OBJ:.o=.d)
+-include $(LIB_C_COMPILER_RT_OBJ:.o=.d)
