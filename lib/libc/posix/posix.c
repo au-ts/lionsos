@@ -33,8 +33,6 @@
 #include <lions/posix/tcp.h>
 #include <lions/util.h>
 
-#define STDOUT_FD 1
-
 extern void *__sysinfo;
 static muslcsys_syscall_t syscall_table[MUSLC_NUM_SYSCALLS] = {0};
 

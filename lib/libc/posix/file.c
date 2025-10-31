@@ -29,6 +29,7 @@ static int fs_server_fd_map[MAX_FDS];
 static char fd_path[MAX_FDS][MAX_PATH_LEN];
 
 static size_t file_write(const void *buf, size_t len, int fd) {
+    // TODO: check buffer length can fit into fs write_buffer from fs_buffer_allocate
     ptrdiff_t write_buffer;
     fs_buffer_allocate(&write_buffer);
 
@@ -36,6 +37,7 @@ static size_t file_write(const void *buf, size_t len, int fd) {
 
     fs_cmpl_t completion;
     fd_entry_t *fd_entry = posix_fd_entry(fd);
+    assert(fd_entry);
     fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_WRITE,
                                                 .params.file_write = {
                                                     .fd = fs_server_fd_map[fd],
@@ -62,11 +64,14 @@ static size_t file_read(void *buf, size_t len, int fd) {
 
     fs_cmpl_t completion;
     fd_entry_t *fd_entry = posix_fd_entry(fd);
+    assert(fd_entry);
     fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_READ,
                                                 .params.file_read = {
                                                     .fd = fs_server_fd_map[fd],
                                                     .offset = fd_entry->file_ptr,
                                                     .buf.offset = read_buffer,
+                                                    // TODO: this length should probably be
+                                                    // max(len, FS_BUFFER_SIZE)
                                                     .buf.size = len,
                                                 }});
 
@@ -87,6 +92,7 @@ static size_t file_read(void *buf, size_t len, int fd) {
 static int file_close(int fd) {
     fs_cmpl_t completion;
     fd_entry_t *fd_entry = posix_fd_entry(fd);
+    assert(fd_entry);
 
     if (fd_entry->flags & O_DIRECTORY) {
         fs_command_blocking(&completion, (fs_cmd_t){
