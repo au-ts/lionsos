@@ -9,6 +9,15 @@
 #include <stdbool.h>
 #include <sddf/network/constants.h>
 
+#if defined(CONFIG_PLAT_QEMU_ARM_VIRT) || defined(CONFIG_PLAT_QEMU_RISCV_VIRT)
+// We don't need to do any address conflict detection on QEMU
+// as it creates it's own isolated network.
+//
+// Disabling this option drastically decreases the time to
+// complete DHCP on QEMU.
+#define LWIP_DHCP_DOES_ACD_CHECK 0
+#endif
+
 /**
  * Use lwIP without OS-awareness (no thread, semaphores, mutexes or mboxes).
  */
