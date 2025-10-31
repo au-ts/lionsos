@@ -59,7 +59,7 @@ static fd_entry_t fd_table[MAX_FDS] = {(fd_entry_t){
                                        }};
 
 fd_entry_t *posix_fd_entry(int fd) {
-    if (fd_active[fd] == false) {
+    if (!fd_active[fd]) {
         return NULL;
     }
     return &fd_table[fd];

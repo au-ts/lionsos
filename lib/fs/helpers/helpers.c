@@ -70,6 +70,9 @@ void *fs_buffer_ptr(ptrdiff_t buffer) {
     return fs_share + buffer;
 }
 
+// TODO: probably turn this API into multiple calls from the user so they
+// can decide how to process the completion themselves rather than passing
+// function pointers.
 void fs_process_completions(void (*fs_request_flag_set)(uint64_t)) {
     uint64_t to_consume = fs_queue_length_consumer(fs_completion_queue);
     for (uint64_t i = 0; i < to_consume; i++) {
