@@ -5,7 +5,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 #include <os/sddf.h>
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
@@ -469,14 +468,3 @@ void notified(microkit_channel ch)
         microkit_notify(router_config.tx_active.ch);
     }
 }
-
-/* Extract the entry size of variable length data structures to calculate the
-precise sdfgen memory region size needed. */
-const __attribute__ ((unused)) size_t fw_buffer_queue_entry_size = sizeof(net_buff_desc_t);
-const __attribute__ ((unused)) size_t fw_arp_queue_entry_size = sizeof(fw_arp_request_t);
-const __attribute__ ((unused)) size_t fw_icmp_queue_entry_size = sizeof(icmp_req_t);
-const __attribute__ ((unused)) size_t fw_arp_entry_size = sizeof(fw_arp_entry_t);
-const __attribute__ ((unused)) size_t fw_arp_pkt_node_size = sizeof(pkt_waiting_node_t);
-const __attribute__ ((unused)) size_t fw_routing_entry_size = sizeof(fw_routing_entry_t);
-const __attribute__ ((unused)) size_t fw_rule_size = sizeof(fw_rule_t);
-const __attribute__ ((unused)) size_t fw_instance_size = sizeof(fw_instance_t);
