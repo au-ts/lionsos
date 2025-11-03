@@ -8,6 +8,9 @@ from sdfgen import SystemDescription, Sddf, DeviceTree
 from ctypes import *
 from importlib.metadata import version
 import ipaddress
+from elftools.elf.elffile import ELFFile
+import sys
+
 
 assert version('sdfgen').split(".")[1] == "26", "Unexpected sdfgen version"
 
@@ -64,6 +67,7 @@ BOARDS: List[Board] = [
 
 # Memory region size helper functions
 page_size = 0x1000
+Uint64_Bytes = 8
 
 def round_up_to_Page(region_size: int) -> int:
     if (region_size < page_size):
@@ -73,15 +77,14 @@ def round_up_to_Page(region_size: int) -> int:
     else:
         return region_size + (page_size - (region_size % page_size))
 
-# Elf file containing variables holding the size of structs required for
-# calculating memory region sizes
-entry_size_extraction_elf = "routing.elf"
 class FirewallMemoryRegions():
     # Store all config structs
     all_mrs = []
 
-    def __init__(self, c_name, capacity, region_size_formula, entry_size = 0, region_size = 0):
-        # Name of variable in routing.elf holding size of table entry
+    def __init__(self, elf_name, c_name, capacity, region_size_formula, entry_size = 0, region_size = 0):
+        # Name of elf file with definition of type
+        self.elf_name = elf_name
+        # Name of type in the given elf file
         self.c_name = c_name
         # Capacity of data structure held in memory region
         self.capacity = capacity
@@ -110,47 +113,52 @@ class FirewallMemoryRegions():
             sys.exit()
 
 # Firewall memory region object declarations, update region capacities here
-dma_buffer_queue_region = FirewallMemoryRegions("fw_buffer_queue_entry_size",
+dma_buffer_queue_region = FirewallMemoryRegions("routing.elf","net_buff_desc",
                                                 512,
                                                 lambda x: 16 + x.capacity * x.entry_size)
 
-dma_buffer_region = FirewallMemoryRegions(None,
+dma_buffer_region = FirewallMemoryRegions(None,None,
                                           dma_buffer_queue_region.capacity,
                                           lambda x: x.capacity * x.entry_size,
                                           2048)
 
-arp_queue_region = FirewallMemoryRegions("fw_arp_queue_entry_size",
+arp_queue_region = FirewallMemoryRegions("arp_requester.elf","fw_arp_request",
                                          512,
                                          lambda x: 16 + x.capacity * x.entry_size)
 
-icmp_queue_region = FirewallMemoryRegions("fw_icmp_queue_entry_size",
+icmp_queue_region = FirewallMemoryRegions("icmp_module.elf","icmp_req",
                                          128,
                                          lambda x: 16 + x.capacity * x.entry_size)
 
-arp_cache_region = FirewallMemoryRegions("fw_arp_entry_size",
+arp_cache_region = FirewallMemoryRegions("arp_requester.elf", "fw_arp_entry",
                                          512,
                                          lambda x: x.capacity * x.entry_size)
 
-arp_packet_queue_region = FirewallMemoryRegions("fw_arp_pkt_node_size",
+arp_packet_queue_region = FirewallMemoryRegions("routing.elf", "pkt_waiting_node",
                                          dma_buffer_queue_region.capacity,
                                          lambda x: x.capacity * x.entry_size)
 
-routing_table_region = FirewallMemoryRegions("fw_routing_entry_size",
+routing_table_wrapper = FirewallMemoryRegions("routing.elf", "routing_table",0,lambda x: 0)
+routing_table_region = FirewallMemoryRegions("routing.elf","routing_entry",
                                          256,
-                                         lambda x: 4 + x.capacity * x.entry_size)
+                                         lambda x: routing_table_wrapper.entry_size + x.capacity * x.entry_size)
 
-filter_rules_region = FirewallMemoryRegions("fw_rule_size",
+filter_rules_wrapper = FirewallMemoryRegions("icmp_filter.elf", "fw_rule_table",0,lambda x: 0) 
+filter_rules_region = FirewallMemoryRegions("icmp_filter.elf", "fw_rule",
                                          256,
-                                         lambda x: 4 + x.capacity * x.entry_size)
+                                         lambda x: filter_rules_wrapper.entry_size + x.capacity * x.entry_size)
 
-filter_instances_region = FirewallMemoryRegions("fw_instance_size",
+filter_instances_wrapper = FirewallMemoryRegions("icmp_filter.elf", "fw_instances_table",0,lambda x: 0)
+filter_instances_region = FirewallMemoryRegions("icmp_filter.elf", "fw_instance",
                                          512,
-                                         lambda x: 4 + x.capacity * x.entry_size)
+                                         lambda x: filter_instances_wrapper.entry_size + x.capacity * x.entry_size)
 
-filter_rule_bitmap_region = FirewallMemoryRegions(None,
+filter_rule_bitmap_wrapper = FirewallMemoryRegions("icmp_filter.elf", "fw_rule_id_bitmap",0, lambda x: 0)
+# capacity of bitmap tracking rule ids, scales with the number of rules i.e. capacity of filter rules array
+filter_rule_bitmap_region = FirewallMemoryRegions(None,None,
                                         (filter_rules_region.capacity + 63) // 64,
-                                        lambda x: 8 + x.capacity * x.entry_size,
-                                        8)
+                                        lambda x: filter_rule_bitmap_wrapper.entry_size + x.capacity * x.entry_size,
+                                        Uint64_Bytes)
 
 # Filter action encodings
 FILTER_ACTION_ALLOW = 1
@@ -776,46 +784,32 @@ if __name__ == '__main__':
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
 
-    # For memory regions holding arrays of firewall structs, we require the size
-    # of these structs to ensure our memory regions are the correct size. The
-    # elf file for the routing component defines a set of const size_t variables
-    # holding these sizes. We us objdump to extract these values.
-
-    # Dump the elf file of the routing component
-    objdump_process = subprocess.run([obj_dump, "-DlSx", entry_size_extraction_elf],
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,
-                                     check=True)
-    assert objdump_process.returncode == 0
-
     for mem_region in FirewallMemoryRegions.all_mrs:
         if mem_region.region_size != 0:
             continue
         entry_size = mem_region.entry_size
         if entry_size == 0:
-            # Extract lines that hold the value of the size variable. NOTE: we
-            # assume the value is < UINT32_MAX
-            entry_size_lines = subprocess.run(["grep", "-A", "1", "-E", f"^[0-9a-f]+ <{mem_region.c_name}>"],
-                                              input=objdump_process.stdout,
-                                              stdout=subprocess.PIPE,
-                                              stderr=subprocess.PIPE,
-                                              check=True)
-            # Isolate value line
-            size_line = subprocess.run(args=["grep", "0x"],
-                                              input=entry_size_lines.stdout,
-                                              stdout=subprocess.PIPE,
-                                              stderr=subprocess.PIPE,
-                                              check=True)
-            # Clean line
-            size_bytes = subprocess.run(["sed", "s/.*\\.word\\t*//g"],
-                                              input=size_line.stdout,
-                                              capture_output=True,
-                                              check=True)
+            elf_file_name = mem_region.elf_name
+            if elf_file_name:
+                with open(elf_file_name,"rb") as dwarf_f:
+                    elffile = ELFFile(dwarf_f)
+                    if not elffile.has_dwarf_info():
+                        print("Python dwarf module was not able to parse the dwarf_info: check compiler flags or pyelf tools module", file=sys.stderr)
+                    dwarfinfo = elffile.get_dwarf_info()
+                    for CU in dwarfinfo.iter_CUs():
+                        for DIE in CU.iter_DIEs():
+                            if DIE.tag == "DW_TAG_structure_type":
+                                struct_name = DIE.attributes.get("DW_AT_name", None)
+                                if struct_name:
+                                    if struct_name.value.decode() == mem_region.c_name:
+                                        struct_size = DIE.attributes.get("DW_AT_byte_size", None)
+                                        if struct_size and struct_size.value:
+                                            mem_region.entry_size = struct_size.value
+                                        else:
+                                            print("Unable to extract the size of the struct in the dwarf entry",file=sys.stderr)
 
-            size_hex_string = str(size_bytes.stdout[:-1])[2:-1]
-            entry_size = int(size_hex_string, 16)
-            mem_region.entry_size = entry_size
-
+            else:
+                print(f"Error in definition of the memory region {mem_region.elf_name} : could not find the elf file provided",file=sys.stderr)
+            
         mem_region.calculate_size()
-
     generate(args.sdf, args.output, dtb)
