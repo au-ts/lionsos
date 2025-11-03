@@ -143,7 +143,7 @@ routing_table_region = FirewallMemoryRegions("routing.elf","routing_entry",
                                          256,
                                          lambda x: routing_table_wrapper.entry_size + x.capacity * x.entry_size)
 
-filter_rules_wrapper = FirewallMemoryRegions("icmp_filter.elf", "fw_rule_table",0,lambda x: 0) 
+filter_rules_wrapper = FirewallMemoryRegions("icmp_filter.elf", "fw_rule_table",0,lambda x: 0)
 filter_rules_region = FirewallMemoryRegions("icmp_filter.elf", "fw_rule",
                                          256,
                                          lambda x: filter_rules_wrapper.entry_size + x.capacity * x.entry_size)
@@ -807,9 +807,7 @@ if __name__ == '__main__':
                                             mem_region.entry_size = struct_size.value
                                         else:
                                             print("Unable to extract the size of the struct in the dwarf entry",file=sys.stderr)
-
             else:
                 print(f"Error in definition of the memory region {mem_region.elf_name} : could not find the elf file provided",file=sys.stderr)
-            
         mem_region.calculate_size()
     generate(args.sdf, args.output, dtb)
