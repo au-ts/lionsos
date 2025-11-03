@@ -57,8 +57,8 @@
 
 /* For I2C connections */
 #define MICROPY_PY_MACHINE (1)
-#define MICROPY_PY_MACHINE_I2C (1)
-#define MICROPY_HW_ENABLE_HW_I2C (1)
+// #define MICROPY_PY_MACHINE_I2C (1)
+// #define MICROPY_HW_ENABLE_HW_I2C (1)
 
 #ifdef ENABLE_FRAMEBUFFER
 #define MICROPY_PY_FRAMEBUF (1)
