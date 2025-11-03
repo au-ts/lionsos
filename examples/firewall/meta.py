@@ -2,6 +2,7 @@
 import argparse
 import subprocess
 from os import path
+import sys
 from dataclasses import dataclass
 from typing import List
 from sdfgen import SystemDescription, Sddf, DeviceTree
@@ -64,93 +65,128 @@ BOARDS: List[Board] = [
 
 # Memory region size helper functions
 page_size = 0x1000
+Uint64_Bytes = 8
 
-def round_up_to_Page(region_size: int) -> int:
-    if (region_size < page_size):
+def round_up_to_Page(size: int) -> int:
+    if (size < page_size):
         return page_size
-    elif (region_size % page_size == 0):
-        return region_size
+    elif (size % page_size == 0):
+        return size
     else:
-        return region_size + (page_size - (region_size % page_size))
+        return size + (page_size - (size % page_size))
 
-# Elf file containing variables holding the size of structs required for
-# calculating memory region sizes
-entry_size_extraction_elf = "routing.elf"
-class FirewallMemoryRegions():
-    # Store all config structs
-    all_mrs = []
+# Class for encoding data structures that are held inside memory regions. Allows
+# the metaprogram to extract the size of struct types from firewall .elf files
+class FirewallDataStructure():
+    def __init__(self, *,
+                 size: int = 0,
+                 entry_size: int = 0,
+                 capacity: int = 1,
+                 size_formula = lambda x: x.entry_size * x.capacity,
+                 elf_name = None,
+                 c_name = None):
 
-    def __init__(self, c_name, capacity, region_size_formula, entry_size = 0, region_size = 0):
-        # Name of variable in routing.elf holding size of table entry
-        self.c_name = c_name
-        # Capacity of data structure held in memory region
-        self.capacity = capacity
-        # Formula for calculating memory region size from class object
-        self.region_size_formula = region_size_formula
-        # Size of individual entries of data structure
+        self.size = size
         self.entry_size = entry_size
-        # Size of region calculated using region_size_formula
-        self.region_size = region_size
-        FirewallMemoryRegions.all_mrs.append(self)
+        self.capacity = capacity
+        self.size_formula = size_formula
+        self.elf_name = elf_name
+        self.c_name = c_name
 
-    def region_size(self):
-        property
-        if self.region_size == 0:
-            print("Extracted region size of memory region {self.c_name} was 0!")
-            sys.exit()
-        return self.region_size
+        if not size and (entry_size and capacity):
+            self.size = size_formula(self)
 
+        # If data structure has size 0, it needs to be calculated from elf files
+        if not self.size and not (elf_name and c_name):
+            raise Exception("FirewallDataStructure: Structure of size 0 created with invalid .elf extraction parameters!")
+
+    # To be called after entry size has been extracted
     def calculate_size(self):
-        if self.entry_size == 0:
-            print("Entry size of memory region {self.c_name} was 0 during region size calculation!")
-            sys.exit()
-        self.region_size = round_up_to_Page(self.region_size_formula(self))
-        if self.region_size == 0:
-            print("Calculated region size of memory region {self.c_name} was 0!")
-            sys.exit()
+        if self.size:
+            return
+        if not self.entry_size:
+            raise Exception(f"FirewallDataStructure: Entry size of structure with c name {self.c_name} was 0 during size calculation!")
 
-# Firewall memory region object declarations, update region capacities here
-dma_buffer_queue_region = FirewallMemoryRegions("fw_buffer_queue_entry_size",
-                                                512,
-                                                lambda x: 16 + x.capacity * x.entry_size)
+        self.size = self.size_formula(self)
+        if not self.size:
+            raise Exception(f"FirewallDataStructure: Calculated size of structure with c name {self.c_name}, entry size {self.entry_size} and capacity {self.capacity} was 0!")
 
-dma_buffer_region = FirewallMemoryRegions(None,
-                                          dma_buffer_queue_region.capacity,
-                                          lambda x: x.capacity * x.entry_size,
-                                          2048)
+# Class for creating firewall memory regions to be mapped into components.
+# Memory regions can be created directly, or by listing the data structures to
+# be held within them. Data structures are encoded using the
+# FirewallDataStructure class. This allows the metaprogram to extract the size
+# of the data structures and calculate the size a memory region requires in
+# order to hold all the data structures within it.
+class FirewallMemoryRegions():
+    # Store all memory regions
+    regions = []
 
-arp_queue_region = FirewallMemoryRegions("fw_arp_queue_entry_size",
-                                         512,
-                                         lambda x: 16 + x.capacity * x.entry_size)
+    def __init__(
+        self, *,
+        min_size: int = 0,
+        data_structures: List[FirewallDataStructure] = [],
+        size_formula = lambda list: sum(item.size for item in list)):
 
-icmp_queue_region = FirewallMemoryRegions("fw_icmp_queue_entry_size",
-                                         128,
-                                         lambda x: 16 + x.capacity * x.entry_size)
+        self.min_size = min_size
+        self.data_structures = data_structures
+        self.size_formula = size_formula
 
-arp_cache_region = FirewallMemoryRegions("fw_arp_entry_size",
-                                         512,
-                                         lambda x: x.capacity * x.entry_size)
+        if not min_size and not len(data_structures):
+            raise Exception("FirewallMemoryRegions: Region of size 0 created without internal data structure components")
 
-arp_packet_queue_region = FirewallMemoryRegions("fw_arp_pkt_node_size",
-                                         dma_buffer_queue_region.capacity,
-                                         lambda x: x.capacity * x.entry_size)
+        FirewallMemoryRegions.regions.append(self)
 
-routing_table_region = FirewallMemoryRegions("fw_routing_entry_size",
-                                         256,
-                                         lambda x: 4 + x.capacity * x.entry_size)
+    # To be called after data structure sizes have been calculated
+    def calculate_size(self):
+        if self.min_size:
+            return
 
-filter_rules_region = FirewallMemoryRegions("fw_rule_size",
-                                         256,
-                                         lambda x: 4 + x.capacity * x.entry_size)
+        self.min_size = self.size_formula(self.data_structures)
+        if not self.min_size:
+            raise Exception(f"FirewallMemoryRegions: Calculated minimum size of region with data structure list {self.data_structures} was 0!")
 
-filter_instances_region = FirewallMemoryRegions("fw_instance_size",
-                                         512,
-                                         lambda x: 4 + x.capacity * x.entry_size)
+    @property
+    def region_size(self):
+        if not self.min_size:
+            return 0
 
-filter_rule_bitmap_region = FirewallMemoryRegions(None,
-                                        (filter_rules_region.capacity + 63) // 64,
-                                        lambda x: 8 + x.capacity * x.entry_size,
-                                        8)
+        return round_up_to_Page(self.min_size)
+
+# Firewall memory region and data structure object declarations, update region capacities here
+fw_queue_wrapper = FirewallDataStructure(elf_name="routing.elf", c_name="fw_queue");
+
+dma_buffer_queue = FirewallDataStructure(elf_name="routing.elf", c_name="net_buff_desc", capacity=512)
+dma_buffer_queue_region = FirewallMemoryRegions(data_structures=[fw_queue_wrapper, dma_buffer_queue])
+
+dma_buffer_region = FirewallMemoryRegions(min_size=dma_buffer_queue.capacity * 2048)
+
+arp_queue_buffer = FirewallDataStructure(elf_name="arp_requester.elf", c_name="fw_arp_request", capacity=512)
+arp_queue_region = FirewallMemoryRegions(data_structures=[fw_queue_wrapper, arp_queue_buffer])
+
+icmp_queue_buffer = FirewallDataStructure(elf_name="icmp_module.elf", c_name="icmp_req", capacity=128)
+icmp_queue_region = FirewallMemoryRegions(data_structures=[fw_queue_wrapper, icmp_queue_buffer])
+
+arp_cache_buffer = FirewallDataStructure(elf_name="arp_requester.elf", c_name="fw_arp_entry", capacity=512)
+arp_cache_region = FirewallMemoryRegions(data_structures=[arp_cache_buffer])
+
+arp_packet_queue_buffer = FirewallDataStructure(elf_name="routing.elf", c_name="pkt_waiting_node", capacity=dma_buffer_queue.capacity)
+arp_packet_queue_region = FirewallMemoryRegions(data_structures=[arp_packet_queue_buffer])
+
+routing_table_wrapper = FirewallDataStructure(elf_name="routing.elf", c_name="routing_table")
+routing_table_buffer = FirewallDataStructure(elf_name="routing.elf", c_name="routing_entry", capacity=256)
+routing_table_region = FirewallMemoryRegions(data_structures=[routing_table_wrapper, routing_table_buffer])
+
+filter_rules_wrapper = FirewallDataStructure(elf_name="icmp_filter.elf", c_name="fw_rule_table")
+filter_rules_buffer = FirewallDataStructure(elf_name="icmp_filter.elf", c_name="fw_rule", capacity=256)
+filter_rules_region = FirewallMemoryRegions(data_structures=[filter_rules_wrapper, filter_rules_buffer])
+
+filter_instances_wrapper = FirewallDataStructure(elf_name="icmp_filter.elf", c_name="fw_instances_table")
+filter_instances_buffer = FirewallDataStructure(elf_name="icmp_filter.elf", c_name="fw_instance")
+filter_instances_region = FirewallMemoryRegions(data_structures=[filter_instances_wrapper,filter_instances_buffer])
+
+filter_rule_bitmap_wrapper = FirewallDataStructure(elf_name="icmp_filter.elf", c_name="fw_rule_id_bitmap")
+filter_rule_bitmap_buffer = FirewallDataStructure(entry_size=Uint64_Bytes, capacity=(filter_rules_buffer.capacity + 63) // 64)
+filter_rule_bitmap_region = FirewallMemoryRegions(data_structures=[filter_rule_bitmap_wrapper,filter_rule_bitmap_buffer])
 
 # Filter action encodings
 FILTER_ACTION_ALLOW = 1
@@ -435,12 +471,12 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     # Webserver receives traffic from the internal -> external router
     router_webserver_conn = fw_connection(networks[int_net]["router"], webserver,
-                                          dma_buffer_queue_region.capacity,
+                                          dma_buffer_queue.capacity,
                                           dma_buffer_queue_region.region_size)
 
     # Webserver returns packets to interior rx virtualiser
     webserver_in_virt_conn = fw_connection(webserver, networks[int_net]["in_virt"],
-                                           dma_buffer_queue_region.capacity,
+                                           dma_buffer_queue.capacity,
                                            dma_buffer_queue_region.region_size)
 
     # Webserver needs access to rx dma region
@@ -449,7 +485,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     # Webserver has arp channel for arp requests/responses
     webserver_arp_conn = fw_arp_connection(webserver, networks[ext_net]["arp_req"],
-                                           arp_queue_region.capacity, arp_queue_region.region_size)
+                                           arp_queue_buffer.capacity, arp_queue_region.region_size)
 
     # ICMP Module needs to be able to transmit out of both NICs
     networks[ext_net]["out_net"].add_client_with_copier(icmp_module, rx=False)
@@ -457,9 +493,9 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     # ICMP Module needs to be connected to both routers.
     icmp_int_router_conn = fw_connection(networks[int_net]["router"], icmp_module,
-                                        icmp_queue_region.capacity, icmp_queue_region.region_size)
+                                        icmp_queue_buffer.capacity, icmp_queue_region.region_size)
     icmp_ext_router_conn = fw_connection(networks[ext_net]["router"], icmp_module,
-                                        icmp_queue_region.capacity, icmp_queue_region.region_size)
+                                        icmp_queue_buffer.capacity, icmp_queue_region.region_size)
 
     icmp_module_config = FwIcmpModuleConfig(
         list(ip_to_int(ip) for ip in ips),
@@ -489,13 +525,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         # Create a firewall data connection between router and output virt with
         # the rx dma region as data region
-        router_out_virt_conn = fw_data_connection(router, out_virt, dma_buffer_queue_region.capacity,
+        router_out_virt_conn = fw_data_connection(router, out_virt, dma_buffer_queue.capacity,
                                                   dma_buffer_queue_region.region_size,
                                                   network["rx_dma_region"], "rw", "r")
 
         # Create a firewall connection for output virt to return buffers to
         # input virt
-        output_in_virt_conn = fw_connection(out_virt, in_virt, dma_buffer_queue_region.capacity,
+        output_in_virt_conn = fw_connection(out_virt, in_virt, dma_buffer_queue.capacity,
                                             dma_buffer_queue_region.region_size)
         out_virt_in_virt_data_conn = FwDataConnectionResource(
             output_in_virt_conn[0],
@@ -511,7 +547,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         # Create a firewall connection for router to return free buffers to
         # receive virtualiser on interior network
-        router_in_virt_conn = fw_connection(router, in_virt, dma_buffer_queue_region.capacity,
+        router_in_virt_conn = fw_connection(router, in_virt, dma_buffer_queue.capacity,
                                             dma_buffer_queue_region.region_size)
 
         # Create input virt config
@@ -536,7 +572,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         network["configs"][in_virt].active_client_subtypes.append(arp_eth_opcode_request)
 
         # Create arp queue firewall connection
-        router_arp_conn = fw_arp_connection(router, arp_req, arp_queue_region.capacity,
+        router_arp_conn = fw_arp_connection(router, arp_req, arp_queue_buffer.capacity,
                                             arp_queue_region.region_size)
 
         # Create arp cache
@@ -550,7 +586,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             ip_to_int(ips[network["out_num"]]),
             [router_arp_conn[1]],
             arp_cache[0],
-            arp_cache_region.capacity
+            arp_cache_buffer.capacity
         )
 
         # Create arp resp config
@@ -580,13 +616,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         router_webserver_config = FwWebserverRouterConfig(
             router_update_ch.pd_b_id,
             routing_table[0],
-            routing_table_region.capacity
+            routing_table_buffer.capacity
         )
 
         webserver_router_config = FwWebserverRouterConfig(
             router_update_ch.pd_a_id,
             routing_table[1],
-            routing_table_region.capacity
+            routing_table_buffer.capacity
         )
 
         # Create router config
@@ -602,7 +638,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             router_out_virt_conn[0].data.region,
             router_arp_conn[0],
             arp_cache[1],
-            arp_cache_region.capacity,
+            arp_cache_buffer.capacity,
             arp_packet_queue,
             router_webserver_config,
             network["icmp_module"],
@@ -620,7 +656,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             # Create a firewall connection for filter to transmit buffers to
             # router
             filter_router_conn = fw_connection(filter_pd, router,
-                                               dma_buffer_queue_region.capacity,
+                                               dma_buffer_queue.capacity,
                                                dma_buffer_queue_region.region_size)
 
             # Connect filter as rx only network client
@@ -648,7 +684,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 filter_update_ch.pd_b_id,
                 FILTER_ACTION_ALLOW,
                 filter_rules[0],
-                filter_rules_region.capacity
+                filter_rules_buffer.capacity
             )
 
             webserver_filter_config = FwWebserverFilterConfig(
@@ -656,13 +692,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 filter_update_ch.pd_a_id,
                 FILTER_ACTION_ALLOW,
                 filter_rules[1],
-                filter_rules_region.capacity
+                filter_rules_buffer.capacity
             )
 
             # Create filter config
             network["configs"][filter_pd] = FwFilterConfig(
                 network["num"],
-                filter_instances_region.capacity,
+                filter_instances_buffer.capacity,
                 filter_router_conn[0],
                 filter_webserver_config,
                 None,
@@ -776,46 +812,30 @@ if __name__ == '__main__':
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
 
-    # For memory regions holding arrays of firewall structs, we require the size
-    # of these structs to ensure our memory regions are the correct size. The
-    # elf file for the routing component defines a set of const size_t variables
-    # holding these sizes. We us objdump to extract these values.
-
-    # Dump the elf file of the routing component
-    objdump_process = subprocess.run([obj_dump, "-DlSx", entry_size_extraction_elf],
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,
-                                     check=True)
-    assert objdump_process.returncode == 0
-
-    for mem_region in FirewallMemoryRegions.all_mrs:
-        if mem_region.region_size != 0:
+    for region in FirewallMemoryRegions.regions:
+        if region.region_size:
+            # Memory region size is fixed
             continue
-        entry_size = mem_region.entry_size
-        if entry_size == 0:
-            # Extract lines that hold the value of the size variable. NOTE: we
-            # assume the value is < UINT32_MAX
-            entry_size_lines = subprocess.run(["grep", "-A", "1", "-E", f"^[0-9a-f]+ <{mem_region.c_name}>"],
-                                              input=objdump_process.stdout,
-                                              stdout=subprocess.PIPE,
-                                              stderr=subprocess.PIPE,
-                                              check=True)
-            # Isolate value line
-            size_line = subprocess.run(args=["grep", "0x"],
-                                              input=entry_size_lines.stdout,
-                                              stdout=subprocess.PIPE,
-                                              stderr=subprocess.PIPE,
-                                              check=True)
-            # Clean line
-            size_bytes = subprocess.run(["sed", "s/.*\\.word\\t*//g"],
-                                              input=size_line.stdout,
-                                              capture_output=True,
-                                              check=True)
 
-            size_hex_string = str(size_bytes.stdout[:-1])[2:-1]
-            entry_size = int(size_hex_string, 16)
-            mem_region.entry_size = entry_size
-
-        mem_region.calculate_size()
+        for structure in region.data_structures:
+            if structure.size:
+                # Data structure size has already been calculated
+                continue
+            try:
+                output = subprocess.run(["llvm-dwarfdump", structure.elf_name],
+                                        capture_output=True,
+                                        text=True,
+                                        check=True)
+                dwarfdump = output.stdout.split()
+                for i in range(len(dwarfdump)):
+                    if dwarfdump[i] == "DW_TAG_structure_type":
+                        if dwarfdump[i + 2] == f"(\"{structure.c_name}\")":
+                            assert(dwarfdump[i + 3] == "DW_AT_byte_size")
+                            size_fmt = dwarfdump[i + 4].strip('(').strip(')')
+                            structure.entry_size = int(size_fmt, base=16)
+            except:
+                raise Exception(f"Error calculating {structure.c_name} size using llvm-dwarf dump on {structure.elf_name})")
+            structure.calculate_size()
+        region.calculate_size()
 
     generate(args.sdf, args.output, dtb)
