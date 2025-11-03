@@ -90,8 +90,8 @@ CFLAGS += -DEXEC_MODULE=\"$(EXEC_MODULE)\"
 endif
 
 # I2C setup
-SRC_C += modmachine.c machine_i2c.c extmod/machine_i2c.c
-SRC_QSTR += modmachine.c machine_i2c.c
+SRC_C += modmachine.c
+SRC_QSTR += modmachine.c
 
 ifdef ENABLE_FRAMEBUFFER
 SRC_C += modfb.c extmod/modframebuf.c
