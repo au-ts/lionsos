@@ -118,7 +118,7 @@ $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu_disk:
-	$(LIONSOS)/dep/sddf/tools/mkvirtdisk $@ 1 512 16777216 GPT
+	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 GPT
 
 qemu: ${IMAGE_FILE} qemu_disk
 	$(QEMU) -machine virt,virtualization=on \
