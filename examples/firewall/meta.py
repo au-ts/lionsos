@@ -8,9 +8,6 @@ from sdfgen import SystemDescription, Sddf, DeviceTree
 from ctypes import *
 from importlib.metadata import version
 import ipaddress
-from elftools.elf.elffile import ELFFile
-import sys
-
 
 assert version('sdfgen').split(".")[1] == "26", "Unexpected sdfgen version"
 
@@ -791,23 +788,18 @@ if __name__ == '__main__':
         if entry_size == 0:
             elf_file_name = mem_region.elf_name
             if elf_file_name:
-                with open(elf_file_name,"rb") as dwarf_f:
-                    elffile = ELFFile(dwarf_f)
-                    if not elffile.has_dwarf_info():
-                        print("Python dwarf module was not able to parse the dwarf_info: check compiler flags or pyelf tools module", file=sys.stderr)
-                    dwarfinfo = elffile.get_dwarf_info()
-                    for CU in dwarfinfo.iter_CUs():
-                        for DIE in CU.iter_DIEs():
-                            if DIE.tag == "DW_TAG_structure_type":
-                                struct_name = DIE.attributes.get("DW_AT_name", None)
-                                if struct_name:
-                                    if struct_name.value.decode() == mem_region.c_name:
-                                        struct_size = DIE.attributes.get("DW_AT_byte_size", None)
-                                        if struct_size and struct_size.value:
-                                            mem_region.entry_size = struct_size.value
-                                        else:
-                                            print("Unable to extract the size of the struct in the dwarf entry",file=sys.stderr)
-            else:
-                print(f"Error in definition of the memory region {mem_region.elf_name} : could not find the elf file provided",file=sys.stderr)
+                command = "llvm-dwarfdump"
+                try:
+                    result = subprocess.run([command, elf_file_name], capture_output=True, text=True, check=True)
+                    dwarfdump = result.stdout.split()
+                    for i in range(len(dwarfdump)):
+                        if dwarfdump[i] == "DW_TAG_structure_type":
+                            if dwarfdump[i + 2] == f"(\"{mem_region.c_name}\")":
+                                assert dwarfdump[i + 3] == "DW_AT_byte_size"
+                                size_fmt = dwarfdump[i + 4].strip('(').strip(')')
+                                size = int(size_fmt, base=16)
+                                mem_region.entry_size = size
+                except:
+                    raise Exception(f"Error running the llvm-dwarf dump on {elf_file_name})")
         mem_region.calculate_size()
     generate(args.sdf, args.output, dtb)
