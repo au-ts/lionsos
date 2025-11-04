@@ -214,7 +214,7 @@ $(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross &:
 ${LIONSOS}/dep/libmicrokitco/libmicrokitco.mk:
 	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
 
-${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
+${SDDF}/tools/make/board/common.mk ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
 	cd ${LIONSOS}; git submodule update --init dep/sddf
 
 qemu: $(IMAGE_FILE)
