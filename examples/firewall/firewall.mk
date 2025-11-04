@@ -198,7 +198,7 @@ $(LIONSOS)/dep/libmicrokitco/libmicrokitco.mk:
 $(MICRODOT):
 	cd $(LIONSOS); git submodule update --init dep/microdot
 
-$(SDDF_MAKEFILES) &:
+${SDDF}/tools/make/board/common.mk ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
 	cd $(LIONSOS); git submodule update --init dep/sddf
 
 -include $(DEPS)
