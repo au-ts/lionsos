@@ -48,7 +48,7 @@ static int mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf,
 
     // Check length of buffer is sane. libi2c read max is UINT16_MAX.
     // We leave the function header as a size_t to keep micropython happy
-    if (len >= UINT16_MAX) {
+    if (len > UINT16_MAX) {
         mp_raise_msg_varg(&mp_type_RuntimeError,
                           MP_ERROR_TEXT("Length is too long. Max = UINT16_MAX"),
                           self->port);
@@ -82,7 +82,6 @@ static int mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf,
     if (flag_mask & I2C_FLAG_READ) {
         if (err == I2C_ERR_OK) {
             memcpy(buf, i2c_data, len);
-            // @lesleyr: is this right? old code always returns 0 on success.
             return 0;
         }
     }
