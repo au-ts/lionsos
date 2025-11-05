@@ -11,7 +11,6 @@ LWIP := $(SDDF)/network/ipstacks/lwip
 MICROPYTHON_SRC := $(LIONSOS)/dep/micropython
 FROZEN_MANIFEST ?= $(MICROPYTHON_SRC)/extmod/asyncio/manifest.py
 
-
 # Include the core environment definitions; this will set $(TOP).
 include $(MICROPYTHON_SRC)/py/mkenv.mk
 
@@ -127,7 +126,9 @@ $(BUILD)/micropython.elf: $(OBJ) $(BUILD)/libi2c.o
 	$(Q)$(SIZE) $@
 
 $(OBJ): |${MPY_LIB_DIR}/README.md
-$(MPY_LIB_DIR)/README.md: submodules
+$(MPY_LIB_DIR)/README.md:
+	${MAKE} -C ${LIONSOS}/components/micropython submodules
+.PHONY: submodules
 
 # Include remaining core make rules.
 include $(TOP)/py/mkrules.mk
