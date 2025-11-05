@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <stdlib.h>
 #include <stdbool.h>
 #include <sddf/network/constants.h>
 
@@ -24,11 +23,6 @@
 #define NO_SYS 1
 
 /**
- * Drop support for sys_timeout and lwip-internal cyclic timers.
- */
-#define LWIP_TIMERS 1
-
-/**
  * Enable Netconn API (require to use api_lib.c).
  */
 #define LWIP_NETCONN 0
@@ -37,16 +31,6 @@
  * Enable Socket API (require to use sockets.c).
  */
 #define LWIP_SOCKET 0
-
-/**
- * Enable IPv4.
- */
-#define LWIP_IPV4 1
-
-/**
- * Enable ICMP module inside the IP stack.
- */
-#define LWIP_ICMP 1
 
 /**
  * Enable IGMP module inside the IP stack.
@@ -152,12 +136,6 @@
 #define TCP_SNDLOWAT TCP_MSS
 
 /**
- * TCP will queue segments that arrive out of order. Define to 0 if your
- * device is low on memory.
- */
-#define TCP_QUEUE_OOSEQ 1
-
-/**
  * TCP will support sending selective acknowledgements (SACKs).
  */
 #define LWIP_TCP_SACK_OUT 1
@@ -185,6 +163,13 @@
  */
 #define PBUF_POOL_SIZE 1000
 
+/*
+ * Streams can hang around in FIN_WAIT state for a
+ * while after closing.  Increase the max number of concurrent streams to allow
+ * for a few of these while the next benchmark runs.
+ */
+#define MEMP_NUM_TCP_PCB 100
+
 /**
  * The number of memp struct pbufs (used for PBUF_ROM and PBUF_REF).
  * If the application sends a lot of data out of ROM (or other static memory),
@@ -197,24 +182,11 @@
  */
 #define MEMP_NUM_TCP_SEG (10 * TCP_SND_QUEUELEN)
 
-/*
- * Streams can hang around in FIN_WAIT state for a
- * while after closing.  Increase the max number of concurrent streams to allow
- * for a few of these while the next benchmark runs.
- */
-#define MEMP_NUM_TCP_PCB 100
-
-
 /**
  * The number of listening TCP connections.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_PCB_LISTEN 100
-
-/**
- * The number of struct netconns.
- */
-#define MEMP_NUM_NETCONN 100
+#define MEMP_NUM_TCP_PCB_LISTEN MEMP_NUM_TCP_PCB
 
 /**
  * Enable statistics collection in lwip_stats. Set this to 0 for performance.
