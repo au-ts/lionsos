@@ -8,7 +8,7 @@ from typing import List, Tuple
 from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 from importlib.metadata import version
 
-assert version('sdfgen').split(".")[1] == "26", "Unexpected sdfgen version"
+assert version('sdfgen').split(".")[1] == "27", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion

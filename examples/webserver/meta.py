@@ -9,7 +9,7 @@ from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 from importlib.metadata import version
 from board import BOARDS
 
-assert version('sdfgen').split(".")[1] == "26", "Unexpected sdfgen version"
+assert version('sdfgen').split(".")[1] == "27", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
