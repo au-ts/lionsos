@@ -118,9 +118,9 @@ qemu: ${IMAGE_FILE}
 
 FORCE: ;
 
-#$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross:
-#	cd ${LIONSOS}; git submodule update --init dep/micropython
-#	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
+$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross &:
+	cd ${LIONSOS}; git submodule update --init dep/micropython
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
 ${LIONSOS}/dep/libmicrokitco/libmicrokitco.mk:
 	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
