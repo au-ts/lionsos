@@ -2,7 +2,6 @@
 # Copyright 2024, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 #
-
 LIONSOS := $(abspath ../../)
 SDDF := $(LIONSOS)/dep/sddf
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
@@ -12,6 +11,7 @@ LWIP := $(SDDF)/network/ipstacks/lwip
 MICROPYTHON_SRC := $(LIONSOS)/dep/micropython
 FROZEN_MANIFEST ?= $(MICROPYTHON_SRC)/extmod/asyncio/manifest.py
 
+
 # Include the core environment definitions; this will set $(TOP).
 include $(MICROPYTHON_SRC)/py/mkenv.mk
 
@@ -19,6 +19,8 @@ include $(MICROPYTHON_SRC)/py/mkenv.mk
 CC = $(USE_CC)
 LD = $(USE_LD)
 SIZE := $(USE_SIZE)
+
+all: $(BUILD)/micropython.elf
 
 # Include py core make definitions.
 include $(TOP)/py/py.mk
@@ -119,12 +121,13 @@ include $(LIONSOS)/lib/fs/helpers/fs_helpers.mk
 $(BUILD)/libi2c.o: $(SDDF)/i2c/libi2c.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-all: $(BUILD)/micropython.elf
-
 $(BUILD)/micropython.elf: $(OBJ) $(BUILD)/libi2c.o
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
+
+$(OBJ): |${MPY_LIB_DIR}/README.md
+$(MPY_LIB_DIR)/README.md: submodules
 
 # Include remaining core make rules.
 include $(TOP)/py/mkrules.mk
