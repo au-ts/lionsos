@@ -5,6 +5,8 @@
 
 LIONSOS := $(abspath ../../)
 SDDF := $(LIONSOS)/dep/sddf
+LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
+LIBI2C_DIR := $(SDDF)/i2c
 LWIP := $(SDDF)/network/ipstacks/lwip
 # Path to micropython source code
 MICROPYTHON_SRC := $(LIONSOS)/dep/micropython
@@ -114,9 +116,12 @@ OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 FS_HELPERS_LIBC := $(MICROPYTHON_LIBC)
 include $(LIONSOS)/lib/fs/helpers/fs_helpers.mk
 
+$(BUILD)/libi2c.o: $(SDDF)/i2c/libi2c.c
+	${CC} ${CFLAGS} -c -o $@ $<
+
 all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython.elf: $(OBJ)
+$(BUILD)/micropython.elf: $(OBJ) $(BUILD)/libi2c.o
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@

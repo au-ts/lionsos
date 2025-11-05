@@ -115,7 +115,7 @@ async def on_tap(card_id):
         try:
             info(f'card id: {card_id}')
             writer_stream.write(
-                bytes(f'100 {token} {''.join('{:02x}'.format(x) for x in card_id)} 1.0' + '\n', 'utf-8')
+                bytes(f'100 {token} {''.join('{: 02x}'.format(x) for x in card_id)} 1.0' + '\n', 'utf-8')
             )
             await writer_stream.drain()
             break
@@ -162,6 +162,7 @@ async def read_card(p):
     global token
     global TICKS_DELAY_MS
     while True:
+        print("Waiting for card read")
         uid = p.read_uid()
         # Case where:
         #   - We are not waiting on a specific card
@@ -289,7 +290,8 @@ async def read_from_server():
             # Print server response
             display.rect(0, 400, 2000, 2000, 0x0, True)
             # Position text in middle of row
-            wri50.set_textpos(display, 430, (config.TRUE_DISPLAY_WIDTH - wri50.stringlen(words[1]))//2)
+            wri50.set_textpos(
+                display, 430, (config.TRUE_DISPLAY_WIDTH - wri50.stringlen(words[1]))//2)
             wri50.printstring(f"{words[1]}")
 
             # Display "new card" message for longer, so person has enough time to see number
@@ -302,13 +304,15 @@ async def read_from_server():
             if words[0] == '200':
                 display.rect(0, 500, 2000, 2000, 0x0, True)
                 charged_str = "Charged $1"
-                wri50.set_textpos(display, 500, (config.TRUE_DISPLAY_WIDTH - wri50.stringlen(charged_str))//2)
+                wri50.set_textpos(
+                    display, 500, (config.TRUE_DISPLAY_WIDTH - wri50.stringlen(charged_str))//2)
 
                 wri50.printstring(charged_str)
 
             display.show()
 
-            asyncio.create_task(wait_seconds_and_call(message_display_time, reset_status))
+            asyncio.create_task(wait_seconds_and_call(
+                message_display_time, reset_status))
 
 
 # Coroutine responsible for reading the card
@@ -318,9 +322,12 @@ async def read_card_main():
     # We consider to be finished processing after the server has
     # responded, and after we have then called reset_status()
     if config.enable_i2c:
+        print("pn532: Initialising...")
         p = PN532(1)
+        print("pn532: Initialised!")
         p.rf_configure()
         p.sam_configure()
+        print("pn532: configured")
         await read_card(p)
     elif stdin_ready is True:
         await read_stdin()
@@ -337,6 +344,7 @@ async def main():
 
     # The logo is stored on the NFS directory, do not load it if we do not
     # have access to it.
+    # TODO: gracefully continue instead of crashing out if not found
     if config.enable_nfs:
         logo_stat = os.stat(LOGO_PATH)
         logo_size = logo_stat[6]
@@ -392,6 +400,8 @@ def run(host: str):
     wri50 = CWriter(display, font_height50)
     wri35 = CWriter(display, font_height35)
     HOST = host
+    # TODO: gracefully wait for NFS / tell user to do so.
+    # currently just crashes with EHOSTUNREACH otherwise!
     asyncio.run(main())
 
 

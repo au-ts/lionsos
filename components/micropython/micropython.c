@@ -20,6 +20,7 @@
 #include <sddf/serial/config.h>
 #include <sddf/i2c/config.h>
 #include <sddf/i2c/queue.h>
+#include <sddf/i2c/libi2c.h>
 #include <sddf/timer/config.h>
 #include <sddf/network/config.h>
 #include <sddf/network/queue.h>
@@ -78,6 +79,7 @@ static char fw_ip_string[IPV4_ADDR_BUFLEN];
 int mp_mod_network_prefer_dns_use_ip_version = 4;
 
 i2c_queue_handle_t i2c_queue_handle;
+libi2c_conf_t libi2c_config;
 
 #ifdef ENABLE_FRAMEBUFFER
 uintptr_t framebuffer_data_region = 0x30000000;
@@ -223,6 +225,8 @@ void init(void) {
     i2c_enabled = i2c_config_check_magic(&i2c_config);
     if (i2c_enabled) {
         i2c_queue_handle = i2c_queue_init(i2c_config.virt.req_queue.vaddr, i2c_config.virt.resp_queue.vaddr);
+        int ret = libi2c_init(&libi2c_config, &i2c_queue_handle);
+        assert(ret == 0);
     }
 
     stack_ptrs_arg_array_t costacks = { (uintptr_t) mp_stack };
