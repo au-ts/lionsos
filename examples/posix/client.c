@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <lions/posix/posix.h>
+
 #include <microkit.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
@@ -13,7 +15,6 @@
 #include <lions/fs/helpers.h>
 #include <lions/fs/config.h>
 #include <lions/fs/protocol.h>
-#include <lions/posix/posix.h>
 #include <libmicrokitco.h>
 #include <stdio.h>
 #include <sys/stat.h>

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <lions/posix/posix.h>
 #include <microkit.h>
 #include <string.h>
 #include <stdio.h>
@@ -30,7 +31,6 @@
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
-#include <lions/posix/posix.h>
 #include "mpconfigport.h"
 #include "mphalport.h"
 #include "mpfirewallport.h"
