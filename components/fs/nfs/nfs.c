@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <lions/posix/posix.h>
+
 #include <microkit.h>
 
 #include <poll.h>
@@ -25,7 +27,6 @@
 
 #include <lions/util.h>
 #include <lions/posix/tcp.h>
-#include <lions/posix/posix.h>
 
 #include "nfs.h"
 #include "config.h"
