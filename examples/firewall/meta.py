@@ -76,7 +76,7 @@ def round_up_to_Page(region_size: int) -> int:
 
 class DataStructureTypeInfo():
     def __init__(
-        self, *, size: int|None = None, entry_size:int|None = None, capacity:int|None = None, 
+        self, *, size: int|None = None, entry_size:int|None = None, capacity:int|None = None,
         size_formula_bytes = lambda x: x.entry_size * x.capacity, elf_name = None, c_name = None
     ):
         if size:
@@ -85,16 +85,16 @@ class DataStructureTypeInfo():
             self.entry_size = entry_size
             self.capacity = capacity
             self.size = size_formula_bytes(self)
-        elif elf_name and c_name: 
+        elif elf_name and c_name:
             self.capacity = capacity if capacity != None else 1
             self.elf_name = elf_name
             self.c_name = c_name
             self.entry_size = 0
-            self.size_formula_bytes = size_formula_bytes 
+            self.size_formula_bytes = size_formula_bytes
             self.size = 0
         else:
             raise Exception("Invalid Argument Combination")
-    
+
     def calculate_size(self):
         if self.size != 0:
             print("Size has already been calculated, this is probably an error")
@@ -121,7 +121,7 @@ class FirewallMemoryRegions():
         elif dependent_type_info:
             self.region_size = 0
             self.dependent_type_info = dependent_type_info
-        else: 
+        else:
             raise Exception("Invalid arguments")
         self.region_size_formula = region_size_formula
 
@@ -136,11 +136,11 @@ class FirewallMemoryRegions():
 
     def calculate_size(self):
         assert(self.dependent_type_info != None)
-        self.unaligned_size = self.region_size_formula(self.dependent_type_info) 
+        self.unaligned_size = self.region_size_formula(self.dependent_type_info)
         if self.unaligned_size == 0:
             print(f"Calculated region size of memory region was 0!")
             sys.exit()
-        self.region_size = round_up_to_Page(self.unaligned_size) 
+        self.region_size = round_up_to_Page(self.unaligned_size)
 
 # Firewall memory region object declarations, update region capacities here
 fw_queue_wrapper = DataStructureTypeInfo(elf_name="routing.elf", c_name="fw_queue");
@@ -154,7 +154,7 @@ arp_queue_region = FirewallMemoryRegions(dependent_type_info=[fw_queue_wrapper,a
 
 icmp_queue_buffer = DataStructureTypeInfo(elf_name="icmp_module.elf", c_name="icmp_req", capacity=128)
 icmp_queue_region = FirewallMemoryRegions(dependent_type_info=[fw_queue_wrapper,icmp_queue_buffer])
-    
+
 arp_cache_buffer = DataStructureTypeInfo(elf_name="arp_requester.elf", c_name="fw_arp_entry", capacity=512)
 arp_cache_region = FirewallMemoryRegions(dependent_type_info=[arp_cache_buffer])
 
