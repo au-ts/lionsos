@@ -110,22 +110,23 @@ class FirewallMemoryRegions():
             sys.exit()
 
 # Firewall memory region object declarations, update region capacities here
-dma_buffer_queue_region = FirewallMemoryRegions("routing.elf","net_buff_desc",
+fw_queue_wrapper = FirewallMemoryRegions("routing.elf", "fw_queue",0,lambda x: 0)
+dma_buffer_queue_region = FirewallMemoryRegions("routing.elf", "net_buff_desc",
                                                 512,
-                                                lambda x: 16 + x.capacity * x.entry_size)
+                                                lambda x: fw_queue_wrapper.entry_size + x.capacity * x.entry_size)
 
-dma_buffer_region = FirewallMemoryRegions(None,None,
+dma_buffer_region = FirewallMemoryRegions(None, None,
                                           dma_buffer_queue_region.capacity,
                                           lambda x: x.capacity * x.entry_size,
                                           2048)
 
-arp_queue_region = FirewallMemoryRegions("arp_requester.elf","fw_arp_request",
+arp_queue_region = FirewallMemoryRegions("arp_requester.elf", "fw_arp_request",
                                          512,
-                                         lambda x: 16 + x.capacity * x.entry_size)
+                                         lambda x: fw_queue_wrapper.entry_size + x.capacity * x.entry_size)
 
-icmp_queue_region = FirewallMemoryRegions("icmp_module.elf","icmp_req",
+icmp_queue_region = FirewallMemoryRegions("icmp_module.elf", "icmp_req",
                                          128,
-                                         lambda x: 16 + x.capacity * x.entry_size)
+                                         lambda x: fw_queue_wrapper.entry_size + x.capacity * x.entry_size)
 
 arp_cache_region = FirewallMemoryRegions("arp_requester.elf", "fw_arp_entry",
                                          512,
@@ -136,7 +137,7 @@ arp_packet_queue_region = FirewallMemoryRegions("routing.elf", "pkt_waiting_node
                                          lambda x: x.capacity * x.entry_size)
 
 routing_table_wrapper = FirewallMemoryRegions("routing.elf", "routing_table",0,lambda x: 0)
-routing_table_region = FirewallMemoryRegions("routing.elf","routing_entry",
+routing_table_region = FirewallMemoryRegions("routing.elf", "routing_entry",
                                          256,
                                          lambda x: routing_table_wrapper.entry_size + x.capacity * x.entry_size)
 
@@ -802,4 +803,5 @@ if __name__ == '__main__':
                 except:
                     raise Exception(f"Error running the llvm-dwarf dump on {elf_file_name})")
         mem_region.calculate_size()
+        assert(mem_region.region_size != 0)
     generate(args.sdf, args.output, dtb)

@@ -5,7 +5,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 #include <os/sddf.h>
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
@@ -14,7 +13,6 @@
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 #include <lions/firewall/arp.h>
-#include <lions/firewall/checksum.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/filter.h>
