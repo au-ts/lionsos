@@ -71,8 +71,8 @@ void init(void)
     // Setup partition schedule. We want a better way to configure this in the future
     schedule.num_partitions = 3;
     schedule.timeslices[0] = NS_IN_S;
-    schedule.timeslices[1] = NS_IN_S * 2;
-    schedule.timeslices[2] = NS_IN_S * 3;
+    schedule.timeslices[1] = NS_IN_S;
+    schedule.timeslices[2] = NS_IN_S;
 
     current_timeslice = 0;
 

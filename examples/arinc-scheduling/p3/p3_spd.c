@@ -19,10 +19,13 @@ void partition_startup()
 
 void notified(microkit_channel ch)
 {
-    sddf_dprintf("%s Notified!\n", microkit_name);
-
-    partition_startup();
-    microkit_notify(USER_PD);
+    if (ch == SCHEDULER_CH) {
+        partition_startup();
+        microkit_notify(USER_PD);
+    } else if (USER_PD) {
+        // THIS SHOULD ONLY BE FOR THE USER PD TO SIGNAL ITS FINISHED INIT
+        microkit_notify(SCHEDULER_CH);
+    }
 }
 
 void init(void)

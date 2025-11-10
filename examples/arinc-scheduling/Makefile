@@ -24,6 +24,11 @@ export PART_SRC_VPATH := $(PART_1_SRC_DIR) $(PART_2_SRC_DIR) $(PART_3_SRC_DIR)
 PART_1_ELFS := p1_spd.elf p1_upd.elf
 PART_2_ELFS := p2_spd.elf p2_upd.elf
 PART_3_ELFS := p3_spd.elf p3_upd.elf
+
+export PART_1_UPD_OBJS := p1_upd.o sb_queue_int32_t_1.o
+export PART_2_UPD_OBJS := p2_upd.o sb_queue_int32_t_1.o
+export PART_3_UPD_OBJS := p3_upd.o sb_queue_int32_t_1.o
+
 export PART_ELFS := $(PART_1_ELFS) $(PART_2_ELFS) $(PART_3_ELFS)
 
 IMAGE_FILE := $(BUILD_DIR)/arinc_scheduling.img

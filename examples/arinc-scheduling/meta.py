@@ -54,9 +54,9 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     p2_spd = ProtectionDomain("p2_spd", "p2_spd.elf", priority=150, passive=True)
     p3_spd = ProtectionDomain("p3_spd", "p3_spd.elf", priority=150, passive=True)
 
-    p1_upd = ProtectionDomain("p1_upd", "p1_upd.elf", priority=150, passive=True)
-    p2_upd = ProtectionDomain("p2_upd", "p2_upd.elf", priority=150, passive=True)
-    p3_upd = ProtectionDomain("p3_upd", "p3_upd.elf", priority=150, passive=True)
+    p1_upd = ProtectionDomain("p1_upd", "p1_upd.elf", priority=140, passive=True)
+    p2_upd = ProtectionDomain("p2_upd", "p2_upd.elf", priority=140, passive=True)
+    p3_upd = ProtectionDomain("p3_upd", "p3_upd.elf", priority=140, passive=True)
 
 
     partition_initial_pds = [
@@ -96,6 +96,24 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     for pd_init, pd_user in zip(partition_initial_pds, partition_user_pds):
         partition_channel = Channel(pd_init, pd_user)
         sdf.add_channel(partition_channel)
+
+    ### Creating memory regions for simple example
+    
+    mr1 = MemoryRegion(sdf, "top_impl_Instance_p1_t1_write_port_1_Memory_Region", 0x1000)
+    sdf.add_mr(mr1)
+    mr2 = MemoryRegion(sdf, "top_impl_Instance_p2_t2_write_port_1_Memory_Region", 0x1000)
+    sdf.add_mr(mr2)
+
+    p1_map_mr1 = Map(mr1, 0x10_000_000, perms="rw")
+    p1_upd.add_map(p1_map_mr1)
+
+    p2_map_mr1 = Map(mr1, 0x10_000_000, perms="r")
+    p2_upd.add_map(p2_map_mr1)
+    p2_map_mr2 = Map(mr2, 0x10_001_000, perms="rw")
+    p2_upd.add_map(p2_map_mr2)
+
+    p3_map_mr2 = Map(mr2, 0x10_000_000, perms="r")
+    p3_upd.add_map(p3_map_mr2);
 
     timer_system.add_client(scheduler)
 
