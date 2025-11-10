@@ -6,9 +6,9 @@
 // metaprogram after
 
 // The max partitions is limited by the number of channels that we can establish
-// between the scheduler and a partition's initial process. One channel is taken
-// by the sDDF timer subsystem.
-#define MAX_PARTITIONS 63
+// between the scheduler and a partition's initial process in microkit.
+// One channel is taken by the sDDF timer subsystem.
+#define MAX_PARTITIONS (MICROKIT_MAX_CHANNELS - 1)
 
 typedef struct schedule_config {
     uint32_t num_partitions;

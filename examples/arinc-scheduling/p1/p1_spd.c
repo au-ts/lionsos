@@ -4,6 +4,7 @@
 // @kwinter: For now this will always be 0, but we will want to patch
 // this information in in the future.
 #define SCHEDULER_CH 0
+#define USER_PD 1
 
 void partition_init()
 {
@@ -16,18 +17,12 @@ void partition_startup()
     // For now this can handle any port management needed
 }
 
-void periodic_start()
-{
-    // For now this can be the periodic function we run every timeslice.
-    // Eventually, this will call into a seperate user process
-}
-
 void notified(microkit_channel ch)
 {
     sddf_dprintf("%s Notified!\n", microkit_name);
 
     partition_startup();
-    periodic_start();
+    microkit_notify(USER_PD);
 }
 
 void init(void)

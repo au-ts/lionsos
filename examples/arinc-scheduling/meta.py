@@ -5,13 +5,12 @@ import struct
 from random import randint
 from dataclasses import dataclass
 from typing import List, Tuple, Optional
-from sdfgen import SystemDescription, Sddf, Vmm, DeviceTree, LionsOs
+from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 from importlib.metadata import version
 
 assert version('sdfgen').split(".")[1] == "27", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
-VirtualMachine = SystemDescription.VirtualMachine
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Irq = SystemDescription.Irq
@@ -36,7 +35,6 @@ BOARDS: List[Board] = [
         serial="pl011@9000000",
         timer="timer",
         ethernet="virtio_mmio@a003e00",
-        # No I2C device on QEMU
         i2c=None,
     ),
 ]
@@ -56,10 +54,21 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     p2_spd = ProtectionDomain("p2_spd", "p2_spd.elf", priority=150, passive=True)
     p3_spd = ProtectionDomain("p3_spd", "p3_spd.elf", priority=150, passive=True)
 
+    p1_upd = ProtectionDomain("p1_upd", "p1_upd.elf", priority=150, passive=True)
+    p2_upd = ProtectionDomain("p2_upd", "p2_upd.elf", priority=150, passive=True)
+    p3_upd = ProtectionDomain("p3_upd", "p3_upd.elf", priority=150, passive=True)
+
+
     partition_initial_pds = [
         p1_spd,
         p2_spd,
         p3_spd,
+    ]
+
+    partition_user_pds = [
+        p1_upd,
+        p2_upd,
+        p3_upd,
     ]
 
     pds = [
@@ -67,15 +76,26 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         scheduler,
     ]
 
-    pds += partition_initial_pds
-
     for pd in pds:
         sdf.add_pd(pd)
+
+    for pd in partition_initial_pds:
+        scheduler.add_child_pd(pd)
+
+    # @kwinter: For now make these all children of the scheduler.
+    # Once microkit supports handing TCBs to different PD's we will
+    # make these user pds children of the initial pds
+    for pd in partition_user_pds:
+        scheduler.add_child_pd(pd)
 
     # These channels will start at 0 from the schedulers point of view
     for pd in partition_initial_pds:
         pd_channel = Channel(scheduler, pd)
         sdf.add_channel(pd_channel)
+
+    for pd_init, pd_user in zip(partition_initial_pds, partition_user_pds):
+        partition_channel = Channel(pd_init, pd_user)
+        sdf.add_channel(partition_channel)
 
     timer_system.add_client(scheduler)
 

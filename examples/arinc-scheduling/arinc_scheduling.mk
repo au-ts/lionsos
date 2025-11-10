@@ -33,7 +33,8 @@ IMAGES := timer_driver.elf scheduler.elf \
 CFLAGS += \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	-I$(ARINC_DIR)/include
 
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(SDDF)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a

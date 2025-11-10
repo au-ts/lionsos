@@ -21,9 +21,9 @@ PART_3_SRC_DIR := $(ARINC_DIR)/p3
 export PART_SRC_VPATH := $(PART_1_SRC_DIR) $(PART_2_SRC_DIR) $(PART_3_SRC_DIR)
 
 # PARTITION ELFs
-PART_1_ELFS := p1_spd.elf
-PART_2_ELFS := p2_spd.elf
-PART_3_ELFS := p3_spd.elf
+PART_1_ELFS := p1_spd.elf p1_upd.elf
+PART_2_ELFS := p2_spd.elf p2_upd.elf
+PART_3_ELFS := p3_spd.elf p3_upd.elf
 export PART_ELFS := $(PART_1_ELFS) $(PART_2_ELFS) $(PART_3_ELFS)
 
 IMAGE_FILE := $(BUILD_DIR)/arinc_scheduling.img
