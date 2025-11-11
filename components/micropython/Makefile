@@ -8,6 +8,7 @@ SDDF := $(LIONSOS)/dep/sddf
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 LIBI2C_DIR := $(SDDF)/i2c
 LWIP := $(SDDF)/network/ipstacks/lwip
+LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 # Path to micropython source code
 MICROPYTHON_SRC := $(LIONSOS)/dep/micropython
 FROZEN_MANIFEST ?= $(MICROPYTHON_SRC)/extmod/asyncio/manifest.py
@@ -121,7 +122,7 @@ $(BUILD)/libi2c.o: $(SDDF)/i2c/libi2c.c
 
 all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython.elf: $(OBJ) $(BUILD)/libi2c.o
+$(BUILD)/micropython.elf: $(OBJ) $(BUILD)/libi2c.o $(BUILD)/tcp_mp.o
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
