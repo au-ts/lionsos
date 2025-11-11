@@ -9,14 +9,13 @@
 #include <sddf/util/printf.h>
 
 #include <scheduler_config.h>
+#include <user_config.h>
 
 /* Number of nanoseconds in a second */
 #define NS_IN_S  1000000000ULL
 
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t config;
-
-// @kwinter: This should be patched in
-schedule_config_t schedule;
+__attribute__((__section__(".user_schedule"))) user_schedule_t user_schedule;
 
 uint32_t current_timeslice;
 
@@ -30,12 +29,12 @@ void next_partition() {
     current_timeslice++;
 
     // Wrap the schedule back around to the beginning if we are at the end
-    if (current_timeslice == schedule.num_partitions) {
+    if (current_timeslice == user_schedule.num_timeslices) {
         current_timeslice = 0;
     }
     microkit_notify(current_timeslice);
     // Set a timeout for the length of this partition's timeslice
-    sddf_timer_set_timeout(config.driver_id, schedule.timeslices[current_timeslice]);
+    sddf_timer_set_timeout(config.driver_id, user_schedule.timeslices[current_timeslice]);
 }
 
 void notified(microkit_channel ch)
@@ -43,12 +42,12 @@ void notified(microkit_channel ch)
     if (ch == config.driver_id) {
         if (scheduler_running == false) {
             microkit_notify(current_timeslice);
-            sddf_timer_set_timeout(config.driver_id, schedule.timeslices[current_timeslice]);
+            sddf_timer_set_timeout(config.driver_id, user_schedule.timeslices[current_timeslice]);
             scheduler_running = true;
         } else {
             next_partition();
         }
-    } else if (ch < schedule.num_partitions) {
+    } else if (ch < user_schedule.num_timeslices) {
         // This should be where all our partition channels are
         if ((part_ready & (1 << ch)) == 0) {
             sddf_dprintf("SCHEDULER | Marking partition %d as ready\n", ch);
@@ -69,19 +68,13 @@ void notified(microkit_channel ch)
 void init(void)
 {
     // Setup partition schedule. We want a better way to configure this in the future
-    schedule.num_partitions = 3;
-    schedule.timeslices[0] = NS_IN_S;
-    schedule.timeslices[1] = NS_IN_S;
-    schedule.timeslices[2] = NS_IN_S;
 
     current_timeslice = 0;
 
     scheduler_running = false;
 
-    assert(schedule.num_partitions <= MAX_PARTITIONS);
-
     // Construct the partition ready check value
-    for (int i = 0; i < schedule.num_partitions; i++) {
+    for (int i = 0; i < user_schedule.num_timeslices; i++) {
         part_ready_check = (part_ready_check << 1) | 1;
     }
 }

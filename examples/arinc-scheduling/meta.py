@@ -10,10 +10,11 @@ from importlib.metadata import version
 
 assert version('sdfgen').split(".")[1] == "27", "Unexpected sdfgen version"
 
+from sdfgen_helper import *
+
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
-Irq = SystemDescription.Irq
 Channel = SystemDescription.Channel
 
 @dataclass
@@ -82,6 +83,13 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     for pd in partition_initial_pds:
         scheduler.add_child_pd(pd)
 
+    # These timeslice are in nanoseconds
+    part_timeslices = [1000000000, 1000000000, 1000000000]
+    # These are the channels to the sPD of a partition
+    part_ch = [0, 1, 2]
+
+    user_schedule = UserSchedule(part_timeslices, part_ch)
+
     # @kwinter: For now make these all children of the scheduler.
     # Once microkit supports handing TCBs to different PD's we will
     # make these user pds children of the initial pds
@@ -97,7 +105,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         partition_channel = Channel(pd_init, pd_user)
         sdf.add_channel(partition_channel)
 
-    ### Creating memory regions for simple example
+    ### Creating memory regions port implementation
     
     mr1 = MemoryRegion(sdf, "top_impl_Instance_p1_t1_write_port_1_Memory_Region", 0x1000)
     sdf.add_mr(mr1)
@@ -120,6 +128,13 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     assert timer_system.connect()
     assert timer_system.serialise_config(output_dir)
 
+    data_path = output_dir + "/schedule_config.data"
+    with open(data_path, "wb+") as f:
+        f.write(user_schedule.serialise())
+    update_elf_section(obj_copy, scheduler.program_image,
+                       user_schedule.section_name,
+                       data_path)
+
     with open(f"{output_dir}/{sdf_path}", "w+") as f:
         f.write(sdf.render())
 
@@ -131,13 +146,21 @@ if __name__ == '__main__':
     parser.add_argument("--board", required=True, choices=[b.name for b in BOARDS])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
+    parser.add_argument("--objcopy", required=True)
 
     args = parser.parse_args()
+
+    # Import the config structs module from the build directory
+    sys.path.append(args.output)
+    from config_structs import *
 
     board = next(filter(lambda b: b.name == args.board, BOARDS))
 
     sdf = SystemDescription(board.arch, board.paddr_top)
     sddf = Sddf(args.sddf)
+
+    global obj_copy
+    obj_copy = args.objcopy
 
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())

@@ -1,7 +1,15 @@
 #pragma once
 
-// @kwinter: I'm not sure whats easier for the HAMR folk, to auto gen a header file such as this or use the metaprogram
-// in some way. If they are using any semi-modern version of the sDDF, they will have to use the metaprogram there to
-// generate the config structs the timer requires. 
-// 
-// Is forcing the user of microkit_sdf_gen another annoying layer of abstraction?
+#include <stdint.h>
+#include <scheduler_config.h>
+
+// The metaprogram will omit a binary with the same format as this struct,
+// and will be patched into the scheduler at system build time
+
+typedef struct user_schedule {
+    uint64_t timeslices[MAX_PARTITIONS];
+    // @kwinter: In the future, will also need to keep track of
+    // all the PD's in a partition so that we can easily suspend them
+    uint32_t timeslice_ch[MAX_PARTITIONS];
+    uint32_t num_timeslices;
+} user_schedule_t;

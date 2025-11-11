@@ -25,6 +25,12 @@ include ${SDDF}/tools/make/board/common.mk
 
 METAPROGRAM := $(ARINC_DIR)/meta.py
 
+SDFGEN_HELPER := $(ARINC_DIR)/sdfgen_helper.py
+# Macros needed by sdfgen helper to calculate config struct sizes
+SDFGEN_UNKOWN_MACROS := MAX_PARTITIONS=61
+# Headers containing config structs and dependencies
+SCHEDULER_CONFIG_HEADERS := $(ARINC_DIR)/include/user_config.h
+
 IMAGES := timer_driver.elf scheduler.elf \
 	$(PART_ELFS)
 
@@ -73,7 +79,8 @@ p3_upd.elf: $(PART_3_UPD_OBJS)
 	${CC} ${CFLAGS} -c -o $@ $<
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
+	$(PYTHON) $(SDFGEN_HELPER) --macros "$(SDFGEN_UNKOWN_MACROS)" --configs "$(SCHEDULER_CONFIG_HEADERS)" --output $(BUILD_DIR)/config_structs.py
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --objcopy $(OBJCOPY)
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_scheduler.data scheduler.elf
 
