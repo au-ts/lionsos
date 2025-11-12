@@ -67,15 +67,15 @@ void notified(microkit_channel ch)
 
 void init(void)
 {
-    // Setup partition schedule. We want a better way to configure this in the future
-
     current_timeslice = 0;
 
     scheduler_running = false;
 
     // Construct the partition ready check value
     for (int i = 0; i < user_schedule.num_timeslices; i++) {
-        part_ready_check = (part_ready_check << 1) | 1;
+        // Construct the ready check based on the channels to the partitions
+        // initial task.
+        part_ready_check |= (1 << user_schedule.timeslice_ch[i]);
     }
 }
 
