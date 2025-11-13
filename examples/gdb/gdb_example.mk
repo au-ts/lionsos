@@ -4,9 +4,10 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-QEMU := qemu-system-aarch64
-DTC := dtc
-PYTHON ?= python3
+
+SDDF=$(LIONSOS)/dep/sddf
+LIBGDB_DIR=$(LIONSOS)/dep/libgdb
+LIBVSPACE_DIR=$(LIBGDB_DIR)/libvspace
 
 METAPROGRAM := $(TOP)/meta.py
 
@@ -15,46 +16,44 @@ DEBUGGER:=${TOP}/apps/debugger
 LWIP:=$(SDDF)/network/ipstacks/lwip/src
 BENCHMARK:=$(SDDF)/benchmark
 UTIL:=$(SDDF)/util
-ETHERNET_DRIVER:=$(SDDF)/drivers/network/$(DRIV_DIR)
 SERIAL_COMPONENTS := $(SDDF)/serial/components
-SERIAL_DRIVER := $(SDDF)/drivers/serial/$(SERIAL_DRIV_DIR)
-TIMER_DRIVER:=$(SDDF)/drivers/timer/$(TIMER_DRV_DIR)
 NETWORK_COMPONENTS:=$(SDDF)/network/components
 DEBUGGER_INCLUDE:=$(TOP)/net_debugger/include
 
+PYTHON ?= python3
+
+TOOLCHAIN ?= clang
 BOARD := $(MICROKIT_BOARD)
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-IMAGE_FILE := loader.img
+IMAGE_FILE := gdb.img
 REPORT_FILE := report.txt
 SYSTEM_FILE := sddf_net_example.system
-DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
-DTB := $(MICROKIT_BOARD).dtb
 METAPROGRAM := $(TOP)/meta.py
-
-vpath %.c ${SDDF} ${DEBUGGER}
 
 # The base images for this example
 IMAGES := ping.elf pong.elf debugger.elf serial_driver.elf \
 		serial_virt_tx.elf eth_driver.elf network_virt_rx.elf \
 		network_virt_tx.elf network_copy.elf timer_driver.elf
 
+SUPPORTED_BOARDS:= \
+	maaxboard \
+	odroidc4 \
+	qemu_virt_aarch64
+
+all: $(IMAGE_FILE)
+
+include ${SDDF}/tools/make/board/common.mk
+
+ETHERNET_DRIVER:=$(SDDF)/drivers/network/$(NET_DRIV_DIR)
+SERIAL_DRIVER := $(SDDF)/drivers/serial/$(UART_DRIV_DIR)
+TIMER_DRIVER:=$(SDDF)/drivers/timer/$(TIMER_DRIV_DIR)
+
+vpath %.c ${SDDF} ${DEBUGGER}
+
 include $(LIONSOS)/lib/libc/libc.mk
 
-CFLAGS := \
-	-mtune=$(CPU) \
-	-mstrict-align \
-	-ffreestanding \
-	-O2 \
-	-g3 \
-	-MD \
-	-MP \
-	-Wall \
-	-Wno-unused-function \
-	-Wno-bitwise-op-parentheses \
-	-Wno-shift-op-parentheses \
-	-I$(BOARD_DIR)/include \
-	$(CFLAGS_ARCH) \
-	-DBOARD_$(MICROKIT_BOARD) \
+CFLAGS += \
+	-DMICROKIT \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
@@ -70,17 +69,7 @@ CFLAGS := \
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS :=  -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a libvspace.a
 
-CHECK_FLAGS_BOARD_MD5 := .board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
-
-${CHECK_FLAGS_BOARD_MD5}:
-	-rm -f .board_cflags-*
-	touch $@
-
-all: $(IMAGE_FILE)
 $(IMAGES): $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a libvspace.a ${CHECK_FLAGS_BOARD_MD5}
-
-%.elf: %.o
-	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
 
 ping.o: $(TOP)/ping.c libsddf_util_debug.a
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -88,11 +77,8 @@ ping.o: $(TOP)/ping.c libsddf_util_debug.a
 pong.o: $(TOP)/pong.c libsddf_util_debug.a
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(DTB): $(DTS)
-	dtc -q -I dts -O dtb $(DTS) > $(DTB)
-
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
+	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
@@ -106,6 +92,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_client_config=net_client_debugger.data debugger.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_debugger.data debugger.elf
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_debugger.data debugger.elf
+	touch $@
 
 
 ${IMAGE_FILE} $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
@@ -138,12 +125,5 @@ qemu: $(IMAGE_FILE)
 			-global virtio-mmio.force-legacy=false \
 			-d guest_errors
 
-clean::
-	${RM} -f *.elf .depend* $
-	find . -name \*.[do] |xargs --no-run-if-empty rm
-
-clobber:: clean
-	rm -f *.a
-	rm -f ${IMAGE_FILE} ${REPORT_FILE}
-
--include $(DEPS)
+${SDDF}/tools/make/board/common.mk ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
+	cd $(LIONSOS); git submodule update --init dep/sddf
