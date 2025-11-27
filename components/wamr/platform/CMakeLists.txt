@@ -4,7 +4,7 @@
 
 cmake_minimum_required (VERSION 3.14)
 include (CheckPIESupported)
-project (iwasm)
+project (iwasm LANGUAGES C)
 
 option (BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 
