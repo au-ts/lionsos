@@ -25,6 +25,10 @@ jobs:
         run: |
           wget ${{ env.MICROKIT_URL }}/microkit-sdk-${{ env.MICROKIT_VERSION }}-linux-x86-64.tar.gz
           tar xf microkit-sdk-${{ env.MICROKIT_VERSION }}-linux-x86-64.tar.gz
+      - name: Download WASI SDK
+        run: |
+          wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-27/wasi-sdk-27.0-x86_64-linux.tar.gz
+          tar xf wasi-sdk-27.0-x86_64-linux.tar.gz
       - name: Install dependencies (apt)
         run: |
           sudo apt update && sudo apt install make cmake clang lld llvm device-tree-compiler qemu-system-arm
@@ -37,6 +41,7 @@ jobs:
         shell: bash
         env:
           PYTHON: ${{ github.workspace }}/venv/bin/python
+          WASI_SDK: ${{ github.workspace }}/wasi-sdk-27.0-x86_64-linux
   build_examples_linux_x86_64_nix:
     name: Build example systems (Linux x86-64 via Nix)
     runs-on: ubuntu-24.04
