@@ -67,16 +67,19 @@ include $(WAMR)/wamr.mk
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
 FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include ${SDDF}/util/util.mk
-include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
-include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk
-include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
-include ${SDDF}/serial/components/serial_components.mk
-include ${SDDF}/network/components/network_components.mk
-include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
-include ${SDDF}/libco/libco.mk
-include ${BLK_DRIVER}/blk_driver.mk
-include ${BLK_COMPONENTS}/blk_components.mk
+
+SDDF_MAKEFILES := ${SDDF}/util/util.mk \
+${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
+${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk \
+${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
+${SDDF}/serial/components/serial_components.mk \
+${SDDF}/network/components/network_components.mk \
+${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
+${SDDF}/libco/libco.mk \
+${BLK_DRIVER}/blk_driver.mk \
+${BLK_COMPONENTS}/blk_components.mk
+
+include ${SDDF_MAKEFILES}
 include $(LIONSOS)/components/fs/fat/fat.mk
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
@@ -152,4 +155,10 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-netdev user,id=netdev0,hostfwd=tcp::5555-10.0.2.15:1234
 
 ${SDDF_MAKEFILES} &:
+	cd ${LIONSOS}; git submodule update --init dep/sddf
+
+${LIONSOS}/dep/libmicrokitco/libmicrokitco.mk:
+	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
+
+${SDDF}/tools/make/board/common.mk ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
 	cd ${LIONSOS}; git submodule update --init dep/sddf
