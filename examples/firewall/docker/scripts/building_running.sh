@@ -6,7 +6,7 @@
 # -- Commands for building, running and executing in the container -- #
 
 # Set configuration variables
-source srcipts/firewall_configuration.sh
+source scripts/firewall_configuration.sh
 
 # Build the docker image
 docker build -f Dockerfile . -t ${DOCKER_IMAGE}
