@@ -3,17 +3,17 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <lions/posix/posix.h>
+
 #include <microkit.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 #include <sddf/timer/config.h>
 #include <sddf/network/config.h>
 #include <sddf/network/queue.h>
-#include <sddf/network/lib_sddf_lwip.h>
 #include <lions/fs/helpers.h>
 #include <lions/fs/config.h>
 #include <lions/fs/protocol.h>
-#include <lions/posix/posix.h>
 #include <libmicrokitco.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -23,7 +23,6 @@
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
-__attribute__((__section__(".lib_sddf_lwip_config"))) lib_sddf_lwip_config_t lib_sddf_lwip_config;
 __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
 
 fs_queue_t *fs_command_queue;
@@ -32,6 +31,9 @@ char *fs_share;
 
 serial_queue_handle_t serial_tx_queue_handle;
 serial_queue_handle_t serial_rx_queue_handle;
+
+net_queue_handle_t net_tx_handle;
+net_queue_handle_t net_rx_handle;
 
 bool fs_enabled;
 bool serial_rx_enabled;
@@ -50,41 +52,41 @@ void notified(microkit_channel ch) {
 }
 
 void cont() {
-    libc_init();
+    libc_init(NULL);
 
     if (fs_enabled) {
         fs_cmpl_t completion;
         int err = fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_INITIALISE});
         if (err || completion.status != FS_STATUS_SUCCESS) {
-            printf("CLIENT|ERROR: Failed to mount\n");
+            printf("FILEIO|ERROR: Failed to mount\n");
             return;
         }
 
-        printf("CLIENT|INFO: fs init\n");
+        printf("FILEIO|INFO: fs init\n");
 
         FILE *file = fopen("hello.txt", "w+");
         assert(file);
 
         int fd = fileno(file);
 
-        printf("CLIENT|INFO: opened on fd %d\n", fd);
+        printf("FILEIO|INFO: opened on fd %d\n", fd);
 
         char *hello = "hello there";
         int size = fwrite(hello, sizeof(char), strlen(hello), file);
         fflush(file);
 
-        printf("CLIENT|INFO: wrote %d bytes\n", size);
+        printf("FILEIO|INFO: wrote %d bytes\n", size);
 
         fseek(file, 0, SEEK_END);
         long pos = ftell(file);
         rewind(file);
-        printf("file size is %ld\n", pos);
+        printf("FILEIO|INFO: file size is %ld\n", pos);
 
         char buf[20] = {0};
         size_t bytes_read = fread(buf, sizeof(char), pos, file);
-        printf("CLIENT|INFO: bytes_read: %d, buf: %s\n", bytes_read, buf);
+        printf("FILEIO|INFO: bytes_read: %d, buf: %s\n", bytes_read, buf);
 
-        printf("CLIENT|INFO: doing fseek\n");
+        printf("FILEIO|INFO: doing fseek\n");
         err = fseek(file, 100, SEEK_CUR);
         assert(!err);
 
@@ -94,24 +96,24 @@ void cont() {
         size = fwrite(how, sizeof(char), strlen(how), file);
         fflush(file);
 
-        printf("CLIENT|INFO: wrote %d bytes at pos %ld\n", size, pos);
+        printf("FILEIO|INFO: wrote %d bytes at pos %ld\n", size, pos);
 
         int closed = fclose(file);
         assert(closed == 0);
 
-        printf("CLIENT|INFO: closed file\n");
+        printf("FILEIO|INFO: closed file\n");
 
         file = fopen("hello.txt", "r");
         assert(file);
 
         fd = fileno(file);
 
-        printf("CLIENT|INFO: opened on fd %d\n", fd);
+        printf("FILEIO|INFO: opened on fd %d\n", fd);
         fseek(file, pos, SEEK_SET);
 
         memset(buf, 0, sizeof(buf));
         bytes_read = fread(buf, sizeof(char), strlen(how), file);
-        printf("CLIENT|INFO: bytes_read: %d, buf: %s\n", bytes_read, buf);
+        printf("FILEIO|INFO: bytes_read: %d, buf: %s\n", bytes_read, buf);
 
         closed = fclose(file);
         assert(closed == 0);
@@ -121,27 +123,27 @@ void cont() {
         mode_t mode = 0755;
 
         if (mkdir(dir, mode) == 0) {
-            printf("CLIENT|INFO: Directory '%s' created successfully.\n", dir);
+            printf("FILEIO|INFO: Directory '%s' created successfully.\n", dir);
         } else {
-            printf("Error creating directory\n");
+            printf("FILEIO|ERROR: Error creating directory\n");
         }
 
         int dirfd = open(dir, O_DIRECTORY | O_RDONLY);
 
-        printf("CLIENT|INFO: opened directory %s with fd %d\n", dir, dirfd);
+        printf("FILEIO|INFO: opened directory %s with fd %d\n", dir, dirfd);
         const char *dir2 = "subdir";
 
         if (mkdirat(dirfd, dir2, mode) == 0) {
-            printf("CLIENT|INFO: Subdirectory '%s' created successfully in directory '%s'\n", dir2, dir);
+            printf("FILEIO|INFO: Subdirectory '%s' created successfully in directory '%s'\n", dir2, dir);
         } else {
-            printf("Error creating subdirectory\n");
+            printf("FILEIO|ERROR: Error creating subdirectory\n");
         }
 
         char *example = "example.txt";
         if ((fd = openat(dirfd, example, O_RDWR | O_CREAT)) > 0) {
-            printf("CLIENT|INFO: opened %s at %s with fd %d\n", example, dir, fd);
+            printf("FILEIO|INFO: opened %s at %s with fd %d\n", example, dir, fd);
             int written = write(fd, "hello example", 13);
-            printf("CLIENT|INFO: wrote %d\n", written);
+            printf("FILEIO|INFO: wrote %d\n", written);
             assert(close(fd) == 0);
 
             char path[40] = "/";
@@ -149,13 +151,13 @@ void cont() {
             strcat(path, "/");
             strcat(path, example);
 
-            printf("CLIENT|INFO: opening %s\n", path);
+            printf("FILEIO|INFO: opening %s\n", path);
 
             if ((fd = open(path, O_RDONLY)) > 0) {
-                printf("CLIENT|INFO: opened %s absolute with fd %d\n", path, fd);
+                printf("FILEIO|INFO: opened %s absolute with fd %d\n", path, fd);
                 memset(buf, 0, sizeof(buf));
                 bytes_read = read(fd, buf, sizeof(buf));
-                printf("CLIENT|INFO: bytes_read: %d, buf: %s\n", bytes_read, buf);
+                printf("FILEIO|INFO: bytes_read: %d, buf: %s\n", bytes_read, buf);
                 close(fd);
             }
         }
@@ -189,7 +191,7 @@ void init() {
     microkit_cothread_init(&co_controller_mem, LIBC_COTHREAD_STACK_SIZE, costacks);
 
     if (microkit_cothread_spawn(cont, NULL) == LIBMICROKITCO_NULL_HANDLE) {
-        printf("CLIENT|ERROR: Cannot initialise cothread\n");
+        printf("FILEIO|ERROR: Cannot initialise cothread\n");
         assert(false);
     };
 

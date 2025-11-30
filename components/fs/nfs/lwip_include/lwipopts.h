@@ -5,8 +5,6 @@
 
 #pragma once
 
-
-#include <stdlib.h>
 #include <stdbool.h>
 #include <sddf/network/constants.h>
 
@@ -25,11 +23,6 @@
 #define NO_SYS 1
 
 /**
- * Drop support for sys_timeout and lwip-internal cyclic timers.
- */
-#define LWIP_TIMERS 1
-
-/**
  * Enable Netconn API (require to use api_lib.c).
  */
 #define LWIP_NETCONN 0
@@ -38,11 +31,6 @@
  * Enable Socket API (require to use sockets.c).
  */
 #define LWIP_SOCKET 0
-
-/**
- * Enable ICMP module inside the IP stack.
- */
-#define LWIP_ICMP 1
 
 /**
  * Enable DHCP module.
@@ -58,7 +46,7 @@
  * The size of the heap memory. If the application will send
  * a lot of data that needs to be copied, this should be set high.
  */
-#define MEM_SIZE 0x20000
+#define MEM_SIZE 0x30000
 
 /**
  * Enable code to support static ARP table entries (using
@@ -133,12 +121,6 @@
 #define TCP_SND_BUF TCP_WND
 
 /**
- * TCP will queue segments that arrive out of order. Define to 0 if your
- * device is low on memory.
- */
-#define TCP_QUEUE_OOSEQ 1
-
-/**
  * TCP will support sending selective acknowledgements (SACKs).
  */
 #define LWIP_TCP_SACK_OUT 1
@@ -190,11 +172,6 @@
 * (requires the LWIP_TCP option)
 */
 #define MEMP_NUM_TCP_PCB_LISTEN MEMP_NUM_TCP_PCB
-
-/**
- * The number of struct netconns.
- */
-#define MEMP_NUM_NETCONN MEMP_NUM_TCP_PCB
 
 /**
  * Enable statistics collection in lwip_stats. Set this to 0 for performance.

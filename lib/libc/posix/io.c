@@ -14,6 +14,8 @@
 #include <lions/posix/posix.h>
 #include <lions/posix/fd.h>
 
+#include <stdio.h>
+
 long sys_write(va_list ap) {
     int fd = va_arg(ap, int);
     const void *buf = va_arg(ap, const void *);
