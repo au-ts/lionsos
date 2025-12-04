@@ -26,12 +26,12 @@ int_net = 1
 
 macs = [
     [0x00, 0x01, 0xC0, 0x39, 0xD5, 0x18],  # External network
-    [0x00, 0x01, 0xC0, 0x39, 0xD5, 0x10],
-]  # Internal network
+    [0x00, 0x01, 0xC0, 0x39, 0xD5, 0x10],  # Internal network
+]
 
-subnet_bits = [12, 24]  # External network  # Internal network
+subnet_bits = [12, 24]  # External network, Internal network
 
-ips = ["172.16.2.1", "192.168.1.1"]  # External network  # Internal network
+ips = ["172.16.2.1", "192.168.1.1"]  # External network, Internal network
 
 
 @dataclass
@@ -969,7 +969,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     assert timer_system.connect()
     assert timer_system.serialise_config(output_dir)
 
-    # Serialise webservers lib sDDF LWIP config
+    # Serialise webserver lib sDDF LWIP config
     assert webserver_lib_sddf_lwip.connect()
     assert webserver_lib_sddf_lwip.serialise_config(networks[int_net]["out_dir"])
 
