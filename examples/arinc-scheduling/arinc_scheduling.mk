@@ -29,7 +29,7 @@ SDFGEN_HELPER := $(ARINC_DIR)/sdfgen_helper.py
 # Macros needed by sdfgen helper to calculate config struct sizes
 SDFGEN_UNKOWN_MACROS := MAX_PARTITIONS=61
 # Headers containing config structs and dependencies
-SCHEDULER_CONFIG_HEADERS := $(ARINC_DIR)/include/user_config.h
+SCHEDULER_CONFIG_HEADERS := $(ARINC_DIR)/include/scheduler_config.h
 
 IMAGES := timer_driver.elf scheduler.elf \
 	$(PART_ELFS)

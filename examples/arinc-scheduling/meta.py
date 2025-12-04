@@ -83,12 +83,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     for pd in partition_initial_pds:
         scheduler.add_child_pd(pd)
 
-    # These timeslice are in nanoseconds
-    part_timeslices = [1000000000, 1000000000, 1000000000]
-    # These are the channels to the sPD of a partition
-    part_ch = [0, 1, 2]
-
-    user_schedule = UserSchedule(part_timeslices, part_ch)
+    partition_configs = []
 
     # @kwinter: For now make these all children of the scheduler.
     # Once microkit supports handing TCBs to different PD's we will
@@ -100,10 +95,21 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     for pd in partition_initial_pds:
         pd_channel = Channel(scheduler, pd)
         sdf.add_channel(pd_channel)
+        partition_configs.append(PartitionConfig(pd_channel.pd_a_id))
 
     for pd_init, pd_user in zip(partition_initial_pds, partition_user_pds):
         partition_channel = Channel(pd_init, pd_user)
         sdf.add_channel(partition_channel)
+
+    # Config information that we need to pass to the scheduler for this system.
+
+    # These timeslice are in nanoseconds
+    part_timeslices = [1000000000, 1000000000, 1000000000]
+    # These id's correspond to the index into the partition_configs array
+    part_id = [0, 1, 2]
+    user_schedule = Schedule(part_timeslices, part_id)
+
+    schedule_config = SchedulerConfig(partition_configs, user_schedule)
 
     ### Creating memory regions port implementation
     
@@ -130,9 +136,9 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
     data_path = output_dir + "/schedule_config.data"
     with open(data_path, "wb+") as f:
-        f.write(user_schedule.serialise())
+        f.write(schedule_config.serialise())
     update_elf_section(obj_copy, scheduler.program_image,
-                       user_schedule.section_name,
+                       schedule_config.section_name,
                        data_path)
 
     with open(f"{output_dir}/{sdf_path}", "w+") as f:
