@@ -71,6 +71,8 @@ enum {
 
     // file does not exist
     FS_STATUS_NO_FILE = 15,
+
+    FS_STATUS_NUM_STATUSES
 };
 
 // these constants each represent a type of command that may be issued by the client to the server
