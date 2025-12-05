@@ -24,9 +24,30 @@
 #include <lions/fs/config.h>
 
 #define MAX_PATH_LEN 128
+#define FILE_SUCC 0
+#define FILE_ERR 1
 
 static int fs_server_fd_map[MAX_FDS];
 static char fd_path[MAX_FDS][MAX_PATH_LEN];
+
+static size_t fs_status_to_errno[FS_STATUS_NUM_STATUSES] = {
+    [FS_STATUS_SUCCESS] = FILE_SUCC,
+    [FS_STATUS_ERROR] = FILE_ERR,
+    [FS_STATUS_INVALID_BUFFER] = EINVAL,
+    [FS_STATUS_INVALID_PATH] = ENOENT,
+    [FS_STATUS_INVALID_FD] = EBADF,
+    [FS_STATUS_ALLOCATION_ERROR] = ENOMEM,
+    [FS_STATUS_OUTSTANDING_OPERATIONS] = EBUSY,
+    [FS_STATUS_INVALID_NAME] = EINVAL,
+    [FS_STATUS_TOO_MANY_OPEN_FILES] = EMFILE,
+    [FS_STATUS_SERVER_WAS_DENIED] = EPERM,
+    [FS_STATUS_INVALID_WRITE] = EACCES,
+    [FS_STATUS_INVALID_READ] = EACCES,
+    [FS_STATUS_DIRECTORY_IS_FULL] = ENOSPC,
+    [FS_STATUS_INVALID_COMMAND] = EINVAL,
+    [FS_STATUS_END_OF_DIRECTORY] = FILE_ERR,
+    [FS_STATUS_NO_FILE] = ENOENT,
+};
 
 static size_t file_write(const void *buf, size_t len, int fd) {
     // TODO: check buffer length can fit into fs write_buffer from fs_buffer_allocate
