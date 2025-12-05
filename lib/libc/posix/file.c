@@ -28,7 +28,25 @@
 #define FILE_ERR 1
 
 static int fs_server_fd_map[MAX_FDS];
+
 static char fd_path[MAX_FDS][MAX_PATH_LEN];
+static void resolve_path(int dirfd, const char *path, char *out_path, size_t out_size) {
+    if (path[0] == '/') {
+        // Absolute path: ignore dirfd
+        strncpy(out_path, path, out_size - 1);
+        out_path[out_size - 1] = '\0';
+    } else {
+        if (dirfd == AT_FDCWD) {
+            out_path[0] = '/';
+            out_path[1] = '\0';
+        } else {
+            strncpy(out_path, fd_path[dirfd], out_size - 1);
+            out_path[out_size - 1] = '\0';
+            strncat(out_path, "/", out_size - strlen(out_path) - 1);
+        }
+        strncat(out_path, path, out_size - strlen(out_path) - 1);
+    }
+}
 
 static size_t fs_status_to_errno[FS_STATUS_NUM_STATUSES] = {
     [FS_STATUS_SUCCESS] = FILE_SUCC,
@@ -50,59 +68,94 @@ static size_t fs_status_to_errno[FS_STATUS_NUM_STATUSES] = {
 };
 
 static size_t file_write(const void *buf, size_t len, int fd) {
-    // TODO: check buffer length can fit into fs write_buffer from fs_buffer_allocate
-    ptrdiff_t write_buffer;
-    fs_buffer_allocate(&write_buffer);
-
-    memcpy(fs_buffer_ptr(write_buffer), buf, len);
-
-    fs_cmpl_t completion;
     fd_entry_t *fd_entry = posix_fd_entry(fd);
-    assert(fd_entry);
-    fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_WRITE,
-                                                .params.file_write = {
-                                                    .fd = fs_server_fd_map[fd],
-                                                    .offset = fd_entry->file_ptr,
-                                                    .buf.offset = write_buffer,
-                                                    .buf.size = len,
-                                                }});
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    ptrdiff_t write_buffer;
+    int err;
+
+    err = fs_buffer_allocate(&write_buffer);
+    if (err) {
+        return -ENOMEM;
+    };
+
+    size_t written = 0;
+    for (size_t to_write = MIN(len, FS_BUFFER_SIZE); to_write > 0;
+         len -= to_write, buf += to_write, to_write = MIN(len, FS_BUFFER_SIZE)) {
+        memcpy(fs_buffer_ptr(write_buffer), buf, to_write);
+
+        fs_cmpl_t completion;
+        err = fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_FILE_WRITE,
+                                                            .params.file_write = {
+                                                                .fd = fs_server_fd_map[fd],
+                                                                .offset = fd_entry->file_ptr + written,
+                                                                .buf.offset = write_buffer,
+                                                                .buf.size = to_write,
+                                                            } });
+
+        if (err) {
+            fs_buffer_free(write_buffer);
+            return -ENOMEM;
+        }
+
+        if (completion.status != FS_STATUS_SUCCESS) {
+            fs_buffer_free(write_buffer);
+            return -fs_status_to_errno[completion.status];
+        }
+
+        written += completion.data.file_write.len_written;
+    }
 
     fs_buffer_free(write_buffer);
 
-    if (completion.status != FS_STATUS_SUCCESS) {
-        return -1;
-    }
-
-    size_t written = completion.data.file_write.len_written;
     fd_entry->file_ptr += written;
 
     return written;
 }
 
 static size_t file_read(void *buf, size_t len, int fd) {
-    ptrdiff_t read_buffer;
-    fs_buffer_allocate(&read_buffer);
-
-    fs_cmpl_t completion;
     fd_entry_t *fd_entry = posix_fd_entry(fd);
-    assert(fd_entry);
-    fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_READ,
-                                                .params.file_read = {
-                                                    .fd = fs_server_fd_map[fd],
-                                                    .offset = fd_entry->file_ptr,
-                                                    .buf.offset = read_buffer,
-                                                    // TODO: this length should probably be
-                                                    // max(len, FS_BUFFER_SIZE)
-                                                    .buf.size = len,
-                                                }});
-
-    if (completion.status != FS_STATUS_SUCCESS) {
-        fs_buffer_free(read_buffer);
-        return -1;
+    if (fd_entry == NULL) {
+        return -EBADF;
     }
 
-    size_t read = completion.data.file_read.len_read;
-    memcpy(buf, fs_buffer_ptr(read_buffer), read);
+    ptrdiff_t read_buffer;
+    int err;
+
+    err = fs_buffer_allocate(&read_buffer);
+
+    if (err) {
+        return -ENOMEM;
+    }
+
+    size_t read = 0;
+    for (size_t to_read = MIN(len, FS_BUFFER_SIZE); to_read > 0;
+         len -= to_read, buf += to_read, to_read = MIN(len, FS_BUFFER_SIZE)) {
+        fs_cmpl_t completion;
+        err = fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_FILE_READ,
+                                                            .params.file_read = {
+                                                                .fd = fs_server_fd_map[fd],
+                                                                .offset = fd_entry->file_ptr + read,
+                                                                .buf.offset = read_buffer,
+                                                                .buf.size = to_read,
+                                                            } });
+
+        if (err) {
+            fs_buffer_free(read_buffer);
+            return -ENOMEM;
+        }
+
+        if (completion.status != FS_STATUS_SUCCESS) {
+            fs_buffer_free(read_buffer);
+            return -fs_status_to_errno[completion.status];
+        }
+
+        read += completion.data.file_read.len_read;
+        memcpy(buf, fs_buffer_ptr(read_buffer), to_read);
+    }
+
     fs_buffer_free(read_buffer);
 
     fd_entry->file_ptr += read;
@@ -113,28 +166,28 @@ static size_t file_read(void *buf, size_t len, int fd) {
 static int file_close(int fd) {
     fs_cmpl_t completion;
     fd_entry_t *fd_entry = posix_fd_entry(fd);
-    assert(fd_entry);
+
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
 
     if (fd_entry->flags & O_DIRECTORY) {
-        fs_command_blocking(&completion, (fs_cmd_t){
+        fs_command_blocking(&completion, (fs_cmd_t) {
                                              .type = FS_CMD_DIR_CLOSE,
                                              .params.dir_close.fd = fs_server_fd_map[fd],
                                          });
     } else {
-        fs_command_blocking(&completion, (fs_cmd_t){
+        fs_command_blocking(&completion, (fs_cmd_t) {
                                              .type = FS_CMD_FILE_CLOSE,
                                              .params.file_close.fd = fs_server_fd_map[fd],
                                          });
     }
 
-    if (completion.status != FS_STATUS_SUCCESS) {
-        return -1;
-    }
-
+    // Always release the fd even if there is a close error
     fs_server_fd_map[fd] = -1;
     memset(fd_path[fd], 0, MAX_PATH_LEN);
 
-    return 0;
+    return -fs_status_to_errno[completion.status];
 }
 
 static int file_dup3(int oldfd, int newfd) {
@@ -154,13 +207,13 @@ static long sys_fcntl(va_list ap) {
 
     fd_entry_t *fd_entry = posix_fd_entry(fd);
     switch (op) {
-        case F_SETFD: {
-            fd_entry->flags = arg;
-            break;
-        }
-        case F_GETFL: {
-            return fd_entry->flags;
-        }
+    case F_SETFD: {
+        fd_entry->flags = arg;
+        break;
+    }
+    case F_GETFL: {
+        return fd_entry->flags;
+    }
     }
 
     return 0;
@@ -179,13 +232,13 @@ static int fstat_int(const char *path, struct stat *statbuf) {
     memcpy(fs_buffer_ptr(path_buffer), path, path_len);
 
     fs_cmpl_t completion;
-    fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_STAT,
-                                                .params.stat = {
-                                                    .path.offset = path_buffer,
-                                                    .path.size = path_len,
-                                                    .buf.offset = output_buffer,
-                                                    .buf.size = FS_BUFFER_SIZE,
-                                                }});
+    fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_STAT,
+                                                  .params.stat = {
+                                                      .path.offset = path_buffer,
+                                                      .path.size = path_len,
+                                                      .buf.offset = output_buffer,
+                                                      .buf.size = FS_BUFFER_SIZE,
+                                                  } });
 
     fs_buffer_free(path_buffer);
 
@@ -233,6 +286,18 @@ static long sys_fstatat(va_list ap) {
 
     (void)dirfd;
 
+    char full_path[MAX_PATH_LEN] = { 0 };
+    resolve_path(dirfd, path, full_path, MAX_PATH_LEN);
+
+    if (strcmp(full_path, "/etc/services") == 0) {
+        // Return minimal stat for services file
+        memset(statbuf, 0, sizeof(*statbuf));
+        statbuf->st_mode = S_IFREG | 0444; // regular file, read-only
+        statbuf->st_nlink = 1;
+        statbuf->st_size = 0;
+        return 0;
+    }
+
     return fstat_int(path, statbuf);
 }
 
@@ -240,25 +305,15 @@ static long sys_readlinkat(va_list ap) { return -EINVAL; }
 
 static long sys_openat(va_list ap) {
     int dirfd = va_arg(ap, int);
-    const char *pathname = va_arg(ap, const char *);
+    const char *path = va_arg(ap, const char *);
     int flags = va_arg(ap, int);
 
-    char path[MAX_PATH_LEN] = {0};
+    char full_path[MAX_PATH_LEN] = { 0 };
+    resolve_path(dirfd, path, full_path, MAX_PATH_LEN);
 
-    // if pathname is absolute, the dirfd is ignored.
-    if (pathname[0] != '/') {
-        if (dirfd == AT_FDCWD) {
-            // TODO: once we have cwd impl, use that instead
-            path[0] = '/';
-        } else {
-            strncat(path, fd_path[dirfd], MAX_PATH_LEN);
-            strncat(path, "/", 1);
-        }
-    }
+    printf("sys_openat: dirfd=%d path=%s full_path=%s flags=0x%x\n", dirfd, path, full_path, flags);
 
-    strncat(path, pathname, MAX_PATH_LEN);
-
-    if (strcmp(path, "/etc/services") == 0) {
+    if (strcmp(full_path, "/etc/services") == 0) {
         return SERVICES_FD;
     }
 
@@ -266,8 +321,8 @@ static long sys_openat(va_list ap) {
     int err = fs_buffer_allocate(&path_buffer);
     assert(!err);
 
-    uint64_t path_len = strlen(path);
-    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
+    uint64_t path_len = strlen(full_path);
+    memcpy(fs_buffer_ptr(path_buffer), full_path, path_len);
 
     uint64_t fs_flags = 0;
     if (flags & O_RDONLY) {
@@ -285,24 +340,24 @@ static long sys_openat(va_list ap) {
 
     fs_cmpl_t completion;
     if (flags & O_DIRECTORY) {
-        fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_DIR_OPEN,
-                                                    .params.dir_open = {
-                                                        .path.offset = path_buffer,
-                                                        .path.size = path_len,
-                                                    }});
+        fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_DIR_OPEN,
+                                                      .params.dir_open = {
+                                                          .path.offset = path_buffer,
+                                                          .path.size = path_len,
+                                                      } });
     } else {
-        fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_OPEN,
-                                                    .params.file_open = {
-                                                        .path.offset = path_buffer,
-                                                        .path.size = path_len,
-                                                        .flags = fs_flags,
-                                                    }});
+        fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_FILE_OPEN,
+                                                      .params.file_open = {
+                                                          .path.offset = path_buffer,
+                                                          .path.size = path_len,
+                                                          .flags = fs_flags,
+                                                      } });
     }
 
     fs_buffer_free(path_buffer);
 
     if (completion.status != FS_STATUS_SUCCESS) {
-        return -1;
+        return -fs_status_to_errno[completion.status];
     }
 
     uint64_t fs_fd;
@@ -312,12 +367,12 @@ static long sys_openat(va_list ap) {
         fs_fd = completion.data.file_open.fd;
 
         if (flags & O_TRUNC) {
-            fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_TRUNCATE,
-                                                        .params.file_truncate = {.fd = fs_fd, .length = 0}});
+            fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_FILE_TRUNCATE,
+                                                          .params.file_truncate = { .fd = fs_fd, .length = 0 } });
         }
 
         if (completion.status != FS_STATUS_SUCCESS) {
-            return -1;
+            return -fs_status_to_errno[completion.status];
         }
     }
 
@@ -326,13 +381,13 @@ static long sys_openat(va_list ap) {
     fd_entry_t *fd_entry = posix_fd_entry(fd);
 
     if (fd_entry != NULL) {
-        *fd_entry = (fd_entry_t){.read = file_read,
-                                 .write = file_write,
-                                 .close = file_close,
-                                 .dup3 = file_dup3,
-                                 .fstat = file_fstat,
-                                 .flags = flags,
-                                 .file_ptr = 0};
+        *fd_entry = (fd_entry_t) { .read = file_read,
+                                   .write = file_write,
+                                   .close = file_close,
+                                   .dup3 = file_dup3,
+                                   .fstat = file_fstat,
+                                   .flags = flags,
+                                   .file_ptr = 0 };
 
         fs_server_fd_map[fd] = fs_fd;
     } else {
@@ -349,34 +404,43 @@ static long sys_lseek(va_list ap) {
     off_t offset = va_arg(ap, off_t);
     int whence = va_arg(ap, int);
 
+    if (fd == SERVICES_FD) {
+        return -EBADF;
+    }
+
     fd_entry_t *fd_entry = posix_fd_entry(fd);
 
     /* TODO: need to sanitise input */
     size_t curr_fp = fd_entry->file_ptr;
     size_t new_fp;
     switch (whence) {
-        case SEEK_SET:
-            new_fp = offset;
-            break;
-        case SEEK_CUR:
-            new_fp = curr_fp + offset;
-            break;
-        case SEEK_END: {
-            fs_cmpl_t completion;
-            int err = fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_SIZE,
-                                                                  .params.file_size = {
-                                                                      .fd = fs_server_fd_map[fd],
-                                                                  }});
-            if (err || completion.status != FS_STATUS_SUCCESS) {
-                return -1;
-            }
-            new_fp = completion.data.file_size.size + offset;
-            break;
+    case SEEK_SET:
+        new_fp = offset;
+        break;
+    case SEEK_CUR:
+        new_fp = curr_fp + offset;
+        break;
+    case SEEK_END: {
+        fs_cmpl_t completion;
+        int err = fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_FILE_SIZE,
+                                                                .params.file_size = {
+                                                                    .fd = fs_server_fd_map[fd],
+                                                                } });
+
+        if (err) {
+            return -ENOMEM;
         }
-        default:
-            printf("POSIX ERROR: lseek got unsupported whence %d\n", whence);
-            // TODO: correct error
-            return -1;
+
+        if (completion.status != FS_STATUS_SUCCESS) {
+            return -fs_status_to_errno[completion.status];
+        }
+
+        new_fp = completion.data.file_size.size + offset;
+        break;
+    }
+    default:
+        printf("POSIX ERROR: lseek got unsupported whence %d\n", whence);
+        return -EINVAL;
     }
 
     fd_entry->file_ptr = new_fp;
@@ -396,7 +460,7 @@ static long sys_mkdirat(va_list ap) {
     assert(!err);
 
     // TODO: factor out path resolution common between this and openat
-    char path[MAX_PATH_LEN] = {0};
+    char path[MAX_PATH_LEN] = { 0 };
 
     // if pathname is absolute, the dirfd is ignored.
     if (pathname[0] != '/') {
@@ -415,15 +479,15 @@ static long sys_mkdirat(va_list ap) {
     memcpy(fs_buffer_ptr(path_buffer), path, path_len + 1);
 
     fs_cmpl_t completion;
-    fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_DIR_CREATE,
-                                                .params.dir_create = {
-                                                    .path.offset = path_buffer,
-                                                    .path.size = path_len,
-                                                }});
+    fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_DIR_CREATE,
+                                                  .params.dir_create = {
+                                                      .path.offset = path_buffer,
+                                                      .path.size = path_len,
+                                                  } });
     fs_buffer_free(path_buffer);
 
     if (completion.status != FS_STATUS_SUCCESS) {
-        return -1;
+        return -fs_status_to_errno[completion.status];
     }
 
     return 0;

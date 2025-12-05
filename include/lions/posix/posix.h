@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#pragma once
+
 #include <stdarg.h>
 #include <bits/syscall.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/types.h>
-
-#define SERVICES_FD 101
 
 #define MUSLC_HIGHEST_SYSCALL SYS_pkey_free
 #define MUSLC_NUM_SYSCALLS (MUSLC_HIGHEST_SYSCALL + 1)

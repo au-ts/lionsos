@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/uio.h>
 
 #include <lions/posix/posix.h>
@@ -21,6 +22,11 @@ long sys_write(va_list ap) {
     const void *buf = va_arg(ap, const void *);
     size_t count = va_arg(ap, size_t);
 
+    if (fd == SERVICES_FD) {
+        // Don't allow writes to services file
+        return -EBADF;
+    }
+
     fd_entry_t *fd_entry = posix_fd_entry(fd);
     return fd_entry->write(buf, count, fd);
 }
@@ -31,7 +37,7 @@ long sys_read(va_list ap) {
     size_t count = va_arg(ap, size_t);
 
     if (fd == SERVICES_FD) {
-        // Just return EOF for now
+        // Just return EOF to indicate no services available
         return 0;
     }
 
@@ -43,6 +49,11 @@ long sys_writev(va_list ap) {
     int fd = va_arg(ap, int);
     struct iovec *iov = va_arg(ap, struct iovec *);
     int iovcnt = va_arg(ap, int);
+
+    if (fd == SERVICES_FD) {
+        // Don't allow writes to services file
+        return -EBADF;
+    }
 
     long long sum = 0;
 
@@ -88,6 +99,11 @@ long sys_readv(va_list ap) {
     const struct iovec *iov = va_arg(ap, const struct iovec *);
     int iovcnt = va_arg(ap, int);
 
+    if (fd == SERVICES_FD) {
+        // Just return EOF to indicate no services available
+        return 0;
+    }
+
     ssize_t ret = 0;
     for (int i = 0; i < iovcnt; i++) {
         fd_entry_t *fd_entry = posix_fd_entry(fd);
@@ -130,9 +146,13 @@ long sys_ioctl(va_list ap) {
     int fd = va_arg(ap, int);
     int request = va_arg(ap, int);
     (void)request;
-    // dlog("musl called ioctl on fd %d", fd);
-    /* muslc does some ioctls to stdout, so just allow these to silently
-       go through */
+
+    if (fd == SERVICES_FD) {
+        // /etc/services does not support ioctl
+        return -ENOTTY;
+    }
+
+    /* muslc does some ioctls to stdout, so just allow these to silently go through */
     if (fd == STDOUT_FD) {
         return 0;
     }
@@ -144,6 +164,11 @@ static long sys_dup3(va_list ap) {
     int oldfd = va_arg(ap, int);
     int newfd = va_arg(ap, int);
     int flags = va_arg(ap, int);
+
+    if (oldfd == SERVICES_FD || newfd == SERVICES_FD) {
+        // Don't allow duping to or from services file
+        return -EBADF;
+    }
 
     fd_entry_t *oldfd_entry = posix_fd_entry(oldfd);
     if (oldfd_entry == NULL) {
@@ -179,6 +204,15 @@ static long sys_dup3(va_list ap) {
 static long sys_fstat(va_list ap) {
     int fd = va_arg(ap, int);
     struct stat *statbuf = va_arg(ap, struct stat *);
+
+    if (fd == SERVICES_FD) {
+        // Return minimal stat for services file
+        memset(statbuf, 0, sizeof(*statbuf));
+        statbuf->st_mode = S_IFREG | 0444; // regular file, read-only
+        statbuf->st_nlink = 1;
+        statbuf->st_size = 0;
+        return 0;
+    }
 
     fd_entry_t *fd_entry = posix_fd_entry(fd);
     return fd_entry->fstat(fd, statbuf);

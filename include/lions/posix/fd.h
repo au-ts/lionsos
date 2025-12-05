@@ -3,13 +3,24 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#pragma once
+
 #include <stdlib.h>
 #include <sys/stat.h>
 
 #define MAX_FDS 128
 
+/*
+ * Reserved FDs for special files
+ */
+
+// stdio
+#define STDIN_FD  0
 #define STDOUT_FD 1
 #define STDERR_FD 2
+
+// /etc/services
+#define SERVICES_FD (MAX_FDS + 1)
 
 typedef size_t (*fd_write_func)(const void *, size_t, int);
 typedef size_t (*fd_read_func)(void *, size_t, int);
