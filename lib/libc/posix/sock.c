@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -31,21 +32,24 @@ static int fd_socket[MAX_FDS];
 
 static ssize_t sock_write(const void *buf, size_t len, int fd) {
     int socket_handle = fd_socket[fd];
-
-    ssize_t wrote = socket_config->tcp_socket_write(socket_handle, buf, len, 0);
-    if (wrote == -2) {
-        // TODO: error handling at sys_writev etc
-        return -EAGAIN;
-    } else if (wrote < 0) {
-        return -1;
+    
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
+    if (fd_entry == NULL) {
+        return -EBADF;
     }
 
-    return wrote;
+    return socket_config->tcp_socket_write(socket_handle, buf, len, fd_entry->flags);
 }
 
 static ssize_t sock_read(void *buf, size_t len, int fd) {
-    // TODO: implement
-    return 0;
+    int socket_handle = fd_socket[fd];
+    
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    return socket_config->tcp_socket_recv(socket_handle, buf, len, fd_entry->flags);
 }
 
 static int sock_close(int fd) {
@@ -68,47 +72,113 @@ static int sock_fstat(int fd, struct stat *statbuf) {
     return 0;
 }
 
-static long sys_setsockopt(va_list ap) { return 0; }
+static long sys_setsockopt(va_list ap) {
+    int sockfd = va_arg(ap, int);
+    int level = va_arg(ap, int);
+    int optname = va_arg(ap, int);
+    const void *optval = va_arg(ap, const void *);
+    socklen_t optlen = va_arg(ap, socklen_t);
 
-static long sys_getsockopt(va_list ap) { return 0; }
+    fd_entry_t *fd_entry = posix_fd_entry(sockfd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    if (level == SOL_SOCKET && optname == SO_LINGER) {
+        if (optval == NULL || optlen < sizeof(struct linger)) {
+            return -EINVAL;
+        }
+
+        // Accept but ignore linger option
+        return 0;
+    }
+
+    return -ENOPROTOOPT;
+}
+
+static long sys_getsockopt(va_list ap) {
+    int sockfd = va_arg(ap, int);
+    int level = va_arg(ap, int);
+    int optname = va_arg(ap, int);
+    void *optval = va_arg(ap, void *);
+    socklen_t *optlen = va_arg(ap, socklen_t *);
+
+    fd_entry_t *fd_entry = posix_fd_entry(sockfd);
+
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    if (level == SOL_SOCKET && optname == SO_ERROR) {
+        if (optval == NULL || optlen == NULL || *optlen < sizeof(int)) {
+            return -EINVAL;
+        }
+
+        int socket_handle = fd_socket[sockfd];
+        int err = 0;
+        if (socket_config->tcp_socket_err) {
+            err = socket_config->tcp_socket_err(socket_handle);
+        }
+
+        *(int *)optval = err;
+        *optlen = sizeof(int);
+        return 0;
+    }
+
+    return -ENOPROTOOPT;
+}
 
 static long sys_socket(va_list ap) {
     int domain = va_arg(ap, int);
     int type = va_arg(ap, int);
     int protocol = va_arg(ap, int);
 
-    assert(domain == AF_INET);
-    assert(type == SOCK_STREAM);
     (void)protocol;
 
-    int socket_handle = socket_config->socket_allocate();
-    if (socket_handle != -1) {
-        int err = socket_config->tcp_socket_init(socket_handle);
-        assert(err == 0);
-
-        int fd = posix_fd_allocate();
-        fd_entry_t *fd_entry = posix_fd_entry(fd);
-
-        if (fd_entry != NULL) {
-            *fd_entry = (fd_entry_t) {
-                .read = sock_read,
-                .write = sock_write,
-                .close = sock_close,
-                .dup3 = sock_dup3,
-                .fstat = sock_fstat,
-                .flags = O_RDWR,
-            };
-        } else {
-            // TODO: cleanup socket
-            return -1;
-        }
-
-        fd_socket[fd] = socket_handle;
-        return fd;
-    } else {
-        dlog("POSIX ERROR: sys_socket: could not create socket!\n");
-        return -1;
+    if (domain != AF_INET) {
+        return -EAFNOSUPPORT;
     }
+
+    if (type != SOCK_STREAM) {
+        return -ESOCKTNOSUPPORT;
+    }
+
+    int fd = posix_fd_allocate();
+    if (fd < 0) {
+        return -EMFILE;
+    }
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
+
+    if (fd_entry != NULL) {
+        *fd_entry = (fd_entry_t) {
+            .read = sock_read,
+            .write = sock_write,
+            .close = sock_close,
+            .dup3 = sock_dup3,
+            .fstat = sock_fstat,
+            .flags = O_RDWR,
+        };
+    } else {
+        // Unreachable: we just allocated fd.
+        assert(false);
+        return -EBADF;
+    }
+
+    int socket_handle = socket_config->socket_allocate();
+    if (socket_handle < 0) {
+        posix_fd_deallocate(fd);
+        return socket_handle;
+    }
+
+    int err = socket_config->tcp_socket_init(socket_handle);
+    if (err < 0) {
+        socket_config->tcp_socket_close(socket_handle);
+        posix_fd_deallocate(fd);
+        return err;
+    };
+
+    fd_socket[fd] = socket_handle;
+    return fd;
 }
 
 static long sys_bind(va_list ap) {
@@ -116,14 +186,31 @@ static long sys_bind(va_list ap) {
     const struct sockaddr *sockaddr = va_arg(ap, const struct sockaddr *);
     socklen_t addrlen = va_arg(ap, socklen_t);
 
-    assert(sockaddr->sa_family == AF_INET);
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    if (fd_socket[fd] == -1) {
+        return -ENOTSOCK;
+    }
+
+    if (sockaddr == NULL) {
+        return -EFAULT;
+    }
+
+    if (sockaddr->sa_family != AF_INET) {
+        return -EAFNOSUPPORT;
+    }
+
+    if (addrlen < sizeof(struct sockaddr_in)) {
+        return -EINVAL;
+    }
+
     const struct sockaddr_in *addr_in = (const struct sockaddr_in *)sockaddr;
 
     uint32_t addr = addr_in->sin_addr.s_addr;
     uint16_t port = ntohs(addr_in->sin_port);
-
-    char ipstr[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &addr_in->sin_addr, ipstr, sizeof(ipstr));
 
     return (long)socket_config->tcp_socket_bind(fd_socket[fd], addr, port);
 }
@@ -131,14 +218,35 @@ static long sys_bind(va_list ap) {
 static long sys_socket_connect(va_list ap) {
     long fd = va_arg(ap, int);
     const struct sockaddr *sockaddr = va_arg(ap, const struct sockaddr *);
+    socklen_t addrlen = va_arg(ap, socklen_t);
 
-    assert(sockaddr->sa_family == AF_INET);
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    if (fd_socket[fd] == -1) {
+        return -ENOTSOCK;
+    }
+
+    if (sockaddr == NULL) {
+        return -EFAULT;
+    }
+
+    if (sockaddr->sa_family != AF_INET) {
+        return -EAFNOSUPPORT;
+    }
+
+    if (addrlen < sizeof(struct sockaddr_in)) {
+        return -EINVAL;
+    }
+
     const struct sockaddr_in *addr_in = (const struct sockaddr_in *)sockaddr;
 
     uint32_t addr = addr_in->sin_addr.s_addr;
     uint16_t port = ntohs(addr_in->sin_port);
 
-    return (long)socket_config->tcp_socket_connect(fd_socket[fd], addr, port, 0);
+    return (long)socket_config->tcp_socket_connect(fd_socket[fd], addr, port, fd_entry->flags);
 }
 
 static long sys_sendto(va_list ap) {
@@ -146,14 +254,25 @@ static long sys_sendto(va_list ap) {
     const void *buf = va_arg(ap, const void *);
     size_t len = va_arg(ap, size_t);
     int flags = va_arg(ap, int);
-    (void)flags;
 
-    ssize_t wrote = socket_config->tcp_socket_write(fd_socket[sockfd], buf, len, 0);
-    if (wrote == -2) {
-        return -EAGAIN;
+    if (buf == NULL) {
+        return -EFAULT;
     }
 
-    return (long)wrote;
+    fd_entry_t *fd_entry = posix_fd_entry(sockfd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    if (fd_socket[sockfd] == -1) {
+        return -ENOTSOCK;
+    }
+
+    int effective_flags = fd_entry->flags;
+    if (flags & MSG_DONTWAIT) {
+        effective_flags |= O_NONBLOCK;
+    }
+    return socket_config->tcp_socket_write(fd_socket[sockfd], buf, len, effective_flags);
 }
 
 static long sys_recvfrom(va_list ap) {
@@ -167,22 +286,38 @@ static long sys_recvfrom(va_list ap) {
     (void)src_addr;
     (void)addrlen;
 
-    int socket_handle = fd_socket[sockfd];
-    ssize_t read = socket_config->tcp_socket_recv(socket_handle, buf, len, 0);
-
-    if (read == 0 && flags & MSG_DONTWAIT) {
-        return -EAGAIN;
-    }
-    if (read == -1) {
-        return -ENOTCONN;
+    if (buf == NULL) {
+        return -EFAULT;
     }
 
-    return (long)read;
+    fd_entry_t *fd_entry = posix_fd_entry(sockfd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    if (fd_socket[sockfd] == -1) {
+        return -ENOTSOCK;
+    }
+
+    int effective_flags = fd_entry->flags;
+    if (flags & MSG_DONTWAIT) {
+        effective_flags |= O_NONBLOCK;
+    }
+    return socket_config->tcp_socket_recv(fd_socket[sockfd], buf, len, effective_flags);
 }
 
 static long sys_listen(va_list ap) {
     int sockfd = va_arg(ap, int);
     int backlog = va_arg(ap, int);
+
+    fd_entry_t *fd_entry = posix_fd_entry(sockfd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    if (fd_socket[sockfd] == -1) {
+        return -ENOTSOCK;
+    }
 
     return (long)socket_config->tcp_socket_listen(fd_socket[sockfd], backlog);
 }
@@ -192,11 +327,28 @@ static long sys_accept(va_list ap) {
     struct sockaddr *sockaddr = va_arg(ap, struct sockaddr *);
     socklen_t *addrlen = va_arg(ap, socklen_t *);
 
-    int socket_handle = socket_config->tcp_socket_accept(fd_socket[sockfd], 0);
-    assert(socket_handle >= 0);
+    fd_entry_t *fd_entry = posix_fd_entry(sockfd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    if (fd_socket[sockfd] == -1) {
+        return -ENOTSOCK;
+    }
+
+    int socket_handle = socket_config->tcp_socket_accept(fd_socket[sockfd], fd_entry->flags);
+
+    if (socket_handle < 0) {
+        return socket_handle;
+    }
 
     int fd = posix_fd_allocate();
-    fd_entry_t *fd_entry = posix_fd_entry(fd);
+    if (fd < 0) {
+        socket_config->tcp_socket_close(socket_handle);
+        return -EMFILE;
+    }
+
+    fd_entry = posix_fd_entry(fd);
     if (fd_entry != NULL) {
         *fd_entry = (fd_entry_t) {
             .read = sock_read,
@@ -221,8 +373,9 @@ static long sys_accept(va_list ap) {
             *addrlen = sizeof(*sin);
         }
     } else {
-        // TODO: cleanup socket
-        return -1;
+        // Unreachable: we just allocated fd.
+        assert(false);
+        return -EBADF;
     }
 
     return (long)fd;
@@ -233,8 +386,12 @@ static long sys_getsockname(va_list ap) {
     struct sockaddr *sockaddr = va_arg(ap, struct sockaddr *);
     socklen_t *addrlen = va_arg(ap, socklen_t *);
 
-    if (*addrlen < sizeof(struct sockaddr)) {
-        printf("POSIX ERROR: sys_getsockname: addrlen %d too small\n", *addrlen);
+    if (addrlen == NULL || sockaddr == NULL) {
+        return -EFAULT;
+    }
+
+    if (*addrlen < sizeof(struct sockaddr_in)) {
+        fprintf(stderr, "POSIX|ERROR: sys_getsockname: addrlen %d too small\n", *addrlen);
         return -EINVAL;
     }
 
@@ -244,14 +401,15 @@ static long sys_getsockname(va_list ap) {
     uint16_t port;
 
     int err = socket_config->tcp_socket_getsockname(fd_socket[sockfd], &addr, &port);
-    assert(err == 0);
+    if (err) {
+        return -ENOTCONN;
+    }
 
     addr_in->sin_family = AF_INET;
     addr_in->sin_addr.s_addr = addr;
     addr_in->sin_port = htons(port);
 
-    char ipstr[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &addr_in->sin_addr, ipstr, sizeof(ipstr));
+    *addrlen = sizeof(struct sockaddr_in);
 
     return 0;
 }
@@ -261,8 +419,12 @@ static long sys_getpeername(va_list ap) {
     struct sockaddr *sockaddr = va_arg(ap, struct sockaddr *);
     socklen_t *addrlen = va_arg(ap, socklen_t *);
 
-    if (*addrlen < sizeof(struct sockaddr)) {
-        printf("POSIX ERROR: sys_getpeername: addrlen %d too small\n", *addrlen);
+    if (addrlen == NULL || sockaddr == NULL) {
+        return -EFAULT;
+    }
+
+    if (*addrlen < sizeof(struct sockaddr_in)) {
+        fprintf(stderr, "POSIX|ERROR: sys_getpeername: addrlen %d too small\n", *addrlen);
         return -EINVAL;
     }
 
@@ -272,16 +434,86 @@ static long sys_getpeername(va_list ap) {
     uint16_t port;
 
     int err = socket_config->tcp_socket_getpeername(fd_socket[sockfd], &addr, &port);
-    assert(err == 0);
+    if (err != 0) {
+        return -ENOTCONN;
+    }
 
     addr_in->sin_family = AF_INET;
     addr_in->sin_addr.s_addr = addr;
     addr_in->sin_port = htons(port);
 
-    char ipstr[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &addr_in->sin_addr, ipstr, sizeof(ipstr));
+    *addrlen = sizeof(struct sockaddr_in);
 
     return 0;
+}
+
+static long sys_ppoll(va_list ap) {
+    struct pollfd *fds = va_arg(ap, struct pollfd *);
+    nfds_t nfds = va_arg(ap, nfds_t);
+    const struct timespec *timeout_ts = va_arg(ap, const struct timespec *);
+    const sigset_t *sigmask = va_arg(ap, const sigset_t *);
+
+    // Ignore timeout and sigmask for now
+    (void)timeout_ts;
+    (void)sigmask;
+
+    if (fds == NULL && nfds > 0) {
+        return -EFAULT;
+    }
+
+    if (nfds > MAX_FDS) {
+        return -EINVAL;
+    }
+
+    int ready = 0;
+    for (nfds_t i = 0; i < nfds; i++) {
+        int fd = fds[i].fd;
+        fds[i].revents = 0;
+
+        if (fd < 0) {
+            continue;
+        }
+
+        fd_entry_t *fd_entry = posix_fd_entry(fd);
+        if (fd_entry == NULL) {
+            fds[i].revents = POLLNVAL;
+            ready++;
+            continue;
+        }
+
+        if (fd_socket[fd] != -1) {
+            int sock = fd_socket[fd];
+            if ((fds[i].events & POLLIN) && socket_config->tcp_socket_readable(sock)) {
+                fds[i].revents |= POLLIN;
+            }
+            if ((fds[i].events & POLLOUT) && socket_config->tcp_socket_writable(sock)) {
+                fds[i].revents |= POLLOUT;
+            }
+
+            // POLLHUP, POLLERR always checked regardless of events
+            if (socket_config->tcp_socket_hup(sock)) {
+                fds[i].revents |= POLLHUP;
+            }
+            if (socket_config->tcp_socket_err(sock) != 0) {
+                fds[i].revents |= POLLERR;
+            }
+            if (fds[i].revents) {
+                ready++;
+            }
+        } else {
+            // Regular files are always ready
+            if (fds[i].events & POLLIN) {
+                fds[i].revents |= POLLIN;
+            }
+            if (fds[i].events & POLLOUT) {
+                fds[i].revents |= POLLOUT;
+            }
+            if (fds[i].revents) {
+                ready++;
+            }
+        }
+    }
+    return ready;
 }
 
 void libc_init_sock(libc_socket_config_t *s_cfg) {
@@ -294,10 +526,21 @@ void libc_init_sock(libc_socket_config_t *s_cfg) {
     libc_define_syscall(__NR_getsockopt, sys_getsockopt);
     libc_define_syscall(__NR_sendto, sys_sendto);
     libc_define_syscall(__NR_recvfrom, sys_recvfrom);
-    if (s_cfg->tcp_socket_listen) libc_define_syscall(__NR_listen, sys_listen);
-    if (s_cfg->tcp_socket_accept) libc_define_syscall(__NR_accept, sys_accept);
-    if (s_cfg->tcp_socket_getsockname) libc_define_syscall(__NR_getsockname, sys_getsockname);
-    if (s_cfg->tcp_socket_getpeername) libc_define_syscall(__NR_getpeername, sys_getpeername);
+    if (s_cfg->tcp_socket_listen) {
+        libc_define_syscall(__NR_listen, sys_listen);
+    }
+    if (s_cfg->tcp_socket_accept) {
+        libc_define_syscall(__NR_accept, sys_accept);
+    }
+    if (s_cfg->tcp_socket_getsockname) {
+        libc_define_syscall(__NR_getsockname, sys_getsockname);
+    }
+    if (s_cfg->tcp_socket_getpeername) {
+        libc_define_syscall(__NR_getpeername, sys_getpeername);
+    }
+    if (s_cfg->tcp_socket_readable && s_cfg->tcp_socket_writable && s_cfg->tcp_socket_hup && s_cfg->tcp_socket_err) {
+        libc_define_syscall(__NR_ppoll, sys_ppoll);
+    }
 
     memset(fd_socket, -1, sizeof(fd_socket));
 }
