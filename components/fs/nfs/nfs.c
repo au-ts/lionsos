@@ -108,8 +108,7 @@ void notified(microkit_channel ch) {
     sddf_lwip_maybe_notify();
 }
 
-void init(void)
-{
+void init(void) {
     assert(fs_config_check_magic(&fs_config));
     assert(nfs_config_check_magic(&nfs_config));
 
@@ -117,7 +116,8 @@ void init(void)
     fs_completion_queue = fs_config.client.completion_queue.vaddr;
     fs_share = fs_config.client.share.vaddr;
 
-    serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
+    serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size,
+                      serial_config.tx.data.vaddr);
 
     libc_init(&socket_config);
     continuation_pool_init();
