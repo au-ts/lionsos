@@ -49,7 +49,7 @@ static size_t fs_status_to_errno[FS_STATUS_NUM_STATUSES] = {
     [FS_STATUS_NO_FILE] = ENOENT,
 };
 
-static size_t file_write(const void *buf, size_t len, int fd) {
+static ssize_t file_write(const void *buf, size_t len, int fd) {
     // TODO: check buffer length can fit into fs write_buffer from fs_buffer_allocate
     ptrdiff_t write_buffer;
     fs_buffer_allocate(&write_buffer);
@@ -73,13 +73,13 @@ static size_t file_write(const void *buf, size_t len, int fd) {
         return -1;
     }
 
-    size_t written = completion.data.file_write.len_written;
+    ssize_t written = completion.data.file_write.len_written;
     fd_entry->file_ptr += written;
 
     return written;
 }
 
-static size_t file_read(void *buf, size_t len, int fd) {
+static ssize_t file_read(void *buf, size_t len, int fd) {
     ptrdiff_t read_buffer;
     fs_buffer_allocate(&read_buffer);
 
@@ -101,7 +101,7 @@ static size_t file_read(void *buf, size_t len, int fd) {
         return -1;
     }
 
-    size_t read = completion.data.file_read.len_read;
+    ssize_t read = completion.data.file_read.len_read;
     memcpy(buf, fs_buffer_ptr(read_buffer), read);
     fs_buffer_free(read_buffer);
 
