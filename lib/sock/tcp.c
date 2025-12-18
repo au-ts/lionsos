@@ -10,6 +10,7 @@
 #include <limits.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
@@ -32,6 +33,9 @@
 #include <netif/etharp.h>
 
 #include <lions/util.h>
+
+#define SOCK_SUCC 0
+#define SOCK_ERR  1
 
 #define MAX_SOCKETS 10
 #define MAX_LISTEN_BACKLOG 10
@@ -205,7 +209,8 @@ static int tcp_socket_init(int index) {
     return 0;
 }
 
-static int tcp_socket_connect(int index, uint32_t addr, uint16_t port) {
+static int tcp_socket_connect(int index, uint32_t addr, uint16_t port, int flags) {
+    (void)flags; // TODO: use for blocking/non-blocking behavior
     socket_t *sock = &sockets[index];
     assert(sock->state == socket_state_bound);
 
@@ -267,7 +272,8 @@ static int tcp_socket_dup(int index) {
     return 0;
 }
 
-static ssize_t tcp_socket_write(int index, const char *buf, size_t len) {
+static ssize_t tcp_socket_write(int index, const char *buf, size_t len, int flags) {
+    (void)flags; // TODO: use for blocking/non-blocking behavior
     socket_t *sock = &sockets[index];
     int available = tcp_sndbuf(sock->sock_tpcb);
 
@@ -294,7 +300,8 @@ static ssize_t tcp_socket_write(int index, const char *buf, size_t len) {
     return to_write;
 }
 
-static ssize_t tcp_socket_recv(int index, char *buf, size_t len) {
+static ssize_t tcp_socket_recv(int index, char *buf, size_t len, int flags) {
+    (void)flags; // TODO: use for blocking/non-blocking behavior
     socket_t *sock = &sockets[index];
     if (sock->state != socket_state_connected) {
         return -1;
@@ -373,7 +380,8 @@ static int tcp_socket_listen(int index, int backlog) {
     return 0;
 }
 
-static int tcp_socket_accept(int listen_index) {
+static int tcp_socket_accept(int listen_index, int flags) {
+    (void)flags; // TODO: use for blocking/non-blocking behavior
     assert(listen_index >= 0 && listen_index < MAX_SOCKETS);
     socket_t *listen_socket = &sockets[listen_index];
     assert(listen_socket->state == socket_state_listening);
