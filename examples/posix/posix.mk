@@ -45,6 +45,8 @@ FAT := $(LIONSOS)/components/fs/fat
 CFLAGS += \
 	-Wno-bitwise-op-parentheses \
 	-Wno-shift-op-parentheses \
+	-Wno-unused-function \
+	-Wno-tautological-constant-out-of-range-compare \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \

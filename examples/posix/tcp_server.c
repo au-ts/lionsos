@@ -64,8 +64,7 @@ static co_control_t co_controller_mem;
 static void blocking_wait(microkit_channel ch) { microkit_cothread_wait_on_channel(ch); }
 
 static void netif_status_callback(char *ip_addr) {
-    printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n", microkit_name, __FILE__, __LINE__,
-           __func__, microkit_name, ip_addr);
+    printf("TCP_SERVER|INFO: DHCP request finished, IP address is: %s\n", ip_addr);
 }
 
 void notified(microkit_channel ch) {
@@ -152,19 +151,19 @@ void cont() {
         printf("TCP_SERVER|INFO: Create socket\n");
         socket_fd = socket(af, SOCK_STREAM, 0);
         if (socket_fd < 0) {
-            printf("TCP_SERVER|ERROR: Create socket failed");
+            fprintf(stderr, "TCP_SERVER|ERROR: Create socket failed");
             goto fail;
         }
 
         printf("TCP_SERVER|INFO: Bind socket\n");
         if (bind(socket_fd, (struct sockaddr *)&addr, addrlen) < 0) {
-            printf("TCP_SERVER|ERROR: Bind failed");
+            fprintf(stderr, "TCP_SERVER|ERROR: Bind failed");
             goto fail;
         }
 
         printf("TCP_SERVER|INFO: Listening on socket\n");
         if (listen(socket_fd, 10) < 0) {
-            printf("TCP_SERVER|ERROR: Listen failed");
+            fprintf(stderr, "TCP_SERVER|ERROR: Listen failed");
             goto fail;
         }
 
@@ -173,12 +172,12 @@ void cont() {
 
         int new_socket = accept(socket_fd, (struct sockaddr *)&addr, (socklen_t *)&addrlen);
         if (new_socket < 0) {
-            printf("TCP_SERVER|ERROR: Accept failed");
+            fprintf(stderr, "TCP_SERVER|ERROR: Accept failed");
             goto fail;
         }
 
         if (sockaddr_to_string((struct sockaddr *)&addr, ip_string, sizeof(ip_string) / sizeof(ip_string[0])) != 0) {
-            printf("TCP_SERVER|INFO: failed to parse client address\n");
+            printf("TCP_SERVER|ERROR: failed to parse client address\n");
             goto fail;
         }
 
@@ -187,7 +186,7 @@ void cont() {
         const char *message = "Hi from the Server\n";
 
         if (send(new_socket, message, strlen(message), 0) < 0) {
-            printf("TCP_SERVER|ERROR: Send failed");
+            fprintf(stderr, "TCP_SERVER|ERROR: Send failed");
         }
 
         printf("TCP_SERVER|INFO: Shutting down connection fd %d ..\n", new_socket);
@@ -231,7 +230,7 @@ void init() {
     microkit_cothread_init(&co_controller_mem, LIBC_COTHREAD_STACK_SIZE, costacks);
 
     if (microkit_cothread_spawn(cont, NULL) == LIBMICROKITCO_NULL_HANDLE) {
-        printf("CLIENT|ERROR: Cannot initialise cothread\n");
+        fprintf(stderr, "TCP_SERVER|ERROR: Cannot initialise cothread\n");
         assert(false);
     };
 
