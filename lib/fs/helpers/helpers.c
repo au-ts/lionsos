@@ -67,9 +67,7 @@ void fs_buffer_free(ptrdiff_t buffer) {
     memset(fs_share + buffer, 0, FS_BUFFER_SIZE);
 }
 
-void *fs_buffer_ptr(ptrdiff_t buffer) {
-    return fs_share + buffer;
-}
+void *fs_buffer_ptr(ptrdiff_t buffer) { return fs_share + buffer; }
 
 // TODO: probably turn this API into multiple calls from the user so they
 // can decide how to process the completion themselves rather than passing
@@ -115,9 +113,7 @@ void fs_command_complete(uint64_t request_id, fs_cmd_t *command, fs_cmpl_t *comp
     }
 }
 
-void fs_set_blocking_wait(void(*f)(microkit_channel)) {
-    blocking_wait = f;
-}
+void fs_set_blocking_wait(void (*f)(microkit_channel)) { blocking_wait = f; }
 
 int fs_command_blocking(fs_cmpl_t *completion, fs_cmd_t cmd) {
     assert(blocking_wait);

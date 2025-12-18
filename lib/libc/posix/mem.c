@@ -55,7 +55,7 @@ static long sys_mmap(va_list ap) {
 
     if (flags & MAP_ANONYMOUS) {
         /* Align length to page size */
-        length = (length + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1); 
+        length = (length + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1);
         /* Check that we don't try and allocate more than exists */
         if (length > morecore_top - morecore_base) {
             return -ENOMEM;

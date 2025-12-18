@@ -32,7 +32,7 @@ static int fd_socket[MAX_FDS];
 
 static ssize_t sock_write(const void *buf, size_t len, int fd) {
     int socket_handle = fd_socket[fd];
-    
+
     fd_entry_t *fd_entry = posix_fd_entry(fd);
     if (fd_entry == NULL) {
         return -EBADF;
@@ -43,7 +43,7 @@ static ssize_t sock_write(const void *buf, size_t len, int fd) {
 
 static ssize_t sock_read(void *buf, size_t len, int fd) {
     int socket_handle = fd_socket[fd];
-    
+
     fd_entry_t *fd_entry = posix_fd_entry(fd);
     if (fd_entry == NULL) {
         return -EBADF;
