@@ -27,7 +27,6 @@
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
-#include <lions/sock/tcp.h>
 #include <lions/util.h>
 #include <lions/fs/helpers.h>
 

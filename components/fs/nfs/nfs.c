@@ -26,7 +26,6 @@
 #include <lions/fs/config.h>
 
 #include <lions/util.h>
-#include <lions/sock/tcp.h>
 
 #include "nfs.h"
 #include "config.h"

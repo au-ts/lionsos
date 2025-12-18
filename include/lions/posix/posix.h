@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#pragma once
+
 #include <stdarg.h>
 #include <bits/syscall.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/types.h>
-
-#define SERVICES_FD 101
 
 #define MUSLC_HIGHEST_SYSCALL SYS_pkey_free
 #define MUSLC_NUM_SYSCALLS (MUSLC_HIGHEST_SYSCALL + 1)
@@ -22,17 +22,17 @@ Required socket operations to be implemented by client.
 typedef struct {
     int (*socket_allocate)(void);
     int (*tcp_socket_init)(int index);
-    int (*tcp_socket_connect)(int index, uint32_t addr, uint16_t port);
+    int (*tcp_socket_connect)(int index, uint32_t addr, uint16_t port, int flags);
     int (*tcp_socket_close)(int index);
     int (*tcp_socket_dup)(int index);
-    ssize_t (*tcp_socket_write)(int index, const char *buf, size_t len);
-    ssize_t (*tcp_socket_recv)(int index, char *buf, size_t len);
+    ssize_t (*tcp_socket_write)(int index, const char *buf, size_t len, int flags);
+    ssize_t (*tcp_socket_recv)(int index, char *buf, size_t len, int flags);
     int (*tcp_socket_readable)(int index);
     int (*tcp_socket_writable)(int index);
     int (*tcp_socket_hup)(int index);
     int (*tcp_socket_err)(int index);
     int (*tcp_socket_listen)(int index, int backlog);
-    int (*tcp_socket_accept)(int index);
+    int (*tcp_socket_accept)(int index, int flags);
     int (*tcp_socket_bind)(int index, uint32_t addr, uint16_t port);
     int (*tcp_socket_getsockname)(int index, uint32_t *addr, uint16_t *port);
     int (*tcp_socket_getpeername)(int index, uint32_t *addr, uint16_t *port);

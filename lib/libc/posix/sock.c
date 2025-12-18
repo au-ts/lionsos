@@ -28,10 +28,10 @@ static libc_socket_config_t *socket_config;
 
 static int fd_socket[MAX_FDS];
 
-static size_t sock_write(const void *buf, size_t len, int fd) {
+static ssize_t sock_write(const void *buf, size_t len, int fd) {
     int socket_handle = fd_socket[fd];
 
-    int wrote = socket_config->tcp_socket_write(socket_handle, buf, len);
+    ssize_t wrote = socket_config->tcp_socket_write(socket_handle, buf, len, 0);
     if (wrote == -2) {
         // TODO: error handling at sys_writev etc
         return -EAGAIN;
@@ -42,7 +42,7 @@ static size_t sock_write(const void *buf, size_t len, int fd) {
     return wrote;
 }
 
-static size_t sock_read(void *buf, size_t len, int fd) {
+static ssize_t sock_read(void *buf, size_t len, int fd) {
     // TODO: implement
     return 0;
 }
@@ -137,7 +137,7 @@ static long sys_socket_connect(va_list ap) {
     uint32_t addr = addr_in->sin_addr.s_addr;
     uint16_t port = ntohs(addr_in->sin_port);
 
-    return (long)socket_config->tcp_socket_connect(fd_socket[fd], addr, port);
+    return (long)socket_config->tcp_socket_connect(fd_socket[fd], addr, port, 0);
 }
 
 static long sys_sendto(va_list ap) {
@@ -147,7 +147,7 @@ static long sys_sendto(va_list ap) {
     int flags = va_arg(ap, int);
     (void)flags;
 
-    ssize_t wrote = socket_config->tcp_socket_write(fd_socket[sockfd], buf, len);
+    ssize_t wrote = socket_config->tcp_socket_write(fd_socket[sockfd], buf, len, 0);
     if (wrote == -2) {
         return -EAGAIN;
     }
@@ -167,7 +167,7 @@ static long sys_recvfrom(va_list ap) {
     (void)addrlen;
 
     int socket_handle = fd_socket[sockfd];
-    ssize_t read = socket_config->tcp_socket_recv(socket_handle, buf, len);
+    ssize_t read = socket_config->tcp_socket_recv(socket_handle, buf, len, 0);
 
     if (read == 0 && flags & MSG_DONTWAIT) {
         return -EAGAIN;
@@ -191,7 +191,7 @@ static long sys_accept(va_list ap) {
     struct sockaddr *sockaddr = va_arg(ap, struct sockaddr *);
     socklen_t *addrlen = va_arg(ap, socklen_t *);
 
-    int socket_handle = socket_config->tcp_socket_accept(fd_socket[sockfd]);
+    int socket_handle = socket_config->tcp_socket_accept(fd_socket[sockfd], 0);
     assert(socket_handle >= 0);
 
     int fd = posix_fd_allocate();
