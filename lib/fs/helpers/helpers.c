@@ -64,6 +64,7 @@ void fs_buffer_free(ptrdiff_t buffer) {
     assert(i < NUM_BUFFERS);
     assert(buffer_metadata[i].used);
     buffer_metadata[i].used = false;
+    memset(fs_share + buffer, 0, FS_BUFFER_SIZE);
 }
 
 void *fs_buffer_ptr(ptrdiff_t buffer) {
