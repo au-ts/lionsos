@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -50,27 +51,45 @@ static size_t fs_status_to_errno[FS_STATUS_NUM_STATUSES] = {
 };
 
 static ssize_t file_write(const void *buf, size_t len, int fd) {
-    // TODO: check buffer length can fit into fs write_buffer from fs_buffer_allocate
-    ptrdiff_t write_buffer;
-    fs_buffer_allocate(&write_buffer);
+    if (len == 0) {
+        return 0;
+    }
 
+    if (buf == NULL) {
+        return -EFAULT;
+    }
+
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    ptrdiff_t write_buffer;
+    int err = fs_buffer_allocate(&write_buffer);
+    if (err) {
+        return -ENOMEM;
+    }
+
+    // TODO: handle len > FS_BUFFER_SIZE
     memcpy(fs_buffer_ptr(write_buffer), buf, len);
 
     fs_cmpl_t completion;
-    fd_entry_t *fd_entry = posix_fd_entry(fd);
-    assert(fd_entry);
-    fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_WRITE,
-                                                .params.file_write = {
-                                                    .fd = fs_server_fd_map[fd],
-                                                    .offset = fd_entry->file_ptr,
-                                                    .buf.offset = write_buffer,
-                                                    .buf.size = len,
-                                                }});
+    err = fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_FILE_WRITE,
+                                                        .params.file_write = {
+                                                            .fd = fs_server_fd_map[fd],
+                                                            .offset = fd_entry->file_ptr,
+                                                            .buf.offset = write_buffer,
+                                                            .buf.size = len,
+                                                        } });
 
     fs_buffer_free(write_buffer);
 
+    if (err) {
+        return -ENOMEM;
+    }
+
     if (completion.status != FS_STATUS_SUCCESS) {
-        return -1;
+        return -fs_status_to_errno[completion.status];
     }
 
     ssize_t written = completion.data.file_write.len_written;
@@ -80,61 +99,82 @@ static ssize_t file_write(const void *buf, size_t len, int fd) {
 }
 
 static ssize_t file_read(void *buf, size_t len, int fd) {
+    if (len == 0) {
+        return 0;
+    }
+
+    if (buf == NULL) {
+        return -EFAULT;
+    }
+
+    fd_entry_t *fd_entry = posix_fd_entry(fd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
     ptrdiff_t read_buffer;
-    fs_buffer_allocate(&read_buffer);
+    int err = fs_buffer_allocate(&read_buffer);
+    if (err) {
+        return -ENOMEM;
+    }
 
     fs_cmpl_t completion;
-    fd_entry_t *fd_entry = posix_fd_entry(fd);
-    assert(fd_entry);
-    fs_command_blocking(&completion, (fs_cmd_t){.type = FS_CMD_FILE_READ,
-                                                .params.file_read = {
-                                                    .fd = fs_server_fd_map[fd],
-                                                    .offset = fd_entry->file_ptr,
-                                                    .buf.offset = read_buffer,
-                                                    // TODO: this length should probably be
-                                                    // max(len, FS_BUFFER_SIZE)
-                                                    .buf.size = len,
-                                                }});
+    // TODO: handle len > FS_BUFFER_SIZE
+    err = fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_FILE_READ,
+                                                        .params.file_read = {
+                                                            .fd = fs_server_fd_map[fd],
+                                                            .offset = fd_entry->file_ptr,
+                                                            .buf.offset = read_buffer,
+                                                            .buf.size = len,
+                                                        } });
+
+    if (err) {
+        fs_buffer_free(read_buffer);
+        return -ENOMEM;
+    }
 
     if (completion.status != FS_STATUS_SUCCESS) {
         fs_buffer_free(read_buffer);
-        return -1;
+        return -fs_status_to_errno[completion.status];
     }
 
-    ssize_t read = completion.data.file_read.len_read;
-    memcpy(buf, fs_buffer_ptr(read_buffer), read);
+    ssize_t bytes_read = completion.data.file_read.len_read;
+    memcpy(buf, fs_buffer_ptr(read_buffer), bytes_read);
     fs_buffer_free(read_buffer);
 
-    fd_entry->file_ptr += read;
+    fd_entry->file_ptr += bytes_read;
 
-    return read;
+    return bytes_read;
 }
 
 static int file_close(int fd) {
-    fs_cmpl_t completion;
     fd_entry_t *fd_entry = posix_fd_entry(fd);
-    assert(fd_entry);
+
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    fs_cmpl_t completion;
 
     if (fd_entry->flags & O_DIRECTORY) {
-        fs_command_blocking(&completion, (fs_cmd_t){
+        fs_command_blocking(&completion, (fs_cmd_t) {
                                              .type = FS_CMD_DIR_CLOSE,
                                              .params.dir_close.fd = fs_server_fd_map[fd],
                                          });
     } else {
-        fs_command_blocking(&completion, (fs_cmd_t){
+        fs_command_blocking(&completion, (fs_cmd_t) {
                                              .type = FS_CMD_FILE_CLOSE,
                                              .params.file_close.fd = fs_server_fd_map[fd],
                                          });
     }
 
-    if (completion.status != FS_STATUS_SUCCESS) {
-        return -1;
-    }
-
+    // Always release the fd even if there is a close error
     fs_server_fd_map[fd] = -1;
     memset(fd_path[fd], 0, MAX_PATH_LEN);
 
-    return 0;
+    posix_fd_deallocate(fd);
+
+    return -fs_status_to_errno[completion.status];
 }
 
 static int file_dup3(int oldfd, int newfd) {
