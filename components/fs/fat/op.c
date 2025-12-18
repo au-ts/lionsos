@@ -154,7 +154,11 @@ void handle_file_open(void) {
     FRESULT RET = f_open(file, filepath, fat_flag);
 
     // Error handling
-    if (RET != FR_OK) {
+    if (RET == FR_NO_FILE) {
+        file_free(file);
+        args->status = FS_STATUS_NO_FILE;
+        return;
+    } else if (RET != FR_OK) {
         file_free(file);
         args->status = FS_STATUS_ERROR;
         return;
@@ -429,7 +433,13 @@ void handle_file_remove(void) {
 
     FRESULT RET = f_unlink(dirpath);
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    if (RET == FR_NO_FILE) {
+        args->status = FS_STATUS_NO_FILE;
+    } else if (RET != FR_OK) {
+        args->status = FS_STATUS_ERROR;
+    } else {
+        args->status = FS_STATUS_SUCCESS;
+    }
 }
 
 void handle_file_truncate(void) {
