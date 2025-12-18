@@ -46,24 +46,19 @@ static ssize_t console_write(const void *data, size_t count, int fd) {
 static bool fd_active[MAX_FDS] = { [STDIN_FD] = true, [STDOUT_FD] = true, [STDERR_FD] = true };
 static fd_entry_t fd_table[MAX_FDS] = { [STDIN_FD] =
                                             (fd_entry_t) {
-                                           // STDIN
                                                 .flags = O_RDONLY,
                                             },
                                         [STDOUT_FD] =
                                             (fd_entry_t) {
-                                           // STDOUT
                                                 .write = console_write,
                                                 .flags = O_WRONLY,
                                             },
                                         [STDERR_FD] = (fd_entry_t) {
-                                           // STDERR
                                             .write = console_write,
                                             .flags = O_WRONLY,
                                         } };
 
-static inline bool posix_fd_is_valid(int fd) {
-    return fd >= 0 && fd < MAX_FDS && fd_active[fd];
-}
+static inline bool posix_fd_is_valid(int fd) { return fd >= 0 && fd < MAX_FDS && fd_active[fd]; }
 
 fd_entry_t *posix_fd_entry(int fd) {
     if (!posix_fd_is_valid(fd)) {
