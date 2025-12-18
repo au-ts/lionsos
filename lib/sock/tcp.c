@@ -55,6 +55,28 @@ typedef enum {
     socket_state_listening,
 } socket_state_t;
 
+static ssize_t lwip_err_to_errno[20] = {
+    [ERR_OK] = 0,
+
+    //lwIP errors are negative
+    [-ERR_MEM] = ENOMEM,
+    [-ERR_BUF] = ENOBUFS,
+    [-ERR_TIMEOUT] = ETIMEDOUT,
+    [-ERR_RTE] = EHOSTUNREACH,
+    [-ERR_INPROGRESS] = EINPROGRESS,
+    [-ERR_VAL] = EINVAL,
+    [-ERR_WOULDBLOCK] = EAGAIN,
+    [-ERR_USE] = EADDRINUSE,
+    [-ERR_ALREADY] = EALREADY,
+    [-ERR_ISCONN] = EISCONN,
+    [-ERR_CONN] = ENOTCONN,
+    [-ERR_IF] = ENODEV,
+    [-ERR_ABRT] = ECONNABORTED,
+    [-ERR_RST] = ECONNRESET,
+    [-ERR_CLSD] = ENOTCONN,
+    [-ERR_ARG] = EINVAL,
+};
+
 typedef struct {
     struct tcp_pcb *pending_pcbs[MAX_LISTEN_BACKLOG];
     int head;
@@ -65,12 +87,16 @@ typedef struct {
 typedef struct {
     struct tcp_pcb *sock_tpcb;
     socket_state_t state;
+    int last_error;
 
     char rx_buf[SOCKET_BUF_SIZE];
     ssize_t rx_head;
     ssize_t rx_len;
 
     accept_queue_t accept_queue;
+    microkit_cothread_sem_t connect_sem;
+    microkit_cothread_sem_t recv_sem;
+    microkit_cothread_sem_t send_sem;
 } socket_t;
 
 extern timer_client_config_t timer_config;
@@ -89,7 +115,17 @@ static void socket_err_func(void *arg, err_t err) {
         dlog("error %d with closed socket", err);
     } else {
         dlog("error %d with socket %d which is in state %d", err, socket_id(socket), socket->state);
+
+        socket_state_t prev_state = socket->state;
         socket->state = socket_state_error;
+        socket->last_error = lwip_err_to_errno[-err];
+
+        // Wake up any blocked connect() call
+        if (prev_state == socket_state_connecting) {
+            if (!microkit_cothread_semaphore_is_queue_empty(&socket->connect_sem)) {
+                microkit_cothread_semaphore_signal(&socket->connect_sem);
+            }
+        }
     }
 }
 
@@ -106,7 +142,7 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
         if (p != NULL) {
             int capacity = SOCKET_BUF_SIZE - socket->rx_len;
             if (capacity < p->tot_len) {
-                return ERR_MEM;
+                return -lwip_err_to_errno[-ERR_MEM];
             }
 
             int copied = 0, remaining = p->tot_len;
@@ -124,7 +160,11 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
             tcp_close(tpcb);
             tcp_arg(socket->sock_tpcb, NULL);
         }
-        return ERR_OK;
+        // Wake any blocked recv() call
+        if (!microkit_cothread_semaphore_is_queue_empty(&socket->recv_sem)) {
+            microkit_cothread_semaphore_signal(&socket->recv_sem);
+        }
+        return SOCK_SUCC;
     }
 
     case socket_state_allocated:
@@ -138,17 +178,26 @@ static err_t socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *
             socket->rx_head = 0;
             socket->rx_len = 0;
         }
-        return ERR_OK;
+        return SOCK_SUCC;
     }
 
     default:
         dlog("called on invalid socket state: %d (socket=%d)", socket->state, socket_index);
         assert(false);
-        return ERR_OK;
+        return SOCK_ERR;
     }
 }
 
-static err_t socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len) { return ERR_OK; }
+static err_t socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len) {
+    socket_t *socket = arg;
+    assert(socket != NULL);
+
+    if (!microkit_cothread_semaphore_is_queue_empty(&socket->send_sem)) {
+        microkit_cothread_semaphore_signal(&socket->send_sem);
+    }
+
+    return SOCK_SUCC;
+}
 
 static err_t socket_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
     socket_t *socket = arg;
@@ -162,7 +211,12 @@ static err_t socket_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
 
     tpcb->so_options |= SOF_KEEPALIVE;
 
-    return ERR_OK;
+    // Wake the connect() call
+    if (!microkit_cothread_semaphore_is_queue_empty(&socket->connect_sem)) {
+        microkit_cothread_semaphore_signal(&socket->connect_sem);
+    }
+
+    return SOCK_SUCC;
 }
 
 static int socket_allocate() {
@@ -176,7 +230,7 @@ static int socket_allocate() {
     }
     if (socket == NULL) {
         dlog("no free sockets");
-        return -1;
+        return -ENOMEM;
     }
 
     assert(socket->sock_tpcb == NULL);
@@ -196,35 +250,55 @@ static int tcp_socket_init(int index) {
 
     if (socket->sock_tpcb == NULL) {
         dlog("couldn't init socket");
-        return -1;
+        return -ENOMEM;
     }
 
     socket->sock_tpcb->so_options |= SOF_KEEPALIVE;
+
+    socket->accept_queue.head = 0;
+    socket->accept_queue.tail = 0;
+    microkit_cothread_semaphore_init(&socket->accept_queue.accept_sem);
+    microkit_cothread_semaphore_init(&socket->connect_sem);
+    microkit_cothread_semaphore_init(&socket->recv_sem);
+    microkit_cothread_semaphore_init(&socket->send_sem);
 
     tcp_err(socket->sock_tpcb, socket_err_func);
     tcp_arg(socket->sock_tpcb, socket);
 
     socket_refcount[index]++;
 
-    return 0;
+    return SOCK_SUCC;
 }
 
 static int tcp_socket_connect(int index, uint32_t addr, uint16_t port, int flags) {
-    (void)flags; // TODO: use for blocking/non-blocking behavior
     socket_t *sock = &sockets[index];
-    assert(sock->state == socket_state_bound);
+    assert(sock->state == socket_state_bound || sock->state == socket_state_allocated);
 
     ip_addr_t ipaddr;
     ip4_addr_set_u32(&ipaddr, addr);
 
+    sock->state = socket_state_connecting;
+
     err_t err = tcp_connect(sock->sock_tpcb, &ipaddr, port, socket_connected);
     if (err != ERR_OK) {
         dlog("error connecting (%d)", err);
-        return 1;
+        return -lwip_err_to_errno[-err];
     }
-    sock->state = socket_state_connecting;
 
-    return 0;
+    if (flags & O_NONBLOCK) {
+        return -EINPROGRESS;
+    }
+
+    // Block until connection established or error occurs
+    while (sock->state == socket_state_connecting) {
+        microkit_cothread_semaphore_wait(&sock->connect_sem);
+    }
+
+    if (sock->state == socket_state_connected) {
+        return SOCK_SUCC;
+    } else {
+        return -ECONNREFUSED;
+    }
 }
 
 static int tcp_socket_close_int(int index) {
@@ -235,10 +309,14 @@ static int tcp_socket_close_int(int index) {
     case socket_state_connected: {
         socket->state = socket_state_closing;
         int err = tcp_close(socket->sock_tpcb);
-        dlogp(err != ERR_OK, "error closing socket (%d)", err);
-        return err != ERR_OK;
+        if (err != ERR_OK) {
+            dlog("error closing socket (%d)", err);
+            return -lwip_err_to_errno[-err];
+        }
+        return SOCK_SUCC;
     }
 
+    case socket_state_allocated:
     case socket_state_bound:
     case socket_state_error:
     case socket_state_closed_by_peer: {
@@ -247,13 +325,13 @@ static int tcp_socket_close_int(int index) {
         socket->rx_head = 0;
         socket->rx_len = 0;
 
-        return 0;
+        return SOCK_SUCC;
     }
 
     default:
         dlog("called on invalid socket state: %d", socket->state);
         assert(false);
-        return 0;
+        return SOCK_ERR;
     }
 }
 
@@ -263,49 +341,72 @@ static int tcp_socket_close(int index) {
         return tcp_socket_close_int(index);
     }
 
-    return 0;
+    return SOCK_SUCC;
 }
 
 static int tcp_socket_dup(int index) {
     assert(socket_refcount[index] > 0);
     socket_refcount[index]++;
-    return 0;
+    return SOCK_SUCC;
 }
 
 static ssize_t tcp_socket_write(int index, const char *buf, size_t len, int flags) {
-    (void)flags; // TODO: use for blocking/non-blocking behavior
     socket_t *sock = &sockets[index];
-    int available = tcp_sndbuf(sock->sock_tpcb);
-
-    if (available == 0) {
-        dlog("no space available");
-        return -2;
+    // Handle write during connection establishment - nonblocking mode
+    if (sock->state == socket_state_connecting && flags & O_NONBLOCK) {
+        return -EAGAIN;
     }
-    ssize_t to_write = MIN(len, available);
+
+    if (sock->state != socket_state_connected) {
+        // Connection failed or socket in invalid state
+        if (sock->state == socket_state_error) {
+            return -sock->last_error ? -sock->last_error : -ENOTCONN;
+        }
+        return -ENOTCONN;
+    }
+
+    if (tcp_sndbuf(sock->sock_tpcb) == 0) {
+        if (flags & O_NONBLOCK) {
+            return -EAGAIN;
+        }
+        // Block until send buffer available
+        while (tcp_sndbuf(sock->sock_tpcb) == 0 && sock->state == socket_state_connected) {
+            microkit_cothread_semaphore_wait(&sock->send_sem);
+        }
+    }
+
+    ssize_t to_write = MIN(len, tcp_sndbuf(sock->sock_tpcb));
 
     assert(to_write >= 0 && to_write <= USHRT_MAX);
     err_t err = tcp_write(sock->sock_tpcb, (void *)buf, (u16_t)to_write, 1);
-    if (err == ERR_MEM) {
-        dlog("tcp_write returned ERR_MEM");
-        return -2;
-    } else if (err != ERR_OK) {
+    if (err != ERR_OK) {
         dlog("tcp_write failed (%d)", err);
-        return -1;
+        return -lwip_err_to_errno[-err];
     }
     err = tcp_output(sock->sock_tpcb);
     if (err != ERR_OK) {
         dlog("tcp_output failed (%d)", err);
-        return -1;
+        return -lwip_err_to_errno[-err];
     }
     return to_write;
 }
 
 static ssize_t tcp_socket_recv(int index, char *buf, size_t len, int flags) {
-    (void)flags; // TODO: use for blocking/non-blocking behavior
     socket_t *sock = &sockets[index];
     if (sock->state != socket_state_connected) {
-        return -1;
+        return -ENOTCONN;
     }
+
+    if (sock->rx_len == 0) {
+        if (flags & O_NONBLOCK) {
+            return -EAGAIN;
+        }
+        // Block until data received or connection closed
+        while (sock->rx_len == 0 && sock->state == socket_state_connected) {
+            microkit_cothread_semaphore_wait(&sock->recv_sem);
+        }
+    }
+
     ssize_t copied = 0;
     while (copied != len) {
         ssize_t to_copy = MIN(len - copied, MIN(sock->rx_len, SOCKET_BUF_SIZE - sock->rx_head));
@@ -330,14 +431,20 @@ static int tcp_socket_writable(int index) { return !net_queue_empty_free(&net_tx
 
 static int tcp_socket_hup(int index) { return sockets[index].state == socket_state_closed_by_peer; }
 
-static int tcp_socket_err(int index) { return sockets[index].state == socket_state_error; }
+static int tcp_socket_err(int index) {
+    socket_t *socket = &sockets[index];
+    if (socket->state == socket_state_error) {
+        return socket->last_error ? socket->last_error : ECONNRESET;
+    }
+    return 0;
+}
 
 static err_t tcp_socket_accept_cb(void *arg, struct tcp_pcb *newpcb, err_t err) {
     socket_t *listen_socket = (socket_t *)arg;
     assert(listen_socket->state == socket_state_listening);
 
     if (err != ERR_OK) {
-        return -1;
+        return -lwip_err_to_errno[-err];
     }
 
     accept_queue_t *q = &listen_socket->accept_queue;
@@ -345,19 +452,22 @@ static err_t tcp_socket_accept_cb(void *arg, struct tcp_pcb *newpcb, err_t err) 
     int next_head = (q->head + 1) % MAX_LISTEN_BACKLOG;
 
     if (next_head == q->tail) {
-        tcp_close(newpcb);
+        err = tcp_close(newpcb);
         // Wake the accept() call to handle the insufficient backlog case
-        // TODO: communicate errors properly
-        microkit_cothread_semaphore_signal(&listen_socket->accept_queue.accept_sem);
-        return ERR_MEM;
+        if (!microkit_cothread_semaphore_is_queue_empty(&listen_socket->accept_queue.accept_sem)) {
+            microkit_cothread_semaphore_signal(&listen_socket->accept_queue.accept_sem);
+        }
+        return -ENOMEM;
     }
 
     q->pending_pcbs[q->head] = newpcb;
     q->head = next_head;
 
-    microkit_cothread_semaphore_signal(&listen_socket->accept_queue.accept_sem);
+    if (!microkit_cothread_semaphore_is_queue_empty(&listen_socket->accept_queue.accept_sem)) {
+        microkit_cothread_semaphore_signal(&listen_socket->accept_queue.accept_sem);
+    }
 
-    return ERR_OK;
+    return SOCK_SUCC;
 }
 
 static int tcp_socket_listen(int index, int backlog) {
@@ -371,25 +481,26 @@ static int tcp_socket_listen(int index, int backlog) {
     socket->state = socket_state_listening;
     assert(socket->sock_tpcb->state == LISTEN);
 
-    socket->accept_queue.head = 0;
-    socket->accept_queue.tail = 0;
-    microkit_cothread_semaphore_init(&socket->accept_queue.accept_sem);
-
     tcp_accept(socket->sock_tpcb, tcp_socket_accept_cb);
 
-    return 0;
+    return SOCK_SUCC;
 }
 
 static int tcp_socket_accept(int listen_index, int flags) {
-    (void)flags; // TODO: use for blocking/non-blocking behavior
     assert(listen_index >= 0 && listen_index < MAX_SOCKETS);
     socket_t *listen_socket = &sockets[listen_index];
     assert(listen_socket->state == socket_state_listening);
 
     accept_queue_t *q = &listen_socket->accept_queue;
 
-    // Block until there is a pending connection, signalled by the accept callback
-    microkit_cothread_semaphore_wait(&(q->accept_sem));
+    // Check for pending connections
+    if (q->head == q->tail) {
+        if (flags & O_NONBLOCK) {
+            return -EAGAIN;
+        }
+        // Block until there is a pending connection
+        microkit_cothread_semaphore_wait(&(q->accept_sem));
+    }
 
     if (q->head == q->tail) {
         // Not enough backlog space
@@ -400,14 +511,21 @@ static int tcp_socket_accept(int listen_index, int flags) {
     q->tail = (q->tail + 1) % MAX_LISTEN_BACKLOG;
 
     int new_index = socket_allocate();
-    assert(new_index > 0 && new_index < MAX_SOCKETS);
+    if (new_index < 0) {
+        tcp_close(new_conn_pcb);
+        return new_index;
+    }
     socket_t *socket = &sockets[new_index];
 
     socket->sock_tpcb = new_conn_pcb;
+    socket->state = socket_state_connected;
     tcp_err(socket->sock_tpcb, socket_err_func);
     tcp_arg(socket->sock_tpcb, socket);
     tcp_sent(new_conn_pcb, socket_sent_callback);
     tcp_recv(new_conn_pcb, socket_recv_callback);
+
+    microkit_cothread_semaphore_init(&socket->recv_sem);
+    microkit_cothread_semaphore_init(&socket->send_sem);
 
     socket_refcount[new_index]++;
 
@@ -423,12 +541,12 @@ static int tcp_socket_bind(int index, uint32_t addr, uint16_t port) {
     err_t err = tcp_bind(sock->sock_tpcb, &ipaddr, port);
     if (err != ERR_OK) {
         dlog("error binding (%d)", err);
-        return 1;
+        return -lwip_err_to_errno[-err];
     }
 
     sock->state = socket_state_bound;
 
-    return 0;
+    return SOCK_SUCC;
 }
 
 static int tcp_socket_getsockname(int index, uint32_t *addr, uint16_t *port) {
@@ -437,7 +555,7 @@ static int tcp_socket_getsockname(int index, uint32_t *addr, uint16_t *port) {
     *addr = ip4_addr_get_u32(&socket->sock_tpcb->local_ip);
     *port = socket->sock_tpcb->local_port;
 
-    return 0;
+    return SOCK_SUCC;
 }
 
 static int tcp_socket_getpeername(int index, uint32_t *addr, uint16_t *port) {
@@ -446,24 +564,24 @@ static int tcp_socket_getpeername(int index, uint32_t *addr, uint16_t *port) {
     *addr = ip4_addr_get_u32(&socket->sock_tpcb->remote_ip);
     *port = socket->sock_tpcb->remote_port;
 
-    return 0;
+    return SOCK_SUCC;
 }
 
 libc_socket_config_t socket_config = (libc_socket_config_t) {
     .socket_allocate = socket_allocate,
     .tcp_socket_init = tcp_socket_init,
-    .tcp_socket_connect= tcp_socket_connect,
+    .tcp_socket_connect = tcp_socket_connect,
     .tcp_socket_close = tcp_socket_close,
     .tcp_socket_dup = tcp_socket_dup,
     .tcp_socket_write = tcp_socket_write,
     .tcp_socket_recv = tcp_socket_recv,
     .tcp_socket_readable = tcp_socket_readable,
     .tcp_socket_writable = tcp_socket_writable,
-    .tcp_socket_hup= tcp_socket_hup,
-    .tcp_socket_err= tcp_socket_err,
-    .tcp_socket_listen= tcp_socket_listen,
-    .tcp_socket_accept= tcp_socket_accept,
-    .tcp_socket_bind= tcp_socket_bind,
-    .tcp_socket_getsockname= tcp_socket_getsockname,
-    .tcp_socket_getpeername= tcp_socket_getpeername,
+    .tcp_socket_hup = tcp_socket_hup,
+    .tcp_socket_err = tcp_socket_err,
+    .tcp_socket_listen = tcp_socket_listen,
+    .tcp_socket_accept = tcp_socket_accept,
+    .tcp_socket_bind = tcp_socket_bind,
+    .tcp_socket_getsockname = tcp_socket_getsockname,
+    .tcp_socket_getpeername = tcp_socket_getpeername,
 };
