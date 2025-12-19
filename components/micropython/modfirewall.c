@@ -228,12 +228,13 @@ static mp_obj_t route_get_nth(mp_obj_t interface_idx_in,
             (fw_routing_entry_t
                 *)(webserver_state[interface_idx].routing_table->entries + route_idx);
 
-    mp_obj_t tuple[4];
+    mp_obj_t tuple[5];
     tuple[0] = mp_obj_new_int_from_uint(route_idx);
     tuple[1] = mp_obj_new_int_from_uint(entry->ip);
     tuple[2] = mp_obj_new_int_from_uint(entry->subnet);
     tuple[3] = mp_obj_new_int_from_uint(entry->next_hop);
-    return mp_obj_new_tuple(4, tuple);
+    tuple[4] = mp_obj_new_int_from_uint(entry->interface);
+    return mp_obj_new_tuple(5, tuple);
 
     sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INTERNAL_ERROR]);
     mp_raise_OSError(OS_ERR_INTERNAL_ERROR);
