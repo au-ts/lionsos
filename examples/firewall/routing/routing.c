@@ -59,7 +59,7 @@ static bool tx_webserver; /* Packet has been transmitted to the webserver */
 static bool returned; /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp; /* Arp request has been enqueued */
 static bool notify_icmp; /* Request has been enqueued to ICMP module */
-
+static bool ping_response_enabled = false; /* Whether to reply to ICMP echo requests */
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
@@ -177,6 +177,70 @@ static void route(void)
             uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
             eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
             ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
+
+            /* --- Handle ICMP echo request to firewall's own IP --- */
+            if (ping_response_enabled &&
+                eth_hdr->ethtype == htons(ETH_TYPE_IP) &&
+                ip_hdr->protocol == IPV4_PROTO_ICMP &&
+                ip_hdr->dst_ip == router_config.in_ip) {
+
+                icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
+                if (icmp_hdr->type == ICMP_ECHO_REQ) {
+                    /* Extract echo id and sequence from the ICMP header */
+                    uint8_t *echo_data = (uint8_t *)(pkt_vaddr + ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN);
+                    uint16_t echo_id = (echo_data[0] << 8) | echo_data[1];
+                    uint16_t echo_seq = (echo_data[2] << 8) | echo_data[3];
+
+                    /* Calculate payload length */
+                    uint16_t icmp_total_len = htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr);
+                    uint16_t payload_len = icmp_total_len - ICMP_COMMON_HDR_LEN - 4; /* 4 bytes for id+seq */
+                    if (payload_len > FW_ICMP_ECHO_PAYLOAD_LEN) {
+                        payload_len = FW_ICMP_ECHO_PAYLOAD_LEN;
+                    }
+
+                    /* Build ICMP echo reply request for the ICMP module */
+                    icmp_req_t req = {0};
+                    req.type = ICMP_ECHO_REPLY;
+                    req.code = 0;
+                    req.echo_id = echo_id;
+                    req.echo_seq = echo_seq;
+                    req.payload_len = payload_len;
+
+                    /* Copy ethernet header (swap src/dst for reply) */
+                    memcpy(&req.eth_hdr.ethdst_addr, eth_hdr->ethsrc_addr, ETH_HWADDR_LEN);
+                    memcpy(&req.eth_hdr.ethsrc_addr, eth_hdr->ethdst_addr, ETH_HWADDR_LEN);
+                    req.eth_hdr.ethtype = eth_hdr->ethtype;
+
+                    /* Copy IP header (swap src/dst for reply) */
+                    memcpy(&req.ip_hdr, ip_hdr, IPV4_HDR_LEN_MIN);
+                    req.ip_hdr.src_ip = ip_hdr->dst_ip;
+                    req.ip_hdr.dst_ip = ip_hdr->src_ip;
+
+                    /* Copy payload */
+                    memcpy(req.data, echo_data + 4, payload_len);
+
+                    /* Enqueue to ICMP module */
+                    err = fw_enqueue(&icmp_queue, &req);
+                    if (!err) {
+                        notify_icmp = true;
+                        if (FW_DEBUG_OUTPUT) {
+                            sddf_printf("%sRouter queued ICMP echo reply for %s (id=%u, seq=%u)\n",
+                                fw_frmt_str[router_config.interface],
+                                ipaddr_to_string(req.ip_hdr.dst_ip, ip_addr_buf0),
+                                echo_id, echo_seq);
+                        }
+                    } else {
+                        sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP echo reply!\n",
+                            fw_frmt_str[router_config.interface]);
+                    }
+
+                    /* Return the original buffer */
+                    err = fw_enqueue(&rx_free, &buffer);
+                    assert(!err);
+                    returned = true;
+                    continue;
+                }
+            }
 
             /*
              * Decrement the TTL field. If it reaches 0 protocol is
@@ -418,6 +482,16 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         }
 
         microkit_mr_set(ROUTER_RET_ERR, err);
+        return microkit_msginfo_new(0, 1);
+    }
+    case FW_SET_PING_RESPONSE: {
+        ping_response_enabled = (bool)seL4_GetMR(0);
+        if (FW_DEBUG_OUTPUT) {
+            sddf_printf("%sRouter ping response %s\n",
+                fw_frmt_str[router_config.interface],
+                ping_response_enabled ? "enabled" : "disabled");
+        }
+        seL4_SetMR(0, 0); /* success */
         return microkit_msginfo_new(0, 1);
     }
     default:
