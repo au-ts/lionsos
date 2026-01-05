@@ -78,7 +78,7 @@ static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
 
     /* Copy first bytes of data if applicable */
     uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
-    memcpy(req.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
+    memcpy(req.dest.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
 
     int err = fw_enqueue(&icmp_queue, &req);
     if (!err) {
@@ -86,6 +86,36 @@ static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
     }
 
     return err;
+}
+
+static void enquue_icmp_ping(net_buff_desc_t buffer,
+                            uint16_t echo_id,
+                            uint16_t echo_seq,
+                            uint16_t payload_len)
+{
+    icmp_req_t req = {0};
+    req.type = ICMP_ECHO_REPLY;
+    req.code = 0;
+    req.echo.echo_id = echo_id;
+    req.echo.echo_seq = echo_seq;
+    req.echo.payload_len = payload_len;
+
+    /* Copy ethernet header into ICMP request */
+    uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
+    memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
+
+    /* Copy IP header into ICMP request */
+    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
+    memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
+
+    /* Copy payload */
+    uint8_t *payload_data = (uint8_t *)(pkt_vaddr + ICMP_ECHO_OFFSET + sizeof(icmp_echo_t));
+    memcpy(req.echo.data, payload_data, payload_len);
+
+    int err = fw_enqueue(&icmp_queue, &req);
+    if (!err) {
+        notify_icmp = true;
+    }
 }
 
 static void transmit_packet(net_buff_desc_t buffer,
@@ -186,54 +216,18 @@ static void route(void)
 
                 icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
                 if (icmp_hdr->type == ICMP_ECHO_REQ) {
-                    /* Extract echo id and sequence from the ICMP header */
-                    uint8_t *echo_data = (uint8_t *)(pkt_vaddr + ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN);
-                    uint16_t echo_id = (echo_data[0] << 8) | echo_data[1];
-                    uint16_t echo_seq = (echo_data[2] << 8) | echo_data[3];
+                    /* Extract echo id and sequence from the ICMP echo header */
+                    icmp_echo_t *echo_hdr = (icmp_echo_t *)(pkt_vaddr + ICMP_ECHO_OFFSET);
+                    uint16_t echo_id = ntohs(echo_hdr->id);
+                    uint16_t echo_seq = ntohs(echo_hdr->seq);
 
                     /* Calculate payload length */
                     uint16_t icmp_total_len = htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr);
-                    uint16_t payload_len = icmp_total_len - ICMP_COMMON_HDR_LEN - 4; /* 4 bytes for id+seq */
+                    uint16_t payload_len = icmp_total_len - ICMP_COMMON_HDR_LEN - sizeof(icmp_echo_t);
                     if (payload_len > FW_ICMP_ECHO_PAYLOAD_LEN) {
                         payload_len = FW_ICMP_ECHO_PAYLOAD_LEN;
                     }
-
-                    /* Build ICMP echo reply request for the ICMP module */
-                    icmp_req_t req = {0};
-                    req.type = ICMP_ECHO_REPLY;
-                    req.code = 0;
-                    req.echo_id = echo_id;
-                    req.echo_seq = echo_seq;
-                    req.payload_len = payload_len;
-
-                    /* Copy ethernet header (swap src/dst for reply) */
-                    memcpy(&req.eth_hdr.ethdst_addr, eth_hdr->ethsrc_addr, ETH_HWADDR_LEN);
-                    memcpy(&req.eth_hdr.ethsrc_addr, eth_hdr->ethdst_addr, ETH_HWADDR_LEN);
-                    req.eth_hdr.ethtype = eth_hdr->ethtype;
-
-                    /* Copy IP header (swap src/dst for reply) */
-                    memcpy(&req.ip_hdr, ip_hdr, IPV4_HDR_LEN_MIN);
-                    req.ip_hdr.src_ip = ip_hdr->dst_ip;
-                    req.ip_hdr.dst_ip = ip_hdr->src_ip;
-
-                    /* Copy payload */
-                    memcpy(req.data, echo_data + 4, payload_len);
-
-                    /* Enqueue to ICMP module */
-                    err = fw_enqueue(&icmp_queue, &req);
-                    if (!err) {
-                        notify_icmp = true;
-                        if (FW_DEBUG_OUTPUT) {
-                            sddf_printf("%sRouter queued ICMP echo reply for %s (id=%u, seq=%u)\n",
-                                fw_frmt_str[router_config.interface],
-                                ipaddr_to_string(req.ip_hdr.dst_ip, ip_addr_buf0),
-                                echo_id, echo_seq);
-                        }
-                    } else {
-                        sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP echo reply!\n",
-                            fw_frmt_str[router_config.interface]);
-                    }
-
+                    enquue_icmp_ping(buffer, echo_id, echo_seq, payload_len);
                     /* Return the original buffer */
                     err = fw_enqueue(&rx_free, &buffer);
                     assert(!err);
