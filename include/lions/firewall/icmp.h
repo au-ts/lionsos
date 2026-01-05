@@ -78,18 +78,56 @@ typedef struct __attribute__((__packed__)) icmp_dest {
 /* Total length of ICMP destination unreachable header */
 #define ICMP_DEST_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_dest_t))
 
+/* ----------------- 8 - Echo Request / 0 - Echo Reply ---------------------------*/
+
+/* ICMP echo request/reply header fields (following common header) */
+typedef struct __attribute__((__packed__)) icmp_echo {
+    /* Identifier to match requests with replies */
+    uint16_t id;
+    /* Sequence number */
+    uint16_t seq;
+    /* Payload data follows */
+} icmp_echo_t;
+
+/* Offset of the start of the ICMP echo sub-header */
+#define ICMP_ECHO_OFFSET (ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN)
+
+/* Maximum payload length for ICMP echo messages */
+#define FW_ICMP_ECHO_PAYLOAD_LEN 56
+
 /* ----------------- Firewall Data Types ---------------------------*/
+
+/* ICMP destination unreachable request data */
+typedef struct {
+    /* first 8 bytes of data from source packet */
+    uint8_t data[FW_ICMP_SRC_DATA_LEN];
+} icmp_req_dest_t;
+
+/* ICMP echo request/reply data */
+typedef struct {
+    /* Identifier to match requests with replies */
+    uint16_t echo_id;
+    /* Sequence number */
+    uint16_t echo_seq;
+    /* Payload length */
+    uint16_t payload_len;
+    /* Echo payload data */
+    uint8_t data[FW_ICMP_ECHO_PAYLOAD_LEN];
+} icmp_req_echo_t;
 
 /* Data type of ICMP queues used to request transmission of ICMP packets */
 typedef struct icmp_req {
     /* type of ICMP packet to send */
     uint8_t type;
-    /* tode of ICMP packet to sent */
+    /* code of ICMP packet to send */
     uint8_t code;
     /* ethernet header of request source packet */
     eth_hdr_t eth_hdr;
     /* header of source IP packet */
     ipv4_hdr_t ip_hdr;
-    /* first 8 bytes of data from source packet */
-    uint8_t data[FW_ICMP_SRC_DATA_LEN];
+    /* Type-specific data */
+    union {
+        icmp_req_dest_t dest;
+        icmp_req_echo_t echo;
+    };
 } icmp_req_t;
