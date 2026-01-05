@@ -39,6 +39,21 @@ static inline uint32_t htonl(uint32_t n)
 #endif
 }
 
+/**
+ * Convert a 16 bit unsigned from network byte order to host byte order.
+ *
+ * @param n Integer represented in network byte order.
+ * @return Integer represented in host byte order.
+ */
+static inline uint16_t ntohs(uint16_t n)
+{
+#if BYTE_ORDER == BIG_ENDIAN
+    return n;
+#else
+    return (n & 0xff) << 8 | (n & 0xff00) >> 8;
+#endif
+}
+
 /* Subnet value of N means IPs must match on highest N bits. IP addresses are
 stored big-endian, so mask byte order must be swapped for subnet match. */
 #define subnet_mask(n) htonl((uint32_t)(0xffffffffUL << (32 - (n))))

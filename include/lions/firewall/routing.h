@@ -58,6 +58,7 @@ typedef enum {
 /* PP call parameters for webserver to call router and update routing table */
 #define FW_ADD_ROUTE 0
 #define FW_DEL_ROUTE 1
+#define FW_SET_PING_RESPONSE 2
 
 typedef enum {
     ROUTER_ARG_ROUTE_ID = 0,
