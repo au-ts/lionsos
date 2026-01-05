@@ -51,15 +51,8 @@ static void generate_icmp(void)
 
             /* Construct ethernet header */
             eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
-            if (req.type == ICMP_ECHO_REPLY) {
-                /* For echo reply, router already prepared the correct MAC addresses */
-                memcpy(&eth_hdr->ethdst_addr, &req.eth_hdr.ethdst_addr, ETH_HWADDR_LEN);
-                memcpy(&eth_hdr->ethsrc_addr, &req.eth_hdr.ethsrc_addr, ETH_HWADDR_LEN);
-            } else {
-                /* For other ICMP types (e.g., dest unreachable), swap addresses */
-                memcpy(&eth_hdr->ethdst_addr, &req.eth_hdr.ethsrc_addr, ETH_HWADDR_LEN);
-                memcpy(&eth_hdr->ethsrc_addr, &req.eth_hdr.ethdst_addr, ETH_HWADDR_LEN);
-            }
+            memcpy(&eth_hdr->ethdst_addr, &req.eth_hdr.ethsrc_addr, ETH_HWADDR_LEN);
+            memcpy(&eth_hdr->ethsrc_addr, &req.eth_hdr.ethdst_addr, ETH_HWADDR_LEN);
             eth_hdr->ethtype = htons(ETH_TYPE_IP);
 
             /* Construct IP packet */
@@ -93,28 +86,28 @@ static void generate_icmp(void)
             /* Handle each ICMP type separately */
             switch (req.type) {
                 case ICMP_ECHO_REPLY: {
-                    /* Destination is the original sender (already swapped in req) */
-                    ip_hdr->dst_ip = req.ip_hdr.dst_ip;
+                    /* Destination is the sender*/
+                    ip_hdr->dst_ip = req.ip_hdr.src_ip;
 
                     /* Total length of ICMP echo reply IP packet */
-                    uint16_t icmp_payload_len = req.payload_len;
+                    uint16_t icmp_payload_len = req.echo.payload_len;
                     ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_COMMON_HDR_LEN + 4 + icmp_payload_len);
 
                     /* Construct ICMP echo reply: 4 bytes (id + seq) + payload */
                     uint8_t *icmp_data = (uint8_t *)(pkt_vaddr + ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN);
                     /* Echo identifier (network byte order) */
-                    icmp_data[0] = (req.echo_id >> 8) & 0xFF;
-                    icmp_data[1] = req.echo_id & 0xFF;
+                    icmp_data[0] = (req.echo.echo_id >> 8) & 0xFF;
+                    icmp_data[1] = req.echo.echo_id & 0xFF;
                     /* Echo sequence number (network byte order) */
-                    icmp_data[2] = (req.echo_seq >> 8) & 0xFF;
-                    icmp_data[3] = req.echo_seq & 0xFF;
+                    icmp_data[2] = (req.echo.echo_seq >> 8) & 0xFF;
+                    icmp_data[3] = req.echo.echo_seq & 0xFF;
                     /* Copy payload */
-                    memcpy(icmp_data + 4, req.data, icmp_payload_len);
+                    memcpy(icmp_data + 4, req.echo.data, icmp_payload_len);
 
                     if (FW_DEBUG_OUTPUT) {
                         sddf_printf("ICMP module: echo reply to %s id=%u seq=%u len=%u\n",
                             ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
-                            req.echo_id, req.echo_seq, icmp_payload_len);
+                            req.echo.echo_id, req.echo.echo_seq, icmp_payload_len);
                     }
                     break;
                 }
@@ -144,7 +137,7 @@ static void generate_icmp(void)
                     // TODO: If the source packet did not contain 8 bytes of
                     // data, should the rest be zero-filled?
                     uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(req.ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
-                    memcpy(&icmp_dest->data, req.data, to_copy);
+                    memcpy(&icmp_dest->data, req.dest.data, to_copy);
                     break;
 
                 default:
