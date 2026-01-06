@@ -32,7 +32,11 @@ typedef enum {
     /* rule id does not point to a valid entry, or is the default action rule id */
     FILTER_ERR_INVALID_RULE_ID,
     /* unsupported action */
-    FILTER_ERR_UNSUPPORTED_ACTION
+    FILTER_ERR_UNSUPPORTED_ACTION,
+    /* instance pointer is not within instance regions */
+    FILTER_ERR_INVALID_INSTANCE,
+    /* instance is in an invalid state */
+    FILTER_ERR_INVALID_INSTANCE_STATE
 } fw_filter_err_t;
 
 static const char *fw_filter_err_str[] = {
