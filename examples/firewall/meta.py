@@ -33,7 +33,6 @@ subnet_bits = [12, 24]  # External network, Internal network
 
 ips = ["172.16.2.1", "192.168.1.1"]  # External network, Internal network
 
-
 @dataclass
 class Board:
     name: str
@@ -557,25 +556,27 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     )
     common_pds.append(icmp_module)
 
+    # Courtney: Not related to the TCP tracking but this was a fix I forgot to
+    # add earlier!
     networks[ext_net]["filters"] = {}
-    networks[ext_net]["filters"][0x01] = ProtectionDomain(
+    networks[ext_net]["filters"][ip_protocol_icmp] = ProtectionDomain(
         "icmp_filter0", "icmp_filter0.elf", priority=90, budget=20000
     )
-    networks[ext_net]["filters"][0x11] = ProtectionDomain(
+    networks[ext_net]["filters"][ip_protocol_udp] = ProtectionDomain(
         "udp_filter0", "udp_filter0.elf", priority=91, budget=20000
     )
-    networks[ext_net]["filters"][0x06] = ProtectionDomain(
+    networks[ext_net]["filters"][ip_protocol_tcp] = ProtectionDomain(
         "tcp_filter0", "tcp_filter0.elf", priority=92, budget=20000
     )
 
     networks[int_net]["filters"] = {}
-    networks[int_net]["filters"][0x01] = ProtectionDomain(
+    networks[int_net]["filters"][ip_protocol_icmp] = ProtectionDomain(
         "icmp_filter1", "icmp_filter1.elf", priority=93, budget=20000
     )
-    networks[int_net]["filters"][0x11] = ProtectionDomain(
+    networks[int_net]["filters"][ip_protocol_udp] = ProtectionDomain(
         "udp_filter1", "udp_filter1.elf", priority=91, budget=20000
     )
-    networks[int_net]["filters"][0x06] = ProtectionDomain(
+    networks[int_net]["filters"][ip_protocol_tcp] = ProtectionDomain(
         "tcp_filter1", "tcp_filter1.elf", priority=92, budget=20000
     )
 
@@ -933,16 +934,24 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         router_webserver_conn[0]
     )
 
-    # Add ICMP module
-
     # Create filter instance regions
     for protocol, filter_pd in networks[int_net]["filters"].items():
         mirror_filter = networks[ext_net]["filters"][protocol]
+
+        # Courtney: Unlike the other filters which only require read-only
+        # permissions to inspect their neighbour's instance regions, the TCP
+        # filters need write permission so they can update the state of the
+        # connection as TCP syn-fin-etc packets are received
+        if protocol == ip_protocol_tcp:
+            perms2 = "rw"
+        else:
+            perms2 = "r"
+
         int_instances = fw_shared_region(
             filter_pd,
             mirror_filter,
             "rw",
-            "r",
+            perms2,
             "instances",
             filter_instances_region.region_size,
         )
@@ -950,17 +959,17 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             mirror_filter,
             filter_pd,
             "rw",
-            "r",
+            perms2,
             "instances",
             filter_instances_region.region_size,
         )
 
-        networks[int_net]["configs"][filter_pd].internal_instances = int_instances[0]
-        networks[int_net]["configs"][filter_pd].external_instances = ext_instances[1]
-        networks[ext_net]["configs"][mirror_filter].internal_instances = ext_instances[
+        networks[int_net]["configs"][filter_pd].local_instances = int_instances[0]
+        networks[int_net]["configs"][filter_pd].extern_instances = ext_instances[1]
+        networks[ext_net]["configs"][mirror_filter].local_instances = ext_instances[
             0
         ]
-        networks[ext_net]["configs"][mirror_filter].external_instances = int_instances[
+        networks[ext_net]["configs"][mirror_filter].extern_instances = int_instances[
             1
         ]
 

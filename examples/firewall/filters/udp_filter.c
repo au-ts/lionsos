@@ -209,6 +209,6 @@ void init(void)
         sizeof(net_buff_desc_t),  filter_config.router.capacity);
 
     fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr, filter_config.webserver.rules_capacity,
-        filter_config.internal_instances.vaddr, filter_config.external_instances.vaddr, filter_config.instances_capacity,
+        filter_config.local_instances.vaddr, filter_config.extern_instances.vaddr, filter_config.instances_capacity,
         (fw_action_t)filter_config.webserver.default_action);
 }
