@@ -88,11 +88,23 @@ static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
     return err;
 }
 
-static void enquue_icmp_ping(net_buff_desc_t buffer,
-                            uint16_t echo_id,
-                            uint16_t echo_seq,
-                            uint16_t payload_len)
+static void enquue_icmp_ping(net_buff_desc_t buffer)
 {
+    uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
+    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
+
+    /* Extract echo id and sequence from the ICMP echo header */
+    icmp_echo_t *echo_hdr = (icmp_echo_t *)(pkt_vaddr + ICMP_ECHO_OFFSET);
+    uint16_t echo_id = ntohs(echo_hdr->id);
+    uint16_t echo_seq = ntohs(echo_hdr->seq);
+
+    /* Calculate payload length */
+    uint16_t icmp_total_len = htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr);
+    uint16_t payload_len = icmp_total_len - ICMP_COMMON_HDR_LEN - sizeof(icmp_echo_t);
+    if (payload_len > FW_ICMP_ECHO_PAYLOAD_LEN) {
+        payload_len = FW_ICMP_ECHO_PAYLOAD_LEN;
+    }
+
     icmp_req_t req = {0};
     req.type = ICMP_ECHO_REPLY;
     req.code = 0;
@@ -101,11 +113,9 @@ static void enquue_icmp_ping(net_buff_desc_t buffer,
     req.echo.payload_len = payload_len;
 
     /* Copy ethernet header into ICMP request */
-    uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
     memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
 
     /* Copy IP header into ICMP request */
-    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
     memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
 
     /* Copy payload */
@@ -216,18 +226,7 @@ static void route(void)
 
                 icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
                 if (icmp_hdr->type == ICMP_ECHO_REQ) {
-                    /* Extract echo id and sequence from the ICMP echo header */
-                    icmp_echo_t *echo_hdr = (icmp_echo_t *)(pkt_vaddr + ICMP_ECHO_OFFSET);
-                    uint16_t echo_id = ntohs(echo_hdr->id);
-                    uint16_t echo_seq = ntohs(echo_hdr->seq);
-
-                    /* Calculate payload length */
-                    uint16_t icmp_total_len = htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr);
-                    uint16_t payload_len = icmp_total_len - ICMP_COMMON_HDR_LEN - sizeof(icmp_echo_t);
-                    if (payload_len > FW_ICMP_ECHO_PAYLOAD_LEN) {
-                        payload_len = FW_ICMP_ECHO_PAYLOAD_LEN;
-                    }
-                    enquue_icmp_ping(buffer, echo_id, echo_seq, payload_len);
+                    enquue_icmp_ping(buffer);
                     /* Return the original buffer */
                     err = fw_enqueue(&rx_free, &buffer);
                     assert(!err);
