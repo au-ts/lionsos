@@ -88,7 +88,7 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
 
             /* Total length of ICMP echo reply IP packet */
             uint16_t icmp_payload_len = req->echo.payload_len;
-            ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_COMMON_HDR_LEN + 4 + icmp_payload_len);
+            ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_ECHO_LEN);
 
             /* Construct ICMP echo reply: 4 bytes (id + seq) + payload */
             uint8_t *icmp_data = (uint8_t *)(pkt_vaddr + ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN);
@@ -160,14 +160,16 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
     icmp_hdr->check = 0;
     ip_hdr->check = 0;
 
+    uint16_t ip_tot_len = ntohs(ip_hdr->tot_len);
+    
     #ifndef NETWORK_HW_HAS_CHECKSUM
     /* ICMP checksum is calculated over entire ICMP packet */
-    icmp_hdr->check = fw_internet_checksum(icmp_hdr, ntohs(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
+    icmp_hdr->check = fw_internet_checksum(icmp_hdr, ip_tot_len - IPV4_HDR_LEN_MIN);
     /* IP checksum is calculated only over IP header */
     ip_hdr->check = fw_internet_checksum(ip_hdr, IPV4_HDR_LEN_MIN);
     #endif
 
-    buffer.len = ntohs(ip_hdr->tot_len) + ETH_HDR_LEN;
+    buffer.len = ip_tot_len + ETH_HDR_LEN;
     err = net_enqueue_active(&net_queue[out_int], buffer);
     transmitted[out_int] = true;
     assert(!err);
