@@ -31,7 +31,7 @@ fw_queue_t filter_icmp_queue[FW_MAX_FILTERS];
 
 static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmitted)
 {
-    if (req->type != ICMP_DEST_UNREACHABLE && req->type != ICMP_ECHO_REPLY) {
+    if (req->type != ICMP_DEST_UNREACHABLE && req->type != ICMP_ECHO_REPLY && req->type != ICMP_TTL_EXCEED) {
         sddf_printf("ICMP module: unsupported ICMP type %u!\n", req->type);
         return false;
     }
@@ -128,10 +128,29 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
             memcpy(&icmp_dest->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
 
             /* Copy first bytes of data if applicable */
-            uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(req->ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
+            uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
             memcpy(&icmp_dest->data, req->dest.data, to_copy);
             break;
+        case ICMP_TTL_EXCEED:
+            /* Destination is original packet's source */
+            ip_hdr->dst_ip = req->ip_hdr.src_ip;
 
+            /* Total length of ICMP time exceeded IP packet */
+            ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_TIME_EXCEEDED_LEN);
+
+            /* Construct ICMP time exceeded packet */
+            icmp_time_exceeded_t *icmp_time_exceeded = (icmp_time_exceeded_t *)(pkt_vaddr + ICMP_TIME_EXCEEDED_OFFSET);
+
+            /* Unused must be set to 0 */
+            icmp_time_exceeded->unused = 0;
+            
+            /* Copy IP header */
+            memcpy(&icmp_time_exceeded->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
+            
+            /* Copy first bytes of data if applicable */
+            uint16_t to_copy_te = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
+            memcpy(&icmp_time_exceeded->data, req->time_exceeded.data, to_copy_te);
+            break;
         default:
             sddf_printf("ICMP module tried to construct an unsupported ICMP type %u packet!\n", req->type);
             return false;
@@ -143,12 +162,12 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
 
     #ifndef NETWORK_HW_HAS_CHECKSUM
     /* ICMP checksum is calculated over entire ICMP packet */
-    icmp_hdr->check = fw_internet_checksum(icmp_hdr, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
+    icmp_hdr->check = fw_internet_checksum(icmp_hdr, ntohs(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
     /* IP checksum is calculated only over IP header */
     ip_hdr->check = fw_internet_checksum(ip_hdr, IPV4_HDR_LEN_MIN);
     #endif
 
-    buffer.len = htons(ip_hdr->tot_len) + ETH_HDR_LEN;
+    buffer.len = ntohs(ip_hdr->tot_len) + ETH_HDR_LEN;
     err = net_enqueue_active(&net_queue[out_int], buffer);
     transmitted[out_int] = true;
     assert(!err);
