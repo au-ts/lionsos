@@ -52,6 +52,9 @@ typedef struct __attribute__((__packed__)) icmp_hdr {
 #define ICMP_NET_ADMIN_PROHIBITED 9
 #define ICMP_HOST_ADMIN_PROHIBITED 10
 
+/* ICMP Time Exceeded sub-type codes */
+#define ICMP_TIME_EXCEEDED_TTL 0
+#define ICMP_TIME_EXCEEDED_FRAG 1
 /* ----------------- 3 - Destination Unreachable ---------------------------*/
 
 /* Default number of bytes included from source packet in destination
@@ -95,6 +98,21 @@ typedef struct __attribute__((__packed__)) icmp_echo {
 /* Maximum payload length for ICMP echo messages */
 #define FW_ICMP_ECHO_PAYLOAD_LEN 56
 
+/* ----------------- 11 - Time Exceeded ---------------------------*/
+/* ICMP Time Exceeded header fields*/
+typedef struct __attribute__((__packed__)) icmp_time_exceeded {
+    /* unused, must be set to 0 */
+    uint32_t unused;
+    /* IP header of source packet */
+    ipv4_hdr_t ip_hdr;
+    /* First 8 bytes of data from source packet */
+    uint8_t data[FW_ICMP_SRC_DATA_LEN];
+} icmp_time_exceeded_t;
+
+#define ICMP_TIME_EXCEEDED_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_time_exceeded_t))
+
+#define ICMP_TIME_EXCEEDED_OFFSET (ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN)
+
 /* ----------------- Firewall Data Types ---------------------------*/
 
 /* ICMP destination unreachable request data */
@@ -115,6 +133,12 @@ typedef struct {
     uint8_t data[FW_ICMP_ECHO_PAYLOAD_LEN];
 } icmp_req_echo_t;
 
+/* ICMP time exceeded data */
+typedef struct {
+    /* first 8 bytes of data from source packet */
+    uint8_t data[FW_ICMP_SRC_DATA_LEN];
+} icmp_req_time_exceeded_t;
+
 /* Data type of ICMP queues used to request transmission of ICMP packets */
 typedef struct icmp_req {
     /* type of ICMP packet to send */
@@ -129,5 +153,6 @@ typedef struct icmp_req {
     union {
         icmp_req_dest_t dest;
         icmp_req_echo_t echo;
+        icmp_req_time_exceeded_t time_exceeded;
     };
 } icmp_req_t;
