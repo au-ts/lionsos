@@ -17,6 +17,7 @@
 #include <lions/firewall/ip.h>
 #include <lions/firewall/udp.h>
 #include <lions/firewall/queue.h>
+#include <lions/firewall/icmp.h>
 
 __attribute__((__section__(".fw_filter_config"))) fw_filter_config_t filter_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
@@ -25,9 +26,36 @@ __attribute__((__section__(".net_client_config"))) net_client_config_t net_confi
 net_queue_handle_t rx_queue;
 net_queue_handle_t tx_queue;
 fw_queue_t router_queue;
+fw_queue_t icmp_queue;
 
 /* Holds filtering rules and state */
 fw_filter_state_t filter_state;
+
+/* ICMP request queue to send unreachable messages to ICMP module */
+static bool notify_icmp;
+
+static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
+{
+    icmp_req_t req = {0};
+    req.type = ICMP_DEST_UNREACHABLE;
+    req.code = ICMP_DEST_PORT_UNREACHABLE; // Port unreachable for UDP
+
+    uintptr_t pkt_vaddr = (uintptr_t)(net_config.rx_data.vaddr + buffer.io_or_offset);
+    memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
+    
+    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
+    memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
+    
+    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
+    memcpy(req.dest.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
+
+    int err = fw_enqueue(&icmp_queue, &req);
+    if (!err) {
+        notify_icmp = true;
+    }
+
+    return err;
+}
 
 static void filter(void)
 {
@@ -89,6 +117,7 @@ static void filter(void)
                             fw_frmt_str[filter_config.interface], rule_id,
                             ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
                             ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
+                            
                     }
                 }
             } else if (action == FILTER_ACT_DROP) {
@@ -99,6 +128,22 @@ static void filter(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sUDP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
+                        fw_frmt_str[filter_config.interface], rule_id,
+                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
+                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
+                }
+            } else if (action == FILTER_UDP_REJECT) {
+                /* Enqueue an ICMP port unreachable message */
+                err = enqueue_icmp_unreachable(buffer);
+                assert(!err);
+                
+                /* Return the buffer to the rx virtualiser */
+                err = net_enqueue_free(&rx_queue, buffer);
+                assert(!err);
+                returned = true;
+                
+                if (FW_DEBUG_OUTPUT) {
+                    sddf_printf("%sUDP filter rejecting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.interface], rule_id,
                         ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
                         ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
@@ -116,6 +161,8 @@ static void filter(void)
     }
 
     if (returned) {
+        sddf_printf("%sUDP filter returned packets to RX virtualiser\n The action is %s\n",
+            fw_frmt_str[filter_config.interface], fw_filter_action_str[filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action]);
         microkit_deferred_notify(net_config.rx.id);
     }
 
@@ -196,6 +243,13 @@ void notified(microkit_channel ch)
         sddf_dprintf("%sUDP FILTER LOG: Received notification on unknown channel: %d!\n",
             fw_frmt_str[filter_config.interface], ch);
     }
+
+    if (notify_icmp) {
+        sddf_printf("%sUDP filter notifying ICMP module on channel %u\n", 
+            fw_frmt_str[filter_config.interface], filter_config.icmp_module.ch);
+        notify_icmp = false;
+        microkit_notify(filter_config.icmp_module.ch);
+    }
 }
 
 void init(void)
@@ -207,6 +261,11 @@ void init(void)
 
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr,
         sizeof(net_buff_desc_t),  filter_config.router.capacity);
+
+    if (filter_config.icmp_module.queue.vaddr) {
+        fw_queue_init(&icmp_queue, filter_config.icmp_module.queue.vaddr,
+            sizeof(icmp_req_t), filter_config.icmp_module.capacity);
+    }
 
     fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr, filter_config.webserver.rules_capacity,
         filter_config.internal_instances.vaddr, filter_config.external_instances.vaddr, filter_config.instances_capacity,

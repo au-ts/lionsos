@@ -719,6 +719,7 @@ def rules(request, protocol):
           <option value="1">Allow</option>
           <option value="2">Drop</option>
           <option value="3">Connect</option>
+          <option value="5">Reject</option>
         </select>
         <button id="internal-set-default-action-btn">Update Default</button>
       </div>
@@ -750,6 +751,7 @@ def rules(request, protocol):
           <option value="1">Allow</option>
           <option value="2">Drop</option>
           <option value="3">Connect</option>
+          <option value="5">Reject</option>
         </select>
         <button id="external-set-default-action-btn">Update Default</button>
       </div>
@@ -787,6 +789,7 @@ def rules(request, protocol):
         <option value="1">Allow</option>
         <option value="2">Drop</option>
         <option value="3">Connect</option>
+        <option value="5">Reject</option>
       </select>
       <button id="add-rule-btn">Add Rule</button>
     </p>
