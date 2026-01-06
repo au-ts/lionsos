@@ -98,6 +98,9 @@ typedef struct __attribute__((__packed__)) icmp_echo {
 /* Maximum payload length for ICMP echo messages */
 #define FW_ICMP_ECHO_PAYLOAD_LEN 56
 
+/* Total length of ICMP echo request/reply packet with maximum payload */
+#define ICMP_ECHO_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_echo_t) + FW_ICMP_ECHO_PAYLOAD_LEN)
+
 /* ----------------- 11 - Time Exceeded ---------------------------*/
 /* ICMP Time Exceeded header fields*/
 typedef struct __attribute__((__packed__)) icmp_time_exceeded {
