@@ -65,9 +65,12 @@ net_queue_handle_t net_tx_handle;
 
 extern libc_socket_config_t socket_config;
 
+static bool dhcp_ready = false;
+
 static void netif_status_callback(char *ip_addr) {
     printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n", microkit_name, __FILE__, __LINE__,
            __func__, microkit_name, ip_addr);
+    dhcp_ready = true;
 }
 
 static void wamr_main() {
@@ -128,6 +131,16 @@ static void wamr_main() {
 
         sddf_lwip_maybe_notify();
 
+        /* Wait for DHCP lease before running WASM module */
+        printf("WAMR | Waiting for DHCP...\n");
+        while (!dhcp_ready) {
+            microkit_cothread_yield();
+        }
+
+        /* We set dhcp_ready back to false to avoid the now unnecessary yield in notified() */
+        dhcp_ready = false;
+        printf("WAMR | DHCP ready\n");
+
         const char *addr_pool_str[] = { "0.0.0.0/0" };
         wasm_runtime_set_wasi_addr_pool(wasm_module, addr_pool_str, sizeof(addr_pool_str) / sizeof(addr_pool_str[0]));
         printf("done\n");
@@ -171,6 +184,9 @@ void notified(microkit_channel ch) {
     microkit_cothread_recv_ntfn(ch);
 
     if (net_enabled) {
+        if (dhcp_ready) {
+            microkit_cothread_yield();
+        }
         sddf_lwip_maybe_notify();
     }
 }
