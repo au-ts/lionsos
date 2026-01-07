@@ -72,6 +72,15 @@ enum {
     // file does not exist
     FS_STATUS_NO_FILE = 15,
 
+    // path is not a directory (e.g., O_DIRECTORY on a file)
+    FS_STATUS_NOT_DIRECTORY = 16,
+
+    // file or directory already exists
+    FS_STATUS_ALREADY_EXISTS = 17,
+
+    // directory is not empty (e.g., cannot remove)
+    FS_STATUS_NOT_EMPTY = 18,
+
     FS_STATUS_NUM_STATUSES
 };
 
@@ -355,6 +364,12 @@ static inline char *fs_status_to_str(uint64_t status) {
         return "command type is invalid";
     case FS_STATUS_END_OF_DIRECTORY:
         return "end of directory";
+    case FS_STATUS_NOT_DIRECTORY:
+        return "path is not a directory";
+    case FS_STATUS_ALREADY_EXISTS:
+        return "file or directory already exists";
+    case FS_STATUS_NOT_EMPTY:
+        return "directory is not empty";
     default:
         return "invalid status code";
     }

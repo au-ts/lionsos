@@ -94,6 +94,9 @@ static size_t fs_status_to_errno[FS_STATUS_NUM_STATUSES] = {
     [FS_STATUS_INVALID_COMMAND] = EINVAL,
     [FS_STATUS_END_OF_DIRECTORY] = FILE_ERR,
     [FS_STATUS_NO_FILE] = ENOENT,
+    [FS_STATUS_NOT_DIRECTORY] = ENOTDIR,
+    [FS_STATUS_ALREADY_EXISTS] = EEXIST,
+    [FS_STATUS_NOT_EMPTY] = ENOTEMPTY,
 };
 
 static ssize_t file_write(const void *buf, size_t len, int fd) {
