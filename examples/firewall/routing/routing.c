@@ -60,13 +60,13 @@ static bool returned; /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp; /* Arp request has been enqueued */
 static bool notify_icmp; /* Request has been enqueued to ICMP module */
 static bool ping_response_enabled = false; /* Whether to reply to ICMP echo requests */
+
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
     icmp_req_t req = {0};
     req.type = ICMP_DEST_UNREACHABLE;
-    req.code = ICMP_DEST_HOST_UNREACHABLE;
 
     /* Copy ethernet header into ICMP request */
     uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
@@ -75,6 +75,14 @@ static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
     /* Copy IP header into ICMP request */
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
     memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
+    bool is_host = fw_routing_table_is_last_hop(routing_table,
+                                                ip_hdr->dst_ip);
+
+    if (is_host) {
+        req.code = ICMP_DEST_HOST_UNREACHABLE;
+    } else {
+        req.code = ICMP_DEST_NET_UNREACHABLE;
+    }
 
     /* Copy first bytes of data if applicable */
     uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
@@ -310,6 +318,8 @@ static void route(void)
                         ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0));
                 }
 
+                enqueue_icmp_unreachable(buffer);
+
                 err = fw_enqueue(&rx_free, &buffer);
                 assert(!err);
                 returned = true;
@@ -528,9 +538,13 @@ void notified(microkit_channel ch)
          * This is the channel between the ARP component and the
          * routing component
          */
+        sddf_printf("%sROUTING LOG: Notified by ARP module\n",
+            fw_frmt_str[router_config.interface]);
         process_arp_waiting();
     } else {
         /* Router has been notified by a filter */
+        sddf_printf("%sROUTING LOG: Notified by filter module\n",
+            fw_frmt_str[router_config.interface]);
         route();
     }
 
