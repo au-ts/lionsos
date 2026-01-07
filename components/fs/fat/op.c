@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
+#include <sys/stat.h>
 #include <lions/fs/protocol.h>
 #include <lions/fs/server.h>
 #include <fat_config.h>
@@ -356,10 +357,10 @@ void handle_stat(void) {
 // Study how is the structure of the mode, just leave it for now
     file_stat->mode = 0;
     if (fileinfo.fattrib & AM_DIR) {
-        file_stat->mode |= 040755; // Directory with rwx for owner, rx for group and others
+        file_stat->mode |= S_IFDIR | 0755; // Directory with rwx for owner, rx for group and others
     } else {
         // Assume regular file, apply read-only attribute
-        file_stat->mode |= 0444; // Readable by everyone
+        file_stat->mode |= S_IFREG | 0444; // Readable by everyone
     }
     // Adjust for AM_RDO, if applicable
     if (fileinfo.fattrib & AM_RDO) {
@@ -485,7 +486,13 @@ void handle_dir_create(void) {
     }
 
     FRESULT RET = f_mkdir(dirpath);
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    if (RET == FR_OK) {
+        args->status = FS_STATUS_SUCCESS;
+    } else if (RET == FR_EXIST) {
+        args->status = FS_STATUS_ALREADY_EXISTS;
+    } else {
+        args->status = FS_STATUS_ERROR;
+    }
 }
 
 // This seems to do the exact same thing as fat_unlink
@@ -505,7 +512,13 @@ void handle_dir_remove(void) {
 
     FRESULT RET = f_rmdir(dirpath);
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    if (RET == FR_DENIED) {
+        args->status = FS_STATUS_NOT_EMPTY;
+    } else if (RET != FR_OK) {
+        args->status = FS_STATUS_ERROR;
+    } else {
+        args->status = FS_STATUS_SUCCESS;
+    }
 }
 
 void handle_dir_open(void) {
@@ -533,7 +546,11 @@ void handle_dir_open(void) {
 
     // Error handling
     if (RET != FR_OK) {
-        args->status = FS_STATUS_ERROR;
+        if (RET == FR_NO_FILE || RET == FR_NO_PATH) {
+            args->status = FS_STATUS_NOT_DIRECTORY;
+        } else {
+            args->status = FS_STATUS_ERROR;
+        }
         // Free this Dir structure
         dir_free(dir);
         return;
