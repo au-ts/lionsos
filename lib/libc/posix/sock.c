@@ -109,8 +109,15 @@ static long sys_getsockopt(va_list ap) {
         return -EBADF;
     }
 
+    if (fd_socket[sockfd] == -1) {
+        return -ENOTSOCK;
+    }
+
     if (level == SOL_SOCKET && optname == SO_ERROR) {
-        if (optval == NULL || optlen == NULL || *optlen < sizeof(int)) {
+        if (optlen == NULL || optval == NULL) {
+            return -EFAULT;
+        }
+        if (*optlen < sizeof(int)) {
             return -EINVAL;
         }
 
@@ -386,12 +393,20 @@ static long sys_getsockname(va_list ap) {
     struct sockaddr *sockaddr = va_arg(ap, struct sockaddr *);
     socklen_t *addrlen = va_arg(ap, socklen_t *);
 
+    fd_entry_t *fd_entry = posix_fd_entry(sockfd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    if (fd_socket[sockfd] == -1) {
+        return -ENOTSOCK;
+    }
+
     if (addrlen == NULL || sockaddr == NULL) {
         return -EFAULT;
     }
 
     if (*addrlen < sizeof(struct sockaddr_in)) {
-        fprintf(stderr, "POSIX|ERROR: sys_getsockname: addrlen %d too small\n", *addrlen);
         return -EINVAL;
     }
 
@@ -401,8 +416,8 @@ static long sys_getsockname(va_list ap) {
     uint16_t port;
 
     int err = socket_config->tcp_socket_getsockname(fd_socket[sockfd], &addr, &port);
-    if (err) {
-        return -ENOTCONN;
+    if (err != 0) {
+        return err;
     }
 
     addr_in->sin_family = AF_INET;
@@ -419,12 +434,20 @@ static long sys_getpeername(va_list ap) {
     struct sockaddr *sockaddr = va_arg(ap, struct sockaddr *);
     socklen_t *addrlen = va_arg(ap, socklen_t *);
 
+    fd_entry_t *fd_entry = posix_fd_entry(sockfd);
+    if (fd_entry == NULL) {
+        return -EBADF;
+    }
+
+    if (fd_socket[sockfd] == -1) {
+        return -ENOTSOCK;
+    }
+
     if (addrlen == NULL || sockaddr == NULL) {
         return -EFAULT;
     }
 
     if (*addrlen < sizeof(struct sockaddr_in)) {
-        fprintf(stderr, "POSIX|ERROR: sys_getpeername: addrlen %d too small\n", *addrlen);
         return -EINVAL;
     }
 
@@ -435,7 +458,7 @@ static long sys_getpeername(va_list ap) {
 
     int err = socket_config->tcp_socket_getpeername(fd_socket[sockfd], &addr, &port);
     if (err != 0) {
-        return -ENOTCONN;
+        return err;
     }
 
     addr_in->sin_family = AF_INET;
