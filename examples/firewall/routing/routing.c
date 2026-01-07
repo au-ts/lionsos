@@ -250,11 +250,18 @@ static void route(void)
             ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
             /* --- Handle ICMP echo request to firewall's own IP --- */
-            if (ping_response_enabled &&
-                eth_hdr->ethtype == htons(ETH_TYPE_IP) &&
+            if (eth_hdr->ethtype == htons(ETH_TYPE_IP) &&
                 ip_hdr->protocol == IPV4_PROTO_ICMP &&
                 ip_hdr->dst_ip == router_config.in_ip) {
 
+                if (!ping_response_enabled) {
+                    /* Ping responses are disabled, return buffer */
+                    err = fw_enqueue(&rx_free, &buffer);
+                    assert(!err);
+                    returned = true;
+                    continue;
+                }
+                
                 icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
                 if (icmp_hdr->type == ICMP_ECHO_REQ) {
                     enqueue_icmp_ping(buffer);
