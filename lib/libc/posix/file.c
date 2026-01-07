@@ -400,6 +400,26 @@ static long sys_openat(va_list ap) {
         fs_flags |= FS_OPEN_FLAGS_CREATE;
     }
 
+    // O_CREAT|O_EXCL: fail if file already exists
+    if ((flags & O_CREAT) && (flags & O_EXCL)) {
+        struct stat statbuf;
+        if (fstat_int(full_path, &statbuf) == 0) {
+            posix_fd_deallocate(fd);
+            fs_buffer_free(path_buffer);
+            return -EEXIST;
+        }
+    }
+
+    // fail if opening a directory with O_WRONLY or O_RDWR without O_DIRECTORY
+    if (!(flags & O_DIRECTORY) && (flags & (O_WRONLY | O_RDWR))) {
+        struct stat statbuf;
+        if (fstat_int(full_path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode)) {
+            posix_fd_deallocate(fd);
+            fs_buffer_free(path_buffer);
+            return -EISDIR;
+        }
+    }
+
     fs_cmpl_t completion;
     if (flags & O_DIRECTORY) {
         fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_DIR_OPEN,
@@ -582,6 +602,36 @@ static long sys_unlinkat(va_list ap) {
 
     if (strcmp(full_path, "/etc/services") == 0) {
         return -EPERM;
+    }
+
+    if (!(flags & AT_REMOVEDIR)) {
+        struct stat statbuf;
+        int stat_err = fstat_int(full_path, &statbuf);
+        if (stat_err == 0 && S_ISDIR(statbuf.st_mode)) {
+            return -EISDIR;
+        }
+        // If stat returns error and we have a path with multiple components,
+        // check if an intermediate component is not a directory
+        if (stat_err != 0) {
+            // Walk up the path checking each parent until we find one that exists
+            char parent_path[PATH_MAX];
+            strncpy(parent_path, full_path, PATH_MAX - 1);
+            parent_path[PATH_MAX - 1] = '\0';
+            char *last_slash = strrchr(parent_path, '/');
+            while (last_slash != NULL && last_slash != parent_path) {
+                *last_slash = '\0';
+                int parent_stat_err = fstat_int(parent_path, &statbuf);
+                if (parent_stat_err == 0) {
+                    // fstat succeeded: this is a valid path
+                    if (!S_ISDIR(statbuf.st_mode)) {
+                        return -ENOTDIR;
+                    }
+                    break;  // It's a directory, stop checking
+                }
+                // fstat still failing - keep checking parents
+                last_slash = strrchr(parent_path, '/');
+            }
+        }
     }
 
     uint64_t path_len = strlen(full_path);
