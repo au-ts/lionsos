@@ -11,6 +11,7 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <netinet/in.h>
 
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
@@ -489,7 +490,9 @@ static int tcp_socket_listen(int index, int backlog) {
 static int tcp_socket_accept(int listen_index, int flags) {
     assert(listen_index >= 0 && listen_index < MAX_SOCKETS);
     socket_t *listen_socket = &sockets[listen_index];
-    assert(listen_socket->state == socket_state_listening);
+    if (listen_socket->state != socket_state_listening) {
+        return -EINVAL;
+    }
 
     accept_queue_t *q = &listen_socket->accept_queue;
 
@@ -535,12 +538,31 @@ static int tcp_socket_accept(int listen_index, int flags) {
 static int tcp_socket_bind(int index, uint32_t addr, uint16_t port) {
     socket_t *sock = &sockets[index];
 
+    if (sock->state != socket_state_allocated) {
+        return -EINVAL;
+    }
+
     ip_addr_t ipaddr;
     ip4_addr_set_u32(&ipaddr, addr);
 
+    // Check if addr is available on a local interface (INADDR_ANY always allowed)
+    // Assumes waiting for DHCP ready
+    if (addr != INADDR_ANY) {
+        struct netif *netif;
+        bool found = false;
+        NETIF_FOREACH(netif) {
+            if (ip4_addr_eq(netif_ip4_addr(netif), ip_2_ip4(&ipaddr))) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return -EADDRNOTAVAIL;
+        }
+    }
+
     err_t err = tcp_bind(sock->sock_tpcb, &ipaddr, port);
     if (err != ERR_OK) {
-        dlog("error binding (%d)", err);
         return -lwip_err_to_errno[-err];
     }
 
@@ -552,6 +574,10 @@ static int tcp_socket_bind(int index, uint32_t addr, uint16_t port) {
 static int tcp_socket_getsockname(int index, uint32_t *addr, uint16_t *port) {
     socket_t *socket = &sockets[index];
 
+    if (socket->state != socket_state_connected && socket->state != socket_state_bound) {
+        return -ENOTCONN;
+    }
+
     *addr = ip4_addr_get_u32(&socket->sock_tpcb->local_ip);
     *port = socket->sock_tpcb->local_port;
 
@@ -560,6 +586,10 @@ static int tcp_socket_getsockname(int index, uint32_t *addr, uint16_t *port) {
 
 static int tcp_socket_getpeername(int index, uint32_t *addr, uint16_t *port) {
     socket_t *socket = &sockets[index];
+
+    if (socket->state != socket_state_connected) {
+        return -ENOTCONN;
+    }
 
     *addr = ip4_addr_get_u32(&socket->sock_tpcb->remote_ip);
     *port = socket->sock_tpcb->remote_port;
