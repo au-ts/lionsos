@@ -655,9 +655,9 @@ def config(request):
           var interfaceInternal = document.getElementById('new-interface-internal').checked;
           var interface;
           if (interfaceInternal) {
-            interface = 0;
-          } else if (interfaceExternal) {
             interface = 1;
+          } else if (interfaceExternal) {
+            interface = 0;
           } else {
             alert("Invalid interface supplied.");
             return;
