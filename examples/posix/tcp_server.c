@@ -63,8 +63,11 @@ static co_control_t co_controller_mem;
 
 static void blocking_wait(microkit_channel ch) { microkit_cothread_wait_on_channel(ch); }
 
+static bool dhcp_ready = false;
+
 static void netif_status_callback(char *ip_addr) {
     printf("TCP_SERVER|INFO: DHCP request finished, IP address is: %s\n", ip_addr);
+    dhcp_ready = true;
 }
 
 void notified(microkit_channel ch) {
@@ -83,6 +86,9 @@ void notified(microkit_channel ch) {
     microkit_cothread_recv_ntfn(ch);
 
     if (net_enabled) {
+        if (dhcp_ready) {
+            microkit_cothread_yield();
+        }
         sddf_lwip_maybe_notify();
     }
 }
@@ -139,6 +145,16 @@ void cont() {
                        netif_status_callback, NULL, NULL, NULL);
 
         sddf_lwip_maybe_notify();
+
+        /* Wait for DHCP lease before running */
+        printf("TCP_SERVER|INFO: Waiting for DHCP...\n");
+        while (!dhcp_ready) {
+            microkit_cothread_yield();
+        }
+
+        /* We set dhcp_ready back to false to avoid the now unnecessary yield in notified() */
+        dhcp_ready = false;
+        printf("TCP_SERVER|INFO: DHCP ready\n");
 
         int socket_fd = -1, addrlen = 0, af;
         struct sockaddr_storage addr = { 0 };
