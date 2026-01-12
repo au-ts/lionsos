@@ -207,7 +207,7 @@ static void filter(void)
                         transmit = true;
                         break;
                     case TCP_CLOSED:
-                    default:    
+                    default:
 
                         /* Fin handshake complete, final ack received, no more traffic permitted. */
                         break;

@@ -62,9 +62,9 @@ static bool notify_icmp; /* Request has been enqueued to ICMP module */
 
 /* Masks for checking whether it is a roadcast address or not*/
 #define MULTICAST_IP_MASK 0xf0000000
-#define MULTICAST_IP_NETWORK_ADDR 0xe0000000 
-#define BROADCAST_IP_ADDR 0xffffffff 
-uint32_t MULTICAST_MAC_SUFFIX_MASK = 0x7fffff;
+#define MULTICAST_IP_NETWORK_ADDR 0xe0000000
+#define BROADCAST_IP_ADDR 0xffffffff
+#define MULTICAST_MAC_SUFFIX_MASK 0x7fffff
 const uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
