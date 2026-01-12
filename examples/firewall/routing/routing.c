@@ -276,7 +276,10 @@ static void route(void)
                 /* valid arp entry found, transmit packet */
                 transmit_packet(buffer, broadcast_mac_addr);
             } else if ((next_hop & MULTICAST_IP_MASK) == MULTICAST_IP_NETWORK_ADDR) {
-                
+                /* Creates the multicast MAC address from the multicast broadcast address */
+                uint8_t multicast_mac_address[6] = {0x1, 0x0, 0x5e, ((next_hop & MULTICAST_MAC_SUFFIX_MASK) >> 16) & 0xff,
+                ((next_hop & MULTICAST_MAC_SUFFIX_MASK) >> 8) & 0xff, (next_hop & MULTICAST_MAC_SUFFIX_MASK) & 0xff};
+                transmit_packet(buffer, multicast_mac_address);
             } else {
                 fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
                 /* destination unreachable or no space to store packet or send ARP request, drop packet */
