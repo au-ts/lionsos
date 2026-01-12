@@ -60,6 +60,12 @@ static bool returned; /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp; /* Arp request has been enqueued */
 static bool notify_icmp; /* Request has been enqueued to ICMP module */
 
+/* Masks for checking whether it is a roadcast address or not*/
+#define MULTICAST_IP_MASK 0xf0000000
+#define MULTICAST_IP_NETWORK_ADDR 0xe0000000 
+#define BROADCAST_IP_ADDR 0xffffffff 
+const uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
@@ -264,58 +270,67 @@ static void route(void)
 
             }
 
-            fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
-            /* destination unreachable or no space to store packet or send ARP request, drop packet */
-            if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) ||
-                (pkt_waiting_full(&pkt_waiting_queue) &&
-                (arp == NULL || arp->state == ARP_STATE_PENDING)) ||
-                (arp == NULL && fw_queue_full(&arp_req_queue))) {
+            // Checks if 
+            if (next_hop == BROADCAST_IP_ADDR) {
+                /* valid arp entry found, transmit packet */
+                transmit_packet(buffer, broadcast_mac_addr);
+            } else if (next_hop & MULTICAST_IP_MASK == MULTICAST_IP_NETWORK_ADDR) {
+                
+            } else {
+                // TODO: The arp stuff needs to be refactored probably
+                fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
+                /* destination unreachable or no space to store packet or send ARP request, drop packet */
+                if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) ||
+                    (pkt_waiting_full(&pkt_waiting_queue) &&
+                    (arp == NULL || arp->state == ARP_STATE_PENDING)) ||
+                    (arp == NULL && fw_queue_full(&arp_req_queue))) {
 
-                if (arp != NULL && arp->state == ARP_STATE_UNREACHABLE) {
-                    int icmp_err = enqueue_icmp_unreachable(buffer);
-                    if (icmp_err) {
-                        sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP unreachable!\n",
+                    if (arp != NULL && arp->state == ARP_STATE_UNREACHABLE) {
+                        int icmp_err = enqueue_icmp_unreachable(buffer);
+                        if (icmp_err) {
+                            sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP unreachable!\n",
+                                fw_frmt_str[router_config.interface]);
+                        }
+                    } else {
+                        sddf_dprintf("%sROUTING LOG: Waiting packet or ARP request queue full, dropping packet!\n",
                             fw_frmt_str[router_config.interface]);
                     }
-                } else {
-                    sddf_dprintf("%sROUTING LOG: Waiting packet or ARP request queue full, dropping packet!\n",
-                        fw_frmt_str[router_config.interface]);
-                }
 
-                err = fw_enqueue(&rx_free, &buffer);
-                assert(!err);
-                returned = true;
-                continue;
-            }
-
-            /* no entry in ARP table or request still pending, store packet
-            and send ARP request or await ARP response */
-            if (arp == NULL || arp->state == ARP_STATE_PENDING) {
-                pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue,
-                                                                 next_hop);
-                if (root) {
-                    /* ARP request already enqueued, add node as child. */
-                    fw_err = pkt_waiting_push_child(&pkt_waiting_queue,
-                                                    root,
-                                                    buffer);
-                    assert(fw_err == ROUTING_ERR_OKAY);
-                } else {
-                    /* Generate ARP request and enqueue packet. */
-                    fw_arp_request_t request = {next_hop, {0}, ARP_STATE_INVALID};
-                    err = fw_enqueue(&arp_req_queue, &request);
+                    err = fw_enqueue(&rx_free, &buffer);
                     assert(!err);
-                    fw_err = pkt_waiting_push(&pkt_waiting_queue,
-                                                next_hop,
-                                                buffer);
-                    assert(fw_err == ROUTING_ERR_OKAY);
-                    notify_arp = true;
+                    returned = true;
+                    continue;
                 }
 
-                continue;
-            }
+                /* no entry in ARP table or request still pending, store packet
+                and send ARP request or await ARP response */
+                if (arp == NULL || arp->state == ARP_STATE_PENDING) {
+                    pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue,
+                                                                    next_hop);
+                    if (root) {
+                        /* ARP request already enqueued, add node as child. */
+                        fw_err = pkt_waiting_push_child(&pkt_waiting_queue,
+                                                        root,
+                                                        buffer);
+                        assert(fw_err == ROUTING_ERR_OKAY);
+                    } else {
+                        /* Generate ARP request and enqueue packet. */
+                        fw_arp_request_t request = {next_hop, {0}, ARP_STATE_INVALID};
+                        err = fw_enqueue(&arp_req_queue, &request);
+                        assert(!err);
+                        fw_err = pkt_waiting_push(&pkt_waiting_queue,
+                                                    next_hop,
+                                                    buffer);
+                        assert(fw_err == ROUTING_ERR_OKAY);
+                        notify_arp = true;
+                    }
 
-            /* valid arp entry found, transmit packet */
-            transmit_packet(buffer, arp->mac_addr);
+                    continue;
+                }
+
+                /* valid arp entry found, transmit packet */
+                transmit_packet(buffer, arp->mac_addr);
+            }
         }
     }
 }
