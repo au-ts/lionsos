@@ -65,7 +65,6 @@ static bool notify_icmp; /* Request has been enqueued to ICMP module */
 #define MULTICAST_IP_NETWORK_ADDR 0xe0000000
 #define BROADCAST_IP_ADDR 0xffffffff
 #define MULTICAST_MAC_SUFFIX_MASK 0x7fffff
-const uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
@@ -274,6 +273,7 @@ static void route(void)
             /* Finds the MAC address, then transmits a packet */
             if (next_hop == BROADCAST_IP_ADDR) {
                 /* valid arp entry found, transmit packet */
+                uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
                 transmit_packet(buffer, broadcast_mac_addr);
             } else if ((next_hop & MULTICAST_IP_MASK) == MULTICAST_IP_NETWORK_ADDR) {
                 /* Creates the multicast MAC address from the multicast broadcast address */
