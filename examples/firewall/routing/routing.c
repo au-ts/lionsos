@@ -64,6 +64,7 @@ static bool notify_icmp; /* Request has been enqueued to ICMP module */
 #define MULTICAST_IP_MASK 0xf0000000
 #define MULTICAST_IP_NETWORK_ADDR 0xe0000000 
 #define BROADCAST_IP_ADDR 0xffffffff 
+uint32_t MULTICAST_MAC_SUFFIX_MASK = 0x7fffff;
 const uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
@@ -270,14 +271,16 @@ static void route(void)
 
             }
 
-            // Checks if 
+            /* Finds the MAC address, then transmits a packet */
             if (next_hop == BROADCAST_IP_ADDR) {
                 /* valid arp entry found, transmit packet */
                 transmit_packet(buffer, broadcast_mac_addr);
-            } else if (next_hop & MULTICAST_IP_MASK == MULTICAST_IP_NETWORK_ADDR) {
-                
+            } else if ((next_hop & MULTICAST_IP_MASK) == MULTICAST_IP_NETWORK_ADDR) {
+                /* Creates the multicast MAC address from the multicast broadcast address */
+                uint8_t multicast_mac_address[6] = {0x1, 0x0, 0x5e, ((next_hop & MULTICAST_MAC_SUFFIX_MASK) >> 16) & 0xff,
+                ((next_hop & MULTICAST_MAC_SUFFIX_MASK) >> 8) & 0xff, (next_hop & MULTICAST_MAC_SUFFIX_MASK) & 0xff};
+                transmit_packet(buffer, multicast_mac_address);
             } else {
-                // TODO: The arp stuff needs to be refactored probably
                 fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
                 /* destination unreachable or no space to store packet or send ARP request, drop packet */
                 if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) ||
