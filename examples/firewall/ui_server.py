@@ -51,12 +51,7 @@ UnknownErrStr = "Unexpected unknown error."
 
 numInterfaces = 2
 
-interfaceStringsRouters = [
-    "external",
-    "internal"
-]
-
-interfaceStringsFilters = [
+interfaceStrings = [
     "external",
     "internal"
 ]
@@ -147,11 +142,11 @@ def tupleToMac(macList):
 def interfaceStringToInt(componentType, interfaceStr):
   if componentType == "router":
       for i in range(numInterfaces):
-        if interfaceStr == interfaceStringsRouters[i]:
+        if interfaceStr == interfaceStrings[1-i]:
             return i
   elif componentType == "filter":
     for i in range(numInterfaces):
-        if interfaceStr == interfaceStringsFilters[i]:
+        if interfaceStr == interfaceStrings[i]:
             return i
 
     print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
@@ -425,7 +420,7 @@ def addRule(request, protocolStr):
 @app.route('/api/ping/<string:interfaceStr>/<int:enabled>', methods=['POST'])
 def setPingResponse(request, interfaceStr, enabled):
     try:
-        interface = interfaceStringToInt("router", interfaceStr)
+        interface = interfaceStringToInt("filter", interfaceStr)
         lions_firewall.ping_response_set(interface, bool(enabled))
         return {
             "interface": interfaceStringsCap[interface],
@@ -912,9 +907,9 @@ def rules(request, protocol):
           var interfaceExternal = document.getElementById('new-interface-external').checked;
           var interface;
           if (interfaceInternal) {
-            interface = 1;
-          } else if (interfaceExternal) {
             interface = 0;
+          } else if (interfaceExternal) {
+            interface = 1;
           } else {
             alert("Invalid interface supplied.");
             return;
