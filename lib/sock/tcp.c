@@ -273,6 +273,11 @@ static int tcp_socket_init(int index) {
 
 static int tcp_socket_connect(int index, uint32_t addr, uint16_t port, int flags) {
     socket_t *sock = &sockets[index];
+
+    if (sock->state == socket_state_connected) {
+        return -EISCONN;
+    }
+
     assert(sock->state == socket_state_bound || sock->state == socket_state_allocated);
 
     ip_addr_t ipaddr;
@@ -425,6 +430,13 @@ static ssize_t tcp_socket_recv(int index, char *buf, size_t len, int flags) {
 
 static int tcp_socket_readable(int index) {
     socket_t *socket = &sockets[index];
+    // For listening sockets, "readable" means pending connections
+    if (socket->state == socket_state_listening) {
+        accept_queue_t *q = &socket->accept_queue;
+        return q->head != q->tail;
+    }
+
+    // For connected sockets, "readable" means data available to read
     return socket->rx_len;
 }
 
