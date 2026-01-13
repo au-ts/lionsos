@@ -38,6 +38,7 @@ typedef struct __attribute__((__packed__)) icmp_hdr {
 #define ICMP_ROUTER_SOLIT 10
 #define ICMP_ROUTER_SOLIT 10
 #define ICMP_TTL_EXCEED 11
+#define ICMP_PARAM_PROBLEM 12
 
 /* ICMP destination unreachable sub-type codes */
 #define ICMP_DEST_NET_UNREACHABLE 0
@@ -55,6 +56,13 @@ typedef struct __attribute__((__packed__)) icmp_hdr {
 /* ICMP Time Exceeded sub-type codes */
 #define ICMP_TIME_EXCEEDED_TTL 0
 #define ICMP_TIME_EXCEEDED_FRAG 1
+
+/* ICMP Redirect sub-type codes */
+#define ICMP_REDIRECT_FOR_NET 0
+#define ICMP_REDIRECT_FOR_HOST 1
+#define ICMP_REDIRECT_FOR_TOS_NET 2
+#define ICMP_REDIRECT_FOR_TOS_HOST 3
+
 /* ----------------- 3 - Destination Unreachable ---------------------------*/
 
 /* Default number of bytes included from source packet in destination
@@ -142,6 +150,14 @@ typedef struct {
     uint8_t data[FW_ICMP_SRC_DATA_LEN];
 } icmp_req_time_exceeded_t;
 
+/* ICMP redirect data */
+typedef struct {
+    /* new gateway IP address */
+    uint32_t gateway_ip;
+    /* first 8 bytes of data from source packet */
+    uint8_t data[FW_ICMP_SRC_DATA_LEN];
+} icmp_req_redirect_t;
+
 /* Data type of ICMP queues used to request transmission of ICMP packets */
 typedef struct icmp_req {
     /* type of ICMP packet to send */
@@ -157,5 +173,24 @@ typedef struct icmp_req {
         icmp_req_dest_t dest;
         icmp_req_echo_t echo;
         icmp_req_time_exceeded_t time_exceeded;
+        icmp_req_redirect_t redirect;
     };
 } icmp_req_t;
+
+
+/**
+ * Check if ICMP type is an error message that should not trigger redirects.
+ * Per RFC 1812, redirects should not be sent for ICMP error messages.
+ *
+ * @param type ICMP type value
+ *
+ * @return true if type is an ICMP error message, false otherwise
+ */
+static inline bool icmp_is_error_message(uint8_t type)
+{
+    return (type == ICMP_DEST_UNREACHABLE ||
+            type == ICMP_REDIRECT_MSG ||
+            type == ICMP_SRC_QUENCH ||
+            type == ICMP_TTL_EXCEED ||
+            type == ICMP_PARAM_PROBLEM);
+}
