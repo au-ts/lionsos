@@ -603,6 +603,17 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         "tcp_filter1", "tcp_filter1.elf", priority=92, budget=20000
     )
 
+    networks[ext_net]["nat"] = {}
+
+    networks[ext_net]["nat"][0x11] = ProtectionDomain(
+        "udp_nat0", "udp_nat0.elf", priority=91, budget=20000
+    )
+
+    networks[int_net]["nat"] = {}
+    networks[int_net]["nat"][0x11] = ProtectionDomain(
+        "udp_nat1", "udp_nat1.elf", priority=91, budget=20000
+    )
+
     for pd in common_pds:
         sdf.add_pd(pd)
 
@@ -629,6 +640,14 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 network["num"],
             )
             sdf.add_pd(filter_pd)
+
+        for nat_pd in network["nat"].values():
+            copy_elf(
+                nat_pd.program_image[:-5],
+                nat_pd.program_image[:-5],
+                network["num"],
+            )
+            sdf.add_pd(nat_pd)
 
         # Since arp requesters are net clients of the output network, we add
         # them as network clients here first. This ensures that we do not
@@ -929,6 +948,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
             network["configs"][router].filters.append((filter_router_conn[1]))
             webserver_interface_config.filters.append(webserver_filter_config)
+
+        for protocol, network_pd in network["nat"].items():
+            # Connect NAT as rx only network client
+            network["in_net"].add_client_with_copier(network_pd, tx=False)
+            network["configs"][in_virt].active_client_ethtypes.append(eththype_ip)
+            network["configs"][in_virt].active_client_subtypes.append(protocol)
+
 
         webserver_config.interfaces.append(webserver_interface_config)
 

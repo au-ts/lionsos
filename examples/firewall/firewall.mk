@@ -28,6 +28,7 @@ FIREWALL_FILTERS := $(FIREWALL_SRC_DIR)/filters
 FIREWALL_ICMP := $(FIREWALL_SRC_DIR)/icmp
 FIREWALL_ROUTING := $(FIREWALL_SRC_DIR)/routing
 FIREWALL_ARP := $(FIREWALL_SRC_DIR)/arp
+FIREWALL_NAT := $(FIREWALL_SRC_DIR)/nat
 
 METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
 
@@ -44,7 +45,8 @@ IMAGES := arp_requester.elf arp_responder.elf routing.elf micropython.elf \
 		  firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
 		  timer_driver.elf serial_driver.elf serial_virt_tx.elf \
 		  icmp_filter.elf udp_filter.elf tcp_filter.elf icmp_module.elf \
-		  eth_driver0.elf eth_driver1.elf
+		  eth_driver0.elf eth_driver1.elf \
+		  udp_nat.elf
 
 DEPS := $(IMAGES:.elf=.d)
 
@@ -66,7 +68,7 @@ LIBS := -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a
 
 $(IMAGES): $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
-vpath %.c $(SDDF) $(FIREWALL_SRC_DIR) $(FIREWALL_NET_COMPONENTS) $(FIREWALL_FILTERS) $(FIREWALL_ICMP) $(FIREWALL_ROUTING) $(FIREWALL_ARP)
+vpath %.c $(SDDF) $(FIREWALL_SRC_DIR) $(FIREWALL_NET_COMPONENTS) $(FIREWALL_FILTERS) $(FIREWALL_ICMP) $(FIREWALL_ROUTING) $(FIREWALL_ARP) $(FIREWALL_NAT)
 
 MICROPYTHON_LIBMATH := $(LIBMATH)
 MICROPYTHON_EXEC_MODULE := ui_server.py
