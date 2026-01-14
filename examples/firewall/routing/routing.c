@@ -18,6 +18,7 @@
 #include <lions/firewall/config.h>
 #include <lions/firewall/filter.h>
 #include <lions/firewall/icmp.h>
+#include <lions/firewall/icmp_helper.h>
 #include <lions/firewall/ip.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/routing.h>
@@ -65,30 +66,13 @@ static bool ping_response_enabled = false; /* Whether to reply to ICMP echo requ
 packet back to source */
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
-    icmp_req_t req = {0};
-    req.type = ICMP_DEST_UNREACHABLE;
-
-    /* Copy ethernet header into ICMP request */
     uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
-    memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
-
-    /* Copy IP header into ICMP request */
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
-    memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
-    bool is_host = fw_routing_table_is_last_hop(routing_table,
-                                                ip_hdr->dst_ip);
+    bool is_host = fw_routing_table_is_last_hop(routing_table, ip_hdr->dst_ip);
 
-    if (is_host) {
-        req.code = ICMP_DEST_HOST_UNREACHABLE;
-    } else {
-        req.code = ICMP_DEST_NET_UNREACHABLE;
-    }
+    uint8_t code = is_host ? ICMP_DEST_HOST_UNREACHABLE : ICMP_DEST_NET_UNREACHABLE;
 
-    /* Copy first bytes of data if applicable */
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
-    memcpy(req.dest.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
-
-    int err = fw_enqueue(&icmp_queue, &req);
+    int err = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, code, pkt_vaddr);
     if (!err) {
         notify_icmp = true;
     }
@@ -99,61 +83,17 @@ static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
 static void enqueue_icmp_ping(net_buff_desc_t buffer)
 {
     uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
-    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
-    /* Extract echo id and sequence from the ICMP echo header */
-    icmp_echo_t *echo_hdr = (icmp_echo_t *)(pkt_vaddr + ICMP_ECHO_OFFSET);
-    uint16_t echo_id = ntohs(echo_hdr->id);
-    uint16_t echo_seq = ntohs(echo_hdr->seq);
-
-    /* Calculate payload length */
-    uint16_t icmp_total_len = htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr);
-    uint16_t payload_len = icmp_total_len - ICMP_COMMON_HDR_LEN - sizeof(icmp_echo_t);
-    if (payload_len > FW_ICMP_ECHO_PAYLOAD_LEN) {
-        payload_len = FW_ICMP_ECHO_PAYLOAD_LEN;
-    }
-
-    icmp_req_t req = {0};
-    req.type = ICMP_ECHO_REPLY;
-    req.code = 0;
-    req.echo.echo_id = echo_id;
-    req.echo.echo_seq = echo_seq;
-    req.echo.payload_len = payload_len;
-
-    /* Copy ethernet header into ICMP request */
-    memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
-
-    /* Copy IP header into ICMP request */
-    memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
-
-    /* Copy payload */
-    uint8_t *payload_data = (uint8_t *)(pkt_vaddr + ICMP_ECHO_OFFSET + sizeof(icmp_echo_t));
-    memcpy(req.echo.data, payload_data, payload_len);
-
-    int err = fw_enqueue(&icmp_queue, &req);
+    int err = icmp_enqueue_echo_reply(&icmp_queue, pkt_vaddr);
     if (!err) {
         notify_icmp = true;
     }
 }
 
 static void enqueue_icmp_timeout(net_buff_desc_t buffer) {
-    icmp_req_t req = {0};
-    req.type = ICMP_TTL_EXCEED;
-    req.code = ICMP_TIME_EXCEEDED_TTL;
-
-    /* Copy ethernet header into ICMP request */
     uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
-    memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
 
-    /* Copy IP header into ICMP request */
-    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
-    memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
-
-    /* Copy first bytes of data if applicable */
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
-    memcpy(req.dest.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
-
-    int err = fw_enqueue(&icmp_queue, &req);
+    int err = icmp_enqueue_error(&icmp_queue, ICMP_TTL_EXCEED, ICMP_TIME_EXCEEDED_TTL, pkt_vaddr);
     if (!err) {
         notify_icmp = true;
     }
@@ -245,23 +185,10 @@ static void check_enqueue_icmp_redirect(net_buff_desc_t buffer, fw_routing_inter
         }
     }
 
-    icmp_req_t req = {0};
-    req.type = ICMP_REDIRECT_MSG;
-    req.code = ICMP_REDIRECT_FOR_HOST;
-    /* Copy ethernet header into ICMP request */
-    memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
-    /* Copy IP header into ICMP request */
-    memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
-    /* Set the new gateway to be the router's IP */
-    req.redirect.gateway_ip = router_config.ip;
-    /* Copy first bytes of data if applicable */
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
-    memcpy(req.redirect.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
-    int err = fw_enqueue(&icmp_queue, &req);
+    int err = icmp_enqueue_redirect(&icmp_queue, ICMP_REDIRECT_FOR_HOST, pkt_vaddr, router_config.ip);
     if (!err) {
         notify_icmp = true;
     }
-
 }
 
 static void transmit_packet(net_buff_desc_t buffer,
