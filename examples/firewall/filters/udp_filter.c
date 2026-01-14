@@ -18,6 +18,7 @@
 #include <lions/firewall/udp.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/icmp.h>
+#include <lions/firewall/icmp_helper.h>
 
 __attribute__((__section__(".fw_filter_config"))) fw_filter_config_t filter_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
@@ -36,20 +37,9 @@ static bool notify_icmp;
 
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
-    icmp_req_t req = {0};
-    req.type = ICMP_DEST_UNREACHABLE;
-    req.code = ICMP_DEST_PORT_UNREACHABLE; // Port unreachable for UDP
-
     uintptr_t pkt_vaddr = (uintptr_t)(net_config.rx_data.vaddr + buffer.io_or_offset);
-    memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
-    
-    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
-    memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
-    
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
-    memcpy(req.dest.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
 
-    int err = fw_enqueue(&icmp_queue, &req);
+    int err = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, ICMP_DEST_PORT_UNREACHABLE, pkt_vaddr);
     if (!err) {
         notify_icmp = true;
     }
