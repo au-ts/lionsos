@@ -553,13 +553,13 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         return microkit_msginfo_new(0, 1);
     }
     case FW_SET_PING_RESPONSE: {
-        ping_response_enabled = (bool)seL4_GetMR(0);
+        ping_response_enabled = (bool)microkit_mr_get(0);
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sRouter ping response %s\n",
                 fw_frmt_str[router_config.interface],
                 ping_response_enabled ? "enabled" : "disabled");
         }
-        seL4_SetMR(0, 0); /* success */
+        microkit_mr_set(0, 0); /* success */
         return microkit_msginfo_new(0, 1);
     }
     default:
