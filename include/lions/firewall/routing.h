@@ -500,26 +500,3 @@ static void fw_routing_table_init(fw_routing_table_t **table,
                                             FW_ROUTING_NONEXTHOP);
     assert(err == ROUTING_ERR_OKAY);
 }
-
-/**
- * Check if the given IP address has a valid route in the routing table.
- *
- * @param table address of routing table.
- * @param ip IP address to check for a valid route.
- *
- * @return true if a valid route exists, false otherwise.
- */
-static bool fw_routing_table_is_last_hop(fw_routing_table_t *table,
-                                         uint32_t ip)
-{
-    uint32_t next_hop;
-    fw_routing_interfaces_t interface;
-    fw_routing_err_t err = fw_routing_find_route(table,
-                                                ip,
-                                                &next_hop,
-                                                &interface,
-                                                0);
-    assert(err == ROUTING_ERR_OKAY);
-
-    return interface != ROUTING_OUT_NONE;
-}
