@@ -107,7 +107,6 @@ static void filter(void)
                             fw_frmt_str[filter_config.interface], rule_id,
                             ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
                             ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
-                            
                     }
                 }
             } else if (action == FILTER_ACT_DROP) {
