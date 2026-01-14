@@ -251,10 +251,8 @@ void init(void)
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr,
         sizeof(net_buff_desc_t),  filter_config.router.capacity);
 
-    if (filter_config.icmp_module.queue.vaddr) {
-        fw_queue_init(&icmp_queue, filter_config.icmp_module.queue.vaddr,
-            sizeof(icmp_req_t), filter_config.icmp_module.capacity);
-    }
+    fw_queue_init(&icmp_queue, filter_config.icmp_module.queue.vaddr,
+        sizeof(icmp_req_t), filter_config.icmp_module.capacity);
 
     fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr, filter_config.webserver.rules_capacity,
         filter_config.internal_instances.vaddr, filter_config.external_instances.vaddr, filter_config.instances_capacity,
