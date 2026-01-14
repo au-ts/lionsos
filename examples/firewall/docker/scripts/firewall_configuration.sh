@@ -12,16 +12,15 @@ export DOCKER_IMAGE="firewall_ubuntu"
 export DOCKER_CONTAINER="firewall_container"
 
 # Path to LionsOS repo
-export LIONSOS_REPO="/Users/jenny/Desktop/lionsos"
+export LIONSOS_REPO=
 
 # Host ssh port to container
 export HOST_SSH_PORT=2222
 
 # Host ssh public key
-export HOST_SSH_PUB_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM7p0tERaIcM2Ag7dLHCGg0TAHlXKUDDLVO9PiVuVtoZ jenny@air"
-
+export HOST_SSH_PUB_KEY=
 # Path to host identity
-export HOST_KEY_PATH="/.ssh/id_ts.pub"
+export HOST_KEY_PATH=
 
 # Host http port to container
 export HOST_HTTP_PORT=8080
