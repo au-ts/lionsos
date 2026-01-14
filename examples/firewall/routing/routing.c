@@ -66,9 +66,11 @@ static bool ping_response_enabled = false; /* Whether to reply to ICMP echo requ
 packet back to source */
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
+    sddf_printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
     uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
-    bool is_host = fw_routing_table_is_last_hop(routing_table, ip_hdr->dst_ip);
+    bool is_host = ((ip_hdr->dst_ip & subnet_mask(router_config.subnet)) != 
+        (router_config.ip & subnet_mask(router_config.subnet)));
 
     uint8_t code = is_host ? ICMP_DEST_HOST_UNREACHABLE : ICMP_DEST_NET_UNREACHABLE;
 
