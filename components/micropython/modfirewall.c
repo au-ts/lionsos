@@ -202,12 +202,12 @@ static mp_obj_t ping_response_set(mp_obj_t interface_idx_in, mp_obj_t enable_in)
 
     bool enable = mp_obj_is_true(enable_in);
 
-    seL4_SetMR(0, enable ? 1 : 0);
+    microkit_mr_set(0, enable ? 1 : 0);
     microkit_msginfo msginfo =
         microkit_ppcall(fw_config.interfaces[interface_idx].router.routing_ch,
                         microkit_msginfo_new(FW_SET_PING_RESPONSE, 1));
     
-    uint32_t result = seL4_GetMR(0);
+    uint32_t result = microkit_mr_get(0);
     if (result != 0) {
         sddf_dprintf("WEBSERVER|LOG: Failed to set ping response\n");
         mp_raise_OSError(OS_ERR_INTERNAL_ERROR);
