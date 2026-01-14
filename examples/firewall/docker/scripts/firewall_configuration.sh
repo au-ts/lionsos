@@ -19,6 +19,7 @@ export HOST_SSH_PORT=2222
 
 # Host ssh public key
 export HOST_SSH_PUB_KEY=
+
 # Path to host identity
 export HOST_KEY_PATH=
 
