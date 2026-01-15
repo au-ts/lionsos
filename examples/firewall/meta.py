@@ -384,8 +384,10 @@ def fw_region(
     mr: SystemDescription.MemoryRegion,
     perms: str,
     region_size: int,
+    *,
+    cached: bool = True
 ):
-    pd_map = Map(mr, pd.get_map_vaddr(mr), perms=perms)
+    pd_map = Map(mr, pd.get_map_vaddr(mr), perms=perms, cached=cached)
     pd.add_map(pd_map)
     region_resource = RegionResource(pd_map.vaddr, region_size)
 
@@ -397,8 +399,10 @@ def fw_device_region(
     pd: SystemDescription.ProtectionDomain,
     mr: SystemDescription.MemoryRegion,
     perms: str,
+    *,
+    cached: bool = True
 ):
-    region = fw_region(pd, mr, perms, mr.size)
+    region = fw_region(pd, mr, perms, mr.size, cached=cached)
     device_region = DeviceRegionResource(region, mr.paddr.value)
     return device_region
 
@@ -956,13 +960,15 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                     rule_bitmap_region,
                 )
 
-                nat_dma = fw_device_region(nat, network["rx_dma_region"], "rw")
+                nat_dma = fw_device_region(nat, network["rx_dma_region"], "rw", cached=False)
 
                 # Create NAT config
                 network["configs"][nat] = FwNatConfig(
                     filter_nat_conn[1],
                     nat_router_conn[0],
-                    nat_dma
+                    nat_dma,
+                    network["num"],
+                    ip_to_int(ips[0]) if network["num"] == 1 else 0  # TODO: real dynamic configuration via webserver
                 )
 
                 # Update router config
