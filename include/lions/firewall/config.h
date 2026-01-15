@@ -161,3 +161,8 @@ typedef struct fw_webserver_config {
     fw_webserver_interface_config_t interfaces[FW_NUM_INTERFACES];
     uint8_t num_interfaces;
 } fw_webserver_config_t;
+
+typedef struct fw_nat_config {
+    fw_connection_resource_t filter;
+    fw_connection_resource_t router;
+} fw_nat_config_t;
