@@ -956,10 +956,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                     rule_bitmap_region,
                 )
 
+                nat_dma = fw_device_region(nat, network["rx_dma_region"], "rw")
+
                 # Create NAT config
                 network["configs"][nat] = FwNatConfig(
                     filter_nat_conn[1],
-                    nat_router_conn[0]
+                    nat_router_conn[0],
+                    nat_dma
                 )
 
                 # Update router config
