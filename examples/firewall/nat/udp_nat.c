@@ -49,7 +49,14 @@ static void translate(void)
         }
         if (nat_config.snat) {
             if (FW_DEBUG_OUTPUT) {
-                sddf_dprintf("%sUDP NAT LOG: to translate to %s:%u\n",
+                /* TODO: handle when there is no checksum in hardware */
+                ip_hdr->src_ip = nat_config.snat;
+                ip_hdr->check = 0;
+
+                udp_hdr->src_port = htons(snat_port);
+                udp_hdr->check = 0;
+
+                sddf_dprintf("%sUDP NAT LOG: translated to %s:%u\n",
                              fw_frmt_str[nat_config.interface],
                              ipaddr_to_string(nat_config.snat, ip_addr_buf1),
                              snat_port);
