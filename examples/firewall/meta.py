@@ -593,13 +593,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     )
 
     networks[int_net]["filters"] = {}
-    networks[int_net]["filters"][0x01] = ProtectionDomain(
+    networks[int_net]["filters"][ip_protocol_icmp] = ProtectionDomain(
         "icmp_filter1", "icmp_filter1.elf", priority=93, budget=20000
     )
-    networks[int_net]["filters"][0x11] = ProtectionDomain(
+    networks[int_net]["filters"][ip_protocol_udp] = ProtectionDomain(
         "udp_filter1", "udp_filter1.elf", priority=91, budget=20000
     )
-    networks[int_net]["filters"][0x06] = ProtectionDomain(
+    networks[int_net]["filters"][ip_protocol_tcp] = ProtectionDomain(
         "tcp_filter1", "tcp_filter1.elf", priority=92, budget=20000
     )
 
@@ -879,15 +879,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         )
 
         for protocol, filter_pd in network["filters"].items():
-            # Create a firewall connection for filter to transmit buffers to
-            # router
-            filter_router_conn = fw_connection(
-                filter_pd,
-                router,
-                dma_buffer_queue.capacity,
-                dma_buffer_queue_region.region_size,
-            )
-
             # Connect filter as rx only network client
             network["in_net"].add_client_with_copier(filter_pd, tx=False)
             network["configs"][in_virt].active_client_ethtypes.append(eththype_ip)
@@ -935,26 +926,68 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 filter_rules_buffer.capacity,
             )
 
-            # Create filter config
-            network["configs"][filter_pd] = FwFilterConfig(
-                network["num"],
-                filter_instances_buffer.capacity,
-                filter_router_conn[0],
-                filter_webserver_config,
-                None,
-                None,
-                rule_bitmap_region,
-            )
+            # The NAT is pre-routing but post-filtering (effectively it is transparent to both router and filter).
+            # Since only UDP NAT is implemented, the NAT is inserted between the webserver and firewall only when the protocol is UDP
+            if protocol == ip_protocol_udp:
+                nat = network["nat"][ip_protocol_udp]
+                # Create a firewall connection from filter to NAT
+                filter_nat_conn = fw_connection(
+                    filter_pd,
+                    nat,
+                    dma_buffer_queue.capacity,
+                    dma_buffer_queue_region.region_size,
+                )
+                # Create a firewall connection from NAT to router
+                nat_router_conn = fw_connection(
+                    nat,
+                    router,
+                    dma_buffer_queue.capacity,
+                    dma_buffer_queue_region.region_size,
+                )
 
-            network["configs"][router].filters.append((filter_router_conn[1]))
+                # Create filter config
+                network["configs"][filter_pd] = FwFilterConfig(
+                    network["num"],
+                    filter_instances_buffer.capacity,
+                    filter_nat_conn[0],
+                    filter_webserver_config,
+                    None,
+                    None,
+                    rule_bitmap_region,
+                )
+
+                # Create NAT config
+                network["configs"][nat] = FwNatConfig(
+                    filter_nat_conn[1],
+                    nat_router_conn[0]
+                )
+
+                # Update router config
+                network["configs"][router].filters.append((nat_router_conn[1]))
+            else:
+                # Create a firewall connection for filter to transmit buffers to
+                # router
+                filter_router_conn = fw_connection(
+                    filter_pd,
+                    router,
+                    dma_buffer_queue.capacity,
+                    dma_buffer_queue_region.region_size,
+                )
+
+                # Create filter config
+                network["configs"][filter_pd] = FwFilterConfig(
+                    network["num"],
+                    filter_instances_buffer.capacity,
+                    filter_router_conn[0],
+                    filter_webserver_config,
+                    None,
+                    None,
+                    rule_bitmap_region,
+                )
+
+                network["configs"][router].filters.append((filter_router_conn[1]))
+
             webserver_interface_config.filters.append(webserver_filter_config)
-
-        for protocol, network_pd in network["nat"].items():
-            # Connect NAT as rx only network client
-            network["in_net"].add_client_with_copier(network_pd, tx=False)
-            network["configs"][in_virt].active_client_ethtypes.append(eththype_ip)
-            network["configs"][in_virt].active_client_subtypes.append(protocol)
-
 
         webserver_config.interfaces.append(webserver_interface_config)
 
