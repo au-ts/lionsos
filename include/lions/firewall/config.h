@@ -166,4 +166,7 @@ typedef struct fw_nat_config {
     fw_connection_resource_t filter;
     fw_connection_resource_t router;
     device_region_resource_t data;
+    /* Interface traffic is received from */
+    uint8_t interface;
+    uint32_t snat;
 } fw_nat_config_t;
