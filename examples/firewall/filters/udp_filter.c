@@ -125,12 +125,12 @@ static void filter(void)
                 /* Enqueue an ICMP port unreachable message */
                 err = enqueue_icmp_unreachable(buffer);
                 assert(!err);
-                
+
                 /* Return the buffer to the rx virtualiser */
                 err = net_enqueue_free(&rx_queue, buffer);
                 assert(!err);
                 returned = true;
-                
+
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sUDP filter rejecting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         fw_frmt_str[filter_config.interface], rule_id,
@@ -234,7 +234,7 @@ void notified(microkit_channel ch)
     }
 
     if (notify_icmp) {
-        sddf_printf("%sUDP filter notifying ICMP module on channel %u\n", 
+        sddf_printf("%sUDP filter notifying ICMP module on channel %u\n",
             fw_frmt_str[filter_config.interface], filter_config.icmp_module.ch);
         notify_icmp = false;
         microkit_notify(filter_config.icmp_module.ch);
