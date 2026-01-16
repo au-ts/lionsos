@@ -1040,8 +1040,7 @@ if __name__ == "__main__":
                 # Data structure size has already been calculated
                 continue
             try:
-                import os
-                if not os.path.exists(structure.elf_name):
+                if not path.exists(structure.elf_name):
                     raise Exception(f"ERROR: ELF name '{structure.elf_name}' does not exist")
                 output = subprocess.run(
                     ["llvm-dwarfdump", structure.elf_name],
