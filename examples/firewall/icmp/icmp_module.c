@@ -143,10 +143,10 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
 
             /* Unused must be set to 0 */
             icmp_time_exceeded->unused = 0;
-            
+
             /* Copy IP header */
             memcpy(&icmp_time_exceeded->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
-            
+
             /* Copy first bytes of data if applicable */
             uint16_t to_copy_te = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
             memcpy(&icmp_time_exceeded->data, req->time_exceeded.data, to_copy_te);
@@ -161,7 +161,7 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
     ip_hdr->check = 0;
 
     uint16_t ip_tot_len = ntohs(ip_hdr->tot_len);
-    
+
     #ifndef NETWORK_HW_HAS_CHECKSUM
     /* ICMP checksum is calculated over entire ICMP packet */
     icmp_hdr->check = fw_internet_checksum(icmp_hdr, ip_tot_len - IPV4_HDR_LEN_MIN);
@@ -185,35 +185,35 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
 static void generate_icmp(void)
 {
     bool transmitted[FW_NUM_INTERFACES] = {false};
-    
+
     /* Process ICMP requests from filters */
     for (uint8_t filter_idx = 0; filter_idx < icmp_config.num_filters; filter_idx++) {
         uint8_t out_int = filter_idx;
-        
+
         while (!fw_queue_empty(&filter_icmp_queue[filter_idx])) {
             icmp_req_t req = {0};
             int err = fw_dequeue(&filter_icmp_queue[filter_idx], &req);
             assert(!err);
-            
+
             sddf_printf("ICMP module: processing filter %u ICMP request type %u code %u on interface %u\n",
                 filter_idx, req.type, req.code, out_int);
-            
+
             if (!process_icmp_request(&req, out_int, transmitted)) {
                 break;
             }
         }
     }
-    
+
     /* Process ICMP requests from routers */
     for (uint8_t out_int = 0; out_int < icmp_config.num_interfaces; out_int++) {
         while (!fw_queue_empty(&icmp_queue[out_int])) {
             icmp_req_t req = {0};
             int err = fw_dequeue(&icmp_queue[out_int], &req);
             assert(!err);
-            
+
             sddf_printf("ICMP module: processing router ICMP request type %u code %u on interface %u\n",
                 req.type, req.code, out_int);
-            
+
             if (!process_icmp_request(&req, out_int, transmitted)) {
                 break;
             }
@@ -239,7 +239,7 @@ void init(void)
             net_configs[i]->tx.active_queue.vaddr, net_configs[i]->tx.num_buffers);
         net_buffers_init(&net_queue[i], 0);
     }
-    
+
     /* Setup queues with filters */
     for (int i = 0; i < icmp_config.num_filters; i++) {
         fw_queue_init(&filter_icmp_queue[i], icmp_config.filters[i].queue.vaddr,
