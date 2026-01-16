@@ -68,7 +68,7 @@ static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
     uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
-    bool is_host = ((ip_hdr->dst_ip & subnet_mask(router_config.subnet)) != 
+    bool is_host = ((ip_hdr->dst_ip & subnet_mask(router_config.subnet)) !=
         (router_config.ip & subnet_mask(router_config.subnet)));
 
     uint8_t code = is_host ? ICMP_DEST_HOST_UNREACHABLE : ICMP_DEST_NET_UNREACHABLE;
@@ -114,7 +114,7 @@ static bool interface_comparison(uint8_t interface,
 }
 
 static void check_enqueue_icmp_redirect(net_buff_desc_t buffer, fw_routing_interfaces_t out_int, uint32_t next_hop) {
-    
+
     /* Inerface match check*/
     bool interface_match = interface_comparison(router_config.interface, out_int);
     if (!interface_match) {
@@ -124,13 +124,13 @@ static void check_enqueue_icmp_redirect(net_buff_desc_t buffer, fw_routing_inter
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
     /* Source IP must be on same subnet as router interface */
-    if ((ip_hdr->src_ip & subnet_mask(router_config.subnet)) != 
+    if ((ip_hdr->src_ip & subnet_mask(router_config.subnet)) !=
         (router_config.ip & subnet_mask(router_config.subnet))) {
         return;
     }
 
     /* Nexthop subnet match the src*/
-    if ((ip_hdr->src_ip & subnet_mask(router_config.subnet)) != 
+    if ((ip_hdr->src_ip & subnet_mask(router_config.subnet)) !=
     (next_hop & subnet_mask(router_config.subnet))) {
         return;
     }
