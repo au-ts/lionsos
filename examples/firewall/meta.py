@@ -278,6 +278,16 @@ filter_rule_bitmap_region = FirewallMemoryRegions(
     data_structures=[filter_rule_bitmap_wrapper, filter_rule_bitmap_buffer]
 )
 
+nat_ports_wrapper = FirewallDataStructure(
+    elf_name="udp_nat.elf", c_name="fw_nat_port_table"
+)
+nat_ports_buffer = FirewallDataStructure(
+    elf_name="udp_nat.elf", c_name="fw_nat_port_mapping", capacity=1024
+)
+nat_ports_region = FirewallMemoryRegions(
+    data_structures=[nat_ports_wrapper, nat_ports_buffer]
+)
+
 # Filter action encodings
 FILTER_ACTION_ALLOW = 1
 FILTER_ACTION_DROP = 2
@@ -968,7 +978,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                     nat_router_conn[0],
                     nat_dma,
                     network["num"],
-                    ip_to_int(ips[0]) if network["num"] == 1 else 0  # TODO: real dynamic configuration via webserver
+                    None
                 )
 
                 # Update router config
@@ -1055,6 +1065,56 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         networks[ext_net]["configs"][mirror_filter].external_instances = int_instances[
             1
         ]
+
+    # Create NAT port table regions
+    for protocol, nat_pd in networks[int_net]["nat"].items():
+        mirror_nat = networks[ext_net]["nat"][protocol]
+        int_table = fw_shared_region(
+            nat_pd,
+            mirror_nat,
+            "rw",
+            "r",
+            "port_table",
+            nat_ports_region.region_size,
+        )
+        ext_table = fw_shared_region(
+            mirror_nat,
+            nat_pd,
+            "rw",
+            "r",
+            "port_table",
+            nat_ports_region.region_size,
+        )
+
+        networks[int_net]["configs"][nat_pd].interfaces = [
+            FwNatInterfaceConfig(
+                49152,
+                nat_ports_buffer.capacity,
+                ext_table[1],
+                0
+            ),
+            FwNatInterfaceConfig(
+                49152,
+                nat_ports_buffer.capacity,
+                int_table[0],
+                ip_to_int(ips[0])
+            ),
+        ]
+        networks[ext_net]["configs"][mirror_nat].interfaces = [
+            FwNatInterfaceConfig(
+                49152,
+                nat_ports_buffer.capacity,
+                ext_table[0],
+                0
+            ),
+            FwNatInterfaceConfig(
+                49152,
+                nat_ports_buffer.capacity,
+                int_table[1],
+                ip_to_int(ips[0])
+            ),
+        ]
+
 
     assert serial_system.connect()
     assert serial_system.serialise_config(output_dir)

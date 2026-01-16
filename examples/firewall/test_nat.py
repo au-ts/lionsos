@@ -19,3 +19,6 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         status = ("| PASS" if addr[0] == expected_ip else "| FAIL") if expected_ip is not None else ""
 
         print(f"[{addr[0]}:{addr[1]}{status}] {data}")
+
+        # Return traffic
+        s.sendto(b"return traffic\n", addr)
