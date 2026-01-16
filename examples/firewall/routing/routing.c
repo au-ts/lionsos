@@ -66,7 +66,6 @@ static bool ping_response_enabled = false; /* Whether to reply to ICMP echo requ
 packet back to source */
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
-    sddf_printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
     uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
     bool is_host = ((ip_hdr->dst_ip & subnet_mask(router_config.subnet)) != 
@@ -187,7 +186,7 @@ static void check_enqueue_icmp_redirect(net_buff_desc_t buffer, fw_routing_inter
         }
     }
 
-    int err = icmp_enqueue_redirect(&icmp_queue, ICMP_REDIRECT_FOR_HOST, pkt_vaddr, router_config.ip);
+    int err = icmp_enqueue_redirect(&icmp_queue, ICMP_REDIRECT_FOR_HOST, pkt_vaddr, next_hop);
     if (!err) {
         notify_icmp = true;
     }
