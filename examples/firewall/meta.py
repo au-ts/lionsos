@@ -1040,6 +1040,9 @@ if __name__ == "__main__":
                 # Data structure size has already been calculated
                 continue
             try:
+                import os
+                if not os.path.exists(structure.elf_name):
+                    raise Exception(f"ERROR: ELF name '{structure.elf_name}' does not exist")
                 output = subprocess.run(
                     ["llvm-dwarfdump", structure.elf_name],
                     capture_output=True,
@@ -1053,9 +1056,9 @@ if __name__ == "__main__":
                             assert dwarfdump[i + 3] == "DW_AT_byte_size"
                             size_fmt = dwarfdump[i + 4].strip("(").strip(")")
                             structure.entry_size = int(size_fmt, base=16)
-            except:
+            except Exception as e:
                 raise Exception(
-                    f"Error calculating {structure.c_name} size using llvm-dwarf dump on {structure.elf_name})"
+                        f"Error calculating {structure.c_name} size using llvm-dwarf dump on {structure.elf_name}): {e}"
                 )
             structure.calculate_size()
         region.calculate_size()
