@@ -119,7 +119,9 @@ typedef struct fw_icmp_module_config {
     /* IP address of interfaces */
     uint32_t ips[FW_NUM_INTERFACES];
     fw_connection_resource_t routers[FW_NUM_INTERFACES];
+    fw_connection_resource_t filters[FW_MAX_FILTERS];
     uint8_t num_interfaces;
+    uint8_t num_filters;
 } fw_icmp_module_config_t;
 
 typedef struct fw_webserver_filter_config {
@@ -139,6 +141,7 @@ typedef struct fw_filter_config {
     region_resource_t internal_instances;
     region_resource_t external_instances;
     region_resource_t rule_id_bitmap;
+    fw_connection_resource_t icmp_module;
 } fw_filter_config_t;
 
 typedef struct fw_webserver_interface_config {
