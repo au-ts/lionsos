@@ -694,7 +694,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     networks[int_net]["icmp_module"] = icmp_int_router_conn[0]
     networks[ext_net]["icmp_module"] = icmp_ext_router_conn[0]
-    
+
     # Store filter ICMP connections (will be populated in filter loop below)
     filter_icmp_connections = []
 
