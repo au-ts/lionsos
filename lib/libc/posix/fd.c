@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
@@ -14,7 +15,7 @@
 extern serial_queue_handle_t serial_tx_queue_handle;
 extern serial_client_config_t serial_config;
 
-static size_t console_write(const void *data, size_t count, int fd) {
+static ssize_t console_write(const void *data, size_t count, int fd) {
     char *src = (char *)data;
     uint32_t sent = 0;
     while (sent < count) {
@@ -42,24 +43,25 @@ static size_t console_write(const void *data, size_t count, int fd) {
 }
 
 // Note we initialise console FDs here
-static bool fd_active[MAX_FDS] = {true, true, true};
-static fd_entry_t fd_table[MAX_FDS] = {(fd_entry_t){
-                                           // STDIN
-                                           .flags = O_RDONLY,
-                                       },
-                                       (fd_entry_t){
-                                           // STDOUT
-                                           .write = console_write,
-                                           .flags = O_WRONLY,
-                                       },
-                                       (fd_entry_t){
-                                           // STDERR
-                                           .write = console_write,
-                                           .flags = O_WRONLY,
-                                       }};
+static bool fd_active[MAX_FDS] = { [STDIN_FD] = true, [STDOUT_FD] = true, [STDERR_FD] = true };
+static fd_entry_t fd_table[MAX_FDS] = { [STDIN_FD] =
+                                            (fd_entry_t) {
+                                                .flags = O_RDONLY,
+                                            },
+                                        [STDOUT_FD] =
+                                            (fd_entry_t) {
+                                                .write = console_write,
+                                                .flags = O_WRONLY,
+                                            },
+                                        [STDERR_FD] = (fd_entry_t) {
+                                            .write = console_write,
+                                            .flags = O_WRONLY,
+                                        } };
+
+static inline bool posix_fd_is_valid(int fd) { return fd >= 0 && fd < MAX_FDS && fd_active[fd]; }
 
 fd_entry_t *posix_fd_entry(int fd) {
-    if (!fd_active[fd]) {
+    if (!posix_fd_is_valid(fd)) {
         return NULL;
     }
     return &fd_table[fd];
@@ -76,7 +78,7 @@ int posix_fd_allocate() {
 }
 
 int posix_fd_deallocate(int fd) {
-    if (fd < 0 || fd >= MAX_FDS || !fd_active[fd]) {
+    if (!posix_fd_is_valid(fd)) {
         return -1;
     }
 
@@ -84,4 +86,19 @@ int posix_fd_deallocate(int fd) {
     memset(&fd_table[fd], 0, sizeof(fd_entry_t));
 
     return 0;
+}
+
+fd_entry_t *posix_fd_entry_allocate(int fd) {
+    if (fd < 0 || fd >= MAX_FDS) {
+        return NULL;
+    }
+
+    if (fd_active[fd]) {
+        return NULL;
+    }
+
+    fd_active[fd] = true;
+    memset(&fd_table[fd], 0, sizeof(fd_entry_t));
+
+    return &fd_table[fd];
 }

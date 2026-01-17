@@ -30,23 +30,23 @@ BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
-SYSTEM_FILE := posix.system
-IMAGE_FILE := posix.img
+WAMR := $(LIONSOS)/components/wamr
+
+SYSTEM_FILE := wasm.system
+IMAGE_FILE := wasm.img
 REPORT_FILE := report.txt
 
 all: ${IMAGE_FILE}
 
 include ${SDDF}/tools/make/board/common.mk
 
-METAPROGRAM := $(POSIX_DIR)/meta.py
+METAPROGRAM := $(WASM_DIR)/meta.py
 
 FAT := $(LIONSOS)/components/fs/fat
 
 CFLAGS += \
 	-Wno-bitwise-op-parentheses \
 	-Wno-shift-op-parentheses \
-	-Wno-unused-function \
-	-Wno-tautological-constant-out-of-range-compare \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
@@ -61,49 +61,51 @@ LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
 BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
 BLK_COMPONENTS := $(SDDF)/blk/components
 
+WASM_TARGETS := fileio tcp_server
+include $(WAMR)/wamr.mk
+
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include ${SDDF}/util/util.mk
-include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
-include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk
-include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
-include ${SDDF}/serial/components/serial_components.mk
-include ${SDDF}/network/components/network_components.mk
-
-LIB_SDDF_LWIP_CFLAGS := -I${POSIX_DIR}/lwip_include
-include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
-
-include ${SDDF}/libco/libco.mk
-include ${BLK_DRIVER}/blk_driver.mk
-include ${BLK_COMPONENTS}/blk_components.mk
-
 FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
 FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include $(LIONSOS)/components/fs/fat/fat.mk
 
-LIBMICROKITCO_CFLAGS_posix := -I$(POSIX_DIR)
-LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
+SDDF_MAKEFILES := ${SDDF}/util/util.mk \
+${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
+${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk \
+${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
+${SDDF}/serial/components/serial_components.mk \
+${SDDF}/network/components/network_components.mk \
+${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
+${SDDF}/libco/libco.mk \
+${BLK_DRIVER}/blk_driver.mk \
+${BLK_COMPONENTS}/blk_components.mk
+
+include ${SDDF_MAKEFILES}
+include $(LIONSOS)/components/fs/fat/fat.mk
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
-# for libmicrokitco_opts.h and lwipopts.h
-tcp.o fileio.o tcp_server.o: CFLAGS += $(LIBMICROKITCO_CFLAGS_posix)
-tcp.o tcp_server.o: CFLAGS += $(LIB_SDDF_LWIP_CFLAGS)
+fileio.wasm: $(WASM_DIR)/fileio.c
+	${WASI_SDK}/bin/clang -O3 \
+        -z stack-size=4096 -Wl,--initial-memory=65536 \
+        -o $@ $< \
+        -Wl,--export=__data_end -Wl,--export=__heap_base \
+        -Wl,--strip-all
 
-tcp.o: $(LIONSOS)/lib/sock/tcp.c | $(LIONS_LIBC)/include
+WAMR_SOCKET := $(WAMR_ROOT)/core/iwasm/libraries/lib-socket
+tcp_server.wasm: $(WASM_DIR)/tcp_server.c $(WAMR_SOCKET)/src/wasi/wasi_socket_ext.c
+	${WASI_SDK}/bin/clang -O3 \
+        -z stack-size=4096 -Wl,--initial-memory=65536 \
+        -o $@ $^ \
+        -Wl,--export=__data_end -Wl,--export=__heap_base \
+        -Wl,--strip-all \
+		-I$(WAMR_SOCKET)/inc
+
+%.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-fileio.o: $(POSIX_DIR)/fileio.c | $(LIONS_LIBC)/include
-	${CC} ${CFLAGS} -c -o $@ $<
-
-fileio.elf: fileio.o libmicrokitco_posix.a
-	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
-
-tcp_server.o: $(POSIX_DIR)/tcp_server.c | $(LIONS_LIBC)/include
-	${CC} ${CFLAGS}  -c -o $@ $<
-
-tcp_server.elf: tcp_server.o libmicrokitco_posix.a tcp.o lib_sddf_lwip.a
-	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
+$(DTB): $(DTS)
+	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
 
 FORCE:
 
@@ -151,3 +153,12 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-device virtio-blk-device,drive=hd \
 		-device virtio-net-device,netdev=netdev0 \
 		-netdev user,id=netdev0,hostfwd=tcp::5555-10.0.2.15:1234
+
+${SDDF_MAKEFILES} &:
+	cd ${LIONSOS}; git submodule update --init dep/sddf
+
+${LIONSOS}/dep/libmicrokitco/libmicrokitco.mk:
+	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
+
+${SDDF}/tools/make/board/common.mk ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
+	cd ${LIONSOS}; git submodule update --init dep/sddf

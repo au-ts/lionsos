@@ -21,6 +21,12 @@
         x86_64-linux = "linux-x86-64";
         aarch64-linux = "linux-aarch64";
       };
+      wasi-platforms = {
+        aarch64-darwin = "arm64-macos";
+        x86_64-darwin = "x86_64-macos";
+        x86_64-linux = "x86_64-linux";
+        aarch64-linux = "arm64-linux";
+      };
 
       forAllSystems = with nixpkgs.lib; genAttrs (builtins.attrNames microkit-platforms);
     in
@@ -49,6 +55,7 @@
               name = "lionsos-dev";
 
               microkit-platform = microkit-platforms.${system} or (throw "Unsupported system: ${system}");
+              wasi-platform = wasi-platforms.${system} or (throw "Unsupported system: ${system}");
 
               env.MICROKIT_SDK = pkgs.fetchzip {
                 url = "https://trustworthy.systems/Downloads/microkit/microkit-sdk-${microkit-version}-${microkit-platform}.tar.gz";
@@ -57,6 +64,16 @@
                   x86_64-darwin = "sha256-uS7cM/MK645XCyOR8FUQFtj9yMXGLluMX+k0dt3jXS4=";
                   x86_64-linux = "sha256-qetUCkLNGDyr29OnrE4pSCKP8Xq35jCCQdnCChKkujs=";
                   aarch64-linux = "sha256-3AT3I89QDRzI7bEvKgK5yqNeGv5SQQEzcYTeuFyClnI=";
+                }.${system} or (throw "Unsupported system: ${system}");
+              };
+
+              env.WASI_SDK = pkgs.fetchzip {
+                url = "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-27/wasi-sdk-27.0-${wasi-platform}.tar.gz";
+                hash = {
+                    aarch64-darwin = "sha256-JxJNhpsx1d//zCi80bLSBd9Ve3hhIAD0K7PmqErqIxo=";
+                    x86_64-darwin = "sha256-2HKTO7yNh7gxEGCN9lto7+tDMtiFZHKnssJ069IQ3rs=";
+                    x86_64-linux = "sha256-yu0SExP5zd3AfPMVAhHognwDFBLThlKHLIK8Mxfa000=";
+                    aarch64-linux = "sha256-bNF6pht7o93A9aDQSGQlPj6N+UzKjhNQ/rDInayP7rU=";
                 }.${system} or (throw "Unsupported system: ${system}");
               };
 

@@ -2,10 +2,11 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * Copyright (c) 2001-2003 Swedish Institute of Computer Science.
  */
+#pragma once
 
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
+#include <sddf/util/printf.h>
 
 typedef  uint8_t  u8_t;
 typedef uint16_t u16_t;
@@ -19,10 +20,9 @@ typedef int64_t  s64_t;
 
 typedef uintptr_t mem_ptr_t;
 
-
-#define U16_F "hu"
+#define U16_F "u"
 #define S16_F "d"
-#define X16_F "hx"
+#define X16_F "x"
 #define U32_F "u"
 #define S32_F "d"
 #define X32_F "x"
@@ -58,16 +58,16 @@ typedef uintptr_t mem_ptr_t;
 #define LWIP_RAND                       rand
 
 /* Plaform specific diagnostic output */
-#define LWIP_PLATFORM_DIAG(x)                                   \
-        do {                                                    \
-            printf x;                                           \
+#define LWIP_PLATFORM_DIAG(x)                                                  \
+        do {                                                                   \
+            sddf_dprintf x ;                                                   \
         } while(0)
 
-#define LWIP_PLATFORM_ASSERT(x)                                 \
-        do {                                                    \
-            if (!x) {                                           \
-                printf("assertion violated: %s : %s:%d:%s\n",     \
-                       #x, __FILE__, __LINE__, __FUNCTION__);   \
-                while(1);                                       \
-            }                                                   \
+#define LWIP_PLATFORM_ASSERT(x)                                                \
+        do {                                                                   \
+            if (!x) {                                                          \
+                sddf_dprintf("assertion violated: %s : %s:%d:%s\n",            \
+                       #x, __FILE__, __LINE__, __FUNCTION__);                  \
+                while(1);                                                      \
+            }                                                                  \
         } while(0)
