@@ -254,6 +254,16 @@ filter_rule_bitmap_region = FirewallMemoryRegions(
     data_structures=[filter_rule_bitmap_wrapper, filter_rule_bitmap_buffer]
 )
 
+nat_ports_wrapper = FirewallDataStructure(
+    elf_name="udp_nat.elf", c_name="fw_nat_port_table"
+)
+nat_ports_buffer = FirewallDataStructure(
+    elf_name="udp_nat.elf", c_name="fw_nat_port_mapping", capacity=1024
+)
+nat_ports_region = FirewallMemoryRegions(
+    data_structures=[nat_ports_wrapper, nat_ports_buffer]
+)
+
 # Filter action encodings
 FILTER_ACTION_ALLOW = 1
 FILTER_ACTION_DROP = 2
@@ -360,8 +370,10 @@ def fw_region(
     mr: SystemDescription.MemoryRegion,
     perms: str,
     region_size: int,
+    *,
+    cached: bool = True
 ):
-    pd_map = Map(mr, pd.get_map_vaddr(mr), perms=perms)
+    pd_map = Map(mr, pd.get_map_vaddr(mr), perms=perms, cached=cached)
     pd.add_map(pd_map)
     region_resource = RegionResource(pd_map.vaddr, region_size)
 
@@ -373,8 +385,10 @@ def fw_device_region(
     pd: SystemDescription.ProtectionDomain,
     mr: SystemDescription.MemoryRegion,
     perms: str,
+    *,
+    cached: bool = True
 ):
-    region = fw_region(pd, mr, perms, mr.size)
+    region = fw_region(pd, mr, perms, mr.size, cached=cached)
     device_region = DeviceRegionResource(region, mr.paddr.value)
     return device_region
 
@@ -569,14 +583,25 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     )
 
     networks[int_net]["filters"] = {}
-    networks[int_net]["filters"][0x01] = ProtectionDomain(
+    networks[int_net]["filters"][ip_protocol_icmp] = ProtectionDomain(
         "icmp_filter1", "icmp_filter1.elf", priority=93, budget=20000
     )
-    networks[int_net]["filters"][0x11] = ProtectionDomain(
+    networks[int_net]["filters"][ip_protocol_udp] = ProtectionDomain(
         "udp_filter1", "udp_filter1.elf", priority=91, budget=20000
     )
-    networks[int_net]["filters"][0x06] = ProtectionDomain(
+    networks[int_net]["filters"][ip_protocol_tcp] = ProtectionDomain(
         "tcp_filter1", "tcp_filter1.elf", priority=92, budget=20000
+    )
+
+    networks[ext_net]["nat"] = {}
+
+    networks[ext_net]["nat"][0x11] = ProtectionDomain(
+        "udp_nat0", "udp_nat0.elf", priority=91, budget=20000
+    )
+
+    networks[int_net]["nat"] = {}
+    networks[int_net]["nat"][0x11] = ProtectionDomain(
+        "udp_nat1", "udp_nat1.elf", priority=91, budget=20000
     )
 
     for pd in common_pds:
@@ -605,6 +630,14 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 network["num"],
             )
             sdf.add_pd(filter_pd)
+
+        for nat_pd in network["nat"].values():
+            copy_elf(
+                nat_pd.program_image[:-5],
+                nat_pd.program_image[:-5],
+                network["num"],
+            )
+            sdf.add_pd(nat_pd)
 
         # Since arp requesters are net clients of the output network, we add
         # them as network clients here first. This ensures that we do not
@@ -836,15 +869,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         )
 
         for protocol, filter_pd in network["filters"].items():
-            # Create a firewall connection for filter to transmit buffers to
-            # router
-            filter_router_conn = fw_connection(
-                filter_pd,
-                router,
-                dma_buffer_queue.capacity,
-                dma_buffer_queue_region.region_size,
-            )
-
             # Connect filter as rx only network client
             network["in_net"].add_client_with_copier(filter_pd, tx=False)
             network["configs"][in_virt].active_client_ethtypes.append(eththype_ip)
@@ -892,18 +916,72 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 filter_rules_buffer.capacity,
             )
 
-            # Create filter config
-            network["configs"][filter_pd] = FwFilterConfig(
-                network["num"],
-                filter_instances_buffer.capacity,
-                filter_router_conn[0],
-                filter_webserver_config,
-                None,
-                None,
-                rule_bitmap_region,
-            )
+            # The NAT is pre-routing but post-filtering (effectively it is transparent to both router and filter).
+            # Since only UDP NAT is implemented, the NAT is inserted between the webserver and firewall only when the protocol is UDP
+            if protocol == ip_protocol_udp:
+                nat = network["nat"][ip_protocol_udp]
+                # Create a firewall connection from filter to NAT
+                filter_nat_conn = fw_connection(
+                    filter_pd,
+                    nat,
+                    dma_buffer_queue.capacity,
+                    dma_buffer_queue_region.region_size,
+                )
+                # Create a firewall connection from NAT to router
+                nat_router_conn = fw_connection(
+                    nat,
+                    router,
+                    dma_buffer_queue.capacity,
+                    dma_buffer_queue_region.region_size,
+                )
 
-            network["configs"][router].filters.append((filter_router_conn[1]))
+                # Create filter config
+                network["configs"][filter_pd] = FwFilterConfig(
+                    network["num"],
+                    filter_instances_buffer.capacity,
+                    filter_nat_conn[0],
+                    filter_webserver_config,
+                    None,
+                    None,
+                    rule_bitmap_region,
+                )
+
+                nat_dma = fw_device_region(nat, network["rx_dma_region"], "rw", cached=False)
+
+                # Create NAT config
+                network["configs"][nat] = FwNatConfig(
+                    filter_nat_conn[1],
+                    nat_router_conn[0],
+                    nat_dma,
+                    network["num"],
+                    None
+                )
+
+                # Update router config
+                network["configs"][router].filters.append((nat_router_conn[1]))
+            else:
+                # Create a firewall connection for filter to transmit buffers to
+                # router
+                filter_router_conn = fw_connection(
+                    filter_pd,
+                    router,
+                    dma_buffer_queue.capacity,
+                    dma_buffer_queue_region.region_size,
+                )
+
+                # Create filter config
+                network["configs"][filter_pd] = FwFilterConfig(
+                    network["num"],
+                    filter_instances_buffer.capacity,
+                    filter_router_conn[0],
+                    filter_webserver_config,
+                    None,
+                    None,
+                    rule_bitmap_region,
+                )
+
+                network["configs"][router].filters.append((filter_router_conn[1]))
+
             webserver_interface_config.filters.append(webserver_filter_config)
 
         webserver_config.interfaces.append(webserver_interface_config)
@@ -963,6 +1041,56 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         networks[ext_net]["configs"][mirror_filter].external_instances = int_instances[
             1
         ]
+
+    # Create NAT port table regions
+    for protocol, nat_pd in networks[int_net]["nat"].items():
+        mirror_nat = networks[ext_net]["nat"][protocol]
+        int_table = fw_shared_region(
+            nat_pd,
+            mirror_nat,
+            "rw",
+            "r",
+            "port_table",
+            nat_ports_region.region_size,
+        )
+        ext_table = fw_shared_region(
+            mirror_nat,
+            nat_pd,
+            "rw",
+            "r",
+            "port_table",
+            nat_ports_region.region_size,
+        )
+
+        networks[int_net]["configs"][nat_pd].interfaces = [
+            FwNatInterfaceConfig(
+                49152,
+                nat_ports_buffer.capacity,
+                ext_table[1],
+                0
+            ),
+            FwNatInterfaceConfig(
+                49152,
+                nat_ports_buffer.capacity,
+                int_table[0],
+                ip_to_int(ips[0])
+            ),
+        ]
+        networks[ext_net]["configs"][mirror_nat].interfaces = [
+            FwNatInterfaceConfig(
+                49152,
+                nat_ports_buffer.capacity,
+                ext_table[0],
+                0
+            ),
+            FwNatInterfaceConfig(
+                49152,
+                nat_ports_buffer.capacity,
+                int_table[1],
+                ip_to_int(ips[0])
+            ),
+        ]
+
 
     assert serial_system.connect()
     assert serial_system.serialise_config(output_dir)
