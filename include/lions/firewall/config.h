@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "lions/firewall/nat.h"
 #include <os/sddf.h>
 #include <stdbool.h>
 #include <stdint.h>
