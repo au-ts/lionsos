@@ -10,16 +10,13 @@
 
 /**
  * Stores original source and destination corresponding to a NAT ephemeral port.
+ * This is an endpoint independent mapping since only source address and port are used.
  */
 typedef struct fw_nat_port_mapping {
     /* original source ip of traffic */
     uint32_t src_ip;
-    /* destination ip of traffic */
-    uint32_t dst_ip;
     /* original source port of traffic */
     uint16_t src_port;
-    /* destination port of traffic */
-    uint16_t dst_port;
 } fw_nat_port_mapping_t;
 
 typedef struct fw_nat_port_table {
