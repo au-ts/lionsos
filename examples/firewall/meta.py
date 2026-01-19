@@ -302,6 +302,10 @@ ip_protocol_icmp = 0x01
 ip_protocol_tcp = 0x06
 ip_protocol_udp = 0x11
 
+# Protocols that will have NAT PDs inserted between the filter and router
+# Removing protocols from this list will completely remove any overhead incurred due to NAT
+NAT_PROTOCOLS = [ip_protocol_tcp, ip_protocol_udp]
+
 # ARP ethernet opcodes of ARP components
 arp_eth_opcode_request = 1
 arp_eth_opcode_response = 2
@@ -596,13 +600,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     common_pds.append(icmp_module)
 
     networks[ext_net]["filters"] = {}
-    networks[ext_net]["filters"][0x01] = ProtectionDomain(
+    networks[ext_net]["filters"][ip_protocol_icmp] = ProtectionDomain(
         "icmp_filter0", "icmp_filter0.elf", priority=90, budget=20000
     )
-    networks[ext_net]["filters"][0x11] = ProtectionDomain(
+    networks[ext_net]["filters"][ip_protocol_udp] = ProtectionDomain(
         "udp_filter0", "udp_filter0.elf", priority=91, budget=20000
     )
-    networks[ext_net]["filters"][0x06] = ProtectionDomain(
+    networks[ext_net]["filters"][ip_protocol_tcp] = ProtectionDomain(
         "tcp_filter0", "tcp_filter0.elf", priority=92, budget=20000
     )
 
@@ -618,14 +622,19 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     )
 
     networks[ext_net]["nat"] = {}
-
-    networks[ext_net]["nat"][0x11] = ProtectionDomain(
+    networks[ext_net]["nat"][ip_protocol_udp] = ProtectionDomain(
         "udp_nat0", "udp_nat0.elf", priority=91, budget=20000
+    )
+    networks[ext_net]["nat"][ip_protocol_tcp] = ProtectionDomain(
+        "tcp_nat0", "tcp_nat0.elf", priority=92, budget=20000
     )
 
     networks[int_net]["nat"] = {}
-    networks[int_net]["nat"][0x11] = ProtectionDomain(
+    networks[int_net]["nat"][ip_protocol_udp] = ProtectionDomain(
         "udp_nat1", "udp_nat1.elf", priority=91, budget=20000
+    )
+    networks[int_net]["nat"][ip_protocol_tcp] = ProtectionDomain(
+        "tcp_nat1", "tcp_nat1.elf", priority=92, budget=20000
     )
 
     for pd in common_pds:
@@ -941,9 +950,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             )
 
             # The NAT is pre-routing but post-filtering (effectively it is transparent to both router and filter).
-            # Since only UDP NAT is implemented, the NAT is inserted between the webserver and firewall only when the protocol is UDP
-            if protocol == ip_protocol_udp:
-                nat = network["nat"][ip_protocol_udp]
+            if protocol in NAT_PROTOCOLS:
+                nat = network["nat"][protocol]
                 # Create a firewall connection from filter to NAT
                 filter_nat_conn = fw_connection(
                     filter_pd,
@@ -1067,7 +1075,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         ]
 
     # Create NAT port table regions
-    for protocol, nat_pd in networks[int_net]["nat"].items():
+    for i, (protocol, nat_pd) in enumerate(networks[int_net]["nat"].items()):
         mirror_nat = networks[ext_net]["nat"][protocol]
         int_table = fw_shared_region(
             nat_pd,
@@ -1088,13 +1096,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         networks[int_net]["configs"][nat_pd].interfaces = [
             FwNatInterfaceConfig(
-                49152,
+                49152 + nat_ports_buffer.capacity * i,
                 nat_ports_buffer.capacity,
                 ext_table[1],
                 0
             ),
             FwNatInterfaceConfig(
-                49152,
+                49152 + nat_ports_buffer.capacity * i,
                 nat_ports_buffer.capacity,
                 int_table[0],
                 ip_to_int(ips[0])
@@ -1102,13 +1110,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         ]
         networks[ext_net]["configs"][mirror_nat].interfaces = [
             FwNatInterfaceConfig(
-                49152,
+                49152 + nat_ports_buffer.capacity * i,
                 nat_ports_buffer.capacity,
                 ext_table[0],
                 0
             ),
             FwNatInterfaceConfig(
-                49152,
+                49152 + nat_ports_buffer.capacity * i,
                 nat_ports_buffer.capacity,
                 int_table[1],
                 ip_to_int(ips[0])

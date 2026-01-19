@@ -84,6 +84,10 @@ static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_interface_config_t conf
         }
     }
 
+    if (ports->size >= config.ports_capacity) {
+        return 0; /* Ephemeral ports pool is full */
+    }
+
     /* Assign new ephemeral port */
     ports->mappings[ports->size].src_port = src_port;
     ports->mappings[ports->size].src_ip = src_ip;
