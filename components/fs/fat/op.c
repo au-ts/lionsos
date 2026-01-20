@@ -159,6 +159,10 @@ void handle_file_open(void) {
         file_free(file);
         args->status = FS_STATUS_NO_FILE;
         return;
+    } else if (RET == FR_INVALID_NAME) {
+        file_free(file);
+        args->status = FS_STATUS_INVALID_NAME;
+        return;
     } else if (RET != FR_OK) {
         file_free(file);
         args->status = FS_STATUS_ERROR;
