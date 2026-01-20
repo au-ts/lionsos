@@ -33,6 +33,9 @@
 
 #include <lions/posix/posix.h>
 
+//TODO: fix to use header; have issue with providing correct libmicrokitco_opts.h
+void microkit_cothread_wait_on_channel(const microkit_channel wake_on);
+
 extern size_t __sysinfo;
 extern timer_client_config_t timer_config;
 static muslcsys_syscall_t syscall_table[MUSLC_NUM_SYSCALLS] = { 0 };
@@ -54,6 +57,39 @@ static long sys_clock_gettime(va_list ap) {
 
     tp->tv_sec = rtc / NS_IN_S;
     tp->tv_nsec = rtc % NS_IN_S;
+
+    return 0;
+}
+
+static long sys_nanosleep(va_list ap) {
+    const struct timespec *req = va_arg(ap, const struct timespec *);
+    struct timespec *rem = va_arg(ap, struct timespec *);
+
+    if (req == NULL) {
+        return -EFAULT;
+    }
+
+    if (req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec >= NS_IN_S) {
+        return -EINVAL;
+    }
+
+    uint64_t sleep_ns = (uint64_t)req->tv_sec * NS_IN_S + (uint64_t)req->tv_nsec;
+    uint64_t start_time = sddf_timer_time_now(timer_config.driver_id);
+    uint64_t target_time = start_time + sleep_ns;
+
+    sddf_timer_set_timeout(timer_config.driver_id, sleep_ns);
+
+    // Loop until target time reached
+    // May wake spuriously due to timer expiring for other reasons
+    while (sddf_timer_time_now(timer_config.driver_id) < target_time) {
+        microkit_cothread_wait_on_channel(timer_config.driver_id);
+    }
+
+    // No signal interruption support - always sleep full duration
+    if (rem != NULL) {
+        rem->tv_sec = 0;
+        rem->tv_nsec = 0;
+    }
 
     return 0;
 }
@@ -154,6 +190,7 @@ void libc_init(libc_socket_config_t *socket_config) {
     }
 
     libc_define_syscall(__NR_clock_gettime, sys_clock_gettime);
+    libc_define_syscall(__NR_nanosleep, sys_nanosleep);
     libc_define_syscall(__NR_getpid, sys_getpid);
     libc_define_syscall(__NR_getuid, sys_getuid);
     libc_define_syscall(__NR_getgid, sys_getgid);
