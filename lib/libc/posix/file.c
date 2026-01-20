@@ -64,7 +64,15 @@ static int resolve_path(int dirfd, const char *path, char *out_path, size_t out_
             }
             strncpy(out_path, fd_path[dirfd], out_size - 1);
             out_path[out_size - 1] = '\0';
-            strncat(out_path, "/", out_size - strlen(out_path) - 1);
+            // Only append '/' if the base path doesn't already end with one
+            if (base_len > 0 && fd_path[dirfd][base_len - 1] != '/') {
+                strncat(out_path, "/", out_size - strlen(out_path) - 1);
+            }
+        }
+
+        // Handle "." path - means current directory, so don't append anything
+        if (strcmp(path, ".") == 0) {
+            return FILE_SUCC;
         }
 
         // can we fit the subpath?
