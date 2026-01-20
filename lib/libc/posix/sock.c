@@ -290,9 +290,6 @@ static long sys_recvfrom(va_list ap) {
     struct sockaddr *src_addr = va_arg(ap, struct sockaddr *);
     socklen_t *addrlen = va_arg(ap, socklen_t *);
 
-    (void)src_addr;
-    (void)addrlen;
-
     if (buf == NULL) {
         return -EFAULT;
     }
@@ -310,7 +307,28 @@ static long sys_recvfrom(va_list ap) {
     if (flags & MSG_DONTWAIT) {
         effective_flags |= O_NONBLOCK;
     }
-    return socket_config->tcp_socket_recv(fd_socket[sockfd], buf, len, effective_flags);
+
+    ssize_t ret = socket_config->tcp_socket_recv(fd_socket[sockfd], buf, len, effective_flags);
+    if (ret >= 0 && src_addr && addrlen) {
+        if (*addrlen < sizeof(struct sockaddr_in)) {
+            return -EINVAL;
+        }
+
+        struct sockaddr_in *sin = (struct sockaddr_in *)src_addr;
+        uint32_t addr;
+        uint16_t port;
+        int err = socket_config->tcp_socket_getpeername(fd_socket[sockfd], &addr, &port);
+        if (err == 0) {
+            sin->sin_family = AF_INET;
+            sin->sin_addr.s_addr = addr;
+            sin->sin_port = htons(port);
+            *addrlen = sizeof(*sin);
+        } else {
+            return err;
+        }
+    }
+
+    return ret;
 }
 
 static long sys_listen(va_list ap) {
