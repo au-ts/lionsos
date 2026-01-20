@@ -206,7 +206,7 @@ static long sys_readv(va_list ap) {
 static long sys_close(va_list ap) {
     long fd = va_arg(ap, int);
 
-    if (fd == SERVICES_FD) {
+    if (fd == SERVICES_FD || fd == ETC_FD) {
         return 0;
     }
 
@@ -318,6 +318,14 @@ static long sys_fstat(va_list ap) {
         statbuf->st_mode = S_IFREG | 0444; // regular file, read-only
         statbuf->st_nlink = 1;
         statbuf->st_size = 0;
+        return 0;
+    }
+
+    if (fd == ETC_FD) {
+        // Return directory stat for /etc
+        memset(statbuf, 0, sizeof(*statbuf));
+        statbuf->st_mode = S_IFDIR | 0555; // directory, read-only
+        statbuf->st_nlink = 2;
         return 0;
     }
 

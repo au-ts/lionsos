@@ -22,6 +22,7 @@
 
 // /etc/services
 #define SERVICES_FD (MAX_FDS)
+#define ETC_FD      (MAX_FDS + 1)
 
 typedef ssize_t (*fd_write_func)(const void *, size_t, int);
 typedef ssize_t (*fd_read_func)(void *, size_t, int);

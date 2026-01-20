@@ -43,7 +43,7 @@ static int resolve_path(int dirfd, const char *path, char *out_path, size_t out_
         return ENAMETOOLONG;
     }
 
-    if (dirfd != AT_FDCWD && (dirfd < 0 || dirfd >= MAX_FDS)) {
+    if (dirfd != AT_FDCWD && dirfd != ETC_FD && (dirfd < 0 || dirfd >= MAX_FDS)) {
         return EBADF;
     }
 
@@ -55,6 +55,9 @@ static int resolve_path(int dirfd, const char *path, char *out_path, size_t out_
         // TODO: support modifying CWD
         if (dirfd == AT_FDCWD) {
             strncpy(out_path, "/", 2);
+        } else if (dirfd == ETC_FD) {
+            strncpy(out_path, "/etc/", out_size - 1);
+            out_path[out_size - 1] = '\0';
         } else {
             size_t base_len = strlen(fd_path[dirfd]);
 
@@ -346,6 +349,14 @@ static long sys_fstatat(va_list ap) {
         return -err;
     }
 
+    if (strcmp(full_path, "/etc") == 0) {
+        // Return minimal stat for etc directory
+        memset(statbuf, 0, sizeof(*statbuf));
+        statbuf->st_mode = S_IFDIR | 0555; // directory, read-only
+        statbuf->st_nlink = 2;
+        return 0;
+    }
+
     if (strcmp(full_path, "/etc/services") == 0) {
         // Return minimal stat for services file
         memset(statbuf, 0, sizeof(*statbuf));
@@ -369,6 +380,13 @@ static long sys_openat(va_list ap) {
     int err = resolve_path(dirfd, path, full_path, PATH_MAX);
     if (err != FILE_SUCC) {
         return -err;
+    }
+
+    if (strcmp(full_path, "/etc") == 0) {
+        if (flags & O_DIRECTORY) {
+            return ETC_FD;
+        }
+        return -EISDIR;
     }
 
     if (strcmp(full_path, "/etc/services") == 0) {
@@ -496,7 +514,7 @@ static long sys_lseek(va_list ap) {
     off_t offset = va_arg(ap, off_t);
     int whence = va_arg(ap, int);
 
-    if (fd == SERVICES_FD) {
+    if (fd == SERVICES_FD || fd == ETC_FD) {
         return -EBADF;
     }
 
