@@ -8,15 +8,15 @@
 #include <stdlib.h>
 #include <sddf/util/printf.h>
 
-typedef  uint8_t  u8_t;
+typedef uint8_t u8_t;
 typedef uint16_t u16_t;
 typedef uint32_t u32_t;
 typedef uint64_t u64_t;
 
-typedef  int8_t   s8_t;
-typedef int16_t  s16_t;
-typedef int32_t  s32_t;
-typedef int64_t  s64_t;
+typedef int8_t s8_t;
+typedef int16_t s16_t;
+typedef int32_t s32_t;
+typedef int64_t s64_t;
 
 typedef uintptr_t mem_ptr_t;
 
@@ -28,27 +28,24 @@ typedef uintptr_t mem_ptr_t;
 #define X32_F "x"
 #define SZT_F "lu"
 
-
 // BYTE_ORDER might be defined by the architecture
 #ifndef BYTE_ORDER
 #if defined(__BYTE_ORDER__)
-#  define BYTE_ORDER __BYTE_ORDER__
+#define BYTE_ORDER __BYTE_ORDER__
 #elif defined(__BIG_ENDIAN)
-#  define BYTE_ORDER BIG_ENDIAN
+#define BYTE_ORDER BIG_ENDIAN
 #elif defined(__LITTLE_ENDIAN)
-#  define BYTE_ORDER LITTLE_ENDIAN
+#define BYTE_ORDER LITTLE_ENDIAN
 #else
-#  error Unable to detemine system endianess
+#error Unable to detemine system endianess
 #endif
 #endif
-
 
 #define LWIP_CHKSUM_ALGORITHM 3
 
 #define PACK_STRUCT_STRUCT __attribute__((packed))
 #define PACK_STRUCT_BEGIN
 #define PACK_STRUCT_END
-
 
 #define LWIP_PLATFORM_BYTESWAP 1
 #define LWIP_PLATFORM_HTONS(x) ( (((u16_t)(x))>>8) | (((x)&0xFF)<<8) )
