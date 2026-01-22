@@ -9,7 +9,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+// Allow override of max FDs e.g. for testing purposes
+// Add -DMAX_FDS=<value> to CFLAGS to override
+#ifndef MAX_FDS
 #define MAX_FDS 128
+#endif
 
 /*
  * Reserved FDs for special files

@@ -278,7 +278,13 @@ static int tcp_socket_connect(int index, uint32_t addr, uint16_t port, int flags
         return -EISCONN;
     }
 
-    assert(sock->state == socket_state_bound || sock->state == socket_state_allocated);
+    if (sock->state == socket_state_connecting) {
+        return -EALREADY;
+    }
+
+    if (sock->state != socket_state_bound && sock->state != socket_state_allocated) {
+        return -EINVAL;
+    }
 
     ip_addr_t ipaddr;
     ip4_addr_set_u32(&ipaddr, addr);
@@ -319,6 +325,17 @@ static int tcp_socket_close_int(int index) {
             dlog("error closing socket (%d)", err);
             return -lwip_err_to_errno[-err];
         }
+        return SOCK_SUCC;
+    }
+
+    case socket_state_connecting: {
+        tcp_arg(socket->sock_tpcb, NULL);  // Prevent error callback noise
+        tcp_abort(socket->sock_tpcb);
+        socket->state = socket_state_unallocated;
+        socket->sock_tpcb = NULL;
+        socket->rx_head = 0;
+        socket->rx_len = 0;
+
         return SOCK_SUCC;
     }
 

@@ -1,5 +1,5 @@
 #
-# Copyright 2024, UNSW
+# Copyright 2026, UNSW
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
@@ -10,12 +10,12 @@ endif
 override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
 export LIONSOS ?= $(abspath ../..)
-export POSIX_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+export WASM_TEST_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD ?= qemu_virt_aarch64
 
-IMAGE_FILE := $(BUILD_DIR)/posix.img
+IMAGE_FILE := $(BUILD_DIR)/wasm_test.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
 all: ${IMAGE_FILE}
@@ -23,22 +23,19 @@ all: ${IMAGE_FILE}
 qemu ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
 	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} $(notdir $@)
 
-${BUILD_DIR}/Makefile: posix.mk Makefile
+${BUILD_DIR}/Makefile: wasm_test.mk Makefile
 	mkdir -p ${BUILD_DIR}
-	cp posix.mk $@
+	cp wasm_test.mk $@
 	echo "export LIONSOS ?= ${LIONSOS}" > $@
-	echo "export POSIX_DIR ?= ${POSIX_DIR}" >> $@
+	echo "export WASM_TEST_DIR ?= ${WASM_TEST_DIR}" >> $@
 	echo "export BUILD_DIR := ${BUILD_DIR}" >> $@
 	echo "export MICROKIT_BOARD ?= ${MICROKIT_BOARD}" >> $@
 	echo "export MICROKIT_SDK ?= ${MICROKIT_SDK}" >> $@
 	echo "export MICROKIT_CONFIG ?= ${MICROKIT_CONFIG}" >> $@
-	cat posix.mk >> $@
+	cat wasm_test.mk >> $@
 
 submodules:
-	git submodule update --init $(LIONSOS)/dep/libnfs
-	git submodule update --init $(LIONSOS)/dep/micropython
 	git submodule update --init $(LIONSOS)/dep/sddf
 	git submodule update --init $(LIONSOS)/dep/libmicrokitco
-	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
 FORCE:
