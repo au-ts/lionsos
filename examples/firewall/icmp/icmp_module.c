@@ -151,6 +151,26 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
             uint16_t to_copy_te = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
             memcpy(&icmp_time_exceeded->data, req->time_exceeded.data, to_copy_te);
             break;
+        case ICMP_REDIRECT_MSG:
+            sddf_printf("Redirect triggered");
+            /* Destination is original packet's source */
+            ip_hdr->dst_ip = req->ip_hdr.src_ip;
+
+            /* Total length of ICMP redicrt IP packet */
+            ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_REDIRECT_LEN);
+
+            /* Construct ICMP redirect packet */
+            icmp_redirect_t *icmp_redirect = (icmp_redirect_t *)(pkt_vaddr + ICMP_REDIRECT_OFFSET);
+
+            /* Set the gateway IP address*/
+            icmp_redirect->gateway_ip = req->redirect.gateway_ip;
+
+            /* Copy IP header */
+            memcpy(&icmp_redirect->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
+            /* Copy first bytes of data if applicable */
+            uint16_t to_copy_re = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
+            memcpy(&icmp_redirect->data, req->redirect.data, to_copy_re);
+            break;
         default:
             sddf_printf("ICMP module tried to construct an unsupported ICMP type %u packet!\n", req->type);
             return false;

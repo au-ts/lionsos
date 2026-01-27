@@ -89,6 +89,22 @@ typedef struct __attribute__((__packed__)) icmp_dest {
 /* Total length of ICMP destination unreachable header */
 #define ICMP_DEST_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_dest_t))
 
+/* ----------------- 5 - ICMP REDIRECT MSG ---------------------------*/
+/* ICMP Time Exceeded header fields*/
+typedef struct __attribute__((__packed__)) icmp_redirect {
+    /* IP Address of the new path */
+    uint32_t gateway_ip;
+    /* IP header of source packet */
+    ipv4_hdr_t ip_hdr;
+    /* First 8 bytes of data from source packet */
+    uint8_t data[FW_ICMP_SRC_DATA_LEN];
+} icmp_redirect_t;
+
+#define ICMP_REDIRECT_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_redirect_t))
+
+#define ICMP_REDIRECT_OFFSET (ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN)
+
+
 /* ----------------- 8 - Echo Request / 0 - Echo Reply ---------------------------*/
 
 /* ICMP echo request/reply header fields (following common header) */
@@ -123,6 +139,7 @@ typedef struct __attribute__((__packed__)) icmp_time_exceeded {
 #define ICMP_TIME_EXCEEDED_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_time_exceeded_t))
 
 #define ICMP_TIME_EXCEEDED_OFFSET (ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN)
+
 
 /* ----------------- Firewall Data Types ---------------------------*/
 
