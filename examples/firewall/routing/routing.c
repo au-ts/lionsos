@@ -114,7 +114,7 @@ static bool interface_comparison(uint8_t interface,
 }
 
 static void check_enqueue_icmp_redirect(net_buff_desc_t buffer, fw_routing_interfaces_t out_int, uint32_t next_hop) {
-
+    sddf_printf("Enetred redirect check");
     /* Inerface match check*/
     bool interface_match = interface_comparison(router_config.interface, out_int);
     if (!interface_match) {
@@ -396,6 +396,7 @@ static void route(void)
             }
 
             fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
+            sddf_printf("11111");
             /* destination unreachable or no space to store packet or send ARP request, drop packet */
             if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) ||
                 (pkt_waiting_full(&pkt_waiting_queue) &&
