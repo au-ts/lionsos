@@ -31,7 +31,8 @@ fw_nat_port_table_t *port_table;
 
 fw_nat_interface_config_t nat_interface_config;
 
-static void log_packet(ipv4_hdr_t *ip_hdr, tcp_hdr_t *tcp_hdr) {
+static void log_packet(ipv4_hdr_t *ip_hdr, tcp_hdr_t *tcp_hdr)
+{
     if (FW_DEBUG_OUTPUT) {
         sddf_printf("%sTCP NAT LOG: src = %s:%u\n", fw_frmt_str[nat_config.interface], ipaddr_to_string(ip_hdr->src_ip,
                                                                                                         ip_addr_buf0), htons(tcp_hdr->src_port));
@@ -87,15 +88,15 @@ static void translate(void)
             } else {
                 sddf_printf("%sTCP NAT LOG: ephemeral ports ran out!\n", fw_frmt_str[nat_config.interface]);
             }
-        }
-        else {
+        } else {
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("%sTCP NAT LOG: NAT disabled on this interface\n", fw_frmt_str[nat_config.interface]);
             }
         }
 
         if (tcp_hdr->check == 0) {
-            tcp_hdr->check = calculate_transport_checksum(tcp_hdr, htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr), IPV4_PROTO_TCP, ip_hdr->src_ip, ip_hdr->dst_ip);
+            tcp_hdr->check = calculate_transport_checksum(tcp_hdr, htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr),
+                                                          IPV4_PROTO_TCP, ip_hdr->src_ip, ip_hdr->dst_ip);
         }
 
         log_packet(ip_hdr, tcp_hdr);
