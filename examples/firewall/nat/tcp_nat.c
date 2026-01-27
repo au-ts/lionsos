@@ -76,7 +76,7 @@ static void translate(void)
 
             if (ephemeral_port) {
                 ip_hdr->src_ip = nat_interface_config.snat;
-                tcp_hdr->src_port = htons(ephemeral_port);
+                tcp_hdr->src_port = ephemeral_port;
                 tcp_hdr->check = 0;
                 ip_hdr->check = 0;
 
