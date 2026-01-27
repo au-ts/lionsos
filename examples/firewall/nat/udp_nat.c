@@ -31,7 +31,8 @@ fw_nat_port_table_t *port_table;
 
 fw_nat_interface_config_t nat_interface_config;
 
-static void log_packet(ipv4_hdr_t *ip_hdr, udp_hdr_t *udp_hdr) {
+static void log_packet(ipv4_hdr_t *ip_hdr, udp_hdr_t *udp_hdr)
+{
     if (FW_DEBUG_OUTPUT) {
         sddf_printf("%sUDP NAT LOG: src = %s:%u\n", fw_frmt_str[nat_config.interface], ipaddr_to_string(ip_hdr->src_ip,
                                                                                                         ip_addr_buf0), htons(udp_hdr->src_port));
@@ -91,6 +92,11 @@ static void translate(void)
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("%sUDP NAT LOG: NAT disabled on this interface\n", fw_frmt_str[nat_config.interface]);
             }
+        }
+
+        if (udp_hdr->check == 0) {
+            udp_hdr->check = calculate_transport_checksum(udp_hdr, htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr),
+                                                          IPV4_PROTO_UDP, ip_hdr->src_ip, ip_hdr->dst_ip);
         }
 
         log_packet(ip_hdr, udp_hdr);
