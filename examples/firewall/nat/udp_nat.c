@@ -44,6 +44,7 @@ static void log_packet(ipv4_hdr_t *ip_hdr, udp_hdr_t *udp_hdr)
 static void translate(void)
 {
     net_buff_desc_t buffer;
+    bool transmitted = false;
 
     while (!fw_queue_empty(&filter_queue)) {
         /* Incoming packet from filter */
@@ -105,6 +106,10 @@ static void translate(void)
         fw_enqueue(&router_queue, &buffer);
         assert(!err);
 
+        transmitted = true;
+    }
+
+    if (transmitted) {
         microkit_notify(nat_config.router.ch);
     }
 }
