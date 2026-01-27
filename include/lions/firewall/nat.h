@@ -17,15 +17,24 @@
  * Stores original source and destination corresponding to a NAT ephemeral port.
  * This is an endpoint independent mapping since only source address and port are used.
  */
-typedef struct fw_nat_port_mapping {
+typedef struct fw_nat_port_mapping fw_nat_port_mapping_t;
+struct fw_nat_port_mapping {
     /* original source ip of traffic */
     uint32_t src_ip;
     /* original source port of traffic (network byte order) */
     uint16_t src_port;
-} fw_nat_port_mapping_t;
+    /* next free node (for nodes in free list only) */
+    fw_nat_port_mapping_t *next_free;
+    bool is_valid;
+};
 
 typedef struct fw_nat_port_table {
+    /* number of valid NAT entries */
     uint16_t size;
+    /* largest initialised entry in the NAT table (could be valid or free) */
+    uint16_t largest_index;
+    /* head of free nodes */
+    fw_nat_port_mapping_t *free_head;
     fw_nat_port_mapping_t mappings[];
 } fw_nat_port_table_t;
 
@@ -53,7 +62,8 @@ static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interfa
             fw_nat_port_table_t *port_table = (fw_nat_port_table_t*)interfaces[i].port_table.vaddr;
 
             if ((dst_port >= interfaces[i].base_port)
-                && (dst_port < interfaces[i].base_port + port_table->size)) {
+                && (dst_port < interfaces[i].base_port + port_table->largest_index)
+                && port_table->mappings[dst_port - interfaces[i].base_port].is_valid) {
                 return &port_table->mappings[dst_port - interfaces[i].base_port];
             }
         }
@@ -72,7 +82,7 @@ static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interfa
  * @param src_ip source IP in network byte order
  * @param src_port source port in network byte order
  *
- * @returns ephemeral port in host byte order.
+ * @returns ephemeral port in network byte order.
  */
 static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_interface_config_t config, fw_nat_port_table_t *ports,
                                                   uint32_t src_ip, uint16_t src_port)
@@ -80,17 +90,56 @@ static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_interface_config_t conf
     /* Search for an existing mapping */
     for (uint16_t i = 0; i < ports->size; i++) {
         if (ports->mappings[i].src_ip == src_ip && ports->mappings[i].src_port == src_port) {
-            return config.base_port + i;
+            return htons(config.base_port + i);
         }
+    }
+
+    /* Try to reuse a free entry */
+    if (ports->free_head) {
+        ports->size++;
+
+        /* Remove from front of list */
+        fw_nat_port_mapping_t *mapping = ports->free_head;
+        ports->free_head = mapping->next_free;
+
+        mapping->src_port = src_port;
+        mapping->src_ip = src_ip;
+        ports->mappings[ports->largest_index].is_valid = true;
+        return htons(config.base_port + mapping - ports->mappings);
     }
 
     if (ports->size >= config.ports_capacity) {
         return 0; /* Ephemeral ports pool is full */
     }
 
-    /* Assign new ephemeral port */
-    ports->mappings[ports->size].src_port = src_port;
-    ports->mappings[ports->size].src_ip = src_ip;
+    /* Initialise a new entry in the NAT table and assign its ephemeral port */
+    ports->size++;
+    ports->mappings[ports->largest_index].src_port = src_port;
+    ports->mappings[ports->largest_index].src_ip = src_ip;
+    ports->mappings[ports->largest_index].is_valid = true;
 
-    return config.base_port + ports->size++;
+    return htons(config.base_port + ports->largest_index++);
+}
+
+/**
+ * Free an ephemeral port, prepending it to the head of the free list.
+ *
+ * @param config NAT config for this interface
+ * @param ports ephemeral port table for this interface
+ * @param port ephemeral port to be freed in host byte order
+ */
+static inline void fw_nat_free_ephemeral_port(fw_nat_interface_config_t config, fw_nat_port_table_t *ports,
+                                              uint16_t port)
+{
+    fw_nat_port_mapping_t *mapping = &ports->mappings[port - config.base_port];
+
+    mapping->src_ip = 0;
+    mapping->src_port = 0;
+    mapping->next_free = ports->free_head;
+    mapping->is_valid = false;
+
+    /* this index is now the new head */
+    ports->free_head = mapping;
+
+    ports->size--;
 }
