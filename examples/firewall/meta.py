@@ -898,7 +898,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         )
 
         webserver_interface_config = FwWebserverInterfaceConfig(
-            network["mac"], network["ip"], webserver_router_config, []
+            network["mac"], network["ip"], webserver_router_config, [], []
         )
 
         for protocol, filter_pd in network["filters"].items():
@@ -953,6 +953,12 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             if protocol in NAT_PROTOCOLS:
                 nat = network["nat"][protocol]
 
+                # Create pp channel between webserver and nat for config changes
+                nat_config_ch = Channel(webserver, nat, pp_a=True)
+                sdf.add_channel(nat_config_ch)
+
+                webserver_nat_config = FwWebserverNatConfig(protocol, nat_config_ch.pd_a_id)
+
                 # NAT needs timer for timeouts
                 timer_system.add_client(nat)
 
@@ -989,12 +995,15 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                     filter_nat_conn[1],
                     nat_router_conn[0],
                     nat_dma,
+                    nat_config_ch.pd_b_id,
                     network["num"],
                     None
                 )
 
                 # Update router config
                 network["configs"][router].filters.append((nat_router_conn[1]))
+
+                webserver_interface_config.nat.append(webserver_nat_config)
             else:
                 # Create a firewall connection for filter to transmit buffers to
                 # router
