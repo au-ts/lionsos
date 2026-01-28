@@ -11,7 +11,7 @@ from importlib.metadata import version
 import ipaddress
 from board import BOARDS
 
-assert version("sdfgen").split(".")[1] == "27", "Unexpected sdfgen version"
+assert version("sdfgen").split(".")[1] == "28", "Unexpected sdfgen version"
 
 from sdfgen_helper import *
 
@@ -246,6 +246,17 @@ routing_table_buffer = FirewallDataStructure(
 )
 routing_table_region = FirewallMemoryRegions(
     data_structures=[routing_table_wrapper, routing_table_buffer]
+)
+
+priority_table_wrapper = FirewallDataStructure(
+    elf_name="routing.elf", c_name="filter_prio"
+)
+
+priority_table_buffer = FirewallDataStructure(
+    entry_size=1
+)
+priority_table_region = FirewallMemoryRegions(
+    data_structures=[priority_table_wrapper, priority_table_buffer]
 )
 
 filter_rules_wrapper = FirewallDataStructure(
@@ -828,11 +839,17 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         # Create router webserver config
         router_webserver_config = FwWebserverRouterConfig(
-            router_update_ch.pd_b_id, routing_table[0], routing_table_buffer.capacity
+            router_update_ch.pd_b_id,
+            routing_table[0],
+            routing_table_buffer.capacity,
+            RegionResource(0,0) # Set filter priority region after all filters have been added
         )
 
         webserver_router_config = FwWebserverRouterConfig(
-            router_update_ch.pd_a_id, routing_table[1], routing_table_buffer.capacity
+            router_update_ch.pd_a_id,
+            routing_table[1],
+            routing_table_buffer.capacity,
+            RegionResource(0,0) # Set filter priority region after all filters have been added
         )
 
         # Create router config
@@ -852,6 +869,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             arp_packet_queue,
             router_webserver_config,
             network["icmp_module"],
+            [],
             [],
         )
 
@@ -928,7 +946,25 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             )
 
             network["configs"][router].filters.append((filter_router_conn[1]))
+            # Set an initial priority of 1 for all filters
+            network["configs"][router].init_filter_priorities.append(1)
+            priority_table_buffer.capacity += 1
             webserver_interface_config.filters.append(webserver_filter_config)
+
+        # Recalculate filter priority table size now all filters have been added
+        priority_table_region.update_size()
+
+        priority_table = fw_shared_region(
+            router,
+            webserver,
+            "rw",
+            "r",
+            "priority_table",
+            priority_table_region.region_size,
+        )
+
+        router_webserver_config.filter_priorities = priority_table[0]
+        webserver_router_config.filter_priorities = priority_table[1]
 
         webserver_config.interfaces.append(webserver_interface_config)
 

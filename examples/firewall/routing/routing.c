@@ -52,6 +52,8 @@ pkts_waiting_t pkt_waiting_queue; /* Queue holding packets awaiting
 /* Routing data structures */
 fw_routing_table_t *routing_table; /* Table holding next hop data for subnets */
 
+filter_prio_t *filter_prio;
+
 /* Booleans to keep track of which components need to be notified */
 static bool tx_net; /* Packet has been transmitted to the network tx
                      * virtualiser */
@@ -361,6 +363,9 @@ void init(void)
                           router_config.webserver.routing_table_capacity,
                           router_config.ip,
                           router_config.subnet);
+
+    filter_prio = (filter_prio_t *)router_config.webserver.filter_priorities.vaddr;
+    filter_prio->prio[0] = router_config.init_filter_priorities[0];
 
     /* Set up router --> webserver queue. */
     if (router_config.interface == FW_INTERNAL_INTERFACE_ID) {

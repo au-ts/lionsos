@@ -90,6 +90,13 @@ typedef struct routing_table {
     fw_routing_entry_t entries[];
 } fw_routing_table_t;
 
+typedef struct filter_prio {
+    /* capacity/num filters */
+    uint16_t capacity;
+    bool rr;
+    uint8_t prio[];
+} filter_prio_t;
+
 /* packet waiting node used to store outgoing packets before MAC address has
 been resolved */
 typedef struct pkt_waiting_node {

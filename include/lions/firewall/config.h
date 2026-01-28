@@ -88,6 +88,7 @@ typedef struct fw_webserver_router_config {
     uint8_t routing_ch;
     region_resource_t routing_table;
     uint16_t routing_table_capacity;
+    region_resource_t filter_priorities;
 } fw_webserver_router_config_t;
 
 typedef struct fw_router_config {
@@ -113,6 +114,7 @@ typedef struct fw_router_config {
     fw_connection_resource_t icmp_module;
     fw_connection_resource_t filters[FW_MAX_FILTERS];
     uint8_t num_filters;
+    uint8_t init_filter_priorities[FW_MAX_FILTERS];
 } fw_router_config_t;
 
 typedef struct fw_icmp_module_config {

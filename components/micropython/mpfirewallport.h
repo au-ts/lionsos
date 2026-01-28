@@ -25,6 +25,7 @@ extern fw_webserver_config_t fw_config;
  */
 typedef struct fw_webserver_interface_state {
     fw_routing_table_t *routing_table;
+    filter_prio_t *filter_prio;
     fw_filter_state_t filter_states[FW_MAX_FILTERS];
     uint16_t num_rules[FW_MAX_FILTERS];
 } fw_webserver_interface_state_t;
