@@ -125,6 +125,19 @@ class FirewallDataStructure:
                 f"FirewallDataStructure: Calculated size of structure with c name {self.c_name}, entry size {self.entry_size} and capacity {self.capacity} was 0!"
             )
 
+    # Call to recalculate size after data structure update
+    def update_size(self):
+        if not self.entry_size:
+            raise Exception(
+                f"FirewallDataStructure: Entry size of structure with c name {self.c_name} was 0 during size recalculation!"
+            )
+
+        self.size = self.size_formula(self)
+        if not self.size:
+            raise Exception(
+                f"FirewallDataStructure: Recalculated size of structure with c name {self.c_name}, entry size {self.entry_size} and capacity {self.capacity} was 0!"
+            )
+
 
 # Class for creating firewall memory regions to be mapped into components.
 # Memory regions can be created directly, or by listing the data structures to
@@ -164,6 +177,14 @@ class FirewallMemoryRegions:
         if not self.min_size:
             raise Exception(
                 f"FirewallMemoryRegions: Calculated minimum size of region with data structure list {self.data_structures} was 0!"
+            )
+
+    # Call to recalculate size after data structure update
+    def update_size(self):
+        self.min_size = self.size_formula(self.data_structures)
+        if not self.min_size:
+            raise Exception(
+                f"FirewallMemoryRegions: Recalculated minimum size of region with data structure list {self.data_structures} was 0!"
             )
 
     @property
