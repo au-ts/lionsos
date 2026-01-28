@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include "sddf/util/printf.h"
 #include <os/sddf.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -28,6 +29,8 @@ struct fw_nat_port_mapping {
     /* next free node (for nodes in free list only) */
     fw_nat_port_mapping_t *next_free;
     bool is_valid;
+    /* sddf timer timestamp (nanoseconds) for last time a packet was sent or received on this port */
+    uint64_t last_used_ts;
 };
 
 typedef struct fw_nat_port_table {
@@ -54,7 +57,7 @@ typedef struct fw_nat_port_table {
  * @return the original port mapping if it exists, NULL otherwise.
  */
 static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interface_config_t interfaces[],
-                                                                  uint32_t dst_ip, uint16_t dst_port)
+                                                                  uint32_t dst_ip, uint16_t dst_port, uint64_t now)
 {
     /* Since dst_port is used as an index here it must be in host byte order */
     dst_port = htons(dst_port);
@@ -87,11 +90,12 @@ static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interfa
  * @returns ephemeral port in network byte order.
  */
 static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_interface_config_t config, fw_nat_port_table_t *ports,
-                                                  uint32_t src_ip, uint16_t src_port)
+                                                  uint32_t src_ip, uint16_t src_port, uint64_t now)
 {
     /* Search for an existing mapping */
     for (uint16_t i = 0; i < ports->size; i++) {
-        if (ports->mappings[i].src_ip == src_ip && ports->mappings[i].src_port == src_port) {
+        if (ports->mappings[i].src_ip == src_ip && ports->mappings[i].src_port == src_port && ports->mappings[i].is_valid) {
+            ports->mappings[i].last_used_ts = now;
             return htons(config.base_port + i);
         }
     }
@@ -106,6 +110,7 @@ static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_interface_config_t conf
 
         mapping->src_port = src_port;
         mapping->src_ip = src_ip;
+        mapping->last_used_ts = now;
         ports->mappings[ports->largest_index].is_valid = true;
         return htons(config.base_port + mapping - ports->mappings);
     }
@@ -119,6 +124,7 @@ static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_interface_config_t conf
     ports->mappings[ports->largest_index].src_port = src_port;
     ports->mappings[ports->largest_index].src_ip = src_ip;
     ports->mappings[ports->largest_index].is_valid = true;
+    ports->mappings[ports->largest_index].last_used_ts = now;
 
     return htons(config.base_port + ports->largest_index++);
 }
@@ -135,13 +141,39 @@ static inline void fw_nat_free_ephemeral_port(fw_nat_interface_config_t config, 
 {
     fw_nat_port_mapping_t *mapping = &ports->mappings[port - config.base_port];
 
+    sddf_printf("NAT LOG: free head is now: %p\n", ports->free_head);
     mapping->src_ip = 0;
     mapping->src_port = 0;
     mapping->next_free = ports->free_head;
     mapping->is_valid = false;
+    mapping->last_used_ts = 0;
 
     /* this index is now the new head */
     ports->free_head = mapping;
+    sddf_printf("NAT LOG: free head is now: %p\n", ports->free_head);
 
     ports->size--;
+}
+
+/**
+ * Frees all port mappings older than the timeout duration.
+ * @param config NAT config for this interface
+ * @param ports ephemeral port table for this interface
+ * @param timeout duration in nanoseconds for which entries older than it will be freed
+ * @param now the time now as an SDDF timestamp
+ */
+static inline void fw_nat_free_expired_mappings(fw_nat_interface_config_t config, fw_nat_port_table_t *ports,
+                                                uint64_t timeout, uint64_t now)
+{
+    for (uint16_t i = 0; i < ports->largest_index; i++) {
+        fw_nat_port_mapping_t *mapping = &ports->mappings[i];
+
+        if (mapping->is_valid && now > timeout && mapping->last_used_ts <= now - timeout) {
+            fw_nat_free_ephemeral_port(config, ports, config.base_port + i);
+
+            if (FW_DEBUG_OUTPUT) {
+                sddf_printf("NAT LOG: freed port: %u, %u remaining\n", config.base_port + i, ports->size);
+            }
+        }
+    }
 }
