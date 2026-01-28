@@ -51,12 +51,7 @@ UnknownErrStr = "Unexpected unknown error."
 
 numInterfaces = 2
 
-interfaceStringsRouters = [
-    "internal",
-    "external",
-]
-
-interfaceStringsFilters = [
+interfaceStrings = [
     "external",
     "internal"
 ]
@@ -147,11 +142,11 @@ def tupleToMac(macList):
 def interfaceStringToInt(componentType, interfaceStr):
   if componentType == "router":
       for i in range(numInterfaces):
-        if interfaceStr == interfaceStringsRouters[i]:
+        if interfaceStr == interfaceStrings[1-i]:
             return i
   elif componentType == "filter":
     for i in range(numInterfaces):
-        if interfaceStr == interfaceStringsFilters[i]:
+        if interfaceStr == interfaceStrings[i]:
             return i
 
     print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
@@ -419,6 +414,24 @@ def addRule(request, protocolStr):
         print(f"UI SERVER|ERR: Unknown Error: addRule: {exception}.")
         return {"error": UnknownErrStr}, 404
 
+###### Ping Response methods ######
+
+# Set ping response for an interface
+@app.route('/api/ping/<string:interfaceStr>/<int:enabled>', methods=['POST'])
+def setPingResponse(request, interfaceStr, enabled):
+    try:
+        interface = interfaceStringToInt("filter", interfaceStr)
+        lions_firewall.ping_response_set(interface, bool(enabled))
+        return {
+            "interface": interfaceStringsCap[interface],
+            "ping_enabled": bool(enabled)
+        }
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: setPingResponse: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: setPingResponse: {exception}.")
+        return {"error": UnknownErrStr}, 404
 
 ############ Web UI routes ############
 
@@ -435,7 +448,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
   </body>
 </html>
@@ -455,7 +468,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
     <div id="interfaces-container">
       <table border="1">
@@ -519,7 +532,7 @@ def config(request):
   <body>
     <h1>Routing Configuration Page</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
 
     <h2>Internal Interface Routing Table</h2>
@@ -637,9 +650,9 @@ def config(request):
           var interfaceInternal = document.getElementById('new-interface-internal').checked;
           var interface;
           if (interfaceInternal) {
-            interface = 0;
-          } else if (interfaceExternal) {
             interface = 1;
+          } else if (interfaceExternal) {
+            interface = 0;
           } else {
             alert("Invalid interface supplied.");
             return;
@@ -685,7 +698,7 @@ def rules(request, protocol):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
     <div style="display: flex; flex-direction: column; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>
@@ -701,6 +714,7 @@ def rules(request, protocol):
           <option value="1">Allow</option>
           <option value="2">Drop</option>
           <option value="3">Connect</option>
+          <option value="5">Reject</option>
         </select>
         <button id="internal-set-default-action-btn">Update Default</button>
       </div>
@@ -732,6 +746,7 @@ def rules(request, protocol):
           <option value="1">Allow</option>
           <option value="2">Drop</option>
           <option value="3">Connect</option>
+          <option value="5">Reject</option>
         </select>
         <button id="external-set-default-action-btn">Update Default</button>
       </div>
@@ -769,6 +784,7 @@ def rules(request, protocol):
         <option value="1">Allow</option>
         <option value="2">Drop</option>
         <option value="3">Connect</option>
+        <option value="5">Reject</option>
       </select>
       <button id="add-rule-btn">Add Rule</button>
     </p>
@@ -891,9 +907,9 @@ def rules(request, protocol):
           var interfaceExternal = document.getElementById('new-interface-external').checked;
           var interface;
           if (interfaceInternal) {
-            interface = 1;
-          } else if (interfaceExternal) {
             interface = 0;
+          } else if (interfaceExternal) {
+            interface = 1;
           } else {
             alert("Invalid interface supplied.");
             return;
@@ -958,7 +974,7 @@ def rules(request):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
     <div style="display: inline-block; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>
@@ -988,5 +1004,68 @@ body {
 }
 """
     return Response(body=css, headers={'Content-Type': 'text/css'})
+@app.route('/ping_settings')
+def ping_settings(request):
+    html = """
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Ping Settings</title>
+    <link rel="stylesheet" href="/main.css">
+  </head>
+  <body>
+    <h1>Ping Response Settings</h1>
+    <nav>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
+    </nav>
+
+    <h2>Toggle Ping Response</h2>
+    <p>Control whether the firewall responds to ICMP echo requests (ping) on each interface. Default disabled for all interfaces.</p>
+
+    <div class="ping-control">
+      <h3>Internal Interface (192.168.1.1)</h3>
+      <button id="internal-enable">Enable Ping</button>
+      <button id="internal-disable">Disable Ping</button>
+      <span id="internal-status"></span>
+    </div>
+
+    <div class="ping-control">
+      <h3>External Interface (172.16.2.1)</h3>
+      <button id="external-enable">Enable Ping</button>
+      <button id="external-disable">Disable Ping</button>
+      <span id="external-status"></span>
+    </div>
+
+    <script>
+      function togglePing(interfaceName, enabled) {
+        fetch('/api/ping/' + interfaceName + '/' + (enabled ? 1 : 0), {
+          method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+          var statusSpan = document.getElementById(interfaceName + '-status');
+          if (data.error) {
+            statusSpan.textContent = 'Error: ' + data.error;
+            statusSpan.style.color = 'red';
+          } else {
+            statusSpan.textContent = enabled ? 'Enabled' : 'Disabled';
+            statusSpan.style.color = enabled ? 'green' : 'gray';
+          }
+        })
+        .catch(err => {
+          alert('Error toggling ping response');
+        });
+      }
+
+      document.getElementById('internal-enable').addEventListener('click', () => togglePing('internal', true));
+      document.getElementById('internal-disable').addEventListener('click', () => togglePing('internal', false));
+      document.getElementById('external-enable').addEventListener('click', () => togglePing('external', true));
+      document.getElementById('external-disable').addEventListener('click', () => togglePing('external', false));
+    </script>
+  </body>
+</html>
+"""
+    return Response(body=html, headers={'Content-Type': 'text/html'})
 
 app.run(debug=True, port=80)
