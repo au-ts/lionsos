@@ -181,6 +181,9 @@ class FirewallMemoryRegions:
 
     # Call to recalculate size after data structure update
     def update_size(self):
+        for structure in self.data_structures:
+            structure.update_size()
+
         self.min_size = self.size_formula(self.data_structures)
         if not self.min_size:
             raise Exception(
