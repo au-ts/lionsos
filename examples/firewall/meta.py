@@ -1109,30 +1109,34 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         networks[int_net]["configs"][nat_pd].interfaces = [
             FwNatInterfaceConfig(
-                49152 + nat_ports_buffer.capacity * i,
+                49152,
                 nat_ports_buffer.capacity,
                 ext_table[1],
-                0
+                0,
+                ip_to_int(ips[0])
             ),
             FwNatInterfaceConfig(
-                49152 + nat_ports_buffer.capacity * i,
+                49152,
                 nat_ports_buffer.capacity,
                 int_table[0],
-                ip_to_int(ips[0])
+                ip_to_int(ips[0]),
+                ip_to_int(ips[1])
             ),
         ]
         networks[ext_net]["configs"][mirror_nat].interfaces = [
             FwNatInterfaceConfig(
-                49152 + nat_ports_buffer.capacity * i,
+                49152,
                 nat_ports_buffer.capacity,
                 ext_table[0],
-                0
+                0,
+                ip_to_int(ips[0])
             ),
             FwNatInterfaceConfig(
-                49152 + nat_ports_buffer.capacity * i,
+                49152,
                 nat_ports_buffer.capacity,
                 int_table[1],
-                ip_to_int(ips[0])
+                ip_to_int(ips[0]),
+                ip_to_int(ips[1])
             ),
         ]
 

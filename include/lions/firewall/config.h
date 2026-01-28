@@ -178,6 +178,8 @@ typedef struct fw_nat_interface_config {
     region_resource_t port_table;
     /* Source NAT IP */
     uint32_t snat;
+    /* IP address of interface */
+    uint32_t ip;
 } fw_nat_interface_config_t;
 
 typedef struct fw_nat_config {

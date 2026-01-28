@@ -79,8 +79,7 @@ static void translate(void)
             tcp_hdr->check = 0;
         }
 
-        /* TODO: don't hardcode this */
-        if (nat_interface_config.snat && ip_hdr->dst_ip != 16885952) {
+        if (nat_interface_config.snat && ip_hdr->dst_ip != nat_interface_config.ip) {
             uint16_t ephemeral_port = fw_nat_find_ephemeral_port(nat_interface_config, port_table, ip_hdr->src_ip,
                                                                  tcp_hdr->src_port, now);
 
