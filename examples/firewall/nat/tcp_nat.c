@@ -52,6 +52,9 @@ static void translate(void)
     net_buff_desc_t buffer;
     bool transmitted = false;
 
+    /* This is a PPC (expensive), so it is called only once */
+    uint64_t now = sddf_timer_time_now(timer_config.driver_id);
+
     while (!fw_queue_empty(&filter_queue)) {
         /* Incoming packet from filter */
         int err = fw_dequeue(&filter_queue, &buffer);
@@ -64,7 +67,7 @@ static void translate(void)
         log_packet(ip_hdr, tcp_hdr);
 
         fw_nat_port_mapping_t *dst_mapping = fw_nat_translate_destination(nat_config.interfaces, ip_hdr->dst_ip,
-                                                                          tcp_hdr->dst_port);
+                                                                          tcp_hdr->dst_port, now);
 
         if (dst_mapping) {
             if (FW_DEBUG_OUTPUT) {
@@ -78,7 +81,7 @@ static void translate(void)
 
         if (nat_interface_config.snat) {
             uint16_t ephemeral_port = fw_nat_find_ephemeral_port(nat_interface_config, port_table, ip_hdr->src_ip,
-                                                                 tcp_hdr->src_port);
+                                                                 tcp_hdr->src_port, now);
 
             if (ephemeral_port) {
                 ip_hdr->src_ip = nat_interface_config.snat;
@@ -125,7 +128,8 @@ void notified(microkit_channel ch)
     if (ch == nat_config.filter.ch) {
         translate();
     } else if (ch == timer_config.driver_id) {
-        sddf_printf("%sTCP NAT LOG: Timer tick!\n", fw_frmt_str[nat_config.interface]);
+        uint64_t now = sddf_timer_time_now(timer_config.driver_id);
+        fw_nat_free_expired_mappings(nat_interface_config, port_table, NAT_TCP_TIMEOUT, now);
         sddf_timer_set_timeout(timer_config.driver_id, NAT_TIMEOUT_INTERVAL_NS);
     } else {
         sddf_printf("%sTCP NAT LOG: Received notification on unknown channel: %d!\n", fw_frmt_str[nat_config.interface],
