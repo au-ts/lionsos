@@ -16,6 +16,7 @@
 
 #define FW_MAX_FW_CLIENTS 61
 #define FW_MAX_FILTERS 61
+#define FW_MAX_NAT 16
 
 #define FW_NUM_ARP_REQUESTER_CLIENTS 2
 #define FW_NUM_INTERFACES 2
@@ -141,6 +142,11 @@ typedef struct fw_filter_config {
     region_resource_t rule_id_bitmap;
 } fw_filter_config_t;
 
+typedef struct fw_webserver_nat_config {
+    uint16_t protocol;
+    uint8_t ch;
+} fw_webserver_nat_config_t;
+
 typedef struct fw_webserver_interface_config {
     /* MAC address of interface */
     uint8_t mac_addr[ETH_HWADDR_LEN];
@@ -148,6 +154,7 @@ typedef struct fw_webserver_interface_config {
     uint32_t ip;
     fw_webserver_router_config_t router;
     fw_webserver_filter_config_t filters[FW_MAX_FILTERS];
+    fw_webserver_nat_config_t nat[FW_MAX_NAT];
     uint8_t num_filters;
 } fw_webserver_interface_config_t;
 
@@ -161,3 +168,30 @@ typedef struct fw_webserver_config {
     fw_webserver_interface_config_t interfaces[FW_NUM_INTERFACES];
     uint8_t num_interfaces;
 } fw_webserver_config_t;
+
+typedef struct fw_nat_interface_config {
+    /* base port for ephemeral port table */
+    uint16_t base_port;
+    /* capacity of ephemeral port table */
+    uint16_t ports_capacity;
+    /* region for ephemeral port table */
+    region_resource_t port_table;
+    /* Source NAT IP */
+    uint32_t snat;
+    /* IP address of interface */
+    uint32_t ip;
+} fw_nat_interface_config_t;
+
+typedef struct fw_nat_config {
+    fw_connection_resource_t filter;
+    fw_connection_resource_t router;
+    device_region_resource_t data;
+    uint8_t webserver_ch;
+    /* Interface traffic is received from */
+    uint8_t interface;
+    /**
+     * Configuration for each of the interfaces.
+     * Allows NAT operations by one interface to be reversed by the other.
+     */
+    fw_nat_interface_config_t interfaces[FW_NUM_INTERFACES];
+} fw_nat_config_t;

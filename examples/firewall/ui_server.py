@@ -435,7 +435,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
     </nav>
   </body>
 </html>
@@ -455,7 +455,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
     </nav>
     <div id="interfaces-container">
       <table border="1">
@@ -519,7 +519,7 @@ def config(request):
   <body>
     <h1>Routing Configuration Page</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
     </nav>
 
     <h2>Internal Interface Routing Table</h2>
@@ -685,7 +685,7 @@ def rules(request, protocol):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
     </nav>
     <div style="display: flex; flex-direction: column; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>
@@ -958,7 +958,7 @@ def rules(request):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
     </nav>
     <div style="display: inline-block; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>
@@ -968,6 +968,63 @@ def rules(request):
   </body>
 </html>
 """
+    return Response(body=html, headers={'Content-Type': 'text/html'})
+
+@app.route("/nat")
+def nat(request):
+    html = """
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <meta charset="utf-8" />
+            <title>Firewall Network Address Translation</title>
+            <link rel="stylesheet" href="/main.css" />
+        </head>
+        <body>
+            <h1>Firewall Network Address Translation</h1>
+            <nav>
+                <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
+            </nav>
+            <h2>Internal interface NAT</h2>
+            <div>
+                <input
+                    type="checkbox"
+                    name="nat-enabled"
+                    id="internal-nat-enabled"
+                />
+                <label for="nat-enabled">NAT enabled?</label>
+                <button>Update NAT enabled</button>
+            </div>
+            <div>
+                <label for="nat-ip">Source NAT IP for this interface</label>
+                <input
+                    type="text"
+                    name="nat-ip"
+                    id="internal-nat-ip"
+                />
+                <button>Update NAT IP</button>
+            </div>
+            <div>
+                <label for="tcp-timeout">Timeout for TCP mappings for this interface</label>
+                <input
+                    type="number"
+                    name="tcp-timeout"
+                    id="internal-tcp-timeout"
+                />
+                <button>Update TCP Timeout</button>
+            </div>
+            <div>
+                <label for="udp-timeout">Timeout for UDP mappings for this interface</label>
+                <input
+                    type="number"
+                    name="udp-timeout"
+                    id="internal-udp-timeout"
+                />
+                <button>Update UDP Timeout</button>
+            </div>
+        </body>
+    </html>
+    """
     return Response(body=html, headers={'Content-Type': 'text/html'})
 
 @app.route("/main.css")
