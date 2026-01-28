@@ -13,6 +13,8 @@
 #include <lions/firewall/array_functions.h>
 #include <lions/firewall/config.h>
 
+#define NAT_TIMEOUT_INTERVAL_NS (5 * NS_IN_S)
+
 /**
  * Stores original source and destination corresponding to a NAT ephemeral port.
  * This is an endpoint independent mapping since only source address and port are used.
