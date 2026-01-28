@@ -182,6 +182,11 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester1.data arp_requester1.elf
+# NAT needs timer access
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_udp_nat0.data udp_nat0.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_udp_nat1.data udp_nat1.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_tcp_nat0.data tcp_nat0.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_tcp_nat1.data tcp_nat1.elf
 	touch $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)

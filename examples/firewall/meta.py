@@ -952,6 +952,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             # The NAT is pre-routing but post-filtering (effectively it is transparent to both router and filter).
             if protocol in NAT_PROTOCOLS:
                 nat = network["nat"][protocol]
+
+                # NAT needs timer for timeouts
+                timer_system.add_client(nat)
+
                 # Create a firewall connection from filter to NAT
                 filter_nat_conn = fw_connection(
                     filter_pd,

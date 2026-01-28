@@ -10,6 +10,8 @@
 #include <sddf/util/printf.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
+#include <sddf/timer/client.h>
+#include <sddf/timer/config.h>
 #include <lions/firewall/checksum.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/common.h>
@@ -19,6 +21,10 @@
 #include <lions/firewall/queue.h>
 
 __attribute__((__section__(".fw_nat_config"))) fw_nat_config_t nat_config;
+__attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
+
+/* TODO: make this configurable */
+#define NAT_TCP_TIMEOUT (30 * NS_IN_S)
 
 /* Incoming packets from filter */
 fw_queue_t filter_queue;
@@ -118,6 +124,9 @@ void notified(microkit_channel ch)
 {
     if (ch == nat_config.filter.ch) {
         translate();
+    } else if (ch == timer_config.driver_id) {
+        sddf_printf("%sTCP NAT LOG: Timer tick!\n", fw_frmt_str[nat_config.interface]);
+        sddf_timer_set_timeout(timer_config.driver_id, NAT_TIMEOUT_INTERVAL_NS);
     } else {
         sddf_printf("%sTCP NAT LOG: Received notification on unknown channel: %d!\n", fw_frmt_str[nat_config.interface],
                     ch);
@@ -145,4 +154,7 @@ void init(void)
                     nat_interface_config.snat
                    );
     }
+
+    /* Set first tick */
+    sddf_timer_set_timeout(timer_config.driver_id, NAT_TIMEOUT_INTERVAL_NS);
 }
