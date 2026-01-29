@@ -16,6 +16,21 @@
 
 #define NAT_TIMEOUT_INTERVAL_NS (5 * NS_IN_S)
 
+/* Holds webserver state specific to the NAT of a particular interface */
+typedef struct fw_nat_webserver_interface_state {
+    /* Source NAT IP */
+    uint32_t snat;
+} fw_nat_webserver_interface_state_t;
+
+/**
+ * Structure shared with webserver to configure NAT for all interfaces with this protocol
+ */
+typedef struct fw_nat_webserver_state {
+    fw_nat_webserver_interface_state_t interfaces[FW_NUM_INTERFACES];
+    /* Timeout in nanoseconds */
+    uint64_t timeout;
+} fw_nat_webserver_state_t;
+
 /**
  * Stores original source and destination corresponding to a NAT ephemeral port.
  * This is an endpoint independent mapping since only source address and port are used.
@@ -56,14 +71,14 @@ typedef struct fw_nat_port_table {
  *
  * @return the original port mapping if it exists, NULL otherwise.
  */
-static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interface_config_t interfaces[],
+static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interface_config_t interfaces[], fw_nat_webserver_state_t state,
                                                                   uint32_t dst_ip, uint16_t dst_port, uint64_t now)
 {
     /* Since dst_port is used as an index here it must be in host byte order */
     dst_port = htons(dst_port);
 
     for (uint16_t i = 0; i < FW_NUM_INTERFACES; i++) {
-        if (dst_ip == interfaces[i].snat) {
+        if (dst_ip == state.interfaces[i].snat) {
             fw_nat_port_table_t *port_table = (fw_nat_port_table_t*)interfaces[i].port_table.vaddr;
 
             if ((dst_port >= interfaces[i].base_port)

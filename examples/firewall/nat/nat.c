@@ -22,9 +22,6 @@
 __attribute__((__section__(".fw_nat_config"))) fw_nat_config_t nat_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 
-/* TODO: make this configurable */
-#define NAT_TIMEOUT (30 * NS_IN_S)
-
 /* Incoming packets from filter */
 fw_queue_t filter_queue;
 /* Outgoing packets to router */
@@ -33,8 +30,9 @@ fw_queue_t router_queue;
 uintptr_t data_vaddr;
 /* Table storing ephemeral ports */
 fw_nat_port_table_t *port_table;
-
 fw_nat_interface_config_t nat_interface_config;
+/* Shared state with webserver */
+fw_nat_webserver_state_t *webserver_state;
 
 static void log_packet(ipv4_hdr_t *ip_hdr, uint16_t src_port, uint16_t dst_port)
 {
@@ -69,11 +67,13 @@ static void translate(void)
         uint16_t *dst_port = (uint16_t*)(transport_hdr + nat_config.dst_port_off);
         uint16_t *check = (uint16_t*)(transport_hdr + nat_config.check_off);
 
+        uint32_t snat = webserver_state->interfaces[nat_config.interface].snat;
+
         bool recalculate_checksum = false;
 
         log_packet(ip_hdr, *src_port, *dst_port);
 
-        fw_nat_port_mapping_t *dst_mapping = fw_nat_translate_destination(nat_config.interfaces, ip_hdr->dst_ip,
+        fw_nat_port_mapping_t *dst_mapping = fw_nat_translate_destination(nat_config.interfaces, *webserver_state, ip_hdr->dst_ip,
                                                                           *dst_port, now);
 
         if (dst_mapping) {
@@ -89,12 +89,12 @@ static void translate(void)
             recalculate_checksum = true;
         }
 
-        if (nat_interface_config.snat && ip_hdr->dst_ip != nat_interface_config.ip) {
+        if (snat && ip_hdr->dst_ip != nat_interface_config.ip) {
             uint16_t ephemeral_port = fw_nat_find_ephemeral_port(nat_interface_config, port_table, ip_hdr->src_ip,
                                                                  *src_port, now);
 
             if (ephemeral_port) {
-                ip_hdr->src_ip = nat_interface_config.snat;
+                ip_hdr->src_ip = snat;
                 *src_port = ephemeral_port;
                 ip_hdr->check = 0;
                 recalculate_checksum = true;
@@ -102,7 +102,7 @@ static void translate(void)
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%s%s NAT LOG: translated to %s:%u\n", fw_frmt_str[nat_config.interface],
                                 ipv4_proto_name(nat_config.protocol),
-                                ipaddr_to_string(nat_interface_config.snat, ip_addr_buf0),
+                                ipaddr_to_string(snat, ip_addr_buf0),
                                 htons(*src_port));
                 }
             } else {
@@ -142,7 +142,7 @@ void notified(microkit_channel ch)
         translate();
     } else if (ch == timer_config.driver_id) {
         uint64_t now = sddf_timer_time_now(timer_config.driver_id);
-        fw_nat_free_expired_mappings(nat_interface_config, port_table, NAT_TIMEOUT, now);
+        fw_nat_free_expired_mappings(nat_interface_config, port_table, webserver_state->timeout, now);
         sddf_timer_set_timeout(timer_config.driver_id, NAT_TIMEOUT_INTERVAL_NS);
     } else {
         sddf_printf("%s%s NAT LOG: Received notification on unknown channel: %d!\n",
@@ -159,6 +159,8 @@ void init(void)
 
     port_table = (fw_nat_port_table_t*)nat_interface_config.port_table.vaddr;
 
+    webserver_state = (fw_nat_webserver_state_t*)nat_config.webserver.vaddr;
+
     fw_queue_init(&router_queue, nat_config.router.queue.vaddr,
                   sizeof(net_buff_desc_t),  nat_config.router.capacity);
 
@@ -166,11 +168,10 @@ void init(void)
                   sizeof(net_buff_desc_t),  nat_config.filter.capacity);
 
     if (FW_DEBUG_OUTPUT) {
-        sddf_printf("%s%s NAT LOG: base port: %u\ncapacity: %u\nsnat: %u\n",
+        sddf_printf("%s%s NAT LOG: base port: %u\ncapacity: %u\n",
                     fw_frmt_str[nat_config.interface], ipv4_proto_name(nat_config.protocol),
                     nat_interface_config.base_port,
-                    nat_interface_config.ports_capacity,
-                    nat_interface_config.snat
+                    nat_interface_config.ports_capacity
                    );
     }
 

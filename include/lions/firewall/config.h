@@ -143,10 +143,18 @@ typedef struct fw_filter_config {
     region_resource_t rule_id_bitmap;
 } fw_filter_config_t;
 
+/* NAT configuration that is specific to a PD (interface and protocol specific) */
 typedef struct fw_webserver_nat_config {
-    uint16_t protocol;
+    uint8_t protocol;
     uint8_t ch;
 } fw_webserver_nat_config_t;
+
+/* NAT configuration that is specific to a protocol */
+typedef struct fw_webserver_nat_protocol_config {
+    uint8_t protocol;
+    /* Webserver NAT state, written to by webserver, shared by all NAT of a given protocol */
+    region_resource_t region;
+} fw_webserver_nat_protocol_config_t;
 
 typedef struct fw_webserver_interface_config {
     /* MAC address of interface */
@@ -167,6 +175,7 @@ typedef struct fw_webserver_config {
     fw_connection_resource_t rx_free;
     fw_arp_connection_t arp_queue;
     fw_webserver_interface_config_t interfaces[FW_NUM_INTERFACES];
+    fw_webserver_nat_protocol_config_t nat_state[FW_MAX_NAT];
     uint8_t num_interfaces;
 } fw_webserver_config_t;
 
@@ -177,8 +186,6 @@ typedef struct fw_nat_interface_config {
     uint16_t ports_capacity;
     /* region for ephemeral port table */
     region_resource_t port_table;
-    /* Source NAT IP */
-    uint32_t snat;
     /* IP address of interface */
     uint32_t ip;
 } fw_nat_interface_config_t;
@@ -187,6 +194,8 @@ typedef struct fw_nat_config {
     fw_connection_resource_t filter;
     fw_connection_resource_t router;
     device_region_resource_t data;
+    /* Shared memory state with the webserver */
+    region_resource_t webserver;
     uint8_t webserver_ch;
     /* Interface traffic is received from */
     uint8_t interface;
