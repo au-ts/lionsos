@@ -279,10 +279,10 @@ filter_rule_bitmap_region = FirewallMemoryRegions(
 )
 
 nat_ports_wrapper = FirewallDataStructure(
-    elf_name="udp_nat.elf", c_name="fw_nat_port_table"
+    elf_name="nat.elf", c_name="fw_nat_port_table"
 )
 nat_ports_buffer = FirewallDataStructure(
-    elf_name="udp_nat.elf", c_name="fw_nat_port_mapping", capacity=1024
+    elf_name="nat.elf", c_name="fw_nat_port_mapping", capacity=1024
 )
 nat_ports_region = FirewallMemoryRegions(
     data_structures=[nat_ports_wrapper, nat_ports_buffer]
@@ -301,6 +301,24 @@ ethtype_arp = 0x0806
 ip_protocol_icmp = 0x01
 ip_protocol_tcp = 0x06
 ip_protocol_udp = 0x11
+
+PROTOCOL_INFO = {
+    ip_protocol_tcp: {
+        "protocol": ip_protocol_tcp,
+        "src_port_off": 0,
+        "dst_port_off": 2,
+        "check_off": 16,
+        "check_enabled": True,
+    },
+    ip_protocol_udp: {
+        "protocol": ip_protocol_udp,
+        "src_port_off": 0,
+        "dst_port_off": 2,
+        "check_off": 6,
+        "check_enabled": True,
+    }
+}
+
 
 # Protocols that will have NAT PDs inserted between the filter and router
 # Removing protocols from this list will completely remove any overhead incurred due to NAT
@@ -666,7 +684,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
         for nat_pd in network["nat"].values():
             copy_elf(
-                nat_pd.program_image[:-5],
+                "nat",
                 nat_pd.program_image[:-5],
                 network["num"],
             )
@@ -997,7 +1015,12 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                     nat_dma,
                     nat_config_ch.pd_b_id,
                     network["num"],
-                    None
+                    None,
+                    protocol,
+                    PROTOCOL_INFO[protocol]["src_port_off"],
+                    PROTOCOL_INFO[protocol]["dst_port_off"],
+                    PROTOCOL_INFO[protocol]["check_off"],
+                    PROTOCOL_INFO[protocol]["check_enabled"],
                 )
 
                 # Update router config

@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "sddf/serial/queue.h"
 #include <os/sddf.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -194,4 +195,14 @@ typedef struct fw_nat_config {
      * Allows NAT operations by one interface to be reversed by the other.
      */
     fw_nat_interface_config_t interfaces[FW_NUM_INTERFACES];
+    /* IP protocol */
+    uint8_t protocol;
+    /* Byte offset of source port in transport layer header */
+    size_t src_port_off;
+    /* Byte offset of destination port in transport layer header */
+    size_t dst_port_off;
+    /* Byte offset of checksum in transport layer header */
+    size_t check_off;
+    /* Whether this protocol has a checksum to recalculate */
+    bool check_enabled;
 } fw_nat_config_t;

@@ -66,6 +66,20 @@ typedef struct __attribute__((__packed__)) ipv4_hdr {
 #define IPV4_PROTO_TCP 0x06
 #define IPV4_PROTO_UDP 0x11
 
+static inline char* ipv4_proto_name(uint8_t protocol) {
+    switch (protocol) {
+        case IPV4_PROTO_TCP:
+            return "TCP";
+        case IPV4_PROTO_UDP:
+            return "UDP";
+        case IPV4_PROTO_ICMP:
+            return "ICMP";
+        default:
+            return "Unknown";
+    }
+}
+
+
 /**
  * IPv4 header length in bytes.
  *

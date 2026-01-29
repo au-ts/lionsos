@@ -46,7 +46,7 @@ IMAGES := arp_requester.elf arp_responder.elf routing.elf micropython.elf \
 		  timer_driver.elf serial_driver.elf serial_virt_tx.elf \
 		  icmp_filter.elf udp_filter.elf tcp_filter.elf icmp_module.elf \
 		  eth_driver0.elf eth_driver1.elf \
-		  udp_nat.elf tcp_nat.elf
+		  nat.elf
 
 DEPS := $(IMAGES:.elf=.d)
 
