@@ -288,6 +288,13 @@ nat_ports_region = FirewallMemoryRegions(
     data_structures=[nat_ports_wrapper, nat_ports_buffer]
 )
 
+nat_state = FirewallDataStructure(
+    elf_name="nat.elf", c_name="fw_nat_webserver_state"
+)
+nat_state_region = FirewallMemoryRegions(
+    data_structures=[nat_state]
+)
+
 # Filter action encodings
 FILTER_ACTION_ALLOW = 1
 FILTER_ACTION_DROP = 2
@@ -769,6 +776,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         webserver_in_virt_conn[0],
         webserver_arp_conn[0],
         [],
+        []
     )
 
     for network in networks:
@@ -1013,6 +1021,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                     filter_nat_conn[1],
                     nat_router_conn[0],
                     nat_dma,
+                    None,
                     nat_config_ch.pd_b_id,
                     network["num"],
                     None,
@@ -1110,7 +1119,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             1
         ]
 
-    # Create NAT port table regions
+    # Create NAT port table and webserver state regions
     for i, (protocol, nat_pd) in enumerate(networks[int_net]["nat"].items()):
         mirror_nat = networks[ext_net]["nat"][protocol]
         int_table = fw_shared_region(
@@ -1130,19 +1139,26 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
             nat_ports_region.region_size,
         )
 
+        region_size = nat_state_region.region_size
+        mr = MemoryRegion(sdf, "nat_webserver_state" + nat_pd.name, region_size)
+        sdf.add_mr(mr)
+
+        networks[int_net]["configs"][nat_pd].webserver = fw_region(nat_pd, mr, "r", region_size)
+        networks[ext_net]["configs"][mirror_nat].webserver = fw_region(mirror_nat, mr, "r", region_size)
+
+        webserver_config.nat_state.append(FwWebserverNatProtocolConfig(protocol, fw_region(webserver, mr, "rw", region_size)))
+
         networks[int_net]["configs"][nat_pd].interfaces = [
             FwNatInterfaceConfig(
                 49152,
                 nat_ports_buffer.capacity,
                 ext_table[1],
-                0,
                 ip_to_int(ips[0])
             ),
             FwNatInterfaceConfig(
                 49152,
                 nat_ports_buffer.capacity,
                 int_table[0],
-                ip_to_int(ips[0]),
                 ip_to_int(ips[1])
             ),
         ]
@@ -1151,14 +1167,12 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 49152,
                 nat_ports_buffer.capacity,
                 ext_table[0],
-                0,
                 ip_to_int(ips[0])
             ),
             FwNatInterfaceConfig(
                 49152,
                 nat_ports_buffer.capacity,
                 int_table[1],
-                ip_to_int(ips[0]),
                 ip_to_int(ips[1])
             ),
         ]
