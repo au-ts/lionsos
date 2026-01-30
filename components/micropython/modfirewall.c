@@ -200,7 +200,7 @@ static mp_obj_t route_count(mp_obj_t interface_idx_in) {
         return mp_const_none;
     }
 
-    return mp_obj_new_int_from_uint(webserver_state[interface_idx].routing_table->size);
+    return mp_obj_new_int_from_uint(webserver_state.interfaces[interface_idx].routing_table->size);
 }
 
 static MP_DEFINE_CONST_FUN_OBJ_1(route_count_obj, route_count);
@@ -217,7 +217,7 @@ static mp_obj_t route_get_nth(mp_obj_t interface_idx_in,
     }
 
     uint16_t route_idx = mp_obj_get_int(route_idx_in);
-    if (route_idx >= webserver_state[interface_idx].routing_table->size) {
+    if (route_idx >= webserver_state.interfaces[interface_idx].routing_table->size) {
         sddf_dprintf("WEBSERVER|LOG: %s\n",
                     fw_os_err_str[OS_ERR_INVALID_ROUTE_NUM]);
         mp_raise_OSError(OS_ERR_INVALID_ROUTE_NUM);
@@ -226,7 +226,7 @@ static mp_obj_t route_get_nth(mp_obj_t interface_idx_in,
 
     fw_routing_entry_t *entry =
             (fw_routing_entry_t
-                *)(webserver_state[interface_idx].routing_table->entries + route_idx);
+                *)(webserver_state.interfaces[interface_idx].routing_table->entries + route_idx);
 
     mp_obj_t tuple[4];
     tuple[0] = mp_obj_new_int_from_uint(route_idx);
@@ -364,7 +364,7 @@ static mp_obj_t rule_count(mp_obj_t interface_idx_in, mp_obj_t protocol_in) {
     uint16_t protocol = mp_obj_get_int(protocol_in);
     for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
         if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
-            return mp_obj_new_int_from_uint(webserver_state[interface_idx].filter_states[i].rule_table->size);
+            return mp_obj_new_int_from_uint(webserver_state.interfaces[interface_idx].filter_states[i].rule_table->size);
         }
     }
 
@@ -435,7 +435,7 @@ static mp_obj_t filter_get_default_action(mp_obj_t interface_idx_in,
     for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
         if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
             return mp_obj_new_int_from_uint(
-                webserver_state[interface_idx].filter_states[i].rule_table->rules[DEFAULT_ACTION_IDX].action);
+                webserver_state.interfaces[interface_idx].filter_states[i].rule_table->rules[DEFAULT_ACTION_IDX].action);
         }
     }
 
@@ -474,13 +474,13 @@ static mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in,
         return mp_const_none;
     }
 
-    if (rule_idx == DEFAULT_ACTION_IDX || rule_idx >= webserver_state[interface_idx].filter_states[protocol_match].rule_table->size) {
+    if (rule_idx == DEFAULT_ACTION_IDX || rule_idx >= webserver_state.interfaces[interface_idx].filter_states[protocol_match].rule_table->size) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_RULE_NUM]);
         mp_raise_OSError(OS_ERR_INVALID_RULE_NUM);
         return mp_const_none;
     }
 
-    fw_rule_t *rule = (fw_rule_t *)(webserver_state[interface_idx].filter_states[protocol_match].rule_table->rules + rule_idx);
+    fw_rule_t *rule = (fw_rule_t *)(webserver_state.interfaces[interface_idx].filter_states[protocol_match].rule_table->rules + rule_idx);
     mp_obj_t tuple[10];
     tuple[0] = mp_obj_new_int_from_uint(rule->rule_id);
     tuple[1] = mp_obj_new_int_from_uint(rule->src_ip);
@@ -496,6 +496,56 @@ static mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in,
 }
 
 static MP_DEFINE_CONST_FUN_OBJ_3(rule_get_nth_obj, rule_get_nth);
+
+static mp_obj_t set_snat_ip(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp_obj_t snat_in)
+{
+    uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
+    if (interface_idx >= FW_NUM_INTERFACES) {
+        sddf_dprintf("WEBSERVER|LOG: %s\n",
+                    fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
+        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+        return mp_const_none;
+    }
+
+    uint8_t protocol = mp_obj_get_int(protocol_in);
+    uint32_t snat = mp_obj_get_int(snat_in);
+    for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
+        if (fw_config.nat_state[i].protocol == protocol) {
+            webserver_state.nat_state[i]->interfaces[interface_idx].snat = snat;
+            return mp_const_none;
+        }
+    }
+
+    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
+    mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_3(set_snat_ip_obj, set_snat_ip);
+
+static mp_obj_t get_snat_ip(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
+{
+    uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
+    if (interface_idx >= FW_NUM_INTERFACES) {
+        sddf_dprintf("WEBSERVER|LOG: %s\n",
+                    fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
+        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+        return mp_const_none;
+    }
+
+    uint8_t protocol = mp_obj_get_int(protocol_in);
+    for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
+        if (fw_config.nat_state[i].protocol == protocol) {
+            return mp_obj_new_int_from_uint(webserver_state.nat_state[i]->interfaces[interface_idx].snat);
+        }
+    }
+
+    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
+    mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_2(get_snat_ip_obj, get_snat_ip);
 
 static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     {MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lions_firewall)},
@@ -514,6 +564,8 @@ static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
      MP_ROM_PTR(&filter_get_default_action_obj)},
     {MP_ROM_QSTR(MP_QSTR_filter_set_default_action),
      MP_ROM_PTR(&filter_set_default_action_obj)},
+    {MP_ROM_QSTR(MP_QSTR_set_snat_ip), MP_ROM_PTR(&set_snat_ip_obj)},
+    {MP_ROM_QSTR(MP_QSTR_get_snat_ip), MP_ROM_PTR(&get_snat_ip_obj)},
 };
 
 static MP_DEFINE_CONST_DICT(lions_firewall_module_globals,

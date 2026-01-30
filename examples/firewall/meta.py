@@ -1143,10 +1143,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         mr = MemoryRegion(sdf, "nat_webserver_state" + nat_pd.name, region_size)
         sdf.add_mr(mr)
 
-        networks[int_net]["configs"][nat_pd].webserver = fw_region(nat_pd, mr, "r", region_size)
-        networks[ext_net]["configs"][mirror_nat].webserver = fw_region(mirror_nat, mr, "r", region_size)
+        networks[int_net]["configs"][nat_pd].webserver = fw_region(nat_pd, mr, "r", region_size, cached=False)
+        networks[ext_net]["configs"][mirror_nat].webserver = fw_region(mirror_nat, mr, "r", region_size, cached=False)
 
-        webserver_config.nat_state.append(FwWebserverNatProtocolConfig(protocol, fw_region(webserver, mr, "rw", region_size)))
+        webserver_config.nat_state.append(FwWebserverNatProtocolConfig(protocol, fw_region(webserver, mr, "rw", region_size, cached=False)))
 
         networks[int_net]["configs"][nat_pd].interfaces = [
             FwNatInterfaceConfig(
