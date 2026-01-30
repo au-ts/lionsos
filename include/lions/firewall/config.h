@@ -177,6 +177,7 @@ typedef struct fw_webserver_config {
     fw_webserver_interface_config_t interfaces[FW_NUM_INTERFACES];
     fw_webserver_nat_protocol_config_t nat_state[FW_MAX_NAT];
     uint8_t num_interfaces;
+    uint8_t num_nat_state;
 } fw_webserver_config_t;
 
 typedef struct fw_nat_interface_config {

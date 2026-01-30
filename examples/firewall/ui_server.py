@@ -61,6 +61,11 @@ interfaceStringsFilters = [
     "internal"
 ]
 
+interfaceStringsNat = [
+    "external",
+    "internal"
+]
+
 interfaceStringsCap = [
     "External",
     "Internal"
@@ -153,9 +158,13 @@ def interfaceStringToInt(componentType, interfaceStr):
     for i in range(numInterfaces):
         if interfaceStr == interfaceStringsFilters[i]:
             return i
+  elif componentType == "nat":
+    for i in range(numInterfaces):
+        if interfaceStr == interfaceStringsNat[i]:
+            return i
 
-    print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
-    raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
+  print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
+  raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
 
 ############ Route APIs ############
@@ -419,6 +428,45 @@ def addRule(request, protocolStr):
         print(f"UI SERVER|ERR: Unknown Error: addRule: {exception}.")
         return {"error": UnknownErrStr}, 404
 
+###### NAT configuration methods ######
+
+@app.route('/api/nat/<string:protocolStr>/<string:interfaceStr>/snat', methods=['GET'])
+def get_snat_ip(request, protocolStr, interfaceStr):
+    try:
+        interface = interfaceStringToInt("nat", interfaceStr)
+
+        if protocolStr not in protocolNums.keys():
+            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
+            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+        protocol = protocolNums[protocolStr]
+
+        snat = lions_firewall.get_snat_ip(interface, protocol)
+        return {"snat": intToIp(snat) if snat != 0 else ""}
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: getRules: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: getRules: {exception}.")
+        return {"error": UnknownErrStr}, 404
+
+@app.route('/api/nat/<string:protocolStr>/<string:interfaceStr>/snat/<string:ipStr>', methods=['PUT'])
+def set_snat_ip(request, protocolStr, interfaceStr, ipStr):
+    try:
+        interface = interfaceStringToInt("nat", interfaceStr)
+
+        if protocolStr not in protocolNums.keys():
+            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
+            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+        protocol = protocolNums[protocolStr]
+
+        snat = lions_firewall.set_snat_ip(interface, protocol, ipToInt(ipStr) if ipStr != "" else 0)
+        return {"status": "ok"}
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: getRules: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: getRules: {exception}.")
+        return {"error": UnknownErrStr}, 404
 
 ############ Web UI routes ############
 
