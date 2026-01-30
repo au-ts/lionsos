@@ -459,7 +459,7 @@ def set_snat_ip(request, protocolStr, interfaceStr, ipStr):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
-        lions_firewall.set_snat_ip(interface, protocol, ipToInt(ipStr) if ipStr != "" else 0)
+        lions_firewall.set_snat_ip(interface, protocol, ipToInt(ipStr) if ipStr != "null" else 0)
         return {"status": "ok"}
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: set_snat_ip: {OSErrStrings[OSErr.errno]}")
@@ -477,7 +477,7 @@ def get_nat_timeout(request, protocolStr):
         protocol = protocolNums[protocolStr]
 
         timeout = lions_firewall.get_nat_timeout(protocol)
-        return {"snat": timeout / 10**9}
+        return {"timeout": timeout / 10**9}
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: get_nat_timeout: {OSErrStrings[OSErr.errno]}")
         return {"error": OSErrStrings[OSErr.errno]}, 404
@@ -1054,7 +1054,7 @@ def rules(request):
 
 @app.route("/nat")
 def nat(request):
-    html = """
+    html = r"""
     <!DOCTYPE html>
     <html>
         <head>
@@ -1067,43 +1067,107 @@ def nat(request):
             <nav>
                 <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
             </nav>
+            <div>
+                <label for="tcp-timeout">TCP mappings timeout</label>
+                <input
+                    type="number"
+                    name="tcp-timeout"
+                    id="tcp-timeout"
+                />
+                <button onClick="updateTimeout('tcp')">Update TCP Timeout</button>
+            </div>
+            <div>
+                <label for="udp-timeout">UDP mappings timeout</label>
+                <input
+                    type="number"
+                    name="udp-timeout"
+                    id="udp-timeout"
+                />
+                <button onClick="updateTimeout('udp')">Update UDP Timeout</button>
+            </div>
             <h2>Internal interface NAT</h2>
+            <h3>TCP</h3>
             <div>
                 <input
                     type="checkbox"
                     name="nat-enabled"
-                    id="internal-nat-enabled"
+                    id="internal-tcp-enabled"
+                    onchange="disabledHandler('tcp', 'internal')"
                 />
-                <label for="nat-enabled">NAT enabled?</label>
-                <button>Update NAT enabled</button>
-            </div>
-            <div>
+                <label for="nat-enabled">NAT enabled?</label><br>
                 <label for="nat-ip">Source NAT IP for this interface</label>
                 <input
                     type="text"
                     name="nat-ip"
-                    id="internal-nat-ip"
+                    id="internal-tcp-snat"
                 />
-                <button>Update NAT IP</button>
+                <button onClick="updateSnat('tcp', 'internal')">Update NAT settings</button>
             </div>
+            <h3>UDP</h3>
             <div>
-                <label for="tcp-timeout">Timeout for TCP mappings for this interface</label>
                 <input
-                    type="number"
-                    name="tcp-timeout"
-                    id="internal-tcp-timeout"
+                    type="checkbox"
+                    name="nat-enabled"
+                    id="internal-udp-enabled"
+                    onchange="disabledHandler('udp', 'internal')"
                 />
-                <button>Update TCP Timeout</button>
-            </div>
-            <div>
-                <label for="udp-timeout">Timeout for UDP mappings for this interface</label>
+                <label for="nat-enabled">NAT enabled?</label><br>
+                <label for="nat-ip">Source NAT IP for this interface</label>
                 <input
-                    type="number"
-                    name="udp-timeout"
-                    id="internal-udp-timeout"
+                    type="text"
+                    name="nat-ip"
+                    id="internal-udp-snat"
                 />
-                <button>Update UDP Timeout</button>
+                <button onClick="updateSnat('udp', 'internal')">Update NAT settings</button>
             </div>
+            <script>
+            const placeholderInterfaceMapping = {
+                "internal": 0,
+                "external": 1
+            };
+
+            const getTimeout = async (protocol) => {
+                const data = await fetch(`/api/nat/${protocol}/timeout`).then(res => res.json());
+                if (data?.timeout) {
+                    document.querySelector(`#${protocol}-timeout`).value = data.timeout;
+                }
+            };
+
+            const getSnat = async (protocol, interface) => {
+                const data = await fetch(`/api/nat/${protocol}/${interface}/snat`).then(res => res.json());
+                document.querySelector(`#${interface}-${protocol}-enabled`).checked = !!data?.snat;
+                if (data?.snat) {
+                    document.querySelector(`#${interface}-${protocol}-snat`).value = data.snat;
+                }
+                document.querySelector(`#${interface}-${protocol}-snat`).placeholder = (await fetch(`/api/interfaces/${placeholderInterfaceMapping[interface]}`).then(res => res.json())).ip;
+            }
+
+            const updateTimeout = async (protocol) => {
+                const timeout = document.querySelector(`#${protocol}-timeout`).value;
+                await fetch(`/api/nat/${protocol}/timeout/${timeout}`, {method: "PUT"});
+                await getTimeout(protocol);
+            };
+
+            const updateSnat = async (protocol, interface) => {
+                const enabled = document.querySelector(`#${interface}-${protocol}-enabled`).checked;
+                const snat = enabled ? document.querySelector(`#${interface}-${protocol}-snat`).value : "null";
+                await fetch(`/api/nat/${protocol}/${interface}/snat/${snat}`, {method: "PUT"});
+                await getSnat(protocol, interface);
+            }
+
+            const disabledHandler = (protocol, interface) => {
+                document.querySelector(`#${interface}-${protocol}-snat`).disabled = ! document.querySelector(`#${interface}-${protocol}-enabled`).checked;
+            }
+
+            window.onload = () => {
+                getTimeout("udp");
+                getTimeout("tcp");
+                getSnat("udp", "internal");
+                getSnat("tcp", "internal");
+                disabledHandler("udp", "internal");
+                disabledHandler("tcp", "internal");
+            }
+            </script>
         </body>
     </html>
     """
