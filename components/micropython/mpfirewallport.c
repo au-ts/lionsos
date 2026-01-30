@@ -21,6 +21,7 @@
 #include <lwip/sys.h>
 
 #include "micropython.h"
+#include "sddf/timer/protocol.h"
 #include "mpfirewallport.h"
 
 #define dlog(fmt, ...) do { \
@@ -219,5 +220,8 @@ void init_firewall_webserver(void) {
 
     for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
         webserver_state.nat_state[i] = fw_config.nat_state[i].region.vaddr;
+
+        /* Set sensible NAT timeout defaults */
+        webserver_state.nat_state[i]->timeout = 30 * NS_IN_S;
     }
 }

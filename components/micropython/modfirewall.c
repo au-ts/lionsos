@@ -547,6 +547,40 @@ static mp_obj_t get_snat_ip(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
 
 static MP_DEFINE_CONST_FUN_OBJ_2(get_snat_ip_obj, get_snat_ip);
 
+static mp_obj_t set_nat_timeout(mp_obj_t protocol_in, mp_obj_t timeout_in)
+{
+    uint8_t protocol = mp_obj_get_int(protocol_in);
+    uint64_t timeout = mp_obj_get_int(timeout_in);
+    for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
+        if (fw_config.nat_state[i].protocol == protocol) {
+            webserver_state.nat_state[i]->timeout = timeout;
+            return mp_const_none;
+        }
+    }
+
+    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
+    mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_2(set_nat_timeout_obj, set_nat_timeout);
+
+static mp_obj_t get_nat_timeout(mp_obj_t protocol_in)
+{
+    uint8_t protocol = mp_obj_get_int(protocol_in);
+    for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
+        if (fw_config.nat_state[i].protocol == protocol) {
+            return mp_obj_new_int_from_uint(webserver_state.nat_state[i]->timeout);
+        }
+    }
+
+    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
+    mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_1(get_nat_timeout_obj, get_nat_timeout);
+
 static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     {MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lions_firewall)},
     {MP_ROM_QSTR(MP_QSTR_interface_mac_get),
@@ -566,6 +600,8 @@ static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
      MP_ROM_PTR(&filter_set_default_action_obj)},
     {MP_ROM_QSTR(MP_QSTR_set_snat_ip), MP_ROM_PTR(&set_snat_ip_obj)},
     {MP_ROM_QSTR(MP_QSTR_get_snat_ip), MP_ROM_PTR(&get_snat_ip_obj)},
+    {MP_ROM_QSTR(MP_QSTR_set_nat_timeout), MP_ROM_PTR(&set_nat_timeout_obj)},
+    {MP_ROM_QSTR(MP_QSTR_get_nat_timeout), MP_ROM_PTR(&get_nat_timeout_obj)},
 };
 
 static MP_DEFINE_CONST_DICT(lions_firewall_module_globals,

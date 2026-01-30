@@ -443,10 +443,10 @@ def get_snat_ip(request, protocolStr, interfaceStr):
         snat = lions_firewall.get_snat_ip(interface, protocol)
         return {"snat": intToIp(snat) if snat != 0 else ""}
     except OSError as OSErr:
-        print(f"UI SERVER|ERR: OS Error: getRules: {OSErrStrings[OSErr.errno]}")
+        print(f"UI SERVER|ERR: OS Error: get_snat_ip: {OSErrStrings[OSErr.errno]}")
         return {"error": OSErrStrings[OSErr.errno]}, 404
     except Exception as exception:
-        print(f"UI SERVER|ERR: Unknown Error: getRules: {exception}.")
+        print(f"UI SERVER|ERR: Unknown Error: get_snat_ip: {exception}.")
         return {"error": UnknownErrStr}, 404
 
 @app.route('/api/nat/<string:protocolStr>/<string:interfaceStr>/snat/<string:ipStr>', methods=['PUT'])
@@ -459,15 +459,49 @@ def set_snat_ip(request, protocolStr, interfaceStr, ipStr):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
-        snat = lions_firewall.set_snat_ip(interface, protocol, ipToInt(ipStr) if ipStr != "" else 0)
+        lions_firewall.set_snat_ip(interface, protocol, ipToInt(ipStr) if ipStr != "" else 0)
         return {"status": "ok"}
     except OSError as OSErr:
-        print(f"UI SERVER|ERR: OS Error: getRules: {OSErrStrings[OSErr.errno]}")
+        print(f"UI SERVER|ERR: OS Error: set_snat_ip: {OSErrStrings[OSErr.errno]}")
         return {"error": OSErrStrings[OSErr.errno]}, 404
     except Exception as exception:
-        print(f"UI SERVER|ERR: Unknown Error: getRules: {exception}.")
+        print(f"UI SERVER|ERR: Unknown Error: set_snat_ip: {exception}.")
         return {"error": UnknownErrStr}, 404
 
+@app.route('/api/nat/<string:protocolStr>/timeout', methods=['GET'])
+def get_nat_timeout(request, protocolStr):
+    try:
+        if protocolStr not in protocolNums.keys():
+            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
+            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+        protocol = protocolNums[protocolStr]
+
+        timeout = lions_firewall.get_nat_timeout(protocol)
+        return {"snat": timeout / 10**9}
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: get_nat_timeout: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: get_nat_timeout: {exception}.")
+        return {"error": UnknownErrStr}, 404
+
+@app.route('/api/nat/<string:protocolStr>/timeout/<int:timeout>', methods=['PUT'])
+def set_nat_timeout(request, protocolStr, timeout):
+    try:
+
+        if protocolStr not in protocolNums.keys():
+            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
+            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+        protocol = protocolNums[protocolStr]
+
+        lions_firewall.set_nat_timeout(protocol, timeout * 10**9)
+        return {"status": "ok"}
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: set_nat_timeout: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: set_nat_timeout: {exception}.")
+        return {"error": UnknownErrStr}, 404
 ############ Web UI routes ############
 
 @app.route('/')
