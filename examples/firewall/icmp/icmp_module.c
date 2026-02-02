@@ -215,8 +215,10 @@ static void generate_icmp(void)
             int err = fw_dequeue(&filter_icmp_queue[filter_idx], &req);
             assert(!err);
 
-            sddf_printf("ICMP module: processing filter %u ICMP request type %u code %u on interface %u\n",
-                filter_idx, req.type, req.code, out_int);
+            if (FW_DEBUG_OUTPUT) {
+                sddf_printf("ICMP module: processing filter %u ICMP request type %u code %u on interface %u\n",
+                    filter_idx, req.type, req.code, out_int);
+            }
 
             if (!process_icmp_request(&req, out_int, transmitted)) {
                 break;
@@ -231,8 +233,10 @@ static void generate_icmp(void)
             int err = fw_dequeue(&icmp_queue[out_int], &req);
             assert(!err);
 
-            sddf_printf("ICMP module: processing router ICMP request type %u code %u on interface %u\n",
-                req.type, req.code, out_int);
+            if (FW_DEBUG_OUTPUT) {
+                sddf_printf("ICMP module: processing router ICMP request type %u code %u on interface %u\n",
+                    req.type, req.code, out_int);
+            }
 
             if (!process_icmp_request(&req, out_int, transmitted)) {
                 break;
@@ -269,6 +273,8 @@ void init(void)
 
 void notified(microkit_channel ch)
 {
-    sddf_printf("ICMP module: notified on channel %u, generating ICMP packets\n", ch);
+    if (FW_DEBUG_OUTPUT) {
+        sddf_printf("ICMP module: notified on channel %u, generating ICMP packets\n", ch);
+    }
     generate_icmp();
 }
