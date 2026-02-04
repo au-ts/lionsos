@@ -101,7 +101,10 @@ static void transmit_packet(net_buff_desc_t buffer,
     eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
-    memcpy(&eth_hdr->ethdst_addr, mac_addr, ETH_HWADDR_LEN);
+    /* Replaces mac address if needed */
+    if (mac_addr != NULL) {
+        memcpy(&eth_hdr->ethdst_addr, mac_addr, ETH_HWADDR_LEN);
+    }
     memcpy(&eth_hdr->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
 
     /* Transmit packet out the NIC */
@@ -207,6 +210,15 @@ static void route(void)
                             buffer.io_or_offset/NET_BUFFER_SIZE);
             }
 
+            if (ip_hdr->dst_ip == BROADCAST_IP_ADDR) {
+                /* Broadcast entry, transmit packet */
+                transmit_packet(buffer, NULL);
+                continue;
+            } else if ((ip_hdr->dst_ip & MULTICAST_IP_MASK) == MULTICAST_IP_NETWORK_ADDR) {
+                /* Multicast addresses not handled by router currently, skip */
+                continue;
+            }
+
             /* Find the next hop address. */
             uint32_t next_hop;
             fw_routing_interfaces_t interface;
@@ -267,73 +279,60 @@ static void route(void)
                 }
 
                 continue;
-
             }
+            
+            fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
+            /* destination unreachable or no space to store packet or send ARP request, drop packet */
+            if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) ||
+                (pkt_waiting_full(&pkt_waiting_queue) &&
+                (arp == NULL || arp->state == ARP_STATE_PENDING)) ||
+                (arp == NULL && fw_queue_full(&arp_req_queue))) {
 
-            /* Finds the MAC address, then transmits a packet */
-            if (next_hop == BROADCAST_IP_ADDR) {
-                /* valid arp entry found, transmit packet */
-                uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-                transmit_packet(buffer, broadcast_mac_addr);
-            } else if ((next_hop & MULTICAST_IP_MASK) == MULTICAST_IP_NETWORK_ADDR) {
-                /* Creates the multicast MAC address from the multicast broadcast address */
-                uint8_t multicast_mac_address[6] = {0x1, 0x0, 0x5e, ((next_hop & MULTICAST_MAC_SUFFIX_MASK) >> 16) & 0xff,
-                ((next_hop & MULTICAST_MAC_SUFFIX_MASK) >> 8) & 0xff, (next_hop & MULTICAST_MAC_SUFFIX_MASK) & 0xff};
-                transmit_packet(buffer, multicast_mac_address);
-            } else {
-                fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
-                /* destination unreachable or no space to store packet or send ARP request, drop packet */
-                if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) ||
-                    (pkt_waiting_full(&pkt_waiting_queue) &&
-                    (arp == NULL || arp->state == ARP_STATE_PENDING)) ||
-                    (arp == NULL && fw_queue_full(&arp_req_queue))) {
-
-                    if (arp != NULL && arp->state == ARP_STATE_UNREACHABLE) {
-                        int icmp_err = enqueue_icmp_unreachable(buffer);
-                        if (icmp_err) {
-                            sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP unreachable!\n",
-                                fw_frmt_str[router_config.interface]);
-                        }
-                    } else {
-                        sddf_dprintf("%sROUTING LOG: Waiting packet or ARP request queue full, dropping packet!\n",
+                if (arp != NULL && arp->state == ARP_STATE_UNREACHABLE) {
+                    int icmp_err = enqueue_icmp_unreachable(buffer);
+                    if (icmp_err) {
+                        sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP unreachable!\n",
                             fw_frmt_str[router_config.interface]);
                     }
-
-                    err = fw_enqueue(&rx_free, &buffer);
-                    assert(!err);
-                    returned = true;
-                    continue;
+                } else {
+                    sddf_dprintf("%sROUTING LOG: Waiting packet or ARP request queue full, dropping packet!\n",
+                        fw_frmt_str[router_config.interface]);
                 }
 
-                /* no entry in ARP table or request still pending, store packet
-                and send ARP request or await ARP response */
-                if (arp == NULL || arp->state == ARP_STATE_PENDING) {
-                    pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue,
-                                                                    next_hop);
-                    if (root) {
-                        /* ARP request already enqueued, add node as child. */
-                        fw_err = pkt_waiting_push_child(&pkt_waiting_queue,
-                                                        root,
-                                                        buffer);
-                        assert(fw_err == ROUTING_ERR_OKAY);
-                    } else {
-                        /* Generate ARP request and enqueue packet. */
-                        fw_arp_request_t request = {next_hop, {0}, ARP_STATE_INVALID};
-                        err = fw_enqueue(&arp_req_queue, &request);
-                        assert(!err);
-                        fw_err = pkt_waiting_push(&pkt_waiting_queue,
-                                                    next_hop,
-                                                    buffer);
-                        assert(fw_err == ROUTING_ERR_OKAY);
-                        notify_arp = true;
-                    }
-
-                    continue;
-                }
-
-                /* valid arp entry found, transmit packet */
-                transmit_packet(buffer, arp->mac_addr);
+                err = fw_enqueue(&rx_free, &buffer);
+                assert(!err);
+                returned = true;
+                continue;
             }
+
+            /* no entry in ARP table or request still pending, store packet
+            and send ARP request or await ARP response */
+            if (arp == NULL || arp->state == ARP_STATE_PENDING) {
+                pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue,
+                                                                next_hop);
+                if (root) {
+                    /* ARP request already enqueued, add node as child. */
+                    fw_err = pkt_waiting_push_child(&pkt_waiting_queue,
+                                                    root,
+                                                    buffer);
+                    assert(fw_err == ROUTING_ERR_OKAY);
+                } else {
+                    /* Generate ARP request and enqueue packet. */
+                    fw_arp_request_t request = {next_hop, {0}, ARP_STATE_INVALID};
+                    err = fw_enqueue(&arp_req_queue, &request);
+                    assert(!err);
+                    fw_err = pkt_waiting_push(&pkt_waiting_queue,
+                                                next_hop,
+                                                buffer);
+                    assert(fw_err == ROUTING_ERR_OKAY);
+                    notify_arp = true;
+                }
+
+                continue;
+            }
+
+            /* valid arp entry found, transmit packet */
+            transmit_packet(buffer, arp->mac_addr);
         }
     }
 }
