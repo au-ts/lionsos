@@ -1,0 +1,166 @@
+#
+# Copyright 2026, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
+TOOLCHAIN ?= clang
+SUPPORTED_BOARDS := \
+	qemu_virt_aarch64 \
+	maaxboard
+
+IMAGES := \
+	timer_driver.elf \
+	test_core.elf \
+	test_file.elf \
+	test_server.elf \
+	test_client.elf \
+	fat.elf \
+	serial_driver.elf \
+	serial_virt_rx.elf \
+	serial_virt_tx.elf \
+	eth_driver.elf \
+	network_virt_tx.elf \
+	network_virt_rx.elf \
+	network_copy.elf \
+	blk_virt.elf \
+	blk_driver.elf
+
+TOOLCHAIN ?= clang
+MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
+BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
+SDDF := $(LIONSOS)/dep/sddf
+LWIP := $(SDDF)/network/ipstacks/lwip/src
+LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
+WAMR := $(LIONSOS)/components/wamr
+
+SYSTEM_FILE := wasm_test.system
+IMAGE_FILE := wasm_test.img
+REPORT_FILE := report.txt
+
+all: ${IMAGE_FILE}
+
+include ${SDDF}/tools/make/board/common.mk
+
+METAPROGRAM := $(WASM_TEST_DIR)/meta.py
+
+FAT := $(LIONSOS)/components/fs/fat
+
+CFLAGS += \
+	-Wno-bitwise-op-parentheses \
+	-Wno-shift-op-parentheses \
+	-I$(LIONSOS)/include \
+	-I$(SDDF)/include \
+	-I$(SDDF)/include/microkit \
+	-I$(LIBMICROKITCO_PATH) \
+	-I$(LWIP)/include
+
+include $(LIONSOS)/lib/libc/libc.mk
+
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
+LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
+
+BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
+BLK_COMPONENTS := $(SDDF)/blk/components
+
+WASM_TARGETS := test_core test_file test_server test_client
+include $(WAMR)/wamr.mk
+
+SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
+FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
+FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
+
+SDDF_MAKEFILES := ${SDDF}/util/util.mk \
+${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
+${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk \
+${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
+${SDDF}/serial/components/serial_components.mk \
+${SDDF}/network/components/network_components.mk \
+${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
+${SDDF}/libco/libco.mk \
+${BLK_DRIVER}/blk_driver.mk \
+${BLK_COMPONENTS}/blk_components.mk
+
+include ${SDDF_MAKEFILES}
+include $(LIONSOS)/components/fs/fat/fat.mk
+include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
+
+${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
+
+WASM_CFLAGS := -O3 -z stack-size=32768 -Wl,--initial-memory=131072 \
+               -Wl,--export=__data_end -Wl,--export=__heap_base -Wl,--strip-all \
+			   -D_WASI_EMULATED_MMAN
+WASM_LIBS := -lwasi-emulated-mman
+WAMR_SOCKET := $(WAMR_ROOT)/core/iwasm/libraries/lib-socket
+
+test_core.wasm: $(WASM_TEST_DIR)/test_core.c
+	${WASI_SDK}/bin/clang $(WASM_CFLAGS) -o $@ $< $(WASM_LIBS)
+
+test_file.wasm: $(WASM_TEST_DIR)/test_file.c
+	${WASI_SDK}/bin/clang $(WASM_CFLAGS) -o $@ $< $(WASM_LIBS)
+
+test_server.wasm: $(WASM_TEST_DIR)/test_server.c $(WAMR_SOCKET)/src/wasi/wasi_socket_ext.c
+	${WASI_SDK}/bin/clang $(WASM_CFLAGS) -I$(WAMR_SOCKET)/inc -o $@ $^ $(WASM_LIBS)
+
+test_client.wasm: $(WASM_TEST_DIR)/test_client.c $(WAMR_SOCKET)/src/wasi/wasi_socket_ext.c
+	${WASI_SDK}/bin/clang $(WASM_CFLAGS) -I$(WAMR_SOCKET)/inc -o $@ $^ $(WASM_LIBS)
+
+%.o: %.c
+	${CC} ${CFLAGS} -c -o $@ $<
+
+$(DTB): $(DTS)
+	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
+
+FORCE:
+
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
+	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
+	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
+	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
+	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf
+	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver.elf
+	$(OBJCOPY) --update-section .net_virt_rx_config=net_virt_rx.data network_virt_rx.elf
+	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
+	$(OBJCOPY) --update-section .net_copy_config=net_copy_test_server_copier.data network_copy.elf network_copy_test_server.elf
+	$(OBJCOPY) --update-section .net_copy_config=net_copy_test_client_copier.data network_copy.elf network_copy_test_client.elf
+	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
+	$(OBJCOPY) --update-section .device_resources=blk_driver_device_resources.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_driver_config=blk_driver.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_virt_config=blk_virt.data blk_virt.elf
+	$(OBJCOPY) --update-section .blk_client_config=blk_client_fatfs.data fat.elf
+	$(OBJCOPY) --update-section .fs_server_config=fs_server_fatfs.data fat.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_test_core.data test_core.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_test_core.data test_core.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_test_file.data test_file.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_test_file.data test_file.elf
+	$(OBJCOPY) --update-section .fs_client_config=fs_client_test_file.data test_file.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_test_server.data test_server.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_test_server.data test_server.elf
+	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_test_server.data test_server.elf
+	$(OBJCOPY) --update-section .net_client_config=net_client_test_server.data test_server.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_test_client.data test_client.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_test_client.data test_client.elf
+	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_test_client.data test_client.elf
+	$(OBJCOPY) --update-section .net_client_config=net_client_test_client.data test_client.elf
+
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
+	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+
+qemu_disk:
+	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 GPT
+
+qemu: ${IMAGE_FILE} qemu_disk
+	$(QEMU) -machine virt,virtualization=on \
+		-cpu cortex-a53 \
+		-serial mon:stdio \
+		-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
+		-m size=2G \
+		-nographic \
+		-global virtio-mmio.force-legacy=false \
+		-d guest_errors \
+		-drive file=qemu_disk,if=none,format=raw,id=hd \
+		-device virtio-blk-device,drive=hd \
+		-device virtio-net-device,netdev=netdev0 \
+		-netdev user,id=netdev0,hostfwd=tcp::5560-10.0.2.15:5560,hostfwd=tcp::5561-10.0.2.15:5561

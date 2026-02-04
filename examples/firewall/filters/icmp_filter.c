@@ -126,11 +126,11 @@ static void filter(void)
     }
 }
 
-seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
+microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     switch (microkit_msginfo_get_label(msginfo)) {
     case FW_SET_DEFAULT_ACTION: {
-        fw_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
+        fw_action_t action = microkit_mr_get(FILTER_ARG_ACTION);
 
         if (FW_DEBUG_OUTPUT) {
             sddf_printf("%sICMP filter changing default action from %u to %u\n",
@@ -140,15 +140,15 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         fw_filter_err_t err = fw_filter_update_default_action(&filter_state, action);
         assert(err == FILTER_ERR_OKAY);
 
-        seL4_SetMR(FILTER_RET_ERR, err);
+        microkit_mr_set(FILTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
     case FW_ADD_RULE: {
-        fw_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
-        uint32_t src_ip = seL4_GetMR(FILTER_ARG_SRC_IP);
-        uint32_t dst_ip = seL4_GetMR(FILTER_ARG_DST_IP);
-        uint8_t src_subnet = seL4_GetMR(FILTER_ARG_SRC_SUBNET);
-        uint8_t dst_subnet = seL4_GetMR(FILTER_ARG_DST_SUBNET);
+        fw_action_t action = microkit_mr_get(FILTER_ARG_ACTION);
+        uint32_t src_ip = microkit_mr_get(FILTER_ARG_SRC_IP);
+        uint32_t dst_ip = microkit_mr_get(FILTER_ARG_DST_IP);
+        uint8_t src_subnet = microkit_mr_get(FILTER_ARG_SRC_SUBNET);
+        uint8_t dst_subnet = microkit_mr_get(FILTER_ARG_DST_SUBNET);
         uint16_t rule_id = 0;
         fw_filter_err_t err = fw_filter_add_rule(&filter_state, src_ip, ICMP_FILTER_DUMMY_PORT,
             dst_ip, ICMP_FILTER_DUMMY_PORT, src_subnet, dst_subnet, true, true, action, &rule_id);
@@ -160,12 +160,12 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
                 ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, ICMP_FILTER_DUMMY_PORT, false, fw_filter_err_str[err]);
         }
 
-        seL4_SetMR(FILTER_RET_ERR, err);
-        seL4_SetMR(FILTER_RET_RULE_ID, rule_id);
+        microkit_mr_set(FILTER_RET_ERR, err);
+        microkit_mr_set(FILTER_RET_RULE_ID, rule_id);
         return microkit_msginfo_new(0, 2);
     }
     case FW_DEL_RULE: {
-        uint16_t rule_id = seL4_GetMR(FILTER_ARG_RULE_ID);
+        uint16_t rule_id = microkit_mr_get(FILTER_ARG_RULE_ID);
         fw_filter_err_t err = fw_filter_remove_rule(&filter_state, rule_id);
 
         if (FW_DEBUG_OUTPUT) {
@@ -173,7 +173,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
                 fw_frmt_str[filter_config.interface], rule_id, fw_filter_err_str[err]);
         }
 
-        seL4_SetMR(FILTER_RET_ERR, err);
+        microkit_mr_set(FILTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
     default:

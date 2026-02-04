@@ -125,6 +125,19 @@ class FirewallDataStructure:
                 f"FirewallDataStructure: Calculated size of structure with c name {self.c_name}, entry size {self.entry_size} and capacity {self.capacity} was 0!"
             )
 
+    # Call to recalculate size after data structure update
+    def update_size(self):
+        if not self.entry_size:
+            raise Exception(
+                f"FirewallDataStructure: Entry size of structure with c name {self.c_name} was 0 during size recalculation!"
+            )
+
+        self.size = self.size_formula(self)
+        if not self.size:
+            raise Exception(
+                f"FirewallDataStructure: Recalculated size of structure with c name {self.c_name}, entry size {self.entry_size} and capacity {self.capacity} was 0!"
+            )
+
 
 # Class for creating firewall memory regions to be mapped into components.
 # Memory regions can be created directly, or by listing the data structures to
@@ -164,6 +177,17 @@ class FirewallMemoryRegions:
         if not self.min_size:
             raise Exception(
                 f"FirewallMemoryRegions: Calculated minimum size of region with data structure list {self.data_structures} was 0!"
+            )
+
+    # Call to recalculate size after data structure update
+    def update_size(self):
+        for structure in self.data_structures:
+            structure.update_size()
+
+        self.min_size = self.size_formula(self.data_structures)
+        if not self.min_size:
+            raise Exception(
+                f"FirewallMemoryRegions: Recalculated minimum size of region with data structure list {self.data_structures} was 0!"
             )
 
     @property
@@ -1040,6 +1064,8 @@ if __name__ == "__main__":
                 # Data structure size has already been calculated
                 continue
             try:
+                if not path.exists(structure.elf_name):
+                    raise Exception(f"ERROR: ELF name '{structure.elf_name}' does not exist")
                 output = subprocess.run(
                     ["llvm-dwarfdump", structure.elf_name],
                     capture_output=True,
@@ -1053,9 +1079,9 @@ if __name__ == "__main__":
                             assert dwarfdump[i + 3] == "DW_AT_byte_size"
                             size_fmt = dwarfdump[i + 4].strip("(").strip(")")
                             structure.entry_size = int(size_fmt, base=16)
-            except:
+            except Exception as e:
                 raise Exception(
-                    f"Error calculating {structure.c_name} size using llvm-dwarf dump on {structure.elf_name})"
+                        f"Error calculating {structure.c_name} size using llvm-dwarf dump on {structure.elf_name}): {e}"
                 )
             structure.calculate_size()
         region.calculate_size()

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2024, UNSW
+# Copyright 2026, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 
 #
@@ -10,7 +10,7 @@
 set -e
 
 if [ "$#" -ne 2 ]; then
-    echo "usage: posix.sh /path/to/lionsos /path/to/microkit/sdk"
+    echo "usage: wasm_test.sh /path/to/lionsos /path/to/microkit/sdk"
     exit 1
 fi
 
@@ -21,9 +21,9 @@ build() {
     MICROKIT_BOARD=$1
     MICROKIT_CONFIG=debug
 
-    echo "CI|INFO: building posix for board: ${MICROKIT_BOARD}"
+    echo "CI|INFO: building wasm_test for board: ${MICROKIT_BOARD}"
 
-    BUILD_DIR=$LIONSOS/ci_build/posix/${MICROKIT_BOARD}/${MICROKIT_CONFIG}
+    BUILD_DIR=$LIONSOS/ci_build/wasm_test/${MICROKIT_BOARD}/${MICROKIT_CONFIG}
     rm -rf $BUILD_DIR
 
     export BUILD_DIR=$BUILD_DIR
@@ -32,7 +32,7 @@ build() {
     export MICROKIT_BOARD=$MICROKIT_BOARD
     export LIONSOS=$LIONSOS
 
-    cd $LIONSOS/examples/posix
+    cd $LIONSOS/examples/wasm_test
     make
 }
 
@@ -43,4 +43,4 @@ do
 done
 
 echo ""
-echo "CI|INFO: Passed all posix build tests"
+echo "CI|INFO: Passed all wasm_test build tests"

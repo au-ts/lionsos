@@ -400,13 +400,13 @@ void init(void)
                      router_config.rx_free.capacity);
 }
 
-seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
+microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     switch (microkit_msginfo_get_label(msginfo)) {
     case FW_ADD_ROUTE: {
-        uint32_t ip = seL4_GetMR(ROUTER_ARG_IP);
-        uint8_t subnet = seL4_GetMR(ROUTER_ARG_SUBNET);
-        uint32_t next_hop = seL4_GetMR(ROUTER_ARG_NEXT_HOP);
+        uint32_t ip = microkit_mr_get(ROUTER_ARG_IP);
+        uint8_t subnet = microkit_mr_get(ROUTER_ARG_SUBNET);
+        uint32_t next_hop = microkit_mr_get(ROUTER_ARG_NEXT_HOP);
         // @kwinter: Limiting this to just external routes out of the NIC
         // for now.
         fw_routing_err_t err = fw_routing_table_add_route(routing_table,
@@ -422,11 +422,11 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
                 ipaddr_to_string(next_hop, ip_addr_buf1),
                         fw_routing_err_str[err]);
         }
-        seL4_SetMR(ROUTER_RET_ERR, err);
+        microkit_mr_set(ROUTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
     case FW_DEL_ROUTE: {
-        uint16_t route_id = seL4_GetMR(ROUTER_ARG_ROUTE_ID);
+        uint16_t route_id = microkit_mr_get(ROUTER_ARG_ROUTE_ID);
         fw_routing_err_t err = fw_routing_table_remove_route(routing_table, route_id);
 
         if (FW_DEBUG_OUTPUT) {
@@ -435,7 +435,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
                 route_id, fw_routing_err_str[err]);
         }
 
-        seL4_SetMR(ROUTER_RET_ERR, err);
+        microkit_mr_set(ROUTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
     default:

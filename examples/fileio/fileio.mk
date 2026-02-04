@@ -36,7 +36,9 @@ FAT := $(LIONSOS)/components/fs/fat
 CFLAGS += \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	-I$(LIBMICROKITCO_PATH) \
+	-I$(LWIP)/include
 
 include $(LIONSOS)/lib/libc/libc.mk
 

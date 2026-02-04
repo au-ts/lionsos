@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <lions/posix/posix.h>
+
 #include <microkit.h>
 
 #include <poll.h>
@@ -24,8 +26,6 @@
 #include <lions/fs/config.h>
 
 #include <lions/util.h>
-#include <lions/posix/tcp.h>
-#include <lions/posix/posix.h>
 
 #include "nfs.h"
 #include "config.h"
@@ -47,6 +47,20 @@ char *fs_share;
 
 struct nfs_context *nfs;
 
+net_queue_handle_t net_rx_handle;
+net_queue_handle_t net_tx_handle;
+
+extern libc_socket_config_t socket_config;
+
+static bool network_ready = false;
+
+static void netif_status_callback(char *ip_addr) {
+    printf("%s: %s:%d:%s: DHCP request finished, IP address for %s is: %s\r\n", microkit_name, __FILE__, __LINE__,
+           __func__, microkit_name, ip_addr);
+
+    network_ready = true;
+}
+
 void notified(microkit_channel ch) {
     if (ch == timer_config.driver_id) {
         sddf_lwip_process_rx();
@@ -57,16 +71,16 @@ void notified(microkit_channel ch) {
             int socket_index = socket_index_of_fd(nfs_fd);
             int revents = nfs_which_events(nfs);
             int sevents = 0;
-            if (tcp_socket_hup(socket_index)) {
+            if (socket_config.tcp_socket_hup(socket_index)) {
                 sevents |= POLLHUP;
             }
-            if (tcp_socket_err(socket_index)) {
+            if (socket_config.tcp_socket_err(socket_index) != 0) {
                 sevents |= POLLERR;
             }
-            if (revents & POLLOUT && tcp_socket_writable(socket_index)) {
+            if (revents & POLLOUT && socket_config.tcp_socket_writable(socket_index)) {
                 sevents |= POLLOUT;
             }
-            if (revents & POLLIN && tcp_socket_readable(socket_index)) {
+            if (revents & POLLIN && socket_config.tcp_socket_readable(socket_index)) {
                 sevents |= POLLIN;
             }
             if (sevents) {
@@ -88,14 +102,13 @@ void notified(microkit_channel ch) {
     // If we leave any commands in the queue, we can't rely on another client
     // notification to cause us to try to reprocess those commands, hence we
     // try to process commands unconditionally on any notification
-    if (tcp_ready()) {
+    if (network_ready) {
         process_commands();
     }
     sddf_lwip_maybe_notify();
 }
 
-void init(void)
-{
+void init(void) {
     assert(fs_config_check_magic(&fs_config));
     assert(nfs_config_check_magic(&nfs_config));
 
@@ -103,10 +116,22 @@ void init(void)
     fs_completion_queue = fs_config.client.completion_queue.vaddr;
     fs_share = fs_config.client.share.vaddr;
 
-    serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
+    serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size,
+                      serial_config.tx.data.vaddr);
 
-    libc_init();
+    libc_init(&socket_config);
     continuation_pool_init();
-    tcp_init_0();
+
+    net_queue_init(&net_rx_handle, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
+                   net_config.rx.num_buffers);
+    net_queue_init(&net_tx_handle, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
+                   net_config.tx.num_buffers);
+    net_buffers_init(&net_tx_handle, 0);
+
+    sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, net_rx_handle, net_tx_handle, NULL, printf,
+                   netif_status_callback, NULL, NULL, NULL);
+
+    sddf_lwip_maybe_notify();
+
     sddf_timer_set_timeout(timer_config.driver_id, TIMEOUT);
 }

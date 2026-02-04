@@ -143,14 +143,14 @@ static mp_obj_t route_add(mp_uint_t n_args, const mp_obj_t *args) {
     uint8_t subnet = mp_obj_get_int(args[2]);
     uint32_t next_hop = mp_obj_get_int(args[3]);
 
-    seL4_SetMR(ROUTER_ARG_IP, ip);
-    seL4_SetMR(ROUTER_ARG_SUBNET, subnet);
-    seL4_SetMR(ROUTER_ARG_NEXT_HOP, next_hop);
+    microkit_mr_set(ROUTER_ARG_IP, ip);
+    microkit_mr_set(ROUTER_ARG_SUBNET, subnet);
+    microkit_mr_set(ROUTER_ARG_NEXT_HOP, next_hop);
 
     microkit_msginfo msginfo =
         microkit_ppcall(fw_config.interfaces[interface_idx].router.routing_ch,
                         microkit_msginfo_new(FW_ADD_ROUTE, 4));
-    fw_os_err_t os_err = fw_routing_err_to_os_err(seL4_GetMR(ROUTER_RET_ERR));
+    fw_os_err_t os_err = fw_routing_err_to_os_err(microkit_mr_get(ROUTER_RET_ERR));
     if (os_err != OS_ERR_OKAY) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[os_err]);
         mp_raise_OSError(os_err);
@@ -174,11 +174,11 @@ static mp_obj_t route_delete(mp_obj_t interface_idx_in, mp_obj_t route_id_in) {
 
     uint16_t route_id = mp_obj_get_int(route_id_in);
 
-    seL4_SetMR(ROUTER_ARG_ROUTE_ID, route_id);
+    microkit_mr_set(ROUTER_ARG_ROUTE_ID, route_id);
     microkit_msginfo msginfo =
         microkit_ppcall(fw_config.interfaces[interface_idx].router.routing_ch,
                         microkit_msginfo_new(FW_DEL_ROUTE, 1));
-    fw_os_err_t os_err = fw_routing_err_to_os_err(seL4_GetMR(ROUTER_RET_ERR));
+    fw_os_err_t os_err = fw_routing_err_to_os_err(microkit_mr_get(ROUTER_RET_ERR));
     if (os_err != OS_ERR_OKAY) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[os_err]);
         mp_raise_OSError(os_err);
@@ -282,27 +282,27 @@ static mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
         return mp_const_none;
     }
 
-    seL4_SetMR(FILTER_ARG_ACTION, action);
-    seL4_SetMR(FILTER_ARG_SRC_IP, src_ip);
-    seL4_SetMR(FILTER_ARG_SRC_PORT, src_port);
-    seL4_SetMR(FILTER_ARG_SRC_ANY_PORT, src_port_any);
-    seL4_SetMR(FILTER_ARG_SRC_SUBNET, src_subnet);
-    seL4_SetMR(FILTER_ARG_DST_IP, dst_ip);
-    seL4_SetMR(FILTER_ARG_DST_PORT, dst_port);
-    seL4_SetMR(FILTER_ARG_DST_ANY_PORT, dst_port_any);
-    seL4_SetMR(FILTER_ARG_DST_SUBNET, dst_subnet);
+    microkit_mr_set(FILTER_ARG_ACTION, action);
+    microkit_mr_set(FILTER_ARG_SRC_IP, src_ip);
+    microkit_mr_set(FILTER_ARG_SRC_PORT, src_port);
+    microkit_mr_set(FILTER_ARG_SRC_ANY_PORT, src_port_any);
+    microkit_mr_set(FILTER_ARG_SRC_SUBNET, src_subnet);
+    microkit_mr_set(FILTER_ARG_DST_IP, dst_ip);
+    microkit_mr_set(FILTER_ARG_DST_PORT, dst_port);
+    microkit_mr_set(FILTER_ARG_DST_ANY_PORT, dst_port_any);
+    microkit_mr_set(FILTER_ARG_DST_SUBNET, dst_subnet);
 
     microkit_msginfo msginfo =
         microkit_ppcall(fw_config.interfaces[interface_idx].filters[protocol_match].ch,
                         microkit_msginfo_new(FW_ADD_RULE, 10));
-    fw_os_err_t os_err = filter_err_to_os_err(seL4_GetMR(FILTER_RET_ERR));
+    fw_os_err_t os_err = filter_err_to_os_err(microkit_mr_get(FILTER_RET_ERR));
     if (os_err != OS_ERR_OKAY) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[os_err]);
         mp_raise_OSError(os_err);
         return mp_obj_new_int_from_uint(os_err);
     }
 
-    uint16_t rule_id = seL4_GetMR(FILTER_RET_RULE_ID);
+    uint16_t rule_id = microkit_mr_get(FILTER_RET_RULE_ID);
     return mp_obj_new_int_from_uint(rule_id);
 }
 
@@ -335,11 +335,11 @@ static mp_obj_t rule_delete(mp_obj_t interface_idx_in, mp_obj_t rule_id_in,
         return mp_const_none;
     }
 
-    seL4_SetMR(FILTER_ARG_RULE_ID, rule_id);
+    microkit_mr_set(FILTER_ARG_RULE_ID, rule_id);
     microkit_msginfo msginfo =
         microkit_ppcall(fw_config.interfaces[interface_idx].filters[protocol_match].ch,
                         microkit_msginfo_new(FW_DEL_RULE, 2));
-    fw_os_err_t os_err = filter_err_to_os_err(seL4_GetMR(FILTER_RET_ERR));
+    fw_os_err_t os_err = filter_err_to_os_err(microkit_mr_get(FILTER_RET_ERR));
     if (os_err != OS_ERR_OKAY) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[os_err]);
         mp_raise_OSError(os_err);
@@ -403,11 +403,11 @@ static mp_obj_t filter_set_default_action(mp_obj_t interface_idx_in,
         return mp_const_none;
     }
 
-    seL4_SetMR(FILTER_ARG_ACTION, action);
+    microkit_mr_set(FILTER_ARG_ACTION, action);
     microkit_msginfo msginfo =
         microkit_ppcall(fw_config.interfaces[interface_idx].filters[protocol_match].ch,
                         microkit_msginfo_new(FW_SET_DEFAULT_ACTION, 1));
-    fw_os_err_t os_err = filter_err_to_os_err(seL4_GetMR(FILTER_RET_ERR));
+    fw_os_err_t os_err = filter_err_to_os_err(microkit_mr_get(FILTER_RET_ERR));
     if (os_err != OS_ERR_OKAY) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[os_err]);
         mp_raise_OSError(os_err);
