@@ -234,3 +234,98 @@ static inline void fw_nat_free_expired_mappings(fw_nat_interface_config_t config
         }
     }
 }
+
+/**
+ * Add a port forwarding rule to the table.
+ *
+ * @param table Port forwarding table
+ * @param protocol IPPROTO_TCP or IPPROTO_UDP
+ * @param external_port External port
+ * @param internal_ip Internal destination IP
+ * @param internal_port Internal destination port
+ * @param interface Interface index
+ * @return 0 on success, -1 on error
+ */
+static inline int fw_nat_add_port_forwarding_rule(fw_nat_port_forwarding_table_t *table,
+                                                  uint8_t protocol, uint16_t external_port,
+                                                  uint32_t internal_ip, uint16_t internal_port,
+                                                  uint8_t interface)
+{
+    if (table->num_rules >= FW_MAX_PORT_FORWARDING_RULES)
+    {
+        return -1; /* Table is full */
+    }
+
+    /* Check for duplicate rules */
+    for (uint16_t i = 0; i < table->num_rules; i++)
+    {
+        if (table->rules[i].is_valid && table->rules[i].protocol == protocol &&
+            table->rules[i].external_port == external_port && table->rules[i].interface == interface)
+        {
+            return -1; /* Duplicate rule */
+        }
+    }
+
+    /* Find an empty slot */
+    uint16_t slot = table->num_rules;
+    table->rules[slot].is_valid = true;
+    table->rules[slot].protocol = protocol;
+    table->rules[slot].external_port = external_port;
+    table->rules[slot].internal_ip = internal_ip;
+    table->rules[slot].internal_port = internal_port;
+    table->rules[slot].interface = interface;
+    table->num_rules++;
+
+    return 0;
+}
+
+/**
+ * Remove a port forwarding rule from the table.
+ *
+ * @param table Port forwarding table
+ * @param index Index of rule to remove
+ * @return 0 on success, -1 on error
+ */
+static inline int fw_nat_remove_port_forwarding_rule(fw_nat_port_forwarding_table_t *table, uint16_t index)
+{
+    if (index >= FW_MAX_PORT_FORWARDING_RULES || !table->rules[index].is_valid)
+    {
+        return -1;
+    }
+
+    /* Mark rule as invalid */
+    table->rules[index].is_valid = false;
+
+    /* Shift remaining rules to fill the gap */
+    for (uint16_t i = index; i < table->num_rules - 1; i++)
+    {
+        table->rules[i] = table->rules[i + 1];
+    }
+
+    table->num_rules--;
+    return 0;
+}
+
+/**
+ * Find a port forwarding rule matching the given criteria.
+ *
+ * @param table Port forwarding table
+ * @param protocol IPPROTO_TCP or IPPROTO_UDP
+ * @param external_port External port to match
+ * @param interface Interface index
+ * @return Pointer to matching rule, or NULL if not found
+ */
+static inline fw_nat_port_forwarding_rule_t *fw_nat_find_port_forwarding_rule(
+    fw_nat_port_forwarding_table_t *table, uint8_t protocol, uint16_t external_port, uint8_t interface)
+{
+    for (uint16_t i = 0; i < table->num_rules; i++)
+    {
+        if (table->rules[i].is_valid && table->rules[i].protocol == protocol &&
+            table->rules[i].external_port == external_port && table->rules[i].interface == interface)
+        {
+            return &table->rules[i];
+        }
+    }
+
+    return NULL;
+}
