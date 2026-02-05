@@ -15,9 +15,39 @@
 #include <lions/firewall/config.h>
 
 #define NAT_TIMEOUT_INTERVAL_NS (5 * NS_IN_S)
+#define FW_MAX_PORT_FORWARDING_RULES 64
+
+/**
+ * Port forwarding rule structure
+ * Maps an external port on a NAT interface to an internal IP and port
+ */
+typedef struct fw_nat_port_forwarding_rule
+{
+    /* Whether this rule is active */
+    bool is_valid;
+    uint8_t protocol;
+    /* External port on NAT interface */
+    uint16_t external_port;
+    /* Internal destination IP address */
+    uint32_t internal_ip;
+    /* Internal destination port */
+    uint16_t internal_port;
+    /* Interface this rule applies to */
+    uint8_t interface;
+} fw_nat_port_forwarding_rule_t;
+
+/**
+ * Table of port forwarding rules
+ */
+typedef struct fw_nat_port_forwarding_table
+{
+    fw_nat_port_forwarding_rule_t rules[FW_MAX_PORT_FORWARDING_RULES];
+    uint16_t num_rules;
+} fw_nat_port_forwarding_table_t;
 
 /* Holds webserver state specific to the NAT of a particular interface */
-typedef struct fw_nat_webserver_interface_state {
+typedef struct fw_nat_webserver_interface_state
+{
     /* Source NAT IP */
     uint32_t snat;
 } fw_nat_webserver_interface_state_t;
@@ -25,10 +55,12 @@ typedef struct fw_nat_webserver_interface_state {
 /**
  * Structure shared with webserver to configure NAT for all interfaces with this protocol
  */
-typedef struct fw_nat_webserver_state {
+typedef struct fw_nat_webserver_state
+{
     fw_nat_webserver_interface_state_t interfaces[FW_NUM_INTERFACES];
-    /* Timeout in nanoseconds */
     uint64_t timeout;
+    /* Port forwarding rules table */
+    fw_nat_port_forwarding_table_t port_forwarding;
 } fw_nat_webserver_state_t;
 
 /**
@@ -36,7 +68,8 @@ typedef struct fw_nat_webserver_state {
  * This is an endpoint independent mapping since only source address and port are used.
  */
 typedef struct fw_nat_port_mapping fw_nat_port_mapping_t;
-struct fw_nat_port_mapping {
+struct fw_nat_port_mapping
+{
     /* original source ip of traffic */
     uint32_t src_ip;
     /* original source port of traffic (network byte order) */
@@ -48,7 +81,8 @@ struct fw_nat_port_mapping {
     uint64_t last_used_ts;
 };
 
-typedef struct fw_nat_port_table {
+typedef struct fw_nat_port_table
+{
     /* number of valid NAT entries */
     uint16_t size;
     /* largest initialised entry in the NAT table (could be valid or free) */
@@ -77,13 +111,14 @@ static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interfa
     /* Since dst_port is used as an index here it must be in host byte order */
     dst_port = htons(dst_port);
 
-    for (uint16_t i = 0; i < FW_NUM_INTERFACES; i++) {
-        if (dst_ip == state.interfaces[i].snat) {
-            fw_nat_port_table_t *port_table = (fw_nat_port_table_t*)interfaces[i].port_table.vaddr;
+    for (uint16_t i = 0; i < FW_NUM_INTERFACES; i++)
+    {
+        if (dst_ip == state.interfaces[i].snat)
+        {
+            fw_nat_port_table_t *port_table = (fw_nat_port_table_t *)interfaces[i].port_table.vaddr;
 
-            if ((dst_port >= interfaces[i].base_port)
-                && (dst_port < interfaces[i].base_port + port_table->largest_index)
-                && port_table->mappings[dst_port - interfaces[i].base_port].is_valid) {
+            if ((dst_port >= interfaces[i].base_port) && (dst_port < interfaces[i].base_port + port_table->largest_index) && port_table->mappings[dst_port - interfaces[i].base_port].is_valid)
+            {
                 return &port_table->mappings[dst_port - interfaces[i].base_port];
             }
         }
@@ -108,15 +143,18 @@ static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_interface_config_t conf
                                                   uint32_t src_ip, uint16_t src_port, uint64_t now)
 {
     /* Search for an existing mapping */
-    for (uint16_t i = 0; i < ports->size; i++) {
-        if (ports->mappings[i].src_ip == src_ip && ports->mappings[i].src_port == src_port && ports->mappings[i].is_valid) {
+    for (uint16_t i = 0; i < ports->size; i++)
+    {
+        if (ports->mappings[i].src_ip == src_ip && ports->mappings[i].src_port == src_port && ports->mappings[i].is_valid)
+        {
             ports->mappings[i].last_used_ts = now;
             return htons(config.base_port + i);
         }
     }
 
     /* Try to reuse a free entry */
-    if (ports->free_head) {
+    if (ports->free_head)
+    {
         ports->size++;
 
         /* Remove from front of list */
@@ -130,7 +168,8 @@ static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_interface_config_t conf
         return htons(config.base_port + mapping - ports->mappings);
     }
 
-    if (ports->size >= config.ports_capacity) {
+    if (ports->size >= config.ports_capacity)
+    {
         return 0; /* Ephemeral ports pool is full */
     }
 
@@ -180,13 +219,16 @@ static inline void fw_nat_free_ephemeral_port(fw_nat_interface_config_t config, 
 static inline void fw_nat_free_expired_mappings(fw_nat_interface_config_t config, fw_nat_port_table_t *ports,
                                                 uint64_t timeout, uint64_t now)
 {
-    for (uint16_t i = 0; i < ports->largest_index; i++) {
+    for (uint16_t i = 0; i < ports->largest_index; i++)
+    {
         fw_nat_port_mapping_t *mapping = &ports->mappings[i];
 
-        if (mapping->is_valid && now > timeout && mapping->last_used_ts <= now - timeout) {
+        if (mapping->is_valid && now > timeout && mapping->last_used_ts <= now - timeout)
+        {
             fw_nat_free_ephemeral_port(config, ports, config.base_port + i);
 
-            if (FW_DEBUG_OUTPUT) {
+            if (FW_DEBUG_OUTPUT)
+            {
                 sddf_printf("NAT LOG: freed port: %u, %u remaining\n", config.base_port + i, ports->size);
             }
         }
