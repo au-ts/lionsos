@@ -66,8 +66,6 @@ oneTimeSetUp() {
     # automatically cleaned up on exit.
     SENT="${SHUNIT_TMPDIR}/sent"
     RECEIVED="${SHUNIT_TMPDIR}/received"
-    EXTERNAL_TRAFFIC="${SHUNIT_TMPDIR}/external_traffic"
-    INTERNAL_TRAFFIC="${SHUNIT_TMPDIR}/internal_traffic"
 
     # Test data
     #
@@ -121,8 +119,6 @@ oneTimeSetUp() {
     # to be displayed when a test fails.
     LOG='/tmp/lionsos_firewall_log'
     PRINT_LOG_ON_ERROR=true
-    PRINT_EXTERNAL_TRAFFIC_ON_ERROR=false
-    PRINT_INTERNAL_TRAFFIC_ON_ERROR=false
 
     if [ "${PRINT_LOG_ON_ERROR}" = true ] && [ ! -f "${LOG}" ]; then
         print_warning "Log file (${LOG}) does not exist"
@@ -140,14 +136,6 @@ oneTimeSetUp() {
 # Executed before each test
 #
 setUp() {
-    if [ "${PRINT_EXTERNAL_TRAFFIC_ON_ERROR}" = true ]; then
-        tcpdump -ex -i tap0 > "${EXTERNAL_TRAFFIC}" 2> /dev/null &
-    fi
-
-    if [ "${PRINT_INTERNAL_TRAFFIC_ON_ERROR}" = true ]; then
-        tcpdump -ex -i tap1 > "${INTERNAL_TRAFFIC}" 2> /dev/null &
-    fi
-
     if [ "${TEST_DEBUG}" = true ]; then
         set -x
     fi
@@ -166,8 +154,6 @@ tearDown() {
     fi
 
     cp /dev/null "${RECEIVED}"
-    cp /dev/null "${EXTERNAL_TRAFFIC}"
-    cp /dev/null "${INTERNAL_TRAFFIC}"
 }
 
 #
@@ -191,16 +177,6 @@ print_file() {
     print_header "$1"
     cat "${data_file}"
     printf '\n'
-}
-
-print_traffic() {
-    if [ "${PRINT_EXTERNAL_TRAFFIC_ON_ERROR}" = true ]; then
-        print_file 'External traffic' "${EXTERNAL_TRAFFIC}"
-    fi
-
-    if [ "${PRINT_INTERNAL_TRAFFIC_ON_ERROR}" = true ]; then
-        print_file 'Internal traffic' "${INTERNAL_TRAFFIC}"
-    fi
 }
 
 print_log() {
@@ -315,7 +291,6 @@ test_tcp_internal_to_external() {
     # Verify that the data was transmitted correctly
     if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
         fail "${ERROR_DATA_INCORRECT}"
-        print_traffic
         print_log
     fi
 }
@@ -341,7 +316,6 @@ test_tcp_external_to_internal() {
     # Verify that the data was transmitted correctly
     if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
         fail "${ERROR_DATA_INCORRECT}"
-        print_traffic
         print_log
     fi
 }
@@ -371,7 +345,6 @@ test_udp_internal_to_external() {
     # Verify that the data was transmitted correctly
     if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
         fail "${ERROR_DATA_INCORRECT}"
-        print_traffic
         print_log
     fi
 }
@@ -397,7 +370,6 @@ test_udp_external_to_internal() {
     # Verify that the data was transmitted correctly
     if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
         fail "${ERROR_DATA_INCORRECT}"
-        print_traffic
         print_log
     fi
 }
