@@ -211,8 +211,7 @@ static void route(void)
             }
 
             if (ip_hdr->dst_ip == BROADCAST_IP_ADDR) {
-                /* Broadcast entry, transmit packet */
-                transmit_packet(buffer, NULL);
+                /* Limited broadcast, drop packet explicitly */
                 continue;
             } else if ((ip_hdr->dst_ip & MULTICAST_IP_MASK) == MULTICAST_IP_NETWORK_ADDR) {
                 /* Multicast addresses not handled by router currently, skip */
