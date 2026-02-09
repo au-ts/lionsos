@@ -60,7 +60,7 @@ static bool returned; /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp; /* Arp request has been enqueued */
 static bool notify_icmp; /* Request has been enqueued to ICMP module */
 
-/* Masks for checking whether it is a roadcast address or not*/
+/* Masks for checking whether it is a broadcast address or not*/
 #define MULTICAST_IP_MASK 0xf0000000
 #define MULTICAST_IP_NETWORK_ADDR 0xe0000000
 #define BROADCAST_IP_ADDR 0xffffffff
