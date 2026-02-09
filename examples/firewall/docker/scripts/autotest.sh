@@ -149,7 +149,7 @@ oneTimeSetUp() {
 
 
     # If `TEST_DEBUG` is set to true, the commands executed during a test will
-    # be display on the console.
+    # be displayed on the console.
     TEST_DEBUG=false
 
     print_header 'Running firewall tests...'
