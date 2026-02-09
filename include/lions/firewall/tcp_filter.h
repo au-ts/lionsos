@@ -32,10 +32,10 @@ typedef struct fw_tcp_instance {
     uint16_t src_port;
     /* destination port of traffic */
     uint16_t dst_port;
-    /* data from last packet received by this filter */
-    fw_tcp_interface_state_t local;
-    /* data from last packet received by neighbouring filter */
-    fw_tcp_interface_state_t external;
+    /* Last recorded state, in case a resend occurs and the prev->curr transition needs to be repeated */
+    fw_tcp_interface_state_t prev;
+    /* What state it is currently expected to be in currently*/
+    fw_tcp_interface_state_t curr;
     /* tick of last packet received */
     uint64_t timestamp;
     /* ID of the rule this instance was created from. Allows instances
@@ -43,33 +43,23 @@ typedef struct fw_tcp_instance {
     uint16_t rule_id;
 } fw_tcp_instance_t;
 
+/* States relative to the filter's instance based on https://en.wikipedia.org/wiki/File:Tcp_state_diagram.png*/
 typedef enum {
-    /* no traffic has been seen */
+    /* no traffic has been seen (listen and closed combined) */
     TCP_NONE,
-    /* this filter has received a syn */
+    /* this filter has received a syn (closed -> syn sent) */
     TCP_SYN_SENT,
-    /* neighbour filter has received a syn */
+    /* neighbour filter has received a syn (listen -> syn recieved) */
     TCP_SYN_SEEN,
-    /* this filter has received a syn-ack */
-    TCP_SYNACK_SENT,
-    /* neighbour filter has received a syn-ack */
-    TCP_SYNACK_SEEN,
     /* three-way syn handshake has been completed */
     TCP_ESTABLISHED,
-    /* this filter has received a fin */
-    TCP_FIN_SENT,
-    /* neighbour filter has received a fin */
-    TCP_FIN_SEEN,
-    /* this filter has received a fin-ack */
-    TCP_FINACK_SENT,
-    /* neighbour filter has received a fin-ack */
-    TCP_FINACK_SEEN,
-    /* this filter has received final ack. Three-way fin handshake has been
-    completed */
-    TCP_FINAL_ACK_SENT,
-    /* neighbour filter has received final ack. Three-way fin handshake has been
-    completed */
-    TCP_CLOSED
+    /* this filter has recieved a fin/ack after sending a fin */
+    TCP_FIN_WAIT1,
+    TCP_FIN_WAIT2,
+    CLOSING,
+    TIME_WAIT,
+    CLOSE_WAIT,
+    LAST_ACK,
 } fw_tcp_conn_state_t;
 
 /* Bits used to store TCP flags */
