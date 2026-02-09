@@ -328,7 +328,7 @@ test_tcp_external_to_internal() {
 
     # Send traffic, from the external host, to the internal host
     ip netns exec ext \
-    nc -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+    nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
     exit_code=$?
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
