@@ -126,6 +126,28 @@ oneTimeSetUp() {
         PRINT_LOG_ON_ERROR=false
     fi
 
+    # If `SAVE_SESSION_LOG_ON_EXIT` is set to true, the entire firewall log will
+    # be saved to `SESSION_LOG` on exit. Setting `CLOBBER_SESSION_LOG` to true
+    # will cause the session log to be overwritten if it already exists.
+    # Otherwise, the output will be appended.
+    SESSION_LOG='/tmp/lionsos_firewall_session_log'
+    SAVE_SESSION_LOG_ON_EXIT=true
+    CLOBBER_SESSION_LOG=true
+
+    if [ -f "${LOG}" ]; then
+        if [ "${SAVE_SESSION_LOG_ON_EXIT}" = true ]; then
+            printf '\n%s %s\n' 'Session log will be saved to' "'${SESSION_LOG}'"
+        fi
+
+        if [ "$CLOBBER_SESSION_LOG" = true ]; then
+            cp /dev/null "${SESSION_LOG}"
+        fi
+    else
+        print_warning 'Session logs will not be generated'
+        SAVE_SESSION_LOG_ON_EXIT=false
+    fi
+
+
     # If `TEST_DEBUG` is set to true, the commands executed during a test will
     # be display on the console.
     TEST_DEBUG=false
@@ -147,6 +169,10 @@ tearDown() {
     if [ "${TEST_DEBUG}" = true ]; then
         set +x
         printf '\n'
+    fi
+
+    if [ "${SAVE_SESSION_LOG_ON_EXIT}" = true ]; then
+        cat "${LOG}" >> "${SESSION_LOG}"
     fi
 
     if [ -f "${LOG}" ]; then
