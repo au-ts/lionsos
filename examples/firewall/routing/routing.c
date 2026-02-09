@@ -279,7 +279,7 @@ static void route(void)
 
                 continue;
             }
-            
+
             fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
             /* destination unreachable or no space to store packet or send ARP request, drop packet */
             if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE) ||
