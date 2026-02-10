@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "sddf/serial/queue.h"
 #include <os/sddf.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -17,7 +16,6 @@
 
 #define FW_MAX_FW_CLIENTS 61
 #define FW_MAX_FILTERS 61
-#define FW_MAX_NAT 16
 
 #define FW_NUM_ARP_REQUESTER_CLIENTS 2
 #define FW_NUM_INTERFACES 2
@@ -143,18 +141,47 @@ typedef struct fw_filter_config {
     region_resource_t rule_id_bitmap;
 } fw_filter_config_t;
 
-/* NAT configuration that is specific to a PD (interface and protocol specific) */
 typedef struct fw_webserver_nat_config {
     uint8_t protocol;
     uint8_t ch;
+    uint8_t default_timeout;
+    /* shared memory to store source IP and mapping timeout. If NAT component
+    does not exist for an IP protocol, this region is left empty */
+    region_resource_t configuration;
 } fw_webserver_nat_config_t;
 
-/* NAT configuration that is specific to a protocol */
-typedef struct fw_webserver_nat_protocol_config {
-    uint8_t protocol;
-    /* Webserver NAT state, written to by webserver, shared by all NAT of a given protocol */
-    region_resource_t region;
-} fw_webserver_nat_protocol_config_t;
+typedef struct fw_nat_interface_config {
+    /* IP address of interface */
+    uint32_t ip;
+    /* base port for ephemeral port table */
+    uint16_t base_port;
+    /* region for ephemeral port table */
+    region_resource_t port_table;
+    /* capacity of ephemeral port table */
+    uint16_t ports_capacity;
+} fw_nat_interface_config_t;
+
+typedef struct fw_nat_config {
+    /* Interface traffic is received from */
+    uint8_t interface;
+    /**
+     * Configuration for each of the interfaces.
+     * Allows NAT operations by one interface to be reversed by the other.
+     */
+    fw_nat_interface_config_t interfaces[FW_NUM_INTERFACES];
+    fw_connection_resource_t filter;
+    fw_connection_resource_t router;
+    device_region_resource_t data;
+    fw_webserver_nat_config_t webserver;
+    /* Byte offset of source port in transport layer header */
+    size_t src_port_off;
+    /* Byte offset of destination port in transport layer header */
+    size_t dst_port_off;
+    /* Byte offset of checksum in transport layer header */
+    size_t check_off;
+    /* Whether this protocol has a checksum to recalculate */
+    bool check_enabled;
+} fw_nat_config_t;
 
 typedef struct fw_webserver_interface_config {
     /* MAC address of interface */
@@ -163,7 +190,7 @@ typedef struct fw_webserver_interface_config {
     uint32_t ip;
     fw_webserver_router_config_t router;
     fw_webserver_filter_config_t filters[FW_MAX_FILTERS];
-    fw_webserver_nat_config_t nat[FW_MAX_NAT];
+    fw_webserver_nat_config_t nat[FW_MAX_FILTERS];
     uint8_t num_filters;
 } fw_webserver_interface_config_t;
 
@@ -175,44 +202,5 @@ typedef struct fw_webserver_config {
     fw_connection_resource_t rx_free;
     fw_arp_connection_t arp_queue;
     fw_webserver_interface_config_t interfaces[FW_NUM_INTERFACES];
-    fw_webserver_nat_protocol_config_t nat_state[FW_MAX_NAT];
     uint8_t num_interfaces;
-    uint8_t num_nat_state;
 } fw_webserver_config_t;
-
-typedef struct fw_nat_interface_config {
-    /* base port for ephemeral port table */
-    uint16_t base_port;
-    /* capacity of ephemeral port table */
-    uint16_t ports_capacity;
-    /* region for ephemeral port table */
-    region_resource_t port_table;
-    /* IP address of interface */
-    uint32_t ip;
-} fw_nat_interface_config_t;
-
-typedef struct fw_nat_config {
-    fw_connection_resource_t filter;
-    fw_connection_resource_t router;
-    device_region_resource_t data;
-    /* Shared memory state with the webserver */
-    region_resource_t webserver;
-    uint8_t webserver_ch;
-    /* Interface traffic is received from */
-    uint8_t interface;
-    /**
-     * Configuration for each of the interfaces.
-     * Allows NAT operations by one interface to be reversed by the other.
-     */
-    fw_nat_interface_config_t interfaces[FW_NUM_INTERFACES];
-    /* IP protocol */
-    uint8_t protocol;
-    /* Byte offset of source port in transport layer header */
-    size_t src_port_off;
-    /* Byte offset of destination port in transport layer header */
-    size_t dst_port_off;
-    /* Byte offset of checksum in transport layer header */
-    size_t check_off;
-    /* Whether this protocol has a checksum to recalculate */
-    bool check_enabled;
-} fw_nat_config_t;
