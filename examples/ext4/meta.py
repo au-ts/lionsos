@@ -43,7 +43,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     blk_virt = ProtectionDomain("blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000)
     blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
 
-    ext4 = ProtectionDomain("ext4", "ext4.elf", priority=1)
+    ext4 = ProtectionDomain("ext4", "ext4.elf", priority=1, stack_size=0x10000)
 
     blk_system.add_client(ext4, partition=board.blk_partition)
 

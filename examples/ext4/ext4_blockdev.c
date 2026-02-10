@@ -26,8 +26,16 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
 #include <microkit.h>
+#include <sddf/blk/config.h>
+#include <sddf/blk/queue.h>
 
+extern blk_storage_info_t *storage_info;
+extern blk_queue_handle_t blk_queue;
+extern blk_client_config_t blk_config;
 
 #include <ext4_config.h>
 #include <ext4_blockdev.h>
@@ -45,7 +53,7 @@ static int blockdev_lock(struct ext4_blockdev *bdev);
 static int blockdev_unlock(struct ext4_blockdev *bdev);
 
 /******************************************************************************/
-EXT4_BLOCKDEV_STATIC_INSTANCE(blockdev, 512, 0, blockdev_open,
+EXT4_BLOCKDEV_STATIC_INSTANCE(blockdev, BLK_TRANSFER_SIZE, 0, blockdev_open,
                   blockdev_bread, blockdev_bwrite, blockdev_close,
                   blockdev_lock, blockdev_unlock);
 
@@ -53,8 +61,15 @@ EXT4_BLOCKDEV_STATIC_INSTANCE(blockdev, 512, 0, blockdev_open,
 static int blockdev_open(struct ext4_blockdev *bdev)
 {
     /*blockdev_open: skeleton*/
-    microkit_dbg_puts("TRIED TO OPEN\n");
-    return EIO;
+    // microkit_dbg_puts("LIONSOS: open\n");
+
+    blockdev.part_offset = 0;
+    blockdev.part_size = storage_info->capacity * BLK_TRANSFER_SIZE;
+    blockdev.bdif->ph_bcnt = blockdev.part_size / blockdev.bdif->ph_bsize;
+
+    assert(bdev->bdif->ph_bsize == BLK_TRANSFER_SIZE);
+
+    return EOK;
 }
 
 /******************************************************************************/
@@ -62,8 +77,29 @@ static int blockdev_open(struct ext4_blockdev *bdev)
 static int blockdev_bread(struct ext4_blockdev *bdev, void *buf, uint64_t blk_id,
              uint32_t blk_cnt)
 {
+    // microkit_dbg_puts("LIONSOS: bread\n");
+    // printf("blk_id %lu, blk_cnt: %u\n", blk_id, blk_cnt);
+
+    size_t buf_size = blk_cnt * BLK_TRANSFER_SIZE;
+    assert(buf_size <= blk_config.data.size);
+
+    int err = blk_enqueue_req(&blk_queue, BLK_REQ_READ, 0, blk_id, blk_cnt, 0);
+    assert(!err);
+    microkit_notify(blk_config.virt.id);
+
+    blk_resp_status_t status;
+    uint16_t success_count;
+    uint32_t id;
+    while (blk_dequeue_resp(&blk_queue, &status, &success_count, &id)) {}
+
+    assert(status == BLK_RESP_OK);
+    assert(success_count == blk_cnt);
+    assert(id == 0);
+
+    memcpy(buf, blk_config.data.vaddr, buf_size);
+
     /*blockdev_bread: skeleton*/
-    return EIO;
+    return EOK;
 }
 
 
@@ -71,26 +107,50 @@ static int blockdev_bread(struct ext4_blockdev *bdev, void *buf, uint64_t blk_id
 static int blockdev_bwrite(struct ext4_blockdev *bdev, const void *buf,
               uint64_t blk_id, uint32_t blk_cnt)
 {
+    // microkit_dbg_puts("LIONSOS: bwrite\n");
+    // printf("blk_id %d, blk_cnt: %d\n", blk_id, blk_cnt);
+
+    size_t buf_size = blk_cnt * BLK_TRANSFER_SIZE;
+    assert(buf_size <= blk_config.data.size);
+
+    memcpy(blk_config.data.vaddr, buf, buf_size);
+
+    int err = blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, blk_id, blk_cnt, 0);
+    assert(!err);
+    microkit_notify(blk_config.virt.id);
+
+    blk_resp_status_t status;
+    uint16_t success_count;
+    uint32_t id;
+    while (blk_dequeue_resp(&blk_queue, &status, &success_count, &id)) {}
+
+    assert(status == BLK_RESP_OK);
+    assert(success_count == blk_cnt);
+    assert(id == 0);
+
     /*blockdev_bwrite: skeleton*/
-    return EIO;
+    return EOK;
 }
 /******************************************************************************/
 static int blockdev_close(struct ext4_blockdev *bdev)
 {
-    /*blockdev_close: skeleton*/
-    return EIO;
+    // todo: maybe call flush/sync? otherwise nothing for us to do
+    // microkit_dbg_puts("LIONSOS: close\n");
+    return EOK;
 }
 
 static int blockdev_lock(struct ext4_blockdev *bdev)
 {
+    // microkit_dbg_puts("LIONSOS: lock\n");
     /*blockdev_lock: skeleton*/
-    return EIO;
+    return EOK;
 }
 
 static int blockdev_unlock(struct ext4_blockdev *bdev)
 {
+    // microkit_dbg_puts("LIONSOS: unlock\n");
     /*blockdev_unlock: skeleton*/
-    return EIO;
+    return EOK;
 }
 
 /******************************************************************************/

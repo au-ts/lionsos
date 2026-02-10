@@ -148,7 +148,13 @@ pub fn build(b: *std.Build) !void {
         .files = &lwext4_src,
         .flags = &.{ "-DCONFIG_USE_DEFAULT_CFG", "-DVERSIOn=\"1.0.0\"" },
     });
+    ext4.addCSourceFiles(.{
+        .root = lwext4.path("fs_test/common"),
+        .files = &.{ "test_lwext4.c" },
+        .flags = &.{ "-DCONFIG_USE_DEFAULT_CFG", "-DVERSIOn=\"1.0.0\"" },
+    });
     ext4.addIncludePath(lwext4.path("include"));
+    ext4.addIncludePath(lwext4.path("fs_test/common"));
 
     const picolibc = b.dependency("microkit_libc", .{
         .target = target,
@@ -253,7 +259,7 @@ pub fn build(b: *std.Build) !void {
         create_disk_cmd.addFileInput(mkvirtdisk);
         const disk = create_disk_cmd.addOutputFileArg("disk");
         create_disk_cmd.addArgs(&[_][]const u8{
-            "1", "512", b.fmt("{}", .{ 1024 * 1024 * 16 }),
+            "1", "4096", b.fmt("{}", .{ 1024 * 1024 * 16 }),
         });
         const disk_install = b.addInstallFile(disk, "disk");
         disk_install.step.dependOn(&create_disk_cmd.step);
