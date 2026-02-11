@@ -11,7 +11,9 @@
 # - EXT_BAD_HOST_IP
 # - INT_BAD_HOST_IP
 # - FW_INT_IP
+# - FW_INT_SUBNET
 # - FW_EXT_IP
+# - FW_EXT_SUBNET
 #
 # Additionally, the tests expect that allow rules exist for traffic on
 # `UDP_PORT` and `TCP_PORT` for `EXT_HOST_IP` and `INT_HOST_IP`.
@@ -30,6 +32,9 @@ ERROR_NO_ECHO_RESPONSE='Did not receive echo response'
 ERROR_UNREACHABLE='Did not receive destination host unreachable'
 ERROR_TRANSMIT_FAILED='Failed to transmit data'
 ERROR_DATA_INCORRECT='The received data is different to what was sent'
+ERROR_DATA_WAS_NOT_DROPPED='Firewall traffic was not dropped'
+ERROR_FAILED_TO_APPLY_RULE='Failed to apply firewall rule'
+ERROR_FAILED_TO_REMOVE_RULE='Failed to remove firewall rule'
 
 FONT_HEADER=$(printf '\033[1m\033[36m')
 FONT_RED=$(printf '\033[31m')
@@ -37,6 +42,14 @@ FONT_RESET=$(printf '\033[0m')
 
 REGEX_REACHABLE='[1-9][0-9]* received'
 REGEX_UNREACHABLE='Destination host unreachable'
+
+TEMPLATE_SRC='$src_ip, $src_port, $src_subnet'
+TEMPLATE_DEST='$dest_ip, $dest_port, $dest_subnet'
+TEMPLATE_ACTION='$interface, $action'
+TEMPLATE_JSON="{ ${TEMPLATE_SRC}, ${TEMPLATE_DEST}, ${TEMPLATE_ACTION} }"
+
+FIREWALL_EXTERNAL_INTERFACE=0
+FIREWALL_ACTION_DROP=2
 
 #
 # Setup and teardown
@@ -396,6 +409,73 @@ test_udp_external_to_internal() {
     # Verify that the data was transmitted correctly
     if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
         fail "${ERROR_DATA_INCORRECT}"
+        print_log
+    fi
+}
+
+#
+# Rule tests
+#
+
+test_rule_application_and_removal() {
+    # The default rule for traffic on each interface is allow it, so we setup a
+    # drop traffic rule and verify that we receive no traffic.
+
+    # Craft a JSON request with the rule's parameters
+    json=$(jq \
+        --null-input \
+        --argjson interface "${FIREWALL_EXTERNAL_INTERFACE}" \
+        --argjson action "${FIREWALL_ACTION_DROP}" \
+        --arg src_ip "${EXT_HOST_IP}" \
+        --arg src_port "" \
+        --argjson src_subnet "${FW_EXT_SUBNET}" \
+        --arg dest_ip "${INT_HOST_IP}" \
+        --arg dest_port "${TCP_PORT}" \
+        --argjson dest_subnet "${FW_INT_SUBNET}" \
+        "${TEMPLATE_JSON}")
+
+    # Apply the rule
+    response=$(curl --silent \
+        --header 'Content-Type: application/json' \
+        --request 'POST' \
+        --data "$json" "http://${FW_INT_IP}/api/rules/tcp")
+
+    # Extract the rule's ID
+    rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
+
+    if [ -z "${rule_id}" ]; then
+        fail "${ERROR_FAILED_TO_APPLY_RULE}"
+        return
+    fi
+
+    # Listen for traffic on the internal host
+    ip netns exec int \
+    nc -l "${TCP_PORT}" > "${RECEIVED}" &
+    listener=$!
+
+    # Attempt to send traffic, from the external host, to the internal host
+    ip netns exec ext \
+    nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+    kill "${listener}" > /dev/null 2>&1
+
+    # Verify that no data was received
+    if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
+        fail "${ERROR_DATA_WAS_NOT_DROPPED}"
+        print_log
+    fi
+
+    # Remove the rule
+    response=$(curl --silent \
+        --output /dev/null \
+        --header 'Content-Type: application/json' \
+        --request 'DELETE' \
+        "http://${FW_INT_IP}/api/rules/tcp/${rule_id}/external")
+    
+    # Check if the response contains an error
+    error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
+
+    if [ ! -z "${error}" ]; then
+        fail "${ERROR_FAILED_TO_REMOVE_RULE}"
         print_log
     fi
 }
