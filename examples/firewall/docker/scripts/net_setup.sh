@@ -1,20 +1,7 @@
 # Copyright 2025, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 
-set -e
-
 # -- Container script for setting up the network -- #
-
-# Check that all the required environment variables are set
-[ -z "$EXT_ROOT_IP" ] && echo "EXT_ROOT_IP is not set" && exit 1
-[ -z "$FW_EXT_SUBNET" ] && echo "FW_EXT_SUBNET is not set" && exit 1
-[ -z "$INT_ROOT_IP" ] && echo "INT_ROOT_IP is not set" && exit 1
-[ -z "$FW_INT_SUBNET" ] && echo "FW_INT_SUBNET is not set" && exit 1
-[ -z "$EXT_HOST_IP" ] && echo "EXT_HOST_IP is not set" && exit 1
-[ -z "$EXT_HOST_IP_2" ] && echo "EXT_HOST_IP_2 is not set" && exit 1
-[ -z "$INT_HOST_IP" ] && echo "INT_HOST_IP is not set" && exit 1
-[ -z "$FW_EXT_IP" ] && echo "FW_EXT_IP is not set" && exit 1
-[ -z "$FW_INT_IP" ] && echo "FW_INT_IP is not set" && exit 1
 
 # Create bridges to connect namespaces to taps
 ip link add br0 type bridge
