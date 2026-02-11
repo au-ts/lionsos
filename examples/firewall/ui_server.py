@@ -1022,9 +1022,9 @@ def ping_settings(request):
 
     <h2>Toggle Ping Response111</h2>
     <p>Control whether the firewall responds to ICMP echo requests (ping) on each interface. Default disabled for all interfaces.</p>
-    
+
     <div id="ping-controls-container"></div>
-    
+
     <script>
       function togglePing(interfaceName, enabled) {
         fetch('/api/ping/' + interfaceName + '/' + (enabled ? 1 : 0), {
@@ -1051,17 +1051,17 @@ def ping_settings(request):
       document.getElementById('external-enable').addEventListener('click', () => togglePing('external', true));
       document.getElementById('external-disable').addEventListener('click', () => togglePing('external', false));
     </script>
-    
+
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         const container = document.getElementById('ping-controls-container');
-        
+
         // 1. Get the number of interfaces
         fetch('/api/interfaces/count')
           .then(response => response.json())
           .then(data => {
             for (let i = 0; i < data.count; i++) {
-              
+
               // 2. Fetch specific details for each interface
               fetch('/api/interfaces/' + i)
                 .then(response => response.json())
@@ -1069,7 +1069,7 @@ def ping_settings(request):
                   // Create the UI block
                   const interfaceDiv = document.createElement('div');
                   interfaceDiv.className = 'ping-control';
-                  
+
                   // Use the data from the API (info.interface and info.ip)
                   interfaceDiv.innerHTML = `
                     <h3>${info.interface} (${info.ip})</h3>
@@ -1077,7 +1077,7 @@ def ping_settings(request):
                     <button onclick="togglePing('${info.interface.toLowerCase()}', false)">Disable Ping</button>
                     <span id="${info.interface.toLowerCase()}-status"></span>
                   `;
-                  
+
                   container.appendChild(interfaceDiv);
                 })
                 .catch(err => console.error("Error loading interface " + i, err));
