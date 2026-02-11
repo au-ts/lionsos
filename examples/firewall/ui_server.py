@@ -1018,25 +1018,13 @@ def ping_settings(request):
     <h1>Ping Response Settings</h1>
     <nav>
       <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
-    </nav>
+  </nav>
 
-    <h2>Toggle Ping Response</h2>
+    <h2>Toggle Ping Response111</h2>
     <p>Control whether the firewall responds to ICMP echo requests (ping) on each interface. Default disabled for all interfaces.</p>
-
-    <div class="ping-control">
-      <h3>Internal Interface (192.168.1.1)</h3>
-      <button id="internal-enable">Enable Ping</button>
-      <button id="internal-disable">Disable Ping</button>
-      <span id="internal-status"></span>
-    </div>
-
-    <div class="ping-control">
-      <h3>External Interface (172.16.2.1)</h3>
-      <button id="external-enable">Enable Ping</button>
-      <button id="external-disable">Disable Ping</button>
-      <span id="external-status"></span>
-    </div>
-
+    
+    <div id="ping-controls-container"></div>
+    
     <script>
       function togglePing(interfaceName, enabled) {
         fetch('/api/ping/' + interfaceName + '/' + (enabled ? 1 : 0), {
@@ -1062,6 +1050,40 @@ def ping_settings(request):
       document.getElementById('internal-disable').addEventListener('click', () => togglePing('internal', false));
       document.getElementById('external-enable').addEventListener('click', () => togglePing('external', true));
       document.getElementById('external-disable').addEventListener('click', () => togglePing('external', false));
+    </script>
+    
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        const container = document.getElementById('ping-controls-container');
+        
+        // 1. Get the number of interfaces
+        fetch('/api/interfaces/count')
+          .then(response => response.json())
+          .then(data => {
+            for (let i = 0; i < data.count; i++) {
+              
+              // 2. Fetch specific details for each interface
+              fetch('/api/interfaces/' + i)
+                .then(response => response.json())
+                .then(info => {
+                  // Create the UI block
+                  const interfaceDiv = document.createElement('div');
+                  interfaceDiv.className = 'ping-control';
+                  
+                  // Use the data from the API (info.interface and info.ip)
+                  interfaceDiv.innerHTML = `
+                    <h3>${info.interface} (${info.ip})</h3>
+                    <button onclick="togglePing('${info.interface.toLowerCase()}', true)">Enable Ping</button>
+                    <button onclick="togglePing('${info.interface.toLowerCase()}', false)">Disable Ping</button>
+                    <span id="${info.interface.toLowerCase()}-status"></span>
+                  `;
+                  
+                  container.appendChild(interfaceDiv);
+                })
+                .catch(err => console.error("Error loading interface " + i, err));
+            }
+          });
+      });
     </script>
   </body>
 </html>
