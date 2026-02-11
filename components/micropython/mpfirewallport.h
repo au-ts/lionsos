@@ -11,6 +11,7 @@
 #include <sddf/network/lib_sddf_lwip.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/filter.h>
+#include <lions/firewall/nat.h>
 #include <lions/firewall/routing.h>
 #include <lwip/pbuf.h>
 
@@ -29,7 +30,12 @@ typedef struct fw_webserver_interface_state {
     uint16_t num_rules[FW_MAX_FILTERS];
 } fw_webserver_interface_state_t;
 
-extern fw_webserver_interface_state_t webserver_state[FW_NUM_INTERFACES];
+typedef struct fw_webserver_state {
+    fw_webserver_interface_state_t interfaces[FW_NUM_INTERFACES];
+    fw_nat_webserver_state_t *nat_state[FW_MAX_NAT];
+} fw_webserver_state_t;
+
+extern fw_webserver_state_t webserver_state;
 
 /**
  * Checks whether the pbuf contains an ARP request. All ARP requests and

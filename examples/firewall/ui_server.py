@@ -61,6 +61,11 @@ interfaceStringsFilters = [
     "internal"
 ]
 
+interfaceStringsNat = [
+    "external",
+    "internal"
+]
+
 interfaceStringsCap = [
     "External",
     "Internal"
@@ -153,9 +158,13 @@ def interfaceStringToInt(componentType, interfaceStr):
     for i in range(numInterfaces):
         if interfaceStr == interfaceStringsFilters[i]:
             return i
+  elif componentType == "nat":
+    for i in range(numInterfaces):
+        if interfaceStr == interfaceStringsNat[i]:
+            return i
 
-    print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
-    raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
+  print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
+  raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
 
 ############ Route APIs ############
@@ -419,7 +428,80 @@ def addRule(request, protocolStr):
         print(f"UI SERVER|ERR: Unknown Error: addRule: {exception}.")
         return {"error": UnknownErrStr}, 404
 
+###### NAT configuration methods ######
 
+@app.route('/api/nat/<string:protocolStr>/<string:interfaceStr>/snat', methods=['GET'])
+def get_snat_ip(request, protocolStr, interfaceStr):
+    try:
+        interface = interfaceStringToInt("nat", interfaceStr)
+
+        if protocolStr not in protocolNums.keys():
+            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
+            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+        protocol = protocolNums[protocolStr]
+
+        snat = lions_firewall.get_snat_ip(interface, protocol)
+        return {"snat": intToIp(snat) if snat != 0 else ""}
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: get_snat_ip: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: get_snat_ip: {exception}.")
+        return {"error": UnknownErrStr}, 404
+
+@app.route('/api/nat/<string:protocolStr>/<string:interfaceStr>/snat/<string:ipStr>', methods=['PUT'])
+def set_snat_ip(request, protocolStr, interfaceStr, ipStr):
+    try:
+        interface = interfaceStringToInt("nat", interfaceStr)
+
+        if protocolStr not in protocolNums.keys():
+            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
+            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+        protocol = protocolNums[protocolStr]
+
+        lions_firewall.set_snat_ip(interface, protocol, ipToInt(ipStr) if ipStr != "null" else 0)
+        return {"status": "ok"}
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: set_snat_ip: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: set_snat_ip: {exception}.")
+        return {"error": UnknownErrStr}, 404
+
+@app.route('/api/nat/<string:protocolStr>/timeout', methods=['GET'])
+def get_nat_timeout(request, protocolStr):
+    try:
+        if protocolStr not in protocolNums.keys():
+            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
+            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+        protocol = protocolNums[protocolStr]
+
+        timeout = lions_firewall.get_nat_timeout(protocol)
+        return {"timeout": timeout / 10**9}
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: get_nat_timeout: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: get_nat_timeout: {exception}.")
+        return {"error": UnknownErrStr}, 404
+
+@app.route('/api/nat/<string:protocolStr>/timeout/<int:timeout>', methods=['PUT'])
+def set_nat_timeout(request, protocolStr, timeout):
+    try:
+
+        if protocolStr not in protocolNums.keys():
+            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
+            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+        protocol = protocolNums[protocolStr]
+
+        lions_firewall.set_nat_timeout(protocol, timeout * 10**9)
+        return {"status": "ok"}
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: set_nat_timeout: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: set_nat_timeout: {exception}.")
+        return {"error": UnknownErrStr}, 404
 ############ Web UI routes ############
 
 @app.route('/')
@@ -435,7 +517,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
     </nav>
   </body>
 </html>
@@ -455,7 +537,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
     </nav>
     <div id="interfaces-container">
       <table border="1">
@@ -519,7 +601,7 @@ def config(request):
   <body>
     <h1>Routing Configuration Page</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
     </nav>
 
     <h2>Internal Interface Routing Table</h2>
@@ -685,7 +767,7 @@ def rules(request, protocol):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
     </nav>
     <div style="display: flex; flex-direction: column; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>
@@ -958,7 +1040,7 @@ def rules(request):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
     </nav>
     <div style="display: inline-block; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>
@@ -968,6 +1050,127 @@ def rules(request):
   </body>
 </html>
 """
+    return Response(body=html, headers={'Content-Type': 'text/html'})
+
+@app.route("/nat")
+def nat(request):
+    html = r"""
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <meta charset="utf-8" />
+            <title>Firewall Network Address Translation</title>
+            <link rel="stylesheet" href="/main.css" />
+        </head>
+        <body>
+            <h1>Firewall Network Address Translation</h1>
+            <nav>
+                <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat">Network Address Translation</a>
+            </nav>
+            <div>
+                <label for="tcp-timeout">TCP mappings timeout</label>
+                <input
+                    type="number"
+                    name="tcp-timeout"
+                    id="tcp-timeout"
+                />
+                <button onClick="updateTimeout('tcp')">Update TCP Timeout</button>
+            </div>
+            <div>
+                <label for="udp-timeout">UDP mappings timeout</label>
+                <input
+                    type="number"
+                    name="udp-timeout"
+                    id="udp-timeout"
+                />
+                <button onClick="updateTimeout('udp')">Update UDP Timeout</button>
+            </div>
+            <h2>Internal interface NAT</h2>
+            <h3>TCP</h3>
+            <div>
+                <input
+                    type="checkbox"
+                    name="nat-enabled"
+                    id="internal-tcp-enabled"
+                    onchange="disabledHandler('tcp', 'internal')"
+                />
+                <label for="nat-enabled">NAT enabled?</label><br>
+                <label for="nat-ip">Source NAT IP for this interface</label>
+                <input
+                    type="text"
+                    name="nat-ip"
+                    id="internal-tcp-snat"
+                />
+                <button onClick="updateSnat('tcp', 'internal')">Update NAT settings</button>
+            </div>
+            <h3>UDP</h3>
+            <div>
+                <input
+                    type="checkbox"
+                    name="nat-enabled"
+                    id="internal-udp-enabled"
+                    onchange="disabledHandler('udp', 'internal')"
+                />
+                <label for="nat-enabled">NAT enabled?</label><br>
+                <label for="nat-ip">Source NAT IP for this interface</label>
+                <input
+                    type="text"
+                    name="nat-ip"
+                    id="internal-udp-snat"
+                />
+                <button onClick="updateSnat('udp', 'internal')">Update NAT settings</button>
+            </div>
+            <script>
+            const placeholderInterfaceMapping = {
+                "internal": 0,
+                "external": 1
+            };
+
+            const getTimeout = async (protocol) => {
+                const data = await fetch(`/api/nat/${protocol}/timeout`).then(res => res.json());
+                if (data?.timeout) {
+                    document.querySelector(`#${protocol}-timeout`).value = data.timeout;
+                }
+            };
+
+            const getSnat = async (protocol, interface) => {
+                const data = await fetch(`/api/nat/${protocol}/${interface}/snat`).then(res => res.json());
+                document.querySelector(`#${interface}-${protocol}-enabled`).checked = !!data?.snat;
+                if (data?.snat) {
+                    document.querySelector(`#${interface}-${protocol}-snat`).value = data.snat;
+                }
+                document.querySelector(`#${interface}-${protocol}-snat`).placeholder = (await fetch(`/api/interfaces/${placeholderInterfaceMapping[interface]}`).then(res => res.json())).ip;
+            }
+
+            const updateTimeout = async (protocol) => {
+                const timeout = document.querySelector(`#${protocol}-timeout`).value;
+                await fetch(`/api/nat/${protocol}/timeout/${timeout}`, {method: "PUT"});
+                await getTimeout(protocol);
+            };
+
+            const updateSnat = async (protocol, interface) => {
+                const enabled = document.querySelector(`#${interface}-${protocol}-enabled`).checked;
+                const snat = enabled ? document.querySelector(`#${interface}-${protocol}-snat`).value : "null";
+                await fetch(`/api/nat/${protocol}/${interface}/snat/${snat}`, {method: "PUT"});
+                await getSnat(protocol, interface);
+            }
+
+            const disabledHandler = (protocol, interface) => {
+                document.querySelector(`#${interface}-${protocol}-snat`).disabled = ! document.querySelector(`#${interface}-${protocol}-enabled`).checked;
+            }
+
+            window.onload = () => {
+                getTimeout("udp");
+                getTimeout("tcp");
+                getSnat("udp", "internal");
+                getSnat("tcp", "internal");
+                disabledHandler("udp", "internal");
+                disabledHandler("tcp", "internal");
+            }
+            </script>
+        </body>
+    </html>
+    """
     return Response(body=html, headers={'Content-Type': 'text/html'})
 
 @app.route("/main.css")
