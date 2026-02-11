@@ -19,6 +19,7 @@
 
 #define FW_NUM_ARP_REQUESTER_CLIENTS 2
 #define FW_NUM_INTERFACES 2
+#define FW_MAX_INITIAL_FILTER_RULES 4
 
 #define FW_DEBUG_OUTPUT 1
 
@@ -125,19 +126,45 @@ typedef struct fw_icmp_module_config {
 typedef struct fw_webserver_filter_config {
     uint16_t protocol;
     uint8_t ch;
-    uint8_t default_action;
     region_resource_t rules;
     uint16_t rules_capacity;
 } fw_webserver_filter_config_t;
 
+typedef struct fw_rule {
+    /* action to be applied to traffic matching rule */
+    uint8_t action;
+    /* source IP */
+    uint32_t src_ip;
+    /* destination IP */
+    uint32_t dst_ip;
+    /* source port number */
+    uint16_t src_port;
+    /* destination port number */
+    uint16_t dst_port;
+    /* source subnet, 0 is any IP */
+    uint8_t src_subnet;
+    /* destination subnet, 0 is any IP */
+    uint8_t dst_subnet;
+    /* rule applies to any source port */
+    bool src_port_any;
+    /* rule applies to any destination port */
+    bool dst_port_any;
+    /* rule id assigned */
+    uint16_t rule_id;
+} fw_rule_t;
+
 typedef struct fw_filter_config {
     /* Interface traffic is received from */
     uint8_t interface;
+    fw_rule_t default_rule;
+    fw_rule_t initial_rules[FW_MAX_INITIAL_FILTER_RULES];
+    uint8_t num_initial_rules;
     uint16_t instances_capacity;
     fw_connection_resource_t router;
-    fw_webserver_filter_config_t webserver;
     region_resource_t internal_instances;
     region_resource_t external_instances;
+    region_resource_t rules;
+    uint16_t rules_capacity;
     region_resource_t rule_id_bitmap;
 } fw_filter_config_t;
 

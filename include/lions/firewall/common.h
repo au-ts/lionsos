@@ -6,8 +6,8 @@
 
 #pragma once
 
-#include <stdint.h>
 #include <sddf/util/util.h>
+#include <stdint.h>
 
 /**
  * Convert a 16 bit unsigned from host byte order to network byte order.
@@ -45,8 +45,8 @@ stored big-endian, so mask byte order must be swapped for subnet match. */
 
 /* Firewall ID number used by components to identify which interface they
 are connected to */
-#define FW_EXTERNAL_INTERFACE_ID 0
-#define FW_INTERNAL_INTERFACE_ID 1
+#define FW_EXTERNAL_INTERFACE_ID 1
+#define FW_INTERNAL_INTERFACE_ID 0
 
 /* Firewall component print formatting string to identify which interface
 component is printing */
