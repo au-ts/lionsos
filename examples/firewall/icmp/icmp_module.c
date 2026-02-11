@@ -84,26 +84,25 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
 
     /* Handle each ICMP type separately */
     switch (req->type) {
-        case ICMP_ECHO_REPLY: {
-            /* Destination is the sender*/
+case ICMP_ECHO_REPLY: {
+            /* Destination is the sender */
             ip_hdr->dst_ip = req->ip_hdr.src_ip;
 
-            ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_ECHO_LEN);
+            /* Total length of ICMP destination unreachable IP packet */
+            uint16_t icmp_total_len = (uint16_t)(ICMP_COMMON_HDR_LEN + sizeof(icmp_echo_t) + req->echo.payload_len);
+            ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + icmp_total_len);
 
-            /* Construct ICMP echo reply: 4 bytes (id + seq) + payload */
+            /* Construct ICMP echo reply: 4 bytes (id + seq) */
             icmp_echo_t *icmp_echo = (icmp_echo_t *)(pkt_vaddr + ICMP_ECHO_OFFSET);
+            
+            /* Set Echo-specific fields from the request */
+            icmp_echo->id = htons(req->echo.echo_id);
+            icmp_echo->seq = htons(req->echo.echo_seq);
 
-            /* Copy IP header */
-            memcpy(&icmp_echo->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
-
-            /* Copy first bytes of data if applicable */
-            memcpy(&icmp_dest->data, req->dest.data, to_copy);
-
-            if (FW_DEBUG_OUTPUT) {
-                sddf_printf("ICMP module: echo reply to %s id=%u seq=%u len=%u\n",
-                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
-                    req->echo.echo_id, req->echo.echo_seq, icmp_payload_len);
-            }
+            /* Copy the actual Echo payload data (the 'ping' data) */
+            uint8_t *echo_payload_dst = (uint8_t *)(icmp_echo + 1); 
+            memcpy(echo_payload_dst, req->echo.data, req->echo.payload_len);
+            
             break;
         }
 
