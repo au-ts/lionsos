@@ -85,7 +85,7 @@ oneTimeSetUp() {
     # For tests that transfer data, random data can be generated or fixed data
     # can be supplied. Setting `USE_RANDOM_DATA` to true will generate random
     # data at a specified `SIZE_BYTES`.
-    TEST_DATA='/mnt/lionsOS/examples/firewall/docker/scripts/autotest.dat'
+    TEST_DATA='/tmp/firewall_test_data'
     USE_RANDOM_DATA=true
     SIZE_BYTES=4096
 
