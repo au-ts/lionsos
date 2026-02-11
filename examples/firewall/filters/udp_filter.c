@@ -233,8 +233,10 @@ void notified(microkit_channel ch)
     }
 
     if (notify_icmp) {
+        if (FW_DEBUG_OUTPUT) {
         sddf_printf("%sUDP filter notifying ICMP module on channel %u\n",
             fw_frmt_str[filter_config.interface], filter_config.icmp_module.ch);
+        }
         notify_icmp = false;
         microkit_notify(filter_config.icmp_module.ch);
     }
