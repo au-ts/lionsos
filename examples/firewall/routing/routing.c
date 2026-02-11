@@ -18,7 +18,6 @@
 #include <lions/firewall/config.h>
 #include <lions/firewall/filter.h>
 #include <lions/firewall/icmp.h>
-#include <lions/firewall/icmp_helper.h>
 #include <lions/firewall/ip.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/routing.h>
