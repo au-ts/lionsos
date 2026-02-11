@@ -18,7 +18,6 @@
 #include <lions/firewall/udp.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/icmp.h>
-#include <lions/firewall/icmp_helper.h>
 
 __attribute__((__section__(".fw_filter_config"))) fw_filter_config_t filter_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
