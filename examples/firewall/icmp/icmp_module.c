@@ -94,15 +94,15 @@ case ICMP_ECHO_REPLY: {
 
             /* Construct ICMP echo reply: 4 bytes (id + seq) */
             icmp_echo_t *icmp_echo = (icmp_echo_t *)(pkt_vaddr + ICMP_ECHO_OFFSET);
-            
+
             /* Set Echo-specific fields from the request */
             icmp_echo->id = htons(req->echo.echo_id);
             icmp_echo->seq = htons(req->echo.echo_seq);
 
             /* Copy the actual Echo payload data (the 'ping' data) */
-            uint8_t *echo_payload_dst = (uint8_t *)(icmp_echo + 1); 
+            uint8_t *echo_payload_dst = (uint8_t *)(icmp_echo + 1);
             memcpy(echo_payload_dst, req->echo.data, req->echo.payload_len);
-            
+
             break;
         }
 
