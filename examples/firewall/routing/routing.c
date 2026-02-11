@@ -60,6 +60,12 @@ static bool returned; /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp; /* Arp request has been enqueued */
 static bool notify_icmp; /* Request has been enqueued to ICMP module */
 
+/* Masks for checking whether it is a broadcast address or not*/
+#define MULTICAST_IP_MASK 0xf0000000
+#define MULTICAST_IP_NETWORK_ADDR 0xe0000000
+#define BROADCAST_IP_ADDR 0xffffffff
+#define MULTICAST_MAC_SUFFIX_MASK 0x7fffff
+
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
@@ -95,7 +101,10 @@ static void transmit_packet(net_buff_desc_t buffer,
     eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
-    memcpy(&eth_hdr->ethdst_addr, mac_addr, ETH_HWADDR_LEN);
+    /* Replaces mac address if needed */
+    if (mac_addr != NULL) {
+        memcpy(&eth_hdr->ethdst_addr, mac_addr, ETH_HWADDR_LEN);
+    }
     memcpy(&eth_hdr->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
 
     /* Transmit packet out the NIC */
@@ -201,6 +210,14 @@ static void route(void)
                             buffer.io_or_offset/NET_BUFFER_SIZE);
             }
 
+            if (ip_hdr->dst_ip == BROADCAST_IP_ADDR) {
+                /* Limited broadcast, drop packet explicitly */
+                continue;
+            } else if ((ip_hdr->dst_ip & MULTICAST_IP_MASK) == MULTICAST_IP_NETWORK_ADDR) {
+                /* Multicast addresses not handled by router currently, skip */
+                continue;
+            }
+
             /* Find the next hop address. */
             uint32_t next_hop;
             fw_routing_interfaces_t interface;
@@ -261,7 +278,6 @@ static void route(void)
                 }
 
                 continue;
-
             }
 
             fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
@@ -292,7 +308,7 @@ static void route(void)
             and send ARP request or await ARP response */
             if (arp == NULL || arp->state == ARP_STATE_PENDING) {
                 pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue,
-                                                                 next_hop);
+                                                                next_hop);
                 if (root) {
                     /* ARP request already enqueued, add node as child. */
                     fw_err = pkt_waiting_push_child(&pkt_waiting_queue,
