@@ -1,8 +1,6 @@
 # Copyright 2025, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 
-#!/bin/bash
-
 # -- Container script for setting up the network -- #
 
 # Create bridges to connect namespaces to taps
@@ -25,30 +23,38 @@ ip link set tap1 master br1
 
 # Create namespaces, 0 = external side, 1 = internal side
 ip netns add ext
+ip netns add ext2
 ip netns add int
 
 # Create veths to connect namespaces to bridges
 ip link add br0-ext type veth peer name ext-br0
+ip link add br0-ext2 type veth peer name ext2-br0
 ip link add br1-int type veth peer name int-br1
 
 # Attach veth to namespaces and bridges
 ip link set ext-br0 netns ext
 ip link set br0-ext master br0
+ip link set ext2-br0 netns ext2
+ip link set br0-ext2 master br0
 ip link set int-br1 netns int
 ip link set br1-int master br1
 
 # Assign ip address on the namespace side of the veths
 ip -n ext addr add ${EXT_HOST_IP}/${FW_EXT_SUBNET} dev ext-br0
+ip -n ext2 addr add ${EXT_HOST_IP_2}/${FW_EXT_SUBNET} dev ext2-br0
 ip -n int addr add ${INT_HOST_IP}/${FW_INT_SUBNET} dev int-br1
 
 # Set the veth interfaces to up
 ip -n ext link set ext-br0 up
 ip link set br0-ext up
+ip -n ext2 link set ext2-br0 up
+ip link set br0-ext2 up
 ip -n int link set int-br1 up
 ip link set br1-int up
 
 # Add default routes to namespaces via the firewall
 ip -n ext route add default via ${FW_EXT_IP}
+ip -n ext2 route add default via ${FW_EXT_IP}
 ip -n int route add default via ${FW_INT_IP}
 
 # Disable bridge/VLAN filtering

@@ -59,33 +59,136 @@ static bool tx_webserver; /* Packet has been transmitted to the webserver */
 static bool returned; /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp; /* Arp request has been enqueued */
 static bool notify_icmp; /* Request has been enqueued to ICMP module */
+static bool ping_response_enabled = false; /* Whether to reply to ICMP echo requests */
 
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
-    icmp_req_t req = {0};
-    req.type = ICMP_DEST_UNREACHABLE;
-    req.code = ICMP_DEST_HOST_UNREACHABLE;
-
-    /* Copy ethernet header into ICMP request */
     uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
-    memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
-
-    /* Copy IP header into ICMP request */
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
-    memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
+    bool is_host = ((ip_hdr->dst_ip & subnet_mask(router_config.subnet)) !=
+        (router_config.ip & subnet_mask(router_config.subnet)));
 
-    /* Copy first bytes of data if applicable */
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
-    memcpy(req.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
+    uint8_t code = is_host ? ICMP_DEST_HOST_UNREACHABLE : ICMP_DEST_NET_UNREACHABLE;
 
-    int err = fw_enqueue(&icmp_queue, &req);
+    int err = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, code, pkt_vaddr);
     if (!err) {
         notify_icmp = true;
     }
 
     return err;
+}
+
+static void enqueue_icmp_ping(net_buff_desc_t buffer)
+{
+    uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
+
+    int err = icmp_enqueue_echo_reply(&icmp_queue, pkt_vaddr);
+    if (!err) {
+        notify_icmp = true;
+    }
+}
+
+static void enqueue_icmp_timeout(net_buff_desc_t buffer) {
+    uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
+
+    int err = icmp_enqueue_error(&icmp_queue, ICMP_TTL_EXCEED, ICMP_TIME_EXCEEDED_TTL, pkt_vaddr);
+    if (!err) {
+        notify_icmp = true;
+    }
+}
+
+/* Determine if the routing interface matches the interface receiving the packet*/
+static bool interface_comparison(uint8_t interface,
+                                 fw_routing_interfaces_t out_int)
+{
+    if (interface == FW_EXTERNAL_INTERFACE_ID) {
+        return out_int == ROUTING_OUT_EXTERNAL;
+    } else if (interface == FW_INTERNAL_INTERFACE_ID) {
+        return out_int == ROUTING_OUT_SELF;
+    } else {
+        return false;
+    }
+}
+
+static void check_enqueue_icmp_redirect(net_buff_desc_t buffer, fw_routing_interfaces_t out_int, uint32_t next_hop) {
+    sddf_printf("Enetred redirect check");
+    /* Inerface match check*/
+    bool interface_match = interface_comparison(router_config.interface, out_int);
+    if (!interface_match) {
+        return;
+    }
+    uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
+    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
+
+    /* Source IP must be on same subnet as router interface */
+    if ((ip_hdr->src_ip & subnet_mask(router_config.subnet)) !=
+        (router_config.ip & subnet_mask(router_config.subnet))) {
+        return;
+    }
+
+    /* Nexthop subnet match the src*/
+    if ((ip_hdr->src_ip & subnet_mask(router_config.subnet)) !=
+    (next_hop & subnet_mask(router_config.subnet))) {
+        return;
+    }
+
+    /* Check for IP header options */
+    if (ip_hdr->ihl > 5) {
+        uint8_t *options_ptr = (uint8_t *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN);
+        uint8_t options_len = (ip_hdr->ihl - 5) * 4;
+        uint8_t i = 0;
+        while (i < options_len) {
+            uint8_t option_type = options_ptr[i];
+            if (option_type == 0) {
+                /* End of options */
+                break;
+            } else if (option_type == 1) {
+                /* No operation, move to next byte */
+                i++;
+                continue;
+            } else if (option_type == 131 || option_type == 137) {
+                return; /* Routing option present, do not send redirect */
+            } else {
+                if (i + 1 >= options_len) {
+                    break; /* Malformed option, exit */
+                }
+                uint8_t option_len = options_ptr[i + 1];
+                if (option_len < 2 || i + option_len > options_len) {
+                    break; /* Malformed option, exit */
+                }
+                i += option_len; /* Move to next option */
+            }
+        }
+    }
+
+    if (ip_hdr->dst_ip >> 24 == 224) {
+        /* Destination is multicast, do not send redirect */
+        return;
+    } else if (ip_hdr->dst_ip >> 24 == 255) {
+        /* Destination is broadcast, do not send redirect */
+        return;
+    }
+
+    if (ip_hdr->frag_offset1 != 0 || ip_hdr->frag_offset2 != 0 ||
+        ip_hdr->more_frag) {
+        /* Packet is fragmented, do not send redirect */
+        return;
+    }
+
+    if (ip_hdr->protocol == IPV4_PROTO_ICMP) {
+        icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
+        if (icmp_is_error_message(icmp_hdr->type)) {
+            /* ICMP error message, do not send redirect */
+            return;
+        }
+    }
+
+    int err = icmp_enqueue_redirect(&icmp_queue, ICMP_REDIRECT_FOR_HOST, pkt_vaddr, next_hop);
+    if (!err) {
+        notify_icmp = true;
+    }
 }
 
 static void transmit_packet(net_buff_desc_t buffer,
@@ -178,6 +281,30 @@ static void route(void)
             eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
             ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
+            /* --- Handle ICMP echo request to firewall's own IP --- */
+            if (eth_hdr->ethtype == htons(ETH_TYPE_IP) &&
+                ip_hdr->protocol == IPV4_PROTO_ICMP &&
+                ip_hdr->dst_ip == router_config.in_ip) {
+
+                if (!ping_response_enabled) {
+                    /* Ping responses are disabled, return buffer */
+                    err = fw_enqueue(&rx_free, &buffer);
+                    assert(!err);
+                    returned = true;
+                    continue;
+                }
+
+                icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
+                if (icmp_hdr->type == ICMP_ECHO_REQ) {
+                    enqueue_icmp_ping(buffer);
+                    /* Return the original buffer */
+                    err = fw_enqueue(&rx_free, &buffer);
+                    assert(!err);
+                    returned = true;
+                    continue;
+                }
+            }
+
             /*
              * Decrement the TTL field. If it reaches 0 protocol is
              * that we drop the packet in this router.
@@ -186,6 +313,7 @@ static void route(void)
              * handled by the protocol virtualiser.
              */
             if (eth_hdr->ethtype != htons(ETH_TYPE_IP) || ip_hdr->ttl <= 1) {
+                enqueue_icmp_timeout(buffer);
                 err = fw_enqueue(&rx_free, &buffer);
                 assert(!err);
                 returned = true;
@@ -228,6 +356,8 @@ static void route(void)
                         fw_frmt_str[router_config.interface],
                         ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0));
                 }
+
+                enqueue_icmp_unreachable(buffer);
 
                 err = fw_enqueue(&rx_free, &buffer);
                 assert(!err);
@@ -313,6 +443,8 @@ static void route(void)
 
                 continue;
             }
+
+            check_enqueue_icmp_redirect(buffer, interface, next_hop);
 
             /* valid arp entry found, transmit packet */
             transmit_packet(buffer, arp->mac_addr);
@@ -420,6 +552,16 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         microkit_mr_set(ROUTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
+    case FW_SET_PING_RESPONSE: {
+        ping_response_enabled = (bool)microkit_mr_get(0);
+        if (FW_DEBUG_OUTPUT) {
+            sddf_printf("%sRouter ping response %s\n",
+                fw_frmt_str[router_config.interface],
+                ping_response_enabled ? "enabled" : "disabled");
+        }
+        microkit_mr_set(0, 0); /* success */
+        return microkit_msginfo_new(0, 1);
+    }
     default:
         sddf_printf("%sROUTING LOG: unknown request %lu on channel %u\n",
             fw_frmt_str[router_config.interface],
@@ -437,9 +579,13 @@ void notified(microkit_channel ch)
          * This is the channel between the ARP component and the
          * routing component
          */
+        sddf_printf("%sROUTING LOG: Notified by ARP module\n",
+            fw_frmt_str[router_config.interface]);
         process_arp_waiting();
     } else {
         /* Router has been notified by a filter */
+        sddf_printf("%sROUTING LOG: Notified by filter module\n",
+            fw_frmt_str[router_config.interface]);
         route();
     }
 
