@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <lions/firewall/ip.h>
+#include <lions/firewall/queue.h>
 
 /* ----------------- ICMP Protocol Definitions ---------------------------*/
 
@@ -62,20 +63,21 @@ typedef struct __attribute__((__packed__)) icmp_hdr {
 #define ICMP_REDIRECT_FOR_HOST 1
 #define ICMP_REDIRECT_FOR_TOS_NET 2
 #define ICMP_REDIRECT_FOR_TOS_HOST 3
-
-/* ----------------- 3 - Destination Unreachable ---------------------------*/
-
-/* Default number of bytes included from source packet in destination
-unreachable replies */
 #define FW_ICMP_SRC_DATA_LEN 8
+#define FW_ICMP_ECHO_PAYLOAD_LEN 56
 
+/* Unified Offset for all ICMP sub-headers (Type-specific data) */
+#define ICMP_PAYLOAD_OFFSET (ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN)
+
+/* ----------------- WIRE FORMATS (Packed for Network) --------------------------- */
+
+/* ----------------- 3 - ICMP DESTINATION UNREACHABLE ---------------------------*/
 typedef struct __attribute__((__packed__)) icmp_dest {
     /* unused, must be set to 0 */
     uint8_t unused;
     /* optional length of source packet in 32-bit words, or 0 */
     uint8_t len;
-    /* optional MTU of the next-hop network if source packet was too large, or 0
-    */
+    /* optional MTU of the next-hop network if source packet was too large, or 0 */
     uint16_t nexthop_mtu;
     /* IP header of source packet */
     ipv4_hdr_t ip_hdr;
@@ -83,14 +85,10 @@ typedef struct __attribute__((__packed__)) icmp_dest {
     uint8_t data[FW_ICMP_SRC_DATA_LEN];
 } icmp_dest_t;
 
-/* Offset of the start of the ICMP destination unreachable sub-header */
-#define ICMP_DEST_OFFSET (ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN)
-
-/* Total length of ICMP destination unreachable header */
 #define ICMP_DEST_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_dest_t))
+#define ICMP_DEST_OFFSET ICMP_PAYLOAD_OFFSET
 
 /* ----------------- 5 - ICMP REDIRECT MSG ---------------------------*/
-/* ICMP Time Exceeded header fields*/
 typedef struct __attribute__((__packed__)) icmp_redirect {
     /* IP Address of the new path */
     uint32_t gateway_ip;
@@ -101,13 +99,9 @@ typedef struct __attribute__((__packed__)) icmp_redirect {
 } icmp_redirect_t;
 
 #define ICMP_REDIRECT_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_redirect_t))
-
-#define ICMP_REDIRECT_OFFSET (ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN)
-
+#define ICMP_REDIRECT_OFFSET ICMP_PAYLOAD_OFFSET
 
 /* ----------------- 8 - Echo Request / 0 - Echo Reply ---------------------------*/
-
-/* ICMP echo request/reply header fields (following common header) */
 typedef struct __attribute__((__packed__)) icmp_echo {
     /* Identifier to match requests with replies */
     uint16_t id;
@@ -116,17 +110,11 @@ typedef struct __attribute__((__packed__)) icmp_echo {
     /* Payload data follows */
 } icmp_echo_t;
 
-/* Offset of the start of the ICMP echo sub-header */
-#define ICMP_ECHO_OFFSET (ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN)
-
-/* Maximum payload length for ICMP echo messages */
-#define FW_ICMP_ECHO_PAYLOAD_LEN 56
-
 /* Total length of ICMP echo request/reply packet with maximum payload */
 #define ICMP_ECHO_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_echo_t) + FW_ICMP_ECHO_PAYLOAD_LEN)
+#define ICMP_ECHO_OFFSET ICMP_PAYLOAD_OFFSET
 
 /* ----------------- 11 - Time Exceeded ---------------------------*/
-/* ICMP Time Exceeded header fields*/
 typedef struct __attribute__((__packed__)) icmp_time_exceeded {
     /* unused, must be set to 0 */
     uint32_t unused;
@@ -137,11 +125,10 @@ typedef struct __attribute__((__packed__)) icmp_time_exceeded {
 } icmp_time_exceeded_t;
 
 #define ICMP_TIME_EXCEEDED_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_time_exceeded_t))
+#define ICMP_TIME_EXCEEDED_OFFSET ICMP_PAYLOAD_OFFSET
 
-#define ICMP_TIME_EXCEEDED_OFFSET (ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN)
 
-
-/* ----------------- Firewall Data Types ---------------------------*/
+/* ----------------- Firewall Data Types (Internal Use) --------------------------- */
 
 /* ICMP destination unreachable request data */
 typedef struct {
@@ -193,7 +180,6 @@ typedef struct icmp_req {
         icmp_req_redirect_t redirect;
     };
 } icmp_req_t;
-
 
 /**
  * Check if ICMP type is an error message that should not trigger redirects.
