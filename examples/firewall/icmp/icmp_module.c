@@ -80,26 +80,24 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
     icmp_hdr->type = req->type;
     icmp_hdr->code = req->code;
 
+    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
+
     /* Handle each ICMP type separately */
     switch (req->type) {
         case ICMP_ECHO_REPLY: {
             /* Destination is the sender*/
             ip_hdr->dst_ip = req->ip_hdr.src_ip;
 
-            /* Total length of ICMP echo reply IP packet */
-            uint16_t icmp_payload_len = req->echo.payload_len;
             ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_ECHO_LEN);
 
             /* Construct ICMP echo reply: 4 bytes (id + seq) + payload */
-            uint8_t *icmp_data = (uint8_t *)(pkt_vaddr + ICMP_HDR_OFFSET + ICMP_COMMON_HDR_LEN);
-            /* Echo identifier (network byte order) */
-            icmp_data[0] = (req->echo.echo_id >> 8) & 0xFF;
-            icmp_data[1] = req->echo.echo_id & 0xFF;
-            /* Echo sequence number (network byte order) */
-            icmp_data[2] = (req->echo.echo_seq >> 8) & 0xFF;
-            icmp_data[3] = req->echo.echo_seq & 0xFF;
-            /* Copy payload */
-            memcpy(icmp_data + 4, req->echo.data, icmp_payload_len);
+            icmp_echo_t *icmp_echo = (icmp_echo_t *)(pkt_vaddr + ICMP_ECHO_OFFSET);
+
+            /* Copy IP header */
+            memcpy(&icmp_echo->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
+
+            /* Copy first bytes of data if applicable */
+            memcpy(&icmp_dest->data, req->dest.data, to_copy);
 
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("ICMP module: echo reply to %s id=%u seq=%u len=%u\n",
@@ -128,7 +126,6 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
             memcpy(&icmp_dest->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
 
             /* Copy first bytes of data if applicable */
-            uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
             memcpy(&icmp_dest->data, req->dest.data, to_copy);
             break;
         case ICMP_TTL_EXCEED:
@@ -148,11 +145,9 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
             memcpy(&icmp_time_exceeded->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
 
             /* Copy first bytes of data if applicable */
-            uint16_t to_copy_te = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
-            memcpy(&icmp_time_exceeded->data, req->time_exceeded.data, to_copy_te);
+            memcpy(&icmp_time_exceeded->data, req->time_exceeded.data, to_copy);
             break;
         case ICMP_REDIRECT_MSG:
-            sddf_printf("Redirect triggered");
             /* Destination is original packet's source */
             ip_hdr->dst_ip = req->ip_hdr.src_ip;
 
@@ -168,8 +163,7 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
             /* Copy IP header */
             memcpy(&icmp_redirect->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
             /* Copy first bytes of data if applicable */
-            uint16_t to_copy_re = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
-            memcpy(&icmp_redirect->data, req->redirect.data, to_copy_re);
+            memcpy(&icmp_redirect->data, req->redirect.data, to_copy);
             break;
         default:
             sddf_printf("ICMP module tried to construct an unsupported ICMP type %u packet!\n", req->type);
