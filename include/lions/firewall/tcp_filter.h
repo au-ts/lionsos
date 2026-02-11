@@ -34,7 +34,7 @@ typedef struct fw_tcp_instance {
     uint16_t dst_port;
     /* Last recorded state, in case a resend occurs and the prev->curr transition needs to be repeated */
     fw_tcp_interface_state_t prev;
-    /* What state it is currently expected to be in currently*/
+    /* What state it is currently expected to be in currently */
     fw_tcp_interface_state_t curr;
     /* tick of last packet received */
     uint64_t timestamp;
@@ -43,18 +43,19 @@ typedef struct fw_tcp_instance {
     uint16_t rule_id;
 } fw_tcp_instance_t;
 
-/* States relative to the filter's instance based on https://en.wikipedia.org/wiki/File:Tcp_state_diagram.png*/
+/* States relative to the filter's instance based on https://www.ibm.com/support/pages/flowchart-tcp-connections-and-their-definition/*/
 typedef enum {
     /* no traffic has been seen (listen and closed combined) */
     TCP_NONE,
-    /* this filter has received a syn (closed -> syn sent) */
+    /* TCP client has sent its first message in the three-way handshake. This message has the SYN bit set */
     TCP_SYN_SENT,
-    /* neighbour filter has received a syn (listen -> syn recieved) */
-    TCP_SYN_SEEN,
+    /* TCP server has received the first TCP message from the client in the three-way TCP open hand-shake */
+    TCP_SYN_RCVD,
     /* three-way syn handshake has been completed */
     TCP_ESTABLISHED,
     /* this filter has recieved a fin/ack after sending a fin */
     TCP_FIN_WAIT1,
+    /*  */
     TCP_FIN_WAIT2,
     CLOSING,
     TIME_WAIT,

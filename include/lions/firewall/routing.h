@@ -346,7 +346,7 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
                                       uint32_t ip,
                                       uint32_t *next_hop,
                                       fw_routing_interfaces_t *interface,
-                                      uint8_t num_calls)
+                                      uint8_t num_calls, )
 {
     fw_routing_entry_t *match = NULL;
     for (uint16_t i = 0; i < table->size; i++) {
@@ -359,7 +359,6 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
             if (match != NULL && match->subnet > entry->subnet) {
                 continue;
             }
-
             match = entry;
         }
     }
@@ -372,11 +371,14 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
         *interface = ROUTING_OUT_SELF;
     } else if (match->interface == ROUTING_OUT_EXTERNAL &&
                match->next_hop == FW_ROUTING_NONEXTHOP) {
+        if (broadcast detection thing here):
+            if calls == 1 and broadcast detection?
+            ip = 255.255.255
         *next_hop = ip;
         *interface = ROUTING_OUT_EXTERNAL;
     } else if (match->interface == ROUTING_OUT_EXTERNAL &&
                match->next_hop != FW_ROUTING_NONEXTHOP) {
-        num_calls ++;
+        num_calls++;
         if (num_calls == FW_ROUTING_MAX_RECURSION) {
             /* Find route has hit recursive call limit, ip unreachable. */
             *interface = ROUTING_OUT_NONE;
