@@ -10,9 +10,9 @@ on:
     branches: [ "main" ]
 
 env:
-  MICROKIT_VERSION: 2.0.1-dev.61+d7da977
+  MICROKIT_VERSION: 2.1.0-dev.12+2d5a1a6
   MICROKIT_URL: https://trustworthy.systems/Downloads/microkit
-  SDFGEN_VERSION: 0.27.0
+  SDFGEN_VERSION: 0.28.1
 
 jobs:
   build_examples_linux_x86_64:
@@ -37,7 +37,7 @@ jobs:
           python3 -m venv venv
           ./venv/bin/pip install --upgrade sdfgen==${{ env.SDFGEN_VERSION }}
       - name: Build and run examples
-        run: ./ci/examples.sh ${PWD} ${PWD}/microkit-sdk-${{ env.MICROKIT_VERSION }}-linux-x86-64
+        run: ./ci/examples.sh ${PWD} ${PWD}/microkit-sdk-${{ env.MICROKIT_VERSION }}
         shell: bash
         env:
           PYTHON: ${{ github.workspace }}/venv/bin/python

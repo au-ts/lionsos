@@ -49,7 +49,7 @@ static void interface_free_arp_buffer(struct pbuf *buf) {
     SYS_ARCH_DECL_PROTECT(old_level);
     pbuf_custom_offset_t *pbuf = (pbuf_custom_offset_t *)buf;
     SYS_ARCH_PROTECT(old_level);
-    pbuf_pool_free(pbuf);
+    sddf_lwip_pbuf_pool_free(pbuf);
     SYS_ARCH_UNPROTECT(old_level);
 }
 
@@ -60,7 +60,7 @@ static void firewall_interface_free_buffer(struct pbuf *buf) {
     net_buff_desc_t buffer = { pbuf->offset, 0 };
     fw_enqueue(&rx_free, &buffer);
     notify_rx = true;
-    pbuf_pool_free(pbuf);
+    sddf_lwip_pbuf_pool_free(pbuf);
     SYS_ARCH_UNPROTECT(old_level);
 }
 
@@ -133,7 +133,7 @@ void mpfirewall_process_arp(void) {
             }
 
             /* Input packet into lwip stack */
-            pbuf_custom_offset_t *pbuf = pbuf_pool_alloc();
+            pbuf_custom_offset_t *pbuf = sddf_lwip_pbuf_pool_alloc();
             if (!pbuf) {
                 return;
             }
@@ -158,8 +158,8 @@ void mpfirewall_process_arp(void) {
 }
 
 void mpfirewall_process_rx(void) {
-    while (!fw_queue_empty(&rx_active) && !pbuf_pool_empty()) {
-        pbuf_custom_offset_t *pbuf = pbuf_pool_alloc();
+    while (!fw_queue_empty(&rx_active) && !sddf_lwip_pbuf_pool_empty()) {
+        pbuf_custom_offset_t *pbuf = sddf_lwip_pbuf_pool_alloc();
         if (!pbuf) {
             return;
         }

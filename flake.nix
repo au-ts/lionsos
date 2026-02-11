@@ -8,13 +8,14 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     zig-overlay.url = "github:mitchellh/zig-overlay";
-    sdfgen.url = "github:au-ts/microkit_sdf_gen/0.27.0";
+    sdfgen.url = "github:au-ts/microkit_sdf_gen/0.28.1";
     sdfgen.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { nixpkgs, zig-overlay, sdfgen, ... }:
     let
-      microkit-version = "2.0.1-dev.61+d7da977";
+      microkit-version = "2.1.0-dev.12+2d5a1a6";
+      microkit-url = "https://trustworthy.systems/Downloads/microkit/";
       microkit-platforms = {
         aarch64-darwin = "macos-aarch64";
         x86_64-darwin = "macos-x86-64";
@@ -58,13 +59,15 @@
               wasi-platform = wasi-platforms.${system} or (throw "Unsupported system: ${system}");
 
               env.MICROKIT_SDK = pkgs.fetchzip {
-                url = "https://trustworthy.systems/Downloads/microkit/microkit-sdk-${microkit-version}-${microkit-platform}.tar.gz";
-                hash = {
-                  aarch64-darwin = "sha256-f5ZORh3kZqfNEDdkviqos6SNVYg72Mb5+4m+hlOwnW0=";
-                  x86_64-darwin = "sha256-uS7cM/MK645XCyOR8FUQFtj9yMXGLluMX+k0dt3jXS4=";
-                  x86_64-linux = "sha256-qetUCkLNGDyr29OnrE4pSCKP8Xq35jCCQdnCChKkujs=";
-                  aarch64-linux = "sha256-3AT3I89QDRzI7bEvKgK5yqNeGv5SQQEzcYTeuFyClnI=";
-                }.${system} or (throw "Unsupported system: ${system}");
+                url = "${microkit-url}/microkit-sdk-${microkit-version}-${microkit-platform}.tar.gz";
+                hash =
+                  {
+                    aarch64-darwin = "sha256-MKtQyECOHpLQ/SQ6OTkZyRFY4ajFJsq9e0Zy/M8u9BY=";
+                    x86_64-darwin = "sha256-rFL2S5UB14j8eSRyTWisYDeab5MClkxPUPUGmkdoWgQ=";
+                    x86_64-linux = "sha256-C21EpS95KQ1Yw5KYumXqhSY4B9KOPiRY1Mt4k7n8shA=";
+                    aarch64-linux = "sha256-S2oRumOiFO9NPkOOGA1Gj8MIPlzITblrMiehJccdwoM=";
+                  }
+                  .${system} or (throw "Unsupported system: ${system}");
               };
 
               env.WASI_SDK = pkgs.fetchzip {
