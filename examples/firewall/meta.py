@@ -11,7 +11,7 @@ from importlib.metadata import version
 import ipaddress
 from board import BOARDS
 
-assert version("sdfgen").split(".")[1] == "27", "Unexpected sdfgen version"
+assert version("sdfgen").split(".")[1] == "28", "Unexpected sdfgen version"
 
 from sdfgen_helper import *
 
