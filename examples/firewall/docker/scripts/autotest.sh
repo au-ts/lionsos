@@ -35,6 +35,7 @@ ERROR_DATA_INCORRECT='The received data is different to what was sent'
 ERROR_DATA_WAS_NOT_DROPPED='Firewall traffic was not dropped'
 ERROR_FAILED_TO_APPLY_RULE='Failed to apply firewall rule'
 ERROR_FAILED_TO_REMOVE_RULE='Failed to remove firewall rule'
+INFO_SKIPPING_TEST='skipping (feature not implemented yet)'
 
 FONT_HEADER=$(printf '\033[1m\033[36m')
 FONT_RED=$(printf '\033[31m')
@@ -208,6 +209,11 @@ print_warning() {
     printf '%s%s%s\n' "${FONT_RED}" "${text}" "${FONT_RESET}"
 }
 
+print_info() {
+    text=$1
+    printf '%s\n' "- ${text}"
+}
+
 print_file() {
     header=$1
     data_file=$2
@@ -277,7 +283,7 @@ test_icmp_ping_unreachable_host_external_to_internal() {
 
 test_icmp_ping_firewall_from_internal_network() {
     # Prevent test from running, but correctly report skip count
-    printf '%s\n' 'skipping... (feature not implemented yet)'
+    print_info "${INFO_SKIPPING_TEST}"
     startSkipping
     assertEquals 1 1
 
@@ -291,7 +297,7 @@ test_icmp_ping_firewall_from_internal_network() {
 }
 
 test_icmp_ping_firewall_from_external_network() {
-    printf '%s\n' 'skipping... (feature not implemented yet)'
+    print_info "${INFO_SKIPPING_TEST}"
     startSkipping
     assertEquals 1 1
 
