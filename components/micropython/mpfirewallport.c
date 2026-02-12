@@ -5,12 +5,6 @@
 
 #include <microkit.h>
 
-#include <stdio.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include <sddf/network/lib_sddf_lwip.h>
-#include <sddf/network/util.h>
 #include <lions/firewall/arp.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
@@ -19,14 +13,21 @@
 #include <lwip/ip.h>
 #include <lwip/pbuf.h>
 #include <lwip/sys.h>
+#include <sddf/network/lib_sddf_lwip.h>
+#include <sddf/network/util.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "mpfirewallport.h"
 
-#define dlog(fmt, ...) do { \
-    printf("%s: %s:%d:%s: " fmt "\n", microkit_name, __FILE__, __LINE__, __func__, ##__VA_ARGS__); \
-} while (0);
+#define dlog(fmt, ...)                                                                                                 \
+    do {                                                                                                               \
+        printf("%s: %s:%d:%s: " fmt "\n", microkit_name, __FILE__, __LINE__, __func__, ##__VA_ARGS__);                 \
+    } while (0);
 
-fw_webserver_interface_state_t webserver_state[FW_NUM_INTERFACES];
+fw_webserver_interface_state_t webserver_state[FW_MAX_INTERFACES];
 
 extern fw_queue_t rx_active;
 extern fw_queue_t rx_free;
@@ -106,7 +107,7 @@ net_sddf_err_t mpfirewall_handle_arp(struct pbuf *p)
     /**
      * Check if the destination ip is ours - if so, this packet is most likely
      * an ARP probe. We should discard.
-    */
+     */
     arp_pkt_t *arp_pkt = (arp_pkt_t *)(p->payload + ARP_PKT_OFFSET);
     if (arp_pkt->ipdst_addr == fw_config.interfaces[fw_config.interface].ip) {
         return SDDF_LWIP_ERR_OK;
@@ -206,9 +207,7 @@ void mpfirewall_handle_notify(void)
 
 void init_firewall_webserver(void)
 {
-    for (uint8_t i = 0; i < FW_NUM_INTERFACES; i++) {
-        webserver_state[i].routing_table = fw_config.interfaces[i].router.routing_table.vaddr;
-
+    for (uint8_t i = 0; i < fw_config.num_interfaces; i++) {
         for (uint8_t j = 0; j < fw_config.interfaces[i].num_filters; j++) {
             webserver_state[i].filter_states[j].rule_table = fw_config.interfaces[i].filters[j].rules.vaddr;
         }

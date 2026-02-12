@@ -44,49 +44,28 @@ OSErrStrings = [
     "Rule number supplied is the default action rule index, or greater than the number of rules.",
     "Internal data structures are already at capacity.",
     "Unknown internal error.",
-    "Input supplied does not match the format of the field."
+    "Input supplied does not match the format of the field.",
 ]
 
 UnknownErrStr = "Unexpected unknown error."
 
-numInterfaces = 2
+protocolNums = {"icmp": 0x01, "tcp": 0x06, "udp": 0x11}
 
-interfaceStringsRouters = [
-    "internal",
-    "external",
-]
-
-interfaceStringsFilters = [
-    "external",
-    "internal"
-]
-
-interfaceStringsCap = [
-    "External",
-    "Internal"
-]
-
-protocolNums = {
-    "icmp": 0x01,
-    "tcp": 0x06,
-    "udp": 0x11
-}
-
-actionNums = {
-    1: "Allow",
-    2: "Drop",
-    3: "Connect"
-}
+actionNums = {1: "Allow", 2: "Drop", 3: "Connect"}
 
 defaultActionRuleIdx = 0
 
 ############ Helper Functions ############
 
+
 def htons(portNum):
-  if portNum < 0 or portNum > maxPortNum:
-    print(f"UI SERVER|ERR: Supplied port number {portNum} is negative or too large.")
-    raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
-  return ((portNum & 0xFF) << 8) | ((portNum & 0xFF00) >> 8)
+    if portNum < 0 or portNum > maxPortNum:
+        print(
+            f"UI SERVER|ERR: Supplied port number {portNum} is negative or too large."
+        )
+        raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+    return ((portNum & 0xFF) << 8) | ((portNum & 0xFF00) >> 8)
+
 
 def ipToInt(ipString):
     ipSplit = ipString.split(".")
@@ -100,7 +79,9 @@ def ipToInt(ipString):
             digit = int(strDigit)
             ipList.append(digit)
         except:
-            print(f"UI SERVER|ERR: Supplied IP digit {strDigit} is not a valid integer.")
+            print(
+                f"UI SERVER|ERR: Supplied IP digit {strDigit} is not a valid integer."
+            )
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
 
     for digit in ipList:
@@ -110,8 +91,9 @@ def ipToInt(ipString):
 
     ipInt = 0
     for i in range(4):
-        ipInt += (ipList[i] << (8 * i))
+        ipInt += ipList[i] << (8 * i)
     return ipInt
+
 
 def intToIp(ipInt):
     ipString = ""
@@ -124,10 +106,13 @@ def intToIp(ipInt):
         prevMaskSum += mask
     return ipString
 
+
 def tupleToMac(macList):
     macList = list(macList)
     if len(macList) != EthHWAddrLen:
-        print(f"UI SERVER|ERR: System supplied MAC address {macList} has too many digits.")
+        print(
+            f"UI SERVER|ERR: System supplied MAC address {macList} has too many digits."
+        )
         raise OSError(OSErrInternalError, OSErrStrings[OSErrInternalError])
 
     # Switch big to little endian
@@ -136,7 +121,9 @@ def tupleToMac(macList):
     # Ensure digits are in the right format
     for i in range(len(hexList)):
         if len(hexList[i]) > 2:
-            print(f"UI SERVER|ERR: System supplied MAC address {macList} contains a digit that is too large.")
+            print(
+                f"UI SERVER|ERR: System supplied MAC address {macList} contains a digit that is too large."
+            )
             raise OSError(OSErrInternalError, OSErrStrings[OSErrInternalError])
         elif len(hexList[i]) < 2:
             hexList[i] = "0" + hexList[i]
@@ -144,17 +131,9 @@ def tupleToMac(macList):
     mac = ":".join(hexList)
     return mac
 
-def interfaceStringToInt(componentType, interfaceStr):
-  if componentType == "router":
-      for i in range(numInterfaces):
-        if interfaceStr == interfaceStringsRouters[i]:
-            return i
-  elif componentType == "filter":
-    for i in range(numInterfaces):
-        if interfaceStr == interfaceStringsFilters[i]:
-            return i
 
-    print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
+def interfaceStringToInt(componentType, interfaceStr):
+    print(f"UI SERVER|ERR: Interface string lookup deprecated: {interfaceStr}")
     raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
 
@@ -164,25 +143,28 @@ app = Microdot()
 
 ###### Interface methods ######
 
+
 # Get the number of interfaces
-@app.route('/api/interfaces/count', methods=['GET'])
+@app.route("/api/interfaces/count", methods=["GET"])
 def interfaceCount(request):
-    return {"count": numInterfaces}
+    return {"count": lions_firewall.interface_count_get()}
 
 
 # Get interface details
-@app.route('/api/interfaces/<int:interfaceInt>', methods=['GET'])
+@app.route("/api/interfaces/<int:interfaceInt>", methods=["GET"])
 def interfaceDetails(request, interfaceInt):
     try:
-        if interfaceInt < 0 or interfaceInt >= numInterfaces:
-            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
+        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
+            print(
+                f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces."
+            )
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
 
         return {
-                "interface": interfaceStringsCap[interfaceInt],
-                "mac": tupleToMac(lions_firewall.interface_mac_get(interfaceInt)),
-                "ip": intToIp(lions_firewall.interface_ip_get(interfaceInt)),
-            }
+            "interface": lions_firewall.interface_name_get(interfaceInt),
+            "mac": tupleToMac(lions_firewall.interface_mac_get(interfaceInt)),
+            "ip": intToIp(lions_firewall.interface_ip_get(interfaceInt)),
+        }
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: interfaceDetails: {OSErrStrings[OSErr.errno]}")
         return {"error": OSErrStrings[OSErr.errno]}, 404
@@ -193,21 +175,27 @@ def interfaceDetails(request, interfaceInt):
 
 ###### Routing config methods ######
 
+
 # Get routes for an interface
-@app.route('/api/routes/<string:interfaceStr>', methods=['GET'])
-def getRoutes(request, interfaceStr):
+@app.route("/api/routes", methods=["GET"])
+def getRoutes(request):
     try:
-        interface = interfaceStringToInt("router", interfaceStr)
+        if lions_firewall.interface_count_get() == 0:
+            print("UI SERVER|ERR: Firewall config not loaded (no interfaces).")
+            return {"error": "Firewall config not loaded."}, 503
         routes = []
-        route_count = lions_firewall.route_count(interface)
+        route_count = lions_firewall.route_count()
         for i in range(route_count):
-            route = lions_firewall.route_get_nth(interface, i)
-            routes.append({
-                "id": route[0],
-                "ip": intToIp(route[1]),
-                "subnet": route[2],
-                "next_hop": intToIp(route[3])
-            })
+            route = lions_firewall.route_get_nth(i)
+            routes.append(
+                {
+                    "id": route[0],
+                    "ip": intToIp(route[1]),
+                    "subnet": route[2],
+                    "next_hop": intToIp(route[3]),
+                    "interface": route[4],
+                }
+            )
         return {"routes": routes}
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: getRoutes: {OSErrStrings[OSErr.errno]}")
@@ -216,12 +204,12 @@ def getRoutes(request, interfaceStr):
         print(f"UI SERVER|ERR: Unknown Error: getRoutes: {exception}.")
         return {"error": UnknownErrStr}, 404
 
+
 # Delete a route from an interface
-@app.route('/api/routes/<int:routeId>/<string:interfaceStr>', methods=['DELETE'])
-def deleteRoute(request, routeId, interfaceStr):
+@app.route("/api/routes/<int:routeId>", methods=["DELETE"])
+def deleteRoute(request, routeId):
     try:
-        interface = interfaceStringToInt("router", interfaceStr)
-        lions_firewall.route_delete(interface, routeId)
+        lions_firewall.route_delete(routeId)
         return {"status": "ok"}
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: deleteRoute: {OSErrStrings[OSErr.errno]}")
@@ -232,13 +220,15 @@ def deleteRoute(request, routeId, interfaceStr):
 
 
 # Add a route to an interface
-@app.route('/api/routes', methods=['POST'])
+@app.route("/api/routes", methods=["POST"])
 def addRoute(request):
     try:
         newRoute = request.json
         interfaceInt = newRoute.get("interface")
-        if interfaceInt < 0 or interfaceInt >= numInterfaces:
-            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
+        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
+            print(
+                f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces."
+            )
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
 
         subnet = newRoute.get("subnet")
@@ -254,9 +244,9 @@ def addRoute(request):
 
         nextHop = newRoute.get("next_hop")
         if len(nextHop) == 0 or nextHop == "0":
-          nextHop = 0
+            nextHop = 0
         else:
-          nextHop = ipToInt(nextHop)
+            nextHop = ipToInt(nextHop)
 
         lions_firewall.route_add(interfaceInt, ip, subnet, nextHop)
         newRouteOut = {"interface": interfaceInt, "ip": ip, "next_hop": nextHop}
@@ -272,34 +262,46 @@ def addRoute(request):
 
 ###### Filter rule methods ######
 
+
 # Get rules and default rules for an interface filter
-@app.route('/api/rules/<string:protocolStr>/<string:interfaceStr>', methods=['GET'])
-def getRules(request, protocolStr, interfaceStr):
+@app.route("/api/rules/<string:protocolStr>/<int:interfaceInt>", methods=["GET"])
+def getRules(request, protocolStr, interfaceInt):
     try:
-        interface = interfaceStringToInt("filter", interfaceStr)
+        interface = interfaceInt
+        if interface < 0 or interface >= lions_firewall.interface_count_get():
+            print(
+                f"UI SERVER|ERR: Supplied interface integer {interface} does not match existing interfaces."
+            )
+            raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
         if protocolStr not in protocolNums.keys():
-            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match existing filters.")
+            print(
+                f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match existing filters."
+            )
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
         defaultAction = lions_firewall.filter_get_default_action(interface, protocol)
         rules = []
         # ignore default rule at position 0
-        for i in range(defaultActionRuleIdx + 1,lions_firewall.rule_count(interface, protocol)):
+        for i in range(
+            defaultActionRuleIdx + 1, lions_firewall.rule_count(interface, protocol)
+        ):
             rule = lions_firewall.rule_get_nth(interface, protocol, i)
-            rules.append({
-                "id": rule[0],
-                "src_ip": intToIp(rule[1]),
-                "src_port": htons(rule[2]),
-                "src_port_any": rule[3],
-                "dest_ip": intToIp(rule[4]),
-                "dest_port": htons(rule[5]),
-                "dest_port_any": rule[6],
-                "src_subnet": rule[7],
-                "dest_subnet": rule[8],
-                "action": actionNums[rule[9]]
-            })
+            rules.append(
+                {
+                    "id": rule[0],
+                    "src_ip": intToIp(rule[1]),
+                    "src_port": htons(rule[2]),
+                    "src_port_any": rule[3],
+                    "dest_ip": intToIp(rule[4]),
+                    "dest_port": htons(rule[5]),
+                    "dest_port_any": rule[6],
+                    "src_subnet": rule[7],
+                    "dest_subnet": rule[8],
+                    "action": actionNums[rule[9]],
+                }
+            )
         return {"default_action": defaultAction, "rules": rules}
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: getRules: {OSErrStrings[OSErr.errno]}")
@@ -310,13 +312,23 @@ def getRules(request, protocolStr, interfaceStr):
 
 
 # Delete a rule for an interface filter
-@app.route('/api/rules/<string:protocolStr>/<int:ruleId>/<string:interfaceStr>', methods=['DELETE'])
-def deleteRule(request, protocolStr, ruleId, interfaceStr):
+@app.route(
+    "/api/rules/<string:protocolStr>/<int:ruleId>/<int:interfaceInt>",
+    methods=["DELETE"],
+)
+def deleteRule(request, protocolStr, ruleId, interfaceInt):
     try:
-        interface = interfaceStringToInt("filter", interfaceStr)
+        interface = interfaceInt
+        if interface < 0 or interface >= lions_firewall.interface_count_get():
+            print(
+                f"UI SERVER|ERR: Supplied interface integer {interface} does not match existing interfaces."
+            )
+            raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
         if protocolStr not in protocolNums.keys():
-            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match existing filters.")
+            print(
+                f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match existing filters."
+            )
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
@@ -331,13 +343,23 @@ def deleteRule(request, protocolStr, ruleId, interfaceStr):
 
 
 # Add a new default action for an interface filter
-@app.route('/api/rules/<string:protocolStr>/default/<int:action>/<string:interfaceStr>', methods=['POST'])
-def setDefaultAction(request, protocolStr, action, interfaceStr):
+@app.route(
+    "/api/rules/<string:protocolStr>/default/<int:action>/<int:interfaceInt>",
+    methods=["POST"],
+)
+def setDefaultAction(request, protocolStr, action, interfaceInt):
     try:
-        interface = interfaceStringToInt("filter", interfaceStr)
+        interface = interfaceInt
+        if interface < 0 or interface >= lions_firewall.interface_count_get():
+            print(
+                f"UI SERVER|ERR: Supplied interface integer {interface} does not match existing interfaces."
+            )
+            raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
         if protocolStr not in protocolNums.keys():
-            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match existing filters.")
+            print(
+                f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match existing filters."
+            )
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
@@ -352,18 +374,22 @@ def setDefaultAction(request, protocolStr, action, interfaceStr):
 
 
 # Add a new rule for an interface filter
-@app.route('/api/rules/<string:protocolStr>', methods=['POST'])
+@app.route("/api/rules/<string:protocolStr>", methods=["POST"])
 def addRule(request, protocolStr):
     try:
         if protocolStr not in protocolNums.keys():
-            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match existing filters.")
+            print(
+                f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match existing filters."
+            )
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
         newRule = request.json
         interfaceInt = newRule.get("interface")
-        if interfaceInt < 0 or interfaceInt >= numInterfaces:
-            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
+        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
+            print(
+                f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces."
+            )
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
 
         srcSubnet = newRule.get("src_subnet")
@@ -379,7 +405,9 @@ def addRule(request, protocolStr):
 
         destSubnet = newRule.get("dest_subnet")
         if destSubnet < 0 or destSubnet > maxSubnetMask:
-            print(f"UI SERVER|ERR: Supplied destination subnet mask {destSubnet} is invalid.")
+            print(
+                f"UI SERVER|ERR: Supplied destination subnet mask {destSubnet} is invalid."
+            )
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
 
         # No IP needed for subnet == 0: rule matches all IP
@@ -409,8 +437,19 @@ def addRule(request, protocolStr):
             destPort = htons(int(destPort))
             destPortAny = False
 
-        ruleId = lions_firewall.rule_add(interfaceInt, protocol, srcIp, srcPort, srcPortAny,
-                                         srcSubnet, destIp, destPort, destPortAny, destSubnet, action)
+        ruleId = lions_firewall.rule_add(
+            interfaceInt,
+            protocol,
+            srcIp,
+            srcPort,
+            srcPortAny,
+            srcSubnet,
+            destIp,
+            destPort,
+            destPortAny,
+            destSubnet,
+            action,
+        )
         return {"status": "ok", "rule": {"id": ruleId}}, 201
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: addRule: {OSErrStrings[OSErr.errno]}")
@@ -422,7 +461,8 @@ def addRule(request, protocolStr):
 
 ############ Web UI routes ############
 
-@app.route('/')
+
+@app.route("/")
 def index(request):
     html = """
 <!DOCTYPE html>
@@ -440,9 +480,10 @@ def index(request):
   </body>
 </html>
 """
-    return Response(body=html, headers={'Content-Type': 'text/html'})
+    return Response(body=html, headers={"Content-Type": "text/html"})
 
-@app.route('/interface')
+
+@app.route("/interface")
 def index(request):
     html = """
 <!DOCTYPE html>
@@ -475,38 +516,64 @@ def index(request):
       document.addEventListener("DOMContentLoaded", function() {
         var tbody = document.getElementById('interfaces-body');
         tbody.innerHTML = "";
-        fetch('/api/interfaces/count')
-          .then(response => response.json())
-          .then(data => {
-            for (let i = 0; i < data.count; i++) {
-              fetch('/api/interfaces/' + i)
-                .then(response => response.json())
-                .then(info => {
+
+        function fetchJson(url) {
+          return fetch(url).then(function(response) {
+            return response.text().then(function(text) {
+              let data = null;
+              try {
+                data = JSON.parse(text);
+              } catch (e) {
+                data = null;
+              }
+              if (!response.ok) {
+                const msg = (data && data.error) ? data.error : (text || ("HTTP " + response.status));
+                throw new Error(msg);
+              }
+              if (data === null) {
+                const snippet = text ? text.slice(0, 120) : "";
+                throw new Error("Invalid JSON from " + url + (snippet ? (": " + snippet) : ""));
+              }
+              return data;
+            });
+          });
+        }
+
+        fetchJson('/api/interfaces/count')
+          .then(function(data) {
+            function fetchInterface(i, count) {
+              if (i >= count) return;
+              fetchJson('/api/interfaces/' + i)
+                .then(function(info) {
                   let row = document.createElement('tr');
                   row.innerHTML = "<td>" + info.interface + "</td>" +
                                   "<td>" + info.mac + "</td>" +
                                   "<td>" + info.ip + "</td>";
                   tbody.appendChild(row);
                 })
-                .catch(err => {
-                  alert("Error" + info.error);
+                .catch(function(err) {
                   let row = document.createElement('tr');
-                  row.innerHTML = "<td colspan='3'>Error retrieving interface " + i + "</td>";
+                  row.innerHTML = "<td colspan='3'>Error retrieving interface " + i + ": " + err.message + "</td>";
                   tbody.appendChild(row);
+                })
+                .then(function() {
+                  fetchInterface(i + 1, count);
                 });
             }
+            fetchInterface(0, data.count);
           })
-          .catch(err => {
-            tbody.innerHTML = "<tr><td colspan='3'>Error retrieving interface count</td></tr>";
+          .catch(function(err) {
+            tbody.innerHTML = "<tr><td colspan='3'>Error retrieving interface count: " + err.message + "</td></tr>";
           });
       });
     </script>
   </body>
 </html>
 """
-    return Response(body=html, headers={'Content-Type': 'text/html'})
+    return Response(body=html, headers={"Content-Type": "text/html"})
 
-@app.route('/routing_config')
+
+@app.route("/routing_config")
 def config(request):
     html = """
 <!DOCTYPE html>
@@ -522,7 +589,7 @@ def config(request):
       <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
     </nav>
 
-    <h2>Internal Interface Routing Table</h2>
+    <h2>Routing Table</h2>
     <table border="1">
       <thead>
         <tr>
@@ -530,28 +597,13 @@ def config(request):
           <th>IP</th>
           <th>Subnet</th>
           <th>Next Hop</th>
+          <th>Interface</th>
+          <th></th>
         </tr>
       </thead>
-      <tbody id="internal-routes-body">
+      <tbody id="routes-body">
         <tr>
-          <td colspan="5">Loading routes...</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <h2>External Interface Routing Table</h2>
-    <table border="1">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>IP</th>
-          <th>Subnet</th>
-          <th>Next Hop</th>
-        </tr>
-      </thead>
-      <tbody id="external-routes-body">
-        <tr>
-          <td colspan="5">Loading routes...</td>
+          <td colspan="6">Loading routes...</td>
         </tr>
       </tbody>
     </table>
@@ -559,7 +611,7 @@ def config(request):
 
     <h3>Add New Route</h3>
     <p>
-      Interface: <input type="radio" name="new-interface" id="new-interface-external">External<input type="radio" name="new-interface" id="new-interface-internal">Internal<br>
+      Interface: <select id="new-interface"></select><br>
       IP: <input type="text" id="new-ip" placeholder="e.g. 10.0.0.0"><br>
       Subnet: <input type="number" id="new-subnet" placeholder="e.g. 24"><br>
       Next hop: <input type="text" id="new-next-hop" placeholder="e.g. 10.0.0.0"><br>
@@ -568,15 +620,43 @@ def config(request):
 
     <script>
       document.addEventListener("DOMContentLoaded", function() {
-        function loadRoutes(type) {
-          var routesBody = document.getElementById(`${type}-routes-body`);
+        var interfaceMap = {};
+
+        function loadInterfaces() {
+          return fetch('/api/interfaces/count')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+              var requests = [];
+              for (let i = 0; i < data.count; i++) {
+                requests.push(
+                  fetch('/api/interfaces/' + i)
+                    .then(function(response) { return response.json(); })
+                    .then(function(info) { interfaceMap[i] = info.interface; })
+                );
+              }
+              return Promise.all(requests);
+            })
+            .then(function() {
+              var select = document.getElementById('new-interface');
+              select.innerHTML = "";
+              Object.keys(interfaceMap).forEach(function(id) {
+                var opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = interfaceMap[id];
+                select.appendChild(opt);
+              });
+            });
+        }
+
+        function loadRoutes() {
+          var routesBody = document.getElementById('routes-body');
           routesBody.innerHTML = "";
-          fetch(`/api/routes/${type}`)
+          fetch('/api/routes')
             .then(function(response) { return response.json(); })
             .then(function(data) {
               if (data.routes.length === 0) {
                 let row = document.createElement('tr');
-                row.innerHTML = "<td colspan='5'>No routes available</td>";
+                row.innerHTML = "<td colspan='6'>No routes available</td>";
                 routesBody.appendChild(row);
               } else {
                 data.routes.forEach(function(route) {
@@ -598,18 +678,22 @@ def config(request):
                   cellNextHop.textContent = route.next_hop;
                   row.appendChild(cellNextHop);
 
+                  let cellInterface = document.createElement('td');
+                  cellInterface.textContent = interfaceMap[route.interface] ?? route.interface;
+                  row.appendChild(cellInterface);
+
                   let cellActions = document.createElement('td');
                   let delBtn = document.createElement('button');
                   delBtn.textContent = "Delete";
                   delBtn.addEventListener("click", function() {
-                    fetch(`/api/routes/${route.id}/${type}`, { method: 'DELETE' })
+                    fetch(`/api/routes/${route.id}`, { method: 'DELETE' })
                       .then(function(response) {
                         if (!response.ok) throw new Error("Delete failed");
                         return response.json();
                       })
                       .then(function(result) {
                         alert("Route " + route.id + " deleted.");
-                        loadRoutes("external");
+                        loadRoutes();
                       })
                       .catch(function(error) {
                         alert("Error deleting route " + route.id);
@@ -624,33 +708,22 @@ def config(request):
             })
             .catch(function(err) {
               let row = document.createElement('tr');
-              row.innerHTML = "<td colspan='5'>Error retrieving routes</td>";
+              row.innerHTML = "<td colspan='6'>Error retrieving routes</td>";
               routesBody.appendChild(row);
             });
         }
 
-        loadRoutes("internal");
-        loadRoutes("external");
+        loadInterfaces().then(loadRoutes);
 
         document.getElementById('add-route-btn').addEventListener('click', function() {
-          var interfaceExternal = document.getElementById('new-interface-external').checked;
-          var interfaceInternal = document.getElementById('new-interface-internal').checked;
-          var interface;
-          if (interfaceInternal) {
-            interface = 0;
-          } else if (interfaceExternal) {
-            interface = 1;
-          } else {
-            alert("Invalid interface supplied.");
-            return;
-          }
+          var interfaceId = Number(document.getElementById('new-interface').value);
           var ip = document.getElementById('new-ip').value;
           var subnet = Number(document.getElementById('new-subnet').value);
           var next_hop = document.getElementById('new-next-hop').value;
           fetch(`/api/routes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ interface: interface, ip: ip, subnet: subnet, next_hop: next_hop})
+            body: JSON.stringify({ interface: interfaceId, ip: ip, subnet: subnet, next_hop: next_hop})
           })
           .then(function(response) {
             if (!response.ok) throw new Error('Add route failed');
@@ -658,8 +731,7 @@ def config(request):
           })
           .then(function(result) {
             alert("Route added successfully.");
-            loadRoutes("internal");
-            loadRoutes("external");
+            loadRoutes();
           })
           .catch(function(err) {
             alert("Error adding route");
@@ -670,9 +742,10 @@ def config(request):
   </body>
 </html>
 """
-    return Response(body=html, headers={'Content-Type': 'text/html'})
+    return Response(body=html, headers={"Content-Type": "text/html"})
 
-@app.route('/rules/<string:protocol>')
+
+@app.route("/rules/<string:protocol>")
 def rules(request, protocol):
     html = """
 <!DOCTYPE html>
@@ -693,16 +766,19 @@ def rules(request, protocol):
       <a href="/rules/icmp">ICMP</a>
     </div>
     <h1>INSERT_PROTOCOL_UPPER rules</h1>
-    <h2>Internal Rules</h2>
+    <div style="margin-bottom: 1rem;">
+      Interface:
+      <select id="rules-interface"></select>
+    </div>
     <div class="default-action-container">
       <h4>Default action</h4>
       <div>
-        <select name="internal-default-action" id="internal-default-action">
+        <select name="default-action" id="default-action">
           <option value="1">Allow</option>
           <option value="2">Drop</option>
           <option value="3">Connect</option>
         </select>
-        <button id="internal-set-default-action-btn">Update Default</button>
+        <button id="set-default-action-btn">Update Default</button>
       </div>
     </div>
     <table border="1">
@@ -719,44 +795,13 @@ def rules(request, protocol):
           <th></th>
         </tr>
       </thead>
-      <tbody id="internal-rules-body">
-        <tr><td colspan="5">Loading rules...</td></tr>
-      </tbody>
-    </table>
-    <h2>External Rules</h2>
-    <div class="default-action-container">
-      <h4>Default action</h4>
-      <div>
-        <select name="external-default-action" id="external-default-action">
-          <option value="">...</option>
-          <option value="1">Allow</option>
-          <option value="2">Drop</option>
-          <option value="3">Connect</option>
-        </select>
-        <button id="external-set-default-action-btn">Update Default</button>
-      </div>
-    </div>
-    <table border="1">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Source IP</th>
-          <th>Source Port</th>
-          <th>Destination IP</th>
-          <th>Destination Port</th>
-          <th>Source Subnet</th>
-          <th>Destination Subnet</th>
-          <th>Action</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="external-rules-body">
-        <tr><td colspan="5">Loading rules...</td></tr>
+      <tbody id="rules-body">
+        <tr><td colspan="9">Loading rules...</td></tr>
       </tbody>
     </table>
 
     <h2>Add New Rule</h2>
-      Interface: <input type="radio" name="new-interface" id="new-interface-internal">Internal<input type="radio" name="new-interface" id="new-interface-external">External<br>
+      Interface: <select id="new-interface"></select><br>
       Source IP: <input type="text" id="new-src-ip" placeholder="e.g. 192.168.10.3"><br>
       Source Port: <input type="number" id="new-src-port" placeholder="e.g. 24"><br>
       Source Subnet: <input type="number" id="new-src-subnet" placeholder="e.g. 16"><br>
@@ -775,11 +820,38 @@ def rules(request, protocol):
 
     <script>
       document.addEventListener("DOMContentLoaded", function() {
-        function loadRules(type) {
-          var rulesBody = document.getElementById(`${type}-rules-body`);
+        function loadInterfaces() {
+          return fetch('/api/interfaces/count')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+              var requests = [];
+              for (let i = 0; i < data.count; i++) {
+                requests.push(
+                  fetch('/api/interfaces/' + i)
+                    .then(function(response) { return response.json(); })
+                    .then(function(info) {
+                      var option = document.createElement('option');
+                      option.value = i;
+                      option.textContent = info.interface;
+                      document.getElementById('rules-interface').appendChild(option);
+
+                      var addOpt = document.createElement('option');
+                      addOpt.value = i;
+                      addOpt.textContent = info.interface;
+                      document.getElementById('new-interface').appendChild(addOpt);
+                    })
+                );
+              }
+              return Promise.all(requests);
+            });
+        }
+
+        function loadRules() {
+          var rulesBody = document.getElementById('rules-body');
           rulesBody.innerHTML = "";
-          const defaultAction = document.getElementById(`${type}-default-action`);
-          fetch(`/api/rules/INSERT_PROTOCOL/${type}`)
+          const defaultAction = document.getElementById('default-action');
+          const interfaceId = Number(document.getElementById('rules-interface').value);
+          fetch(`/api/rules/INSERT_PROTOCOL/${interfaceId}`)
             .then(function(response) { return response.json(); })
             .then(function(data) {
               for (let i = 0; i < defaultAction.options.length; i++) {
@@ -791,7 +863,7 @@ def rules(request, protocol):
               }
               if (data.rules.length === 0) {
                 var row = document.createElement('tr');
-                row.innerHTML = "<td colspan='5'>No rules available</td>";
+                row.innerHTML = "<td colspan='9'>No rules available</td>";
                 rulesBody.appendChild(row);
               } else {
                 data.rules.forEach(function(rule) {
@@ -816,23 +888,23 @@ def rules(request, protocol):
                   let button = document.createElement("button");
                   button.textContent = "Delete";
                   button.addEventListener("click", () => {
-                    deleteRule(rule.id, type);
+                    deleteRule(rule.id);
                   });
                   buttonCell.appendChild(button);
-                  console.log("This is inner html:" + row.innerHTML);
                   rulesBody.appendChild(row);
                 });
               }
             })
             .catch(function(err) {
               var row = document.createElement('tr');
-              row.innerHTML = "<td colspan='5'>Error retrieving rules</td>";
+              row.innerHTML = "<td colspan='9'>Error retrieving rules</td>";
               rulesBody.appendChild(row);
             });
         }
 
-        window.deleteRule = function(ruleId, type) {
-          fetch(`/api/rules/INSERT_PROTOCOL/${ruleId}/${type}`, {
+        window.deleteRule = function(ruleId) {
+          const interfaceId = Number(document.getElementById('rules-interface').value);
+          fetch(`/api/rules/INSERT_PROTOCOL/${ruleId}/${interfaceId}`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' }
           })
@@ -842,17 +914,17 @@ def rules(request, protocol):
           })
           .then(function(result) {
             alert("Rule " + ruleId + " deleted.");
-            loadRules("internal");
-            loadRules("external");
+            loadRules();
           })
           .catch(function(error) {
             alert("Error deleting rule " + ruleId);
           });
         }
 
-        document.getElementById(`external-set-default-action-btn`).addEventListener('click', function() {
-          const newDefaultAction = document.getElementById(`external-default-action`).value;
-          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}/external`, {
+        document.getElementById(`set-default-action-btn`).addEventListener('click', function() {
+          const interfaceId = Number(document.getElementById('rules-interface').value);
+          const newDefaultAction = document.getElementById(`default-action`).value;
+          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}/${interfaceId}`, {
             method: 'POST',
           })
           .then(function(response) {
@@ -861,25 +933,7 @@ def rules(request, protocol):
           })
           .then(function(result) {
             alert("Updated default action successfully.");
-            loadRules("external");
-          })
-          .catch(function(err) {
-            alert("Error updating default action");
-          });
-        });
-
-        document.getElementById(`internal-set-default-action-btn`).addEventListener('click', function() {
-          const newDefaultAction = document.getElementById(`internal-default-action`).value;
-          fetch(`/api/rules/INSERT_PROTOCOL/default/${newDefaultAction}/internal`, {
-            method: 'POST',
-          })
-          .then(function(response) {
-            if (!response.ok) throw new Error("Update default action failed");
-            return response.json();
-          })
-          .then(function(result) {
-            loadRules("internal");
-            alert("Updated default action successfully.");
+            loadRules();
           })
           .catch(function(err) {
             alert("Error updating default action");
@@ -887,17 +941,7 @@ def rules(request, protocol):
         });
 
         document.getElementById('add-rule-btn').addEventListener('click', function() {
-          var interfaceInternal = document.getElementById('new-interface-internal').checked;
-          var interfaceExternal = document.getElementById('new-interface-external').checked;
-          var interface;
-          if (interfaceInternal) {
-            interface = 1;
-          } else if (interfaceExternal) {
-            interface = 0;
-          } else {
-            alert("Invalid interface supplied.");
-            return;
-          }
+          var interface = Number(document.getElementById('new-interface').value);
           var srcIp = document.getElementById('new-src-ip').value;
           var srcPort = document.getElementById('new-src-port').value;
           var srcSubnet = Number(document.getElementById('new-src-subnet').value);
@@ -926,16 +970,20 @@ def rules(request, protocol):
           })
           .then(function(result) {
             alert("Rule added successfully.");
-            loadRules("internal");
-            loadRules("external");
+            loadRules();
           })
           .catch(function(err) {
             alert("Error adding rule");
           });
         });
 
-        loadRules("internal");
-        loadRules("external");
+        document.getElementById('rules-interface').addEventListener('change', function() {
+          loadRules();
+        });
+
+        loadInterfaces().then(function() {
+          loadRules();
+        });
       });
     </script>
   </body>
@@ -943,9 +991,10 @@ def rules(request, protocol):
 """
     html = html.replace("INSERT_PROTOCOL_UPPER", protocol.upper())
     html = html.replace("INSERT_PROTOCOL", protocol)
-    return Response(body=html, headers={'Content-Type': 'text/html'})
+    return Response(body=html, headers={"Content-Type": "text/html"})
 
-@app.route('/rules')
+
+@app.route("/rules")
 def rules(request):
     html = """
 <!DOCTYPE html>
@@ -968,7 +1017,8 @@ def rules(request):
   </body>
 </html>
 """
-    return Response(body=html, headers={'Content-Type': 'text/html'})
+    return Response(body=html, headers={"Content-Type": "text/html"})
+
 
 @app.route("/main.css")
 def css(request):
@@ -987,6 +1037,7 @@ body {
   margin-bottom: 1rem;
 }
 """
-    return Response(body=css, headers={'Content-Type': 'text/css'})
+    return Response(body=css, headers={"Content-Type": "text/css"})
+
 
 app.run(debug=True, port=80)

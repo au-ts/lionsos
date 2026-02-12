@@ -43,15 +43,6 @@ static inline uint32_t htonl(uint32_t n)
 stored big-endian, so mask byte order must be swapped for subnet match. */
 #define subnet_mask(n) htonl((uint32_t)(0xffffffffUL << (32 - (n))))
 
-/* Firewall ID number used by components to identify which interface they
-are connected to */
-#define FW_EXTERNAL_INTERFACE_ID 1
-#define FW_INTERNAL_INTERFACE_ID 0
-
-/* Firewall component print formatting string to identify which interface
-component is printing */
-static const char *fw_frmt_str[] = { "EXT --> INT | ", "INT --> EXT | " };
-
 #define IPV4_ADDR_BUFLEN 16
 
 static char ip_addr_buf0[IPV4_ADDR_BUFLEN];

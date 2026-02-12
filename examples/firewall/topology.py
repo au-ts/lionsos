@@ -32,7 +32,7 @@ def _collect_all_connections(builder) -> Dict[str, Any]:
     """Collect all ConnectionSpec/ArpConnectionSpec/DataConnectionSpec objects."""
     conns = dict(builder._global_connections)
     for iface in builder.interfaces:
-        for name, spec in iface.wiring.connections.items():
+        for name, spec in iface.interface_wiring.connections.items():
             conns[f"iface{iface.index}_{name}"] = spec
     return conns
 
@@ -41,7 +41,7 @@ def _collect_all_regions(builder) -> Dict[str, Any]:
     """Collect all SharedRegionSpec objects."""
     regions = dict(builder._global_regions)
     for iface in builder.interfaces:
-        for name, spec in iface.wiring.regions.items():
+        for name, spec in iface.interface_wiring.regions.items():
             regions[f"iface{iface.index}_{name}"] = spec
     return regions
 
@@ -50,8 +50,8 @@ def _collect_all_net_edges(builder):
     """Collect inferred sDDF Net edges from interface wiring."""
     edges = []
     for iface in builder.interfaces:
-        if hasattr(iface.wiring, "net_edges"):
-            edges.extend(iface.wiring.net_edges)
+        if hasattr(iface.interface_wiring, "net_edges"):
+            edges.extend(iface.interface_wiring.net_edges)
     return edges
 
 
@@ -59,7 +59,9 @@ def generate_topology_dot(builder) -> str:
     """Generate a graphviz DOT string from all Spec objects."""
     lines = ["digraph firewall_topology {"]
     lines.append("    rankdir=LR;")
-    lines.append("    graph [overlap=false, splines=true, nodesep=0.4, ranksep=0.6, size=\"11,8.5!\", ratio=fill];")
+    lines.append(
+        '    graph [overlap=false, splines=true, nodesep=0.4, ranksep=0.6, size="11,8.5!", ratio=fill];'
+    )
     lines.append('    node [shape=box, style=filled, fillcolor="#E3F2FD"];')
     lines.append("    edge [fontsize=9, labelfloat=true];")
     lines.append("")
@@ -177,7 +179,7 @@ def generate_topology_dot(builder) -> str:
             )
         lines.append("        style=rounded;")
         lines.append('        color="#90CAF9";')
-        for pd, role in iface.wiring.all_pds():
+        for pd, role in iface.interface_wiring.all_pds():
             if SHOW_NODE_LABELS:
                 lines.append(f'        "{pd.name}" [label="{role}\\n{pd.name}"];')
             else:
@@ -187,8 +189,9 @@ def generate_topology_dot(builder) -> str:
 
     # Global PDs outside clusters
     for pd, label in [
-        (getattr(builder, "webserver", None), "Webserver"),
-        (getattr(builder, "icmp_module", None), "ICMP Module"),
+        (builder.router, "Router"),
+        (builder.webserver, "Webserver"),
+        (builder.icmp_module, "ICMP Module"),
     ]:
         if pd:
             if SHOW_NODE_LABELS:

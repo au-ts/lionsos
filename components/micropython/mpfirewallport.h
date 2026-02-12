@@ -6,13 +6,13 @@
 
 #pragma once
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <sddf/network/lib_sddf_lwip.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/filter.h>
 #include <lions/firewall/routing.h>
 #include <lwip/pbuf.h>
+#include <sddf/network/lib_sddf_lwip.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 /**
  * Firewall webserver configuration structure.
@@ -24,12 +24,11 @@ extern fw_webserver_config_t fw_config;
  * for each network interface.
  */
 typedef struct fw_webserver_interface_state {
-    fw_routing_table_t *routing_table;
     fw_filter_state_t filter_states[FW_MAX_FILTERS];
     uint16_t num_rules[FW_MAX_FILTERS];
 } fw_webserver_interface_state_t;
 
-extern fw_webserver_interface_state_t webserver_state[FW_NUM_INTERFACES];
+extern fw_webserver_interface_state_t webserver_state[FW_MAX_INTERFACES];
 
 /**
  * Checks whether the pbuf contains an ARP request. All ARP requests and

@@ -60,9 +60,9 @@ static void tx_provide(void)
 
                 if (buffer.io_or_offset % NET_BUFFER_SIZE
                     || buffer.io_or_offset >= NET_BUFFER_SIZE * tx_queue_clients[client].capacity) {
-                    sddf_dprintf("%sVIRT TX LOG: Client provided offset %lx which is not buffer aligned or outside of "
-                                 "buffer region\n",
-                                 fw_frmt_str[fw_config.interface], buffer.io_or_offset);
+                    sddf_dprintf("VIRT TX LOG, Interface %u: Client provided offset %lx which is not buffer aligned or "
+                                 "outside of buffer region\n",
+                                 fw_config.interface, buffer.io_or_offset);
                     err = net_enqueue_free(&tx_queue_clients[client], buffer);
                     assert(!err);
                     continue;

@@ -411,14 +411,6 @@ class TxFreeClient:
 
 
 @dataclass
-class OutboundConnection:
-    """Router's outbound data path from this interface toward a destination interface's TX virtualiser."""
-
-    dest_interface_index: int
-    resource: FwDataConnectionResource
-
-
-@dataclass
 class NetEdge:
     """Lightweight representation of sDDF Net wiring for topology tracking."""
 
@@ -446,7 +438,6 @@ class InterfaceWiring:
     connections: Dict[str, Any] = field(default_factory=dict)
     regions: Dict[str, Any] = field(default_factory=dict)
 
-    outbound_connections: List[OutboundConnection] = field(default_factory=list)
     tx_active_clients: List[TxActiveClient] = field(default_factory=list)
     tx_free_clients: List[TxFreeClient] = field(default_factory=list)
     net_edges: List[NetEdge] = field(default_factory=list)
@@ -467,8 +458,6 @@ class InterfaceWiring:
     def all_pds(self) -> List[Tuple[ProtectionDomain, str]]:
         """Return all (pd, role_label) pairs for graph node rendering."""
         pds = []
-        if getattr(self.interface, "router", None):
-            pds.append((self.interface.router, "Router"))
         if self.interface.driver:
             pds.append((self.interface.driver, "Driver"))
         if self.interface.rx_virt:
