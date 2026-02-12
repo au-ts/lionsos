@@ -35,7 +35,7 @@ ERROR_DATA_INCORRECT='The received data is different to what was sent'
 ERROR_DATA_WAS_NOT_DROPPED='Firewall traffic was not dropped'
 ERROR_FAILED_TO_APPLY_RULE='Failed to apply firewall rule'
 ERROR_FAILED_TO_REMOVE_RULE='Failed to remove firewall rule'
-INFO_SKIPPING_TEST='skipping (feature not implemented yet)'
+INFO_SKIPPING_TEST='Skipping (feature not implemented yet)'
 
 FONT_HEADER=$(printf '\033[1m\033[36m')
 FONT_RED=$(printf '\033[31m')
@@ -260,7 +260,7 @@ test_icmp_ping_host_external_to_internal() {
 }
 
 test_icmp_ping_unreachable_host_internal_to_external() {
-    print_info "this may take upto ${LONG_TIMEOUT} seconds..."
+    print_info "This may take upto ${LONG_TIMEOUT} seconds..."
 
     ip netns exec int \
     ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${EXT_BAD_HOST_IP}" \
@@ -273,7 +273,7 @@ test_icmp_ping_unreachable_host_internal_to_external() {
 }
 
 test_icmp_ping_unreachable_host_external_to_internal() {
-    print_info "this may take upto ${LONG_TIMEOUT} seconds..."
+    print_info "This may take upto ${LONG_TIMEOUT} seconds..."
 
     ip netns exec ext \
     ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INT_BAD_HOST_IP}" \
