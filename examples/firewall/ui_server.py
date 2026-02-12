@@ -206,7 +206,8 @@ def getRoutes(request, interfaceStr):
                 "id": route[0],
                 "ip": intToIp(route[1]),
                 "subnet": route[2],
-                "next_hop": intToIp(route[3])
+                "next_hop": intToIp(route[3]),
+                "interface": route[4]
             })
         return {"routes": routes}
     except OSError as OSErr:
@@ -530,6 +531,7 @@ def config(request):
           <th>IP</th>
           <th>Subnet</th>
           <th>Next Hop</th>
+          <th>Interface ID</th>
         </tr>
       </thead>
       <tbody id="internal-routes-body">
@@ -547,6 +549,7 @@ def config(request):
           <th>IP</th>
           <th>Subnet</th>
           <th>Next Hop</th>
+          <th>Interface ID</th>
         </tr>
       </thead>
       <tbody id="external-routes-body">
@@ -597,6 +600,10 @@ def config(request):
                   let cellNextHop = document.createElement('td');
                   cellNextHop.textContent = route.next_hop;
                   row.appendChild(cellNextHop);
+
+                  let cellInterface = document.createElement('td');
+                  cellInterface.textContent = route.interface;
+                  row.appendChild(cellInterface);
 
                   let cellActions = document.createElement('td');
                   let delBtn = document.createElement('button');
