@@ -160,7 +160,6 @@ oneTimeSetUp() {
         SAVE_SESSION_LOG_ON_EXIT=false
     fi
 
-
     # If `TEST_DEBUG` is set to true, the commands executed during a test will
     # be displayed on the console.
     TEST_DEBUG=false
@@ -470,7 +469,7 @@ test_rule_application_and_removal() {
         --header 'Content-Type: application/json' \
         --request 'DELETE' \
         "http://${FW_INT_IP}/api/rules/tcp/${rule_id}/external")
-    
+
     # Check if the response contains an error
     error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
 
