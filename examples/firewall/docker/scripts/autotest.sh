@@ -427,8 +427,8 @@ test_udp_external_to_internal() {
 #
 
 test_rule_application_and_removal() {
-    # The default rule for traffic on each interface is allow it, so we setup a
-    # drop traffic rule and verify that we receive no traffic.
+    # The default rule for traffic on each interface is to allow it, so we setup
+    # a drop traffic rule and verify that we receive no traffic.
 
     # Craft a JSON request with the rule's parameters
     json=$(jq \
