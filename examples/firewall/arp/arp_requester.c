@@ -42,7 +42,7 @@ fw_arp_table_t arp_table;
 static bool transmitted;
 
 /* Keep track of which clients require notification */
-static bool notify_client[FW_NUM_ARP_REQUESTER_CLIENTS] = {false};
+static bool notify_client[FW_NUM_ARP_REQUESTER_CLIENTS] = { false };
 
 #define ARP_MAX_RETRIES 5               /* How many times the ARP requester will send out an ARP request. */
 #define ARP_RETRY_TIMER_S 1             /* How often to retry an ARP request, in seconds. */
@@ -104,7 +104,6 @@ static void process_requests()
                 continue;
             }
 
-
             /* Generate ARP request */
             net_buff_desc_t buffer = {};
             err = net_dequeue_free(&tx_queue, &buffer);
@@ -116,15 +115,14 @@ static void process_requests()
 
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("%sARP requester processing client %u request for ip %s\n",
-                    fw_frmt_str[arp_config.interface], client,
-                    ipaddr_to_string(request.ip, ip_addr_buf0));
+                            fw_frmt_str[arp_config.interface], client, ipaddr_to_string(request.ip, ip_addr_buf0));
             }
 
             /* Create arp entry for request to store associated client */
             fw_arp_error_t arp_err = fw_arp_table_add_entry(&arp_table, ARP_STATE_PENDING, request.ip, NULL, client);
             if (arp_err == ARP_ERR_FULL) {
                 sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n",
-                fw_frmt_str[arp_config.interface]);
+                             fw_frmt_str[arp_config.interface]);
             }
 
             transmitted = true;
@@ -164,19 +162,21 @@ static void process_responses()
                                 fw_enqueue(&arp_resp_queue[client], &response);
                                 notify_client[client] = true;
                                 if (FW_DEBUG_OUTPUT) {
-                                    sddf_printf("%sARP requester received response for client %u, ip %s. MAC[0] = %x, MAC[5] = %x\n",
-                                        fw_frmt_str[arp_config.interface], client, ipaddr_to_string(arp_resp->ipsrc_addr, ip_addr_buf0),
-                                        arp_resp->hwsrc_addr[0], arp_resp->hwsrc_addr[5]);
+                                    sddf_printf("%sARP requester received response for client %u, ip %s. MAC[0] = %x, "
+                                                "MAC[5] = %x\n",
+                                                fw_frmt_str[arp_config.interface], client,
+                                                ipaddr_to_string(arp_resp->ipsrc_addr, ip_addr_buf0),
+                                                arp_resp->hwsrc_addr[0], arp_resp->hwsrc_addr[5]);
                                 }
                             }
                         }
                     } else {
                         /* Create a new entry */
                         fw_arp_error_t arp_err = fw_arp_table_add_entry(&arp_table, ARP_STATE_REACHABLE,
-                            arp_resp->ipsrc_addr, arp_resp->hwsrc_addr, 0);
+                                                                        arp_resp->ipsrc_addr, arp_resp->hwsrc_addr, 0);
                         if (arp_err == ARP_ERR_FULL) {
                             sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n",
-                                fw_frmt_str[arp_config.interface]);
+                                         fw_frmt_str[arp_config.interface]);
                         }
                     }
                 }
@@ -229,12 +229,11 @@ static uint16_t process_retries(void)
 
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("%sARP requester attempting to resend request for ip %s\n",
-                    fw_frmt_str[arp_config.interface],
-                    ipaddr_to_string(entry->ip, ip_addr_buf0));
+                            fw_frmt_str[arp_config.interface], ipaddr_to_string(entry->ip, ip_addr_buf0));
             }
 
             if (!net_queue_empty_free(&tx_queue)) {
-                net_buff_desc_t buffer = {0};
+                net_buff_desc_t buffer = { 0 };
                 int err = net_dequeue_free(&tx_queue, &buffer);
                 assert(!err);
 
@@ -244,9 +243,8 @@ static uint16_t process_retries(void)
                 transmitted = true;
 
                 if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("%sARP requester resent request for ip %s\n",
-                        fw_frmt_str[arp_config.interface],
-                        ipaddr_to_string(entry->ip, ip_addr_buf0));
+                    sddf_printf("%sARP requester resent request for ip %s\n", fw_frmt_str[arp_config.interface],
+                                ipaddr_to_string(entry->ip, ip_addr_buf0));
                 }
             }
 
@@ -260,7 +258,8 @@ static uint16_t process_retries(void)
 }
 
 /* Flush all non pending cache entries */
-static uint16_t arp_table_flush(void) {
+static uint16_t arp_table_flush(void)
+{
     uint16_t flushed = 0;
     for (uint16_t i = 0; i < arp_table.capacity; i++) {
         fw_arp_entry_t *entry = arp_table.entries + i;
@@ -280,20 +279,20 @@ void init(void)
     assert(net_config_check_magic((void *)&net_config));
 
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size,
-        serial_config.tx.data.vaddr);
+                      serial_config.tx.data.vaddr);
     serial_putchar_init(serial_config.tx.id, &serial_tx_queue_handle);
 
     net_queue_init(&rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
-        net_config.rx.num_buffers);
+                   net_config.rx.num_buffers);
     net_queue_init(&tx_queue, net_config.tx.free_queue.vaddr, net_config.tx.active_queue.vaddr,
-        net_config.tx.num_buffers);
+                   net_config.tx.num_buffers);
     net_buffers_init(&tx_queue, 0);
 
     for (uint8_t client = 0; client < arp_config.num_arp_clients; client++) {
-        fw_queue_init(&arp_req_queue[client], arp_config.arp_clients[client].request.vaddr,
-            sizeof(fw_arp_request_t), arp_config.arp_clients[client].capacity);
-        fw_queue_init(&arp_resp_queue[client], arp_config.arp_clients[client].response.vaddr,
-            sizeof(fw_arp_request_t), arp_config.arp_clients[client].capacity);
+        fw_queue_init(&arp_req_queue[client], arp_config.arp_clients[client].request.vaddr, sizeof(fw_arp_request_t),
+                      arp_config.arp_clients[client].capacity);
+        fw_queue_init(&arp_resp_queue[client], arp_config.arp_clients[client].response.vaddr, sizeof(fw_arp_request_t),
+                      arp_config.arp_clients[client].capacity);
     }
 
     fw_arp_table_init(&arp_table, (fw_arp_entry_t *)arp_config.arp_cache.vaddr, arp_config.arp_cache_capacity);
@@ -306,7 +305,8 @@ void notified(microkit_channel ch)
 {
     if (ch == arp_config.arp_clients[0].ch || (arp_config.num_arp_clients == 2 && ch == arp_config.arp_clients[1].ch)) {
         process_requests();
-    } if (ch == net_config.rx.id) {
+    }
+    if (ch == net_config.rx.id) {
         process_responses();
     } else if (ch == timer_config.driver_id) {
         ticks_to_flush--;
@@ -314,16 +314,16 @@ void notified(microkit_channel ch)
             uint16_t retries = process_retries();
 
             if (FW_DEBUG_OUTPUT && retries > 0) {
-                sddf_printf("%sARP requester processed %u retries for tick %lu\n",
-                    fw_frmt_str[arp_config.interface], retries, ticks_to_flush);
+                sddf_printf("%sARP requester processed %u retries for tick %lu\n", fw_frmt_str[arp_config.interface],
+                            retries, ticks_to_flush);
             }
 
         } else {
             uint16_t flushed = arp_table_flush();
 
             if (FW_DEBUG_OUTPUT && flushed > 0) {
-                sddf_printf("%sARP requester flushed %u entries from cache\n",
-                    fw_frmt_str[arp_config.interface], flushed);
+                sddf_printf("%sARP requester flushed %u entries from cache\n", fw_frmt_str[arp_config.interface],
+                            flushed);
             }
 
             ticks_to_flush = ARP_TICKS_PER_FLUSH;

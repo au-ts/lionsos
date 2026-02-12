@@ -20,7 +20,6 @@
 #include <lwip/pbuf.h>
 #include <lwip/sys.h>
 
-#include "micropython.h"
 #include "mpfirewallport.h"
 
 #define dlog(fmt, ...) do { \
@@ -39,13 +38,14 @@ typedef struct __attribute__((__packed__)) arp_frame {
     arp_pkt_t arp_pkt;
 } arp_frame_t;
 
-arp_frame_t arp_response_pkt = {0};
+arp_frame_t arp_response_pkt = { 0 };
 
 static bool notify_rx = false;
 static bool notify_arp = false;
 
 /* Custom pbuf free function to free pbuf holding ARP packet */
-static void interface_free_arp_buffer(struct pbuf *buf) {
+static void interface_free_arp_buffer(struct pbuf *buf)
+{
     SYS_ARCH_DECL_PROTECT(old_level);
     pbuf_custom_offset_t *pbuf = (pbuf_custom_offset_t *)buf;
     SYS_ARCH_PROTECT(old_level);
@@ -53,7 +53,8 @@ static void interface_free_arp_buffer(struct pbuf *buf) {
     SYS_ARCH_UNPROTECT(old_level);
 }
 
-static void firewall_interface_free_buffer(struct pbuf *buf) {
+static void firewall_interface_free_buffer(struct pbuf *buf)
+{
     SYS_ARCH_DECL_PROTECT(old_level);
     pbuf_custom_offset_t *pbuf = (pbuf_custom_offset_t *)buf;
     SYS_ARCH_PROTECT(old_level);
@@ -64,7 +65,8 @@ static void firewall_interface_free_buffer(struct pbuf *buf) {
     SYS_ARCH_UNPROTECT(old_level);
 }
 
-static void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN]) {
+static void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN])
+{
     /* Fill ethernet header */
     memcpy(arp_response_pkt.eth_hdr.ethdst_addr, fw_config.interfaces[fw_config.interface].mac_addr, ETH_HWADDR_LEN);
     memcpy(arp_response_pkt.eth_hdr.ethsrc_addr, mac, ETH_HWADDR_LEN);
@@ -81,7 +83,8 @@ static void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN]) {
     arp_response_pkt.arp_pkt.ipdst_addr = fw_config.interfaces[fw_config.interface].ip;
 }
 
-bool mpfirewall_intercept_arp(struct pbuf *p) {
+bool mpfirewall_intercept_arp(struct pbuf *p)
+{
     /* Check if this is an ARP request before transmitting through NIC */
     eth_hdr_t *eth_hdr = (eth_hdr_t *)p->payload;
     arp_pkt_t *arp_pkt = (arp_pkt_t *)(p->payload + ARP_PKT_OFFSET);
@@ -98,7 +101,8 @@ bool mpfirewall_intercept_arp(struct pbuf *p) {
  * ARP packets are not transmitted directly, instead they are converted to ARP
  * requests and passed to the ARP requester to handle.
  */
-net_sddf_err_t mpfirewall_handle_arp(struct pbuf *p) {
+net_sddf_err_t mpfirewall_handle_arp(struct pbuf *p)
+{
     /**
      * Check if the destination ip is ours - if so, this packet is most likely
      * an ARP probe. We should discard.
@@ -108,7 +112,7 @@ net_sddf_err_t mpfirewall_handle_arp(struct pbuf *p) {
         return SDDF_LWIP_ERR_OK;
     }
 
-    fw_arp_request_t request = {arp_pkt->ipdst_addr, {0}, ARP_STATE_INVALID};
+    fw_arp_request_t request = { arp_pkt->ipdst_addr, { 0 }, ARP_STATE_INVALID };
     int err = fw_enqueue(&arp_req_queue, &request);
     if (err) {
         dlog("Could not enqueue arp request, queue is full");
@@ -119,7 +123,8 @@ net_sddf_err_t mpfirewall_handle_arp(struct pbuf *p) {
     return SDDF_LWIP_ERR_OK;
 }
 
-void mpfirewall_process_arp(void) {
+void mpfirewall_process_arp(void)
+{
     while (!fw_queue_empty(&arp_resp_queue)) {
         fw_arp_request_t response;
         int err = fw_dequeue(&arp_resp_queue, &response);
@@ -129,7 +134,8 @@ void mpfirewall_process_arp(void) {
             fill_arp(response.ip, response.mac_addr);
 
             if (FW_DEBUG_OUTPUT) {
-                dlog("Inputting ARP response for ip %s -> obtained MAC[0] = %x, MAC[5] = %x\n", ipaddr_to_string(response.ip, ip_addr_buf0), response.mac_addr[0], response.mac_addr[5]);
+                dlog("Inputting ARP response for ip %s -> obtained MAC[0] = %x, MAC[5] = %x\n",
+                     ipaddr_to_string(response.ip, ip_addr_buf0), response.mac_addr[0], response.mac_addr[5]);
             }
 
             /* Input packet into lwip stack */
@@ -139,14 +145,8 @@ void mpfirewall_process_arp(void) {
             }
             pbuf->custom.custom_free_function = interface_free_arp_buffer;
 
-            struct pbuf *p = pbuf_alloced_custom(
-                PBUF_RAW,
-                ARP_PKT_LEN,
-                PBUF_REF,
-                &pbuf->custom,
-                &arp_response_pkt,
-                ARP_PKT_LEN
-            );
+            struct pbuf *p = pbuf_alloced_custom(PBUF_RAW, ARP_PKT_LEN, PBUF_REF, &pbuf->custom, &arp_response_pkt,
+                                                 ARP_PKT_LEN);
 
             net_sddf_err_t net_err = sddf_lwip_input_pbuf(p);
             if (net_err != SDDF_LWIP_ERR_OK) {
@@ -157,7 +157,8 @@ void mpfirewall_process_arp(void) {
     }
 }
 
-void mpfirewall_process_rx(void) {
+void mpfirewall_process_rx(void)
+{
     while (!fw_queue_empty(&rx_active) && !sddf_lwip_pbuf_pool_empty()) {
         pbuf_custom_offset_t *pbuf = sddf_lwip_pbuf_pool_alloc();
         if (!pbuf) {
@@ -171,14 +172,8 @@ void mpfirewall_process_rx(void) {
         pbuf->offset = buffer.io_or_offset;
         pbuf->custom.custom_free_function = firewall_interface_free_buffer;
 
-        struct pbuf *p = pbuf_alloced_custom(
-            PBUF_RAW,
-            buffer.len,
-            PBUF_REF,
-            &pbuf->custom,
-            (void *)(buffer.io_or_offset + fw_config.data.vaddr),
-            NET_BUFFER_SIZE
-        );
+        struct pbuf *p = pbuf_alloced_custom(PBUF_RAW, buffer.len, PBUF_REF, &pbuf->custom,
+                                             (void *)(buffer.io_or_offset + fw_config.data.vaddr), NET_BUFFER_SIZE);
 
         net_sddf_err_t net_err = sddf_lwip_input_pbuf(p);
         if (net_err != SDDF_LWIP_ERR_OK) {
@@ -188,7 +183,8 @@ void mpfirewall_process_rx(void) {
     }
 }
 
-void mpfirewall_handle_notify(void) {
+void mpfirewall_handle_notify(void)
+{
     if (notify_arp) {
         notify_arp = false;
         if (!microkit_have_signal) {
@@ -208,7 +204,8 @@ void mpfirewall_handle_notify(void) {
     }
 }
 
-void init_firewall_webserver(void) {
+void init_firewall_webserver(void)
+{
     for (uint8_t i = 0; i < FW_NUM_INTERFACES; i++) {
         webserver_state[i].routing_table = fw_config.interfaces[i].router.routing_table.vaddr;
 

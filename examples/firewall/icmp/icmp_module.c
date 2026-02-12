@@ -23,17 +23,17 @@ __attribute__((__section__(".fw_icmp_module_config"))) fw_icmp_module_config_t i
 __attribute__((__section__(".ext_net_client_config"))) net_client_config_t ext_net_config;
 __attribute__((__section__(".int_net_client_config"))) net_client_config_t int_net_config;
 
-net_client_config_t *net_configs[FW_NUM_INTERFACES] = {&ext_net_config, &int_net_config};
+net_client_config_t *net_configs[FW_NUM_INTERFACES] = { &ext_net_config, &int_net_config };
 
 net_queue_handle_t net_queue[FW_NUM_INTERFACES];
 fw_queue_t icmp_queue[FW_NUM_INTERFACES];
 
 static void generate_icmp(void)
 {
-    bool transmitted[FW_NUM_INTERFACES] = {false};
+    bool transmitted[FW_NUM_INTERFACES] = { false };
     for (uint8_t out_int = 0; out_int < icmp_config.num_interfaces; out_int++) {
         while (!fw_queue_empty(&icmp_queue[out_int]) && !net_queue_empty_free(&net_queue[out_int])) {
-            icmp_req_t req = {0};
+            icmp_req_t req = { 0 };
             int err = fw_dequeue(&icmp_queue[out_int], &req);
             assert(!err);
 
@@ -85,36 +85,36 @@ static void generate_icmp(void)
 
             /* Handle each ICMP type separately */
             switch (req.type) {
-                case ICMP_DEST_UNREACHABLE:
+            case ICMP_DEST_UNREACHABLE:
 
                     /* Total length of ICMP destination unreachable IP packet */
                     // TODO: Should this be less if the source packet did not
                     // contain 8 bytes of data?
-                    ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_DEST_LEN);
+                ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_DEST_LEN);
 
                     /* Construct ICMP destination unreachable packet */
-                    icmp_dest_t *icmp_dest = (icmp_dest_t *)(pkt_vaddr + ICMP_DEST_OFFSET);
+                icmp_dest_t *icmp_dest = (icmp_dest_t *)(pkt_vaddr + ICMP_DEST_OFFSET);
 
                     /* Unused must be set to 0, as well as optional fields we
                     are not currently using */
-                    icmp_dest->unused = 0;
-                    icmp_dest->len = 0;
-                    icmp_dest->nexthop_mtu = 0;
+                icmp_dest->unused = 0;
+                icmp_dest->len = 0;
+                icmp_dest->nexthop_mtu = 0;
 
                     /* Copy IP header */
-                    memcpy(&icmp_dest->ip_hdr, &req.ip_hdr, IPV4_HDR_LEN_MIN);
+                memcpy(&icmp_dest->ip_hdr, &req.ip_hdr, IPV4_HDR_LEN_MIN);
 
                     /* Copy first bytes of data if applicable */
                     // TODO: If the source packet did not contain 8 bytes of
                     // data, should the rest be zero-filled?
-                    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(req.ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
-                    memcpy(&icmp_dest->data, req.data, to_copy);
-                    break;
+                uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(req.ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
+                memcpy(&icmp_dest->data, req.data, to_copy);
+                break;
 
-                default:
-                    sddf_printf("ICMP module tried to construct an unsupported ICMP type %u packet for interface %u!\n",
-                                req.type, out_int);
-                    break;
+            default:
+                sddf_printf("ICMP module tried to construct an unsupported ICMP type %u packet for interface %u!\n",
+                            req.type, out_int);
+                break;
             }
 
             /* Set checksum to 0 and leave calculation to hardware. If this is
@@ -122,12 +122,12 @@ static void generate_icmp(void)
             icmp_hdr->check = 0;
             ip_hdr->check = 0;
 
-            #ifndef NETWORK_HW_HAS_CHECKSUM
+#ifndef NETWORK_HW_HAS_CHECKSUM
             /* ICMP checksum is calculated over entire ICMP packet */
             icmp_hdr->check = fw_internet_checksum(icmp_hdr, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
             /* IP checksum is calculated only over IP header */
             ip_hdr->check = fw_internet_checksum(ip_hdr, IPV4_HDR_LEN_MIN);
-            #endif
+#endif
 
             buffer.len = htons(ip_hdr->tot_len) + ETH_HDR_LEN;
             err = net_enqueue_active(&net_queue[out_int], buffer);
@@ -136,7 +136,7 @@ static void generate_icmp(void)
 
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("ICMP module sending packet for ip %s with type %u, code %u\n",
-                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0), icmp_hdr->type, icmp_hdr->code);
+                            ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0), icmp_hdr->type, icmp_hdr->code);
             }
         }
     }
@@ -152,12 +152,12 @@ void init(void)
 {
     for (int i = 0; i < icmp_config.num_interfaces; i++) {
         /* Setup the queue with the router. */
-        fw_queue_init(&icmp_queue[i], icmp_config.routers[i].queue.vaddr,
-            sizeof(icmp_req_t), icmp_config.routers[i].capacity);
+        fw_queue_init(&icmp_queue[i], icmp_config.routers[i].queue.vaddr, sizeof(icmp_req_t),
+                      icmp_config.routers[i].capacity);
 
         /* Setup transmit queues with the transmit virtualisers. */
-        net_queue_init(&net_queue[i], net_configs[i]->tx.free_queue.vaddr,
-            net_configs[i]->tx.active_queue.vaddr, net_configs[i]->tx.num_buffers);
+        net_queue_init(&net_queue[i], net_configs[i]->tx.free_queue.vaddr, net_configs[i]->tx.active_queue.vaddr,
+                       net_configs[i]->tx.num_buffers);
         net_buffers_init(&net_queue[i], 0);
     }
 }
