@@ -49,7 +49,9 @@ typedef enum {
     /* allow traffic, and additionally any return traffic */
     FILTER_ACT_CONNECT = 3,
     /* traffic is return traffic from a connect rule */
-    FILTER_ACT_ESTABLISHED
+    FILTER_ACT_ESTABLISHED = 4,
+    /* reject traffic (send back icmp unreachable) */
+    FILTER_ACT_REJECT
 } fw_action_t;
 
 static const char *fw_filter_action_str[] = {
@@ -57,7 +59,8 @@ static const char *fw_filter_action_str[] = {
     "Allow",
     "Drop",
     "Connect",
-    "Established"
+    "Established",
+    "UDP Reject"
 };
 
 typedef struct fw_rule {

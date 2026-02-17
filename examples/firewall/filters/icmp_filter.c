@@ -24,11 +24,27 @@ __attribute__((__section__(".net_client_config"))) net_client_config_t net_confi
 net_queue_handle_t rx_queue;
 net_queue_handle_t tx_queue;
 fw_queue_t router_queue;
+fw_queue_t icmp_queue;
 
 /* Holds filtering rules and state */
 fw_filter_state_t filter_state;
 
 #define ICMP_FILTER_DUMMY_PORT 0
+
+/* ICMP request queue to send unreachable messages to ICMP module */
+static bool notify_icmp;
+
+static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
+{
+    uintptr_t pkt_vaddr = (uintptr_t)(net_config.rx_data.vaddr + buffer.io_or_offset);
+
+    int err = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, ICMP_DEST_PORT_UNREACHABLE, pkt_vaddr);
+    if (!err) {
+        notify_icmp = true;
+    }
+
+    return err;
+}
 
 static void filter(void)
 {
@@ -104,6 +120,24 @@ static void filter(void)
                         fw_frmt_str[filter_config.interface], rule_id,
                         ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
                         ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
+                }
+            } else if (action == FILTER_ACT_REJECT) {
+                icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
+                uint8_t icmp_type = icmp_hdr->type;
+                // An ICMP error message shouldn't be sent upon receival of anthor ICMP error message
+                if (icmp_is_error_message(icmp_type)) {
+                    err = net_enqueue_free(&rx_queue, buffer);
+                    assert(!err);
+                    returned = true;
+                } else {
+                    /* Enqueue an ICMP port unreachable message */
+                    err = enqueue_icmp_unreachable(buffer);
+                    assert(!err);
+
+                    /* Return the buffer to the rx virtualiser */
+                    err = net_enqueue_free(&rx_queue, buffer);
+                    assert(!err);
+                    returned = true; 
                 }
             }
         }
@@ -194,6 +228,13 @@ void notified(microkit_channel ch)
         sddf_dprintf("%sICMP FILTER LOG: Received notification on unknown channel: %d!\n",
             fw_frmt_str[filter_config.interface], ch);
     }
+
+    if (notify_icmp) {
+        sddf_printf("%sUDP filter notifying ICMP module on channel %u\n",
+            fw_frmt_str[filter_config.interface], filter_config.icmp_module.ch);
+        notify_icmp = false;
+        microkit_notify(filter_config.icmp_module.ch);
+    }
 }
 
 void init(void)
@@ -205,6 +246,9 @@ void init(void)
 
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr,
         sizeof(net_buff_desc_t), filter_config.router.capacity);
+
+    fw_queue_init(&icmp_queue, filter_config.icmp_module.queue.vaddr,
+        sizeof(icmp_req_t), filter_config.icmp_module.capacity);
 
     fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr, filter_config.webserver.rules_capacity,
         filter_config.internal_instances.vaddr, filter_config.external_instances.vaddr, filter_config.instances_capacity,

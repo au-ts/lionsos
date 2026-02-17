@@ -692,14 +692,11 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         icmp_queue_region.region_size,
     )
 
-    icmp_module_config = FwIcmpModuleConfig(
-        list(ip_to_int(ip) for ip in ips),
-        [icmp_ext_router_conn[1], icmp_int_router_conn[1]],
-        2,
-    )
-
     networks[int_net]["icmp_module"] = icmp_int_router_conn[0]
     networks[ext_net]["icmp_module"] = icmp_ext_router_conn[0]
+
+    # Store filter ICMP connections (will be populated in filter loop below)
+    filter_icmp_connections = []
 
     # Create webserver config
     webserver_config = FwWebserverConfig(
@@ -869,6 +866,18 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 dma_buffer_queue_region.region_size,
             )
 
+            # Create a firewall connection for UDP filter to send ICMP requests to ICMP module
+            filter_icmp_conn = None
+            if protocol == ip_protocol_udp or protocol == ip_protocol_icmp:
+                filter_icmp_conn = fw_connection(
+                    filter_pd,
+                    icmp_module,
+                    icmp_queue_buffer.capacity,
+                    icmp_queue_region.region_size,
+                )
+                # Store ICMP module's end of the connection
+                filter_icmp_connections.append(filter_icmp_conn[1])
+
             # Connect filter as rx only network client
             network["in_net"].add_client_with_copier(filter_pd, tx=False)
             network["configs"][in_virt].active_client_ethtypes.append(eththype_ip)
@@ -925,6 +934,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 None,
                 None,
                 rule_bitmap_region,
+                filter_icmp_conn[0] if filter_icmp_conn else None,
             )
 
             network["configs"][router].filters.append((filter_router_conn[1]))
@@ -957,7 +967,13 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         router_webserver_conn[0]
     )
 
-    # Add ICMP module
+    # Create ICMP module config with router and filter connections
+    icmp_module_config = FwIcmpModuleConfig(
+        list(ip_to_int(ip) for ip in ips),
+        [icmp_ext_router_conn[1], icmp_int_router_conn[1]],
+        filter_icmp_connections,
+        2,
+    )
 
     # Create filter instance regions
     for protocol, filter_pd in networks[int_net]["filters"].items():

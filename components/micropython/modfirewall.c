@@ -190,6 +190,53 @@ static mp_obj_t route_delete(mp_obj_t interface_idx_in, mp_obj_t route_id_in) {
 
 static MP_DEFINE_CONST_FUN_OBJ_2(route_delete_obj, route_delete);
 
+/* Enable or disable ICMP ping responses on an interface */
+static mp_obj_t ping_response_set(mp_obj_t interface_idx_in, mp_obj_t enable_in) {
+    uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
+    if (interface_idx >= FW_NUM_INTERFACES) {
+        sddf_dprintf("WEBSERVER|LOG: %s\n",
+                    fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
+        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+        return mp_const_none;
+    }
+
+    bool enable = mp_obj_is_true(enable_in);
+
+    microkit_mr_set(0, enable ? 1 : 0);
+    microkit_msginfo msginfo =
+        microkit_ppcall(fw_config.interfaces[interface_idx].router.routing_ch,
+                        microkit_msginfo_new(FW_SET_PING_RESPONSE, 1));
+
+    uint32_t result = microkit_mr_get(0);
+    if (result != 0) {
+        sddf_dprintf("WEBSERVER|LOG: Failed to set ping response\n");
+        mp_raise_OSError(OS_ERR_INTERNAL_ERROR);
+        return mp_const_none;
+    }
+    
+    /* Store the state of the ping response */
+    webserver_state[interface_idx].ping_enabled = enable;
+
+    return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_2(ping_response_set_obj, ping_response_set);
+
+/* Get status of ICMP ping responses on an interface */
+static mp_obj_t ping_response_get(mp_obj_t interface_idx_in) {
+    uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
+    if (interface_idx >= FW_NUM_INTERFACES) {
+        sddf_dprintf("WEBSERVER|LOG: %s\n",
+                    fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
+        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+        return mp_const_none;
+    }
+
+    return mp_obj_new_bool(webserver_state[interface_idx].ping_enabled);
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_1(ping_response_get_obj, ping_response_get);
+
 /* Count the number of routes in an interface routing table */
 static mp_obj_t route_count(mp_obj_t interface_idx_in) {
     uint8_t interface_idx =   mp_obj_get_int(interface_idx_in);
@@ -506,6 +553,8 @@ static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_route_delete), MP_ROM_PTR(&route_delete_obj)},
     {MP_ROM_QSTR(MP_QSTR_route_count), MP_ROM_PTR(&route_count_obj)},
     {MP_ROM_QSTR(MP_QSTR_route_get_nth), MP_ROM_PTR(&route_get_nth_obj)},
+    {MP_ROM_QSTR(MP_QSTR_ping_response_set), MP_ROM_PTR(&ping_response_set_obj)},
+    {MP_ROM_QSTR(MP_QSTR_ping_response_get), MP_ROM_PTR(&ping_response_get_obj)},
     {MP_ROM_QSTR(MP_QSTR_rule_add), MP_ROM_PTR(&rule_add_obj)},
     {MP_ROM_QSTR(MP_QSTR_rule_delete), MP_ROM_PTR(&rule_delete_obj)},
     {MP_ROM_QSTR(MP_QSTR_rule_count), MP_ROM_PTR(&rule_count_obj)},

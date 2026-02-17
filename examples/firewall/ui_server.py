@@ -29,6 +29,7 @@ OSErrInvalidRuleNum = 10
 OSErrOutOfMemory = 11
 OSErrInternalError = 12
 OSErrInvalidInput = 13
+OSErrInvalidActionTcp = 14
 
 OSErrStrings = [
     "Ok.",
@@ -44,19 +45,15 @@ OSErrStrings = [
     "Rule number supplied is the default action rule index, or greater than the number of rules.",
     "Internal data structures are already at capacity.",
     "Unknown internal error.",
-    "Input supplied does not match the format of the field."
+    "Input supplied does not match the format of the field.",
+    "Reject Rule for TCP is currently not supported"
 ]
 
 UnknownErrStr = "Unexpected unknown error."
 
 numInterfaces = 2
 
-interfaceStringsRouters = [
-    "internal",
-    "external",
-]
-
-interfaceStringsFilters = [
+interfaceStrings = [
     "external",
     "internal"
 ]
@@ -75,7 +72,8 @@ protocolNums = {
 actionNums = {
     1: "Allow",
     2: "Drop",
-    3: "Connect"
+    3: "Connect",
+    5: "Reject"
 }
 
 defaultActionRuleIdx = 0
@@ -147,11 +145,11 @@ def tupleToMac(macList):
 def interfaceStringToInt(componentType, interfaceStr):
   if componentType == "router":
       for i in range(numInterfaces):
-        if interfaceStr == interfaceStringsRouters[i]:
+        if interfaceStr == interfaceStrings[1-i]:
             return i
   elif componentType == "filter":
     for i in range(numInterfaces):
-        if interfaceStr == interfaceStringsFilters[i]:
+        if interfaceStr == interfaceStrings[i]:
             return i
 
     print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
@@ -341,6 +339,9 @@ def setDefaultAction(request, protocolStr, action, interfaceStr):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
+        if (protocol == protocolNums["tcp"] and action == 5):
+          raise OSError(OSErrInvalidActionTcp, OSErrStrings[OSErrInvalidActionTcp])
+
         lions_firewall.filter_set_default_action(interface, protocol, action)
         return {"status": "ok"}, 201
     except OSError as OSErr:
@@ -392,6 +393,9 @@ def addRule(request, protocolStr):
         if action not in actionNums.keys():
             print(f"UI SERVER|ERR: Supplied invalid action {action}.")
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+            
+        if (protocol ==  protocolNums["tcp"] and action == 5):
+          raise OSError(OSErrInvalidActionTcp, OSErrStrings[OSErrInvalidActionTcp])
 
         srcPort = newRule.get("src_port")
         if not srcPort or protocol == protocolNums["icmp"]:
@@ -419,6 +423,41 @@ def addRule(request, protocolStr):
         print(f"UI SERVER|ERR: Unknown Error: addRule: {exception}.")
         return {"error": UnknownErrStr}, 404
 
+###### Ping Response methods ######
+# Set ping response for an interface
+@app.route('/api/ping/<string:interfaceStr>/<int:enabled>', methods=['POST'])
+def setPingResponse(request, interfaceStr, enabled):
+    try:
+        interface = interfaceStringToInt("filter", interfaceStr)
+        lions_firewall.ping_response_set(interface, bool(enabled))
+        return {
+            "interface": interfaceStringsCap[interface],
+            "ping_enabled": bool(enabled)
+        }
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: setPingResponse: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: setPingResponse: {exception}.")
+        return {"error": UnknownErrStr}, 404
+
+@app.route('/api/ping/<string:interfaceStr>/', methods=['GET'])
+def getPing(request, interfaceStr):
+    try:
+        interface = interfaceStringToInt("filter", interfaceStr)
+
+        enabled = lions_firewall.ping_response_get(interface)
+        return {
+            "interface": interfaceStringsCap[interface],
+            "ping_enabled": bool(enabled)
+        }
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: getRules: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: getRules: {exception}.")
+        return {"error": UnknownErrStr}, 404
+
 
 ############ Web UI routes ############
 
@@ -435,7 +474,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
   </body>
 </html>
@@ -455,7 +494,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
     <div id="interfaces-container">
       <table border="1">
@@ -519,7 +558,7 @@ def config(request):
   <body>
     <h1>Routing Configuration Page</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
 
     <h2>Internal Interface Routing Table</h2>
@@ -637,9 +676,9 @@ def config(request):
           var interfaceInternal = document.getElementById('new-interface-internal').checked;
           var interface;
           if (interfaceInternal) {
-            interface = 0;
-          } else if (interfaceExternal) {
             interface = 1;
+          } else if (interfaceExternal) {
+            interface = 0;
           } else {
             alert("Invalid interface supplied.");
             return;
@@ -685,7 +724,7 @@ def rules(request, protocol):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
     <div style="display: flex; flex-direction: column; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>
@@ -701,6 +740,7 @@ def rules(request, protocol):
           <option value="1">Allow</option>
           <option value="2">Drop</option>
           <option value="3">Connect</option>
+          <option value="5">Reject</option>
         </select>
         <button id="internal-set-default-action-btn">Update Default</button>
       </div>
@@ -732,6 +772,7 @@ def rules(request, protocol):
           <option value="1">Allow</option>
           <option value="2">Drop</option>
           <option value="3">Connect</option>
+          <option value="5">Reject</option>
         </select>
         <button id="external-set-default-action-btn">Update Default</button>
       </div>
@@ -769,6 +810,7 @@ def rules(request, protocol):
         <option value="1">Allow</option>
         <option value="2">Drop</option>
         <option value="3">Connect</option>
+        <option value="5">Reject</option>
       </select>
       <button id="add-rule-btn">Add Rule</button>
     </p>
@@ -891,9 +933,9 @@ def rules(request, protocol):
           var interfaceExternal = document.getElementById('new-interface-external').checked;
           var interface;
           if (interfaceInternal) {
-            interface = 1;
-          } else if (interfaceExternal) {
             interface = 0;
+          } else if (interfaceExternal) {
+            interface = 1;
           } else {
             alert("Invalid interface supplied.");
             return;
@@ -958,7 +1000,7 @@ def rules(request):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
     <div style="display: inline-block; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>
@@ -988,5 +1030,87 @@ body {
 }
 """
     return Response(body=css, headers={'Content-Type': 'text/css'})
+@app.route('/ping_settings')
+def ping_settings(request):
+    html = """
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Ping Settings</title>
+    <link rel="stylesheet" href="/main.css">
+  </head>
+  <body>
+    <h1>Ping Response Settings</h1>
+    <nav>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
+  </nav>
+
+    <h2>Toggle Ping Response</h2>
+    <p>Control whether the firewall responds to ICMP echo requests (ping) on each interface. Default disabled for all interfaces.</p>
+
+    <div id="ping-controls-container"></div>
+
+    <script>
+      function togglePing(interfaceName, enabled) {
+        fetch('/api/ping/' + interfaceName + '/' + (enabled ? 1 : 0), {
+          method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+          var statusSpan = document.getElementById(interfaceName + '-status');
+          if (data.error) {
+            statusSpan.textContent = 'Error: ' + data.error;
+            statusSpan.style.color = 'red';
+          } else {
+            statusSpan.textContent = data.ping_enabled ? 'Enabled' : 'Disabled';
+            statusSpan.style.color = data.ping_enabled ? 'green' : 'gray';
+          }
+        })
+        .catch(err => {
+          alert('Error toggling ping response');
+        });
+      }
+
+      document.addEventListener("DOMContentLoaded", function() {
+        const container = document.getElementById('ping-controls-container');
+        const interfaceNames = ['internal', 'external'];
+
+        interfaceNames.forEach(interfaceName => {
+            const interfaceDiv = document.createElement('div');
+            interfaceDiv.className = 'ping-control';
+
+            interfaceDiv.innerHTML = `
+                <h3>${interfaceName.charAt(0).toUpperCase() + interfaceName.slice(1)}</h3>
+                <button onclick="togglePing('${interfaceName}', true)">Enable Ping</button>
+                <button onclick="togglePing('${interfaceName}', false)">Disable Ping</button>
+                <span id="${interfaceName}-status">Loading...</span>
+            `;
+            container.appendChild(interfaceDiv);
+
+            fetch('/api/ping/' + interfaceName + '/')
+                .then(response => response.json())
+                .then(data => {
+                    const statusSpan = document.getElementById(interfaceName + '-status');
+                    if (data.error) {
+                        statusSpan.textContent = 'Error: ' + data.error;
+                        statusSpan.style.color = 'red';
+                    } else {
+                        statusSpan.textContent = data.ping_enabled ? 'Enabled' : 'Disabled';
+                        statusSpan.style.color = data.ping_enabled ? 'green' : 'gray';
+                    }
+                })
+                .catch(err => {
+                    const statusSpan = document.getElementById(interfaceName + '-status');
+                    statusSpan.textContent = 'Error loading status';
+                    statusSpan.style.color = 'red';
+                });
+        });
+      });
+    </script>
+  </body>
+</html>
+"""
+    return Response(body=html, headers={'Content-Type': 'text/html'})
 
 app.run(debug=True, port=80)
