@@ -387,7 +387,7 @@ def addRule(request, protocolStr):
         if action not in actionNums.keys():
             print(f"UI SERVER|ERR: Supplied invalid action {action}.")
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
-
+            
         srcPort = newRule.get("src_port")
         if not srcPort or protocol == protocolNums["icmp"]:
             srcPort = 0
@@ -415,7 +415,6 @@ def addRule(request, protocolStr):
         return {"error": UnknownErrStr}, 404
 
 ###### Ping Response methods ######
-
 # Set ping response for an interface
 @app.route('/api/ping/<string:interfaceStr>/<int:enabled>', methods=['POST'])
 def setPingResponse(request, interfaceStr, enabled):
@@ -1020,7 +1019,7 @@ def ping_settings(request):
       <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
   </nav>
 
-    <h2>Toggle Ping Response111</h2>
+    <h2>Toggle Ping Response</h2>
     <p>Control whether the firewall responds to ICMP echo requests (ping) on each interface. Default disabled for all interfaces.</p>
 
     <div id="ping-controls-container"></div>
