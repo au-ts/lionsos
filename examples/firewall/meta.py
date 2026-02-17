@@ -868,7 +868,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
             # Create a firewall connection for UDP filter to send ICMP requests to ICMP module
             filter_icmp_conn = None
-            if protocol == ip_protocol_udp:  # Only UDP filter gets ICMP connection
+            if protocol == ip_protocol_udp or protocol == ip_protocol_icmp:
                 filter_icmp_conn = fw_connection(
                     filter_pd,
                     icmp_module,

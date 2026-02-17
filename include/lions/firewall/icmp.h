@@ -41,6 +41,14 @@ typedef struct __attribute__((__packed__)) icmp_hdr {
 #define ICMP_TTL_EXCEED 11
 #define ICMP_PARAM_PROBLEM 12
 
+/* ICMP error types */
+#define ICMP_ERROR_TYPES_MASK ((1 << ICMP_DEST_UNREACHABLE) | \
+                               (1 << ICMP_SRC_QUENCH) | \
+                               (1 << ICMP_TTL_EXCEED) | \
+                               (1 << ICMP_PARAM_PROBLEM) | \
+                               (1 << ICMP_REDIRECT_MSG))
+
+
 /* ICMP destination unreachable sub-type codes */
 #define ICMP_DEST_NET_UNREACHABLE 0
 #define ICMP_DEST_HOST_UNREACHABLE 1
@@ -304,4 +312,22 @@ static inline int icmp_enqueue_redirect(fw_queue_t *icmp_queue, uint8_t code, ui
     memcpy(req.redirect.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
 
     return fw_enqueue(icmp_queue, &req);
+}
+
+/**
+ * @brief Checks if an ICMP message type is an error type.
+ * 
+ * Determines whether the given ICMP type represents an error message by
+ * checking against a bitmask of known error types.
+ * 
+ * @param type The ICMP message type to check.
+ * 
+ * @return true if the type is an ICMP error type, false otherwise.
+ */
+static inline int icmp_is_error_type(int type)
+{
+    if ( (1 << type) & ICMP_ERROR_TYPES_MASK) {
+        return true;
+    }
+    return false;
 }

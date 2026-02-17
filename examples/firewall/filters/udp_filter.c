@@ -120,7 +120,7 @@ static void filter(void)
                         ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
                         ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
                 }
-            } else if (action == FILTER_UDP_REJECT) {
+            } else if (action == FILTER_ACT_REJECT) {
                 /* Enqueue an ICMP port unreachable message */
                 err = enqueue_icmp_unreachable(buffer);
                 assert(!err);

@@ -84,7 +84,7 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
 
     /* Handle each ICMP type separately */
     switch (req->type) {
-case ICMP_ECHO_REPLY: {
+        case ICMP_ECHO_REPLY: {
             /* Destination is the sender */
             ip_hdr->dst_ip = req->ip_hdr.src_ip;
 
