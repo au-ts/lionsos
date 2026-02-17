@@ -29,6 +29,7 @@ OSErrInvalidRuleNum = 10
 OSErrOutOfMemory = 11
 OSErrInternalError = 12
 OSErrInvalidInput = 13
+OSErrInvalidActionTcp = 14
 
 OSErrStrings = [
     "Ok.",
@@ -44,7 +45,8 @@ OSErrStrings = [
     "Rule number supplied is the default action rule index, or greater than the number of rules.",
     "Internal data structures are already at capacity.",
     "Unknown internal error.",
-    "Input supplied does not match the format of the field."
+    "Input supplied does not match the format of the field.",
+    "Reject Rule for TCP is currently not supported"
 ]
 
 UnknownErrStr = "Unexpected unknown error."
@@ -70,7 +72,8 @@ protocolNums = {
 actionNums = {
     1: "Allow",
     2: "Drop",
-    3: "Connect"
+    3: "Connect",
+    5: "Reject"
 }
 
 defaultActionRuleIdx = 0
@@ -336,6 +339,9 @@ def setDefaultAction(request, protocolStr, action, interfaceStr):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
+        if (protocol == protocolNums["tcp"] and action == 5):
+          raise OSError(OSErrInvalidActionTcp, OSErrStrings[OSErrInvalidActionTcp])
+
         lions_firewall.filter_set_default_action(interface, protocol, action)
         return {"status": "ok"}, 201
     except OSError as OSErr:
@@ -388,6 +394,9 @@ def addRule(request, protocolStr):
             print(f"UI SERVER|ERR: Supplied invalid action {action}.")
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
             
+        if (protocol ==  protocolNums["tcp"] and action == 5):
+          raise OSError(OSErrInvalidActionTcp, OSErrStrings[OSErrInvalidActionTcp])
+
         srcPort = newRule.get("src_port")
         if not srcPort or protocol == protocolNums["icmp"]:
             srcPort = 0
@@ -431,6 +440,24 @@ def setPingResponse(request, interfaceStr, enabled):
     except Exception as exception:
         print(f"UI SERVER|ERR: Unknown Error: setPingResponse: {exception}.")
         return {"error": UnknownErrStr}, 404
+
+@app.route('/api/ping/<string:interfaceStr>/', methods=['GET'])
+def getPing(request, interfaceStr):
+    try:
+        interface = interfaceStringToInt("filter", interfaceStr)
+
+        enabled = lions_firewall.ping_response_get(interface)
+        return {
+            "interface": interfaceStringsCap[interface],
+            "ping_enabled": bool(enabled)
+        }
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: getRules: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: getRules: {exception}.")
+        return {"error": UnknownErrStr}, 404
+
 
 ############ Web UI routes ############
 
@@ -1036,8 +1063,8 @@ def ping_settings(request):
             statusSpan.textContent = 'Error: ' + data.error;
             statusSpan.style.color = 'red';
           } else {
-            statusSpan.textContent = enabled ? 'Enabled' : 'Disabled';
-            statusSpan.style.color = enabled ? 'green' : 'gray';
+            statusSpan.textContent = data.ping_enabled ? 'Enabled' : 'Disabled';
+            statusSpan.style.color = data.ping_enabled ? 'green' : 'gray';
           }
         })
         .catch(err => {
@@ -1045,43 +1072,40 @@ def ping_settings(request):
         });
       }
 
-      document.getElementById('internal-enable').addEventListener('click', () => togglePing('internal', true));
-      document.getElementById('internal-disable').addEventListener('click', () => togglePing('internal', false));
-      document.getElementById('external-enable').addEventListener('click', () => togglePing('external', true));
-      document.getElementById('external-disable').addEventListener('click', () => togglePing('external', false));
-    </script>
-
-    <script>
       document.addEventListener("DOMContentLoaded", function() {
         const container = document.getElementById('ping-controls-container');
+        const interfaceNames = ['internal', 'external'];
 
-        // 1. Get the number of interfaces
-        fetch('/api/interfaces/count')
-          .then(response => response.json())
-          .then(data => {
-            for (let i = 0; i < data.count; i++) {
+        interfaceNames.forEach(interfaceName => {
+            const interfaceDiv = document.createElement('div');
+            interfaceDiv.className = 'ping-control';
 
-              // 2. Fetch specific details for each interface
-              fetch('/api/interfaces/' + i)
+            interfaceDiv.innerHTML = `
+                <h3>${interfaceName.charAt(0).toUpperCase() + interfaceName.slice(1)}</h3>
+                <button onclick="togglePing('${interfaceName}', true)">Enable Ping</button>
+                <button onclick="togglePing('${interfaceName}', false)">Disable Ping</button>
+                <span id="${interfaceName}-status">Loading...</span>
+            `;
+            container.appendChild(interfaceDiv);
+
+            fetch('/api/ping/' + interfaceName + '/')
                 .then(response => response.json())
-                .then(info => {
-                  // Create the UI block
-                  const interfaceDiv = document.createElement('div');
-                  interfaceDiv.className = 'ping-control';
-
-                  // Use the data from the API (info.interface and info.ip)
-                  interfaceDiv.innerHTML = `
-                    <h3>${info.interface} (${info.ip})</h3>
-                    <button onclick="togglePing('${info.interface.toLowerCase()}', true)">Enable Ping</button>
-                    <button onclick="togglePing('${info.interface.toLowerCase()}', false)">Disable Ping</button>
-                    <span id="${info.interface.toLowerCase()}-status"></span>
-                  `;
-
-                  container.appendChild(interfaceDiv);
+                .then(data => {
+                    const statusSpan = document.getElementById(interfaceName + '-status');
+                    if (data.error) {
+                        statusSpan.textContent = 'Error: ' + data.error;
+                        statusSpan.style.color = 'red';
+                    } else {
+                        statusSpan.textContent = data.ping_enabled ? 'Enabled' : 'Disabled';
+                        statusSpan.style.color = data.ping_enabled ? 'green' : 'gray';
+                    }
                 })
-                .catch(err => console.error("Error loading interface " + i, err));
-            }
-          });
+                .catch(err => {
+                    const statusSpan = document.getElementById(interfaceName + '-status');
+                    statusSpan.textContent = 'Error loading status';
+                    statusSpan.style.color = 'red';
+                });
+        });
       });
     </script>
   </body>
