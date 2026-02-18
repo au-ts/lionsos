@@ -73,9 +73,9 @@ static void rx_return(void)
             uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.data.region.vaddr;
 
             /* Remove additional 4 byte ethernet header from NIC promiscuous mode */
-            #if !defined(CONFIG_PLAT_QEMU_ARM_VIRT)
+#if !defined(CONFIG_PLAT_QEMU_ARM_VIRT)
             buffer.len -= 4;
-            #endif
+#endif
 
             // Cache invalidate after DMA write, so we don't read stale data.
             // This must be performed after the DMA write to avoid reading
@@ -155,7 +155,7 @@ static void rx_provide(void)
             int err = fw_dequeue(&fw_free_clients[client], &buffer);
             assert(!err);
             assert(!(buffer.io_or_offset % NET_BUFFER_SIZE)
-                    && (buffer.io_or_offset < NET_BUFFER_SIZE * fw_free_clients[client].capacity));
+                   && (buffer.io_or_offset < NET_BUFFER_SIZE * fw_free_clients[client].capacity));
 
             // To avoid having to perform a cache clean here we ensure that
             // the DMA region is only mapped in read only. This avoids the
@@ -198,8 +198,8 @@ void init(void)
 
     /* Set up firewall queues */
     for (int i = 0; i < fw_config.num_free_clients; i++) {
-        fw_queue_init(&fw_free_clients[i], fw_config.free_clients[i].queue.vaddr,
-            sizeof(net_buff_desc_t), fw_config.free_clients[i].capacity);
+        fw_queue_init(&fw_free_clients[i], fw_config.free_clients[i].queue.vaddr, sizeof(net_buff_desc_t),
+                      fw_config.free_clients[i].capacity);
     }
 
     if (net_require_signal_free(&rx_queue_drv)) {

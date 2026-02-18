@@ -30,14 +30,13 @@ net_queue_handle_t tx_queue;
 
 serial_queue_handle_t serial_tx_queue_handle;
 
-static int arp_reply(const uint8_t ethsrc_addr[ETH_HWADDR_LEN],
-                     const uint8_t ethdst_addr[ETH_HWADDR_LEN],
+static int arp_reply(const uint8_t ethsrc_addr[ETH_HWADDR_LEN], const uint8_t ethdst_addr[ETH_HWADDR_LEN],
                      const uint8_t hwsrc_addr[ETH_HWADDR_LEN], const uint32_t ipsrc_addr,
                      const uint8_t hwdst_addr[ETH_HWADDR_LEN], const uint32_t ipdst_addr)
 {
     if (net_queue_empty_free(&tx_queue)) {
         sddf_dprintf("%sARP_RESPONDER LOG: Transmit free queue empty. Dropping reply\n",
-        fw_frmt_str[arp_config.interface]);
+                     fw_frmt_str[arp_config.interface]);
         return -1;
     }
 
@@ -95,12 +94,12 @@ static void receive(void)
 
                         if (FW_DEBUG_OUTPUT) {
                             sddf_printf("%sARP Responder replying for ip %s\n", fw_frmt_str[arp_config.interface],
-                                ipaddr_to_string(arp_pkt->ipdst_addr, ip_addr_buf0));
+                                        ipaddr_to_string(arp_pkt->ipdst_addr, ip_addr_buf0));
                         }
 
                         /* Reply with the MAC of the firewall */
-                        if (!arp_reply(arp_config.mac_addr, eth_hdr->ethsrc_addr, arp_config.mac_addr,
-                                       arp_config.ip, arp_pkt->hwsrc_addr, arp_pkt->ipsrc_addr)) {
+                        if (!arp_reply(arp_config.mac_addr, eth_hdr->ethsrc_addr, arp_config.mac_addr, arp_config.ip,
+                                       arp_pkt->hwsrc_addr, arp_pkt->ipsrc_addr)) {
                             transmitted = true;
                         }
                     }
@@ -137,7 +136,7 @@ void init(void)
     assert(net_config_check_magic((void *)&net_config));
 
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size,
-        serial_config.tx.data.vaddr);
+                      serial_config.tx.data.vaddr);
     serial_putchar_init(serial_config.tx.id, &serial_tx_queue_handle);
 
     net_queue_init(&rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
