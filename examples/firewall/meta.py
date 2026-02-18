@@ -18,7 +18,7 @@ from pyfw.specs import (
     PairedRegion, PrivateRegion, ReMappableRegion,
 )
 from pyfw.config_structs import (
-    FwDataConnectionResource, FwWebserverFilterConfig,
+    FwDataConnectionResource, FwWebserverFilterConfig, FwRule,
     FwWebserverRouterConfig, FwWebserverInterfaceConfig,
 )
 from pyfw.components import (
@@ -54,6 +54,25 @@ def update_elf_section(obj_copy: str, elf_name: str, section_name: str, data_nam
         ).returncode
         == 0
     )
+
+def ip_to_int(ipString: str) -> int:
+    ipaddress.IPv4Address(ipString)
+    ipSplit = ipString.split(".")
+    ipSplit.reverse()
+    reversedIp = ".".join(ipSplit)
+    return int(ipaddress.IPv4Address(reversedIp))
+
+
+maxPortNum = 65535
+
+
+def htons(portNum):
+    if portNum < 0 or portNum > maxPortNum:
+        print(
+            f"UI SERVER|ERR: Supplied port number {portNum} is negative or too large."
+        )
+    return ((portNum & 0xFF) << 8) | ((portNum & 0xFF00) >> 8)
+
 
 def encode_iface_name(name: str) -> List[int]:
     raw = name.encode("ascii", "ignore")[:31]
@@ -732,6 +751,45 @@ def wire_icmp_connections(
     icmp_module.set_router_connection(icmp_conn.dst)
 
 
+def wire_filter_rules(interfaces: List[NetworkInterface], webserver_interface_idx: int) -> None:
+    """Set default and initial filter rules for all interfaces."""
+    actionNums = {"Allow": 1, "Drop": 2, "Connect": 3}
+    ws_iface = interfaces[webserver_interface_idx]
+    ws_ip = ws_iface.ip_int
+    dst_subnet = 32
+
+    for iface in interfaces:
+        is_web_server = iface.index == webserver_interface_idx
+
+        for protocol, filt in iface.filters.items():
+            default_rule = FwRule(
+                action=actionNums["Drop"],
+                src_port_any=True,
+                dst_port_any=True,
+            )
+            filt.set_default_rule(default_rule)
+
+            filt.add_initial_rule(
+                FwRule(
+                    action=actionNums["Drop"],
+                    dst_ip=ws_ip,
+                    dst_subnet=dst_subnet,
+                    src_port_any=True,
+                    dst_port_any=True,
+                )
+            )
+            if protocol == ip_protocol_tcp:
+                if is_web_server:
+                    filt.add_initial_rule(
+                        FwRule(
+                            action=actionNums["Connect"],
+                            dst_ip=ws_ip,
+                            dst_subnet=dst_subnet,
+                            dst_port=htons(80),
+                            src_port_any=True,
+                        )
+                    )
+
 def wire_filter_instances(
     sdf_obj: SystemDescription, interfaces: List[NetworkInterface],
 ) -> None:
@@ -922,6 +980,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree) -> None:
         sdf, interfaces, router, webserver, serial_system, timer_system, webserver_interface_idx
     )
     wire_icmp_connections(sdf, interfaces, router, icmp_module)
+    wire_filter_rules(interfaces, webserver_interface_idx)
     wire_filter_instances(sdf, interfaces)
 
     # Phase 4: Finalize configs
