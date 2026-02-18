@@ -12,6 +12,7 @@
 #define FW_MAX_FILTERS 61
 #define FW_NUM_ARP_REQUESTER_CLIENTS 2
 #define FW_MAX_INTERFACES 4
+#define FW_MAX_INITIAL_FILTER_RULES 4
 #define FW_INTERFACE_NAME_LEN 32
 #define FW_DEBUG_OUTPUT 1
 
@@ -20,6 +21,19 @@ typedef struct fw_arp_responder_config {
     uint8_t mac_addr[ETH_HWADDR_LEN];
     uint32_t ip;
 } fw_arp_responder_config_t;
+
+typedef struct fw_rule {
+    uint8_t action;
+    uint32_t src_ip;
+    uint32_t dst_ip;
+    uint16_t src_port;
+    uint16_t dst_port;
+    uint8_t src_subnet;
+    uint8_t dst_subnet;
+    bool src_port_any;
+    bool dst_port_any;
+    uint16_t rule_id;
+} fw_rule_t;
 
 typedef struct fw_arp_connection {
     region_resource_t request;
@@ -51,7 +65,9 @@ typedef struct fw_data_connection_resource {
 
 typedef struct fw_filter_config {
     uint8_t interface;
-    uint8_t default_action;
+    fw_rule_t default_rule;
+    fw_rule_t initial_rules[FW_MAX_INITIAL_FILTER_RULES];
+    uint8_t num_initial_rules;
     uint16_t instances_capacity;
     fw_connection_resource_t router;
     region_resource_t internal_instances;

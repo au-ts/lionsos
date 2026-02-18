@@ -12,6 +12,7 @@ from pyfw.config_structs import (
     FwConnectionResource,
     FwDataConnectionResource,
     FwArpConnection,
+    FwRule,
     FwNetVirtRxConfig,
     FwNetVirtTxConfig,
     FwArpRequesterConfig,
@@ -209,6 +210,8 @@ class Filter(Component):
         self._internal_instances = None
         self._external_instances = None
         self._instances_capacity = 0
+        self._default_rule = None
+        self._initial_rules = []
 
     def set_router_connection(self, resource):
         self._router_conn = resource
@@ -225,9 +228,17 @@ class Filter(Component):
         self._external_instances = external
         self._instances_capacity = capacity
 
+    def set_default_rule(self, rule):
+        self._default_rule = rule
+
+    def add_initial_rule(self, rule):
+        self._initial_rules.append(rule)
+
     def finalize_config(self):
         self.config = FwFilterConfig(
             interface=self.iface_index,
+            default_rule=self._default_rule,
+            initial_rules=self._initial_rules,
             instances_capacity=self._instances_capacity,
             router=self._router_conn,
             internal_instances=self._internal_instances,

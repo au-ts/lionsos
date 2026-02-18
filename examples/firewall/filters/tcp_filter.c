@@ -214,8 +214,8 @@ void init(void)
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr, sizeof(net_buff_desc_t),
                   filter_config.router.capacity);
 
-    fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr,
-                         filter_config.webserver.rules_capacity, filter_config.internal_instances.vaddr,
+    fw_filter_state_init(&filter_state, filter_config.rules.vaddr, filter_config.rule_id_bitmap.vaddr,
+                         filter_config.rules_capacity, filter_config.internal_instances.vaddr,
                          filter_config.external_instances.vaddr, filter_config.instances_capacity,
-                         (fw_action_t)filter_config.webserver.default_action);
+                         filter_config.default_rule, filter_config.initial_rules, filter_config.num_initial_rules);
 }
