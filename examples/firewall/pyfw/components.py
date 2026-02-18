@@ -110,8 +110,12 @@ class NetVirtTx(Component):
         self.iface_index = iface_index
         self._active_clients = []
         self._free_clients = []
+        self._data_regions = []
 
-    def add_active_client(self, resource):
+    def add_data_region(self, resource: DeviceRegionResource):
+        self._data_regions.append(resource)
+
+    def add_active_client(self, resource: FwConnectionResource):
         self._active_clients.append(resource)
 
     def add_free_client(self, resource):
@@ -121,6 +125,8 @@ class NetVirtTx(Component):
         self.config = FwNetVirtTxConfig(
             interface=self.iface_index,
             active_clients=self._active_clients,
+            data_region=self._data_regions,
+            num_interfaces=len(self._data_regions),
             free_clients=self._free_clients,
         )
         return self.config
@@ -256,7 +262,7 @@ class RouterInterface:
 
     def __init__(self):
         self.rx_free = None
-        self.tx_active = [FwConnectionResource() for _ in range(FW_MAX_INTERFACES)]
+        self.tx_active = None
         self.data = None
         self.arp_queue = None
         self.arp_cache = None
@@ -265,9 +271,6 @@ class RouterInterface:
         self.mac_addr = None
         self.ip = 0
         self.subnet = 0
-
-    def set_tx_active(self, dst_index, resource):
-        self.tx_active[dst_index] = resource
 
     def add_filter(self, resource):
         self.filters.append(resource)

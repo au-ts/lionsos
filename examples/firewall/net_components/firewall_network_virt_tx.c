@@ -12,6 +12,8 @@
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/queue.h>
+#include <lions/firewall/routing.h>
+#include <stdint.h>
 
 __attribute__((__section__(".net_virt_tx_config"))) net_virt_tx_config_t config;
 __attribute__((__section__(".fw_net_virt_tx_config"))) fw_net_virt_tx_config_t fw_config;
@@ -60,9 +62,9 @@ static void tx_provide(void)
 
                 if (buffer.io_or_offset % NET_BUFFER_SIZE
                     || buffer.io_or_offset >= NET_BUFFER_SIZE * tx_queue_clients[client].capacity) {
-                    sddf_dprintf("%sVIRT TX LOG: Client provided offset %lx which is not buffer aligned or outside of "
-                                 "buffer region\n",
-                                 fw_frmt_str[fw_config.interface], buffer.io_or_offset);
+                    sddf_dprintf("VIRT TX LOG, Interface %u: Client provided offset %lx which is not buffer aligned or "
+                                 "outside of buffer region\n",
+                                 fw_config.interface, buffer.io_or_offset);
                     err = net_enqueue_free(&tx_queue_clients[client], buffer);
                     assert(!err);
                     continue;
@@ -89,19 +91,20 @@ static void tx_provide(void)
 
     for (int client = 0; client < fw_config.num_active_clients; client++) {
         while (!fw_queue_empty(&fw_active_clients[client])) {
-            net_buff_desc_t buffer;
+            fw_buff_desc_t buffer;
             int err = fw_dequeue(&fw_active_clients[client], &buffer);
             assert(!err);
 
-            assert(buffer.io_or_offset % NET_BUFFER_SIZE == 0
-                   && buffer.io_or_offset < NET_BUFFER_SIZE * fw_active_clients[client].capacity);
+            assert(buffer.offset % NET_BUFFER_SIZE == 0
+                   && buffer.offset < NET_BUFFER_SIZE * fw_active_clients[client].capacity);
+            assert(buffer.interface < fw_config.num_interfaces);
 
-            uintptr_t buffer_vaddr = buffer.io_or_offset
-                                   + (uintptr_t)fw_config.active_clients[client].data.region.vaddr;
+            uintptr_t buffer_vaddr = buffer.offset + (uintptr_t)fw_config.data_region[buffer.interface].region.vaddr;
             cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
-            buffer.io_or_offset = buffer.io_or_offset + fw_config.active_clients[client].data.io_addr;
+            uintptr_t io_addr = buffer.offset + fw_config.data_region[buffer.interface].io_addr;
 
-            err = net_enqueue_active(&tx_queue_drv, buffer);
+            net_buff_desc_t net_buffer = { .io_or_offset = io_addr, .len = buffer.len };
+            err = net_enqueue_active(&tx_queue_drv, net_buffer);
             assert(!err);
             enqueued = true;
         }
@@ -183,8 +186,8 @@ void init(void)
 
     /* Set up firewall queues */
     for (int i = 0; i < fw_config.num_active_clients; i++) {
-        fw_queue_init(&fw_active_clients[i], fw_config.active_clients[i].conn.queue.vaddr, sizeof(net_buff_desc_t),
-                      fw_config.active_clients[i].conn.capacity);
+        fw_queue_init(&fw_active_clients[i], fw_config.active_clients[i].queue.vaddr, sizeof(fw_buff_desc_t),
+                      fw_config.active_clients[i].capacity);
     }
 
     for (int i = 0; i < fw_config.num_free_clients; i++) {

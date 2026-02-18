@@ -544,37 +544,27 @@ def wire_routing_connections(
     """Wire cross-interface routing: router->tx_virt data + tx_virt->rx_virt return."""
     # Add the routing component as a serial_client
     serial_system.add_client(router.pd)
-    for src_iface in interfaces:
-        for dst_iface in interfaces:
-            # Router -> Tx_virt queue, note we do this for every possible src_iface -> dst_iface.
-            # !! This allows us to maintain which interface a given buffer originates from
-            # Alternative buffer descriptors could track this information essentially for free, however at the moment sddf
-            # does not offer flexibility to modify the definition of these buffers without modifying the API itself or
-            # giving components other than the virtualiser/driver knowledge about physical addresses.
-            # This could be fixed by applying similar config generation used in this implementation for SDDF queues and the API
-            # in general. !!
-            router_tx_virt = QueueConnection(
+
+    for dst_iface in interfaces:
+        router_tx_virt = QueueConnection(
                 sdf=sdf_obj,
-                name=f"router_tx_virt_{src_iface.index}_{dst_iface.index}",
+                name=f"router_tx_virt_{dst_iface.index}",
                 src_pd=router.pd,
                 dst_pd=dst_iface.tx_virt.pd,
                 capacity=dma_buffer_queue.capacity,
                 queue_size=dma_buffer_queue_region.region_size,
-                name_suffix=f"{src_iface.index}{dst_iface.index}",
                 category="data",
-                interface_index=dst_iface.index,
-            )
-            router._connections[f"iface{dst_iface.index}_router_tx_virt_{src_iface.index}_{dst_iface.index}"] = router_tx_virt
+                interface_index=dst_iface.index
+                )
+        router._connections[f"iface{dst_iface.index}_router_tx_virt"] = router_tx_virt
+        dst_iface.router_interface.tx_active = router_tx_virt.src
+        dst_iface.tx_virt.add_active_client(router_tx_virt.dst)
 
+        for src_iface in interfaces:
             # SDF_Map src DMA region into dst tx_virt for read access
             tx_virt_dma = src_iface.rx_dma_region.map_device(pd=dst_iface.tx_virt.pd, perms="r")
 
-            # TX virt active client (queue + data)
-            dst_iface.tx_virt.add_active_client(
-                FwDataConnectionResource(conn=router_tx_virt.dst, data=tx_virt_dma)
-            )
-            # Router tx_active (queue only)
-            src_iface.router_interface.set_tx_active(dst_iface.index, router_tx_virt.src)
+            dst_iface.tx_virt.add_data_region(tx_virt_dma)
 
             # dst.tx_virt -> src.rx_virt buffer return queue
             tx_rx_return = QueueConnection(

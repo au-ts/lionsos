@@ -93,15 +93,17 @@ typedef struct fw_net_virt_rx_config {
 
 typedef struct fw_net_virt_tx_config {
     uint8_t interface;
-    fw_data_connection_resource_t active_clients[FW_MAX_FW_CLIENTS];
+    fw_connection_resource_t active_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_active_clients;
+    device_region_resource_t data_region[FW_MAX_INTERFACES];
+    uint8_t num_interfaces;
     fw_data_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_free_clients;
 } fw_net_virt_tx_config_t;
 
 typedef struct fw_router_interface {
     fw_connection_resource_t rx_free;
-    fw_connection_resource_t tx_active[FW_MAX_INTERFACES];
+    fw_connection_resource_t tx_active;
     region_resource_t data;
     fw_arp_connection_t arp_queue;
     region_resource_t arp_cache;
