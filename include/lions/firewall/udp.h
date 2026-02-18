@@ -11,8 +11,7 @@
 
 /* ----------------- UDP Protocol Definitions ---------------------------*/
 
-typedef struct __attribute__((__packed__)) udp_hdr
-{
+typedef struct __attribute__((__packed__)) udp_hdr {
     /* source port */
     uint16_t src_port;
     /* destination port */
