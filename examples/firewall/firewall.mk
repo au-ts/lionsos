@@ -19,8 +19,8 @@ REPORT_FILE := report.txt
 
 all: $(IMAGE_FILE)
 include ${SDDF}/tools/make/board/common.mk
-ETH_DRIV0 := ${ETH_DRIV}
-ETH_DRIV1 := ${ETH_DRIV_1}
+ETH_DRIV0 := ${ETH_DRIV_1}
+ETH_DRIV1 := ${ETH_DRIV}
 
 MICRODOT := $(LIONSOS)/dep/microdot/src
 FIREWALL_NET_COMPONENTS := $(FIREWALL_SRC_DIR)/net_components
@@ -122,10 +122,10 @@ include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(PYTHON) $(SDFGEN_HELPER) \
-		   --macros "$(SDFGEN_UNKOWN_MACROS)" \
-		   --configs "$(FIREWALL_CONFIG_HEADERS)" \
-		  --output $(BUILD_DIR)/config_structs.py
-	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) \
+		--macros "$(SDFGEN_UNKOWN_MACROS)" \
+		--configs "$(FIREWALL_CONFIG_HEADERS)" \
+		--output $(FIREWALL_SRC_DIR)/pyfw/config_structs.py
+	PYTHONPATH=$(FIREWALL_SRC_DIR):${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) \
 		--sddf $(SDDF) --board $(MICROKIT_BOARD) \
 		--dtb $(DTB) --output . --sdf $(SYSTEM_FILE) \
 		--objcopy $(OBJCOPY) --objdump $(OBJDUMP)
@@ -141,17 +141,17 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data0/net_virt_rx.data firewall_network_virt_rx0.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data0/net_virt_tx.data firewall_network_virt_tx0.elf
 
-# arp_requester1 receives requests from net1 router but transmits out net0
-	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_arp_requester1.data arp_requester1.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing.data routing.elf
+	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_arp_requester0.data arp_requester0.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_arp_responder0.data arp_responder0.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_icmp_filter0.data icmp_filter0.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_udp_filter0.data udp_filter0.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_tcp_filter0.data tcp_filter0.elf
+	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .ext_net_client_config=net_data0/net_client_icmp_module.data icmp_module.elf
 
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder0.data arp_responder0.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester0.data arp_requester0.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing0.data routing0.elf
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester0.data arp_requester0.elf
 
@@ -162,20 +162,17 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data1/net_virt_rx.data firewall_network_virt_rx1.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data1/net_virt_tx.data firewall_network_virt_tx1.elf
 
-# arp_requester0 receives requests from net1 router but transmits out net1
-	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_arp_requester0.data arp_requester0.elf
+	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_arp_requester1.data arp_requester1.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_arp_responder1.data arp_responder1.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_icmp_filter1.data icmp_filter1.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_udp_filter1.data udp_filter1.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_tcp_filter1.data tcp_filter1.elf
-	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .int_net_client_config=net_data1/net_client_icmp_module.data icmp_module.elf
 
-	$(OBJCOPY) --update-section .lib_sddf_lwip_config=net_data1/lib_sddf_lwip_config_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .lib_sddf_lwip_config=net_data0/lib_sddf_lwip_config_micropython.data micropython.elf
 
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder1.data arp_responder1.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester1.data arp_requester1.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing1.data routing1.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf

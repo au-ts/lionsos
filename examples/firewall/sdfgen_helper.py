@@ -120,7 +120,7 @@ class Macro():
             print(f"Duplicate definition found for macro {c_name}: {Macro.all_macros[c_name]}")
             sys.exit()
         self.c_name = c_name
-        self.p_name = cNameToPName(c_name)
+        self.p_name = c_name
         self.value = value
         Macro.all_macros[c_name] = self
 
@@ -309,6 +309,7 @@ if __name__ == '__main__':
 
     with open(p_classes_out, "w") as out:
 
+        out.write("# Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause\n")
         # Import modules
         out.write("from typing import List\n")
         out.write("from ctypes import *\n\n")
@@ -401,17 +402,27 @@ if __name__ == '__main__':
                 if len(field.n_size):
                     list_start = "List["
                     list_end = "]"
-                if field.c_type in Struct.all_structs:
-                    out.write(f", {field.c_name}: {list_start}{field.p_class[:-6]}{list_end}")
+                    default = " = None"
+                elif field.c_type in Struct.all_structs:
+                    default = " = None"
+                elif p_class_to_p_type.get(field.p_class) == "bool":
+                    default = " = False"
                 else:
-                    out.write(f", {field.c_name}: {list_start}{p_class_to_p_type[field.p_class]}{list_end}")
+                    default = " = 0"
+                if field.c_type in Struct.all_structs:
+                    out.write(f", {field.c_name}: {list_start}{field.p_class[:-6]}{list_end}{default}")
+                else:
+                    out.write(f", {field.c_name}: {list_start}{p_class_to_p_type[field.p_class]}{list_end}{default}")
             out.write("):\n")
 
             # Initialise field objects
             for field in struct.fields.values():
                 if field.c_name[:4] == "num_" and field.c_name[4:] in struct.fields:
                     continue
-                out.write(" " * 8 + f"self.{field.c_name} = {field.c_name}\n")
+                if len(field.n_size):
+                    out.write(" " * 8 + f"self.{field.c_name} = {field.c_name} if {field.c_name} is not None else []\n")
+                else:
+                    out.write(" " * 8 + f"self.{field.c_name} = {field.c_name}\n")
             out.write(" " * 8 + f"self.section_name = \"{struct.c_name[:-2]}\"\n")
             out.write("\n")
 
