@@ -54,19 +54,19 @@ static void filter(void)
                                                                 ip_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, rule_id);
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
-                    sddf_printf(
-                        "%sICMP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[filter_config.interface], rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                        ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
+                    sddf_printf("ICMP filter on interface %u establishing connection via rule %u: (ip %s, port %u) -> "
+                                "(ip %s, port %u)\n",
+                                filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                                ICMP_FILTER_DUMMY_PORT);
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
-                    sddf_printf("%sICMP FILTER LOG: could not establish connection for rule %u: (ip %s, port %u) -> "
-                                "(ip %s, port %u): %s\n",
-                                fw_frmt_str[filter_config.interface], rule_id,
-                                ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                                ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT,
-                                fw_filter_err_str[fw_err]);
+                    sddf_printf("ICMP FILTER LOG: on interface %u could not establish connection for rule %u: (ip %s, "
+                                "port %u) -> (ip %s, port %u): %s\n",
+                                filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                                ICMP_FILTER_DUMMY_PORT, fw_filter_err_str[fw_err]);
                 }
             }
 
@@ -85,16 +85,17 @@ static void filter(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
-                        sddf_printf("%sICMP filter transmitting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                                    fw_frmt_str[filter_config.interface], rule_id,
-                                    ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
+                        sddf_printf("ICMP filter on interface %u transmitting via rule %u: (ip %s, port %u) -> (ip %s, "
+                                    "port %u)\n",
+                                    filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                    ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                                    ICMP_FILTER_DUMMY_PORT);
                     } else if (action == FILTER_ACT_ESTABLISHED) {
-                        sddf_printf(
-                            "%sICMP filter transmitting via external rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                            fw_frmt_str[filter_config.interface], rule_id,
-                            ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                            ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
+                        sddf_printf("ICMP filter on interface %u transmitting via external rule %u: (ip %s, port %u) "
+                                    "-> (ip %s, port %u)\n",
+                                    filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                    ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                                    ICMP_FILTER_DUMMY_PORT);
                     }
                 }
             } else if (action == FILTER_ACT_DROP) {
@@ -104,10 +105,10 @@ static void filter(void)
                 returned = true;
 
                 if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("%sICMP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                                fw_frmt_str[filter_config.interface], rule_id,
-                                ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                                ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
+                    sddf_printf(
+                        "ICMP filter on interface %u dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
+                        filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                        ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                 }
             }
         }
@@ -137,7 +138,7 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         fw_action_t action = microkit_mr_get(FILTER_ARG_ACTION);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("%sICMP filter changing default action from %u to %u\n", fw_frmt_str[filter_config.interface],
+            sddf_printf("ICMP filter on interface %u changing default action from %u to %u\n", filter_config.interface,
                         filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
         }
 
@@ -159,10 +160,10 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
                                                  &rule_id);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("%sICMP filter create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> (ip %s, mask "
-                        "%u, port %u, any_port %u): %s\n",
-                        fw_frmt_str[filter_config.interface], rule_id, ipaddr_to_string(src_ip, ip_addr_buf0),
-                        src_subnet, ICMP_FILTER_DUMMY_PORT, false, fw_filter_action_str[action],
+            sddf_printf("ICMP filter on interface %u create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> "
+                        "(ip %s, mask %u, port %u, any_port %u): %s\n",
+                        filter_config.interface, rule_id, ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet,
+                        ICMP_FILTER_DUMMY_PORT, false, fw_filter_action_str[action],
                         ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, ICMP_FILTER_DUMMY_PORT, false,
                         fw_filter_err_str[err]);
         }
@@ -176,7 +177,7 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         fw_filter_err_t err = fw_filter_remove_rule(&filter_state, rule_id);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("%sICMP remove rule id %u: %s\n", fw_frmt_str[filter_config.interface], rule_id,
+            sddf_printf("ICMP filter on interface %u remove rule id %u: %s\n", filter_config.interface, rule_id,
                         fw_filter_err_str[err]);
         }
 
@@ -184,7 +185,7 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         return microkit_msginfo_new(0, 1);
     }
     default:
-        sddf_printf("%sICMP FILTER LOG: unknown request %lu on channel %u\n", fw_frmt_str[filter_config.interface],
+        sddf_printf("ICMP FILTER LOG: on interface %u, unknown request %lu on channel %u\n", filter_config.interface,
                     microkit_msginfo_get_label(msginfo), ch);
         break;
     }
@@ -197,8 +198,8 @@ void notified(microkit_channel ch)
     if (ch == net_config.rx.id) {
         filter();
     } else {
-        sddf_dprintf("%sICMP FILTER LOG: Received notification on unknown channel: %d!\n",
-                     fw_frmt_str[filter_config.interface], ch);
+        sddf_dprintf("ICMP FILTER LOG: on interface %u, received notification on unknown channel: %d!\n",
+                     filter_config.interface, ch);
     }
 }
 

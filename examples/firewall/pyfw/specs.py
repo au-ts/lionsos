@@ -32,29 +32,6 @@ def fw_device_resource(pd_map, mr):
     return DeviceRegionResource(region=fw_resource(pd_map, mr.size), io_addr=mr.paddr)
 
 
-@dataclass
-class TopologyEdge:
-    """Descriptor for one edge in the topology graph."""
-
-    src_name: str
-    dst_name: str
-    category: str
-    bidirectional: bool = False
-    channel_label: str = ""  # e.g., "ch=3/4"
-    queue_perms: str = "rw"
-    extra_perms: str = ""  # e.g., "rw/r" for DMA
-
-
-@dataclass
-class NetEdge:
-    """Lightweight representation of sDDF Net wiring for topology tracking."""
-
-    src_pd: ProtectionDomain
-    dst_pd: ProtectionDomain
-    label: str = ""
-    bidirectional: bool = True
-    interface_index: Optional[int] = None
-
 class ReMappableRegion:
     """MR that can be mapped into multiple PDs via .map() calls."""
 
@@ -64,7 +41,6 @@ class ReMappableRegion:
         self.mr = mr
         self.size = size or mr.size
         self.category = category
-        self.mapped_pds = []
 
     def get_mr(self) -> MemoryRegion:
         """Retrieve the Memory Region"""
@@ -73,20 +49,13 @@ class ReMappableRegion:
     def map(self, *, pd, perms="rw") -> RegionResource:
         """Map the MR into pd with given perms. Returns RegionResource."""
         pd_map = fw_map(pd, self.mr, perms)
-        self.mapped_pds.append((pd, perms))
         return fw_resource(pd_map, self.size)
 
     def map_device(self, *, pd, perms="rw") -> DeviceRegionResource:
         """Map the MR into pd with given perms. Returns DeviceRegionResource."""
         pd_map = fw_map(pd, self.mr, perms)
-        self.mapped_pds.append((pd, perms))
         return fw_device_resource(pd_map, self.mr)
 
-    def get_mapped_pds(self) -> List[str]:
-        return [pd.name for pd, _ in self.mapped_pds]
-
-    def topology_mappings(self) -> List[Tuple[str, str]]:
-        return [(pd.name, perms) for pd, perms in self.mapped_pds]
 
 class QueueConnection:
     """Queue MR + channel between two PDs."""
@@ -95,8 +64,6 @@ class QueueConnection:
                  name_suffix="", category="", interface_index=None):
         self.category = category
         self.interface_index = interface_index
-        self._src_name = src_pd.name
-        self._dst_name = dst_pd.name
 
         queue_name = (
             "fw_queue_" + src_pd.name + "_" + dst_pd.name + name_suffix
@@ -113,21 +80,8 @@ class QueueConnection:
         ch = Channel(src_pd, dst_pd)
         sdf.add_channel(ch)
 
-        self._channel_id_src = ch.pd_a_id
-        self._channel_id_dst = ch.pd_b_id
         self.src = FwConnectionResource(queue=src_region, capacity=capacity, ch=ch.pd_a_id)
         self.dst = FwConnectionResource(queue=dst_region, capacity=capacity, ch=ch.pd_b_id)
-
-    def topology_edges(self) -> List[TopologyEdge]:
-        ch = f"ch={self._channel_id_src}/{self._channel_id_dst}"
-        return [
-            TopologyEdge(
-                src_name=self._src_name,
-                dst_name=self._dst_name,
-                category=self.category,
-                channel_label=ch,
-            )
-        ]
 
 
 class ArpConnection:
@@ -159,28 +113,12 @@ class ArpConnection:
         ch = Channel(pd1, pd2)
         sdf.add_channel(ch)
 
-        self._channel_id_src = ch.pd_a_id
-        self._channel_id_dst = ch.pd_b_id
-        self._pd1_name = pd1.name
-        self._pd2_name = pd2.name
         self.pd1 = FwArpConnection(
             request=pd1_req_region, response=pd1_res_region, capacity=capacity, ch=ch.pd_a_id
         )
         self.pd2 = FwArpConnection(
             request=pd2_req_region, response=pd2_res_region, capacity=capacity, ch=ch.pd_b_id
         )
-
-    def topology_edges(self) -> List[TopologyEdge]:
-        ch = f"ch={self._channel_id_src}/{self._channel_id_dst}"
-        return [
-            TopologyEdge(
-                src_name=self._pd1_name,
-                dst_name=self._pd2_name,
-                category=self.category,
-                bidirectional=True,
-                channel_label=ch,
-            )
-        ]
 
 
 class PairedRegion:
@@ -192,10 +130,6 @@ class PairedRegion:
         self.size = size
         self.category = category
         self.interface_index = interface_index
-        self._owner_pd_name = owner_pd.name
-        self._peer_pd_name = peer_pd.name
-        self._owner_perms = owner_perms
-        self._peer_perms = peer_perms
 
         region_name = name + "_" + owner_pd.name + "_" + peer_pd.name
         mr = MemoryRegion(sdf, region_name, size)
@@ -205,13 +139,6 @@ class PairedRegion:
         peer_map = fw_map(peer_pd, mr, peer_perms)
         self.peer = fw_resource(peer_map, size)
 
-    def topology_mappings(self) -> List[Tuple[str, str]]:
-        return [
-            (self._owner_pd_name, self._owner_perms),
-            (self._peer_pd_name, self._peer_perms),
-        ]
-
-
 class PrivateRegion:
     """Private MR for a single PD."""
 
@@ -220,8 +147,6 @@ class PrivateRegion:
         self.size = size
         self.category = category
         self.interface_index = interface_index
-        self._pd_name = pd.name
-        self._perms = perms
 
         region_name = name + "_" + pd.name
         mr = MemoryRegion(sdf, region_name, size)
@@ -229,12 +154,9 @@ class PrivateRegion:
         pd_map = fw_map(pd, mr, perms)
         self.resource = fw_resource(pd_map, size)
 
-    def topology_mappings(self) -> List[Tuple[str, str]]:
-        return [(self._pd_name, self._perms)]
-
 
 class TrackedNet:
-    """Wrapper around Sddf.Net to record net wiring edges for topology tracking."""
+    """Wrapper around the Sddf.Net object"""
 
     def __init__(
         self,
@@ -254,46 +176,7 @@ class TrackedNet:
         self._virt_tx = virt_tx
         self._virt_rx = virt_rx
         self._interface_index = interface_index
-        self.net_edges = []
-        self._edge_keys = set()
 
-        self._add_edge(self._driver, self._virt_rx, "driver<->virt_rx")
-        self._add_edge(self._driver, self._virt_tx, "driver<->virt_tx")
-
-    def _edge_key(
-        self,
-        src: ProtectionDomain,
-        dst: ProtectionDomain,
-        label: str,
-        bidirectional: bool,
-    ) -> tuple:
-        if bidirectional:
-            names = tuple(sorted((src.name, dst.name)))
-        else:
-            names = (src.name, dst.name)
-        return (names, label, bidirectional, self._interface_index)
-
-    def _add_edge(
-        self,
-        src: ProtectionDomain,
-        dst: ProtectionDomain,
-        label: str,
-        *,
-        bidirectional: bool = True,
-    ) -> None:
-        key = self._edge_key(src, dst, label, bidirectional)
-        if key in self._edge_keys:
-            return
-        self._edge_keys.add(key)
-        self.net_edges.append(
-            NetEdge(
-                src_pd=src,
-                dst_pd=dst,
-                label=label,
-                bidirectional=bidirectional,
-                interface_index=self._interface_index,
-            )
-        )
 
     def add_client_with_copier(
         self,
@@ -304,19 +187,6 @@ class TrackedNet:
         rx: Optional[bool] = None,
         tx: Optional[bool] = None,
     ) -> None:
-        rx_enabled = True if rx is None else bool(rx)
-        tx_enabled = True if tx is None else bool(tx)
-
-        if rx_enabled:
-            if copier is None:
-                self._add_edge(self._virt_rx, client, "virt_rx<->client")
-            else:
-                self._add_edge(self._virt_rx, copier, "virt_rx<->copier")
-                self._add_edge(copier, client, "copier<->client")
-
-        if tx_enabled:
-            self._add_edge(self._virt_tx, client, "virt_tx<->client")
-
         self._net.add_client_with_copier(
             client, copier, mac_addr=mac_addr, rx=rx, tx=tx
         )

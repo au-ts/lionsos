@@ -5,14 +5,10 @@
 
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any, Tuple
-from sdfgen import SystemDescription, Sddf, DeviceTree
+from sdfgen import SystemDescription
 from pyfw.config_structs import (
-    RegionResource,
     DeviceRegionResource,
     FwConnectionResource,
-    FwDataConnectionResource,
-    FwArpConnection,
-    FwRule,
     FwNetVirtRxConfig,
     FwNetVirtTxConfig,
     FwArpRequesterConfig,
@@ -21,13 +17,9 @@ from pyfw.config_structs import (
     FwRouterInterface,
     FwRouterConfig,
     FwIcmpModuleConfig,
-    FwWebserverFilterConfig,
-    FwWebserverRouterConfig,
-    FwWebserverInterfaceConfig,
     FwWebserverConfig,
-    FW_MAX_INTERFACES,
 )
-from pyfw.specs import ReMappableRegion, TopologyEdge
+from pyfw.specs import ReMappableRegion
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
@@ -47,8 +39,6 @@ class Component:
             period=period or None,
             stack_size=stack_size or None,
         )
-        self._connections = {}
-        self._regions = {}
 
     @property
     def name(self):
@@ -56,12 +46,6 @@ class Component:
 
     def register(self):
         self.sdf.add_pd(self.pd)
-
-    def topology_connections(self):
-        return self._connections
-
-    def topology_regions(self):
-        return self._regions
 
 
 class NetVirtRx(Component):
@@ -110,8 +94,12 @@ class NetVirtTx(Component):
         self.iface_index = iface_index
         self._active_clients = []
         self._free_clients = []
+        self._data_regions = []
 
-    def add_active_client(self, resource):
+    def add_data_region(self, resource: DeviceRegionResource):
+        self._data_regions.append(resource)
+
+    def add_active_client(self, resource: FwConnectionResource):
         self._active_clients.append(resource)
 
     def add_free_client(self, resource):
@@ -121,6 +109,8 @@ class NetVirtTx(Component):
         self.config = FwNetVirtTxConfig(
             interface=self.iface_index,
             active_clients=self._active_clients,
+            data_region=self._data_regions,
+            num_interfaces=len(self._data_regions),
             free_clients=self._free_clients,
         )
         return self.config
@@ -210,7 +200,6 @@ class Filter(Component):
         self._internal_instances = None
         self._external_instances = None
         self._instances_capacity = 0
-        self._default_rule = None
         self._initial_rules = []
 
     def set_router_connection(self, resource):
@@ -228,16 +217,12 @@ class Filter(Component):
         self._external_instances = external
         self._instances_capacity = capacity
 
-    def set_default_rule(self, rule):
-        self._default_rule = rule
-
     def add_initial_rule(self, rule):
         self._initial_rules.append(rule)
 
     def finalize_config(self):
         self.config = FwFilterConfig(
             interface=self.iface_index,
-            default_rule=self._default_rule,
             initial_rules=self._initial_rules,
             instances_capacity=self._instances_capacity,
             router=self._router_conn,
@@ -256,7 +241,7 @@ class RouterInterface:
 
     def __init__(self):
         self.rx_free = None
-        self.tx_active = [FwConnectionResource() for _ in range(FW_MAX_INTERFACES)]
+        self.tx_active = None
         self.data = None
         self.arp_queue = None
         self.arp_cache = None
@@ -265,9 +250,6 @@ class RouterInterface:
         self.mac_addr = None
         self.ip = 0
         self.subnet = 0
-
-    def set_tx_active(self, dst_index, resource):
-        self.tx_active[dst_index] = resource
 
     def add_filter(self, resource):
         self.filters.append(resource)
@@ -477,21 +459,3 @@ class NetworkInterface:
             yield self.arp_responder
         for f in self.filters.values():
             yield f
-
-    def all_pds(self) -> List[Tuple[ProtectionDomain, str]]:
-        """Return all (pd, role_label) pairs for graph node rendering."""
-        pds = []
-        if self.driver:
-            pds.append((self.driver, "Driver"))
-        if self.rx_virt:
-            pds.append((self.rx_virt.pd, "RX Virt"))
-        if self.tx_virt:
-            pds.append((self.tx_virt.pd, "TX Virt"))
-        if self.arp_requester:
-            pds.append((self.arp_requester.pd, "ARP Req"))
-        if self.arp_responder:
-            pds.append((self.arp_responder.pd, "ARP Resp"))
-        proto_names = {0x01: "ICMP", 0x06: "TCP", 0x11: "UDP"}
-        for proto, filt in self.filters.items():
-            pds.append((filt.pd, f"{proto_names.get(proto, hex(proto))} Filter"))
-        return pds

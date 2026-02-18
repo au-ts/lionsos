@@ -114,15 +114,15 @@ static void process_requests()
             assert(!err);
 
             if (FW_DEBUG_OUTPUT) {
-                sddf_printf("%sARP requester processing client %u request for ip %s\n",
-                            fw_frmt_str[arp_config.interface], client, ipaddr_to_string(request.ip, ip_addr_buf0));
+                sddf_printf("ARP requester processing client %u request for ip %s on interface %u\n", client,
+                            ipaddr_to_string(request.ip, ip_addr_buf0), arp_config.interface);
             }
 
             /* Create arp entry for request to store associated client */
             fw_arp_error_t arp_err = fw_arp_table_add_entry(&arp_table, ARP_STATE_PENDING, request.ip, NULL, client);
             if (arp_err == ARP_ERR_FULL) {
-                sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n",
-                             fw_frmt_str[arp_config.interface]);
+                sddf_dprintf("ARP REQUESTER LOG: Arp cache full, cannot enqueue entry on interface %u!\n",
+                             arp_config.interface);
             }
 
             transmitted = true;
@@ -162,11 +162,10 @@ static void process_responses()
                                 fw_enqueue(&arp_resp_queue[client], &response);
                                 notify_client[client] = true;
                                 if (FW_DEBUG_OUTPUT) {
-                                    sddf_printf("%sARP requester received response for client %u, ip %s. MAC[0] = %x, "
-                                                "MAC[5] = %x\n",
-                                                fw_frmt_str[arp_config.interface], client,
-                                                ipaddr_to_string(arp_resp->ipsrc_addr, ip_addr_buf0),
-                                                arp_resp->hwsrc_addr[0], arp_resp->hwsrc_addr[5]);
+                                    sddf_printf("ARP requester received response for client %u, ip %s. MAC[0] = %x, "
+                                                "MAC[5] = %x on interface %u\n",
+                                                client, ipaddr_to_string(arp_resp->ipsrc_addr, ip_addr_buf0),
+                                                arp_resp->hwsrc_addr[0], arp_resp->hwsrc_addr[5], arp_config.interface);
                                 }
                             }
                         }
@@ -175,8 +174,8 @@ static void process_responses()
                         fw_arp_error_t arp_err = fw_arp_table_add_entry(&arp_table, ARP_STATE_REACHABLE,
                                                                         arp_resp->ipsrc_addr, arp_resp->hwsrc_addr, 0);
                         if (arp_err == ARP_ERR_FULL) {
-                            sddf_dprintf("%sARP REQUESTER LOG: Arp cache full, cannot enqueue entry!\n",
-                                         fw_frmt_str[arp_config.interface]);
+                            sddf_dprintf("ARP REQUESTER LOG: Arp cache full, cannot enqueue entry on interface %u!\n",
+                                         arp_config.interface);
                         }
                     }
                 }
@@ -228,8 +227,8 @@ static uint16_t process_retries(void)
             /* Resend the ARP request out to the network */
 
             if (FW_DEBUG_OUTPUT) {
-                sddf_printf("%sARP requester attempting to resend request for ip %s\n",
-                            fw_frmt_str[arp_config.interface], ipaddr_to_string(entry->ip, ip_addr_buf0));
+                sddf_printf("ARP requester attempting to resend request for ip %s on interface %u\n",
+                            ipaddr_to_string(entry->ip, ip_addr_buf0), arp_config.interface);
             }
 
             if (!net_queue_empty_free(&tx_queue)) {
@@ -243,8 +242,8 @@ static uint16_t process_retries(void)
                 transmitted = true;
 
                 if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("%sARP requester resent request for ip %s\n", fw_frmt_str[arp_config.interface],
-                                ipaddr_to_string(entry->ip, ip_addr_buf0));
+                    sddf_printf("ARP requester resent request for ip %s on interface %u\n",
+                                ipaddr_to_string(entry->ip, ip_addr_buf0), arp_config.interface);
                 }
             }
 
@@ -314,16 +313,16 @@ void notified(microkit_channel ch)
             uint16_t retries = process_retries();
 
             if (FW_DEBUG_OUTPUT && retries > 0) {
-                sddf_printf("%sARP requester processed %u retries for tick %lu\n", fw_frmt_str[arp_config.interface],
-                            retries, ticks_to_flush);
+                sddf_printf("ARP requester processed %u retries for tick %lu on interface %u\n", retries,
+                            ticks_to_flush, arp_config.interface);
             }
 
         } else {
             uint16_t flushed = arp_table_flush();
 
             if (FW_DEBUG_OUTPUT && flushed > 0) {
-                sddf_printf("%sARP requester flushed %u entries from cache\n", fw_frmt_str[arp_config.interface],
-                            flushed);
+                sddf_printf("ARP requester flushed %u entries from cache on interface %u\n", flushed,
+                            arp_config.interface);
             }
 
             ticks_to_flush = ARP_TICKS_PER_FLUSH;

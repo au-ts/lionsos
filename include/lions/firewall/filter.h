@@ -73,6 +73,19 @@ typedef struct fw_instances_table {
     fw_instance_t instances[];
 } fw_instances_table_t;
 
+typedef struct fw_rule {
+    uint8_t action;
+    uint32_t src_ip;
+    uint32_t dst_ip;
+    uint16_t src_port;
+    uint16_t dst_port;
+    uint8_t src_subnet;
+    uint8_t dst_subnet;
+    bool src_port_any;
+    bool dst_port_any;
+    uint16_t rule_id;
+} fw_rule_t;
+
 typedef struct fw_rule_table {
     uint16_t size;
     fw_rule_t rules[];

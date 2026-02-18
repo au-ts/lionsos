@@ -26,7 +26,6 @@ from pyfw.components import (
     NetVirtRx, NetVirtTx, ArpRequester, ArpResponder, Filter,
     Router, Webserver, IcmpModule,
 )
-from pyfw.topology import generate_topology_dot
 
 SDF_ProtectionDomain = SystemDescription.ProtectionDomain
 SDF_MemoryRegion = SystemDescription.MemoryRegion
@@ -327,25 +326,6 @@ ip_protocol_udp = 0x11
 arp_eth_opcode_request = 1
 arp_eth_opcode_response = 2
 
-def create_common_subsystems(
-    sdf_obj: SystemDescription, dtb: DeviceTree, board_obj: Board,
-) -> Tuple[Sddf.Timer, Sddf.Serial, SDF_ProtectionDomain, SDF_ProtectionDomain, SDF_ProtectionDomain]:
-    """Create timer and serial subsystems."""
-    serial_node = dtb.node(board_obj.serial)
-    assert serial_node is not None
-    timer_node = dtb.node(board_obj.timer)
-    assert timer_node is not None
-
-    timer_driver = SDF_ProtectionDomain("timer_driver", "timer_driver.elf", priority=101)
-    timer_system = Sddf.Timer(sdf_obj, timer_node, timer_driver)
-
-    serial_driver = SDF_ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
-    serial_virt_tx = SDF_ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
-    serial_system = Sddf.Serial(sdf_obj, serial_node, serial_driver, serial_virt_tx)
-
-    return timer_system, serial_system, timer_driver, serial_driver, serial_virt_tx
-
-
 def create_net_subsystem(sdf_obj: SystemDescription, dtb: DeviceTree, iface: NetworkInterface) -> None:
     """Create the sDDF Net subsystem for a single interface."""
     ethernet_node = dtb.node(iface.ethernet_node_path)
@@ -414,7 +394,6 @@ def wire_interface_connections(
             category="buffer_return",
             interface_index=iface.index,
         )
-        router._connections[f"iface{iface.index}_router_rx_virt"] = router_rx_virt
 
         # RX virt: register ARP requester ethtype
         iface.rx_virt.add_active_client(ethtype_arp, arp_eth_opcode_response)
@@ -440,7 +419,6 @@ def wire_interface_connections(
             queue_size=arp_queue_region.region_size,
             interface_index=iface.index,
         )
-        router._connections[f"iface{iface.index}_router_arp_resolution"] = router_arp
         iface.arp_requester.add_arp_client(router_arp.pd2)
 
         # ARP cache
@@ -455,7 +433,6 @@ def wire_interface_connections(
             category="arp_cache",
             interface_index=iface.index,
         )
-        iface.arp_requester._regions[f"iface{iface.index}_arp_cache"] = arp_cache
         iface.arp_requester.set_cache(arp_cache.owner, arp_cache_buffer.capacity)
 
         # Create RouterInterface
@@ -483,7 +460,6 @@ def wire_interface_connections(
                 category="filter",
                 interface_index=iface.index,
             )
-            filt._connections[f"iface{iface.index}_filter_{filt.name}_router"] = filter_router
 
             # Connect filter as RX-only network client
             iface.net_system.add_client_with_copier(filt.pd, tx=False)
@@ -498,7 +474,6 @@ def wire_interface_connections(
                 category="rule_bitmap",
                 interface_index=iface.index,
             )
-            filt._regions[f"iface{iface.index}_rule_bitmap_{filt.name}"] = rule_bitmap
 
             # Filter rules region
             filter_rules = PairedRegion(
@@ -512,7 +487,6 @@ def wire_interface_connections(
                 category="filter_rules",
                 interface_index=iface.index,
             )
-            filt._regions[f"iface{iface.index}_filter_rules_{filt.name}"] = filter_rules
 
             # SDF_Channel for rule updates
             filter_update_ch = SDF_Channel(webserver.pd, filt.pd, pp_a=True)
@@ -544,37 +518,26 @@ def wire_routing_connections(
     """Wire cross-interface routing: router->tx_virt data + tx_virt->rx_virt return."""
     # Add the routing component as a serial_client
     serial_system.add_client(router.pd)
-    for src_iface in interfaces:
-        for dst_iface in interfaces:
-            # Router -> Tx_virt queue, note we do this for every possible src_iface -> dst_iface.
-            # !! This allows us to maintain which interface a given buffer originates from
-            # Alternative buffer descriptors could track this information essentially for free, however at the moment sddf
-            # does not offer flexibility to modify the definition of these buffers without modifying the API itself or
-            # giving components other than the virtualiser/driver knowledge about physical addresses.
-            # This could be fixed by applying similar config generation used in this implementation for SDDF queues and the API
-            # in general. !!
-            router_tx_virt = QueueConnection(
+
+    for dst_iface in interfaces:
+        router_tx_virt = QueueConnection(
                 sdf=sdf_obj,
-                name=f"router_tx_virt_{src_iface.index}_{dst_iface.index}",
+                name=f"router_tx_virt_{dst_iface.index}",
                 src_pd=router.pd,
                 dst_pd=dst_iface.tx_virt.pd,
                 capacity=dma_buffer_queue.capacity,
                 queue_size=dma_buffer_queue_region.region_size,
-                name_suffix=f"{src_iface.index}{dst_iface.index}",
                 category="data",
-                interface_index=dst_iface.index,
-            )
-            router._connections[f"iface{dst_iface.index}_router_tx_virt_{src_iface.index}_{dst_iface.index}"] = router_tx_virt
+                interface_index=dst_iface.index
+                )
+        dst_iface.router_interface.tx_active = router_tx_virt.src
+        dst_iface.tx_virt.add_active_client(router_tx_virt.dst)
 
+        for src_iface in interfaces:
             # SDF_Map src DMA region into dst tx_virt for read access
             tx_virt_dma = src_iface.rx_dma_region.map_device(pd=dst_iface.tx_virt.pd, perms="r")
 
-            # TX virt active client (queue + data)
-            dst_iface.tx_virt.add_active_client(
-                FwDataConnectionResource(conn=router_tx_virt.dst, data=tx_virt_dma)
-            )
-            # Router tx_active (queue only)
-            src_iface.router_interface.set_tx_active(dst_iface.index, router_tx_virt.src)
+            dst_iface.tx_virt.add_data_region(tx_virt_dma)
 
             # dst.tx_virt -> src.rx_virt buffer return queue
             tx_rx_return = QueueConnection(
@@ -587,7 +550,6 @@ def wire_routing_connections(
                 name_suffix=f"{src_iface.index}{dst_iface.index}",
                 category="buffer_return",
             )
-            dst_iface.tx_virt._connections[f"iface{src_iface.index}_tx_rx_return_{src_iface.index}_{dst_iface.index}"] = tx_rx_return
 
             # TX free client (queue + data reusing tx_virt's existing DMA mapping)
             dst_iface.tx_virt.add_free_client(
@@ -626,7 +588,6 @@ def wire_webserver_connections(
         queue_size=dma_buffer_queue_region.region_size,
         category="data",
     )
-    router._connections["router_webserver"] = router_ws
     webserver.set_rx_active(router_ws.dst)
     router.set_webserver_rx(router_ws.src)
 
@@ -641,7 +602,6 @@ def wire_webserver_connections(
         category="buffer_return",
         interface_index=ws_iface.index,
     )
-    webserver._connections["webserver_rx_virt_return"] = ws_rx_virt
     webserver.set_rx_free(ws_rx_virt.src)
     ws_iface.rx_virt.add_free_client(ws_rx_virt.dst)
 
@@ -659,7 +619,6 @@ def wire_webserver_connections(
         queue_size=arp_queue_region.region_size,
         interface_index=ws_iface.index,
     )
-    webserver._connections["webserver_arp"] = ws_arp
     webserver.set_arp_connection(ws_arp.pd1)
     ws_iface.arp_requester.add_arp_client(ws_arp.pd2)
 
@@ -674,7 +633,6 @@ def wire_webserver_connections(
         peer_perms="r",
         category="routing_table",
     )
-    router._regions["routing_table"] = routing_table
 
     # PP channel for routing table updates
     router_update_ch = SDF_Channel(webserver.pd, router.pd, pp_a=True)
@@ -705,7 +663,6 @@ def wire_webserver_connections(
         pd=router.pd,
         category="arp_packet_queue",
     )
-    router._regions["arp_packet_queue"] = arp_pq
     router.set_packet_queue(arp_pq.resource, arp_packet_queue_buffer.capacity)
 
     # Webserver interface configs
@@ -746,7 +703,6 @@ def wire_icmp_connections(
         queue_size=icmp_queue_region.region_size,
         category="icmp",
     )
-    router._connections["icmp_router"] = icmp_conn
     router.set_icmp_connection(icmp_conn.src)
     icmp_module.set_router_connection(icmp_conn.dst)
 
@@ -767,7 +723,7 @@ def wire_filter_rules(interfaces: List[NetworkInterface], webserver_interface_id
                 src_port_any=True,
                 dst_port_any=True,
             )
-            filt.set_default_rule(default_rule)
+            filt.add_initial_rule(default_rule)
 
             filt.add_initial_rule(
                 FwRule(
@@ -814,7 +770,6 @@ def wire_filter_instances(
                 category="filter_instances",
                 interface_index=iface.index,
             )
-            filt._regions[f"iface{iface.index}_instances_{filt.name}_{mirror_filt.name}"] = local_instances
 
             # remote_instances: mirror_filt owns, filt reads
             remote_instances = PairedRegion(
@@ -828,7 +783,6 @@ def wire_filter_instances(
                 category="filter_instances",
                 interface_index=other_iface.index,
             )
-            mirror_filt._regions[f"iface{other_iface.index}_instances_{mirror_filt.name}_{filt.name}"] = remote_instances
 
             # Update both filters
             filt.set_instances(local_instances.owner, remote_instances.peer, filter_instances_buffer.capacity)
@@ -958,10 +912,18 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree) -> None:
     webserver = Webserver(sdf)
     icmp_module = IcmpModule(sdf)
 
-    # Phase 2: Create common subsystems
-    timer_system, serial_system, timer_driver, serial_driver, serial_virt_tx = (
-        create_common_subsystems(sdf, dtb, board)
-    )
+    # Phase 2: Create timer and serial subsystems
+    serial_node = dtb.node(board.serial)
+    assert serial_node is not None
+    timer_node = dtb.node(board.timer)
+    assert timer_node is not None
+
+    timer_driver = SDF_ProtectionDomain("timer_driver", "timer_driver.elf", priority=101)
+    timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
+
+    serial_driver = SDF_ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
+    serial_virt_tx = SDF_ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
+    serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx)
 
     # Create net subsystems
     for iface in interfaces:
@@ -1007,34 +969,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree) -> None:
     # Render SDF
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
         f.write(sdf.render())
-
-    # Generate topology graph
-    all_connections = {}
-    all_regions = {}
-    for comp in [router, webserver, icmp_module]:
-        all_connections.update(comp.topology_connections())
-        all_regions.update(comp.topology_regions())
-    for iface in interfaces:
-        for comp in iface.all_components():
-            all_connections.update(comp.topology_connections())
-            all_regions.update(comp.topology_regions())
-        all_regions[iface.rx_dma_region.name] = iface.rx_dma_region
-
-    all_net_edges = []
-    for iface in interfaces:
-        all_net_edges.extend(iface.net_system.net_edges)
-
-    dot_str = generate_topology_dot(
-        interfaces=interfaces,
-        router=router,
-        webserver=webserver,
-        icmp_module=icmp_module,
-        all_connections=all_connections,
-        all_regions=all_regions,
-        all_net_edges=all_net_edges,
-    )
-    with open(f"{output_dir}/topology.dot", "w+") as f:
-        f.write(dot_str)
 
 
 if __name__ == "__main__":

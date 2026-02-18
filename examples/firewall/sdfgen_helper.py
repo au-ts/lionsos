@@ -266,8 +266,16 @@ if __name__ == '__main__':
                     c_type = match.group(1)
                     c_size_literal = match.group(5)
 
-                    # Pointer type or field is array with empty size
-                    if match.group(2) or (match.group(4) and not c_size_literal):
+                    # For flexible arrays skip struct
+                    if match.group(4) and not c_size_literal and not match.group(2):
+                        del Struct.all_structs[struct.c_name]
+                        # Consume remaining lines until struct closing brace
+                        while not re.match(r"[^;]*}.*", line):
+                            line = next(input)
+                        break
+
+                    # Pointer type
+                    if match.group(2):
                         c_type += match.group(2)
 
                     # Process array size
@@ -309,7 +317,6 @@ if __name__ == '__main__':
 
     with open(p_classes_out, "w") as out:
 
-        out.write("# Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause\n")
         # Import modules
         out.write("from typing import List\n")
         out.write("from ctypes import *\n\n")

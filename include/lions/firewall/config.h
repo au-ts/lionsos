@@ -1,13 +1,14 @@
 // Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
 #pragma once
 
+#include <lions/firewall/filter.h>
+#include <sddf/network/config.h>
+#include <sddf/network/constants.h>
 #include <sddf/resources/common.h>
 #include <sddf/resources/device.h>
 #include <stdbool.h>
 #include <stdint.h>
 
-#define ETH_HWADDR_LEN 6
-#define SDDF_NET_MAX_CLIENTS 64
 #define FW_MAX_FW_CLIENTS 61
 #define FW_MAX_FILTERS 61
 #define FW_NUM_ARP_REQUESTER_CLIENTS 2
@@ -21,19 +22,6 @@ typedef struct fw_arp_responder_config {
     uint8_t mac_addr[ETH_HWADDR_LEN];
     uint32_t ip;
 } fw_arp_responder_config_t;
-
-typedef struct fw_rule {
-    uint8_t action;
-    uint32_t src_ip;
-    uint32_t dst_ip;
-    uint16_t src_port;
-    uint16_t dst_port;
-    uint8_t src_subnet;
-    uint8_t dst_subnet;
-    bool src_port_any;
-    bool dst_port_any;
-    uint16_t rule_id;
-} fw_rule_t;
 
 typedef struct fw_arp_connection {
     region_resource_t request;
@@ -93,15 +81,17 @@ typedef struct fw_net_virt_rx_config {
 
 typedef struct fw_net_virt_tx_config {
     uint8_t interface;
-    fw_data_connection_resource_t active_clients[FW_MAX_FW_CLIENTS];
+    fw_connection_resource_t active_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_active_clients;
+    device_region_resource_t data_region[FW_MAX_INTERFACES];
+    uint8_t num_interfaces;
     fw_data_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_free_clients;
 } fw_net_virt_tx_config_t;
 
 typedef struct fw_router_interface {
     fw_connection_resource_t rx_free;
-    fw_connection_resource_t tx_active[FW_MAX_INTERFACES];
+    fw_connection_resource_t tx_active;
     region_resource_t data;
     fw_arp_connection_t arp_queue;
     region_resource_t arp_cache;

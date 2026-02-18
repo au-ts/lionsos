@@ -32,12 +32,13 @@ FIREWALL_ARP := $(FIREWALL_SRC_DIR)/arp
 METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
 
 SDFGEN_HELPER := $(FIREWALL_SRC_DIR)/sdfgen_helper.py
-# Macros needed by sdfgen helper to calculate config struct sizes
-SDFGEN_UNKOWN_MACROS := ETH_HWADDR_LEN=6 SDDF_NET_MAX_CLIENTS=64
 # Headers containing config structs and dependencies
 FIREWALL_CONFIG_HEADERS := \
 	$(SDDF)/include/sddf/resources/common.h \
 	$(SDDF)/include/sddf/resources/device.h \
+	$(SDDF)/include/sddf/network/constants.h \
+	$(SDDF)/include/sddf/network/config.h \
+	$(LIONSOS)/include/lions/firewall/filter.h \
 	$(LIONSOS)/include/lions/firewall/config.h
 
 IMAGES := arp_requester.elf arp_responder.elf routing.elf micropython.elf \
@@ -122,7 +123,6 @@ include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(PYTHON) $(SDFGEN_HELPER) \
-		--macros "$(SDFGEN_UNKOWN_MACROS)" \
 		--configs "$(FIREWALL_CONFIG_HEADERS)" \
 		--output $(FIREWALL_SRC_DIR)/pyfw/config_structs.py
 	PYTHONPATH=$(FIREWALL_SRC_DIR):${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) \
