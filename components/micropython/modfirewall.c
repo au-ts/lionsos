@@ -87,6 +87,18 @@ static fw_os_err_t filter_err_to_os_err(fw_filter_err_t filter_err)
     }
 }
 
+/* Find the index of a filter matching the given protocol on an interface.
+ * Returns -1 if no matching filter is found. */
+static int8_t find_filter_index(uint8_t interface_idx, uint16_t protocol)
+{
+    for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
+        if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
+            return (int8_t)i;
+        }
+    }
+    return -1;
+}
+
 /* Get MAC address for network interface */
 static mp_obj_t interface_get_mac(mp_obj_t interface_idx_in)
 {
@@ -262,15 +274,8 @@ static mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args)
     uint8_t dst_subnet = mp_obj_get_int(args[9]);
     uint8_t action = mp_obj_get_int(args[10]);
 
-    uint8_t protocol_match = fw_config.interfaces[interface_idx].num_filters;
-    for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
-        if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
-            protocol_match = i;
-            break;
-        }
-    }
-
-    if (protocol_match == fw_config.interfaces[interface_idx].num_filters) {
+    int8_t protocol_match = find_filter_index(interface_idx, protocol);
+    if (protocol_match < 0) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
         mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
         return mp_const_none;
@@ -313,15 +318,8 @@ static mp_obj_t rule_delete(mp_obj_t interface_idx_in, mp_obj_t rule_id_in, mp_o
 
     uint16_t rule_id = mp_obj_get_int(rule_id_in);
     uint16_t protocol = mp_obj_get_int(protocol_in);
-    uint8_t protocol_match = fw_config.interfaces[interface_idx].num_filters;
-    for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
-        if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
-            protocol_match = i;
-            break;
-        }
-    }
-
-    if (protocol_match == fw_config.interfaces[interface_idx].num_filters) {
+    int8_t protocol_match = find_filter_index(interface_idx, protocol);
+    if (protocol_match < 0) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
         mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
         return mp_const_none;
@@ -353,15 +351,14 @@ static mp_obj_t rule_count(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
     }
 
     uint16_t protocol = mp_obj_get_int(protocol_in);
-    for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
-        if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
-            return mp_obj_new_int_from_uint(webserver_state[interface_idx].filter_states[i].rule_table->size);
-        }
+    int8_t protocol_match = find_filter_index(interface_idx, protocol);
+    if (protocol_match < 0) {
+        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
+        mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+        return mp_const_none;
     }
 
-    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
-    mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
-    return mp_const_none;
+    return mp_obj_new_int_from_uint(webserver_state[interface_idx].filter_states[protocol_match].rule_table->size);
 }
 
 static MP_DEFINE_CONST_FUN_OBJ_2(rule_count_obj, rule_count);
@@ -378,15 +375,8 @@ static mp_obj_t filter_set_default_action(mp_obj_t interface_idx_in, mp_obj_t pr
 
     uint16_t protocol = mp_obj_get_int(protocol_in);
     uint8_t action = mp_obj_get_int(action_in);
-    uint8_t protocol_match = fw_config.interfaces[interface_idx].num_filters;
-    for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
-        if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
-            protocol_match = i;
-            break;
-        }
-    }
-
-    if (protocol_match == fw_config.interfaces[interface_idx].num_filters) {
+    int8_t protocol_match = find_filter_index(interface_idx, protocol);
+    if (protocol_match < 0) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
         mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
         return mp_const_none;
@@ -418,16 +408,15 @@ static mp_obj_t filter_get_default_action(mp_obj_t interface_idx_in, mp_obj_t pr
     }
 
     uint16_t protocol = mp_obj_get_int(protocol_in);
-    for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
-        if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
-            return mp_obj_new_int_from_uint(
-                webserver_state[interface_idx].filter_states[i].rule_table->rules[DEFAULT_ACTION_IDX].action);
-        }
+    int8_t protocol_match = find_filter_index(interface_idx, protocol);
+    if (protocol_match < 0) {
+        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
+        mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+        return mp_const_none;
     }
 
-    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
-    mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
-    return mp_const_none;
+    return mp_obj_new_int_from_uint(
+        webserver_state[interface_idx].filter_states[protocol_match].rule_table->rules[DEFAULT_ACTION_IDX].action);
 }
 
 static MP_DEFINE_CONST_FUN_OBJ_2(filter_get_default_action_obj, filter_get_default_action);
@@ -444,15 +433,8 @@ static mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp
 
     uint16_t protocol = mp_obj_get_int(protocol_in);
     uint16_t rule_idx = mp_obj_get_int(rule_idx_in);
-    uint8_t protocol_match = fw_config.interfaces[interface_idx].num_filters;
-    for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
-        if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
-            protocol_match = i;
-            break;
-        }
-    }
-
-    if (protocol_match == fw_config.interfaces[interface_idx].num_filters) {
+    int8_t protocol_match = find_filter_index(interface_idx, protocol);
+    if (protocol_match < 0) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
         mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
         return mp_const_none;
