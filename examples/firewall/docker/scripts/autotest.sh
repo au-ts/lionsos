@@ -260,7 +260,7 @@ test_icmp_ping_host_external_to_internal() {
 }
 
 test_icmp_ping_unreachable_host_internal_to_external() {
-    print_info "This may take upto ${LONG_TIMEOUT} seconds..."
+    print_info "This may take up to ${LONG_TIMEOUT} seconds..."
 
     ip netns exec int \
     ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${EXT_BAD_HOST_IP}" \
@@ -273,7 +273,7 @@ test_icmp_ping_unreachable_host_internal_to_external() {
 }
 
 test_icmp_ping_unreachable_host_external_to_internal() {
-    print_info "This may take upto ${LONG_TIMEOUT} seconds..."
+    print_info "This may take up to ${LONG_TIMEOUT} seconds..."
 
     ip netns exec ext \
     ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INT_BAD_HOST_IP}" \
