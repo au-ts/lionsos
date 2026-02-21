@@ -1,7 +1,7 @@
 /*
-* Copyright 2025, UNSW
-* SPDX-License-Identifier: BSD-2-Clause
-*/
+ * Copyright 2025, UNSW
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,13 +20,13 @@
 #include <lions/firewall/queue.h>
 
 __attribute__((__section__(".fw_icmp_module_config"))) fw_icmp_module_config_t icmp_config;
-__attribute__((__section__(".ext_net_client_config"))) net_client_config_t ext_net_config;
-__attribute__((__section__(".int_net_client_config"))) net_client_config_t int_net_config;
+__attribute__((__section__(".net_config_0"))) net_client_config_t net_config_0;
+__attribute__((__section__(".net_config_1"))) net_client_config_t net_config_1;
 
-net_client_config_t *net_configs[FW_NUM_INTERFACES] = {&ext_net_config, &int_net_config};
+net_client_config_t *net_configs[FW_MAX_INTERFACES] = { &net_config_0, &net_config_1 };
 
 net_queue_handle_t net_queue[FW_NUM_INTERFACES];
-fw_queue_t router_icmp_queue[FW_NUM_INTERFACES];
+fw_queue_t router_icmp_queue;
 fw_queue_t filter_icmp_queue[FW_NUM_INTERFACES][FW_MAX_FILTERS];
 
 static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmitted)
@@ -214,20 +214,18 @@ static void generate_icmp(void)
         }
     }
 
-    /* Process ICMP requests from routers */
-    for (uint8_t out_int = 0; out_int < icmp_config.num_interfaces; out_int++) {
-        while (!fw_queue_empty(&router_icmp_queue[out_int])) {
-            icmp_req_t req = {0};
-            int err = fw_dequeue(&router_icmp_queue[out_int], &req);
-            assert(!err);
+    /* Process ICMP requests from router */
+    while (!fw_queue_empty(&router_icmp_queue)) {
+        icmp_req_t req = {0};
+        int err = fw_dequeue(&router_icmp_queue, &req);
+        assert(!err);
 
-            if (FW_DEBUG_OUTPUT) {
-                sddf_printf("ICMP module: processing router ICMP request type %u code %u on interface %u\n",
-                    req.type, req.code, out_int);
-            }
-
-            process_icmp_request(&req, out_int, transmitted);
+        if (FW_DEBUG_OUTPUT) {
+            sddf_printf("ICMP module: processing router ICMP request type %u code %u using interface %u\n",
+                req.type, req.code, req.out_interface);
         }
+
+        process_icmp_request(&req, req.out_interface, transmitted);
     }
 
     for (uint8_t out_int = 0; out_int < icmp_config.num_interfaces; out_int++) {
@@ -239,11 +237,9 @@ static void generate_icmp(void)
 
 void init(void)
 {
+    /* Setup the queue with the router. */
+    fw_queue_init(&router_icmp_queue, icmp_config.router.queue.vaddr, sizeof(icmp_req_t), icmp_config.router.capacity);
     for (int out = 0; out < icmp_config.num_interfaces; out++) {
-        /* Setup the queue with the router. */
-        fw_queue_init(&router_icmp_queue[out], icmp_config.interfaces[out].router.queue.vaddr,
-            sizeof(icmp_req_t), icmp_config.interfaces[out].router.capacity);
-
         /* Setup transmit queues with the transmit virtualisers. */
         net_queue_init(&net_queue[out], net_configs[out]->tx.free_queue.vaddr,
             net_configs[out]->tx.active_queue.vaddr, net_configs[out]->tx.num_buffers);

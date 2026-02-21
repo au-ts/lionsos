@@ -10,7 +10,6 @@
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
 #include <sddf/util/util.h>
-#include <sddf/util/printf.h>
 #include <sddf/util/cache.h>
 #include <lions/firewall/arp.h>
 #include <lions/firewall/checksum.h>

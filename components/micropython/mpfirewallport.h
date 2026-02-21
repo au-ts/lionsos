@@ -30,7 +30,7 @@ typedef struct fw_webserver_interface_state {
     bool ping_enabled;
 } fw_webserver_interface_state_t;
 
-extern fw_webserver_interface_state_t webserver_state[FW_NUM_INTERFACES];
+extern fw_webserver_interface_state_t webserver_state[FW_MAX_INTERFACES];
 
 /**
  * Checks whether the pbuf contains an ARP request. All ARP requests and
