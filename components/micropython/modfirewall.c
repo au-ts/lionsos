@@ -121,7 +121,7 @@ static int8_t find_filter_index(uint8_t interface_idx, uint16_t protocol)
 static mp_obj_t interface_get_mac(mp_obj_t interface_idx_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -137,11 +137,19 @@ static mp_obj_t interface_get_mac(mp_obj_t interface_idx_in)
 
 static MP_DEFINE_CONST_FUN_OBJ_1(interface_get_mac_obj, interface_get_mac);
 
+/* Get number of configured interfaces */
+static mp_obj_t interface_count_get(void)
+{
+    return mp_obj_new_int_from_uint(fw_config.num_interfaces);
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_0(interface_count_obj, interface_count_get);
+
 /* Get IP address for network interface */
 static mp_obj_t interface_get_ip(mp_obj_t interface_idx_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -162,7 +170,7 @@ static mp_obj_t route_add(mp_uint_t n_args, const mp_obj_t *args)
     }
 
     uint8_t interface_idx = mp_obj_get_int(args[0]);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -194,7 +202,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR(route_add_obj, 4, route_add);
 static mp_obj_t route_delete(mp_obj_t interface_idx_in, mp_obj_t route_id_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -268,7 +276,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(ping_response_get_obj, ping_response_get);
 static mp_obj_t route_count(mp_obj_t interface_idx_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -283,7 +291,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(route_count_obj, route_count);
 static mp_obj_t route_get_nth(mp_obj_t interface_idx_in, mp_obj_t route_idx_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -299,16 +307,20 @@ static mp_obj_t route_get_nth(mp_obj_t interface_idx_in, mp_obj_t route_idx_in)
     fw_routing_entry_t *entry = (fw_routing_entry_t *)(webserver_state[interface_idx].routing_table->entries
                                                        + route_idx);
 
-    mp_obj_t tuple[4];
+    mp_obj_t tuple[5];
     tuple[0] = mp_obj_new_int_from_uint(route_idx);
     tuple[1] = mp_obj_new_int_from_uint(entry->ip);
     tuple[2] = mp_obj_new_int_from_uint(entry->subnet);
     tuple[3] = mp_obj_new_int_from_uint(entry->next_hop);
-    return mp_obj_new_tuple(4, tuple);
-
-    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INTERNAL_ERROR]);
-    mp_raise_OSError(OS_ERR_INTERNAL_ERROR);
-    return mp_const_none;
+    // TODO: Fix with routing combine
+    uint8_t interface_out;
+    if (entry->interface == ROUTING_OUT_SELF) {
+        interface_out = fw_config.num_interfaces;
+    } else {
+        interface_out = (interface_idx + 1) % fw_config.num_interfaces;
+    }
+    tuple[4] = mp_obj_new_int_from_uint(interface_out);
+    return mp_obj_new_tuple(5, tuple);
 }
 
 static MP_DEFINE_CONST_FUN_OBJ_2(route_get_nth_obj, route_get_nth);
@@ -322,7 +334,7 @@ static mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args)
     }
 
     uint8_t interface_idx = mp_obj_get_int(args[0]);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -382,7 +394,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR(rule_add_obj, 9, rule_add);
 static mp_obj_t rule_delete(mp_obj_t interface_idx_in, mp_obj_t rule_id_in, mp_obj_t protocol_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -416,7 +428,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(rule_delete_obj, rule_delete);
 static mp_obj_t rule_count(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -439,7 +451,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(rule_count_obj, rule_count);
 static mp_obj_t filter_set_default_action(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp_obj_t action_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -480,7 +492,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(filter_set_default_action_obj, filter_set_defau
 static mp_obj_t filter_get_default_action(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -504,7 +516,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(filter_get_default_action_obj, filter_get_defau
 static mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp_obj_t rule_idx_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -546,20 +558,21 @@ static MP_DEFINE_CONST_FUN_OBJ_3(rule_get_nth_obj, rule_get_nth);
 
 static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lions_firewall)},
-    { MP_ROM_QSTR(MP_QSTR_interface_mac_get), MP_ROM_PTR(&interface_get_mac_obj)},
     { MP_ROM_QSTR(MP_QSTR_interface_ip_get), MP_ROM_PTR(&interface_get_ip_obj)},
-    { MP_ROM_QSTR(MP_QSTR_route_add), MP_ROM_PTR(&route_add_obj)},
     { MP_ROM_QSTR(MP_QSTR_route_delete), MP_ROM_PTR(&route_delete_obj)},
-    { MP_ROM_QSTR(MP_QSTR_route_count), MP_ROM_PTR(&route_count_obj)},
     { MP_ROM_QSTR(MP_QSTR_route_get_nth), MP_ROM_PTR(&route_get_nth_obj)},
     { MP_ROM_QSTR(MP_QSTR_ping_response_set), MP_ROM_PTR(&ping_response_set_obj)},
     { MP_ROM_QSTR(MP_QSTR_ping_response_get), MP_ROM_PTR(&ping_response_get_obj)},
-    { MP_ROM_QSTR(MP_QSTR_rule_add), MP_ROM_PTR(&rule_add_obj)},
     { MP_ROM_QSTR(MP_QSTR_rule_delete), MP_ROM_PTR(&rule_delete_obj)},
-    { MP_ROM_QSTR(MP_QSTR_rule_count), MP_ROM_PTR(&rule_count_obj)},
     { MP_ROM_QSTR(MP_QSTR_rule_get_nth), MP_ROM_PTR(&rule_get_nth_obj)},
-    { MP_ROM_QSTR(MP_QSTR_filter_get_default_action), MP_ROM_PTR(&filter_get_default_action_obj)},
-    { MP_ROM_QSTR(MP_QSTR_filter_set_default_action), MP_ROM_PTR(&filter_set_default_action_obj)},
+    { MP_ROM_QSTR(MP_QSTR_interface_mac_get), MP_ROM_PTR(&interface_get_mac_obj) },
+    { MP_ROM_QSTR(MP_QSTR_interface_count_get), MP_ROM_PTR(&interface_count_obj) },
+    { MP_ROM_QSTR(MP_QSTR_route_add), MP_ROM_PTR(&route_add_obj) },
+    { MP_ROM_QSTR(MP_QSTR_route_count), MP_ROM_PTR(&route_count_obj) },
+    { MP_ROM_QSTR(MP_QSTR_rule_add), MP_ROM_PTR(&rule_add_obj) },
+    { MP_ROM_QSTR(MP_QSTR_rule_count), MP_ROM_PTR(&rule_count_obj) },
+    { MP_ROM_QSTR(MP_QSTR_filter_get_default_action), MP_ROM_PTR(&filter_get_default_action_obj) },
+    { MP_ROM_QSTR(MP_QSTR_filter_set_default_action), MP_ROM_PTR(&filter_set_default_action_obj) },
 };
 
 static MP_DEFINE_CONST_DICT(lions_firewall_module_globals, lions_firewall_module_globals_table);

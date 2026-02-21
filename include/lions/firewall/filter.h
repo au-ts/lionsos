@@ -28,8 +28,7 @@ typedef enum {
     FILTER_ERR_DUPLICATE,
     /* entry clashes with existing entry */
     FILTER_ERR_CLASH,
-    /* rule id does not point to a valid entry, or is the default action rule id
-    */
+    /* rule id does not point to a valid entry, or is the default action rule id */
     FILTER_ERR_INVALID_RULE_ID,
     /* unsupported action */
     FILTER_ERR_UNSUPPORTED_ACTION

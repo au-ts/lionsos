@@ -172,6 +172,8 @@ typedef struct icmp_req {
     uint8_t type;
     /* code of ICMP packet to send */
     uint8_t code;
+    /* interface to transmit out of */
+    uint8_t out_interface;
     /* ethernet header of request source packet */
     eth_hdr_t eth_hdr;
     /* header of source IP packet */
@@ -215,11 +217,12 @@ static inline bool icmp_is_error_message(uint8_t type)
  *
  * @return true on success, false if the queue is full.
  */
-static inline bool icmp_enqueue_error(fw_queue_t *icmp_queue, uint8_t type, uint8_t code, uintptr_t pkt_vaddr)
+static inline bool icmp_enqueue_error(fw_queue_t *icmp_queue, uint8_t type, uint8_t code, uintptr_t pkt_vaddr, uint8_t out_interface)
 {
     icmp_req_t req = {0};
     req.type = type;
     req.code = code;
+    req.out_interface = out_interface;
 
     /* Copy ethernet header into ICMP request */
     memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
