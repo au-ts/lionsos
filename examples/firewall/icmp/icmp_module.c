@@ -1,7 +1,7 @@
 /*
-* Copyright 2025, UNSW
-* SPDX-License-Identifier: BSD-2-Clause
-*/
+ * Copyright 2025, UNSW
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,22 +20,26 @@
 #include <lions/firewall/queue.h>
 
 __attribute__((__section__(".fw_icmp_module_config"))) fw_icmp_module_config_t icmp_config;
-__attribute__((__section__(".ext_net_client_config"))) net_client_config_t ext_net_config;
-__attribute__((__section__(".int_net_client_config"))) net_client_config_t int_net_config;
+__attribute__((__section__(".net_config_0"))) net_client_config_t net_config_0;
+__attribute__((__section__(".net_config_1"))) net_client_config_t net_config_1;
 
-net_client_config_t *net_configs[FW_NUM_INTERFACES] = {&ext_net_config, &int_net_config};
+net_client_config_t *net_configs[FW_MAX_INTERFACES] = { &net_config_0, &net_config_1 };
 
-net_queue_handle_t net_queue[FW_NUM_INTERFACES];
-fw_queue_t icmp_queue[FW_NUM_INTERFACES];
+net_queue_handle_t net_queue[FW_MAX_INTERFACES];
+fw_queue_t icmp_queue[FW_MAX_INTERFACES];
 
 static void generate_icmp(void)
 {
-    bool transmitted[FW_NUM_INTERFACES] = {false};
-    for (uint8_t out_int = 0; out_int < icmp_config.num_interfaces; out_int++) {
-        while (!fw_queue_empty(&icmp_queue[out_int]) && !net_queue_empty_free(&net_queue[out_int])) {
-            icmp_req_t req = {0};
-            int err = fw_dequeue(&icmp_queue[out_int], &req);
+    bool transmitted[FW_MAX_INTERFACES] = { false };
+    for (uint8_t interface = 0; interface < icmp_config.num_interfaces; interface++) {
+        while (!fw_queue_empty(&icmp_queue[interface])) {
+            icmp_req_t req = { 0 };
+            int err = fw_dequeue(&icmp_queue[interface], &req);
             assert(!err);
+
+            uint8_t out_int = req.out_interface;
+            // TODO: Fix with routing combine
+            assert(out_int == interface);
 
             /* Currently we only support destination unreachable ICMP traffic */
             if (req.type != ICMP_DEST_UNREACHABLE) {
@@ -87,26 +91,26 @@ static void generate_icmp(void)
             switch (req.type) {
             case ICMP_DEST_UNREACHABLE:
 
-                    /* Total length of ICMP destination unreachable IP packet */
-                    // TODO: Should this be less if the source packet did not
-                    // contain 8 bytes of data?
+                /* Total length of ICMP destination unreachable IP packet */
+                // TODO: Should this be less if the source packet did not
+                // contain 8 bytes of data?
                 ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_DEST_LEN);
 
-                    /* Construct ICMP destination unreachable packet */
+                /* Construct ICMP destination unreachable packet */
                 icmp_dest_t *icmp_dest = (icmp_dest_t *)(pkt_vaddr + ICMP_DEST_OFFSET);
 
-                    /* Unused must be set to 0, as well as optional fields we
-                    are not currently using */
+                /* Unused must be set to 0, as well as optional fields we
+                are not currently using */
                 icmp_dest->unused = 0;
                 icmp_dest->len = 0;
                 icmp_dest->nexthop_mtu = 0;
 
-                    /* Copy IP header */
+                /* Copy IP header */
                 memcpy(&icmp_dest->ip_hdr, &req.ip_hdr, IPV4_HDR_LEN_MIN);
 
-                    /* Copy first bytes of data if applicable */
-                    // TODO: If the source packet did not contain 8 bytes of
-                    // data, should the rest be zero-filled?
+                /* Copy first bytes of data if applicable */
+                // TODO: If the source packet did not contain 8 bytes of
+                // data, should the rest be zero-filled?
                 uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(req.ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
                 memcpy(&icmp_dest->data, req.data, to_copy);
                 break;

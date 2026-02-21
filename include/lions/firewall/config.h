@@ -16,9 +16,9 @@
 
 #define FW_MAX_FW_CLIENTS 61
 #define FW_MAX_FILTERS 61
-
+#define FW_MAX_INTERFACES 4
 #define FW_NUM_ARP_REQUESTER_CLIENTS 2
-#define FW_NUM_INTERFACES 2
+
 
 #define FW_DEBUG_OUTPUT 1
 
@@ -102,7 +102,7 @@ typedef struct fw_router_config {
     /* IP address of input interface */
     uint32_t in_ip;
     fw_connection_resource_t rx_free;
-    fw_connection_resource_t rx_active;
+    fw_connection_resource_t webserver_rx_queue;
     fw_connection_resource_t tx_active;
     region_resource_t data;
     fw_arp_connection_t arp_queue;
@@ -117,8 +117,8 @@ typedef struct fw_router_config {
 
 typedef struct fw_icmp_module_config {
     /* IP address of interfaces */
-    uint32_t ips[FW_NUM_INTERFACES];
-    fw_connection_resource_t routers[FW_NUM_INTERFACES];
+    uint32_t ips[FW_MAX_INTERFACES];
+    fw_connection_resource_t routers[FW_MAX_INTERFACES];
     uint8_t num_interfaces;
 } fw_icmp_module_config_t;
 
@@ -158,6 +158,6 @@ typedef struct fw_webserver_config {
     region_resource_t data;
     fw_connection_resource_t rx_free;
     fw_arp_connection_t arp_queue;
-    fw_webserver_interface_config_t interfaces[FW_NUM_INTERFACES];
+    fw_webserver_interface_config_t interfaces[FW_MAX_INTERFACES];
     uint8_t num_interfaces;
 } fw_webserver_config_t;

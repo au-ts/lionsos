@@ -147,7 +147,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_icmp_filter0.data icmp_filter0.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_udp_filter0.data udp_filter0.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_tcp_filter0.data tcp_filter0.elf
-	$(OBJCOPY) --update-section .ext_net_client_config=net_data0/net_client_icmp_module.data icmp_module.elf
+	$(OBJCOPY) --update-section .net_config_0=net_data0/net_client_icmp_module.data icmp_module.elf
 
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder0.data arp_responder0.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester0.data arp_requester0.elf
@@ -169,7 +169,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_udp_filter1.data udp_filter1.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_tcp_filter1.data tcp_filter1.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_micropython.data micropython.elf
-	$(OBJCOPY) --update-section .int_net_client_config=net_data1/net_client_icmp_module.data icmp_module.elf
+	$(OBJCOPY) --update-section .net_config_1=net_data1/net_client_icmp_module.data icmp_module.elf
 
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=net_data1/lib_sddf_lwip_config_micropython.data micropython.elf
 

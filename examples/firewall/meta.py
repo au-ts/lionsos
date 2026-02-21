@@ -953,7 +953,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
 
     # Add a firewall connection to the webserver from the internal router for
     # packet transmission
-    networks[int_net]["configs"][networks[int_net]["router"]].rx_active = (
+    networks[int_net]["configs"][networks[int_net]["router"]].webserver_rx_queue = (
         router_webserver_conn[0]
     )
 
