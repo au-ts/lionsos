@@ -20,12 +20,12 @@
 #include <lwip/pbuf.h>
 #include <lwip/sys.h>
 
-#include "micropython.h"
 #include "mpfirewallport.h"
 
-#define dlog(fmt, ...) do { \
-    printf("%s: %s:%d:%s: " fmt "\n", microkit_name, __FILE__, __LINE__, __func__, ##__VA_ARGS__); \
-} while (0);
+#define dlog(fmt, ...)                                                                                                 \
+    do {                                                                                                               \
+        printf("%s: %s:%d:%s: " fmt "\n", microkit_name, __FILE__, __LINE__, __func__, ##__VA_ARGS__);                 \
+    } while (0);
 
 fw_webserver_interface_state_t webserver_state[FW_MAX_INTERFACES];
 
