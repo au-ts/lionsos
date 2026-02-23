@@ -33,6 +33,7 @@ subnet_bits = [12, 24]  # External network, Internal network
 
 ips = ["172.16.2.1", "192.168.1.1"]  # External network, Internal network
 
+interface_names = ["external", "internal"] # Max length 63 characters
 
 @dataclass
 class Board:
@@ -468,6 +469,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 "out_num": (i + 1) % 2,
                 "mac": macs[i],
                 "ip": ip_to_int(ips[i]),
+                "name": interface_names[i],
                 "out_dir": output_dir + "/net_data" + str(i),
                 "configs": {},
             }
@@ -856,7 +858,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         )
 
         webserver_interface_config = FwWebserverInterfaceConfig(
-            network["mac"], network["ip"], webserver_router_config, []
+            network["mac"], network["ip"], network["name"], webserver_router_config, []
         )
 
         for protocol, filter_pd in network["filters"].items():

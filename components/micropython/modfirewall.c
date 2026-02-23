@@ -99,6 +99,14 @@ static int8_t find_filter_index(uint8_t interface_idx, uint16_t protocol)
     return -1;
 }
 
+/* Get number of configured interfaces */
+static mp_obj_t interface_count(void)
+{
+    return mp_obj_new_int_from_uint(fw_config.num_interfaces);
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_0(interface_count_obj, interface_count);
+
 /* Get MAC address for network interface */
 static mp_obj_t interface_get_mac(mp_obj_t interface_idx_in)
 {
@@ -119,13 +127,21 @@ static mp_obj_t interface_get_mac(mp_obj_t interface_idx_in)
 
 static MP_DEFINE_CONST_FUN_OBJ_1(interface_get_mac_obj, interface_get_mac);
 
-/* Get number of configured interfaces */
-static mp_obj_t interface_count_get(void)
+/* Get inteface name */
+static mp_obj_t interface_get_name(mp_obj_t interface_idx_in)
 {
-    return mp_obj_new_int_from_uint(fw_config.num_interfaces);
+    uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
+    if (interface_idx >= fw_config.num_interfaces) {
+        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
+        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+        return mp_const_none;
+    }
+
+    uint8_t len = strnlen(fw_config.interfaces[interface_idx].name, FW_MAX_INTERFACE_NAME_LEN);
+    return mp_obj_new_str(fw_config.interfaces[interface_idx].name, len);
 }
 
-static MP_DEFINE_CONST_FUN_OBJ_0(interface_count_obj, interface_count_get);
+static MP_DEFINE_CONST_FUN_OBJ_1(interface_get_name_obj, interface_get_name);
 
 /* Get IP address for network interface */
 static mp_obj_t interface_get_ip(mp_obj_t interface_idx_in)
@@ -479,8 +495,9 @@ static MP_DEFINE_CONST_FUN_OBJ_3(rule_get_nth_obj, rule_get_nth);
 
 static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lions_firewall) },
-    { MP_ROM_QSTR(MP_QSTR_interface_mac_get), MP_ROM_PTR(&interface_get_mac_obj) },
     { MP_ROM_QSTR(MP_QSTR_interface_count_get), MP_ROM_PTR(&interface_count_obj) },
+    { MP_ROM_QSTR(MP_QSTR_interface_mac_get), MP_ROM_PTR(&interface_get_mac_obj) },
+    { MP_ROM_QSTR(MP_QSTR_interface_name_get), MP_ROM_PTR(&interface_get_name_obj) },
     { MP_ROM_QSTR(MP_QSTR_interface_ip_get), MP_ROM_PTR(&interface_get_ip_obj) },
     { MP_ROM_QSTR(MP_QSTR_route_add), MP_ROM_PTR(&route_add_obj) },
     { MP_ROM_QSTR(MP_QSTR_route_delete), MP_ROM_PTR(&route_delete_obj) },

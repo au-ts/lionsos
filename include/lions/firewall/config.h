@@ -17,6 +17,8 @@
 #define FW_MAX_FW_CLIENTS 61
 #define FW_MAX_FILTERS 61
 #define FW_MAX_INTERFACES 4
+#define FW_MAX_INTERFACE_NAME_LEN 63
+
 #define FW_NUM_ARP_REQUESTER_CLIENTS 2
 
 
@@ -146,6 +148,8 @@ typedef struct fw_webserver_interface_config {
     uint8_t mac_addr[ETH_HWADDR_LEN];
     /* IP address of interface */
     uint32_t ip;
+    /* name of interface */
+    char name[FW_MAX_INTERFACE_NAME_LEN + 1];
     fw_webserver_router_config_t router;
     fw_webserver_filter_config_t filters[FW_MAX_FILTERS];
     uint8_t num_filters;
