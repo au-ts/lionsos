@@ -165,6 +165,7 @@ def interfaceDetails(request, interfaceInt):
 
         return {
             "interface": f"{interfaceInt}",
+            "name": lions_firewall.interface_name_get(interfaceInt),
             "mac": tupleToMac(lions_firewall.interface_mac_get(interfaceInt)),
             "ip": intToIp(lions_firewall.interface_ip_get(interfaceInt)),
         }
@@ -191,8 +192,7 @@ def getRoutes(request, interfaceInt):
                 "ip": intToIp(route[1]),
                 "subnet": route[2],
                 "next_hop": intToIp(route[3]),
-                # TODO: Remove with router combine
-                "interface_out": "Internal" if route[4] == lions_firewall.interface_count_get() else route[4]
+                "interface_out": route[4]
             })
         return {"routes": routes}
     except OSError as OSErr:
@@ -509,7 +509,7 @@ def index(request):
                 .then(function(response) { return response.json(); })
                 .then(function(info) {
                   let row = document.createElement('tr');
-                  row.innerHTML = "<td>" + info.interface + "</td>" +
+                  row.innerHTML = "<td>" + info.name + "</td>" +
                                   "<td>" + info.mac + "</td>" +
                                   "<td>" + info.ip + "</td>";
                   tbody.appendChild(row);
@@ -590,7 +590,7 @@ def config(request):
                 requests.push(
                   fetch("/api/interfaces/" + i)
                     .then(function(response) { return response.json(); })
-                    .then(function(info) { interfaceMap[i] = info.interface; })
+                    .then(function(info) { interfaceMap[i] = info.name; })
                 );
               }
               return Promise.all(requests);
@@ -611,7 +611,7 @@ def config(request):
           var routesBody = document.getElementById(`routes-body`);
           routesBody.innerHTML = "";
           Object.keys(interfaceMap).forEach(id => {
-            fetch(`/api/routes/${interfaceMap[id]}`)
+            fetch(`/api/routes/${id}`)
               .then(function(response) { return response.json(); })
               .then(function(data) {
                 if (data.routes.length === 0) {
@@ -652,14 +652,14 @@ def config(request):
                     row.appendChild(cellNextHop);
 
                     let cellInterfaceOut = document.createElement('td');
-                    cellInterfaceOut.textContent = route.interface_out;
+                    cellInterfaceOut.textContent = route.interface_out == Object.keys(interfaceMap).length ? "firewall" : interfaceMap[route.interface_out];
                     row.appendChild(cellInterfaceOut);
 
                     let cellActions = document.createElement('td');
                     let delBtn = document.createElement('button');
                     delBtn.textContent = "Delete";
                     delBtn.addEventListener("click", function() {
-                      fetch(`/api/routes/${route.id}/${interfaceMap[id]}`, { method: 'DELETE' })
+                      fetch(`/api/routes/${route.id}/${id}`, { method: 'DELETE' })
                         .then(function(response) {
                           if (!response.ok) throw new Error("Delete failed");
                           return response.json();
@@ -807,12 +807,12 @@ def rules(request, protocol):
                     .then(function(info) {
                       var option = document.createElement('option');
                       option.value = i;
-                      option.textContent = info.interface;
+                      option.textContent = info.name;
                       document.getElementById('rules-interface').appendChild(option);
 
                       var addOpt = document.createElement('option');
                       addOpt.value = i;
-                      addOpt.textContent = info.interface;
+                      addOpt.textContent = info.name;
                       document.getElementById('new-interface').appendChild(addOpt);
                     })
                 );

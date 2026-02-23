@@ -419,7 +419,9 @@ if __name__ == '__main__':
             out.write(" " * 4 + f"def to_struct(self) -> {struct.p_name}:\n")
             for field in struct.fields.values():
                 out.write(" " * 8)
-                if len(field.n_size) and field.c_type not in Struct.all_structs:
+                if len(field.n_size) and field.c_type == "char":
+                    out.write(f"{field.c_name}_arg = bytes(create_string_buffer(bytes(self.{field.c_name}, encoding=\"ascii\"), size=len(self.{field.c_name})))")
+                elif len(field.n_size) and field.c_type not in Struct.all_structs:
                     out.write(f"{field.c_name}_arg = self.{field.c_name} + [{field.p_class}()] * ({field.e_size} - len(self.{field.c_name}))")
                 elif len(field.n_size) and field.c_type in Struct.all_structs:
                     out.write(f"{field.c_name}_arg = [x.to_struct() for x in self.{field.c_name}] + (({field.e_size} - len(self.{field.c_name})) * [{field.p_class}()])")
@@ -434,7 +436,9 @@ if __name__ == '__main__':
             # Create to_struct.serialise arguments
             out.write(" " * 8 + f"return {struct.p_name}(")
             for i, field in zip(range(len(struct.fields.values())), struct.fields.values()):
-                if field.n_size:
+                if len(field.n_size) and field.c_type == "char":
+                    out.write(f"{field.c_name}_arg")
+                elif field.n_size:
                     out.write(f"({field.p_class} * {field.e_size})(*{field.c_name}_arg)")
                 else:
                     out.write(f"{field.c_name}_arg")
