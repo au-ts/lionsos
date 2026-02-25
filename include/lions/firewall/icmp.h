@@ -316,12 +316,12 @@ static inline int icmp_enqueue_redirect(fw_queue_t *icmp_queue, uint8_t code, ui
 
 /**
  * @brief Checks if an ICMP message type is an error type.
- * 
+ *
  * Determines whether the given ICMP type represents an error message by
  * checking against a bitmask of known error types.
- * 
+ *
  * @param type The ICMP message type to check.
- * 
+ *
  * @return true if the type is an ICMP error type, false otherwise.
  */
 static inline int icmp_is_error_type(int type)
