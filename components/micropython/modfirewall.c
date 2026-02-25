@@ -213,7 +213,7 @@ static mp_obj_t ping_response_set(mp_obj_t interface_idx_in, mp_obj_t enable_in)
         mp_raise_OSError(OS_ERR_INTERNAL_ERROR);
         return mp_const_none;
     }
-    
+
     /* Store the state of the ping response */
     webserver_state[interface_idx].ping_enabled = enable;
 
