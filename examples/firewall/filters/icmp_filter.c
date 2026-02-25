@@ -137,7 +137,7 @@ static void filter(void)
                     /* Return the buffer to the rx virtualiser */
                     err = net_enqueue_free(&rx_queue, buffer);
                     assert(!err);
-                    returned = true; 
+                    returned = true;
                 }
             }
         }

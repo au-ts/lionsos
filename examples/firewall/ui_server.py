@@ -393,7 +393,7 @@ def addRule(request, protocolStr):
         if action not in actionNums.keys():
             print(f"UI SERVER|ERR: Supplied invalid action {action}.")
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
-            
+
         if (protocol ==  protocolNums["tcp"] and action == 5):
           raise OSError(OSErrInvalidActionTcp, OSErrStrings[OSErrInvalidActionTcp])
 
