@@ -10,6 +10,21 @@
 #include <sddf/util/util.h>
 
 /**
+ * Firewall buffer descriptor. An extension of a network buffer description
+ * allowing the buffer's region to be tracked. Used in queues which hold buffers
+ * belonging to multiple regions for address translation and returning when
+ * freed.
+ */
+typedef struct fw_buff_desc {
+    /* offset of buffer within buffer memory region */
+    uint64_t offset;
+    /* length of data inside buffer */
+    uint16_t len;
+    /* id of memory region buffer belongs to */
+    uint8_t region_id;
+} fw_buff_desc_t;
+
+/**
  * Convert a 16 bit unsigned from host byte order to network byte order.
  *
  * @param n Integer represented in host byte order.

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <stdint.h>
 #include <os/sddf.h>
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
@@ -89,19 +90,20 @@ static void tx_provide(void)
 
     for (int client = 0; client < fw_config.num_active_clients; client++) {
         while (!fw_queue_empty(&fw_active_clients[client])) {
-            net_buff_desc_t buffer;
+            fw_buff_desc_t buffer;
             int err = fw_dequeue(&fw_active_clients[client], &buffer);
             assert(!err);
 
-            assert(buffer.io_or_offset % NET_BUFFER_SIZE == 0
-                   && buffer.io_or_offset < NET_BUFFER_SIZE * fw_active_clients[client].capacity);
+            assert(buffer.offset % NET_BUFFER_SIZE == 0
+                   && buffer.offset < NET_BUFFER_SIZE * fw_active_clients[client].capacity);
+            assert(buffer.region_id < fw_config.num_data_regions);
 
-            uintptr_t buffer_vaddr = buffer.io_or_offset
-                                   + (uintptr_t)fw_config.active_clients[client].data.region.vaddr;
+            uintptr_t buffer_vaddr = buffer.offset + (uintptr_t)fw_config.data_regions[buffer.region_id].region.vaddr;
             cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
-            buffer.io_or_offset = buffer.io_or_offset + fw_config.active_clients[client].data.io_addr;
+            uintptr_t io_addr = buffer.offset + fw_config.data_regions[buffer.region_id].io_addr;
 
-            err = net_enqueue_active(&tx_queue_drv, buffer);
+            net_buff_desc_t net_buffer = { .io_or_offset = io_addr, .len = buffer.len };
+            err = net_enqueue_active(&tx_queue_drv, net_buffer);
             assert(!err);
             enqueued = true;
         }
@@ -183,8 +185,8 @@ void init(void)
 
     /* Set up firewall queues */
     for (int i = 0; i < fw_config.num_active_clients; i++) {
-        fw_queue_init(&fw_active_clients[i], fw_config.active_clients[i].conn.queue.vaddr, sizeof(net_buff_desc_t),
-                      fw_config.active_clients[i].conn.capacity);
+        fw_queue_init(&fw_active_clients[i], fw_config.active_clients[i].queue.vaddr, sizeof(fw_buff_desc_t),
+                      fw_config.active_clients[i].capacity);
     }
 
     for (int i = 0; i < fw_config.num_free_clients; i++) {

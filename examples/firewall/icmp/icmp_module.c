@@ -18,6 +18,7 @@
 #include <lions/firewall/icmp.h>
 #include <lions/firewall/ip.h>
 #include <lions/firewall/queue.h>
+#include <lions/firewall/routing.h>
 
 __attribute__((__section__(".fw_icmp_module_config"))) fw_icmp_module_config_t icmp_config;
 __attribute__((__section__(".net_config_0"))) net_client_config_t net_config_0;
@@ -239,6 +240,7 @@ void init(void)
 {
     /* Setup the queue with the router. */
     fw_queue_init(&router_icmp_queue, icmp_config.router.queue.vaddr, sizeof(icmp_req_t), icmp_config.router.capacity);
+
     for (int out = 0; out < icmp_config.num_interfaces; out++) {
         /* Setup transmit queues with the transmit virtualisers. */
         net_queue_init(&net_queue[out], net_configs[out]->tx.free_queue.vaddr,
