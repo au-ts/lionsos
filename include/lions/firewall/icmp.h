@@ -243,10 +243,11 @@ static inline bool icmp_enqueue_error(fw_queue_t *icmp_queue, uint8_t type, uint
  *
  * @param icmp_queue Pointer to the ICMP queue to enqueue the request.
  * @param pkt_vaddr Virtual address of the packet data.
+ * @param out_interface Interface the reply should be transmitted from.
  *
  * @return true on success, false if the queue is full.
  */
-static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt_vaddr)
+static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt_vaddr, uint8_t out_interface)
 {
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
@@ -265,6 +266,7 @@ static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt
     icmp_req_t req = {0};
     req.type = ICMP_ECHO_REPLY;
     req.code = 0;
+    req.out_interface = out_interface;
     req.echo.echo_id = echo_id;
     req.echo.echo_seq = echo_seq;
     req.echo.payload_len = payload_len;

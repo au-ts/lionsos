@@ -43,22 +43,19 @@ static const char *fw_routing_err_str[] = { "Ok.",
                                             "Invalid route ID.",
                                             "Invalid route values." };
 
-/* routing interfaces */
-typedef enum {
-    /* no interface */
-    ROUTING_OUT_NONE = 0,
-    /* transmit out NIC */
-    ROUTING_OUT_EXTERNAL,
-    /* transmit internally within the system */
-    ROUTING_OUT_SELF
-} fw_routing_interfaces_t;
 
 /* PP call parameters for webserver to call router and update routing table */
 #define FW_ADD_ROUTE 0
 #define FW_DEL_ROUTE 1
 #define FW_SET_PING_RESPONSE 2
 
-typedef enum { ROUTER_ARG_ROUTE_ID = 0, ROUTER_ARG_IP, ROUTER_ARG_SUBNET, ROUTER_ARG_NEXT_HOP } fw_router_args_t;
+typedef enum {
+    ROUTER_ARG_ROUTE_ID = 0,
+    ROUTER_ARG_IP,
+    ROUTER_ARG_SUBNET,
+    ROUTER_ARG_NEXT_HOP,
+    ROUTER_ARG_INTERFACE
+} fw_router_args_t;
 
 typedef enum { ROUTER_RET_ERR = 0 } fw_router_ret_args_t;
 
@@ -82,8 +79,8 @@ typedef struct routing_table {
     fw_routing_entry_t entries[];
 } fw_routing_table_t;
 
-/* packet waiting node used to store outgoing packets before MAC address has
-been resolved */
+/* packet waiting node used to store outgoing packets for an interface before
+MAC address has been resolved */
 typedef struct pkt_waiting_node {
     /* next packet waiting node */
     uint16_t next;
@@ -97,7 +94,7 @@ typedef struct pkt_waiting_node {
     root node */
     uint32_t ip;
     /* buffer of outgoing packet */
-    net_buff_desc_t buffer;
+    fw_buff_desc_t buffer;
 } pkt_waiting_node_t;
 
 typedef struct pkts_waiting {
@@ -191,7 +188,7 @@ static pkt_waiting_node_t *pkts_waiting_next_child(pkts_waiting_t *pkts_waiting,
  * @return error status of operation.
  */
 static fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root,
-                                               net_buff_desc_t buffer)
+                                               fw_buff_desc_t buffer)
 {
     if (pkt_waiting_full(pkts_waiting)) {
         return ROUTING_ERR_FULL;
@@ -227,7 +224,7 @@ static fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt
  *
  * @return error status of operation.
  */
-static fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, net_buff_desc_t buffer)
+static fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, fw_buff_desc_t buffer)
 {
     if (pkt_waiting_full(pkts_waiting)) {
         return ROUTING_ERR_FULL;
@@ -318,57 +315,48 @@ static fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, p
  * looping.
  *
  * @param table address of routing table.
- * @param ip IP address to find route to.
- * @param next_hop address to store IP of next hop.
- * @param interface interface traffic should be routed out.
- * @param num_calls number of times fw_routing_find_route has been called
- * recursively. Pass 0 for maximum number of recursive calls.
+ * @param ip address of destination IP, modified to hold the IP of the next hop,
+ * or FW_ROUTING_NONEXTHOP if it is unreachable.
+ * @param interface address of the interface traffic should be routed out.
  *
  * @return error status of operation.
  */
-static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t ip, uint32_t *next_hop,
-                                              fw_routing_interfaces_t *interface, uint8_t num_calls,
-                                              fw_routing_entry_t **match)
+static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, uint8_t *interface)
 {
-    fw_routing_entry_t *current_best = NULL;
+    uint8_t num_lookups = 0;
+    while (num_lookups < FW_ROUTING_MAX_RECURSION) {
+        fw_routing_entry_t *match = NULL;
+        for (uint16_t i = 0; i < table->size; i++) {
+            fw_routing_entry_t *entry = table->entries + i;
 
-    for (uint16_t i = 0; i < table->size; i++) {
-        fw_routing_entry_t *entry = table->entries + i;
+            /* ip is part of subnet */
+            if ((subnet_mask(entry->subnet) & *ip) == entry->ip) {
+                /* Current match is stronger */
+                if (match != NULL && match->subnet > entry->subnet) {
+                    continue;
+                }
 
-        /* ip is part of subnet */
-        if ((subnet_mask(entry->subnet) & ip) == entry->ip) {
-
-            /* Current match is stronger */
-            if (current_best != NULL && current_best->subnet > entry->subnet) {
-                continue;
+                match = entry;
             }
-
-            current_best = entry;
         }
-    }
-    /* Saves the result of match to be used externally */
-    *match = current_best;
 
-    if (current_best == NULL) {
-        /* No route found */
-        *interface = ROUTING_OUT_NONE;
-    } else if (current_best->interface == ROUTING_OUT_SELF) {
-        /* Route internally */
-        *interface = ROUTING_OUT_SELF;
-    } else if (current_best->interface == ROUTING_OUT_EXTERNAL && current_best->next_hop == FW_ROUTING_NONEXTHOP) {
-        *next_hop = ip;
-        *interface = ROUTING_OUT_EXTERNAL;
-    } else if (current_best->interface == ROUTING_OUT_EXTERNAL && current_best->next_hop != FW_ROUTING_NONEXTHOP) {
-        num_calls++;
-        if (num_calls == FW_ROUTING_MAX_RECURSION) {
-            /* Find route has hit recursive call limit, ip unreachable. */
-            *interface = ROUTING_OUT_NONE;
+        if (match == NULL) {
+            /* No route found */
+            *ip = FW_ROUTING_NONEXTHOP;
             return ROUTING_ERR_OKAY;
         }
-        fw_routing_err_t err = fw_routing_find_route(table, current_best->next_hop, next_hop, interface, num_calls, match);
-        return err;
+
+        if (match->next_hop == FW_ROUTING_NONEXTHOP) {
+            *interface = match->interface;
+            return ROUTING_ERR_OKAY;
+        }
+
+        *ip = match->next_hop;
+        num_lookups++;
     }
 
+    /* No route found */
+    *ip = FW_ROUTING_NONEXTHOP;
     return ROUTING_ERR_OKAY;
 }
 
@@ -383,8 +371,8 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_
  *
  * @return error status of operation.
  */
-static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table, fw_routing_interfaces_t interface,
-                                                   uint32_t ip, uint8_t subnet, uint32_t next_hop)
+static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table, uint8_t interface, uint32_t ip,
+                                                   uint8_t subnet, uint32_t next_hop)
 {
     /* Default routes must specify a next hop! */
     if ((subnet == 0) && (next_hop == FW_ROUTING_NONEXTHOP)) {
@@ -445,24 +433,24 @@ static fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table,
 }
 
 /**
- * Initialise the routing table. Adds entry for external interface based on
- * external subnet.
+ * Initialise the routing table.
  *
  * @param table address of routing table.
  * @param table_vaddr address of routing entries.
  * @param capacity capacity of routing table.
- * @param extern_ip IP address of external interface.
- * @param extern_subnet subnet bits of external interface.
  */
-static void fw_routing_table_init(fw_routing_table_t **table, void *table_vaddr, uint16_t capacity, uint32_t extern_ip,
-                                  uint8_t extern_subnet)
+static void fw_routing_table_init(fw_routing_table_t **table, void *table_vaddr, uint16_t capacity,
+                                  fw_routing_entry_t *initial_routes, uint8_t num_initial_routes)
 {
     *table = (fw_routing_table_t *)table_vaddr;
     (*table)->capacity = capacity;
     (*table)->size = 0;
 
-    /* Add a route for external network */
-    fw_routing_err_t err = fw_routing_table_add_route(*table, ROUTING_OUT_EXTERNAL, extern_ip, extern_subnet,
-                                                      FW_ROUTING_NONEXTHOP);
-    assert(err == ROUTING_ERR_OKAY);
+    for (uint8_t r = 0; r < num_initial_routes; r++) {
+        fw_routing_err_t err = fw_routing_table_add_route(*table, initial_routes[r].interface,
+                                                          initial_routes[r].ip, initial_routes[r].subnet,
+                                                          initial_routes[r].next_hop);
+
+        assert(err == ROUTING_ERR_OKAY);
+    }
 }
