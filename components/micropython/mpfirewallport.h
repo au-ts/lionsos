@@ -20,16 +20,20 @@
 extern fw_webserver_config_t fw_config;
 
 /**
- * Firewall webserver data structure tracking the routing table and filter rules
- * for each network interface.
+ * Firewall webserver data structure tracking the filter rules for each network
+ * interface.
  */
 typedef struct fw_webserver_interface_state {
-    fw_routing_table_t *routing_table;
     fw_filter_state_t filter_states[FW_MAX_FILTERS];
     uint16_t num_rules[FW_MAX_FILTERS];
 } fw_webserver_interface_state_t;
 
-extern fw_webserver_interface_state_t webserver_state[FW_MAX_INTERFACES];
+extern fw_webserver_interface_state_t fw_interface_state[FW_MAX_INTERFACES];
+
+/**
+ * Firewall routing table.
+ */
+extern fw_routing_table_t *fw_routing_table;
 
 /**
  * Checks whether the pbuf contains an ARP request. All ARP requests and

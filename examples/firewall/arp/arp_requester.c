@@ -32,8 +32,8 @@ net_queue_handle_t tx_queue;
 serial_queue_handle_t serial_tx_queue_handle;
 
 /* Queues hold ARP requests/responses for router and webserver */
-fw_queue_t arp_req_queue[FW_NUM_ARP_REQUESTER_CLIENTS];
-fw_queue_t arp_resp_queue[FW_NUM_ARP_REQUESTER_CLIENTS];
+fw_queue_t arp_req_queue[FW_MAX_ARP_REQUESTER_CLIENTS];
+fw_queue_t arp_resp_queue[FW_MAX_ARP_REQUESTER_CLIENTS];
 
 /* ARP table caches ARP request responses */
 fw_arp_table_t arp_table;
@@ -42,7 +42,7 @@ fw_arp_table_t arp_table;
 static bool transmitted;
 
 /* Keep track of which clients require notification */
-static bool notify_client[FW_NUM_ARP_REQUESTER_CLIENTS] = { false };
+static bool notify_client[FW_MAX_ARP_REQUESTER_CLIENTS] = { false };
 
 #define ARP_MAX_RETRIES 5               /* How many times the ARP requester will send out an ARP request. */
 #define ARP_RETRY_TIMER_S 1             /* How often to retry an ARP request, in seconds. */

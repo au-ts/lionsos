@@ -163,20 +163,20 @@ def interfaceDetails(request, interfaceInt):
 
 ###### Routing config methods ######
 
-# Get routes for an interface
-@app.route('/api/routes/<int:interfaceInt>', methods=['GET'])
-def getRoutes(request, interfaceInt):
+# Get routes
+@app.route('/api/routes', methods=['GET'])
+def getRoutes(request):
     try:
         routes = []
-        route_count = lions_firewall.route_count(interfaceInt)
+        route_count = lions_firewall.route_count()
         for i in range(route_count):
-            route = lions_firewall.route_get_nth(interfaceInt, i)
+            route = lions_firewall.route_get_nth(i)
             routes.append({
                 "id": route[0],
                 "ip": intToIp(route[1]),
                 "subnet": route[2],
                 "next_hop": intToIp(route[3]),
-                "interface_out": route[4]
+                "interface": route[4],
             })
         return {"routes": routes}
     except OSError as OSErr:
@@ -186,11 +186,11 @@ def getRoutes(request, interfaceInt):
         print(f"UI SERVER|ERR: Unknown Error: getRoutes: {exception}.")
         return {"error": UnknownErrStr}, 404
 
-# Delete a route from an interface
-@app.route('/api/routes/<int:routeId>/<int:interfaceInt>', methods=['DELETE'])
-def deleteRoute(request, routeId, interfaceInt):
+# Delete a route
+@app.route('/api/routes/<int:routeId>', methods=['DELETE'])
+def deleteRoute(request, routeId):
     try:
-        lions_firewall.route_delete(interfaceInt, routeId)
+        lions_firewall.route_delete(routeId)
         return {"status": "ok"}
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: deleteRoute: {OSErrStrings[OSErr.errno]}")
@@ -200,7 +200,7 @@ def deleteRoute(request, routeId, interfaceInt):
         return {"error": UnknownErrStr}, 404
 
 
-# Add a route to an interface
+# Add a route
 @app.route('/api/routes', methods=['POST'])
 def addRoute(request):
     try:
@@ -242,7 +242,7 @@ def addRoute(request):
 ###### Filter rule methods ######
 
 # Get rules and default rules for an interface filter
-@app.route('/api/rules/<string:protocolStr>/<int:interfaceInt>', methods=["GET"])
+@app.route('/api/rules/<string:protocolStr>/<int:interfaceInt>', methods=['GET'])
 def getRules(request, protocolStr, interfaceInt):
     try:
         if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
@@ -501,17 +501,17 @@ def config(request):
     <table border="1">
       <thead>
         <tr>
-          <th>Interface In</th>
           <th>Route ID</th>
           <th>IP</th>
           <th>Subnet</th>
           <th>Next Hop</th>
-          <th>Interface Out</th>
+          <th>Interface</th>
+          <th></th>
         </tr>
       </thead>
       <tbody id="routes-body">
         <tr>
-          <td colspan="7">Loading routes...</td>
+          <td colspan="6">Loading routes...</td>
         </tr>
       </tbody>
     </table>
@@ -519,7 +519,7 @@ def config(request):
 
     <h3>Add New Route</h3>
     <p>
-      Interface In: <select id="new-interface"></select><br>
+      Interface: <select id="new-interface"></select><br>
       IP: <input type="text" id="new-ip" placeholder="e.g. 10.0.0.0"><br>
       Subnet: <input type="number" id="new-subnet" placeholder="e.g. 24"><br>
       Next Hop: <input type="text" id="new-next-hop" placeholder="e.g. 10.0.0.0"><br>
@@ -559,91 +559,86 @@ def config(request):
         function loadRoutes() {
           var routesBody = document.getElementById(`routes-body`);
           routesBody.innerHTML = "";
-          Object.keys(interfaceMap).forEach(id => {
-            fetch(`/api/routes/${id}`)
-              .then(function(response) { return response.json(); })
-              .then(function(data) {
-                if (data.routes.length === 0) {
+          fetch('/api/routes')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+              if (data.routes.length === 0) {
+                let row = document.createElement('tr');
+
+                let cellInterfaceIn = document.createElement('td');
+                cellInterfaceIn.textContent = interfaceMap[id];
+                row.appendChild(cellInterfaceIn);
+
+                let cellInterfaceNone = document.createElement('td');
+                cellInterfaceNone.textContent = "No routes available";
+                cellInterfaceNone.colSpan = 5;
+                row.appendChild(cellInterfaceNone);
+
+                routesBody.appendChild(row);
+              } else {
+                data.routes.forEach(function(route) {
                   let row = document.createElement('tr');
 
-                  let cellInterfaceIn = document.createElement('td');
-                  cellInterfaceIn.textContent = interfaceMap[id];
-                  row.appendChild(cellInterfaceIn);
+                  let cellId = document.createElement('td');
+                  cellId.textContent = route.id;
+                  row.appendChild(cellId);
 
-                  let cellInterfaceNone = document.createElement('td');
-                  cellInterfaceNone.textContent = "No routes available";
-                  cellInterfaceNone.colSpan = 6;
-                  row.appendChild(cellInterfaceNone);
+                  let cellDest = document.createElement('td');
+                  cellDest.textContent = route.subnet ? route.ip : "-";
+                  row.appendChild(cellDest);
+
+                  let cellSubnet = document.createElement('td');
+                  cellSubnet.textContent = route.subnet ? route.subnet : "-";
+                  row.appendChild(cellSubnet);
+
+                  let cellNextHop = document.createElement('td');
+                  cellNextHop.textContent = route.next_hop;
+                  row.appendChild(cellNextHop);
+
+                  let cellInterface = document.createElement('td');
+                  cellInterface.textContent = route.interface == interfaceMap[route.interface];
+                  row.appendChild(cellInterface);
+
+                  let cellActions = document.createElement('td');
+                  let delBtn = document.createElement('button');
+                  delBtn.textContent = "Delete";
+                  delBtn.addEventListener("click", function() {
+                    fetch('/api/routes/' + route.id, { method: 'DELETE' })
+                      .then(function(response) {
+                        if (!response.ok) throw new Error("Delete failed");
+                        return response.json();
+                      })
+                      .then(function(result) {
+                        alert("Route " + route.id + " deleted.");
+                        loadRoutes();
+                      })
+                      .catch(function(error) {
+                        alert("Error deleting route " + route.id);
+                      });
+                  });
+                  cellActions.appendChild(delBtn);
+                  row.appendChild(cellActions);
 
                   routesBody.appendChild(row);
-                } else {
-                  data.routes.forEach(function(route) {
-                    let row = document.createElement('tr');
-
-                    let cellInterfaceIn = document.createElement('td');
-                    cellInterfaceIn.textContent = interfaceMap[id];
-                    row.appendChild(cellInterfaceIn);
-
-                    let cellId = document.createElement('td');
-                    cellId.textContent = route.id;
-                    row.appendChild(cellId);
-
-                    let cellDest = document.createElement('td');
-                    cellDest.textContent = route.subnet ? route.ip : "-";
-                    row.appendChild(cellDest);
-
-                    let cellSubnet = document.createElement('td');
-                    cellSubnet.textContent = route.subnet ? route.subnet : "-";
-                    row.appendChild(cellSubnet);
-
-                    let cellNextHop = document.createElement('td');
-                    cellNextHop.textContent = route.next_hop;
-                    row.appendChild(cellNextHop);
-
-                    let cellInterfaceOut = document.createElement('td');
-                    cellInterfaceOut.textContent = route.interface_out == Object.keys(interfaceMap).length ? "firewall" : interfaceMap[route.interface_out];
-                    row.appendChild(cellInterfaceOut);
-
-                    let cellActions = document.createElement('td');
-                    let delBtn = document.createElement('button');
-                    delBtn.textContent = "Delete";
-                    delBtn.addEventListener("click", function() {
-                      fetch(`/api/routes/${route.id}/${id}`, { method: 'DELETE' })
-                        .then(function(response) {
-                          if (!response.ok) throw new Error("Delete failed");
-                          return response.json();
-                        })
-                        .then(function(result) {
-                          alert("Route " + route.id + " deleted.");
-                          loadRoutes("external");
-                        })
-                        .catch(function(error) {
-                          alert("Error deleting route " + route.id);
-                        });
-                    });
-                    cellActions.appendChild(delBtn);
-                    row.appendChild(cellActions);
-
-                    routesBody.appendChild(row);
-                  });
-                }
-              })
-              .catch(function(err) {
-                let row = document.createElement('tr');
-                row.innerHTML = "<td colspan='6'>Error retrieving routes</td>";
-                routesBody.appendChild(row);
-              });
-          });
+                });
+              }
+              return Promise.all(requests);
+            })
+            .catch(function(err) {
+              let row = document.createElement('tr');
+              row.innerHTML = "<td colspan='6'>Error retrieving routes</td>";
+              routesBody.appendChild(row);
+            });
         }
 
         loadInterfaces().then(loadRoutes);
 
         document.getElementById('add-route-btn').addEventListener('click', function() {
-          var interfaceId = Number(document.getElementById("new-interface").value);
+          var interfaceId = Number(document.getElementById('new-interface').value);
           var ip = document.getElementById('new-ip').value;
           var subnet = Number(document.getElementById('new-subnet').value);
           var next_hop = document.getElementById('new-next-hop').value;
-          fetch(`/api/routes`, {
+          fetch('/api/routes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ interface: interfaceId, ip: ip, subnet: subnet, next_hop: next_hop})
