@@ -1,14 +1,15 @@
-
-
-
-/**
- * Initialise packet waiting structure.
+/*
+ * Copyright 2025, UNSW
  *
- * @param pkts_waiting address of packets waiting structure.
- * @param packets virtual address of packets.
- * @param capacity number of available packet waiting nodes.
+ * SPDX-License-Identifier: BSD-2-Clause
  */
-static void pkt_waiting_init(pkts_waiting_t *pkts_waiting, void *packets, int16_t capacity)
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <lions/firewall/queue.h>
+#include <lions/firewall/routing.h>
+
+void pkt_waiting_init(pkts_waiting_t *pkts_waiting, void *packets, int16_t capacity)
 {
     pkts_waiting->packets = (pkt_waiting_node_t *)packets;
     pkts_waiting->capacity = capacity;
@@ -19,27 +20,12 @@ static void pkt_waiting_init(pkts_waiting_t *pkts_waiting, void *packets, int16_
     }
 }
 
-/**
- * Check if the packet waiting queue is full.
- *
- * @param pkts_waiting address of packets waiting structure.
- *
- * @return whether packet waiting queue is full.
- */
-static bool pkt_waiting_full(pkts_waiting_t *pkts_waiting)
+bool pkt_waiting_full(pkts_waiting_t *pkts_waiting)
 {
     return pkts_waiting->size == pkts_waiting->capacity;
 }
 
-/**
- * Find matching ip packet waiting node in packet waiting list.
- *
- * @param pkts_waiting address of packets waiting structure.
- * @param ip ip adress to match with.
- *
- * @return address of matching packet waiting root node or NULL if no match.
- */
-static pkt_waiting_node_t *pkt_waiting_find_node(pkts_waiting_t *pkts_waiting, uint32_t ip)
+pkt_waiting_node_t *pkt_waiting_find_node(pkts_waiting_t *pkts_waiting, uint32_t ip)
 {
     pkt_waiting_node_t *node = pkts_waiting->packets + pkts_waiting->head;
     for (uint16_t i = 0; i < pkts_waiting->length; i++) {
@@ -52,29 +38,12 @@ static pkt_waiting_node_t *pkt_waiting_find_node(pkts_waiting_t *pkts_waiting, u
     return NULL;
 }
 
-/**
- * Return the next child node, assumes child node is valid!
- *
- * @param pkts_waiting address of packets waiting structure.
- * @param node parent node.
- *
- * @return address of child node.
- */
-static pkt_waiting_node_t *pkts_waiting_next_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *node)
+pkt_waiting_node_t *pkts_waiting_next_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *node)
 {
     return pkts_waiting->packets + node->child;
 }
 
-/**
- * Add a child node to a root waiting node. Node passed must be a root node!
- *
- * @param pkts_waiting address of packets waiting structure.
- * @param root root node.
- * @param buffer buffer holding outgoing packet to be stored in new node.
- *
- * @return error status of operation.
- */
-static fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root,
+fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root,
                                                fw_buff_desc_t buffer)
 {
     if (pkt_waiting_full(pkts_waiting)) {
@@ -102,16 +71,7 @@ static fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt
     return ROUTING_ERR_OKAY;
 }
 
-/**
- * Add a new root node to IP packet list. Assumes no valid root node for IP.
- *
- * @param pkts_waiting address of packets waiting structure.
- * @param ip IP address of outgoing packet stored in new node.
- * @param buffer buffer holding outgoing packet to be stored in new node.
- *
- * @return error status of operation.
- */
-static fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, fw_buff_desc_t buffer)
+fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, fw_buff_desc_t buffer)
 {
     if (pkt_waiting_full(pkts_waiting)) {
         return ROUTING_ERR_FULL;
@@ -146,15 +106,7 @@ static fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t 
     return ROUTING_ERR_OKAY;
 }
 
-/**
- * Free a node and all its children. Must pass a root node!
- *
- * @param pkts_waiting address of packets waiting structure.
- * @param root root node to free.
- *
- * @return error status of operation.
- */
-static fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root)
+fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root)
 {
     /* First free children */
     uint16_t child_idx = root->child;
