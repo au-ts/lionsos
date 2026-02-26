@@ -5,7 +5,7 @@ import shutil
 from os import path
 from itertools import combinations
 from dataclasses import dataclass
-from typing import List, Dict, Any, Tuple
+from typing import List
 from importlib.metadata import version
 import ipaddress
 
@@ -13,23 +13,22 @@ from sdfgen import SystemDescription, Sddf, DeviceTree
 
 assert version("sdfgen").split(".")[1] == "28", "Unexpected sdfgen version"
 
-from pyfw.specs import (
-    TrackedNet, QueueConnection, ArpConnection,
-    PairedRegion, PrivateRegion, ReMappableRegion,
+from pyfw.memory_layout import (
+    FirewallDataStructure,
+    FirewallMemoryRegions,
+    UINT64_BYTES,
+    resolve_region_sizes,
 )
-from pyfw.config_structs import (
-    FwDataConnectionResource, FwWebserverFilterConfig, FwRule,
-    FwWebserverRouterConfig, FwWebserverInterfaceConfig,
-)
-from pyfw.components import (
-    NetworkInterface, InterfacePriorities,
-    NetVirtRx, NetVirtTx, ArpRequester, ArpResponder, Filter,
-    Router, Webserver, IcmpModule,
-)
+from pyfw.specs import TrackedNet, FirewallMemoryRegion
+from pyfw.component_arp import ArpRequester, ArpResponder
+from pyfw.component_filter import Filter
+from pyfw.component_icmp import IcmpModule
+from pyfw.component_models import InterfacePriorities, NetworkInterface
+from pyfw.component_net_virt import NetVirtRx, NetVirtTx
+from pyfw.component_router import Router
+from pyfw.component_webserver import Webserver
 
 SDF_ProtectionDomain = SystemDescription.ProtectionDomain
-SDF_MemoryRegion = SystemDescription.MemoryRegion
-SDF_Map = SystemDescription.Map
 SDF_Channel = SystemDescription.Channel
 
 
@@ -61,9 +60,7 @@ def ip_to_int(ipString: str) -> int:
     reversedIp = ".".join(ipSplit)
     return int(ipaddress.IPv4Address(reversedIp))
 
-
 maxPortNum = 65535
-
 
 def htons(portNum):
     if portNum < 0 or portNum > maxPortNum:
@@ -72,12 +69,6 @@ def htons(portNum):
         )
     return ((portNum & 0xFF) << 8) | ((portNum & 0xFF00) >> 8)
 
-
-def encode_iface_name(name: str) -> List[int]:
-    raw = name.encode("ascii", "ignore")[:31]
-    return list(raw)
-
-interface_names = ["external", "internal"] # Max length 63 characters
 
 @dataclass
 class Board:
@@ -106,130 +97,10 @@ BOARDS: List[Board] = [
         paddr_top=0x70_000_000,
         serial="soc@0/bus@30800000/serial@30890000",
         timer="soc@0/bus@30000000/timer@302d0000",
-        ethernet0="soc@0/bus@30800000/ethernet@30be0000",  # IMX
-        ethernet1="soc@0/bus@30800000/ethernet@30bf0000",  # DWMAC
+        ethernet0="soc@0/bus@30800000/ethernet@30bf0000",  # DWMAC
+        ethernet1="soc@0/bus@30800000/ethernet@30be0000",  # IMX
     ),
 ]
-
-page_size = 0x1000
-Uint64_Bytes = 8
-
-def round_up_to_Page(size: int) -> int:
-    if size < page_size:
-        return page_size
-    elif size % page_size == 0:
-        return size
-    else:
-        return size + (page_size - (size % page_size))
-
-# Class for encoding data structures that are held inside memory regions. Allows
-# the metaprogram to extract the size of struct types from firewall .elf files
-class FirewallDataStructure:
-    def __init__(
-        self,
-        *,
-        size: int = 0,
-        entry_size: int = 0,
-        capacity: int = 1,
-        size_formula=lambda x: x.entry_size * x.capacity,
-        elf_name=None,
-        c_name=None,
-    ):
-        self.size = size
-        self.entry_size = entry_size
-        self.capacity = capacity
-        self.size_formula = size_formula
-        self.elf_name = elf_name
-        self.c_name = c_name
-
-        if not size and (entry_size and capacity):
-            self.size = size_formula(self)
-
-        if not self.size and not (elf_name and c_name):
-            raise Exception(
-                "FirewallDataStructure: Structure of size 0 created with invalid .elf extraction parameters!"
-            )
-
-    # To be called after entry size has been extracted
-    def calculate_size(self):
-        if self.size:
-            return
-        if not self.entry_size:
-            raise Exception(
-                f"FirewallDataStructure: Entry size of structure with c name {self.c_name} was 0 during size calculation!"
-            )
-        self.size = self.size_formula(self)
-        if not self.size:
-            raise Exception(
-                f"FirewallDataStructure: Calculated size of structure with c name {self.c_name},"
-                    "entry size {self.entry_size} and capacity {self.capacity} was 0!"
-            )
-
-    # Call to recalculate size after data structure update
-    def update_size(self):
-        if not self.entry_size:
-            raise Exception(
-                f"FirewallDataStructure: Entry size of structure with c name {self.c_name} was 0 during size recalculation!"
-            )
-        self.size = self.size_formula(self)
-        if not self.size:
-            raise Exception(
-                    f"FirewallDataStructure: Recalculated size of structure with c name {self.c_name},"
-                        "entry size {self.entry_size} and capacity {self.capacity} was 0!"
-            )
-
-# Class for creating firewall memory regions to be mapped into components.
-# Memory regions can be created directly, or by listing the data structures to
-# be held within them. Data structures are encoded using the
-# FirewallDataStructure class. This allows the metaprogram to extract the size
-# of the data structures and calculate the size a memory region requires in
-# order to hold all the data structures within it.
-class FirewallMemoryRegions:
-    regions = []
-
-    def __init__(
-        self,
-        *,
-        min_size: int = 0,
-        data_structures: List[FirewallDataStructure] = [],
-        size_formula=lambda list: sum(item.size for item in list),
-    ):
-        self.min_size = min_size
-        self.data_structures = data_structures
-        self.size_formula = size_formula
-
-        if not min_size and not len(data_structures):
-            raise Exception(
-                "FirewallMemoryRegions: Region of size 0 created without internal data structure components"
-            )
-        FirewallMemoryRegions.regions.append(self)
-
-    # To be called after data structure sizes have been calculated
-    def calculate_size(self):
-        if self.min_size:
-            return
-        self.min_size = self.size_formula(self.data_structures)
-        if not self.min_size:
-            raise Exception(
-                f"FirewallMemoryRegions: Calculated minimum size of region with data structure list {self.data_structures} was 0!"
-            )
-
-    # Call to recalculate size after data structure update
-    def update_size(self):
-        for structure in self.data_structures:
-            structure.update_size()
-        self.min_size = self.size_formula(self.data_structures)
-        if not self.min_size:
-            raise Exception(
-                f"FirewallMemoryRegions: Recalculated minimum size of region with data structure list {self.data_structures} was 0!"
-            )
-
-    @property
-    def region_size(self):
-        if not self.min_size:
-            return 0
-        return round_up_to_Page(self.min_size)
-
 
 # Firewall memory region and data structure object declarations, update region capacities here
 fw_queue_wrapper = FirewallDataStructure(elf_name="routing.elf", c_name="fw_queue")
@@ -270,10 +141,10 @@ arp_packet_queue_region = FirewallMemoryRegions(
 )
 
 routing_table_wrapper = FirewallDataStructure(
-    elf_name="routing.elf", c_name="routing_table"
+    elf_name="routing.elf", c_name="fw_routing_table"
 )
 routing_table_buffer = FirewallDataStructure(
-    elf_name="routing.elf", c_name="routing_entry", capacity=256
+    elf_name="routing.elf", c_name="fw_routing_entry", capacity=256
 )
 routing_table_region = FirewallMemoryRegions(
     data_structures=[routing_table_wrapper, routing_table_buffer]
@@ -303,7 +174,7 @@ filter_rule_bitmap_wrapper = FirewallDataStructure(
     elf_name="icmp_filter.elf", c_name="fw_rule_id_bitmap"
 )
 filter_rule_bitmap_buffer = FirewallDataStructure(
-    entry_size=Uint64_Bytes, capacity=(filter_rules_buffer.capacity + 63) // 64
+    entry_size=UINT64_BYTES, capacity=(filter_rules_buffer.capacity + 63) // 64
 )
 filter_rule_bitmap_region = FirewallMemoryRegions(
     data_structures=[filter_rule_bitmap_wrapper, filter_rule_bitmap_buffer]
@@ -327,539 +198,14 @@ ip_protocol_udp = 0x11
 arp_eth_opcode_request = 1
 arp_eth_opcode_response = 2
 
-def create_net_subsystem(sdf_obj: SystemDescription, dtb: DeviceTree, iface: NetworkInterface) -> None:
-    """Create the sDDF Net subsystem for a single interface."""
-    ethernet_node = dtb.node(iface.ethernet_node_path)
-    assert ethernet_node is not None, (
-        f"Could not find device tree node: {iface.ethernet_node_path}"
-    )
-
-    iface.net_system = TrackedNet(
-        sdf_obj,
-        ethernet_node,
-        iface.driver,
-        iface.tx_virt.pd,
-        iface.rx_virt.pd,
-        iface.rx_dma_region.get_mr(),
-        interface_index=iface.index,
-    )
-
-
-def register_pds(
-    sdf_obj: SystemDescription,
-    interfaces: List[NetworkInterface],
-    timer_driver: SDF_ProtectionDomain,
-    serial_driver: SDF_ProtectionDomain,
-    serial_virt_tx: SDF_ProtectionDomain,
-    router: Router,
-    webserver: Webserver,
-    icmp_module: IcmpModule,
-) -> None:
-    """Register all PDs with the SDF and copy ELFs for per-interface components."""
-    for pd in [timer_driver, serial_driver, serial_virt_tx, webserver.pd, icmp_module.pd, router.pd]:
-        sdf_obj.add_pd(pd)
-
-    for iface in interfaces:
-        for comp in [iface.tx_virt, iface.rx_virt, iface.arp_requester, iface.arp_responder]:
-            copy_elf(comp.pd.program_image[:-5], comp.pd.program_image[:-5], iface.index)
-            sdf_obj.add_pd(comp.pd)
-
-        sdf_obj.add_pd(iface.driver)
-
-        for filt in iface.filters.values():
-            copy_elf(filt.pd.program_image[:-5], filt.pd.program_image[:-5], iface.index)
-            sdf_obj.add_pd(filt.pd)
-
-
-def wire_interface_connections(
-    sdf_obj: SystemDescription,
-    interfaces: List[NetworkInterface],
-    router: Router,
-    webserver: Webserver,
-    serial_system: Sddf.Serial,
-    timer_system: Sddf.Timer,
-) -> None:
-    """Setup Per Interface Connections"""
-    for iface in interfaces:
-        # ARP requester is network client
-        iface.net_system.add_client_with_copier(iface.arp_requester.pd)
-
-        # Router -> RX virt queue (buffer return)
-        router_rx_virt = QueueConnection(
-            sdf=sdf_obj,
-            name="router_rx_virt",
-            src_pd=router.pd,
-            dst_pd=iface.rx_virt.pd,
-            capacity=dma_buffer_queue.capacity,
-            queue_size=dma_buffer_queue_region.region_size,
-            category="buffer_return",
-            interface_index=iface.index,
-        )
-
-        # RX virt: register ARP requester ethtype
-        iface.rx_virt.add_active_client(ethtype_arp, arp_eth_opcode_response)
-        # Add buffer return from router as free client
-        iface.rx_virt.add_free_client(router_rx_virt.dst)
-
-        # ARP requester needs timer and serial access
-        timer_system.add_client(iface.arp_requester.pd)
-        serial_system.add_client(iface.arp_requester.pd)
-
-        # ARP responder is network and serial client
-        iface.net_system.add_client_with_copier(iface.arp_responder.pd)
-        serial_system.add_client(iface.arp_responder.pd)
-        iface.rx_virt.add_active_client(ethtype_arp, arp_eth_opcode_request)
-
-        # Router <-> ARP requester
-        router_arp = ArpConnection(
-            sdf=sdf_obj,
-            name="router_arp",
-            pd1=router.pd,
-            pd2=iface.arp_requester.pd,
-            capacity=arp_queue_buffer.capacity,
-            queue_size=arp_queue_region.region_size,
-            interface_index=iface.index,
-        )
-        iface.arp_requester.add_arp_client(router_arp.pd2)
-
-        # ARP cache
-        arp_cache = PairedRegion(
-            sdf=sdf_obj,
-            name="arp_cache",
-            size=arp_cache_region.region_size,
-            owner_pd=iface.arp_requester.pd,
-            peer_pd=router.pd,
-            owner_perms="rw",
-            peer_perms="r",
-            category="arp_cache",
-            interface_index=iface.index,
-        )
-        iface.arp_requester.set_cache(arp_cache.owner, arp_cache_buffer.capacity)
-
-        # Create RouterInterface
-        ri = router.create_interface()
-        ri.rx_free = router_rx_virt.src
-        ri.data = iface.rx_dma_region.map(pd=router.pd, perms="rw")
-        ri.arp_queue = router_arp.pd1
-        ri.arp_cache = arp_cache.peer
-        ri.arp_cache_capacity = arp_cache_buffer.capacity
-        ri.mac_addr = iface.mac_list
-        ri.ip = iface.ip_int
-        ri.subnet = iface.subnet_bits
-        iface.router_interface = ri
-
-        # Filters
-        for protocol, filt in iface.filters.items():
-            # Filter -> router connection
-            filter_router = QueueConnection(
-                sdf=sdf_obj,
-                name=f"filter_{filt.name}_router",
-                src_pd=filt.pd,
-                dst_pd=router.pd,
-                capacity=dma_buffer_queue.capacity,
-                queue_size=dma_buffer_queue_region.region_size,
-                category="filter",
-                interface_index=iface.index,
-            )
-
-            # Connect filter as RX-only network client
-            iface.net_system.add_client_with_copier(filt.pd, tx=False)
-            iface.rx_virt.add_active_client(eththype_ip, protocol)
-
-            # Rule bitmap
-            rule_bitmap = PrivateRegion(
-                sdf=sdf_obj,
-                name="rule_bitmap_" + filt.name,
-                size=filter_rule_bitmap_region.region_size,
-                pd=filt.pd,
-                category="rule_bitmap",
-                interface_index=iface.index,
-            )
-
-            # Filter rules region
-            filter_rules = PairedRegion(
-                sdf=sdf_obj,
-                name="filter_rules",
-                size=filter_rules_region.region_size,
-                owner_pd=filt.pd,
-                peer_pd=webserver.pd,
-                owner_perms="rw",
-                peer_perms="r",
-                category="filter_rules",
-                interface_index=iface.index,
-            )
-
-            # SDF_Channel for rule updates
-            filter_update_ch = SDF_Channel(webserver.pd, filt.pd, pp_a=True)
-            sdf_obj.add_channel(filter_update_ch)
-
-            # Store webserver filter config for this filter
-            filt._webserver_filter_config = FwWebserverFilterConfig(
-                protocol=protocol,
-                ch=filter_update_ch.pd_a_id,
-                rules=filter_rules.peer,
-                rules_capacity=filter_rules_buffer.capacity,
-            )
-
-            # Populate filter component state
-            filt.set_router_connection(filter_router.src)
-            filt.set_rules_region(filter_rules.owner, filter_rules_buffer.capacity)
-            filt.set_rule_bitmap(rule_bitmap.resource)
-            filt._instances_capacity = filter_instances_buffer.capacity
-
-            ri.add_filter(filter_router.dst)
-
-
-def wire_routing_connections(
-    sdf_obj: SystemDescription,
-    interfaces: List[NetworkInterface],
-    router: Router,
-    serial_system: Sddf.Serial,
-) -> None:
-    """Wire cross-interface routing: router->tx_virt data + tx_virt->rx_virt return."""
-    # Add the routing component as a serial_client
-    serial_system.add_client(router.pd)
-
-    for dst_iface in interfaces:
-        router_tx_virt = QueueConnection(
-                sdf=sdf_obj,
-                name=f"router_tx_virt_{dst_iface.index}",
-                src_pd=router.pd,
-                dst_pd=dst_iface.tx_virt.pd,
-                capacity=dma_buffer_queue.capacity,
-                queue_size=dma_buffer_queue_region.region_size,
-                category="data",
-                interface_index=dst_iface.index
-                )
-        dst_iface.router_interface.tx_active = router_tx_virt.src
-        dst_iface.tx_virt.add_active_client(router_tx_virt.dst)
-
-        for src_iface in interfaces:
-            # SDF_Map src DMA region into dst tx_virt for read access
-            tx_virt_dma = src_iface.rx_dma_region.map_device(pd=dst_iface.tx_virt.pd, perms="r")
-
-            dst_iface.tx_virt.add_data_region(tx_virt_dma)
-
-            # dst.tx_virt -> src.rx_virt buffer return queue
-            tx_rx_return = QueueConnection(
-                sdf=sdf_obj,
-                name=f"tx_rx_return_{src_iface.index}_{dst_iface.index}",
-                src_pd=dst_iface.tx_virt.pd,
-                dst_pd=src_iface.rx_virt.pd,
-                capacity=dma_buffer_queue.capacity,
-                queue_size=dma_buffer_queue_region.region_size,
-                name_suffix=f"{src_iface.index}{dst_iface.index}",
-                category="buffer_return",
-            )
-
-            # TX free client (queue + data reusing tx_virt's existing DMA mapping)
-            dst_iface.tx_virt.add_free_client(
-                FwDataConnectionResource(conn=tx_rx_return.src, data=tx_virt_dma)
-            )
-            # RX virt free client (queue only)
-            src_iface.rx_virt.add_free_client(tx_rx_return.dst)
-
-def wire_webserver_connections(
-    sdf_obj: SystemDescription,
-    interfaces: List[NetworkInterface],
-    router: Router,
-    webserver: Webserver,
-    serial_system: Sddf.Serial,
-    timer_system: Sddf.Timer,
-    webserver_interface_idx: int,
-) -> Sddf.Lwip:
-    """Wire webserver connections."""
-    ws_iface = interfaces[webserver_interface_idx]
-    serial_system.add_client(webserver.pd)
-    timer_system.add_client(webserver.pd)
-
-    # Webserver is TX client of webserver interface network
-    ws_iface.net_system.add_client_with_copier(webserver.pd, rx=False)
-
-    # Webserver uses lib sDDF LWIP
-    webserver_lib_sddf_lwip = Sddf.Lwip(sdf_obj, ws_iface.net_system._net, webserver.pd)
-
-    # Router -> webserver
-    router_ws = QueueConnection(
-        sdf=sdf_obj,
-        name="router_webserver",
-        src_pd=router.pd,
-        dst_pd=webserver.pd,
-        capacity=dma_buffer_queue.capacity,
-        queue_size=dma_buffer_queue_region.region_size,
-        category="data",
-    )
-    webserver.set_rx_active(router_ws.dst)
-    router.set_webserver_rx(router_ws.src)
-
-    # Webserver -> ws_iface.rx_virt (buffer return)
-    ws_rx_virt = QueueConnection(
-        sdf=sdf_obj,
-        name="webserver_rx_virt_return",
-        src_pd=webserver.pd,
-        dst_pd=ws_iface.rx_virt.pd,
-        capacity=dma_buffer_queue.capacity,
-        queue_size=dma_buffer_queue_region.region_size,
-        category="buffer_return",
-        interface_index=ws_iface.index,
-    )
-    webserver.set_rx_free(ws_rx_virt.src)
-    ws_iface.rx_virt.add_free_client(ws_rx_virt.dst)
-
-    # Webserver DMA access
-    webserver_data_region = ws_iface.rx_dma_region.map(pd=webserver.pd, perms="rw")
-    webserver.set_data(webserver_data_region)
-
-    # Webserver ARP
-    ws_arp = ArpConnection(
-        sdf=sdf_obj,
-        name="webserver_arp",
-        pd1=webserver.pd,
-        pd2=ws_iface.arp_requester.pd,
-        capacity=arp_queue_buffer.capacity,
-        queue_size=arp_queue_region.region_size,
-        interface_index=ws_iface.index,
-    )
-    webserver.set_arp_connection(ws_arp.pd1)
-    ws_iface.arp_requester.add_arp_client(ws_arp.pd2)
-
-    # Routing table shared between router and webserver
-    routing_table = PairedRegion(
-        sdf=sdf_obj,
-        name="routing_table",
-        size=routing_table_region.region_size,
-        owner_pd=router.pd,
-        peer_pd=webserver.pd,
-        owner_perms="rw",
-        peer_perms="r",
-        category="routing_table",
-    )
-
-    # PP channel for routing table updates
-    router_update_ch = SDF_Channel(webserver.pd, router.pd, pp_a=True)
-    sdf_obj.add_channel(router_update_ch)
-
-    # Router webserver config
-    router_ws_config = FwWebserverRouterConfig(
-        routing_ch=router_update_ch.pd_b_id,
-        routing_table=routing_table.owner,
-        routing_table_capacity=routing_table_buffer.capacity,
-    )
-    router.set_webserver_config(router_ws_config)
-
-    webserver_router_config = FwWebserverRouterConfig(
-        routing_ch=router_update_ch.pd_a_id,
-        routing_table=routing_table.peer,
-        routing_table_capacity=routing_table_buffer.capacity,
-    )
-    webserver.set_router_config(webserver_router_config)
-    webserver.set_interface(webserver_interface_idx)
-    router.set_webserver_interface(webserver_interface_idx)
-
-    # Router packet queue
-    arp_pq = PrivateRegion(
-        sdf=sdf_obj,
-        name="arp_packet_queue",
-        size=arp_packet_queue_region.region_size,
-        pd=router.pd,
-        category="arp_packet_queue",
-    )
-    router.set_packet_queue(arp_pq.resource, arp_packet_queue_buffer.capacity)
-
-    # Webserver interface configs
-    for iface in interfaces:
-        ws_filter_configs = []
-        for proto in sorted(iface.filters.keys()):
-            filt = iface.filters[proto]
-            ws_filter_configs.append(filt._webserver_filter_config)
-
-        ws_iface_cfg = FwWebserverInterfaceConfig(
-            mac_addr=iface.mac_list,
-            ip=iface.ip_int,
-            filters=ws_filter_configs,
-            name=encode_iface_name(iface.name),
-        )
-        webserver.add_interface_config(ws_iface_cfg)
-
-    return webserver_lib_sddf_lwip
-
-
-def wire_icmp_connections(
-    sdf_obj: SystemDescription,
-    interfaces: List[NetworkInterface],
-    router: Router,
-    icmp_module: IcmpModule,
-) -> None:
-    """Wire ICMP module connections."""
-    for iface in interfaces:
-        iface.net_system.add_client_with_copier(icmp_module.pd, rx=False)
-        icmp_module.add_ip(iface.ip_int)
-
-    icmp_conn = QueueConnection(
-        sdf=sdf_obj,
-        name="icmp_router",
-        src_pd=router.pd,
-        dst_pd=icmp_module.pd,
-        capacity=icmp_queue_buffer.capacity,
-        queue_size=icmp_queue_region.region_size,
-        category="icmp",
-    )
-    router.set_icmp_connection(icmp_conn.src)
-    icmp_module.set_router_connection(icmp_conn.dst)
-
-
-def wire_filter_rules(interfaces: List[NetworkInterface], webserver_interface_idx: int) -> None:
-    """Set default and initial filter rules for all interfaces."""
-    actionNums = {"Allow": 1, "Drop": 2, "Connect": 3}
-    ws_iface = interfaces[webserver_interface_idx]
-    ws_ip = ws_iface.ip_int
-    dst_subnet = 32
-
-    for iface in interfaces:
-        is_web_server = iface.index == webserver_interface_idx
-
-        for protocol, filt in iface.filters.items():
-            default_rule = FwRule(
-                action=actionNums["Drop"],
-                src_port_any=True,
-                dst_port_any=True,
-            )
-            filt.add_initial_rule(default_rule)
-
-            filt.add_initial_rule(
-                FwRule(
-                    action=actionNums["Drop"],
-                    dst_ip=ws_ip,
-                    dst_subnet=dst_subnet,
-                    src_port_any=True,
-                    dst_port_any=True,
-                )
-            )
-            if protocol == ip_protocol_tcp:
-                if is_web_server:
-                    filt.add_initial_rule(
-                        FwRule(
-                            action=actionNums["Connect"],
-                            dst_ip=ws_ip,
-                            dst_subnet=dst_subnet,
-                            dst_port=htons(80),
-                            src_port_any=True,
-                        )
-                    )
-
-def wire_filter_instances(
-    sdf_obj: SystemDescription, interfaces: List[NetworkInterface],
-) -> None:
-    """Create filter instance sharing between interface pairs."""
-    if len(interfaces) < 2:
-        return
-
-    for iface, other_iface in combinations(interfaces, 2):
-        for protocol in iface.filters.keys():
-            filt = iface.filters[protocol]
-            mirror_filt = other_iface.filters[protocol]
-
-            # local_instances: filt owns, mirror_filt reads
-            local_instances = PairedRegion(
-                sdf=sdf_obj,
-                name="instances",
-                size=filter_instances_region.region_size,
-                owner_pd=filt.pd,
-                peer_pd=mirror_filt.pd,
-                owner_perms="rw",
-                peer_perms="r",
-                category="filter_instances",
-                interface_index=iface.index,
-            )
-
-            # remote_instances: mirror_filt owns, filt reads
-            remote_instances = PairedRegion(
-                sdf=sdf_obj,
-                name="instances",
-                size=filter_instances_region.region_size,
-                owner_pd=mirror_filt.pd,
-                peer_pd=filt.pd,
-                owner_perms="rw",
-                peer_perms="r",
-                category="filter_instances",
-                interface_index=other_iface.index,
-            )
-
-            # Update both filters
-            filt.set_instances(local_instances.owner, remote_instances.peer, filter_instances_buffer.capacity)
-            mirror_filt.set_instances(remote_instances.owner, local_instances.peer, filter_instances_buffer.capacity)
-
-
-def finalize_all_configs(
-    interfaces: List[NetworkInterface], router: Router, webserver: Webserver, icmp_module: IcmpModule,
-) -> None:
-    """Finalize configs for all components."""
-    for iface in interfaces:
-        for comp in iface.all_components():
-            comp.finalize_config()
-    router.finalize_config()
-    webserver.finalize_config()
-    icmp_module.finalize_config()
-
-
-def serialize_all(
-    output_dir: str,
-    interfaces: List[NetworkInterface],
-    router: Router,
-    webserver: Webserver,
-    icmp_module: IcmpModule,
-    obj_copy_path: str,
-) -> None:
-    """Serialize configs to data files and update ELF sections."""
-    for iface in interfaces:
-        iface_out_dir = f"{output_dir}/{iface.out_dir}"
-
-        for comp in iface.all_components():
-            data_path = f"{iface_out_dir}/firewall_config_{comp.name}.data"
-            with open(data_path, "wb+") as f:
-                f.write(comp.config.serialise())
-            update_elf_section(obj_copy_path, comp.pd.program_image, comp.config.section_name, data_path)
-
-    # Router
-    data_path = f"{output_dir}/firewall_config_routing.data"
-    with open(data_path, "wb+") as f:
-        f.write(router.config.serialise())
-    update_elf_section(obj_copy_path, router.pd.program_image, router.config.section_name, data_path)
-
-    # Webserver
-    data_path = f"{output_dir}/firewall_config_webserver.data"
-    with open(data_path, "wb+") as f:
-        f.write(webserver.config.serialise())
-    update_elf_section(obj_copy_path, webserver.pd.program_image, webserver.config.section_name, data_path)
-
-    # ICMP module
-    data_path = f"{output_dir}/firewall_icmp_module_config.data"
-    with open(data_path, "wb+") as f:
-        f.write(icmp_module.config.serialise())
-    update_elf_section(obj_copy_path, icmp_module.pd.program_image, icmp_module.config.section_name, data_path)
-
-
 def generate(sdf_file: str, output_dir: str, dtb: DeviceTree) -> None:
-    webserver_interface_idx = 0
+    webserver_interface_idx = 1
 
     interfaces = [
         NetworkInterface(
             index=0,
-            name="internal",
-            ethernet_node_path=board.ethernet0,
-            mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x10),
-            ip="192.168.1.1",
-            subnet_bits=24,
-            priorities=InterfacePriorities(
-                arp_requester=95,
-                arp_responder=93,
-                icmp_filter=93,
-            ),
-        ),
-        NetworkInterface(
-            index=1,
             name="external",
-            ethernet_node_path=board.ethernet1,
+            ethernet_node_path=board.ethernet0,
             mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x18),
             ip="172.16.2.1",
             subnet_bits=16,
@@ -869,9 +215,22 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree) -> None:
                 icmp_filter=90,
             ),
         ),
+        NetworkInterface(
+            index=1,
+            name="internal",
+            ethernet_node_path=board.ethernet1,
+            mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x10),
+            ip="192.168.1.1",
+            subnet_bits=24,
+            priorities=InterfacePriorities(
+                arp_requester=95,
+                arp_responder=93,
+                icmp_filter=93,
+            ),
+        ),
     ]
 
-    # Phase 1: Create component objects
+    # Phase 1: Create component classes
     for iface in interfaces:
         prio = iface.priorities
 
@@ -898,12 +257,9 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree) -> None:
             ip_protocol_tcp: Filter(iface.index, ip_protocol_tcp, sdf, prio.tcp_filter),
         }
 
-        dma_region = SDF_MemoryRegion(
-            sdf, f"rx_dma_region{iface.index}", dma_buffer_region.region_size, physical=True
+        iface.rx_dma_region = FirewallMemoryRegion(
+            sdf, f"rx_dma_region{iface.index}", dma_buffer_region.region_size, physical=True,
         )
-
-        iface.rx_dma_region = ReMappableRegion(name=f"rx_dma_region{iface.index}", mr=dma_region, size=dma_region.size, category="dma_buffer")
-        sdf.add_mr(iface.rx_dma_region.get_mr())
 
         iface_out_dir = f"{output_dir}/{iface.out_dir}"
         if not path.isdir(iface_out_dir):
@@ -972,6 +328,546 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree) -> None:
         f.write(sdf.render())
 
 
+def create_net_subsystem(sdf_obj: SystemDescription, dtb: DeviceTree, iface: NetworkInterface) -> None:
+    """Create the sDDF Net subsystem for a single interface."""
+    ethernet_node = dtb.node(iface.ethernet_node_path)
+    assert ethernet_node is not None, (
+        f"Could not find device tree node: {iface.ethernet_node_path}"
+    )
+
+    iface.net_system = TrackedNet(
+        sdf_obj,
+        ethernet_node,
+        iface.driver,
+        iface.tx_virt.pd,
+        iface.rx_virt.pd,
+        iface.rx_dma_region.mr,
+        interface_index=iface.index,
+    )
+
+
+def register_pds(
+    sdf_obj: SystemDescription,
+    interfaces: List[NetworkInterface],
+    timer_driver: SDF_ProtectionDomain,
+    serial_driver: SDF_ProtectionDomain,
+    serial_virt_tx: SDF_ProtectionDomain,
+    router: Router,
+    webserver: Webserver,
+    icmp_module: IcmpModule,
+) -> None:
+    """Register all PDs with SDF and copy ELFs for per-interface components."""
+    for pd in [timer_driver, serial_driver, serial_virt_tx, webserver.pd, icmp_module.pd, router.pd]:
+        sdf_obj.add_pd(pd)
+
+    for iface in interfaces:
+        for comp in [iface.tx_virt, iface.rx_virt, iface.arp_requester, iface.arp_responder]:
+            copy_elf(comp.pd.program_image[:-5], comp.pd.program_image[:-5], iface.index)
+            sdf_obj.add_pd(comp.pd)
+
+        sdf_obj.add_pd(iface.driver)
+
+        for filt in iface.filters.values():
+            copy_elf(filt.pd.program_image[:-5], filt.pd.program_image[:-5], iface.index)
+            sdf_obj.add_pd(filt.pd)
+
+
+def wire_interface_connections(
+    sdf_obj: SystemDescription,
+    interfaces: List[NetworkInterface],
+    router: Router,
+    webserver: Webserver,
+    serial_system: Sddf.Serial,
+    timer_system: Sddf.Timer,
+) -> None:
+    """These are the Per Interface Connections"""
+    for iface in interfaces:
+        # ARP requester is network client
+        iface.net_system.add_client_with_copier(iface.arp_requester.pd)
+
+        # Router -> RX virt queue (buffer return)
+        router_rx_virt_mr = FirewallMemoryRegion(
+            sdf_obj, "fw_queue_" + router.pd.name + "_" + iface.rx_virt.pd.name,
+            dma_buffer_queue_region.region_size,
+        )
+        router_rx_virt_src = router_rx_virt_mr.map(router.pd, "rw")
+        router_rx_virt_dst = router_rx_virt_mr.map(iface.rx_virt.pd, "rw")
+        router_rx_virt_ch = SDF_Channel(router.pd, iface.rx_virt.pd)
+        sdf_obj.add_channel(router_rx_virt_ch)
+
+        # RX virt: register ARP ethtype (the response queue)
+        iface.rx_virt.add_active_client(ethtype_arp, arp_eth_opcode_response)
+        # Add buffer return from router as free client
+        iface.rx_virt.add_free_client(
+            router_rx_virt_dst, dma_buffer_queue.capacity, router_rx_virt_ch.pd_b_id,
+        )
+
+        # ARP requester needs timer and serial access
+        timer_system.add_client(iface.arp_requester.pd)
+        serial_system.add_client(iface.arp_requester.pd)
+
+        # ARP responder is network and serial client
+        iface.net_system.add_client_with_copier(iface.arp_responder.pd)
+        serial_system.add_client(iface.arp_responder.pd)
+        iface.rx_virt.add_active_client(ethtype_arp, arp_eth_opcode_request)
+
+        # Router <-> ARP requester (request + response queues + channel)
+        arp_req_mr = FirewallMemoryRegion(
+            sdf_obj, "fw_req_queue_" + router.pd.name + "_" + iface.arp_requester.pd.name,
+            arp_queue_region.region_size,
+        )
+        router_arp_req = arp_req_mr.map(router.pd, "rw")
+        arp_req_arp_req = arp_req_mr.map(iface.arp_requester.pd, "rw")
+
+        arp_res_mr = FirewallMemoryRegion(
+            sdf_obj, "fw_res_queue_" + router.pd.name + "_" + iface.arp_requester.pd.name,
+            arp_queue_region.region_size,
+        )
+        router_arp_res = arp_res_mr.map(router.pd, "rw")
+        arp_req_arp_res = arp_res_mr.map(iface.arp_requester.pd, "rw")
+
+        router_arp_ch = SDF_Channel(router.pd, iface.arp_requester.pd)
+        sdf_obj.add_channel(router_arp_ch)
+
+        iface.arp_requester.add_arp_client(
+            arp_req_arp_req, arp_req_arp_res,
+            arp_queue_buffer.capacity, router_arp_ch.pd_b_id,
+        )
+
+        # ARP cache
+        arp_cache_mr = FirewallMemoryRegion(
+            sdf_obj,
+            "arp_cache_" + iface.arp_requester.pd.name + "_" + router.pd.name,
+            arp_cache_region.region_size,
+        )
+        arp_cache_owner = arp_cache_mr.map(iface.arp_requester.pd, "rw")
+        arp_cache_peer = arp_cache_mr.map(router.pd, "r")
+        iface.arp_requester.set_cache(arp_cache_owner, arp_cache_buffer.capacity)
+
+        # Create RouterInterface the order that we add here needs to align
+        # with the order we add to the data regions to the tx virt currently
+        # sequential on the interfaces list
+        ri = router.create_interface()
+        ri.set_rx_free(
+            router_rx_virt_src, dma_buffer_queue.capacity, router_rx_virt_ch.pd_a_id,
+        )
+        ri.set_data(iface.rx_dma_region.map(router.pd, "rw"))
+        ri.set_arp_queue(
+            router_arp_req, router_arp_res,
+            arp_queue_buffer.capacity, router_arp_ch.pd_a_id,
+        )
+        ri.set_arp_cache(arp_cache_peer, arp_cache_buffer.capacity)
+        ri.set_network_info(iface.mac_list, iface.ip_int, iface.subnet_bits)
+        iface.router_interface = ri
+
+        # Add the No-Next-Hop route
+        router.add_initial_route(ip=iface.ip_int, subnet=iface.subnet_bits,interface=iface.index, next_hop=0)
+
+        # Filters
+        for protocol, filt in iface.filters.items():
+            # Filter -> router connection
+            filter_router_mr = FirewallMemoryRegion(
+                sdf_obj,
+                "fw_queue_" + filt.pd.name + "_" + router.pd.name,
+                dma_buffer_queue_region.region_size,
+            )
+            filter_router_src = filter_router_mr.map(filt.pd, "rw")
+            filter_router_dst = filter_router_mr.map(router.pd, "rw")
+            filter_router_ch = SDF_Channel(filt.pd, router.pd)
+            sdf_obj.add_channel(filter_router_ch)
+
+            # Connect filter as RX-only network client
+            iface.net_system.add_client_with_copier(filt.pd, tx=False)
+            iface.rx_virt.add_active_client(eththype_ip, protocol)
+
+            # Rule bitmap
+            rule_bitmap_mr = FirewallMemoryRegion(
+                sdf_obj,
+                "rule_bitmap_" + filt.name + "_" + filt.pd.name,
+                filter_rule_bitmap_region.region_size,
+            )
+            rule_bitmap_res = rule_bitmap_mr.map(filt.pd, "rw")
+
+            # Filter rules region
+            filter_rules_mr = FirewallMemoryRegion(
+                sdf_obj,
+                "filter_rules_" + filt.pd.name + "_" + webserver.pd.name,
+                filter_rules_region.region_size,
+            )
+            filter_rules_owner = filter_rules_mr.map(filt.pd, "rw")
+            filter_rules_peer = filter_rules_mr.map(webserver.pd, "r")
+
+            # SDF_Channel for rule updates
+            filter_update_ch = SDF_Channel(webserver.pd, filt.pd, pp_a=True)
+            sdf_obj.add_channel(filter_update_ch)
+
+            # Store webserver-side view of this filter's rule table.
+            webserver.set_filter_config(
+                iface.index,
+                protocol,
+                filter_update_ch.pd_a_id, filter_rules_peer, filter_rules_buffer.capacity,
+            )
+            # Filter side keeps only the update channel id.
+            filt.set_webserver_channel(filter_update_ch.pd_a_id)
+
+            # Populate filter component state
+            filt.set_router_connection(
+                filter_router_src, dma_buffer_queue.capacity, filter_router_ch.pd_a_id,
+            )
+            filt.set_rules_region(filter_rules_owner, filter_rules_buffer.capacity)
+            filt.set_rule_bitmap(rule_bitmap_res)
+            filt.set_instances_capacity(filter_instances_buffer.capacity)
+
+            ri.add_filter(
+                filter_router_dst, dma_buffer_queue.capacity, filter_router_ch.pd_b_id,
+            )
+
+
+def wire_routing_connections(
+    sdf_obj: SystemDescription,
+    interfaces: List[NetworkInterface],
+    router: Router,
+    serial_system: Sddf.Serial,
+) -> None:
+    """Wire cross-interface routing: router->tx_virt data & tx_virt->rx_virt return."""
+    # Add the routing component as a serial_client
+    serial_system.add_client(router.pd)
+
+    for dst_iface in interfaces:
+        router_tx_virt_mr = FirewallMemoryRegion(
+            sdf_obj,
+            "fw_queue_" + router.pd.name + "_" + dst_iface.tx_virt.pd.name,
+            dma_buffer_queue_region.region_size,
+        )
+        router_tx_virt_src = router_tx_virt_mr.map(router.pd, "rw")
+        router_tx_virt_dst = router_tx_virt_mr.map(dst_iface.tx_virt.pd, "rw")
+        router_tx_virt_ch = SDF_Channel(router.pd, dst_iface.tx_virt.pd)
+        sdf_obj.add_channel(router_tx_virt_ch)
+
+        dst_iface.router_interface.set_tx_active(
+            router_tx_virt_src, dma_buffer_queue.capacity, router_tx_virt_ch.pd_a_id,
+        )
+        dst_iface.tx_virt.add_active_client(
+            router_tx_virt_dst, dma_buffer_queue.capacity, router_tx_virt_ch.pd_b_id,
+        )
+
+        for src_iface in interfaces:
+            # SDF_Map src DMA region into dst tx_virt with read access
+            tx_virt_dma = src_iface.rx_dma_region.map_device(dst_iface.tx_virt.pd, "r")
+
+            # This is sequential on the interface list matching with the routers interfaces ordering
+            dst_iface.tx_virt.add_data_region(tx_virt_dma)
+
+            # dst.tx_virt -> src.rx_virt buffer return queue
+            tx_rx_return_mr = FirewallMemoryRegion(
+                sdf_obj,
+                "fw_queue_" + dst_iface.tx_virt.pd.name + "_" + src_iface.rx_virt.pd.name
+                + f"{src_iface.index}{dst_iface.index}",
+                dma_buffer_queue_region.region_size,
+            )
+            tx_rx_return_src = tx_rx_return_mr.map(dst_iface.tx_virt.pd, "rw")
+            tx_rx_return_dst = tx_rx_return_mr.map(src_iface.rx_virt.pd, "rw")
+            tx_rx_return_ch = SDF_Channel(dst_iface.tx_virt.pd, src_iface.rx_virt.pd)
+            sdf_obj.add_channel(tx_rx_return_ch)
+
+            # TX free client (queue + data reusing tx_virt's existing DMA mapping)
+            dst_iface.tx_virt.add_free_client(
+                tx_rx_return_src, dma_buffer_queue.capacity,
+                tx_rx_return_ch.pd_a_id, tx_virt_dma,
+            )
+            # RX virt free client (queue only)
+            src_iface.rx_virt.add_free_client(
+                tx_rx_return_dst, dma_buffer_queue.capacity, tx_rx_return_ch.pd_b_id,
+            )
+
+def wire_webserver_connections(
+    sdf_obj: SystemDescription,
+    interfaces: List[NetworkInterface],
+    router: Router,
+    webserver: Webserver,
+    serial_system: Sddf.Serial,
+    timer_system: Sddf.Timer,
+    webserver_interface_idx: int,
+) -> Sddf.Lwip:
+    # This setup makes an assumption on the Tx Interface used by the webserver
+    ws_iface = interfaces[webserver_interface_idx]
+    serial_system.add_client(webserver.pd)
+    timer_system.add_client(webserver.pd)
+
+    # Webserver is TX client of webserver interface network
+    ws_iface.net_system.add_client_with_copier(webserver.pd, rx=False)
+
+    # Webserver uses lib sDDF LWIP
+    webserver_lib_sddf_lwip = Sddf.Lwip(sdf_obj, ws_iface.net_system._net, webserver.pd)
+
+    # Router -> webserver
+    router_ws_mr = FirewallMemoryRegion(
+        sdf_obj,
+        "fw_queue_" + router.pd.name + "_" + webserver.pd.name,
+        dma_buffer_queue_region.region_size,
+    )
+    router_ws_src = router_ws_mr.map(router.pd, "rw")
+    router_ws_dst = router_ws_mr.map(webserver.pd, "rw")
+    router_ws_ch = SDF_Channel(router.pd, webserver.pd)
+    sdf_obj.add_channel(router_ws_ch)
+
+    webserver.set_rx_active(
+        router_ws_dst, dma_buffer_queue.capacity, router_ws_ch.pd_b_id,
+    )
+    router.set_webserver_rx(
+        router_ws_src, dma_buffer_queue.capacity, router_ws_ch.pd_a_id,
+    )
+
+    # Webserver per-interface resources: data region and buffer-return queue.
+    for iface in interfaces:
+        ws_rx_virt_mr = FirewallMemoryRegion(
+            sdf_obj,
+            "fw_queue_" + webserver.pd.name + "_" + iface.rx_virt.pd.name,
+            dma_buffer_queue_region.region_size,
+        )
+        ws_rx_virt_src = ws_rx_virt_mr.map(webserver.pd, "rw")
+        ws_rx_virt_dst = ws_rx_virt_mr.map(iface.rx_virt.pd, "rw")
+        ws_rx_virt_ch = SDF_Channel(webserver.pd, iface.rx_virt.pd)
+        sdf_obj.add_channel(ws_rx_virt_ch)
+
+        webserver_data_region = iface.rx_dma_region.map_device(webserver.pd, "rw")
+        webserver.set_interface_resources(
+            iface.index,
+            webserver_data_region,
+            ws_rx_virt_src,
+            dma_buffer_queue.capacity,
+            ws_rx_virt_ch.pd_a_id,
+        )
+
+        iface.rx_virt.add_free_client(
+            ws_rx_virt_dst, dma_buffer_queue.capacity, ws_rx_virt_ch.pd_b_id,
+        )
+
+    # Webser ARP will likely need to change in the future in order to handle Tx on any interface
+    # Webserver ARP (request + response queues + channel)
+    ws_arp_req_mr = FirewallMemoryRegion(
+        sdf_obj,
+        "fw_req_queue_" + webserver.pd.name + "_" + ws_iface.arp_requester.pd.name,
+        arp_queue_region.region_size,
+    )
+    ws_arp_req_ws = ws_arp_req_mr.map(webserver.pd, "rw")
+    ws_arp_req_arp = ws_arp_req_mr.map(ws_iface.arp_requester.pd, "rw")
+
+    ws_arp_res_mr = FirewallMemoryRegion(
+        sdf_obj,
+        "fw_res_queue_" + webserver.pd.name + "_" + ws_iface.arp_requester.pd.name,
+        arp_queue_region.region_size,
+    )
+    ws_arp_res_ws = ws_arp_res_mr.map(webserver.pd, "rw")
+    ws_arp_res_arp = ws_arp_res_mr.map(ws_iface.arp_requester.pd, "rw")
+
+    ws_arp_ch = SDF_Channel(webserver.pd, ws_iface.arp_requester.pd)
+    sdf_obj.add_channel(ws_arp_ch)
+
+    webserver.set_arp_connection(
+        ws_arp_req_ws, ws_arp_res_ws,
+        arp_queue_buffer.capacity, ws_arp_ch.pd_a_id,
+    )
+    ws_iface.arp_requester.add_arp_client(
+        ws_arp_req_arp, ws_arp_res_arp,
+        arp_queue_buffer.capacity, ws_arp_ch.pd_b_id,
+    )
+
+    # Routing table shared between router and webserver
+    routing_table_mr = FirewallMemoryRegion(
+        sdf_obj,
+        "routing_table_" + router.pd.name + "_" + webserver.pd.name,
+        routing_table_region.region_size,
+    )
+    routing_table_owner = routing_table_mr.map(router.pd, "rw")
+    routing_table_peer = routing_table_mr.map(webserver.pd, "r")
+
+    # PP channel for routing table updates
+    router_update_ch = SDF_Channel(webserver.pd, router.pd, pp_a=True)
+    sdf_obj.add_channel(router_update_ch)
+
+    # Router webserver config
+    router.set_webserver_config(
+        router_update_ch.pd_b_id, routing_table_owner, routing_table_buffer.capacity,
+    )
+
+    webserver.set_router_config(
+        router_update_ch.pd_a_id, routing_table_peer, routing_table_buffer.capacity,
+    )
+    webserver.set_interface(webserver_interface_idx)
+
+    # Router packet queue
+    arp_pq_mr = FirewallMemoryRegion(
+        sdf_obj,
+        "arp_packet_queue_" + router.pd.name,
+        arp_packet_queue_region.region_size,
+    )
+    arp_pq_res = arp_pq_mr.map(router.pd, "rw")
+    router.set_packet_queue(arp_pq_res, arp_packet_queue_buffer.capacity)
+
+    # Webserver interface configs
+    for iface in interfaces:
+        webserver.add_interface_config(iface)
+
+    return webserver_lib_sddf_lwip
+
+
+def wire_icmp_connections(
+    sdf_obj: SystemDescription,
+    interfaces: List[NetworkInterface],
+    router: Router,
+    icmp_module: IcmpModule,
+) -> None:
+    """Wire ICMP module connections."""
+    for iface in interfaces:
+        iface.net_system.add_client_with_copier(icmp_module.pd, rx=False)
+        icmp_module.add_ip(iface.ip_int)
+
+    icmp_mr = FirewallMemoryRegion(
+        sdf_obj,
+        "fw_queue_" + router.pd.name + "_" + icmp_module.pd.name,
+        icmp_queue_region.region_size,
+    )
+    icmp_src = icmp_mr.map(router.pd, "rw")
+    icmp_dst = icmp_mr.map(icmp_module.pd, "rw")
+    icmp_ch = SDF_Channel(router.pd, icmp_module.pd)
+    sdf_obj.add_channel(icmp_ch)
+
+    router.set_icmp_connection(
+        icmp_src, icmp_queue_buffer.capacity, icmp_ch.pd_a_id,
+    )
+    icmp_module.set_router_connection(
+        icmp_dst, icmp_queue_buffer.capacity, icmp_ch.pd_b_id,
+    )
+
+
+def wire_filter_rules(interfaces: List[NetworkInterface], webserver_interface_idx: int) -> None:
+    """Set default and initial filter rules for all interfaces."""
+    actionNums = {"Allow": 1, "Drop": 2, "Connect": 3}
+    ws_iface = interfaces[webserver_interface_idx]
+    ws_ip = ws_iface.ip_int
+    dst_subnet = 32
+
+    # This loop will have to be updated based on what interfaces we want the webserver to be reachable through.
+    for iface in interfaces:
+        is_web_server = iface.index == webserver_interface_idx
+
+        for protocol, filt in iface.filters.items():
+            # This is treated as the DEFAULT rule by the filters init()
+            filt.add_initial_rule(
+                action=actionNums["Drop"],
+                src_port_any=True,
+                dst_port_any=True,
+            )
+
+            filt.add_initial_rule(
+                action=actionNums["Drop"],
+                dst_ip=ws_ip,
+                dst_subnet=dst_subnet,
+                src_port_any=True,
+                dst_port_any=True,
+            )
+            if protocol == ip_protocol_tcp:
+                if is_web_server:
+                    filt.add_initial_rule(
+                        action=actionNums["Connect"],
+                        dst_ip=ws_ip,
+                        dst_subnet=dst_subnet,
+                        dst_port=htons(80),
+                        src_port_any=True,
+                    )
+
+def wire_filter_instances(
+    sdf_obj: SystemDescription, interfaces: List[NetworkInterface],
+) -> None:
+    """Create filter instance sharing between interface pairs."""
+    if len(interfaces) < 2:
+        return
+
+    for iface, other_iface in combinations(interfaces, 2):
+        for protocol in iface.filters.keys():
+            filt = iface.filters[protocol]
+            mirror_filt = other_iface.filters[protocol]
+
+            # local_instances: filt owns, mirror_filt reads
+            local_mr = FirewallMemoryRegion(
+                sdf_obj,
+                "instances_" + filt.pd.name + "_" + mirror_filt.pd.name,
+                filter_instances_region.region_size,
+            )
+            local_owner = local_mr.map(filt.pd, "rw")
+            local_peer = local_mr.map(mirror_filt.pd, "r")
+
+            # remote_instances: mirror_filt owns, filt reads
+            remote_mr = FirewallMemoryRegion(
+                sdf_obj,
+                "instances_" + mirror_filt.pd.name + "_" + filt.pd.name,
+                filter_instances_region.region_size,
+            )
+            remote_owner = remote_mr.map(mirror_filt.pd, "rw")
+            remote_peer = remote_mr.map(filt.pd, "r")
+
+            # Update both filters
+            filt.set_instances(
+                local_owner,
+                remote_peer,
+                filter_instances_buffer.capacity,
+            )
+            mirror_filt.set_instances(
+                remote_owner,
+                local_peer,
+                filter_instances_buffer.capacity,
+            )
+
+
+def finalize_all_configs(
+    interfaces: List[NetworkInterface], router: Router, webserver: Webserver, icmp_module: IcmpModule,
+) -> None:
+    """Finalize configs for all components."""
+    for iface in interfaces:
+        for comp in iface.all_components():
+            comp.finalize_config()
+    router.finalize_config()
+    webserver.finalize_config()
+    icmp_module.finalize_config()
+
+
+def serialize_all(
+    output_dir: str,
+    interfaces: List[NetworkInterface],
+    router: Router,
+    webserver: Webserver,
+    icmp_module: IcmpModule,
+    obj_copy_path: str,
+) -> None:
+    """Serialize configs to data files and update ELF sections."""
+    for iface in interfaces:
+        iface_out_dir = f"{output_dir}/{iface.out_dir}"
+
+        for comp in iface.all_components():
+            data_path = f"{iface_out_dir}/firewall_config_{comp.name}.data"
+            with open(data_path, "wb+") as f:
+                f.write(comp.config.serialise())
+            update_elf_section(obj_copy_path, comp.pd.program_image, comp.config.section_name, data_path)
+
+    # Router
+    data_path = f"{output_dir}/firewall_config_routing.data"
+    with open(data_path, "wb+") as f:
+        f.write(router.config.serialise())
+    update_elf_section(obj_copy_path, router.pd.program_image, router.config.section_name, data_path)
+
+    # Webserver
+    data_path = f"{output_dir}/firewall_config_webserver.data"
+    with open(data_path, "wb+") as f:
+        f.write(webserver.config.serialise())
+    update_elf_section(obj_copy_path, webserver.pd.program_image, webserver.config.section_name, data_path)
+
+    # ICMP module
+    data_path = f"{output_dir}/firewall_icmp_module_config.data"
+    with open(data_path, "wb+") as f:
+        f.write(icmp_module.config.serialise())
+    update_elf_section(obj_copy_path, icmp_module.pd.program_image, icmp_module.config.section_name, data_path)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dtb", required=True)
@@ -994,36 +890,6 @@ if __name__ == "__main__":
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
 
-    for region in FirewallMemoryRegions.regions:
-        if region.region_size:
-            continue
-
-        for structure in region.data_structures:
-            if structure.size:
-                continue
-            try:
-                if not path.exists(structure.elf_name):
-                    raise Exception(
-                        f"ERROR: ELF name '{structure.elf_name}' does not exist"
-                    )
-                output = subprocess.run(
-                    ["llvm-dwarfdump", structure.elf_name],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                dwarfdump = output.stdout.split()
-                for i in range(len(dwarfdump)):
-                    if dwarfdump[i] == "DW_TAG_structure_type":
-                        if dwarfdump[i + 2] == f'("{structure.c_name}")':
-                            assert dwarfdump[i + 3] == "DW_AT_byte_size"
-                            size_fmt = dwarfdump[i + 4].strip("(").strip(")")
-                            structure.entry_size = int(size_fmt, base=16)
-            except Exception as e:
-                raise Exception(
-                    f"Error calculating {structure.c_name} size using llvm-dwarf dump on {structure.elf_name}): {e}"
-                )
-            structure.calculate_size()
-        region.calculate_size()
+    resolve_region_sizes()
 
     generate(args.sdf, args.output, dtb)
