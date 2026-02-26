@@ -62,15 +62,15 @@ static bool notify_icmp;                                  /* Request has been en
 
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
-static int enqueue_icmp_unreachable(net_buff_desc_t buffer, uint8_t src_interface)
+static int enqueue_icmp_unreachable(fw_buff_desc_t buffer)
 {
     icmp_req_t req = { 0 };
     req.type = ICMP_DEST_UNREACHABLE;
     req.code = ICMP_DEST_HOST_UNREACHABLE;
-    req.out_interface = src_interface;
+    req.out_interface = buffer.interface;
 
     /* Copy ethernet header into ICMP request */
-    uintptr_t pkt_vaddr = data_vaddr[src_interface] + buffer.io_or_offset;
+    uintptr_t pkt_vaddr = data_vaddr[buffer.interface] + buffer.offset;
     memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
 
     /* Copy IP header into ICMP request */
@@ -89,10 +89,9 @@ static int enqueue_icmp_unreachable(net_buff_desc_t buffer, uint8_t src_interfac
     return err;
 }
 
-static void transmit_packet(net_buff_desc_t buffer, uint8_t *mac_addr, uint8_t src_interface,
-                            uint8_t out_interface)
+static void transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t out_interface)
 {
-    uintptr_t pkt_vaddr = data_vaddr[src_interface] + buffer.io_or_offset;
+    uintptr_t pkt_vaddr = data_vaddr[buffer.interface] + buffer.offset;
     eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
@@ -103,8 +102,8 @@ static void transmit_packet(net_buff_desc_t buffer, uint8_t *mac_addr, uint8_t s
     if (FW_DEBUG_OUTPUT) {
         sddf_printf(
             "Router sending packet received on interface %u out of interface %u for ip %s with buffer number %lu\n",
-            src_interface, out_interface, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
-            buffer.io_or_offset / NET_BUFFER_SIZE);
+            buffer.interface, out_interface, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
+            buffer.offset / NET_BUFFER_SIZE);
     }
 
     /* Checksum needs to be re-calculated as header has been modified */
@@ -114,13 +113,12 @@ static void transmit_packet(net_buff_desc_t buffer, uint8_t *mac_addr, uint8_t s
     ip_hdr->check = fw_internet_checksum(ip_hdr, ipv4_header_length(ip_hdr));
 #endif
 
-    fw_buff_desc_t fw_buffer = { .offset = buffer.io_or_offset, .len = buffer.len, .interface = src_interface };
-    int err = fw_enqueue(&tx_active[out_interface], &fw_buffer);
+    int err = fw_enqueue(&tx_active[out_interface], &buffer);
     assert(!err);
     tx_net[out_interface] = true;
 }
 
-static void process_arp_waiting(fw_interface_id_t out_interface)
+static void process_arp_waiting(uint8_t out_interface)
 {
     while (!fw_queue_empty(&arp_resp_queue[out_interface])) {
         fw_arp_request_t response;
@@ -144,7 +142,7 @@ static void process_arp_waiting(fw_interface_id_t out_interface)
             /* Invalid response, drop packet associated with the IP address */
             pkt_waiting_node_t *node = root;
             for (uint16_t i = 0; i < root->num_children + 1; i++) {
-                err = enqueue_icmp_unreachable(node->buffer, node->buffer.interface);
+                err = enqueue_icmp_unreachable(node->buffer);
                 if (FW_DEBUG_OUTPUT && err) {
                     sddf_printf("ROUTING LOG: Could not enqueue ICMP unreachable!\n");
                 }
@@ -157,7 +155,7 @@ static void process_arp_waiting(fw_interface_id_t out_interface)
             /* Substitute the MAC address and send packets out of the NIC */
             pkt_waiting_node_t *node = root;
             for (uint16_t i = 0; i < root->num_children + 1; i++) {
-                transmit_packet(node->buffer, response.mac_addr, node->buffer.interface, out_interface);
+                transmit_packet(node->buffer, response.mac_addr, out_interface);
                 node = pkts_waiting_next_child(&pkt_waiting_queue, node);
             }
         }
@@ -176,6 +174,7 @@ static void route(void)
                 int err = fw_dequeue(&fw_filters[interface][filter], &buffer);
                 assert(!err);
 
+                fw_buff_desc_t fw_buffer = { .offset = buffer.io_or_offset, .len = buffer.len, .interface = interface };
                 uintptr_t pkt_vaddr = data_vaddr[interface] + buffer.io_or_offset;
                 eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
                 ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
@@ -202,7 +201,7 @@ static void route(void)
                 }
 
                 /* Packet destined for webserver */
-                if (ip_hdr->dst_ip == fw_config.interfaces[interface].ip) {
+                if (ip_hdr->dst_ip == router_config.interfaces[interface].ip) {
                     if (FW_DEBUG_OUTPUT) {
                         sddf_printf("Router transmitted packet to webserver on interface %u\n", interface);
                     }
@@ -247,7 +246,7 @@ static void route(void)
                     || (arp == NULL && fw_queue_full(&arp_req_queue[out_interface]))) {
 
                     if (arp != NULL && arp->state == ARP_STATE_UNREACHABLE) {
-                        int icmp_err = enqueue_icmp_unreachable(buffer, interface);
+                        int icmp_err = enqueue_icmp_unreachable(fw_buffer);
                         if (icmp_err) {
                             sddf_dprintf("ROUTING LOG: Could not enqueue ICMP unreachable!\n");
                         }
@@ -265,7 +264,6 @@ static void route(void)
                 and send ARP request or await ARP response */
                 if (arp == NULL || arp->state == ARP_STATE_PENDING) {
                     pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue, next_hop);
-                    fw_buff_desc_t fw_buffer = { .io_or_offset = buffer.io_or_offset, .len = buffer.len, .interface = interface };
                     if (root) {
                         /* ARP request already enqueued, add node as child. */
                         fw_err = pkt_waiting_push_child(&pkt_waiting_queue, root, fw_buffer);
@@ -284,7 +282,7 @@ static void route(void)
                 }
 
                 /* valid arp entry found, transmit packet */
-                transmit_packet(buffer, arp->mac_addr, interface, out_interface);
+                transmit_packet(fw_buffer, arp->mac_addr, out_interface);
             }
         }
     }
@@ -340,13 +338,13 @@ void init(void)
         }
     }
 
-    fw_queue_init(&webserver, router_config.webserver_rx.queue.vaddr, sizeof(fw_buff_desc_t),
-                  router_config.webserver_rx.capacity);
+    fw_queue_init(&webserver, router_config.webserver.rx_active.queue.vaddr, sizeof(fw_buff_desc_t),
+                  router_config.webserver.rx_active.capacity);
 
     assert(router_config.packet_queue.vaddr != 0);
     /* Initialise the packet waiting queue from mapped in memory */
     pkt_waiting_init(&pkt_waiting_queue, (void *)router_config.packet_queue.vaddr,
-                     router_config.packet_waiting_capacity);
+                     router_config.packet_queue_capacity);
 }
 
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
@@ -424,6 +422,6 @@ void notified(microkit_channel ch)
 
     if (tx_webserver) {
         tx_webserver = false;
-        microkit_notify(router_config.webserver_rx.ch);
+        microkit_notify(router_config.webserver.rx_active.ch);
     }
 }

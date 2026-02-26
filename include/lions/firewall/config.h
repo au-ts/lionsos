@@ -86,6 +86,7 @@ typedef struct fw_webserver_router_config {
     uint8_t routing_ch;
     region_resource_t routing_table;
     uint16_t routing_table_capacity;
+    fw_connection_resource_t rx_active;
 } fw_webserver_router_config_t;
 
 typedef struct fw_router_interface {
@@ -132,6 +133,7 @@ typedef struct fw_filter_config {
     region_resource_t internal_instances;
     region_resource_t external_instances;
     uint16_t instances_capacity;
+    fw_webserver_filter_config_t webserver;
     region_resource_t rule_id_bitmap;
     fw_rule_t initial_rules[FW_MAX_INITIAL_FILTER_RULES];
     uint8_t num_initial_rules;
@@ -148,9 +150,10 @@ typedef struct fw_webserver_interface_config {
 } fw_webserver_interface_config_t;
 
 typedef struct fw_webserver_config {
-    fw_connection_resource_t rx_active;
     fw_webserver_interface_config_t interfaces[FW_MAX_INTERFACES];
     uint8_t num_interfaces;
     fw_webserver_router_config_t router;
     fw_arp_connection_t arp_queue;
+    // TODO: Temporary work around until webserver transmits via router.
+    uint8_t tx_interface;
 } fw_webserver_config_t;

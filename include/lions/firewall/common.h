@@ -21,7 +21,7 @@ typedef struct fw_buff_desc {
     /* length of data inside buffer */
     uint16_t len;
     /* id of memory region buffer belongs to */
-    uint8_t region_id;
+    uint8_t interface;
 } fw_buff_desc_t;
 
 /**

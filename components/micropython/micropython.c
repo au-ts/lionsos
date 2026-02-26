@@ -70,7 +70,7 @@ net_queue_handle_t net_rx_handle;
 net_queue_handle_t net_tx_handle;
 
 fw_queue_t rx_active;
-fw_queue_t rx_free;
+fw_queue_t rx_free[FW_MAX_INTERFACES];
 fw_queue_t arp_req_queue;
 fw_queue_t arp_resp_queue;
 
@@ -131,11 +131,13 @@ start_repl:
     if (firewall_enabled) {
         assert(net_enabled);
         // Active Rx packets are received from routing component
-        fw_queue_init(&rx_active, fw_config.rx_active.queue.vaddr,
-            sizeof(net_buff_desc_t), fw_config.rx_active.capacity);
-        // Free Rx buffers are returned to the Rx virtualiser
-        fw_queue_init(&rx_free, fw_config.rx_free.queue.vaddr,
-            sizeof(net_buff_desc_t), fw_config.rx_free.capacity);
+        fw_queue_init(&rx_active, fw_config.router.rx_active.queue.vaddr,
+            sizeof(net_buff_desc_t), fw_config.router.rx_active.capacity);
+        for (uint8_t i = 0; i < fw_config.num_interfaces; i++) {
+            // Free Rx buffers are returned to the Rx virtualisers
+            fw_queue_init(&rx_free[i], fw_config.interfaces[i].rx_free.queue.vaddr,
+                sizeof(net_buff_desc_t), fw_config.interfaces[i].rx_free.capacity);
+        }
         // ARP queue is used to transmit ARP requests to the ARP requestor component
         fw_queue_init(&arp_req_queue, fw_config.arp_queue.request.vaddr,
             sizeof(fw_arp_request_t), fw_config.arp_queue.capacity);
@@ -143,7 +145,7 @@ start_repl:
             sizeof(fw_arp_request_t), fw_config.arp_queue.capacity);
 
         // lib sDDF LWIP requires ipv4 string for static ip configuration
-        ipaddr_to_string(fw_config.interfaces[fw_config.interface].ip, fw_ip_string);
+        ipaddr_to_string(fw_config.interfaces[fw_config.tx_interface].ip, fw_ip_string);
 
         // lib sDDF LWIP firewall arguments
         ip_string_arg = fw_ip_string;
@@ -215,7 +217,7 @@ void init(void) {
     }
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 
-    firewall_enabled = (fw_config.rx_active.queue.vaddr != NULL);
+    firewall_enabled = (fw_config.router.rx_active.queue.vaddr != NULL);
 
     if (fs_enabled) {
         fs_set_blocking_wait(blocking_wait);

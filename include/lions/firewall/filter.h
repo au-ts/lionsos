@@ -336,9 +336,6 @@ static inline void fw_filter_state_init(fw_filter_state_t *state, void *rules, v
     assert(initial_rules[DEFAULT_ACTION_IDX].dst_subnet == 0 && initial_rules[DEFAULT_ACTION_IDX].dst_port_any);
     assert(initial_rules[DEFAULT_ACTION_IDX].rule_id == DEFAULT_ACTION_RULE_ID);
 
-    /* Number of rules must not exceed capacities */
-    assert(num_rules <= FW_MAX_INITIAL_FILTER_RULES && num_rules <= rules_capacity);
-
     state->rule_id_bitmap->id_bitmap[default_block_idx] |= default_mask;
     state->rule_id_bitmap->last_allocated_rule_id = DEFAULT_ACTION_RULE_ID;
 

@@ -329,7 +329,7 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_
             fw_routing_entry_t *entry = table->entries + i;
 
             /* ip is part of subnet */
-            if ((subnet_mask(entry->subnet) & ip) == entry->ip) {
+            if ((subnet_mask(entry->subnet) & *ip) == entry->ip) {
 
                 /* Current match is stronger */
                 if (match != NULL && match->subnet > entry->subnet) {
