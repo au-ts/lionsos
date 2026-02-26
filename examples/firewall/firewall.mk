@@ -131,12 +131,31 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 		--sddf $(SDDF) --board $(MICROKIT_BOARD) \
 		--dtb $(DTB) --output . --sdf $(SYSTEM_FILE) \
 		--objcopy $(OBJCOPY) --objdump $(OBJDUMP)
+
+# Serial configs
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
+
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder0.data arp_responder0.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester0.data arp_requester0.elf
+
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder1.data arp_responder1.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester1.data arp_requester1.elf
+
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing.data routing.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
+
+# Timer configs
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 
-# Components receiving from or transmitting out net0
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester0.data arp_requester0.elf
+
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester1.data arp_requester1.elf
+
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
+
+# Interface 0 components
 	$(OBJCOPY) --update-section .device_resources=net_data0/ethernet_driver0_device_resources.data eth_driver0.elf
 	$(OBJCOPY) --update-section .net_driver_config=net_data0/net_driver.data eth_driver0.elf
 
@@ -148,15 +167,14 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_icmp_filter0.data icmp_filter0.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_udp_filter0.data udp_filter0.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_tcp_filter0.data tcp_filter0.elf
-	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_micropython.data micropython.elf
+
 	$(OBJCOPY) --update-section .net_config_0=net_data0/net_client_icmp_module.data icmp_module.elf
 
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder0.data arp_responder0.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester0.data arp_requester0.elf
+# TODO: webserver should be able to transmit out all interfaces via the router
+	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .lib_sddf_lwip_config=net_data0/lib_sddf_lwip_config_micropython.data micropython.elf
 
-	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester0.data arp_requester0.elf
-
-# Components receiving from or transmitting out net1
+# Interface 1 components
 	$(OBJCOPY) --update-section .device_resources=net_data1/ethernet_driver1_device_resources.data eth_driver1.elf
 	$(OBJCOPY) --update-section .net_driver_config=net_data1/net_driver.data eth_driver1.elf
 
@@ -168,17 +186,9 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_icmp_filter1.data icmp_filter1.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_udp_filter1.data udp_filter1.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_tcp_filter1.data tcp_filter1.elf
+
 	$(OBJCOPY) --update-section .net_config_1=net_data1/net_client_icmp_module.data icmp_module.elf
 
-	$(OBJCOPY) --update-section .lib_sddf_lwip_config=net_data0/lib_sddf_lwip_config_micropython.data micropython.elf
-
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder1.data arp_responder1.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester1.data arp_requester1.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing.data routing.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
-
-	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
-	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester1.data arp_requester1.elf
 	touch $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
