@@ -132,7 +132,7 @@ start_repl:
         assert(net_enabled);
         // Active Rx packets are received from routing component
         fw_queue_init(&rx_active, fw_config.router.rx_active.queue.vaddr,
-            sizeof(net_buff_desc_t), fw_config.router.rx_active.capacity);
+            sizeof(fw_buff_desc_t), fw_config.router.rx_active.capacity);
         for (uint8_t i = 0; i < fw_config.num_interfaces; i++) {
             // Free Rx buffers are returned to the Rx virtualisers
             fw_queue_init(&rx_free[i], fw_config.interfaces[i].rx_free.queue.vaddr,
