@@ -349,7 +349,7 @@ static inline void fw_filter_state_init(fw_filter_state_t *state, void *rules, v
     state->rule_table->rules[DEFAULT_ACTION_IDX] = initial_rules[DEFAULT_ACTION_IDX];
     state->rule_table->size++;
 
-    for (uint8_t r = 0; r < num_rules; r++) {
+    for (uint8_t r = 1; r < num_rules; r++) {
         fw_filter_err_t err = fw_filter_add_rule(state, initial_rules[r].src_ip, initial_rules[r].src_port,
                                                  initial_rules[r].dst_ip, initial_rules[r].dst_port,
                                                  initial_rules[r].src_subnet, initial_rules[r].dst_subnet,

@@ -61,7 +61,7 @@ typedef struct fw_routing_entry {
     uint32_t next_hop;
 } fw_routing_entry_t;
 
-typedef struct routing_table {
+typedef struct fw_routing_table {
     /* capacity of table */
     uint16_t capacity;
     /* number of valid entries in table */
@@ -152,8 +152,7 @@ pkt_waiting_node_t *pkts_waiting_next_child(pkts_waiting_t *pkts_waiting, pkt_wa
  *
  * @return error status of operation.
  */
-fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root,
-                                               fw_buff_desc_t buffer);
+fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root, fw_buff_desc_t buffer);
 
 /**
  * Add a new root node to IP packet list. Assumes no valid root node for IP.
@@ -200,8 +199,8 @@ fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, 
  *
  * @return error status of operation.
  */
-fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table, uint8_t interface, uint32_t ip,
-                                                   uint8_t subnet, uint32_t next_hop);
+fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table, uint8_t interface, uint32_t ip, uint8_t subnet,
+                                            uint32_t next_hop);
 
 /**
  * Remove a route from the routing table.
@@ -223,4 +222,4 @@ fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table, uint16
  * @param num_initial_routes number of initial routes.
  */
 void fw_routing_table_init(fw_routing_table_t **table, void *table_vaddr, uint16_t capacity,
-                                  fw_routing_entry_t *initial_routes, uint8_t num_initial_routes);
+                           fw_routing_entry_t *initial_routes, uint8_t num_initial_routes);

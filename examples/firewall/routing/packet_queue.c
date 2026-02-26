@@ -43,8 +43,7 @@ pkt_waiting_node_t *pkts_waiting_next_child(pkts_waiting_t *pkts_waiting, pkt_wa
     return pkts_waiting->packets + node->child;
 }
 
-fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root,
-                                               fw_buff_desc_t buffer)
+fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root, fw_buff_desc_t buffer)
 {
     if (pkt_waiting_full(pkts_waiting)) {
         return ROUTING_ERR_FULL;

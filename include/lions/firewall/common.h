@@ -10,6 +10,7 @@
 #include <sddf/util/util.h>
 
 #define FW_MAX_INTERFACES 4
+
 /**
  * Firewall buffer descriptor. An extension of a network buffer description
  * allowing the buffer's region to be tracked. Used in queues which hold buffers
