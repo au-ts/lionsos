@@ -50,7 +50,7 @@ typedef enum {
 
 typedef enum { ROUTER_RET_ERR = 0 } fw_router_ret_args_t;
 
-typedef struct routing_entry {
+typedef struct fw_routing_entry {
     /* ip address of destination subnet */
     uint32_t ip;
     /* number of bits in subnet mask */
