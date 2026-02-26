@@ -179,14 +179,17 @@ void mpfirewall_process_rx(void)
             assert(buffer.interface <= fw_config.num_interfaces);
             fw_enqueue(&rx_free[buffer.interface], &buffer);
             notify_rx[buffer.interface] = true;
+            sddf_lwip_pbuf_pool_free(pbuf);
+            continue;
         }
 
         pbuf->offset = buffer.offset;
         pbuf->region_id = buffer.interface;
         pbuf->custom.custom_free_function = firewall_interface_free_buffer;
 
-        struct pbuf *p = pbuf_alloced_custom(PBUF_RAW, buffer.len, PBUF_REF, &pbuf->custom,
-                                             (void *)(buffer.offset + fw_config.interfaces[buffer.interface].data.region.vaddr), NET_BUFFER_SIZE);
+        struct pbuf *p = pbuf_alloced_custom(
+            PBUF_RAW, buffer.len, PBUF_REF, &pbuf->custom,
+            (void *)(buffer.offset + fw_config.interfaces[buffer.interface].data.region.vaddr), NET_BUFFER_SIZE);
 
         net_sddf_err_t net_err = sddf_lwip_input_pbuf(p);
         if (net_err != SDDF_LWIP_ERR_OK) {
@@ -207,7 +210,7 @@ void mpfirewall_handle_notify(void)
         }
     }
 
-    for (uint8_t i; i < fw_config.num_interfaces; i++) {
+    for (uint8_t i = 0; i < fw_config.num_interfaces; i++) {
         if (notify_rx[i]) {
             notify_rx[i] = false;
             if (!microkit_have_signal) {

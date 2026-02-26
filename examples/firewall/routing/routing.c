@@ -145,9 +145,9 @@ static void process_arp_waiting(uint8_t out_interface)
                     sddf_dprintf("ROUTING LOG: Could not enqueue ICMP unreachable on interface %u!\n",
                                  node->buffer.interface);
                 }
-                net_buff_desc_t buffer = { .io_or_offset = node->buffer.offset, .len = node->buffer.len };
-                err = fw_enqueue(&rx_free[node->buffer.region_id], &buffer);
-                returned[node->buffer.region_id] = true;
+                net_buff_desc_t net_buff = { .io_or_offset = node->buffer.offset, .len = node->buffer.len };
+                err = fw_enqueue(&rx_free[node->buffer.interface], &net_buff);
+                returned[node->buffer.interface] = true;
                 assert(!err);
                 node = pkts_waiting_next_child(waiting_queue, node);
             }
@@ -390,8 +390,7 @@ void init(void)
 
     assert(router_config.packet_queue.vaddr != 0);
     /* Initialise the packet waiting queue from mapped in memory */
-    pkt_waiting_init(&pkt_waiting_queue, (void *)router_config.packet_queue.vaddr,
-                     router_config.packet_queue_capacity);
+    pkt_waiting_init(&pkt_waiting_queue, (void *)router_config.packet_queue.vaddr, router_config.packet_queue_capacity);
 }
 
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
