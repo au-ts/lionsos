@@ -15,8 +15,8 @@
 #include <sddf/network/constants.h>
 #include <lions/firewall/filter.h>
 #include <lions/firewall/routing.h>
+#include <lions/firewall/common.h>
 
-#define FW_MAX_INTERFACES 4
 #define FW_MAX_INTERFACE_NAME_LEN 63
 #define FW_MAX_FW_CLIENTS 61
 #define FW_MAX_FILTERS 61
@@ -131,7 +131,8 @@ typedef struct fw_filter_config {
     uint8_t interface;
     fw_connection_resource_t router;
     region_resource_t internal_instances;
-    region_resource_t external_instances;
+    region_resource_t external_instances[FW_MAX_INTERFACES];
+    uint8_t num_interfaces;
     uint16_t instances_capacity;
     fw_webserver_filter_config_t webserver;
     region_resource_t rule_id_bitmap;

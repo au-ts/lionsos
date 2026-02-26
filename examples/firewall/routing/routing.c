@@ -146,7 +146,8 @@ static void process_arp_waiting(uint8_t out_interface)
                 if (FW_DEBUG_OUTPUT && err) {
                     sddf_printf("ROUTING LOG: Could not enqueue ICMP unreachable!\n");
                 }
-                err = fw_enqueue(&rx_free[node->buffer.interface], &node->buffer);
+                net_buff_desc_t net_buff = { .io_or_offset = node->buffer.offset, .len = node->buffer.len };
+                err = fw_enqueue(&rx_free[node->buffer.interface], &net_buff);
                 returned[node->buffer.interface] = true;
                 assert(!err);
                 node = pkts_waiting_next_child(&pkt_waiting_queue, node);
@@ -207,7 +208,7 @@ static void route(void)
                     }
                     tcp_hdr_t *tcp_pkt = (tcp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
                     assert(ip_hdr->protocol == WEBSERVER_PROTOCOL && tcp_pkt->dst_port == htons(WEBSERVER_PORT));
-                    err = fw_enqueue(&webserver, &buffer);
+                    err = fw_enqueue(&webserver, &fw_buffer);
                     assert(!err);
                     tx_webserver = true;
                     continue;
@@ -343,8 +344,7 @@ void init(void)
 
     assert(router_config.packet_queue.vaddr != 0);
     /* Initialise the packet waiting queue from mapped in memory */
-    pkt_waiting_init(&pkt_waiting_queue, (void *)router_config.packet_queue.vaddr,
-                     router_config.packet_queue_capacity);
+    pkt_waiting_init(&pkt_waiting_queue, (void *)router_config.packet_queue.vaddr, router_config.packet_queue_capacity);
 }
 
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)

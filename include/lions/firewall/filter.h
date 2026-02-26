@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <sddf/util/util.h>
 #include <sddf/network/util.h>
+#include <sddf/resources/common.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/array_functions.h>
 
@@ -118,9 +119,11 @@ typedef struct fw_filter_state {
     fw_instances_table_t *internal_instances_table;
     /* instances created by neighbour filter,
     to be searched by this filter */
-    fw_instances_table_t *external_instances_table;
+    fw_instances_table_t *external_instances_table[FW_MAX_INTERFACES];
     /* capacity of both instance tables */
     uint16_t instances_capacity;
+    /* number of interfaces */
+    uint8_t num_interfaces;
 } fw_filter_state_t;
 
 /* PP call parameters for webserver to call filters and update rules */
@@ -209,7 +212,6 @@ static fw_filter_err_t rules_free_id(fw_filter_state_t *state, uint16_t rule_id)
     state->rule_id_bitmap->id_bitmap[block_idx] &= ~mask;
     return FILTER_ERR_OKAY;
 }
-
 
 /**
  * Add a filtering rule.
@@ -312,15 +314,20 @@ static inline fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state, uint3
  * @param num_rules number of initial rules.
  */
 static inline void fw_filter_state_init(fw_filter_state_t *state, void *rules, void *rule_id_bitmap,
-                                        uint16_t rules_capacity, void *internal_instances, void *external_instances,
-                                        uint16_t instances_capacity, fw_rule_t *initial_rules, uint8_t num_rules)
+                                        uint16_t rules_capacity, void *internal_instances,
+                                        region_resource_t *external_instances, uint16_t instances_capacity,
+                                        fw_rule_t *initial_rules, uint8_t num_rules, uint8_t num_interfaces)
 {
     state->rule_table = (fw_rule_table_t *)rules;
     state->rules_capacity = rules_capacity;
     state->rule_id_bitmap = (fw_rule_id_bitmap_t *)rule_id_bitmap;
     state->instances_capacity = instances_capacity;
     state->internal_instances_table = (fw_instances_table_t *)internal_instances;
-    state->external_instances_table = (fw_instances_table_t *)external_instances;
+    state->num_interfaces = num_interfaces;
+    /* Populate the array of possible external instance tables */
+    for (size_t i = 0; i < num_interfaces; i++) {
+        state->external_instances_table[i] = (fw_instances_table_t *)external_instances[i].vaddr;
+    }
 
     /* Allocate the default action rule ID for the default action */
     uint16_t default_block_idx = DEFAULT_ACTION_RULE_ID / RULE_ID_BITMAP_BLK_SIZE;
@@ -413,19 +420,21 @@ static inline fw_action_t fw_filter_find_action(fw_filter_state_t *state, uint32
                                                 uint32_t dst_ip, uint16_t dst_port, uint16_t *rule_id)
 {
     /* First check external instances */
-    for (uint16_t i = 0; i < state->external_instances_table->size; i++) {
-        fw_instance_t *instance = state->external_instances_table->instances + i;
+    for (size_t iface = 0; iface < state->num_interfaces; iface++) {
+        for (uint16_t i = 0; i < state->external_instances_table[iface]->size; i++) {
+            fw_instance_t *instance = state->external_instances_table[iface]->instances + i;
 
-        if (instance->src_port != dst_port || instance->dst_port != src_port) {
-            continue;
+            if (instance->src_port != dst_port || instance->dst_port != src_port) {
+                continue;
+            }
+
+            if (instance->src_ip != dst_ip || instance->dst_ip != src_ip) {
+                continue;
+            }
+
+            *rule_id = instance->rule_id;
+            return FILTER_ACT_ESTABLISHED;
         }
-
-        if (instance->src_ip != dst_ip || instance->dst_ip != src_ip) {
-            continue;
-        }
-
-        *rule_id = instance->rule_id;
-        return FILTER_ACT_ESTABLISHED;
     }
 
     /* Check rules for best match otherwise we match with the default rule */
