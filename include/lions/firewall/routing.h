@@ -8,7 +8,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <sddf/network/queue.h>
 #include <lions/firewall/array_functions.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/queue.h>
@@ -35,14 +34,7 @@ typedef enum {
     ROUTING_ERR_INVALID_ROUTE
 } fw_routing_err_t;
 
-static const char *fw_routing_err_str[] = { "Ok.",
-                                            "Out of memory error.",
-                                            "Duplicate entry.",
-                                            "Clashing entry.",
-                                            "Invalid child node.",
-                                            "Invalid route ID.",
-                                            "Invalid route values." };
-
+extern const char *fw_routing_err_str[];
 
 /* PP call parameters for webserver to call router and update routing table */
 #define FW_ADD_ROUTE 0
@@ -120,16 +112,7 @@ typedef struct pkts_waiting {
  * @param packets virtual address of packets.
  * @param capacity number of available packet waiting nodes.
  */
-static void pkt_waiting_init(pkts_waiting_t *pkts_waiting, void *packets, int16_t capacity)
-{
-    pkts_waiting->packets = (pkt_waiting_node_t *)packets;
-    pkts_waiting->capacity = capacity;
-    for (uint16_t i = 0; i < pkts_waiting->capacity; i++) {
-        pkt_waiting_node_t *node = pkts_waiting->packets + i;
-        /* Free list only maintains next pointers */
-        node->next = i + 1;
-    }
-}
+void pkt_waiting_init(pkts_waiting_t *pkts_waiting, void *packets, int16_t capacity);
 
 /**
  * Check if the packet waiting queue is full.
@@ -138,10 +121,7 @@ static void pkt_waiting_init(pkts_waiting_t *pkts_waiting, void *packets, int16_
  *
  * @return whether packet waiting queue is full.
  */
-static bool pkt_waiting_full(pkts_waiting_t *pkts_waiting)
-{
-    return pkts_waiting->size == pkts_waiting->capacity;
-}
+bool pkt_waiting_full(pkts_waiting_t *pkts_waiting);
 
 /**
  * Find matching ip packet waiting node in packet waiting list.
@@ -151,18 +131,7 @@ static bool pkt_waiting_full(pkts_waiting_t *pkts_waiting)
  *
  * @return address of matching packet waiting root node or NULL if no match.
  */
-static pkt_waiting_node_t *pkt_waiting_find_node(pkts_waiting_t *pkts_waiting, uint32_t ip)
-{
-    pkt_waiting_node_t *node = pkts_waiting->packets + pkts_waiting->head;
-    for (uint16_t i = 0; i < pkts_waiting->length; i++) {
-        if (node->ip == ip) {
-            return node;
-        }
-        node = pkts_waiting->packets + node->next;
-    }
-
-    return NULL;
-}
+pkt_waiting_node_t *pkt_waiting_find_node(pkts_waiting_t *pkts_waiting, uint32_t ip);
 
 /**
  * Return the next child node, assumes child node is valid!
@@ -172,10 +141,7 @@ static pkt_waiting_node_t *pkt_waiting_find_node(pkts_waiting_t *pkts_waiting, u
  *
  * @return address of child node.
  */
-static pkt_waiting_node_t *pkts_waiting_next_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *node)
-{
-    return pkts_waiting->packets + node->child;
-}
+pkt_waiting_node_t *pkts_waiting_next_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *node);
 
 /**
  * Add a child node to a root waiting node. Node passed must be a root node!
@@ -186,33 +152,8 @@ static pkt_waiting_node_t *pkts_waiting_next_child(pkts_waiting_t *pkts_waiting,
  *
  * @return error status of operation.
  */
-static fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root,
-                                               fw_buff_desc_t buffer)
-{
-    if (pkt_waiting_full(pkts_waiting)) {
-        return ROUTING_ERR_FULL;
-    }
-
-    uint16_t new_idx = pkts_waiting->free;
-    pkt_waiting_node_t *new_node = pkts_waiting->packets + new_idx;
-
-    /* Update values */
-    new_node->buffer = buffer;
-
-    /* Update pointers */
-    pkts_waiting->free = new_node->next;
-    pkt_waiting_node_t *last_child = root;
-    for (uint16_t i = 0; i < root->num_children; i++) {
-        last_child = pkts_waiting_next_child(pkts_waiting, last_child);
-    }
-    last_child->child = new_idx;
-
-    /* Update counts */
-    root->num_children++;
-    pkts_waiting->size++;
-
-    return ROUTING_ERR_OKAY;
-}
+fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root,
+                                               fw_buff_desc_t buffer);
 
 /**
  * Add a new root node to IP packet list. Assumes no valid root node for IP.
@@ -223,40 +164,7 @@ static fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt
  *
  * @return error status of operation.
  */
-static fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, fw_buff_desc_t buffer)
-{
-    if (pkt_waiting_full(pkts_waiting)) {
-        return ROUTING_ERR_FULL;
-    }
-
-    uint16_t new_idx = pkts_waiting->free;
-    pkt_waiting_node_t *new_node = pkts_waiting->packets + new_idx;
-
-    /* Update values */
-    new_node->num_children = 0;
-    new_node->ip = ip;
-    new_node->buffer = buffer;
-
-    /* Update pointers */
-    pkts_waiting->free = new_node->next;
-    /* If this is not the first node */
-    if (pkts_waiting->length) {
-        uint16_t head_idx = pkts_waiting->head;
-        pkt_waiting_node_t *head_node = pkts_waiting->packets + head_idx;
-
-        new_node->next = head_idx;
-        head_node->prev = new_idx;
-    } else {
-        pkts_waiting->tail = new_idx;
-    }
-    pkts_waiting->head = new_idx;
-
-    /* Update counts */
-    pkts_waiting->length++;
-    pkts_waiting->size++;
-
-    return ROUTING_ERR_OKAY;
-}
+fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, fw_buff_desc_t buffer);
 
 /**
  * Free a node and all its children. Must pass a root node!
@@ -266,48 +174,7 @@ static fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t 
  *
  * @return error status of operation.
  */
-static fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root)
-{
-    /* First free children */
-    uint16_t child_idx = root->child;
-    pkt_waiting_node_t *child_node = pkts_waiting_next_child(pkts_waiting, root);
-    for (uint16_t i = 0; i < root->num_children; i++) {
-
-        /* Add to free list */
-        child_node->next = pkts_waiting->free;
-        pkts_waiting->free = child_idx;
-        pkts_waiting->size--;
-
-        /* Possibly free next child */
-        child_idx = child_node->child;
-        child_node = pkts_waiting_next_child(pkts_waiting, child_node);
-    }
-
-    /* Now free parent */
-    uint16_t root_idx = (uint16_t)(root - pkts_waiting->packets);
-    if (root_idx == pkts_waiting->head) {
-        /* Root node is head */
-        pkts_waiting->head = root->next;
-    } else {
-        pkt_waiting_node_t *prev_node = pkts_waiting->packets + root->prev;
-        prev_node->next = root->next;
-    }
-
-    if (root_idx == pkts_waiting->tail) {
-        /* Root node is tail */
-        pkts_waiting->tail = root->prev;
-    } else {
-        pkt_waiting_node_t *next_node = pkts_waiting->packets + root->next;
-        next_node->prev = root->prev;
-    }
-
-    root->next = pkts_waiting->free;
-    pkts_waiting->free = root_idx;
-    pkts_waiting->length--;
-    pkts_waiting->size--;
-
-    return ROUTING_ERR_OKAY;
-}
+fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_waiting_node_t *root);
 
 /**
  * Find next hop for destination IP. Maximum recursion limit to prevent infinite
@@ -320,45 +187,7 @@ static fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, p
  *
  * @return error status of operation.
  */
-static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, uint8_t *interface)
-{
-    uint8_t num_lookups = 0;
-    while (num_lookups < FW_ROUTING_MAX_RECURSION) {
-        fw_routing_entry_t *match = NULL;
-        for (uint16_t i = 0; i < table->size; i++) {
-            fw_routing_entry_t *entry = table->entries + i;
-
-            /* ip is part of subnet */
-            if ((subnet_mask(entry->subnet) & *ip) == entry->ip) {
-
-                /* Current match is stronger */
-                if (match != NULL && match->subnet > entry->subnet) {
-                    continue;
-                }
-
-                match = entry;
-            }
-        }
-
-        if (match == NULL) {
-            /* No route found */
-            *ip = FW_ROUTING_NONEXTHOP;
-            return ROUTING_ERR_OKAY;
-        }
-
-        if (match->next_hop == FW_ROUTING_NONEXTHOP) {
-            *interface = match->interface;
-            return ROUTING_ERR_OKAY;
-        }
-
-        *ip = match->next_hop;
-        num_lookups++;
-    }
-
-    /* No route found */
-    *ip = FW_ROUTING_NONEXTHOP;
-    return ROUTING_ERR_OKAY;
-}
+fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, uint8_t *interface);
 
 /**
  * Add a route to the routing table.
@@ -371,46 +200,8 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_
  *
  * @return error status of operation.
  */
-static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table, uint8_t interface, uint32_t ip,
-                                                   uint8_t subnet, uint32_t next_hop)
-{
-    /* Default routes must specify a next hop! */
-    if ((subnet == 0) && (next_hop == FW_ROUTING_NONEXTHOP)) {
-        return ROUTING_ERR_INVALID_ROUTE;
-    } else if (table->size >= table->capacity) {
-        return ROUTING_ERR_FULL;
-    }
-
-    for (uint16_t i = 0; i < table->size; i++) {
-        fw_routing_entry_t *entry = table->entries + i;
-
-        /* One rule applies to a larger subnet than the other */
-        if (subnet != entry->subnet) {
-            continue;
-        }
-
-        /* Rules apply to different subnets */
-        if ((subnet_mask(subnet) & ip) != entry->ip) {
-            continue;
-        }
-
-        /* There is a clash! */
-        if ((interface == entry->interface) && (next_hop == entry->next_hop)) {
-            return ROUTING_ERR_DUPLICATE;
-        } else {
-            return ROUTING_ERR_CLASH;
-        }
-    }
-
-    fw_routing_entry_t *empty_slot = table->entries + table->size;
-    empty_slot->interface = interface;
-    empty_slot->ip = subnet_mask(subnet) & ip;
-    empty_slot->subnet = subnet;
-    empty_slot->next_hop = next_hop;
-    table->size++;
-
-    return ROUTING_ERR_OKAY;
-}
+fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table, uint8_t interface, uint32_t ip,
+                                                   uint8_t subnet, uint32_t next_hop);
 
 /**
  * Remove a route from the routing table.
@@ -420,17 +211,7 @@ static fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table, ui
  *
  * @return error status of operation.
  */
-static fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table, uint16_t route_id)
-{
-    if (route_id >= table->size) {
-        return ROUTING_ERR_INVALID_ID;
-    }
-
-    /* Shift everything left to delete this item */
-    generic_array_shift(table->entries, sizeof(fw_routing_entry_t), table->capacity, route_id);
-    table->size--;
-    return ROUTING_ERR_OKAY;
-}
+fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table, uint16_t route_id);
 
 /**
  * Initialise the routing table.
@@ -438,19 +219,8 @@ static fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table,
  * @param table address of routing table.
  * @param table_vaddr address of routing entries.
  * @param capacity capacity of routing table.
+ * @param initial_routes address of initial route table.
+ * @param num_initial_routes number of initial routes.
  */
-static void fw_routing_table_init(fw_routing_table_t **table, void *table_vaddr, uint16_t capacity,
-                                  fw_routing_entry_t *initial_routes, uint8_t num_initial_routes)
-{
-    *table = (fw_routing_table_t *)table_vaddr;
-    (*table)->capacity = capacity;
-    (*table)->size = 0;
-
-    for (uint8_t r = 0; r < num_initial_routes; r++) {
-        fw_routing_err_t err = fw_routing_table_add_route(*table, initial_routes[r].interface,
-                                                          initial_routes[r].ip, initial_routes[r].subnet,
-                                                          initial_routes[r].next_hop);
-
-        assert(err == ROUTING_ERR_OKAY);
-    }
-}
+void fw_routing_table_init(fw_routing_table_t **table, void *table_vaddr, uint16_t capacity,
+                                  fw_routing_entry_t *initial_routes, uint8_t num_initial_routes);
