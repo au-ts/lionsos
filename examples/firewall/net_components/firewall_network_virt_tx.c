@@ -96,11 +96,11 @@ static void tx_provide(void)
 
             assert(buffer.offset % NET_BUFFER_SIZE == 0
                    && buffer.offset < NET_BUFFER_SIZE * fw_active_clients[client].capacity);
-            assert(buffer.region_id < fw_config.num_data_regions);
+            assert(buffer.interface < fw_config.num_data_regions);
 
-            uintptr_t buffer_vaddr = buffer.offset + (uintptr_t)fw_config.data_regions[buffer.region_id].region.vaddr;
+            uintptr_t buffer_vaddr = buffer.offset + (uintptr_t)fw_config.data_regions[buffer.interface].region.vaddr;
             cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
-            uintptr_t io_addr = buffer.offset + fw_config.data_regions[buffer.region_id].io_addr;
+            uintptr_t io_addr = buffer.offset + fw_config.data_regions[buffer.interface].io_addr;
 
             net_buff_desc_t net_buffer = { .io_or_offset = io_addr, .len = buffer.len };
             err = net_enqueue_active(&tx_queue_drv, net_buffer);
