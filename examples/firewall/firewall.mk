@@ -97,7 +97,7 @@ arp_requester.elf: arp_requester.o libsddf_util.a
 arp_responder.elf: arp_responder.o libsddf_util.a
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
-routing.elf: routing.o libsddf_util.a
+routing.elf: routing.o packet_queue.o routing_table.o libsddf_util.a
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
