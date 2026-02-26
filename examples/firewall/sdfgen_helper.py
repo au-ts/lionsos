@@ -120,7 +120,7 @@ class Macro():
             print(f"Duplicate definition found for macro {c_name}: {Macro.all_macros[c_name]}")
             sys.exit()
         self.c_name = c_name
-        self.p_name = c_name
+        self.p_name = cNameToPName(c_name)
         self.value = value
         Macro.all_macros[c_name] = self
 
@@ -409,17 +409,11 @@ if __name__ == '__main__':
                 if len(field.n_size):
                     list_start = "List["
                     list_end = "]"
-                    default = " = None"
-                elif field.c_type in Struct.all_structs:
-                    default = " = None"
-                elif p_class_to_p_type.get(field.p_class) == "bool":
-                    default = " = False"
-                else:
-                    default = " = 0"
+
                 if field.c_type in Struct.all_structs:
-                    out.write(f", {field.c_name}: {list_start}{field.p_class[:-6]}{list_end}{default}")
+                    out.write(f", {field.c_name}: {list_start}{field.p_class[:-6]}{list_end}")
                 else:
-                    out.write(f", {field.c_name}: {list_start}{p_class_to_p_type[field.p_class]}{list_end}{default}")
+                    out.write(f", {field.c_name}: {list_start}{p_class_to_p_type[field.p_class]}{list_end}")
             out.write("):\n")
 
             # Initialise field objects
