@@ -135,12 +135,12 @@ app = Microdot()
 ###### Interface methods ######
 
 # Get the number of interfaces
-@app.route('/api/interfaces/count', methods=['GET'])
+@app.route("/api/interfaces/count", methods=["GET"])
 def interfaceCount(request):
     return {"count": lions_firewall.interface_count_get()}
 
 # Get interface details
-@app.route('/api/interfaces/<int:interfaceInt>', methods=['GET'])
+@app.route("/api/interfaces/<int:interfaceInt>", methods=["GET"])
 def interfaceDetails(request, interfaceInt):
     try:
         if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
@@ -148,8 +148,7 @@ def interfaceDetails(request, interfaceInt):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
 
         return {
-            "interface": f"{interfaceInt}",
-            "name": lions_firewall.interface_name_get(interfaceInt),
+            "interface": lions_firewall.interface_name_get(interfaceInt),
             "mac": tupleToMac(lions_firewall.interface_mac_get(interfaceInt)),
             "ip": intToIp(lions_firewall.interface_ip_get(interfaceInt)),
         }
@@ -164,9 +163,12 @@ def interfaceDetails(request, interfaceInt):
 ###### Routing config methods ######
 
 # Get routes
-@app.route('/api/routes', methods=['GET'])
+@app.route("/api/routes", methods=["GET"])
 def getRoutes(request):
     try:
+        if lions_firewall.interface_count_get() == 0:
+            print("UI SERVER|ERR: Firewall config not loaded (no interfaces).")
+            return {"error": "Firewall config not loaded."}, 503
         routes = []
         route_count = lions_firewall.route_count()
         for i in range(route_count):
@@ -187,7 +189,7 @@ def getRoutes(request):
         return {"error": UnknownErrStr}, 404
 
 # Delete a route
-@app.route('/api/routes/<int:routeId>', methods=['DELETE'])
+@app.route("/api/routes/<int:routeId>", methods=["DELETE"])
 def deleteRoute(request, routeId):
     try:
         lions_firewall.route_delete(routeId)
@@ -201,7 +203,7 @@ def deleteRoute(request, routeId):
 
 
 # Add a route
-@app.route('/api/routes', methods=['POST'])
+@app.route("/api/routes", methods=["POST"])
 def addRoute(request):
     try:
         newRoute = request.json
@@ -242,11 +244,12 @@ def addRoute(request):
 ###### Filter rule methods ######
 
 # Get rules and default rules for an interface filter
-@app.route('/api/rules/<string:protocolStr>/<int:interfaceInt>', methods=['GET'])
+@app.route("/api/rules/<string:protocolStr>/<int:interfaceInt>", methods=["GET"])
 def getRules(request, protocolStr, interfaceInt):
     try:
-        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
-            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
+        interface = interfaceInt
+        if interface < 0 or interface >= lions_firewall.interface_count_get():
+            print(f"UI SERVER|ERR: Supplied interface integer {interface} does not match existing interfaces.")
             raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
         if protocolStr not in protocolNums.keys():
@@ -254,11 +257,11 @@ def getRules(request, protocolStr, interfaceInt):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
-        defaultAction = lions_firewall.filter_get_default_action(interfaceInt, protocol)
+        defaultAction = lions_firewall.filter_get_default_action(interface, protocol)
         rules = []
         # ignore default rule at position 0
-        for i in range(defaultActionRuleIdx + 1, lions_firewall.rule_count(interfaceInt, protocol)):
-            rule = lions_firewall.rule_get_nth(interfaceInt, protocol, i)
+        for i in range(defaultActionRuleIdx + 1, lions_firewall.rule_count(interface, protocol)):
+            rule = lions_firewall.rule_get_nth(interface, protocol, i)
             rules.append({
                 "id": rule[0],
                 "src_ip": intToIp(rule[1]),
@@ -281,11 +284,12 @@ def getRules(request, protocolStr, interfaceInt):
 
 
 # Delete a rule for an interface filter
-@app.route('/api/rules/<string:protocolStr>/<int:ruleId>/<int:interfaceInt>', methods=["DELETE"])
+@app.route("/api/rules/<string:protocolStr>/<int:ruleId>/<int:interfaceInt>", methods=["DELETE"])
 def deleteRule(request, protocolStr, ruleId, interfaceInt):
     try:
-        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
-            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
+        interface = interfaceInt
+        if interface < 0 or interface >= lions_firewall.interface_count_get():
+            print(f"UI SERVER|ERR: Supplied interface integer {interface} does not match existing interfaces.")
             raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
         if protocolStr not in protocolNums.keys():
@@ -293,7 +297,7 @@ def deleteRule(request, protocolStr, ruleId, interfaceInt):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
-        lions_firewall.rule_delete(interfaceInt, ruleId, protocol)
+        lions_firewall.rule_delete(interface, ruleId, protocol)
         return {"status": "ok"}
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: deleteRule: {OSErrStrings[OSErr.errno]}")
@@ -304,11 +308,12 @@ def deleteRule(request, protocolStr, ruleId, interfaceInt):
 
 
 # Add a new default action for an interface filter
-@app.route('/api/rules/<string:protocolStr>/default/<int:action>/<int:interfaceInt>', methods=["POST"])
+@app.route("/api/rules/<string:protocolStr>/default/<int:action>/<int:interfaceInt>", methods=["POST"])
 def setDefaultAction(request, protocolStr, action, interfaceInt):
     try:
-        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
-            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
+        interface = interfaceInt
+        if interface < 0 or interface >= lions_firewall.interface_count_get():
+            print(f"UI SERVER|ERR: Supplied interface integer {interface} does not match existing interfaces.")
             raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
         if protocolStr not in protocolNums.keys():
@@ -316,7 +321,7 @@ def setDefaultAction(request, protocolStr, action, interfaceInt):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
-        lions_firewall.filter_set_default_action(interfaceInt, protocol, action)
+        lions_firewall.filter_set_default_action(interface, protocol, action)
         return {"status": "ok"}, 201
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: setDefaultAction: {OSErrStrings[OSErr.errno]}")
@@ -327,7 +332,7 @@ def setDefaultAction(request, protocolStr, action, interfaceInt):
 
 
 # Add a new rule for an interface filter
-@app.route('/api/rules/<string:protocolStr>', methods=['POST'])
+@app.route("/api/rules/<string:protocolStr>", methods=["POST"])
 def addRule(request, protocolStr):
     try:
         if protocolStr not in protocolNums.keys():
@@ -397,7 +402,7 @@ def addRule(request, protocolStr):
 
 ############ Web UI routes ############
 
-@app.route('/')
+@app.route("/")
 def index(request):
     html = """
 <!DOCTYPE html>
@@ -415,9 +420,9 @@ def index(request):
   </body>
 </html>
 """
-    return Response(body=html, headers={'Content-Type': 'text/html'})
+    return Response(body=html, headers={"Content-Type": "text/html"})
 
-@app.route('/interface')
+@app.route("/interface")
 def index(request):
     html = """
 <!DOCTYPE html>
@@ -448,24 +453,23 @@ def index(request):
     </div>
     <script>
       document.addEventListener("DOMContentLoaded", function() {
-        var tbody = document.getElementById('interfaces-body');
+        var tbody = document.getElementById("interfaces-body");
         tbody.innerHTML = "";
-        fetch('/api/interfaces/count')
+        fetch("/api/interfaces/count")
           .then(function(response) { return response.json(); })
           .then(function(data) {
             for (let i = 0; i < data.count; i++) {
-              fetch('/api/interfaces/' + i)
+              fetch("/api/interfaces/" + i)
                 .then(function(response) { return response.json(); })
                 .then(function(info) {
-                  let row = document.createElement('tr');
-                  row.innerHTML = "<td>" + info.name + "</td>" +
+                  let row = document.createElement("tr");
+                  row.innerHTML = "<td>" + info.interface + "</td>" +
                                   "<td>" + info.mac + "</td>" +
                                   "<td>" + info.ip + "</td>";
                   tbody.appendChild(row);
                 })
                 .catch(function(err) {
-                  alert("Error" + info.error);
-                  let row = document.createElement('tr');
+                  let row = document.createElement("tr");
                   row.innerHTML = "<td colspan='3'>Error retrieving interface " + i + "</td>";
                   tbody.appendChild(row);
                 });
@@ -479,9 +483,9 @@ def index(request):
   </body>
 </html>
 """
-    return Response(body=html, headers={'Content-Type': 'text/html'})
+    return Response(body=html, headers={"Content-Type": "text/html"})
 
-@app.route('/routing_config')
+@app.route("/routing_config")
 def config(request):
     html = """
 <!DOCTYPE html>
@@ -501,7 +505,7 @@ def config(request):
     <table border="1">
       <thead>
         <tr>
-          <th>Route ID</th>
+          <th>ID</th>
           <th>IP</th>
           <th>Subnet</th>
           <th>Next Hop</th>
@@ -522,7 +526,7 @@ def config(request):
       Interface: <select id="new-interface"></select><br>
       IP: <input type="text" id="new-ip" placeholder="e.g. 10.0.0.0"><br>
       Subnet: <input type="number" id="new-subnet" placeholder="e.g. 24"><br>
-      Next Hop: <input type="text" id="new-next-hop" placeholder="e.g. 10.0.0.0"><br>
+      Next hop: <input type="text" id="new-next-hop" placeholder="e.g. 10.0.0.0"><br>
       <button id="add-route-btn">Add Route</button>
     </p>
 
@@ -539,7 +543,7 @@ def config(request):
                 requests.push(
                   fetch("/api/interfaces/" + i)
                     .then(function(response) { return response.json(); })
-                    .then(function(info) { interfaceMap[i] = info.name; })
+                    .then(function(info) { interfaceMap[i] = info.interface; })
                 );
               }
               return Promise.all(requests);
@@ -557,64 +561,54 @@ def config(request):
         }
 
         function loadRoutes() {
-          var routesBody = document.getElementById(`routes-body`);
+          var routesBody = document.getElementById("routes-body");
           routesBody.innerHTML = "";
-          fetch('/api/routes')
+          fetch("/api/routes")
             .then(function(response) { return response.json(); })
             .then(function(data) {
               if (data.routes.length === 0) {
-                let row = document.createElement('tr');
-
-                let cellInterfaceIn = document.createElement('td');
-                cellInterfaceIn.textContent = interfaceMap[id];
-                row.appendChild(cellInterfaceIn);
-
-                let cellInterfaceNone = document.createElement('td');
-                cellInterfaceNone.textContent = "No routes available";
-                cellInterfaceNone.colSpan = 5;
-                row.appendChild(cellInterfaceNone);
-
+                let row = document.createElement("tr");
+                row.innerHTML = "<td colspan='6'>No routes available</td>";
                 routesBody.appendChild(row);
               } else {
                 data.routes.forEach(function(route) {
-                  let row = document.createElement('tr');
+                  let row = document.createElement("tr");
 
-                  let cellId = document.createElement('td');
+                  let cellId = document.createElement("td");
                   cellId.textContent = route.id;
                   row.appendChild(cellId);
 
-                  let cellDest = document.createElement('td');
+                  let cellDest = document.createElement("td");
                   cellDest.textContent = route.subnet ? route.ip : "-";
                   row.appendChild(cellDest);
 
-                  let cellSubnet = document.createElement('td');
+                  let cellSubnet = document.createElement("td");
                   cellSubnet.textContent = route.subnet ? route.subnet : "-";
                   row.appendChild(cellSubnet);
 
-                  let cellNextHop = document.createElement('td');
+                  let cellNextHop = document.createElement("td");
                   cellNextHop.textContent = route.next_hop;
                   row.appendChild(cellNextHop);
 
-                  let cellInterface = document.createElement('td');
-                  cellInterface.textContent = route.interface == interfaceMap[route.interface];
+                  let cellInterface = document.createElement("td");
+                  cellInterface.textContent = interfaceMap[route.interface] ?? route.interface;
                   row.appendChild(cellInterface);
 
-                  let cellActions = document.createElement('td');
-                  let delBtn = document.createElement('button');
+                  let cellActions = document.createElement("td");
+                  let delBtn = document.createElement("button");
                   delBtn.textContent = "Delete";
                   delBtn.addEventListener("click", function() {
-                    fetch('/api/routes/' + route.id, { method: 'DELETE' })
-                      .then(function(response) {
-                        if (!response.ok) throw new Error("Delete failed");
-                        return response.json();
-                      })
-                      .then(function(result) {
-                        alert("Route " + route.id + " deleted.");
+                    fetch("/api/routes/" + route.id, { method: "DELETE" })
+                      .then(function(r) { return r.json(); })
+                      .then(function(d) {
+                        if (d.error) {
+                          alert(d.error);
+                        } else {
+                          alert("Route deleted successfully!");
+                        }
                         loadRoutes();
                       })
-                      .catch(function(error) {
-                        alert("Error deleting route " + route.id);
-                      });
+                      .catch(function() { alert("Error deleting route"); });
                   });
                   cellActions.appendChild(delBtn);
                   row.appendChild(cellActions);
@@ -622,10 +616,9 @@ def config(request):
                   routesBody.appendChild(row);
                 });
               }
-              return Promise.all(requests);
             })
             .catch(function(err) {
-              let row = document.createElement('tr');
+              let row = document.createElement("tr");
               row.innerHTML = "<td colspan='6'>Error retrieving routes</td>";
               routesBody.appendChild(row);
             });
@@ -633,36 +626,35 @@ def config(request):
 
         loadInterfaces().then(loadRoutes);
 
-        document.getElementById('add-route-btn').addEventListener('click', function() {
-          var interfaceId = Number(document.getElementById('new-interface').value);
-          var ip = document.getElementById('new-ip').value;
-          var subnet = Number(document.getElementById('new-subnet').value);
-          var next_hop = document.getElementById('new-next-hop').value;
-          fetch('/api/routes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+        document.getElementById("add-route-btn").addEventListener("click", function() {
+          var interfaceId = Number(document.getElementById("new-interface").value);
+          var ip = document.getElementById("new-ip").value;
+          var subnet = Number(document.getElementById("new-subnet").value);
+          var next_hop = document.getElementById("new-next-hop").value;
+          fetch("/api/routes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ interface: interfaceId, ip: ip, subnet: subnet, next_hop: next_hop})
           })
-          .then(function(response) {
-            if (!response.ok) throw new Error('Add route failed');
-            return response.json();
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d.error) {
+              alert(d.error);
+            } else {
+              alert("Route added successfully!");
+              loadRoutes();
+            }
           })
-          .then(function(result) {
-            alert("Route added successfully.");
-            loadRoutes();
-          })
-          .catch(function(err) {
-            alert("Error adding route");
-          });
+          .catch(function() { alert("Error adding route"); });
         });
       });
     </script>
   </body>
 </html>
 """
-    return Response(body=html, headers={'Content-Type': 'text/html'})
+    return Response(body=html, headers={"Content-Type": "text/html"})
 
-@app.route('/rules/<string:protocol>')
+@app.route("/rules/<string:protocol>")
 def rules(request, protocol):
     html = """
 <!DOCTYPE html>
@@ -718,7 +710,6 @@ def rules(request, protocol):
     </table>
 
     <h2>Add New Rule</h2>
-      Interface: <select id="new-interface"></select><br>
       Source IP: <input type="text" id="new-src-ip" placeholder="e.g. 192.168.10.3"><br>
       Source Port: <input type="number" id="new-src-port" placeholder="e.g. 24"><br>
       Source Subnet: <input type="number" id="new-src-subnet" placeholder="e.g. 16"><br>
@@ -738,24 +729,19 @@ def rules(request, protocol):
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         function loadInterfaces() {
-          return fetch('/api/interfaces/count')
+          return fetch("/api/interfaces/count")
             .then(function(response) { return response.json(); })
             .then(function(data) {
               var requests = [];
               for (let i = 0; i < data.count; i++) {
                 requests.push(
-                  fetch('/api/interfaces/' + i)
+                  fetch("/api/interfaces/" + i)
                     .then(function(response) { return response.json(); })
                     .then(function(info) {
-                      var option = document.createElement('option');
+                      var option = document.createElement("option");
                       option.value = i;
-                      option.textContent = info.name;
-                      document.getElementById('rules-interface').appendChild(option);
-
-                      var addOpt = document.createElement('option');
-                      addOpt.value = i;
-                      addOpt.textContent = info.name;
-                      document.getElementById('new-interface').appendChild(addOpt);
+                      option.textContent = info.interface;
+                      document.getElementById("rules-interface").appendChild(option);
                     })
                 );
               }
@@ -764,11 +750,11 @@ def rules(request, protocol):
         }
 
         function loadRules() {
-          var rulesBody = document.getElementById('rules-body');
+          var rulesBody = document.getElementById("rules-body");
           rulesBody.innerHTML = "";
-          var defaultAction = document.getElementById('default-action');
-          var interfaceId = Number(document.getElementById('rules-interface').value);
-          fetch('/api/rules/INSERT_PROTOCOL/' + interfaceId)
+          var defaultAction = document.getElementById("default-action");
+          var interfaceId = Number(document.getElementById("rules-interface").value);
+          fetch("/api/rules/INSERT_PROTOCOL/" + interfaceId)
             .then(function(response) { return response.json(); })
             .then(function(data) {
               for (let i = 0; i < defaultAction.options.length; i++) {
@@ -779,12 +765,12 @@ def rules(request, protocol):
                 }
               }
               if (data.rules.length === 0) {
-                var row = document.createElement('tr');
+                var row = document.createElement("tr");
                 row.innerHTML = "<td colspan='9'>No rules available</td>";
                 rulesBody.appendChild(row);
               } else {
                 data.rules.forEach(function(rule) {
-                  var row = document.createElement('tr');
+                  var row = document.createElement("tr");
                   let id = row.insertCell();
                   id.textContent = rule.id;
                   let srcIp = row.insertCell();
@@ -813,43 +799,57 @@ def rules(request, protocol):
               }
             })
             .catch(function(err) {
-              var row = document.createElement('tr');
+              var row = document.createElement("tr");
               row.innerHTML = "<td colspan='9'>Error retrieving rules</td>";
               rulesBody.appendChild(row);
             });
         }
 
         window.deleteRule = function(ruleId) {
-          var interfaceId = Number(document.getElementById('rules-interface').value);
-          fetch('/api/rules/INSERT_PROTOCOL/' + ruleId + '/' + interfaceId, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' }
+          var interfaceId = Number(document.getElementById("rules-interface").value);
+          fetch("/api/rules/INSERT_PROTOCOL/" + ruleId + "/" + interfaceId, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" }
           })
           .then(function(r) { return r.json(); })
-          .then(function(d) { if (d.error) alert(d.error); loadRules(); })
+          .then(function(d) {
+            if (d.error) {
+              alert(d.error);
+            } else {
+              alert("Rule deleted successfully!");
+            }
+            loadRules();
+          })
           .catch(function() { alert("Error deleting rule"); });
         }
 
-        document.getElementById('set-default-action-btn').addEventListener('click', function() {
-          var interfaceId = Number(document.getElementById('rules-interface').value);
-          var newDefaultAction = document.getElementById('default-action').value;
-          fetch('/api/rules/INSERT_PROTOCOL/default/' + newDefaultAction + '/' + interfaceId, {
-            method: 'POST',
+        document.getElementById("set-default-action-btn").addEventListener("click", function() {
+          var interfaceId = Number(document.getElementById("rules-interface").value);
+          var newDefaultAction = document.getElementById("default-action").value;
+          fetch("/api/rules/INSERT_PROTOCOL/default/" + newDefaultAction + "/" + interfaceId, {
+            method: "POST",
           })
           .then(function(r) { return r.json(); })
-          .then(function(d) { if (d.error) alert(d.error); loadRules(); })
+          .then(function(d) {
+            if (d.error) {
+              alert(d.error);
+            } else {
+              alert("Default action updated successfully!");
+            }
+            loadRules();
+          })
           .catch(function() { alert("Error updating default action"); });
         });
 
-        document.getElementById('add-rule-btn').addEventListener('click', function() {
-          var interfaceId = Number(document.getElementById('new-interface').value);
-          var srcIp = document.getElementById('new-src-ip').value;
-          var srcPort = document.getElementById('new-src-port').value;
-          var srcSubnet = Number(document.getElementById('new-src-subnet').value);
-          var destIp = document.getElementById('new-dest-ip').value;
-          var destPort = document.getElementById('new-dest-port').value;
-          var destSubnet = Number(document.getElementById('new-dest-subnet').value);
-          var action = Number(document.getElementById('new-action').value);
+        document.getElementById("add-rule-btn").addEventListener("click", function() {
+          var interfaceId = Number(document.getElementById("rules-interface").value);
+          var srcIp = document.getElementById("new-src-ip").value;
+          var srcPort = document.getElementById("new-src-port").value;
+          var srcSubnet = Number(document.getElementById("new-src-subnet").value);
+          var destIp = document.getElementById("new-dest-ip").value;
+          var destPort = document.getElementById("new-dest-port").value;
+          var destSubnet = Number(document.getElementById("new-dest-subnet").value);
+          var action = Number(document.getElementById("new-action").value);
           var body = JSON.stringify({
             interface: interfaceId,
             src_ip: srcIp,
@@ -860,17 +860,24 @@ def rules(request, protocol):
             dest_subnet: destSubnet,
             action: action,
           });
-          fetch('/api/rules/INSERT_PROTOCOL', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+          fetch("/api/rules/INSERT_PROTOCOL", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: body,
           })
           .then(function(r) { return r.json(); })
-          .then(function(d) { if (d.error) alert(d.error); else loadRules(); })
+          .then(function(d) {
+            if (d.error) {
+              alert(d.error);
+            } else {
+              alert("Rule added successfully!");
+              loadRules();
+            }
+          })
           .catch(function() { alert("Error adding rule"); });
         });
 
-        document.getElementById('rules-interface').addEventListener('change', function() {
+        document.getElementById("rules-interface").addEventListener("change", function() {
           loadRules();
         });
 
@@ -882,11 +889,11 @@ def rules(request, protocol):
   </body>
 </html>
 """
-    html = html.replace('INSERT_PROTOCOL_UPPER', protocol.upper())
-    html = html.replace('INSERT_PROTOCOL', protocol)
-    return Response(body=html, headers={'Content-Type': 'text/html'})
+    html = html.replace("INSERT_PROTOCOL_UPPER", protocol.upper())
+    html = html.replace("INSERT_PROTOCOL", protocol)
+    return Response(body=html, headers={"Content-Type": "text/html"})
 
-@app.route('/rules')
+@app.route("/rules")
 def rules(request):
     html = """
 <!DOCTYPE html>
@@ -909,9 +916,9 @@ def rules(request):
   </body>
 </html>
 """
-    return Response(body=html, headers={'Content-Type': 'text/html'})
+    return Response(body=html, headers={"Content-Type": "text/html"})
 
-@app.route('/main.css')
+@app.route("/main.css")
 def css(request):
     css = """
 body {
@@ -928,6 +935,6 @@ body {
   margin-bottom: 1rem;
 }
 """
-    return Response(body=css, headers={'Content-Type': 'text/css'})
+    return Response(body=css, headers={"Content-Type": "text/css"})
 
 app.run(debug=True, port=80)
