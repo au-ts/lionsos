@@ -19,8 +19,8 @@ REPORT_FILE := report.txt
 
 all: $(IMAGE_FILE)
 include ${SDDF}/tools/make/board/common.mk
-ETH_DRIV0 := ${ETH_DRIV_1}
-ETH_DRIV1 := ${ETH_DRIV}
+ETH_DRIV0 := ${ETH_DRIV}
+ETH_DRIV1 := ${ETH_DRIV_1}
 
 MICRODOT := $(LIONSOS)/dep/microdot/src
 FIREWALL_NET_COMPONENTS := $(FIREWALL_SRC_DIR)/net_components
@@ -126,7 +126,7 @@ include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(PYTHON) $(SDFGEN_HELPER) \
 		--configs "$(FIREWALL_CONFIG_HEADERS)" \
-		--output $(BUILD_DIR)/config_structs.py
+		--output $(FIREWALL_SRC_DIR)/pyfw/config_structs.py
 	PYTHONPATH=$(FIREWALL_SRC_DIR):${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) \
 		--sddf $(SDDF) --board $(MICROKIT_BOARD) \
 		--dtb $(DTB) --output . --sdf $(SYSTEM_FILE) \
@@ -171,8 +171,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
 	$(OBJCOPY) --update-section .net_config_0=net_data0/net_client_icmp_module.data icmp_module.elf
 
 # TODO: webserver should be able to transmit out all interfaces via the router
-	$(OBJCOPY) --update-section .net_client_config=net_data0/net_client_micropython.data micropython.elf
-	$(OBJCOPY) --update-section .lib_sddf_lwip_config=net_data0/lib_sddf_lwip_config_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_micropython.data micropython.elf
+	$(OBJCOPY) --update-section .lib_sddf_lwip_config=net_data1/lib_sddf_lwip_config_micropython.data micropython.elf
 
 # Interface 1 components
 	$(OBJCOPY) --update-section .device_resources=net_data1/ethernet_driver1_device_resources.data eth_driver1.elf
