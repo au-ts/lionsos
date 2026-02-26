@@ -70,7 +70,7 @@ const uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 packet back to source */
 static bool enqueue_icmp_unreachable(fw_buff_desc_t buffer)
 {
-    uint8_t src_interface = buffer.region_id;
+    uint8_t src_interface = buffer.interface;
     uintptr_t pkt_vaddr = data_vaddr[src_interface] + buffer.offset;
 
     /* Copy IP header into ICMP request */
@@ -83,10 +83,9 @@ static bool enqueue_icmp_unreachable(fw_buff_desc_t buffer)
     return enqueued;
 }
 
-static void transmit_packet(net_buff_desc_t buffer, uint8_t *mac_addr, uint8_t src_interface,
-                            uint8_t out_interface)
+static void transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t out_interface)
 {
-    uintptr_t pkt_vaddr = data_vaddr[src_interface] + buffer.io_or_offset;
+    uintptr_t pkt_vaddr = data_vaddr[buffer.interface] + buffer.offset;
     eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
@@ -97,8 +96,8 @@ static void transmit_packet(net_buff_desc_t buffer, uint8_t *mac_addr, uint8_t s
     if (FW_DEBUG_OUTPUT) {
         sddf_printf(
             "Router sending packet received on interface %u out of interface %u for ip %s with buffer number %lu\n",
-            src_interface, out_interface, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
-            buffer.io_or_offset / NET_BUFFER_SIZE);
+            buffer.interface, out_interface, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
+            buffer.offset / NET_BUFFER_SIZE);
     }
 
     /* Checksum needs to be re-calculated as header has been modified */
@@ -108,13 +107,12 @@ static void transmit_packet(net_buff_desc_t buffer, uint8_t *mac_addr, uint8_t s
     ip_hdr->check = fw_internet_checksum(ip_hdr, ipv4_header_length(ip_hdr));
 #endif
 
-    fw_buff_desc_t fw_buffer = { .offset = buffer.io_or_offset, .len = buffer.len, .region_id = src_interface };
-    int err = fw_enqueue(&tx_active[out_interface], &fw_buffer);
+    int err = fw_enqueue(&tx_active[out_interface], &buffer);
     assert(!err);
     tx_net[out_interface] = true;
 }
 
-static void process_arp_waiting(fw_interface_id_t out_interface)
+static void process_arp_waiting(uint8_t out_interface)
 {
     pkts_waiting_t *waiting_queue = &pkt_waiting_queue[out_interface];
     while (!fw_queue_empty(&arp_resp_queue[out_interface])) {
@@ -157,9 +155,8 @@ static void process_arp_waiting(fw_interface_id_t out_interface)
             /* Substitute the MAC address and send packets out of the NIC */
             pkt_waiting_node_t *node = root;
             for (uint16_t i = 0; i < root->num_children + 1; i++) {
-                net_buff_desc_t buffer = { .io_or_offset = node->buffer.offset, .len = node->buffer.len };
-                transmit_packet(buffer, response.mac_addr, node->buffer.region_id, out_interface);
-                node = pkts_waiting_next_child(waiting_queue, node);
+                transmit_packet(node->buffer, response.mac_addr, out_interface);
+                node = pkts_waiting_next_child(&pkt_waiting_queue, node);
             }
         }
         /* Free the packet waiting nodes */
@@ -177,6 +174,7 @@ static void route(void)
                 int err = fw_dequeue(&fw_filters[interface][filter], &buffer);
                 assert(!err);
 
+                fw_buff_desc_t fw_buffer = { .offset = buffer.io_or_offset, .len = buffer.len, .interface = interface };
                 uintptr_t pkt_vaddr = data_vaddr[interface] + buffer.io_or_offset;
                 eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
                 ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
@@ -230,8 +228,10 @@ static void route(void)
                 }
 
                 /* Packet destined for webserver */
-                if (router_config.webserver.rx_active.capacity &&
-                    ip_hdr->dst_ip == router_config.interfaces[interface].ip) {
+                if (ip_hdr->dst_ip == router_config.interfaces[interface].ip) {
+                    if (FW_DEBUG_OUTPUT) {
+                        sddf_printf("Router transmitted packet to webserver on interface %u\n", interface);
+                    }
                     tcp_hdr_t *tcp_pkt = (tcp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
                     if (ip_hdr->protocol != WEBSERVER_PROTOCOL || tcp_pkt->dst_port != htons(WEBSERVER_PORT)) {
                         err = fw_enqueue(&rx_free[interface], &buffer);
@@ -288,9 +288,8 @@ static void route(void)
                     || (arp == NULL && fw_queue_full(&arp_req_queue[out_interface]))) {
 
                     if (arp != NULL && arp->state == ARP_STATE_UNREACHABLE) {
-                        fw_buff_desc_t fw_buffer = { .offset = buffer.io_or_offset, .len = buffer.len, .region_id = interface };
-                        bool icmp_enqueued = enqueue_icmp_unreachable(fw_buffer);
-                        if (!icmp_enqueued) {
+                        int icmp_err = enqueue_icmp_unreachable(fw_buffer);
+                        if (icmp_err) {
                             sddf_dprintf("ROUTING LOG: Could not enqueue ICMP unreachable!\n");
                         }
                     } else {
@@ -306,8 +305,7 @@ static void route(void)
                 /* no entry in ARP table or request still pending, store packet
                 and send ARP request or await ARP response */
                 if (arp == NULL || arp->state == ARP_STATE_PENDING) {
-                    pkt_waiting_node_t *root = pkt_waiting_find_node(waiting_queue, next_hop);
-                    fw_buff_desc_t fw_buffer = { .offset = buffer.io_or_offset, .len = buffer.len, .region_id = interface };
+                    pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue, next_hop);
                     if (root) {
                         /* ARP request already enqueued, add node as child. */
                         fw_err = pkt_waiting_push_child(waiting_queue, root, fw_buffer);
@@ -326,7 +324,7 @@ static void route(void)
                 }
 
                 /* valid arp entry found, transmit packet */
-                transmit_packet(buffer, arp->mac_addr, interface, out_interface);
+                transmit_packet(fw_buffer, arp->mac_addr, out_interface);
             }
         }
     }
@@ -386,10 +384,14 @@ void init(void)
         }
     }
 
-    if (router_config.webserver.rx_active.capacity) {
-        fw_queue_init(&webserver, router_config.webserver.rx_active.queue.vaddr, sizeof(net_buff_desc_t),
-                      router_config.webserver.rx_active.capacity);
-    }
+    assert(router_config.webserver.rx_active.queue.vaddr != 0);
+    fw_queue_init(&webserver, router_config.webserver.rx_active.queue.vaddr, sizeof(fw_buff_desc_t),
+                  router_config.webserver.rx_active.capacity);
+
+    assert(router_config.packet_queue.vaddr != 0);
+    /* Initialise the packet waiting queue from mapped in memory */
+    pkt_waiting_init(&pkt_waiting_queue, (void *)router_config.packet_queue.vaddr,
+                     router_config.packet_queue_capacity);
 }
 
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
