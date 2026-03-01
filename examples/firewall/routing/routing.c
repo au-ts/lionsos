@@ -315,7 +315,7 @@ static void route(void)
             and send ARP request or await ARP response */
             if (arp == NULL || arp->state == ARP_STATE_PENDING) {
                 pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue,
-                                                                next_hop);
+                                                                 next_hop);
                 if (root) {
                     /* ARP request already enqueued, add node as child. */
                     fw_err = pkt_waiting_push_child(&pkt_waiting_queue,
