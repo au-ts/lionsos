@@ -227,7 +227,7 @@ static void route(void)
 
             if (ROUTING_OUT_EXTERNAL == interface && next_hop == ip_hdr->dst_ip && match != NULL && ~(subnet_mask(match->subnet) & next_hop) == ~match->ip) {
                 /* If externally routed, next hop is destination and postfix indicates subnet broadcast IP, broadcast using temp to avoid warning */
-                uint8_t mac_broadcast_copy[6]; 
+                uint8_t mac_broadcast_copy[6];
                 memcpy(mac_broadcast_copy, broadcast_mac_addr, sizeof(mac_broadcast_copy));
                 transmit_packet(buffer, mac_broadcast_copy);
                 continue;
