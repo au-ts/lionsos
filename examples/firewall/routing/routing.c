@@ -284,7 +284,9 @@ static void route(void)
                     sddf_printf("%sRouter transmitted packet to webserver\n",
                     fw_frmt_str[router_config.interface]);
                 }
+                
                 continue;
+
             }
 
             fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
