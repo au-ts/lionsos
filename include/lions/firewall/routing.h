@@ -346,9 +346,10 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
                                       uint32_t ip,
                                       uint32_t *next_hop,
                                       fw_routing_interfaces_t *interface,
-                                      uint8_t num_calls)
+                                      uint8_t num_calls,
+                                      fw_routing_entry_t *match,
+                                      )
 {
-    fw_routing_entry_t *match = NULL;
     for (uint16_t i = 0; i < table->size; i++) {
         fw_routing_entry_t *entry = table->entries + i;
 

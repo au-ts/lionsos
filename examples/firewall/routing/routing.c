@@ -65,6 +65,7 @@ static bool notify_icmp; /* Request has been enqueued to ICMP module */
 #define MULTICAST_IP_NETWORK_ADDR 0xe0000000
 #define BROADCAST_IP_ADDR 0xffffffff
 #define MULTICAST_MAC_SUFFIX_MASK 0x7fffff
+const uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
@@ -221,12 +222,19 @@ static void route(void)
             /* Find the next hop address. */
             uint32_t next_hop;
             fw_routing_interfaces_t interface;
+            fw_routing_entry_t *match = NULL;
             fw_routing_err_t fw_err = fw_routing_find_route(routing_table,
                                                             ip_hdr->dst_ip,
                                                             &next_hop,
                                                             &interface,
-                                                            0);
+                                                            0, match);
             assert(fw_err == ROUTING_ERR_OKAY);
+
+            if (ROUTING_OUT_EXTERNAL == interface && next_hop == ip_hdr->dst_ip && ~(subnet_mask(match->subnet) & ip) == ~entry->ip) {
+                /* If externally routed, next hop is destination address and postfix indicates that is subnet broadcast IP address */ 
+                transmit_packet(buffer, broadcast_mac_addr);
+                continue;
+            }
 
             if (FW_DEBUG_OUTPUT && interface != ROUTING_OUT_NONE) {
                 sddf_printf("%sRouter converted ip %s to next hop ip %s out interface %u\n",
