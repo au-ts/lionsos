@@ -343,7 +343,7 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
             if (match != NULL && match->subnet > entry->subnet) {
                 continue;
             }
-            
+
             match = entry;
         }
     }

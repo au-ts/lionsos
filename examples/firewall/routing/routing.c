@@ -226,7 +226,7 @@ static void route(void)
             assert(fw_err == ROUTING_ERR_OKAY);
 
             if (ROUTING_OUT_EXTERNAL == interface && next_hop == ip_hdr->dst_ip && ~(subnet_mask(match->subnet) & ip) == ~entry->ip) {
-                /* If externally routed, next hop is destination address and postfix indicates that is subnet broadcast IP address */ 
+                /* If externally routed, next hop is destination and postfix indicates subnet broadcast IP, broadcast */
                 transmit_packet(buffer, broadcast_mac_addr);
                 continue;
             }
@@ -272,7 +272,7 @@ static void route(void)
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sRouter transmitted packet to webserver\n", fw_frmt_str[router_config.interface]);
                 }
-                
+
                 continue;
             }
 
