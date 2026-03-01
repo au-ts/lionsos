@@ -225,7 +225,7 @@ static void route(void)
                                                             0, &match);
             assert(fw_err == ROUTING_ERR_OKAY);
 
-            if (ROUTING_OUT_EXTERNAL == interface && next_hop == ip_hdr->dst_ip && match != NULL && ~(subnet_mask(match->subnet) & ip) == ~entry->ip) {
+            if (ROUTING_OUT_EXTERNAL == interface && next_hop == ip_hdr->dst_ip && match != NULL && ~(subnet_mask(match->subnet) & ip) == ~match->ip) {
                 /* If externally routed, next hop is destination and postfix indicates subnet broadcast IP, broadcast */
                 transmit_packet(buffer, broadcast_mac_addr);
                 continue;
