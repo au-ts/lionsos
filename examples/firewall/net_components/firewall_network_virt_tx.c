@@ -26,8 +26,7 @@ static int extract_offset_net_client(uintptr_t *phys)
 {
     for (int client = 0; client < config.num_clients; client++) {
         if (*phys >= config.clients[client].data.io_addr
-            && *phys
-                   < config.clients[client].data.io_addr + tx_queue_clients[client].capacity * NET_BUFFER_SIZE) {
+            && *phys < config.clients[client].data.io_addr + tx_queue_clients[client].capacity * NET_BUFFER_SIZE) {
             *phys = *phys - config.clients[client].data.io_addr;
             return client;
         }
@@ -61,9 +60,9 @@ static void tx_provide(void)
 
                 if (buffer.io_or_offset % NET_BUFFER_SIZE
                     || buffer.io_or_offset >= NET_BUFFER_SIZE * tx_queue_clients[client].capacity) {
-                    sddf_dprintf("%sVIRT TX LOG: Client provided offset %lx which is not buffer aligned or outside of buffer region\n",
-                                 fw_frmt_str[fw_config.interface],
-                                 buffer.io_or_offset);
+                    sddf_dprintf("%sVIRT TX LOG: Client provided offset %lx which is not buffer aligned or outside of "
+                                 "buffer region\n",
+                                 fw_frmt_str[fw_config.interface], buffer.io_or_offset);
                     err = net_enqueue_free(&tx_queue_clients[client], buffer);
                     assert(!err);
                     continue;
@@ -94,10 +93,11 @@ static void tx_provide(void)
             int err = fw_dequeue(&fw_active_clients[client], &buffer);
             assert(!err);
 
-            assert(buffer.io_or_offset % NET_BUFFER_SIZE == 0 &&
-                   buffer.io_or_offset < NET_BUFFER_SIZE * fw_active_clients[client].capacity);
+            assert(buffer.io_or_offset % NET_BUFFER_SIZE == 0
+                   && buffer.io_or_offset < NET_BUFFER_SIZE * fw_active_clients[client].capacity);
 
-            uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)fw_config.active_clients[client].data.region.vaddr;
+            uintptr_t buffer_vaddr = buffer.io_or_offset
+                                   + (uintptr_t)fw_config.active_clients[client].data.region.vaddr;
             cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
             buffer.io_or_offset = buffer.io_or_offset + fw_config.active_clients[client].data.io_addr;
 
@@ -133,7 +133,6 @@ static void tx_return(void)
             }
             client = extract_offset_fw_client(&buffer.io_or_offset);
             assert(client >= 0);
-
 
             err = fw_enqueue(&fw_free_clients[client], &buffer);
             assert(!err);
@@ -184,13 +183,13 @@ void init(void)
 
     /* Set up firewall queues */
     for (int i = 0; i < fw_config.num_active_clients; i++) {
-        fw_queue_init(&fw_active_clients[i], fw_config.active_clients[i].conn.queue.vaddr,
-            sizeof(net_buff_desc_t), fw_config.active_clients[i].conn.capacity);
+        fw_queue_init(&fw_active_clients[i], fw_config.active_clients[i].conn.queue.vaddr, sizeof(net_buff_desc_t),
+                      fw_config.active_clients[i].conn.capacity);
     }
 
     for (int i = 0; i < fw_config.num_free_clients; i++) {
-        fw_queue_init(&fw_free_clients[i], fw_config.free_clients[i].conn.queue.vaddr,
-            sizeof(net_buff_desc_t), fw_config.free_clients[i].conn.capacity);
+        fw_queue_init(&fw_free_clients[i], fw_config.free_clients[i].conn.queue.vaddr, sizeof(net_buff_desc_t),
+                      fw_config.free_clients[i].conn.capacity);
     }
     tx_provide();
 }

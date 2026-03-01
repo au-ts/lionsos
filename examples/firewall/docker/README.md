@@ -12,4 +12,4 @@ to test the firewall, with the firewall itself running on qemu inside the
 container.
 
 Further building and testing information can be found on the lionsos
-[website](https://https://lionsos.org/docs/examples/firewall/).
+[website](https://lionsos.org/docs/examples/firewall/).

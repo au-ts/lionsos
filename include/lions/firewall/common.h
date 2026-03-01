@@ -50,10 +50,7 @@ are connected to */
 
 /* Firewall component print formatting string to identify which interface
 component is printing */
-static const char *fw_frmt_str[] = {
-    "EXT --> INT | ",
-    "INT --> EXT | "
-};
+static const char *fw_frmt_str[] = { "EXT --> INT | ", "INT --> EXT | " };
 
 #define IPV4_ADDR_BUFLEN 16
 
@@ -68,8 +65,7 @@ static char ip_addr_buf1[IPV4_ADDR_BUFLEN];
  *
  * @return buffer or NULL upon failure.
  */
-static inline char *ipaddr_to_string(uint32_t ip,
-                              char *buf)
+static inline char *ipaddr_to_string(uint32_t ip, char *buf)
 {
     char inv[3], *rp;
     uint8_t *ap, rem, n, i;
