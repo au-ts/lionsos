@@ -284,7 +284,6 @@ static void route(void)
                     sddf_printf("%sRouter transmitted packet to webserver\n",
                     fw_frmt_str[router_config.interface]);
                 }
-
                 continue;
             }
 
