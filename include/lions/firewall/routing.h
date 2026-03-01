@@ -355,12 +355,10 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
 
         /* ip is part of subnet */
         if ((subnet_mask(entry->subnet) & ip) == entry->ip) {
-
             /* Current match is stronger */
             if (match != NULL && match->subnet > entry->subnet) {
                 continue;
             }
-
             match = entry;
         }
     }
@@ -377,7 +375,7 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
         *interface = ROUTING_OUT_EXTERNAL;
     } else if (match->interface == ROUTING_OUT_EXTERNAL &&
                match->next_hop != FW_ROUTING_NONEXTHOP) {
-        num_calls ++;
+        num_calls++;
         if (num_calls == FW_ROUTING_MAX_RECURSION) {
             /* Find route has hit recursive call limit, ip unreachable. */
             *interface = ROUTING_OUT_NONE;
