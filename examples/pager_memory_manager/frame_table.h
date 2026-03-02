@@ -26,8 +26,11 @@ static FrameInfo *get_frame(uint32_t pd_idx) {
         return ret;
     }
 
-    if (wshand[pd_idx]->page->dirty) {
-        wshand[pd_idx]->page->dirty = false;
+    if (wshand[pd_idx]->page->recently_used) {
+        wshand[pd_idx]->page->recently_used = false;
+        // map as ro again or do I want to unmap it?
+        // maybe I want to unmap it... so that reads are counted as well.
+        microkit_arm_page_unmap(wshand->cap);
         move_hand(pd_idx);
     } else if (time - wshand[pd_idx]->last_accessed < TAU)
     {

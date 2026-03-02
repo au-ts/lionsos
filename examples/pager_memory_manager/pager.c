@@ -10,29 +10,30 @@
 
 /**
  * TODOS:
- * - Check if the logic for if the page should be paged in is correct or not
- * - blk_config.data.vaddr should contain data for writing, need to do this, it will also contain the read data which i then need to memcpy.
- * - Implement the software dirty bit and used bit
- * - Make sure that I skip the writing part of paging out if not dirty.
+ * - Patch in the vspace id for pager
  * 
  * I think I may have made a mistake in the design where I should've leave the paged out data untouched.
  * I think I will probably eat a lot of disk and memory with this design...
  */
+
+ /**
+  * REFACTOR TODOS:
+  * - Do error checking for blk functions.
+  * - Static & const functions and variables
+  * - inline the required functions.
+  * 
+  */
 
 /** Assumptions and Restrictions:
  * - there is a fixed maximum of PD's (64 currently)
  * - Heap is bounded to 128 4k frames.
  */
 
-
-/** Questions:
- * - How do I set the dirtybit???
- * - How do I do concurrency?
- * - How do I write to the file?
- */
+#define FRAME_DATA 0x8000000000
 
 static uint64_t unmapped_frames_addr;
 static uint64_t num_frames;
+uint32_t pager_vspace;
 
 // TODO: figure out where I need to outline this...
 __attribute__((__section__(".blk_client_config"))) blk_client_config_t blk_config;
@@ -67,6 +68,8 @@ static inline pe retrieve_page(uintptr_t fault_addr, uint32_t pd_idx) {
 
 void init(void)
 {
+    // TODO: memset stuff to 0 where required.
+    memset(page_table, 0, MAX_PDS * NUM_PT_ENTRIES * sizeof(pe));
 
     // initialise and check blk queue and config
     assert(blk_config_check_magic(&blk_config));
@@ -82,7 +85,8 @@ void init(void)
         frame_pd_id *cur_frame = &frames[i];
         int pd_idx = cur_frame->pd_idx;
 
-        frame_table[pd_idx][frame_indicies[pd_idx]] = { .cap = cur_frame->frame_cap, .last_accessed = 0, page = NULL, .next = ++frame_indicies[pd_idx]};
+        frame_table[pd_idx][frame_indicies[pd_idx]] = { .cap = cur_frame->frame_cap, .last_accessed = 0, page = NULL, .next = ++frame_indicies[pd_idx], .frame_data = i * 4096 + FRAME_DATA };
+        microkit_arm_page_map_wr(cur_frame->frame_cap, pager_vspace, FRAME_DATA + i * 4096);
     }
 
     
@@ -108,6 +112,7 @@ void page_in(uint32_t pd_idx, uintptr_t fault_addr) {
     // queue the read
     int request_id = get_request_id();
     page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_IN }; // TODO: fill this out with relevant info.
+    memcpy(frame_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_data, (char *)blk_config.data.vaddr);
     blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
     sddf_notify(blk_config.virt.id);
 }
@@ -121,15 +126,17 @@ void after_page_out(uint32_t pd_idx, uintptr_t fault_addr) {
     }
 }
 
-void page_out(uint32_t pd_idx, uintptr_t fault_addr) {
+void page_out(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     // find empty slot in pagefile
     int slot = get_pagefile_slot();
     // mark in page entry where the pagefile entry is.
-    page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].pagefile_offset = slot;
+    frame->page = slot;
     // queue the write with page after_page_out();
     int request_id = get_request_id();
-    if (page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].dirty) {
+    if (frame->page.dirty) {
         page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_OUT }; // TODO: fill this out with relevant info.
+        char *data_dest = (char *) blk_config.data.vaddr;
+        memcpy(data_dest, frame->frame_data, 4096);
         blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
         sddf_notify(blk_config.virt.id);
     } else {
@@ -139,12 +146,29 @@ void page_out(uint32_t pd_idx, uintptr_t fault_addr) {
     
 }
 
+/**
+ * The vm fault may occur for one of two reasons:
+ * - RO perms, need to set the dirtybit/used
+ * - Actual VM fault.
+ */
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
     ++time;
     // TODO: this is when the child has a vm fault...
     uintptr_t fault_addr = microkit_mr_get(1); // I am not sure if this is the right mr number so will need to check later.
     uint32_t pd_idx = microkit_mr_get(0);
+
+    // check if I just need to remap with write perms.
+    FrameInfo *old_frame = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr;
+    pe *page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
+    if (old_frame->page == page) {
+        // microkit_arm_page_unmap(old_frame->cap); // I don't know if I actually need to unmap the frame. maybe this is an unnecessary step...
+        microkit_arm_page_map_rw(old_frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
+        // i need to mark the page as dirty and recently used
+        page->recently_used = true;
+        page->dirty = true;
+        return;
+    }
 
     // check that the fault is not currently being served
     if (current_faults[pd_idx] == ROUND_DOWN_TO_4K(fault_addr)) {
@@ -158,7 +182,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     // frame has a associated page, therefore we need to page out.
     if (frame->page) { 
         // TODO: The page out should page out the frame's page, not the faulting page...
-        page_out(pd_idx, fault_addr);
+        page_out(frame, pd_idx, fault_addr);
     } else {
         after_page_out(pd_idx, fault_addr);
     }

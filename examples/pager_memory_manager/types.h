@@ -49,6 +49,7 @@ typedef struct FrameInfo {
     uint64_t last_accessed; // for working set.
     pe *page; // the page this frame is mapped to.
     uint32_t next;
+    char *frame_data; // where the frame is mapped into for the pager.
 } FrameInfo;
 
 enum paging_state {
