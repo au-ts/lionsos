@@ -8,12 +8,13 @@ from typing import List, Tuple
 from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 from importlib.metadata import version
 
-assert version('sdfgen').split(".")[1] == "28", "Unexpected sdfgen version"
+assert version("sdfgen").split(".")[1] == "28", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Channel = SystemDescription.Channel
+
 
 @dataclass
 class Board:
@@ -48,7 +49,15 @@ BOARDS: List[Board] = [
 ]
 
 
-def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
+def generate(
+    sdf_path: str,
+    output_dir: str,
+    dtb: DeviceTree,
+    fs: str,
+):
+    fs_pd_name = f"{fs}fs"
+    fs_elf = f"{fs}.elf"
+
     serial_node = dtb.node(board.serial)
     assert serial_node is not None
     blk_node = dtb.node(board.blk)
@@ -60,27 +69,34 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
 
     serial_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
-    serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
-    serial_virt_rx = ProtectionDomain("serial_virt_rx", "serial_virt_rx.elf", priority=99)
-    serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx, virt_rx=serial_virt_rx)
+    serial_virt_tx = ProtectionDomain(
+        "serial_virt_tx", "serial_virt_tx.elf", priority=99
+    )
+    serial_virt_rx = ProtectionDomain(
+        "serial_virt_rx", "serial_virt_rx.elf", priority=99
+    )
+    serial_system = Sddf.Serial(
+        sdf, serial_node, serial_driver, serial_virt_tx, virt_rx=serial_virt_rx
+    )
 
     blk_driver = ProtectionDomain("blk_driver", "blk_driver.elf", priority=200)
-    blk_virt = ProtectionDomain("blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000)
+    blk_virt = ProtectionDomain(
+        "blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000
+    )
     blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
 
-    micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, stack_size=0x10000)
+    micropython = ProtectionDomain(
+        "micropython", "micropython.elf", priority=1, stack_size=0x10000
+    )
 
     serial_system.add_client(micropython)
     timer_system.add_client(micropython)
 
-    fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
+    fs_pd = ProtectionDomain(fs_pd_name, fs_elf, priority=96)
 
+    # TODO: Switch to a dedicated LionsOs.FileSystem.Ext4 when available.
     fs = LionsOs.FileSystem.Fat(
-        sdf,
-        fatfs,
-        micropython,
-        blk=blk_system,
-        partition=board.blk_partition
+        sdf, fs_pd, micropython, blk=blk_system, partition=board.blk_partition
     )
 
     if board.name == "maaxboard":
@@ -91,7 +107,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         serial_virt_tx,
         serial_virt_rx,
         micropython,
-        fatfs,
+        fs_pd,
         timer_driver,
         blk_driver,
         blk_virt,
@@ -112,13 +128,14 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         f.write(sdf.render())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dtb", required=True)
     parser.add_argument("--sddf", required=True)
     parser.add_argument("--board", required=True, choices=[b.name for b in BOARDS])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
+    parser.add_argument("--fs", default="fat", choices=["fat", "ext4"])
 
     args = parser.parse_args()
 
@@ -130,4 +147,9 @@ if __name__ == '__main__':
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
 
-    generate(args.sdf, args.output, dtb)
+    generate(
+        args.sdf,
+        args.output,
+        dtb,
+        args.fs,
+    )
