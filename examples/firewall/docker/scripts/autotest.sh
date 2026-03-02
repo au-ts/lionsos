@@ -35,6 +35,7 @@ ERROR_DATA_INCORRECT='The received data is different to what was sent'
 ERROR_DATA_WAS_NOT_DROPPED='Firewall traffic was not dropped'
 ERROR_FAILED_TO_APPLY_RULE='Failed to apply firewall rule'
 ERROR_FAILED_TO_REMOVE_RULE='Failed to remove firewall rule'
+ERROR_RULE_STILL_APPLIED='Firewall rule is still applied'
 INFO_SKIPPING_TEST='Skipping (feature not implemented yet)'
 
 FONT_HEADER=$(printf '\033[1m\033[36m')
@@ -485,6 +486,26 @@ test_rule_application_and_removal() {
 
     if [ ! -z "${error}" ]; then
         fail "${ERROR_FAILED_TO_REMOVE_RULE}"
+        print_log
+        return
+    fi
+
+    # Verify that the rule was removed; in other words, data transmission should
+    # now succeed
+
+    # Listen for traffic on the internal host
+    ip netns exec int \
+    nc -l "${TCP_PORT}" > "${RECEIVED}" &
+    listener=$!
+
+    # Send traffic, from the external host, to the internal host
+    ip netns exec ext \
+    nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+    kill "${listener}" > /dev/null 2>&1
+
+    # Verify that the data was transmitted correctly
+    if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
+        fail "${ERROR_RULE_STILL_APPLIED}"
         print_log
     fi
 }
