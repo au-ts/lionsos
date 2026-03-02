@@ -128,9 +128,15 @@ void page_out(uint32_t pd_idx, uintptr_t fault_addr) {
     page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].pagefile_offset = slot;
     // queue the write with page after_page_out();
     int request_id = get_request_id();
-    page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_OUT }; // TODO: fill this out with relevant info.
-    blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
-    sddf_notify(blk_config.virt.id);
+    if (page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].dirty) {
+        page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_OUT }; // TODO: fill this out with relevant info.
+        blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
+        sddf_notify(blk_config.virt.id);
+    } else {
+        microkit_arm_page_unmap(((FrameInfo *)page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr)->cap);
+
+    }
+    
 }
 
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
@@ -150,7 +156,8 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     FrameInfo *frame = get_frame(pd_idx);
 
     // frame has a associated page, therefore we need to page out.
-    if (frame->page) {
+    if (frame->page) { 
+        // TODO: The page out should page out the frame's page, not the faulting page...
         page_out(pd_idx, fault_addr);
     } else {
         after_page_out(pd_idx, fault_addr);
