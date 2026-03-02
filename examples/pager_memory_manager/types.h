@@ -6,7 +6,7 @@
 #define ROUND_DOWN_TO_4K(x) ((x) & ~(4096 - 1))
 #define INDEX_INTO_MMAP_ARRAY(x) (ROUND_DOWN_TO_4K(x)) / 4096
 #define TAU 10 // not too sure what the optimal number for this would be. maybe this is not useful...
-#define PAGEFILE "pagefile"
+#define PAGEFILE ".pagefile"
 
 struct mmap_node
 {
@@ -51,4 +51,6 @@ typedef struct FrameInfo {
     uint32_t next;
 } FrameInfo;
 
-
+struct page_request_info {
+    
+};
