@@ -82,6 +82,8 @@ typedef struct pkt_waiting_node {
     uint16_t child;
     /* number of child nodes, only maintained for root node */
     uint16_t num_children;
+    /* tail node, only maintained for root node */
+    uint16_t tail;
     /* destination ip for this packet and child packets, only maintained for
     root node */
     uint32_t ip;

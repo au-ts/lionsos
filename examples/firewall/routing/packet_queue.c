@@ -57,11 +57,9 @@ fw_routing_err_t pkt_waiting_push_child(pkts_waiting_t *pkts_waiting, pkt_waitin
 
     /* Update pointers */
     pkts_waiting->free = new_node->next;
-    pkt_waiting_node_t *last_child = root;
-    for (uint16_t i = 0; i < root->num_children; i++) {
-        last_child = pkts_waiting_next_child(pkts_waiting, last_child);
-    }
+    pkt_waiting_node_t *last_child = pkts_waiting->packets + root->tail;
     last_child->child = new_idx;
+    root->tail = new_idx;
 
     /* Update counts */
     root->num_children++;
@@ -83,6 +81,7 @@ fw_routing_err_t pkt_waiting_push(pkts_waiting_t *pkts_waiting, uint32_t ip, fw_
     new_node->num_children = 0;
     new_node->ip = ip;
     new_node->buffer = buffer;
+    new_node->tail = new_idx;
 
     /* Update pointers */
     pkts_waiting->free = new_node->next;
