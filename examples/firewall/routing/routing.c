@@ -45,9 +45,8 @@ fw_queue_t icmp_queue;                                      /* Queue to transmit
 /* Arp request/entry data structures */
 fw_queue_t arp_req_queue[FW_MAX_INTERFACES];
 fw_queue_t arp_resp_queue[FW_MAX_INTERFACES];
-fw_arp_table_t arp_table[FW_MAX_INTERFACES]; /* ARP table holding all known ARP entries */
-pkts_waiting_t pkt_waiting_queue[FW_MAX_INTERFACES]; /* Queues holding packets awaiting
-                                                      * arp responses for each output interface */
+fw_arp_table_t arp_table[FW_MAX_INTERFACES];                /* ARP table holding all known ARP entries */
+pkts_waiting_t pkt_waiting_queue[FW_MAX_INTERFACES];        /* Queues holding packets awaiting arp responses */
 
 /* Routing data structures */
 fw_routing_table_t *routing_table; /* Table holding next hop data for subnets */
@@ -127,7 +126,7 @@ static void process_arp_waiting(uint8_t out_interface)
         }
 
         /* Check that we actually have a packet waiting. */
-        pkt_waiting_node_t *root = pkt_waiting_find_node(waiting_queue, response.ip);
+        pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue[out_interface], response.ip);
         if (!root) {
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("Received arp response but no corresponding packet is waiting.");
@@ -149,18 +148,18 @@ static void process_arp_waiting(uint8_t out_interface)
                 err = fw_enqueue(&rx_free[node->buffer.interface], &net_buff);
                 returned[node->buffer.interface] = true;
                 assert(!err);
-                node = pkts_waiting_next_child(waiting_queue, node);
+                node = pkts_waiting_next_child(&pkt_waiting_queue[out_interface], node);
             }
         } else {
             /* Substitute the MAC address and send packets out of the NIC */
             pkt_waiting_node_t *node = root;
             for (uint16_t i = 0; i < root->num_children + 1; i++) {
                 transmit_packet(node->buffer, response.mac_addr, out_interface);
-                node = pkts_waiting_next_child(&pkt_waiting_queue, node);
+                node = pkts_waiting_next_child(&pkt_waiting_queue[out_interface], node);
             }
         }
         /* Free the packet waiting nodes */
-        fw_routing_err_t routing_err = pkts_waiting_free_parent(waiting_queue, root);
+        fw_routing_err_t routing_err = pkts_waiting_free_parent(&pkt_waiting_queue[out_interface], root);
         assert(routing_err == ROUTING_ERR_OKAY);
     }
 }
@@ -284,7 +283,8 @@ static void route(void)
                 /* destination unreachable or no space to store packet or send ARP
                  * request, drop packet */
                 if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE)
-                    || (pkt_waiting_full(waiting_queue) && (arp == NULL || arp->state == ARP_STATE_PENDING))
+                    || (pkt_waiting_full(&pkt_waiting_queue[out_interface])
+                        && (arp == NULL || arp->state == ARP_STATE_PENDING))
                     || (arp == NULL && fw_queue_full(&arp_req_queue[out_interface]))) {
 
                     if (arp != NULL && arp->state == ARP_STATE_UNREACHABLE) {
@@ -305,17 +305,17 @@ static void route(void)
                 /* no entry in ARP table or request still pending, store packet
                 and send ARP request or await ARP response */
                 if (arp == NULL || arp->state == ARP_STATE_PENDING) {
-                    pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue, next_hop);
+                    pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue[out_interface], next_hop);
                     if (root) {
                         /* ARP request already enqueued, add node as child. */
-                        fw_err = pkt_waiting_push_child(waiting_queue, root, fw_buffer);
+                        fw_err = pkt_waiting_push_child(&pkt_waiting_queue[out_interface], root, fw_buffer);
                         assert(fw_err == ROUTING_ERR_OKAY);
                     } else {
                         /* Generate ARP request and enqueue packet. */
                         fw_arp_request_t request = { next_hop, { 0 }, ARP_STATE_INVALID };
                         err = fw_enqueue(&arp_req_queue[out_interface], &request);
                         assert(!err);
-                        fw_err = pkt_waiting_push(waiting_queue, next_hop, fw_buffer);
+                        fw_err = pkt_waiting_push(&pkt_waiting_queue[out_interface], next_hop, fw_buffer);
                         assert(fw_err == ROUTING_ERR_OKAY);
                         notify_arp[out_interface] = true;
                     }
@@ -387,10 +387,6 @@ void init(void)
     assert(router_config.webserver.rx_active.queue.vaddr != 0);
     fw_queue_init(&webserver, router_config.webserver.rx_active.queue.vaddr, sizeof(fw_buff_desc_t),
                   router_config.webserver.rx_active.capacity);
-
-    assert(router_config.packet_queue.vaddr != 0);
-    /* Initialise the packet waiting queue from mapped in memory */
-    pkt_waiting_init(&pkt_waiting_queue, (void *)router_config.packet_queue.vaddr, router_config.packet_queue_capacity);
 }
 
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)

@@ -444,10 +444,7 @@ def wire_interface_connections(
         arp_cache_peer = arp_cache_mr.map(router.pd, "r")
         iface.arp_requester.set_cache(arp_cache_owner, arp_cache_buffer.capacity)
 
-        # Create RouterInterface the order that we add here needs to align
-        # with the order we add to the data regions to the tx virt currently
-        # sequential on the interfaces list
-        ri = router.create_interface()
+        ri = router.create_interface(interface_index=iface.index)
         ri.set_rx_free(
             router_rx_virt_src, dma_buffer_queue.capacity, router_rx_virt_ch.pd_a_id,
         )
@@ -551,12 +548,20 @@ def wire_routing_connections(
             router_tx_virt_dst, dma_buffer_queue.capacity, router_tx_virt_ch.pd_b_id,
         )
 
+        # Router packet queue
+        arp_pq_mr = FirewallMemoryRegion(
+            sdf_obj,
+            "arp_packet_queue_" + router.pd.name + f"{dst_iface.index}",
+            arp_packet_queue_region.region_size,
+        )
+        arp_pq_res = arp_pq_mr.map(router.pd, "rw")
+        router.add_packet_queue(arp_pq_res, arp_packet_queue_buffer.capacity, dst_iface.index)
+
         for src_iface in interfaces:
             # SDF_Map src DMA region into dst tx_virt with read access
             tx_virt_dma = src_iface.rx_dma_region.map_device(dst_iface.tx_virt.pd, "r")
 
-            # This is sequential on the interface list matching with the routers interfaces ordering
-            dst_iface.tx_virt.add_data_region(tx_virt_dma)
+            dst_iface.tx_virt.add_data_region(tx_virt_dma, src_iface.index)
 
             # dst.tx_virt -> src.rx_virt buffer return queue
             tx_rx_return_mr = FirewallMemoryRegion(
@@ -695,15 +700,6 @@ def wire_webserver_connections(
         router_update_ch.pd_a_id, routing_table_peer, routing_table_buffer.capacity,
     )
     webserver.set_interface(webserver_interface_idx)
-
-    # Router packet queue
-    arp_pq_mr = FirewallMemoryRegion(
-        sdf_obj,
-        "arp_packet_queue_" + router.pd.name,
-        arp_packet_queue_region.region_size,
-    )
-    arp_pq_res = arp_pq_mr.map(router.pd, "rw")
-    router.set_packet_queue(arp_pq_res, arp_packet_queue_buffer.capacity)
 
     # Webserver interface configs
     for iface in interfaces:

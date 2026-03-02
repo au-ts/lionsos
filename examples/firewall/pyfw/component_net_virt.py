@@ -69,7 +69,8 @@ class NetVirtTx(Component):
         self._free_clients: List[FwDataConnectionResource] = []
         self._data_regions: List[DeviceRegionResource] = []
 
-    def add_data_region(self, resource: DeviceRegionResource) -> None:
+    def add_data_region(self, resource: DeviceRegionResource, interface_idx: int) -> None:
+        assert interface_idx == len(self._data_regions)
         self._data_regions.append(resource)
 
     def add_active_client(self, queue: RegionResource, capacity: int, ch: int) -> None:
