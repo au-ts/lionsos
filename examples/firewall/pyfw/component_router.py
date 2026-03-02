@@ -99,8 +99,8 @@ class Router(Component):
     ) -> None:
         super().__init__("routing", "routing.elf", sdf, priority, budget=budget)
         self._interfaces: List[RouterInterface] = []
-        self._packet_queue: Optional[RegionResource] = None
-        self._packet_waiting_capacity = 0
+        self._packet_queue: List[RegionResource] = []
+        self._packet_waiting_capacity: Optional[int] = None
 
         self._webserver_routing_ch: Optional[int] = None
         self._webserver_routing_table: Optional[RegionResource] = None
@@ -110,13 +110,16 @@ class Router(Component):
         self._initial_routes: List[FwRoutingEntry] = []
         self._icmp_conn: Optional[FwConnectionResource] = None
 
-    def create_interface(self) -> RouterInterface:
+    def create_interface(self, interface_index: int) -> RouterInterface:
+        assert len(self._interfaces) == interface_index
         ri = RouterInterface()
         self._interfaces.append(ri)
         return ri
 
-    def set_packet_queue(self, resource: RegionResource, capacity: int) -> None:
-        self._packet_queue = resource
+    def add_packet_queue(self, resource: RegionResource, capacity: int, interface_index: int) -> None:
+        assert len(self._packet_queue) == interface_index
+        self._packet_queue.append(resource)
+        assert self._packet_waiting_capacity is None or self._packet_waiting_capacity == capacity
         self._packet_waiting_capacity = capacity
 
     def set_webserver_config(
@@ -139,7 +142,8 @@ class Router(Component):
         self._initial_routes.append(FwRoutingEntry(ip,subnet,interface,next_hop))
 
     def finalize_config(self) -> FwRouterConfig:
-        assert self._packet_queue is not None
+        assert len(self._packet_queue) > 0
+        assert self._packet_waiting_capacity is not None
         assert self._webserver_routing_ch is not None
         assert self._webserver_routing_table is not None
         assert self._webserver_routing_table_capacity > 0

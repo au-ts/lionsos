@@ -105,8 +105,8 @@ typedef struct fw_router_interface {
 
 typedef struct fw_router_config {
     fw_router_interface_t interfaces[FW_MAX_INTERFACES];
+    region_resource_t packet_queue[FW_MAX_INTERFACES];
     uint8_t num_interfaces;
-    region_resource_t packet_queue;
     uint16_t packet_queue_capacity;
     fw_webserver_router_config_t webserver;
     fw_routing_entry_t initial_routes[FW_MAX_INITIAL_ROUTES];
