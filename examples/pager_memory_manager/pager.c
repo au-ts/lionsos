@@ -3,6 +3,21 @@
 #include "types.h"
 #include "pagefile.h"
 #include "frame_table.h"
+#include <os/sddf.h>
+#include <sddf/blk/queue.h> 
+#include <sddf/blk/storage_info.h>
+#include <sddf/blk/config.h>
+
+/**
+ * TODOS:
+ * - Check if the logic for if the page should be paged in is correct or not
+ * - blk_config.data.vaddr should contain data for writing, need to do this, it will also contain the read data which i then need to memcpy.
+ * - Implement the software dirty bit and used bit
+ * - Make sure that I skip the writing part of paging out if not dirty.
+ * 
+ * I think I may have made a mistake in the design where I should've leave the paged out data untouched.
+ * I think I will probably eat a lot of disk and memory with this design...
+ */
 
 /** Assumptions and Restrictions:
  * - there is a fixed maximum of PD's (64 currently)
@@ -83,11 +98,18 @@ void after_page_in(uint32_t pd_idx, uintptr_t fault_addr) {
     // map the page to the frame
     microkit_arm_page_map(frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
     frame->page = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
+    page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr = &frame;
     current_faults[pd_idx] = -1;
 }
 
 void page_in(uint32_t pd_idx, uintptr_t fault_addr) {
-
+    // get the slot
+    int slot = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].pagefile_offset;
+    // queue the read
+    int request_id = get_request_id();
+    page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_IN }; // TODO: fill this out with relevant info.
+    blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
+    sddf_notify(blk_config.virt.id);
 }
 
 void after_page_out(uint32_t pd_idx, uintptr_t fault_addr) {
@@ -105,7 +127,10 @@ void page_out(uint32_t pd_idx, uintptr_t fault_addr) {
     // mark in page entry where the pagefile entry is.
     page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].pagefile_offset = slot;
     // queue the write with page after_page_out();
-
+    int request_id = get_request_id();
+    page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_OUT }; // TODO: fill this out with relevant info.
+    blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
+    sddf_notify(blk_config.virt.id);
 }
 
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
@@ -126,9 +151,9 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
 
     // frame has a associated page, therefore we need to page out.
     if (frame->page) {
-        page_out();
+        page_out(pd_idx, fault_addr);
     } else {
-        after_page_out();
+        after_page_out(pd_idx, fault_addr);
     }
 }
 
@@ -137,7 +162,28 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
  */
 void notified(microkit_channel ch)
 {
-    // TODO: this may not be required 
+    assert(ch == blk_config.virt.id); // sanity check, pager should only be notified by this.
+
+    blk_resp_status_t status = -1;
+    uint16_t count = -1;
+    uint32_t id = -1;
+
+    int err = blk_dequeue_resp(&blk_queue, &status, &count, &id);
+
+    assert(!err);
+    assert(status == BLK_RESP_OK);
+    assert(count == 1); // make sure that the write/read is actually done.
+    // TODO: if necessary make a thing to recover from the error.
+
+    // queue the next thing depending on what was done.
+    if (page_continuations[id].state == PAGE_OUT) {
+        // unmap the frame.
+        microkit_arm_page_unmap(((FrameInfo *) page_table[page_continuations[id].pd_idx][INDEX_INTO_MMAP_ARRAY(page_continuations[id].fault_addr)].frame_addr)->cap);
+        after_page_out(page_continuations[id].pd_idx, page_continuations[id].fault_addr);
+    } else {
+        after_page_in(page_continuations[id].pd_idx, page_continuations[id].fault_addr);
+    }
+
 }
 
 // NOT USED BELOW:

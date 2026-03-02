@@ -51,6 +51,13 @@ typedef struct FrameInfo {
     uint32_t next;
 } FrameInfo;
 
+enum paging_state {
+    PAGE_OUT,
+    PAGE_IN,
+};
+
 struct page_request_info {
-    
+    uint32_t pd_idx;
+    uintptr_t fault_addr;
+    enum paging_state state;
 };
