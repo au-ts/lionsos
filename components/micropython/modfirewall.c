@@ -10,6 +10,7 @@
 #include <sddf/util/printf.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/filter.h>
+#include <lions/firewall/ip.h>
 #include <lions/firewall/routing.h>
 
 #include "mpfirewallport.h"
@@ -28,7 +29,8 @@ typedef enum {
     OS_ERR_INVALID_ROUTE_NUM, /* Invalid route number supplied to route_get_nth */
     OS_ERR_INVALID_RULE_NUM,  /* Invalid route number supplied to rule_get_nth */
     OS_ERR_OUT_OF_MEMORY,     /* Data structures full */
-    OS_ERR_INTERNAL_ERROR     /* Unknown internal error */
+    OS_ERR_INTERNAL_ERROR,    /* Unknown internal error */
+    OS_ERR_UNSUPPORTED_ACTION /* Unsupported action for selected protocol */
 } fw_os_err_t;
 
 static const char *fw_os_err_str[] = {
@@ -47,6 +49,19 @@ static const char *fw_os_err_str[] = {
     "Unknown internal error.",
     "Unsupported action for the protocol selected."
 };
+
+static bool is_action_supported_for_protocol(uint16_t protocol, uint8_t action)
+{
+    if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_DROP || action == FILTER_ACT_CONNECT) {
+        return true;
+    }
+
+    if (action == FILTER_ACT_REJECT) {
+        return protocol == IPV4_PROTO_UDP || protocol == IPV4_PROTO_ICMP;
+    }
+
+    return false;
+}
 
 /* Convert a routing error to OS error */
 static fw_os_err_t fw_routing_err_to_os_err(fw_routing_err_t routing_err)
@@ -330,7 +345,7 @@ static mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
         return mp_const_none;
     }
 
-    if (!(fw_config.interfaces[interface_idx].filters[protocol_match].action[action])) {
+    if (!is_action_supported_for_protocol(protocol, action)) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_UNSUPPORTED_ACTION]);
         mp_raise_OSError(OS_ERR_UNSUPPORTED_ACTION);
         return mp_const_none;
@@ -457,7 +472,7 @@ static mp_obj_t filter_set_default_action(mp_obj_t interface_idx_in,
         return mp_const_none;
     }
 
-    if (!(fw_config.interfaces[interface_idx].filters[protocol_match].action[action])) {
+    if (!is_action_supported_for_protocol(protocol, action)) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_UNSUPPORTED_ACTION]);
         mp_raise_OSError(OS_ERR_UNSUPPORTED_ACTION);
         return mp_const_none;

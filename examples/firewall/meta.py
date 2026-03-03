@@ -700,8 +700,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     networks[int_net]["icmp_module"] = icmp_int_router_conn[0]
     networks[ext_net]["icmp_module"] = icmp_ext_router_conn[0]
 
-    # Store filter ICMP connections (will be populated in filter loop below)
+    # Store filter ICMP connections and associated output interface indices
+    # (both lists must stay in the same order)
     filter_icmp_connections = []
+    filter_icmp_interfaces = []
 
     # Create webserver config
     webserver_config = FwWebserverConfig(
@@ -882,6 +884,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 )
                 # Store ICMP module's end of the connection
                 filter_icmp_connections.append(filter_icmp_conn[1])
+                filter_icmp_interfaces.append(network["num"])
 
             # Connect filter as rx only network client
             network["in_net"].add_client_with_copier(filter_pd, tx=False)
@@ -978,6 +981,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         list(ip_to_int(ip) for ip in ips),
         [icmp_ext_router_conn[1], icmp_int_router_conn[1]],
         filter_icmp_connections,
+        filter_icmp_interfaces,
         2,
     )
 

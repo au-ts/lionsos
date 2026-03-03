@@ -120,6 +120,8 @@ typedef struct fw_icmp_module_config {
     uint32_t ips[FW_NUM_INTERFACES];
     fw_connection_resource_t routers[FW_NUM_INTERFACES];
     fw_connection_resource_t filters[FW_MAX_FILTERS];
+    /* Output interface for each filter queue */
+    uint8_t filter_interfaces[FW_MAX_FILTERS];
     uint8_t num_interfaces;
     uint8_t num_filters;
 } fw_icmp_module_config_t;

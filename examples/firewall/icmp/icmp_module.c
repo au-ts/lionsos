@@ -201,7 +201,12 @@ static void generate_icmp(void)
 
     /* Process ICMP requests from filters */
     for (uint8_t filter_idx = 0; filter_idx < icmp_config.num_filters; filter_idx++) {
-        uint8_t out_int = filter_idx;
+        uint8_t out_int = icmp_config.filter_interfaces[filter_idx];
+
+        if (out_int >= FW_NUM_INTERFACES || out_int >= icmp_config.num_interfaces) {
+            sddf_printf("ICMP module: filter %u has invalid output interface %u\n", filter_idx, out_int);
+            continue;
+        }
 
         while (!fw_queue_empty(&filter_icmp_queue[filter_idx])) {
             icmp_req_t req = {0};
