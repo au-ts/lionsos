@@ -323,7 +323,6 @@ test_tcp_internal_to_external() {
     # Listen for traffic on the external host
     ip netns exec ext \
         nc -l "${TCP_PORT}" > "${RECEIVED}" &
-    listener=$!
 
     # Send traffic, from the internal host, to the external host
     ip netns exec int \
@@ -331,6 +330,7 @@ test_tcp_internal_to_external() {
     exit_code=$?
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
+        listener=$!
         kill "${listener}" > /dev/null 2>&1
         fail "${ERROR_TRANSMIT_FAILED}"
         print_log
@@ -348,7 +348,6 @@ test_tcp_external_to_internal() {
     # Listen for traffic on the internal host
     ip netns exec int \
         nc -l "${TCP_PORT}" > "${RECEIVED}" &
-    listener=$!
 
     # Send traffic, from the external host, to the internal host
     ip netns exec ext \
@@ -356,6 +355,7 @@ test_tcp_external_to_internal() {
     exit_code=$?
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
+        listener=$!
         kill "${listener}" > /dev/null 2>&1
         fail "${ERROR_TRANSMIT_FAILED}"
         print_log
@@ -377,12 +377,13 @@ test_udp_internal_to_external() {
     # Listen for traffic on the external host
     ip netns exec ext \
         nc -ul "${UDP_PORT}" > "${RECEIVED}" &
-    listener=$!
 
     # Send traffic, from the internal host, to the external host
     ip netns exec int \
         nc -u -q "${TIMEOUT}" "${EXT_HOST_IP}" "${UDP_PORT}" < "${SENT}"
     exit_code=$?
+
+    listener=$!
     kill "${listener}" > /dev/null 2>&1
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
@@ -402,12 +403,13 @@ test_udp_external_to_internal() {
     # Listen for traffic on the internal host
     ip netns exec int \
         nc -ul "${UDP_PORT}" > "${RECEIVED}" &
-    listener=$!
 
     # Send traffic, from the external host, to the internal host
     ip netns exec ext \
         nc -u -q "${TIMEOUT}" "${INT_HOST_IP}" "${UDP_PORT}" < "${SENT}"
     exit_code=$?
+
+    listener=$!
     kill "${listener}" > /dev/null 2>&1
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
@@ -461,11 +463,12 @@ test_rule_application_and_removal() {
     # Listen for traffic on the internal host
     ip netns exec int \
         nc -l "${TCP_PORT}" > "${RECEIVED}" &
-    listener=$!
 
     # Attempt to send traffic, from the external host, to the internal host
     ip netns exec ext \
         nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+
+    listener=$!
     kill "${listener}" > /dev/null 2>&1
 
     # Verify that no data was received
@@ -496,11 +499,12 @@ test_rule_application_and_removal() {
     # Listen for traffic on the internal host
     ip netns exec int \
         nc -l "${TCP_PORT}" > "${RECEIVED}" &
-    listener=$!
 
     # Send traffic, from the external host, to the internal host
     ip netns exec ext \
         nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+
+    listener=$!
     kill "${listener}" > /dev/null 2>&1
 
     # Verify that the data was transmitted correctly
