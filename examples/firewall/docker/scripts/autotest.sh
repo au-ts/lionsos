@@ -242,7 +242,7 @@ generate_test_data() {
 
 test_icmp_ping_host_internal_to_external() {
     ip netns exec int \
-    ping -c "${COUNT}" -w "${TIMEOUT}" "${EXT_HOST_IP}" > "${RECEIVED}" 2>&1
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${EXT_HOST_IP}" > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_NO_ECHO_RESPONSE}"
@@ -252,7 +252,7 @@ test_icmp_ping_host_internal_to_external() {
 
 test_icmp_ping_host_external_to_internal() {
     ip netns exec ext \
-    ping -c "${COUNT}" -w "${TIMEOUT}" "${INT_HOST_IP}" > "${RECEIVED}" 2>&1
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${INT_HOST_IP}" > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_NO_ECHO_RESPONSE}"
@@ -264,8 +264,8 @@ test_icmp_ping_unreachable_host_internal_to_external() {
     print_info "This may take up to ${LONG_TIMEOUT} seconds..."
 
     ip netns exec int \
-    ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${EXT_BAD_HOST_IP}" \
-    > "${RECEIVED}" 2>&1
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${EXT_BAD_HOST_IP}" \
+        > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_UNREACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_UNREACHABLE}"
@@ -277,8 +277,8 @@ test_icmp_ping_unreachable_host_external_to_internal() {
     print_info "This may take up to ${LONG_TIMEOUT} seconds..."
 
     ip netns exec ext \
-    ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INT_BAD_HOST_IP}" \
-    > "${RECEIVED}" 2>&1
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INT_BAD_HOST_IP}" \
+        > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_UNREACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_UNREACHABLE}"
@@ -293,7 +293,7 @@ test_icmp_ping_firewall_from_internal_network() {
     assertEquals 1 1
 
     # ip netns exec int \
-    # ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INT_IP}" > "${RECEIVED}" 2>&1
+    #     ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INT_IP}" > "${RECEIVED}" 2>&1
 
     # if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
     #     fail "${ERROR_NO_ECHO_RESPONSE}"
@@ -307,7 +307,7 @@ test_icmp_ping_firewall_from_external_network() {
     assertEquals 1 1
 
     # ip netns exec ext \
-    # ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_EXT_IP}" > "${RECEIVED}" 2>&1
+    #     ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_EXT_IP}" > "${RECEIVED}" 2>&1
 
     # if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
     #     fail "${ERROR_NO_ECHO_RESPONSE}"
@@ -322,12 +322,12 @@ test_icmp_ping_firewall_from_external_network() {
 test_tcp_internal_to_external() {
     # Listen for traffic on the external host
     ip netns exec ext \
-    nc -l "${TCP_PORT}" > "${RECEIVED}" &
+        nc -l "${TCP_PORT}" > "${RECEIVED}" &
     listener=$!
 
     # Send traffic, from the internal host, to the external host
     ip netns exec int \
-    nc -w "${TIMEOUT}" -N "${EXT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+        nc -w "${TIMEOUT}" -N "${EXT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
     exit_code=$?
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
@@ -347,12 +347,12 @@ test_tcp_internal_to_external() {
 test_tcp_external_to_internal() {
     # Listen for traffic on the internal host
     ip netns exec int \
-    nc -l "${TCP_PORT}" > "${RECEIVED}" &
+        nc -l "${TCP_PORT}" > "${RECEIVED}" &
     listener=$!
 
     # Send traffic, from the external host, to the internal host
     ip netns exec ext \
-    nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+        nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
     exit_code=$?
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
@@ -376,12 +376,12 @@ test_tcp_external_to_internal() {
 test_udp_internal_to_external() {
     # Listen for traffic on the external host
     ip netns exec ext \
-    nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
     listener=$!
 
     # Send traffic, from the internal host, to the external host
     ip netns exec int \
-    nc -u -q "${TIMEOUT}" "${EXT_HOST_IP}" "${UDP_PORT}" < "${SENT}"
+        nc -u -q "${TIMEOUT}" "${EXT_HOST_IP}" "${UDP_PORT}" < "${SENT}"
     exit_code=$?
     kill "${listener}" > /dev/null 2>&1
 
@@ -401,12 +401,12 @@ test_udp_internal_to_external() {
 test_udp_external_to_internal() {
     # Listen for traffic on the internal host
     ip netns exec int \
-    nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
     listener=$!
 
     # Send traffic, from the external host, to the internal host
     ip netns exec ext \
-    nc -u -q "${TIMEOUT}" "${INT_HOST_IP}" "${UDP_PORT}" < "${SENT}"
+        nc -u -q "${TIMEOUT}" "${INT_HOST_IP}" "${UDP_PORT}" < "${SENT}"
     exit_code=$?
     kill "${listener}" > /dev/null 2>&1
 
@@ -460,12 +460,12 @@ test_rule_application_and_removal() {
 
     # Listen for traffic on the internal host
     ip netns exec int \
-    nc -l "${TCP_PORT}" > "${RECEIVED}" &
+        nc -l "${TCP_PORT}" > "${RECEIVED}" &
     listener=$!
 
     # Attempt to send traffic, from the external host, to the internal host
     ip netns exec ext \
-    nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+        nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
     kill "${listener}" > /dev/null 2>&1
 
     # Verify that no data was received
@@ -495,12 +495,12 @@ test_rule_application_and_removal() {
 
     # Listen for traffic on the internal host
     ip netns exec int \
-    nc -l "${TCP_PORT}" > "${RECEIVED}" &
+        nc -l "${TCP_PORT}" > "${RECEIVED}" &
     listener=$!
 
     # Send traffic, from the external host, to the internal host
     ip netns exec ext \
-    nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+        nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
     kill "${listener}" > /dev/null 2>&1
 
     # Verify that the data was transmitted correctly
