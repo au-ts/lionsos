@@ -112,84 +112,6 @@ static bool interface_comparison(uint8_t interface,
     }
 }
 
-static void check_enqueue_icmp_redirect(net_buff_desc_t buffer, fw_routing_interfaces_t out_int, uint32_t next_hop) {
-    sddf_printf("Enetred redirect check");
-    /* Inerface match check*/
-    bool interface_match = interface_comparison(router_config.interface, out_int);
-    if (!interface_match) {
-        return;
-    }
-    uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
-    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
-
-    /* Source IP must be on same subnet as router interface */
-    if ((ip_hdr->src_ip & subnet_mask(router_config.subnet)) !=
-        (router_config.ip & subnet_mask(router_config.subnet))) {
-        return;
-    }
-
-    /* Nexthop subnet match the src*/
-    if ((ip_hdr->src_ip & subnet_mask(router_config.subnet)) !=
-    (next_hop & subnet_mask(router_config.subnet))) {
-        return;
-    }
-
-    /* Check for IP header options */
-    if (ip_hdr->ihl > 5) {
-        uint8_t *options_ptr = (uint8_t *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN);
-        uint8_t options_len = (ip_hdr->ihl - 5) * 4;
-        uint8_t i = 0;
-        while (i < options_len) {
-            uint8_t option_type = options_ptr[i];
-            if (option_type == 0) {
-                /* End of options */
-                break;
-            } else if (option_type == 1) {
-                /* No operation, move to next byte */
-                i++;
-                continue;
-            } else if (option_type == 131 || option_type == 137) {
-                return; /* Routing option present, do not send redirect */
-            } else {
-                if (i + 1 >= options_len) {
-                    break; /* Malformed option, exit */
-                }
-                uint8_t option_len = options_ptr[i + 1];
-                if (option_len < 2 || i + option_len > options_len) {
-                    break; /* Malformed option, exit */
-                }
-                i += option_len; /* Move to next option */
-            }
-        }
-    }
-
-    if (ip_hdr->dst_ip >> 24 == 224) {
-        /* Destination is multicast, do not send redirect */
-        return;
-    } else if (ip_hdr->dst_ip >> 24 == 255) {
-        /* Destination is broadcast, do not send redirect */
-        return;
-    }
-
-    if (ip_hdr->frag_offset1 != 0 || ip_hdr->frag_offset2 != 0 ||
-        ip_hdr->more_frag) {
-        /* Packet is fragmented, do not send redirect */
-        return;
-    }
-
-    if (ip_hdr->protocol == IPV4_PROTO_ICMP) {
-        icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
-        if (icmp_is_error_message(icmp_hdr->type)) {
-            /* ICMP error message, do not send redirect */
-            return;
-        }
-    }
-
-    int err = icmp_enqueue_redirect(&icmp_queue, ICMP_REDIRECT_FOR_HOST, pkt_vaddr, next_hop);
-    if (!err) {
-        notify_icmp = true;
-    }
-}
 
 static void transmit_packet(net_buff_desc_t buffer,
                             uint8_t *mac_addr)
@@ -443,9 +365,6 @@ static void route(void)
 
                 continue;
             }
-
-            check_enqueue_icmp_redirect(buffer, interface, next_hop);
-
             /* valid arp entry found, transmit packet */
             transmit_packet(buffer, arp->mac_addr);
         }
