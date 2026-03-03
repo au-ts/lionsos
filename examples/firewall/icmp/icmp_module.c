@@ -165,7 +165,6 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
             memcpy(&icmp_redirect->data, req->redirect.data, to_copy);
             break;
         default:
-            sddf_printf("ICMP module tried to construct an unsupported ICMP type %u packet!\n", req->type);
             return false;
     }
 
