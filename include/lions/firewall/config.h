@@ -24,18 +24,21 @@
 
 #define FW_DEBUG_OUTPUT 1
 
-typedef struct fw_connection_resource {
+typedef struct fw_connection_resource
+{
     region_resource_t queue;
     uint16_t capacity;
     uint8_t ch;
 } fw_connection_resource_t;
 
-typedef struct fw_data_connection_resource {
+typedef struct fw_data_connection_resource
+{
     fw_connection_resource_t conn;
     device_region_resource_t data;
 } fw_data_connection_resource_t;
 
-typedef struct fw_net_virt_tx_config {
+typedef struct fw_net_virt_tx_config
+{
     /* Interface traffic is transmitted out of */
     uint8_t interface;
     fw_data_connection_resource_t active_clients[FW_MAX_FW_CLIENTS];
@@ -44,7 +47,16 @@ typedef struct fw_net_virt_tx_config {
     uint8_t num_free_clients;
 } fw_net_virt_tx_config_t;
 
-typedef struct fw_net_virt_rx_config {
+/* NAT configuration specific to an interface for virt_rx */
+typedef struct fw_virt_rx_nat_config
+{
+    fw_nat_interface_config_t interface_config;
+    uint8_t protocol;
+    bool enabled;
+} fw_virt_rx_nat_config_t;
+
+typedef struct fw_net_virt_rx_config
+{
     /* Interface traffic is received from */
     uint8_t interface;
     /* Eth-type of traffic to be routed to each client */
@@ -55,16 +67,25 @@ typedef struct fw_net_virt_rx_config {
     uint16_t active_client_subtypes[SDDF_NET_MAX_CLIENTS];
     fw_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_free_clients;
+    /* NAT configuration */
+    bool nat_enabled;
+    /* Webserver state for cross-interface DNAT */
+    region_resource_t webserver_state;
+    /* NAT configurations for different protocols (TCP, UDP) */
+    fw_virt_rx_nat_config_t nat_configs[FW_MAX_NAT];
+    uint8_t num_nat_configs;
 } fw_net_virt_rx_config_t;
 
-typedef struct fw_arp_connection {
+typedef struct fw_arp_connection
+{
     region_resource_t request;
     region_resource_t response;
     uint16_t capacity;
     uint8_t ch;
 } fw_arp_connection_t;
 
-typedef struct fw_arp_requester_config {
+typedef struct fw_arp_requester_config
+{
     /* Interface traffic is received from */
     uint8_t interface;
     /* MAC address of output interface */
@@ -77,7 +98,8 @@ typedef struct fw_arp_requester_config {
     uint16_t arp_cache_capacity;
 } fw_arp_requester_config_t;
 
-typedef struct fw_arp_responder_config {
+typedef struct fw_arp_responder_config
+{
     /* Interface traffic is received from */
     uint8_t interface;
     /* MAC address of input and output interface */
@@ -86,13 +108,15 @@ typedef struct fw_arp_responder_config {
     uint32_t ip;
 } fw_arp_responder_config_t;
 
-typedef struct fw_webserver_router_config {
+typedef struct fw_webserver_router_config
+{
     uint8_t routing_ch;
     region_resource_t routing_table;
     uint16_t routing_table_capacity;
 } fw_webserver_router_config_t;
 
-typedef struct fw_router_config {
+typedef struct fw_router_config
+{
     /* Interface traffic is received from */
     uint8_t interface;
     /* MAC address of output interface */
@@ -117,14 +141,16 @@ typedef struct fw_router_config {
     uint8_t num_filters;
 } fw_router_config_t;
 
-typedef struct fw_icmp_module_config {
+typedef struct fw_icmp_module_config
+{
     /* IP address of interfaces */
     uint32_t ips[FW_NUM_INTERFACES];
     fw_connection_resource_t routers[FW_NUM_INTERFACES];
     uint8_t num_interfaces;
 } fw_icmp_module_config_t;
 
-typedef struct fw_webserver_filter_config {
+typedef struct fw_webserver_filter_config
+{
     uint16_t protocol;
     uint8_t ch;
     uint8_t default_action;
@@ -132,7 +158,8 @@ typedef struct fw_webserver_filter_config {
     uint16_t rules_capacity;
 } fw_webserver_filter_config_t;
 
-typedef struct fw_filter_config {
+typedef struct fw_filter_config
+{
     /* Interface traffic is received from */
     uint8_t interface;
     uint16_t instances_capacity;
@@ -144,19 +171,22 @@ typedef struct fw_filter_config {
 } fw_filter_config_t;
 
 /* NAT configuration that is specific to a PD (interface and protocol specific) */
-typedef struct fw_webserver_nat_config {
+typedef struct fw_webserver_nat_config
+{
     uint8_t protocol;
     uint8_t ch;
 } fw_webserver_nat_config_t;
 
 /* NAT configuration that is specific to a protocol */
-typedef struct fw_webserver_nat_protocol_config {
+typedef struct fw_webserver_nat_protocol_config
+{
     uint8_t protocol;
     /* Webserver NAT state, written to by webserver, shared by all NAT of a given protocol */
     region_resource_t region;
 } fw_webserver_nat_protocol_config_t;
 
-typedef struct fw_webserver_interface_config {
+typedef struct fw_webserver_interface_config
+{
     /* MAC address of interface */
     uint8_t mac_addr[ETH_HWADDR_LEN];
     /* IP address of interface */
@@ -167,7 +197,8 @@ typedef struct fw_webserver_interface_config {
     uint8_t num_filters;
 } fw_webserver_interface_config_t;
 
-typedef struct fw_webserver_config {
+typedef struct fw_webserver_config
+{
     /* Interface traffic is received from */
     uint8_t interface;
     fw_connection_resource_t rx_active;
@@ -180,7 +211,8 @@ typedef struct fw_webserver_config {
     uint8_t num_nat_state;
 } fw_webserver_config_t;
 
-typedef struct fw_nat_interface_config {
+typedef struct fw_nat_interface_config
+{
     /* base port for ephemeral port table */
     uint16_t base_port;
     /* capacity of ephemeral port table */
@@ -191,7 +223,8 @@ typedef struct fw_nat_interface_config {
     uint32_t ip;
 } fw_nat_interface_config_t;
 
-typedef struct fw_nat_config {
+typedef struct fw_nat_config
+{
     fw_connection_resource_t filter;
     fw_connection_resource_t router;
     device_region_resource_t data;
