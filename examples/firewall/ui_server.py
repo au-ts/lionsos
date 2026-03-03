@@ -29,7 +29,6 @@ OSErrInvalidRuleNum = 10
 OSErrOutOfMemory = 11
 OSErrInternalError = 12
 OSErrInvalidInput = 13
-OSErrInvalidActionTcp = 14
 
 OSErrStrings = [
     "Ok.",
@@ -339,9 +338,6 @@ def setDefaultAction(request, protocolStr, action, interfaceStr):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
-        if (protocol == protocolNums["tcp"] and action == 5):
-          raise OSError(OSErrInvalidActionTcp, OSErrStrings[OSErrInvalidActionTcp])
-
         lions_firewall.filter_set_default_action(interface, protocol, action)
         return {"status": "ok"}, 201
     except OSError as OSErr:
@@ -393,9 +389,6 @@ def addRule(request, protocolStr):
         if action not in actionNums.keys():
             print(f"UI SERVER|ERR: Supplied invalid action {action}.")
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
-
-        if (protocol ==  protocolNums["tcp"] and action == 5):
-          raise OSError(OSErrInvalidActionTcp, OSErrStrings[OSErrInvalidActionTcp])
 
         srcPort = newRule.get("src_port")
         if not srcPort or protocol == protocolNums["icmp"]:

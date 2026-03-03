@@ -142,6 +142,7 @@ typedef struct fw_filter_config {
     region_resource_t external_instances;
     region_resource_t rule_id_bitmap;
     fw_connection_resource_t icmp_module;
+    uint8_t action[4];
 } fw_filter_config_t;
 
 typedef struct fw_webserver_interface_config {

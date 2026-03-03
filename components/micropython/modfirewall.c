@@ -44,7 +44,8 @@ static const char *fw_os_err_str[] = {
     "Route number supplied is greater than the number of routes.",
     "Rule number supplied is the default action rule index, or greater than the number of rules.",
     "Internal data structures are already at capacity.",
-    "Unknown internal error."
+    "Unknown internal error.",
+    "Unsupported action for the protocol selected."
 };
 
 /* Convert a routing error to OS error */
@@ -329,6 +330,12 @@ static mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
         return mp_const_none;
     }
 
+    if (!(fw_config.interfaces[interface_idx].filters[protocol_match].action[action])) {
+        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_UNSUPPORTED_ACTION]);
+        mp_raise_OSError(OS_ERR_UNSUPPORTED_ACTION);
+        return mp_const_none;
+    }
+
     microkit_mr_set(FILTER_ARG_ACTION, action);
     microkit_mr_set(FILTER_ARG_SRC_IP, src_ip);
     microkit_mr_set(FILTER_ARG_SRC_PORT, src_port);
@@ -447,6 +454,12 @@ static mp_obj_t filter_set_default_action(mp_obj_t interface_idx_in,
     if (protocol_match == fw_config.interfaces[interface_idx].num_filters) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
         mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+        return mp_const_none;
+    }
+
+    if (!(fw_config.interfaces[interface_idx].filters[protocol_match].action[action])) {
+        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_UNSUPPORTED_ACTION]);
+        mp_raise_OSError(OS_ERR_UNSUPPORTED_ACTION);
         return mp_const_none;
     }
 
