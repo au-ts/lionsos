@@ -39,6 +39,20 @@ ip netns exec int nc -u ${EXT_HOST_IP} ${TEST_PORT}
 ip netns exec ext ping ${INT_BAD_HOST_IP}
 ip netns exec int ping ${EXT_BAD_HOST_IP}
 
+# ICMP : ext --> Firewall ext
+ip netns exec ext ping ${FW_EXT_IP}
+
+# ICMP : int --> Firewall int
+ip netns exec int ping ${FW_INT_IP}
+
+# ICMP time out : ext --> int
+ip netns exec ext ping -t 1 ${INT_HOST_IP}
+
+# ICMP Reject: set reject rule
+# UDP: ext listens, int initiates
+ip netns exec int nc -ul ${TEST_PORT}
+ip netns exec ext nc -u ${INT_HOST_IP} ${TEST_PORT}
+
 # TCP dump interfaces (e - include ethernet, x - hexdump packet, -i interface)
 
 # veth attached to the external namespace
