@@ -1,3 +1,4 @@
+#include <microkit.h>
 
 #define MAX_PDS 64
 #define NUM_PT_ENTRIES 128
@@ -7,6 +8,8 @@
 #define INDEX_INTO_MMAP_ARRAY(x) (ROUND_DOWN_TO_4K(x)) / 4096
 #define TAU 10 // not too sure what the optimal number for this would be. maybe this is not useful...
 #define PAGEFILE ".pagefile"
+#define MM_PPC_NUM 1
+
 
 struct mmap_node
 {
@@ -49,7 +52,7 @@ typedef struct FrameInfo {
     uint64_t last_accessed; // for working set.
     pe *page; // the page this frame is mapped to.
     uint32_t next;
-    char *frame_data; // where the frame is mapped into for the pager.
+    int pd_idx;
 } FrameInfo;
 
 enum paging_state {
@@ -62,3 +65,16 @@ struct page_request_info {
     uintptr_t fault_addr;
     enum paging_state state;
 };
+
+void free(uintptr_t addr) {
+    microkit_msginfo message = microkit_msginfo_new(0, 2);
+    microkit_mr_set(0, 0);
+    microkit_ppcall(MM_PPC_NUM);
+}
+
+uintptr_t malloc() {
+    microkit_msginfo message = microkit_msginfo_new(0, 1);
+    microkit_mr_set(0, 1);
+    microkit_ppcall(MM_PPC_NUM);
+    return microkit_mr_get(0);
+}

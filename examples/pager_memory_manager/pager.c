@@ -10,9 +10,8 @@
 
 /**
  * TODOS:
- * - Patch in the vspace id for pager
+ * - I need to map the heap frames to the pager in the .system file.
  * 
- * I think I may have made a mistake in the design where I should've leave the paged out data untouched.
  * I think I will probably eat a lot of disk and memory with this design...
  */
 
@@ -27,9 +26,16 @@
 /** Assumptions and Restrictions:
  * - there is a fixed maximum of PD's (64 currently)
  * - Heap is bounded to 128 4k frames.
+ * - Child PD heaps must be mapped to pager.
  */
 
+/**
+ * This is where the heaps should begin, it is important that the pd's heaps are in order of pd_idx and contiguous.
+ * The size of the heap should always be the same HEAP_SIZE = 524288 bytes.
+ */
 #define FRAME_DATA 0x8000000000
+#define PD_IDX_OFFSET 2 // this is to index into the frame data, 2 because pager and memory manager will be the first 2 indicies.
+#define HEAP_SIZE 128 * 4096
 
 static uint64_t unmapped_frames_addr;
 static uint64_t num_frames;
@@ -46,8 +52,12 @@ frame_pd_id *frames = (frame_pd_id *) unmapped_frames_addr;
 // so that we don't process the same fault multiple times.
 uintptr_t current_faults[MAX_PDS] = {-1};
 
+// this is where the heaps are all located.
+char *heaps = FRAME_DATA;
 
-
+char *get_frame_data(int pd_idx, uintptr_t frame_offset) {
+    return heaps + ((pd_idx - PD_IDX_OFFSET) * HEAP_SIZE + (frame_offset * 4096));
+}
 
 // stuff required for the vm fault handling
 // I cannot have actual page tables due to missing malloc.
@@ -85,8 +95,7 @@ void init(void)
         frame_pd_id *cur_frame = &frames[i];
         int pd_idx = cur_frame->pd_idx;
 
-        frame_table[pd_idx][frame_indicies[pd_idx]] = { .cap = cur_frame->frame_cap, .last_accessed = 0, page = NULL, .next = ++frame_indicies[pd_idx], .frame_data = i * 4096 + FRAME_DATA };
-        microkit_arm_page_map_wr(cur_frame->frame_cap, pager_vspace, FRAME_DATA + i * 4096);
+        frame_table[pd_idx][frame_indicies[pd_idx]] = { .cap = cur_frame->frame_cap, .last_accessed = 0, page = NULL, .next = ++frame_indicies[pd_idx], };
     }
 
     
@@ -104,6 +113,7 @@ void after_page_in(uint32_t pd_idx, uintptr_t fault_addr) {
     frame->page = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
     page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr = &frame;
     current_faults[pd_idx] = -1;
+    frame->pd_idx = pd_idx;
 }
 
 void page_in(uint32_t pd_idx, uintptr_t fault_addr) {
@@ -112,7 +122,7 @@ void page_in(uint32_t pd_idx, uintptr_t fault_addr) {
     // queue the read
     int request_id = get_request_id();
     page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_IN }; // TODO: fill this out with relevant info.
-    memcpy(frame_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_data, (char *)blk_config.data.vaddr);
+    memcpy(get_frame_data(pd_idx, get_frame_offset(frame_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)], pd_idx)), (char *)blk_config.data.vaddr);
     blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
     sddf_notify(blk_config.virt.id);
 }
@@ -136,7 +146,7 @@ void page_out(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     if (frame->page.dirty) {
         page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_OUT }; // TODO: fill this out with relevant info.
         char *data_dest = (char *) blk_config.data.vaddr;
-        memcpy(data_dest, frame->frame_data, 4096);
+        memcpy(data_dest, get_frame_data(frame->pd_idx, get_frame_offset(frame, frame->pd_idx)), 4096);
         blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
         sddf_notify(blk_config.virt.id);
     } else {
@@ -167,12 +177,12 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         // i need to mark the page as dirty and recently used
         page->recently_used = true;
         page->dirty = true;
-        return;
+        return seL4_False;
     }
 
     // check that the fault is not currently being served
     if (current_faults[pd_idx] == ROUND_DOWN_TO_4K(fault_addr)) {
-        return; // i need to return the bool
+        return seL4_False;
     } else {
         current_faults[pd_idx] = ROUND_DOWN_TO_4K(fault_addr);
     }
@@ -186,6 +196,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     } else {
         after_page_out(pd_idx, fault_addr);
     }
+    return seL4_False;
 }
 
 /**

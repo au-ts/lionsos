@@ -16,6 +16,13 @@ static inline void move_hand(uint32_t pd_idx) {
 }
 
 /**
+ * Used to calculate the offset of the frame to get the address of the frame within the pager.
+ */
+uintptr_t get_frame_offset(uintptr_t frame_addr, int pd_idx) {
+    return (frame_addr - frame_table[pd_idx]) / sizeof(FrameInfo);
+}
+
+/**
  * Gets the next frame to allocate, may need to page out the frame
  * currently recursive, may/may not want to change.
  */
@@ -32,9 +39,9 @@ static FrameInfo *get_frame(uint32_t pd_idx) {
         // maybe I want to unmap it... so that reads are counted as well.
         microkit_arm_page_unmap(wshand->cap);
         move_hand(pd_idx);
-    } else if (time - wshand[pd_idx]->last_accessed < TAU)
-    {
-        move_hand(pd_idx); // this has potential to cause infinite loop if I don't increment time.
+    // } else if (time - wshand[pd_idx]->last_accessed < TAU)
+    // {
+    //     move_hand(pd_idx); // this has potential to cause infinite loop if I don't increment time.
     } else {
         FrameInfo *ret = wshand[pd_idx];
         move_hand(pd_idx);
