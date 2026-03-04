@@ -19,8 +19,9 @@
 # `UDP_PORT` and `TCP_PORT` for `EXT_HOST_IP` and `INT_HOST_IP`.
 #
 # The shUnit2 framework is used for setup, teardown and temporary file handling.
-# For further information on shUnit2, see its documentation available at:
-# https://github.com/kward/shunit2
+# For further information on shUnit2 and its execution behaviour, please refer
+# to the quickstart guide available at:
+# https://github.com/kward/shunit2?tab=readme-ov-file#-quickstart
 
 #
 # Constants
@@ -518,6 +519,7 @@ test_rule_application_and_removal() {
 # shUnit
 #
 
-# Load shUnit2
-#
+# Once shUnit2 has been sourced, it will find all functions that begin with the
+# name `test` and add them to a list to be executed. The source statement should
+# be the last line in the file.
 . shunit2
