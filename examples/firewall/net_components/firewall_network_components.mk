@@ -42,8 +42,8 @@ firewall_network/net_components/nat_module.o: ${FIREWALL_COMPONENTS}/net_compone
 firewall_network_virt_rx.elf: firewall_network/net_components/firewall_network_virt_rx.o firewall_network/net_components/nat_module.o |firewall_network/net_components
 	${LD} ${LDFLAGS} -o $@ firewall_network/net_components/firewall_network_virt_rx.o firewall_network/net_components/nat_module.o ${LIBS}
 
-firewall_network_virt_tx.elf: firewall_network/net_components/firewall_network_virt_tx.o |firewall_network/net_components
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
+firewall_network_virt_tx.elf: firewall_network/net_components/firewall_network_virt_tx.o firewall_network/net_components/nat_module.o |firewall_network/net_components
+	${LD} ${LDFLAGS} -o $@ firewall_network/net_components/firewall_network_virt_tx.o firewall_network/net_components/nat_module.o ${LIBS}
 
 clean::
 	${RM} -f firewall_network_virt_[rt]x.[od]
