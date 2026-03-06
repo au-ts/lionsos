@@ -60,6 +60,13 @@ static bool returned; /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp; /* Arp request has been enqueued */
 static bool notify_icmp; /* Request has been enqueued to ICMP module */
 
+/* Masks for checking whether it is a broadcast address or not*/
+#define MULTICAST_IP_MASK 0xf0000000
+#define MULTICAST_IP_NETWORK_ADDR 0xe0000000
+#define BROADCAST_IP_ADDR 0xffffffff
+#define MULTICAST_MAC_SUFFIX_MASK 0x7fffff
+const uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
@@ -94,7 +101,10 @@ static void transmit_packet(net_buff_desc_t buffer, uint8_t *mac_addr)
     eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
-    memcpy(&eth_hdr->ethdst_addr, mac_addr, ETH_HWADDR_LEN);
+    /* Replaces mac address if needed */
+    if (mac_addr != NULL) {
+        memcpy(&eth_hdr->ethdst_addr, mac_addr, ETH_HWADDR_LEN);
+    }
     memcpy(&eth_hdr->ethsrc_addr, router_config.mac_addr, ETH_HWADDR_LEN);
 
     /* Transmit packet out the NIC */
@@ -196,11 +206,32 @@ static void route(void)
                             buffer.io_or_offset / NET_BUFFER_SIZE);
             }
 
+            if (ip_hdr->dst_ip == BROADCAST_IP_ADDR) {
+                /* Limited broadcast, drop packet explicitly */
+                continue;
+            } else if ((ip_hdr->dst_ip & MULTICAST_IP_MASK) == MULTICAST_IP_NETWORK_ADDR) {
+                /* Multicast addresses not handled by router currently, skip */
+                continue;
+            }
+
             /* Find the next hop address. */
             uint32_t next_hop;
             fw_routing_interfaces_t interface;
-            fw_routing_err_t fw_err = fw_routing_find_route(routing_table, ip_hdr->dst_ip, &next_hop, &interface, 0);
+            fw_routing_entry_t *match = NULL;
+            fw_routing_err_t fw_err = fw_routing_find_route(routing_table,
+                                                            ip_hdr->dst_ip,
+                                                            &next_hop,
+                                                            &interface,
+                                                            0, &match);
             assert(fw_err == ROUTING_ERR_OKAY);
+
+            if (ROUTING_OUT_EXTERNAL == interface && next_hop == ip_hdr->dst_ip && match != NULL && ~(subnet_mask(match->subnet) & next_hop) == ~match->ip) {
+                /* If externally routed, next hop is destination and postfix indicates subnet broadcast IP, broadcast using temp to avoid warning */
+                uint8_t mac_broadcast_copy[6];
+                memcpy(mac_broadcast_copy, broadcast_mac_addr, sizeof(mac_broadcast_copy));
+                transmit_packet(buffer, mac_broadcast_copy);
+                continue;
+            }
 
             if (FW_DEBUG_OUTPUT && interface != ROUTING_OUT_NONE) {
                 sddf_printf("%sRouter converted ip %s to next hop ip %s out interface %u\n",
