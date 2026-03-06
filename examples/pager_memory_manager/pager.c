@@ -42,6 +42,7 @@ static uint64_t num_frames;
 uint32_t pager_vspace;
 
 // TODO: figure out where I need to outline this...
+// maybe: blk_system.add_client(pager, partition=partition)
 __attribute__((__section__(".blk_client_config"))) blk_client_config_t blk_config;
 static blk_queue_handle_t blk_queue;
 
