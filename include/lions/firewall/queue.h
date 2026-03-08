@@ -75,8 +75,7 @@ static inline bool fw_queue_full(fw_queue_t *queue)
  *
  * @return -1 when queue is full, 0 on success.
  */
-static inline int fw_enqueue(fw_queue_t *queue,
-                             void *entry)
+static inline int fw_enqueue(fw_queue_t *queue, void *entry)
 {
     if (fw_queue_full(queue)) {
         return -1;
@@ -87,7 +86,7 @@ static inline int fw_enqueue(fw_queue_t *queue,
     memcpy((void *)dest, entry, queue->entry_size);
 
 #ifdef CONFIG_ENABLE_SMP_SUPPORT
-     THREAD_MEMORY_RELEASE();
+    THREAD_MEMORY_RELEASE();
 #endif
     queue->idx->tail++;
 
@@ -102,8 +101,7 @@ static inline int fw_enqueue(fw_queue_t *queue,
  *
  * @return -1 when queue is empty, 0 on success.
  */
-static inline int fw_dequeue(fw_queue_t *queue,
-                             void *entry)
+static inline int fw_dequeue(fw_queue_t *queue, void *entry)
 {
     if (fw_queue_empty(queue)) {
         return -1;
@@ -129,10 +127,7 @@ static inline int fw_dequeue(fw_queue_t *queue,
  * @param entry_size size of queue entries.
  * @param capacity capacity of the queue.
  */
-static inline void fw_queue_init(fw_queue_t *queue,
-                                 void *data,
-                                 size_t entry_size,
-                                 size_t capacity)
+static inline void fw_queue_init(fw_queue_t *queue, void *data, size_t entry_size, size_t capacity)
 {
     queue->idx = (fw_queue_indeces_t *)data;
     queue->entries = (uintptr_t)data + sizeof(fw_queue_indeces_t);

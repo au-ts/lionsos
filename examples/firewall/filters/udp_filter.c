@@ -54,20 +54,19 @@ static void filter(void)
                                                                 ip_hdr->dst_ip, udp_hdr->dst_port, rule_id);
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
-                    sddf_printf(
-                        "%sUDP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[filter_config.interface], rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                        htons(udp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                        htons(udp_hdr->dst_port));
+                    sddf_printf("UDP filter on interface %u establishing connection via rule %u: (ip %s, port %u) -> "
+                                "(ip %s, port %u)\n",
+                                filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                htons(udp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                                htons(udp_hdr->dst_port));
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
-                    sddf_printf("%sUDP FILTER LOG: could not establish connection for rule %u: (ip %s, port %u) -> (ip "
-                                "%s, port %u): %s\n",
-                                fw_frmt_str[filter_config.interface], rule_id,
-                                ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
-                                ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port),
-                                fw_filter_err_str[fw_err]);
+                    sddf_printf("UDP FILTER LOG: on interface %u could not establish connection for rule %u: (ip %s, "
+                                "port %u) -> (ip %s, port %u): %s\n",
+                                filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                htons(udp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                                htons(udp_hdr->dst_port), fw_filter_err_str[fw_err]);
                 }
             }
 
@@ -84,16 +83,17 @@ static void filter(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
-                        sddf_printf("%sUDP filter transmitting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                                    fw_frmt_str[filter_config.interface], rule_id,
-                                    ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
-                                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
+                        sddf_printf("UDP filter on interface %u transmitting via rule %u: (ip %s, port %u) -> (ip %s, "
+                                    "port %u)\n",
+                                    filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                    htons(udp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                                    htons(udp_hdr->dst_port));
                     } else if (action == FILTER_ACT_ESTABLISHED) {
-                        sddf_printf(
-                            "%sUDP filter transmitting via external rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                            fw_frmt_str[filter_config.interface], rule_id,
-                            ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
-                            ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
+                        sddf_printf("UDP filter on interface %u transmitting via external rule %u: (ip %s, port %u) -> "
+                                    "(ip %s, port %u)\n",
+                                    filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                    htons(udp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                                    htons(udp_hdr->dst_port));
                     }
                 }
             } else if (action == FILTER_ACT_DROP) {
@@ -103,10 +103,11 @@ static void filter(void)
                 returned = true;
 
                 if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("%sUDP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                                fw_frmt_str[filter_config.interface], rule_id,
-                                ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
-                                ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
+                    sddf_printf(
+                        "UDP filter on interface %u dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
+                        filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                        htons(udp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                        htons(udp_hdr->dst_port));
                 }
             }
         }
@@ -136,7 +137,7 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         fw_action_t action = microkit_mr_get(FILTER_ARG_ACTION);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("%sUDP filter changing default action from %u to %u\n", fw_frmt_str[filter_config.interface],
+            sddf_printf("UDP filter on interface %u changing default action from %u to %u\n", filter_config.interface,
                         filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
         }
 
@@ -161,10 +162,10 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
                                                  dst_subnet, src_port_any, dst_port_any, action, &rule_id);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("%sUDP filter create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> (ip %s, mask "
-                        "%u, port %u, any_port %u): %s\n",
-                        fw_frmt_str[filter_config.interface], rule_id, ipaddr_to_string(src_ip, ip_addr_buf0),
-                        src_subnet, htons(src_port), src_port_any, fw_filter_action_str[action],
+            sddf_printf("UDP filter on interface %u create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> "
+                        "(ip %s, mask %u, port %u, any_port %u): %s\n",
+                        filter_config.interface, rule_id, ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet,
+                        htons(src_port), src_port_any, fw_filter_action_str[action],
                         ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, htons(dst_port), dst_port_any,
                         fw_filter_err_str[err]);
         }
@@ -178,7 +179,7 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         fw_filter_err_t err = fw_filter_remove_rule(&filter_state, rule_id);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("%sUDP remove rule id %u: %s\n", fw_frmt_str[filter_config.interface], rule_id,
+            sddf_printf("UDP filter on interface %u remove rule id %u: %s\n", filter_config.interface, rule_id,
                         fw_filter_err_str[err]);
         }
 
@@ -186,7 +187,7 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         return microkit_msginfo_new(0, 1);
     }
     default:
-        sddf_printf("%sUDP FILTER LOG: unknown request %lu on channel %u\n", fw_frmt_str[filter_config.interface],
+        sddf_printf("UDP FILTER LOG: on interface %u unknown request %lu on channel %u\n", filter_config.interface,
                     microkit_msginfo_get_label(msginfo), ch);
         break;
     }
@@ -199,8 +200,8 @@ void notified(microkit_channel ch)
     if (ch == net_config.rx.id) {
         filter();
     } else {
-        sddf_dprintf("%sUDP FILTER LOG: Received notification on unknown channel: %d!\n",
-                     fw_frmt_str[filter_config.interface], ch);
+        sddf_dprintf("UDP FILTER LOG: on interface %u received, notification on unknown channel: %d!\n",
+                     filter_config.interface, ch);
     }
 }
 
@@ -214,8 +215,8 @@ void init(void)
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr, sizeof(net_buff_desc_t),
                   filter_config.router.capacity);
 
-    fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr,
-                         filter_config.webserver.rules_capacity, filter_config.internal_instances.vaddr,
+    fw_filter_state_init(&filter_state, filter_config.rules.vaddr, filter_config.rule_id_bitmap.vaddr,
+                         filter_config.rules_capacity, filter_config.internal_instances.vaddr,
                          filter_config.external_instances.vaddr, filter_config.instances_capacity,
-                         (fw_action_t)filter_config.webserver.default_action);
+                         filter_config.default_rule, filter_config.initial_rules, filter_config.num_initial_rules);
 }

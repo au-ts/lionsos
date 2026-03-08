@@ -86,6 +86,8 @@ typedef struct icmp_req {
     uint8_t type;
     /* tode of ICMP packet to sent */
     uint8_t code;
+    /* interface to transmit out of */
+    uint8_t out_interface;
     /* ethernet header of request source packet */
     eth_hdr_t eth_hdr;
     /* header of source IP packet */
