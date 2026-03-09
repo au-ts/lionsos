@@ -50,14 +50,14 @@ static const char *fw_os_err_str[] = {
     "Unsupported action for the protocol selected."
 };
 
-static bool is_action_supported_for_protocol(uint16_t protocol, uint8_t action)
+static bool is_action_supported_for_filter(fw_webserver_filter_config_t *filter, uint8_t action)
 {
-    if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_DROP || action == FILTER_ACT_CONNECT) {
-        return true;
+    if (action == 0 || action > FW_FILTER_NUM_ACTIONS) {
+        return false;
     }
 
-    if (action == FILTER_ACT_REJECT) {
-        return protocol == IPV4_PROTO_UDP || protocol == IPV4_PROTO_ICMP;
+    if (filter->actions[action - 1]) {
+        return true;
     }
 
     return false;
@@ -98,6 +98,8 @@ static fw_os_err_t filter_err_to_os_err(fw_filter_err_t filter_err)
             return OS_ERR_CLASH;
         case FILTER_ERR_INVALID_RULE_ID:
             return OS_ERR_INVALID_RULE_ID;
+        case FILTER_ERR_UNSUPPORTED_ACTION:
+            return OS_ERR_UNSUPPORTED_ACTION;
         default:
             return OS_ERR_INTERNAL_ERROR;
     }
@@ -345,7 +347,8 @@ static mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args) {
         return mp_const_none;
     }
 
-    if (!is_action_supported_for_protocol(protocol, action)) {
+    if (!is_action_supported_for_filter(&fw_config.interfaces[interface_idx].filters[protocol_match],
+                                        action)) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_UNSUPPORTED_ACTION]);
         mp_raise_OSError(OS_ERR_UNSUPPORTED_ACTION);
         return mp_const_none;
@@ -472,7 +475,8 @@ static mp_obj_t filter_set_default_action(mp_obj_t interface_idx_in,
         return mp_const_none;
     }
 
-    if (!is_action_supported_for_protocol(protocol, action)) {
+    if (!is_action_supported_for_filter(&fw_config.interfaces[interface_idx].filters[protocol_match],
+                                        action)) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_UNSUPPORTED_ACTION]);
         mp_raise_OSError(OS_ERR_UNSUPPORTED_ACTION);
         return mp_const_none;

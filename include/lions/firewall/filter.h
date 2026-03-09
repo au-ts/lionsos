@@ -30,7 +30,9 @@ typedef enum {
     FILTER_ERR_CLASH,
     /* rule id does not point to a valid entry, or is the default action rule id
     */
-    FILTER_ERR_INVALID_RULE_ID
+    FILTER_ERR_INVALID_RULE_ID,
+    /* unsupported action */
+    FILTER_ERR_UNSUPPORTED_ACTION
 } fw_filter_err_t;
 
 static const char *fw_filter_err_str[] = {
@@ -38,7 +40,8 @@ static const char *fw_filter_err_str[] = {
     "Out of memory error.",
     "Duplicate entry.",
     "Clashing entry.",
-    "Invalid rule ID."
+    "Invalid rule ID.",
+    "Unsupported action."
 };
 
 typedef enum {
@@ -46,21 +49,21 @@ typedef enum {
 	FILTER_ACT_ALLOW = 1,
     /* drop traffic */
 	FILTER_ACT_DROP = 2,
-    /* allow traffic, and additionally any return traffic */
-    FILTER_ACT_CONNECT = 3,
-    /* traffic is return traffic from a connect rule */
-    FILTER_ACT_ESTABLISHED = 4,
     /* reject traffic (send back icmp unreachable) */
-    FILTER_ACT_REJECT
+    FILTER_ACT_REJECT = 3,
+    /* allow traffic, and additionally any return traffic */
+    FILTER_ACT_CONNECT = 4,
+    /* traffic is return traffic from a connect rule */
+    FILTER_ACT_ESTABLISHED = 5,
 } fw_action_t;
 
 static const char *fw_filter_action_str[] = {
     "No rule",
     "Allow",
     "Drop",
+    "Reject",
     "Connect",
-    "Established",
-    "UDP Reject"
+    "Established"
 };
 
 typedef struct fw_rule {

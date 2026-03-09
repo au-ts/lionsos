@@ -450,7 +450,7 @@ def fw_shared_region(
 def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     filter_actions = {
         ip_protocol_udp: [1, 1, 1, 1],
-        ip_protocol_tcp: [1, 1, 1, 0],
+        ip_protocol_tcp: [1, 1, 0, 1],
         ip_protocol_icmp: [1, 1, 1, 1],
     }
     serial_node = dtb.node(board.serial)
@@ -923,6 +923,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 FILTER_ACTION_ALLOW,
                 filter_rules[0],
                 filter_rules_buffer.capacity,
+                filter_actions[protocol],
             )
 
             webserver_filter_config = FwWebserverFilterConfig(
@@ -931,6 +932,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 FILTER_ACTION_ALLOW,
                 filter_rules[1],
                 filter_rules_buffer.capacity,
+                filter_actions[protocol],
             )
 
             # Create filter config
@@ -943,7 +945,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 None,
                 rule_bitmap_region,
                 filter_icmp_conn[0] if filter_icmp_conn else None,
-                filter_actions[protocol],
             )
 
             network["configs"][router].filters.append((filter_router_conn[1]))

@@ -20,6 +20,8 @@
 #define FW_NUM_ARP_REQUESTER_CLIENTS 2
 #define FW_NUM_INTERFACES 2
 
+#define FW_FILTER_NUM_ACTIONS 4
+
 #define FW_DEBUG_OUTPUT 1
 
 typedef struct fw_connection_resource {
@@ -132,6 +134,7 @@ typedef struct fw_webserver_filter_config {
     uint8_t default_action;
     region_resource_t rules;
     uint16_t rules_capacity;
+    uint8_t actions[FW_FILTER_NUM_ACTIONS];
 } fw_webserver_filter_config_t;
 
 typedef struct fw_filter_config {
@@ -144,7 +147,6 @@ typedef struct fw_filter_config {
     region_resource_t external_instances;
     region_resource_t rule_id_bitmap;
     fw_connection_resource_t icmp_module;
-    uint8_t action[4];
 } fw_filter_config_t;
 
 typedef struct fw_webserver_interface_config {

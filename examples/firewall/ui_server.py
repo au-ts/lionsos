@@ -28,7 +28,8 @@ OSErrInvalidRouteNum = 9
 OSErrInvalidRuleNum = 10
 OSErrOutOfMemory = 11
 OSErrInternalError = 12
-OSErrInvalidInput = 13
+OSErrUnsupportedAction = 13
+OSErrInvalidInput = 14
 
 OSErrStrings = [
     "Ok.",
@@ -44,8 +45,8 @@ OSErrStrings = [
     "Rule number supplied is the default action rule index, or greater than the number of rules.",
     "Internal data structures are already at capacity.",
     "Unknown internal error.",
-    "Input supplied does not match the format of the field.",
-    "Reject Rule for TCP is currently not supported"
+    "Unsupported action for the protocol selected.",
+    "Input supplied does not match the format of the field."
 ]
 
 UnknownErrStr = "Unexpected unknown error."
@@ -71,8 +72,8 @@ protocolNums = {
 actionNums = {
     1: "Allow",
     2: "Drop",
-    3: "Connect",
-    5: "Reject"
+    3: "Reject",
+    4: "Connect"
 }
 
 defaultActionRuleIdx = 0
@@ -732,8 +733,8 @@ def rules(request, protocol):
         <select name="internal-default-action" id="internal-default-action">
           <option value="1">Allow</option>
           <option value="2">Drop</option>
-          <option value="3">Connect</option>
-          <option value="5">Reject</option>
+          <option value="3">Reject</option>
+          <option value="4">Connect</option>
         </select>
         <button id="internal-set-default-action-btn">Update Default</button>
       </div>
@@ -764,8 +765,8 @@ def rules(request, protocol):
           <option value="">...</option>
           <option value="1">Allow</option>
           <option value="2">Drop</option>
-          <option value="3">Connect</option>
-          <option value="5">Reject</option>
+          <option value="3">Reject</option>
+          <option value="4">Connect</option>
         </select>
         <button id="external-set-default-action-btn">Update Default</button>
       </div>
@@ -802,8 +803,8 @@ def rules(request, protocol):
         <option value="">Rule Action</option>
         <option value="1">Allow</option>
         <option value="2">Drop</option>
-        <option value="3">Connect</option>
-        <option value="5">Reject</option>
+        <option value="3">Reject</option>
+        <option value="4">Connect</option>
       </select>
       <button id="add-rule-btn">Add Rule</button>
     </p>

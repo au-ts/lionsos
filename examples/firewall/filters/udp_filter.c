@@ -186,6 +186,13 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         uint8_t dst_subnet = microkit_mr_get(FILTER_ARG_DST_SUBNET);
         bool src_port_any = microkit_mr_get(FILTER_ARG_SRC_ANY_PORT);
         bool dst_port_any = microkit_mr_get(FILTER_ARG_DST_ANY_PORT);
+
+        /* UDP filter does not support this action */
+        if (action == 0 || action > FW_FILTER_NUM_ACTIONS || !filter_config.webserver.actions[action - 1]) {
+            microkit_mr_set(FILTER_RET_ERR, FILTER_ERR_UNSUPPORTED_ACTION);
+            return microkit_msginfo_new(0, 1);
+        }
+
         uint16_t rule_id = 0;
         fw_filter_err_t err = fw_filter_add_rule(&filter_state, src_ip, src_port,
             dst_ip, dst_port, src_subnet, dst_subnet, src_port_any, dst_port_any, action, &rule_id);

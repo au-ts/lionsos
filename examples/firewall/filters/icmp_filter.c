@@ -183,6 +183,13 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         uint32_t dst_ip = microkit_mr_get(FILTER_ARG_DST_IP);
         uint8_t src_subnet = microkit_mr_get(FILTER_ARG_SRC_SUBNET);
         uint8_t dst_subnet = microkit_mr_get(FILTER_ARG_DST_SUBNET);
+
+        /* ICMP filter does not support this action */
+        if (action == 0 || action > FW_FILTER_NUM_ACTIONS || !filter_config.webserver.actions[action - 1]) {
+            microkit_mr_set(FILTER_RET_ERR, FILTER_ERR_UNSUPPORTED_ACTION);
+            return microkit_msginfo_new(0, 1);
+        }
+
         uint16_t rule_id = 0;
         fw_filter_err_t err = fw_filter_add_rule(&filter_state, src_ip, ICMP_FILTER_DUMMY_PORT,
             dst_ip, ICMP_FILTER_DUMMY_PORT, src_subnet, dst_subnet, true, true, action, &rule_id);
