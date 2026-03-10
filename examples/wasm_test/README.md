@@ -1,3 +1,7 @@
+<!--
+     Copyright 2026, UNSW
+     SPDX-License-Identifier: CC-BY-SA-4.0
+-->
 # WASM Test Example
 
 This example checks the ability of LionsOS to run Web Assembly code.
@@ -24,3 +28,14 @@ that saves build-time options.  Doing
 make -C <build_dir>
 ```
 is sufficient for rebuilding after changing any source code.
+
+# Running
+
+```
+make -C <build_dir> qemu
+```
+will run the test if built for `qemu_virt_aarch64`
+
+If built with `MICROKIT_BOARD=maaxboard` the resulting image is in
+*build_dir*`/wasm_test.img`; it is a binary blob.  Use U-Boot to load
+it at 0x50000000, then do `go 0x50000000` to run.
