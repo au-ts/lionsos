@@ -7,6 +7,9 @@
 ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
+ifeq ($(strip $(WASI_SDK)),)
+$(error WASI_SDK should be the path to the WebAssembly SDK)
+endif
 override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
 export LIONSOS ?= $(abspath ../..)
@@ -25,13 +28,14 @@ qemu ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
 
 ${BUILD_DIR}/Makefile: wasm_test.mk Makefile
 	mkdir -p ${BUILD_DIR}
-	cp wasm_test.mk $@
 	echo "export LIONSOS ?= ${LIONSOS}" > $@
 	echo "export WASM_TEST_DIR ?= ${WASM_TEST_DIR}" >> $@
-	echo "export BUILD_DIR := ${BUILD_DIR}" >> $@
+	echo "export WASI_SDK = ${WAS_SDK}" >> $@
+	echo "export BUILD_DIR := $(abspath .)" >> $@
 	echo "export MICROKIT_BOARD ?= ${MICROKIT_BOARD}" >> $@
 	echo "export MICROKIT_SDK ?= ${MICROKIT_SDK}" >> $@
 	echo "export MICROKIT_CONFIG ?= ${MICROKIT_CONFIG}" >> $@
+	-[ "${TOOLCHAIN}" ] && echo "export TOOLCHAIN ?= ${TOOLCHAIN}" >> $@
 	cat wasm_test.mk >> $@
 
 submodules:
