@@ -326,9 +326,11 @@ static fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, p
  * @return error status of operation.
  */
 static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t ip, uint32_t *next_hop,
-                                              fw_routing_interfaces_t *interface, uint8_t num_calls)
+                                              fw_routing_interfaces_t *interface, uint8_t num_calls,
+                                              fw_routing_entry_t **match)
 {
-    fw_routing_entry_t *match = NULL;
+    fw_routing_entry_t *current_best = NULL;
+
     for (uint16_t i = 0; i < table->size; i++) {
         fw_routing_entry_t *entry = table->entries + i;
 
@@ -336,31 +338,33 @@ static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_
         if ((subnet_mask(entry->subnet) & ip) == entry->ip) {
 
             /* Current match is stronger */
-            if (match != NULL && match->subnet > entry->subnet) {
+            if (current_best != NULL && current_best->subnet > entry->subnet) {
                 continue;
             }
 
-            match = entry;
+            current_best = entry;
         }
     }
+    /* Saves the result of match to be used externally */
+    *match = current_best;
 
-    if (match == NULL) {
+    if (current_best == NULL) {
         /* No route found */
         *interface = ROUTING_OUT_NONE;
-    } else if (match->interface == ROUTING_OUT_SELF) {
+    } else if (current_best->interface == ROUTING_OUT_SELF) {
         /* Route internally */
         *interface = ROUTING_OUT_SELF;
-    } else if (match->interface == ROUTING_OUT_EXTERNAL && match->next_hop == FW_ROUTING_NONEXTHOP) {
+    } else if (current_best->interface == ROUTING_OUT_EXTERNAL && current_best->next_hop == FW_ROUTING_NONEXTHOP) {
         *next_hop = ip;
         *interface = ROUTING_OUT_EXTERNAL;
-    } else if (match->interface == ROUTING_OUT_EXTERNAL && match->next_hop != FW_ROUTING_NONEXTHOP) {
+    } else if (current_best->interface == ROUTING_OUT_EXTERNAL && current_best->next_hop != FW_ROUTING_NONEXTHOP) {
         num_calls++;
         if (num_calls == FW_ROUTING_MAX_RECURSION) {
             /* Find route has hit recursive call limit, ip unreachable. */
             *interface = ROUTING_OUT_NONE;
             return ROUTING_ERR_OKAY;
         }
-        fw_routing_err_t err = fw_routing_find_route(table, match->next_hop, next_hop, interface, num_calls);
+        fw_routing_err_t err = fw_routing_find_route(table, current_best->next_hop, next_hop, interface, num_calls, match);
         return err;
     }
 

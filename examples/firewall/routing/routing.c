@@ -60,6 +60,12 @@ static bool returned; /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp; /* Arp request has been enqueued */
 static bool notify_icmp; /* Request has been enqueued to ICMP module */
 
+/* Masks for checking whether it is a broadcast address or not */
+#define MULTICAST_IP_MASK 0xf0000000
+#define MULTICAST_IP_ADDR 0xe0000000
+#define BROADCAST_IP_ADDR 0xffffffff
+const uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
 static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
@@ -196,11 +202,46 @@ static void route(void)
                             buffer.io_or_offset / NET_BUFFER_SIZE);
             }
 
+            /**
+             * Broadcast traffic should not be transmitted across subnets or
+             * retransmitted, thus it is explicitly dropped. Multicast traffic
+             * is not currently handled by the firewall.
+             */
+            if (ip_hdr->dst_ip == BROADCAST_IP_ADDR ||
+                !memcmp(eth_hdr->ethdst_addr, broadcast_mac_addr, ETH_HWADDR_LEN) ||
+                (ip_hdr->dst_ip & MULTICAST_IP_MASK) == MULTICAST_IP_ADDR) {
+
+                if (FW_DEBUG_OUTPUT) {
+                    sddf_printf("%sRouter received a broadcast MAC or multicast IP packet, dropping!\n",
+                                fw_frmt_str[router_config.interface]);
+                }
+
+                err = fw_enqueue(&rx_free, &buffer);
+                assert(!err);
+                returned = true;
+                continue;
+            }
+
             /* Find the next hop address. */
             uint32_t next_hop;
             fw_routing_interfaces_t interface;
-            fw_routing_err_t fw_err = fw_routing_find_route(routing_table, ip_hdr->dst_ip, &next_hop, &interface, 0);
+            fw_routing_entry_t *match = NULL;
+            fw_routing_err_t fw_err = fw_routing_find_route(routing_table, ip_hdr->dst_ip, &next_hop, &interface, 0, &match);
             assert(fw_err == ROUTING_ERR_OKAY);
+
+            if (interface == ROUTING_OUT_EXTERNAL && (~subnet_mask(match->subnet) | match->ip) == ip_hdr->dst_ip) {
+                /* Checks if destination IP address is a subnet broadcast, we do not transmit broadcast traffic across subnets */
+
+                if (FW_DEBUG_OUTPUT) {
+                    sddf_printf("%sRouter received a subnet broadcast IP packet, dropping!\n",
+                                fw_frmt_str[router_config.interface]);
+                }
+
+                err = fw_enqueue(&rx_free, &buffer);
+                assert(!err);
+                returned = true;
+                continue;
+            }
 
             if (FW_DEBUG_OUTPUT && interface != ROUTING_OUT_NONE) {
                 sddf_printf("%sRouter converted ip %s to next hop ip %s out interface %u\n",
