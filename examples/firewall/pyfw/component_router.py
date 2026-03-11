@@ -1,167 +1,156 @@
 # Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
 
-from typing import List, Optional
-
 from sdfgen import SystemDescription
-
 from pyfw.component_base import Component
 from pyfw.config_structs import (
-    FwArpConnection,
     FwConnectionResource,
     FwRouterConfig,
     FwRouterInterface,
     FwRoutingEntry,
     FwWebserverRouterConfig,
-    RegionResource,
 )
+from pyfw.constants import (
+    NetworkInterface,
+    interfaces,
+    arp_packet_queue_buffer,
+    arp_packet_queue_region,
+    arp_cache_buffer,
+    routing_table_buffer,
+    routing_table_region,
+    dma_buffer_queue,
+    dma_buffer_queue_region,
+)
+import pyfw.constants
+from pyfw.specs import FirewallMemoryRegion
 
+SDF_Channel = SystemDescription.Channel
 
-class RouterInterface:
-    def __init__(self) -> None:
-        self.rx_free: Optional[FwConnectionResource] = None
-        self.tx_active: Optional[FwConnectionResource] = None
-        self.data: Optional[RegionResource] = None
-        self.arp_queue: Optional[FwArpConnection] = None
-        self.arp_cache: Optional[RegionResource] = None
-        self.arp_cache_capacity = 0
-        self.filters: List[FwConnectionResource] = []
-        self.mac_addr: Optional[List[int]] = None
-        self.ip = 0
-        self.subnet = 0
-
-    def set_rx_free(self, queue: RegionResource, capacity: int, ch: int) -> None:
-        self.rx_free = FwConnectionResource(queue=queue, capacity=capacity, ch=ch)
-
-    def set_tx_active(self, queue: RegionResource, capacity: int, ch: int) -> None:
-        self.tx_active = FwConnectionResource(queue=queue, capacity=capacity, ch=ch)
-
-    def set_data(self, resource: RegionResource) -> None:
-        self.data = resource
-
-    def set_arp_queue(
-        self,
-        request: RegionResource,
-        response: RegionResource,
-        capacity: int,
-        ch: int,
-    ) -> None:
-        self.arp_queue = FwArpConnection(
-            request=request,
-            response=response,
-            capacity=capacity,
-            ch=ch,
+# TODO: Should probably remove this class and use the config structs class directly...
+class RouterInterface(FwRouterInterface):
+    """Per-interface router configuration."""
+    def __init__(self, net_interface: NetworkInterface) -> None:
+        # Initialise router interface config class
+        super().__init__(
+            net_interface.mac_list,
+            net_interface.ip_int,
+            net_interface.subnet_bits,
+            None,
+            None,
+            None,
+            None,
+            None,
+            arp_cache_buffer.capacity,
+            [],
         )
 
-    def set_arp_cache(self, resource: RegionResource, capacity: int) -> None:
-        self.arp_cache = resource
-        self.arp_cache_capacity = capacity
-
-    def set_network_info(self, mac_addr: List[int], ip: int, subnet: int) -> None:
-        self.mac_addr = mac_addr
-        self.ip = ip
-        self.subnet = subnet
-
-    def add_filter(self, queue: RegionResource, capacity: int, ch: int) -> None:
-        self.filters.append(FwConnectionResource(queue=queue, capacity=capacity, ch=ch))
-
-    def to_struct(self) -> FwRouterInterface:
-        assert self.rx_free is not None
-        assert self.tx_active is not None
-        assert self.data is not None
-        assert self.arp_queue is not None
-        assert self.arp_cache is not None
-        assert self.mac_addr is not None
-        assert self.arp_cache_capacity > 0
-        assert len(self.filters) > 0
-        assert len(self.mac_addr) > 0
-        assert self.ip != 0
-        assert self.subnet != 0
-        return FwRouterInterface(
-            rx_free=self.rx_free,
-            tx_active=self.tx_active,
-            data=self.data,
-            arp_queue=self.arp_queue,
-            arp_cache=self.arp_cache,
-            arp_cache_capacity=self.arp_cache_capacity,
-            filters=self.filters,
-            mac_addr=self.mac_addr,
-            ip=self.ip,
-            subnet=self.subnet,
-        )
-
-
-class Router(Component):
+class Router(Component, FwRouterConfig):
     def __init__(
         self,
-        sdf: SystemDescription,
         priority: int = 97,
         budget: int = 20000,
     ) -> None:
-        super().__init__("routing", "routing.elf", sdf, priority, budget=budget)
-        self._interfaces: List[RouterInterface] = []
-        self._packet_queue: List[RegionResource] = []
-        self._packet_waiting_capacity: Optional[int] = None
+        # Initialise base component class
+        super().__init__(
+            "routing",
+            "routing.elf",
+            priority,
+            budget
+        )
 
-        self._webserver_routing_ch: Optional[int] = None
-        self._webserver_routing_table: Optional[RegionResource] = None
-        self._webserver_routing_table_capacity = 0
-        self._webserver_rx_conn: Optional[FwConnectionResource] = None
+        # Create the routing table
+        self._routing_table_mr = FirewallMemoryRegion(
+            "routing_table_" + self.name,
+            routing_table_region.region_size,
+        )
 
-        self._initial_routes: List[FwRoutingEntry] = []
-        self._icmp_conn: Optional[FwConnectionResource] = None
+        # Create per-interface resources
+        self._interfaces = []
+        self._packet_queue = []
+        self._initial_routes = []
+        for iface in interfaces:
 
-    def create_interface(self, interface_index: int) -> RouterInterface:
-        assert len(self._interfaces) == interface_index
-        ri = RouterInterface()
-        self._interfaces.append(ri)
-        return ri
+            self._interfaces.append(RouterInterface(iface))
 
-    def add_packet_queue(self, resource: RegionResource, capacity: int, interface_index: int) -> None:
-        assert len(self._packet_queue) == interface_index
-        self._packet_queue.append(resource)
-        assert self._packet_waiting_capacity is None or self._packet_waiting_capacity == capacity
-        self._packet_waiting_capacity = capacity
+            # Create packet waiting memory pools
+            packet_waiting_mr = FirewallMemoryRegion(
+                "arp_packet_queue_" + self.name + f"{iface.index}",
+                arp_packet_queue_region.region_size,
+            )
 
-    def set_webserver_config(
+            self._packet_queue.append(packet_waiting_mr.map(self.pd, "rw"))
+
+            # Create a direct route for interface subnets
+            self._initial_routes.append(FwRoutingEntry(
+                iface.ip_int,
+                iface.subnet_bits,
+                iface.index,
+                0
+            ))
+
+            # TODO: Append additional initial routes which can be set in constants.py here
+
+        # Initialise Router config class
+        FwRouterConfig.__init__(
+            self,
+            self._interfaces,
+            # TODO: Wanted one big region here, split inside the code... if we dont do this, then it should be inside the per-interface config
+            self._packet_queue,
+            arp_packet_queue_buffer.capacity,
+            FwWebserverRouterConfig(
+                None,
+                self._routing_table_mr.map(self.pd, "rw"),
+                routing_table_buffer.capacity,
+                None),
+            self._initial_routes,
+            None,
+        )
+
+    def connect_webserver(
         self,
-        routing_ch: int,
-        routing_table: RegionResource,
-        routing_table_capacity: int,
-    ) -> None:
-        self._webserver_routing_ch = routing_ch
-        self._webserver_routing_table = routing_table
-        self._webserver_routing_table_capacity = routing_table_capacity
+        webserver: Component
+    ) -> FwWebserverRouterConfig:
 
-    def set_webserver_rx(self, queue: RegionResource, capacity: int, ch: int) -> None:
-        self._webserver_rx_conn = FwConnectionResource(queue=queue, capacity=capacity, ch=ch)
+        # Webserver needs read-only access to routing table
+        webserver_config = FwWebserverRouterConfig(
+            None,
+            self._routing_table_mr.map(webserver.pd, "r"),
+            routing_table_buffer.capacity,
+            None)
 
-    def set_icmp_connection(self, queue: RegionResource, capacity: int, ch: int) -> None:
-        self._icmp_conn = FwConnectionResource(queue=queue, capacity=capacity, ch=ch)
+        # Router transmits to the webserver
+        queue = FirewallMemoryRegion(
+            "fw_queue_" + self.name + "_" + webserver.name,
+            dma_buffer_queue_region.region_size,
+        )
 
-    def add_initial_route(self, ip: int, subnet: int, interface: int, next_hop: int) -> None:
-        self._initial_routes.append(FwRoutingEntry(ip,subnet,interface,next_hop))
+        # Create channel for notifying upon transmitting packets
+        ch = SDF_Channel(self.pd, webserver.pd)
+        pyfw.constants.sdf.add_channel(ch)
+
+        self.webserver.rx_active = FwConnectionResource(
+            queue.map(self.pd, "rw"),
+            dma_buffer_queue.capacity,
+            ch.pd_a_id,
+        )
+
+        webserver_config.rx_active = FwConnectionResource(
+            queue.map(webserver.pd, "rw"),
+            dma_buffer_queue.capacity,
+            ch.pd_b_id,
+        )
+
+        # Router needs chanel to webserver for routing table updates
+        update_ch = SDF_Channel(self.pd, webserver.pd, pp_b=True)
+        pyfw.constants.sdf.add_channel(update_ch)
+
+        self.webserver.routing_ch = update_ch.pd_a_id
+        webserver_config.routing_ch = update_ch.pd_b_id
+
+        return webserver_config
+
 
     def finalize_config(self) -> FwRouterConfig:
-        assert len(self._packet_queue) > 0
-        assert self._packet_waiting_capacity is not None
-        assert self._webserver_routing_ch is not None
-        assert self._webserver_routing_table is not None
-        assert self._webserver_routing_table_capacity > 0
-        assert self._webserver_rx_conn is not None
-        assert self._icmp_conn is not None
-        assert len(self._interfaces) >= 2
-        assert self._initial_routes is not None
-        self.config = FwRouterConfig(
-            interfaces=[ri.to_struct() for ri in self._interfaces],
-            packet_queue=self._packet_queue,
-            packet_queue_capacity=self._packet_waiting_capacity,
-            webserver=FwWebserverRouterConfig(
-                routing_ch=self._webserver_routing_ch,
-                routing_table=self._webserver_routing_table,
-                routing_table_capacity=self._webserver_routing_table_capacity,
-                rx_active=self._webserver_rx_conn,
-            ),
-            initial_routes=self._initial_routes,
-            icmp_module=self._icmp_conn,
-        )
-        return self.config
+        # TODO: Finish checking assertions
+        assert len(self.packet_queue) > 0
+        assert self.packet_queue_capacity is not None
+        return self

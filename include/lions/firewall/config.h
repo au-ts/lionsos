@@ -144,7 +144,7 @@ typedef struct fw_filter_config {
     fw_connection_resource_t router;
     region_resource_t internal_instances;
     region_resource_t external_instances[FW_MAX_INTERFACES];
-    uint8_t num_interfaces;
+    uint8_t num_external_instances;
     uint16_t instances_capacity;
     fw_webserver_filter_config_t webserver;
     region_resource_t rule_id_bitmap;
@@ -159,7 +159,7 @@ typedef struct fw_webserver_interface_config {
     char name[FW_MAX_INTERFACE_NAME_LEN + 1];
     fw_webserver_filter_config_t filters[FW_MAX_FILTERS];
     uint8_t num_filters;
-    device_region_resource_t data;
+    region_resource_t data;
     fw_connection_resource_t rx_free;
 } fw_webserver_interface_config_t;
 

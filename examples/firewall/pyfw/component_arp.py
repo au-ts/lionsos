@@ -1,9 +1,6 @@
 # Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
 
-from typing import List, Optional
-
 from sdfgen import SystemDescription
-
 from pyfw.component_base import Component
 from pyfw.config_structs import (
     FwArpConnection,
@@ -11,89 +8,122 @@ from pyfw.config_structs import (
     FwArpResponderConfig,
     RegionResource,
 )
+from pyfw.constants import (
+    NetworkInterface,
+    arp_cache_buffer,
+    arp_cache_region,
+    arp_queue_buffer,
+    arp_queue_region,
+)
+import pyfw.constants
+from pyfw.specs import FirewallMemoryRegion
 
+SDF_Channel = SystemDescription.Channel
 
-class ArpRequester(Component):
+class ArpRequester(Component, FwArpRequesterConfig):
     def __init__(
         self,
-        iface_index: int,
-        sdf: SystemDescription,
-        mac: List[int],
-        ip: int,
+        net_interface: NetworkInterface,
         priority: int,
         budget: int = 20000,
     ) -> None:
+        # Initialise base component class
         super().__init__(
-            f"arp_requester{iface_index}",
-            f"arp_requester{iface_index}.elf",
-            sdf,
+            f"arp_requester{net_interface.index}",
+            f"arp_requester{net_interface.index}.elf",
             priority,
-            budget=budget,
+            budget,
         )
-        self.iface_index = iface_index
-        self.mac = mac
-        self.ip = ip
-        self._arp_clients: List[FwArpConnection] = []
-        self._arp_cache: Optional[RegionResource] = None
-        self._arp_cache_capacity = 0
 
+        # Create an ARP entry cache
+        self._arp_cache_mr = FirewallMemoryRegion(
+            "arp_cache_" + self.name,
+            arp_cache_region.region_size,
+        )
+
+        # Initialise ARP requester config class
+        FwArpRequesterConfig.__init__(
+            self,
+            net_interface.index,
+            net_interface.mac_list,
+            net_interface.ip_int,
+            [],
+            self._arp_cache_mr.map(self.pd, "rw"),
+            arp_cache_buffer.capacity,
+        )
+
+
+    # Add a client to the ARP requester - allows the client to make ARP requests
+    # and receive responses. Returns client ARP connection.
     def add_arp_client(
         self,
-        request: RegionResource,
-        response: RegionResource,
-        capacity: int,
-        ch: int,
-    ) -> None:
-        self._arp_clients.append(
-            FwArpConnection(request=request, response=response, capacity=capacity, ch=ch)
+        client: Component,
+    ) -> FwArpConnection:
+
+        # Create and map the ARP request queue memory region
+        arp_req_mr = FirewallMemoryRegion(
+            "fw_req_queue_" + client.name + "_" + self.name,
+            arp_queue_region.region_size,
+        )
+        client_req_region = arp_req_mr.map(client.pd, "rw")
+        arp_req_region = arp_req_mr.map(self.pd, "rw")
+
+        # Create and map the ARP response queue memory region
+        arp_res_mr = FirewallMemoryRegion(
+            "fw_res_queue_" + client.name + "_" + self.name,
+            arp_queue_region.region_size,
+        )
+        client_res_region = arp_res_mr.map(client.pd, "rw")
+        arp_res_region = arp_res_mr.map(self.pd, "rw")
+
+        ch = SDF_Channel(client.pd, self.pd)
+        pyfw.constants.sdf.add_channel(ch)
+
+        self.arp_clients.append(
+            FwArpConnection(request=arp_req_region, response=arp_res_region,
+                                   capacity=arp_queue_buffer.capacity, ch=ch.pd_b_id)
         )
 
-    def set_cache(self, resource: RegionResource, capacity: int) -> None:
-        self._arp_cache = resource
-        self._arp_cache_capacity = capacity
+        return FwArpConnection(request=client_req_region, response=client_res_region,
+                               capacity=arp_queue_buffer.capacity, ch=ch.pd_a_id)
+
+    # Maps the ARP entry cache read-only into another PD
+    def share_cache(self, client: Component) -> RegionResource:
+        client_cache_region = self._arp_cache_mr.map(client.pd, "r")
+        return client_cache_region
 
     def finalize_config(self) -> FwArpRequesterConfig:
-        assert self._arp_cache is not None
-        assert len(self._arp_clients) > 0
-        assert self._arp_cache_capacity > 0
-        self.config = FwArpRequesterConfig(
-            interface=self.iface_index,
-            mac_addr=self.mac,
-            ip=self.ip,
-            arp_clients=self._arp_clients,
-            arp_cache=self._arp_cache,
-            arp_cache_capacity=self._arp_cache_capacity,
-        )
-        return self.config
+        # TODO: Finish checking assertions
+        assert self.arp_cache is not None
+        assert self.arp_cache_capacity > 0
+        assert len(self.arp_clients) > 0
+        return self
 
-
-class ArpResponder(Component):
+class ArpResponder(Component, FwArpResponderConfig):
     def __init__(
         self,
-        iface_index: int,
-        sdf: SystemDescription,
-        mac: List[int],
-        ip: int,
+        net_interface: NetworkInterface,
         priority: int,
         budget: int = 20000,
     ) -> None:
+        # Initialise base component class
         super().__init__(
-            f"arp_responder{iface_index}",
-            f"arp_responder{iface_index}.elf",
-            sdf,
+            f"arp_responder{net_interface.index}",
+            f"arp_responder{net_interface.index}.elf",
             priority,
-            budget=budget,
+            budget,
         )
-        self.iface_index = iface_index
-        self.mac = mac
-        self.ip = ip
+
+        # Initialise ARP requester config class
+        FwArpResponderConfig.__init__(
+            self,
+            net_interface.index,
+            net_interface.mac_list,
+            net_interface.ip_int,
+        )
 
     def finalize_config(self) -> FwArpResponderConfig:
-        assert len(self.mac) != 0
+        # TODO: Finish checking assertions
+        assert len(self.mac_addr) != 0
         assert self.ip != 0
-        self.config = FwArpResponderConfig(
-            interface=self.iface_index,
-            mac_addr=self.mac,
-            ip=self.ip,
-        )
-        return self.config
+        return self

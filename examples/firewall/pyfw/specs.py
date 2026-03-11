@@ -1,18 +1,18 @@
 # Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
-from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Optional
 from sdfgen import SystemDescription, Sddf, DeviceTree
 from pyfw.config_structs import (
     RegionResource,
     DeviceRegionResource,
 )
+import pyfw.constants
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Channel = SystemDescription.Channel
 
-
+# TODO: IS there any reason to define these separately, not within the FirewallMemoryRegion class methods?
 def fw_map(pd, mr, perms):
     """Map a memory region into a protection domain, return the Mapping."""
     pd_map = Map(mr, pd.get_map_vaddr(mr), perms=perms)
@@ -33,10 +33,11 @@ def fw_device_resource(pd_map, mr):
 class FirewallMemoryRegion:
     """Unified memory region: create MR, add to SDF, map into PDs."""
 
-    def __init__(self, sdf, name, size, physical=False):
-        self.mr = MemoryRegion(sdf, name, size, physical=physical)
+    def __init__(self, name, size, physical=False):
+        self.mr = MemoryRegion(pyfw.constants.sdf, name, size, physical=physical)
         self.size = size
-        sdf.add_mr(self.mr)
+        self.physical = physical
+        pyfw.constants.sdf.add_mr(self.mr)
 
     def map(self, pd, perms="rw"):
         """Map the MR into pd with given perms. Returns RegionResource."""
@@ -45,6 +46,7 @@ class FirewallMemoryRegion:
 
     def map_device(self, pd, perms="rw"):
         """Map the MR into pd with given perms. Returns DeviceRegionResource."""
+        assert self.physical
         pd_map = fw_map(pd, self.mr, perms)
         return fw_device_resource(pd_map, self.mr)
 
@@ -54,7 +56,6 @@ class TrackedNet:
 
     def __init__(
         self,
-        sdf_obj: SystemDescription,
         ethernet_node: DeviceTree.Node,
         driver: ProtectionDomain,
         virt_tx: ProtectionDomain,
@@ -64,7 +65,7 @@ class TrackedNet:
         interface_index: int,
     ):
         self._net = Sddf.Net(
-            sdf_obj, ethernet_node, driver, virt_tx, virt_rx, rx_dma_region
+            pyfw.constants.sdf, ethernet_node, driver, virt_tx, virt_rx, rx_dma_region
         )
         self._driver = driver
         self._virt_tx = virt_tx
