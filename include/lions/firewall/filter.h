@@ -316,20 +316,21 @@ static inline fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state, uint3
  * @param instances_capacity capacity of instance tables.
  * @param initial_rules array of initial rules to insert.
  * @param num_rules number of initial rules.
+ * @param num_external_instances number of external instances.
  */
 static inline void fw_filter_state_init(fw_filter_state_t *state, void *rules, void *rule_id_bitmap,
                                         uint16_t rules_capacity, void *internal_instances,
                                         region_resource_t *external_instances, uint16_t instances_capacity,
-                                        fw_rule_t *initial_rules, uint8_t num_rules, uint8_t num_interfaces)
+                                        fw_rule_t *initial_rules, uint8_t num_rules, uint8_t num_external_instances)
 {
     state->rule_table = (fw_rule_table_t *)rules;
     state->rules_capacity = rules_capacity;
     state->rule_id_bitmap = (fw_rule_id_bitmap_t *)rule_id_bitmap;
     state->instances_capacity = instances_capacity;
     state->internal_instances_table = (fw_instances_table_t *)internal_instances;
-    state->num_interfaces = num_interfaces;
+    state->num_interfaces = num_external_instances;
     /* Populate the array of possible external instance tables */
-    for (size_t i = 0; i < num_interfaces; i++) {
+    for (size_t i = 0; i < num_external_instances; i++) {
         state->external_instances_table[i] = (fw_instances_table_t *)external_instances[i].vaddr;
     }
 

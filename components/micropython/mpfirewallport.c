@@ -189,7 +189,7 @@ void mpfirewall_process_rx(void)
 
         struct pbuf *p = pbuf_alloced_custom(
             PBUF_RAW, buffer.len, PBUF_REF, &pbuf->custom,
-            (void *)(buffer.offset + fw_config.interfaces[buffer.interface].data.region.vaddr), NET_BUFFER_SIZE);
+            (void *)(buffer.offset + fw_config.interfaces[buffer.interface].data.vaddr), NET_BUFFER_SIZE);
 
         net_sddf_err_t net_err = sddf_lwip_input_pbuf(p);
         if (net_err != SDDF_LWIP_ERR_OK) {
