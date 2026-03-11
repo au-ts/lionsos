@@ -18,6 +18,7 @@ export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD ?= qemu_virt_aarch64
 
+
 IMAGE_FILE := $(BUILD_DIR)/wasm_test.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
@@ -30,7 +31,7 @@ ${BUILD_DIR}/Makefile: wasm_test.mk Makefile
 	mkdir -p ${BUILD_DIR}
 	echo "export LIONSOS ?= ${LIONSOS}" > $@
 	echo "export WASM_TEST_DIR ?= ${WASM_TEST_DIR}" >> $@
-	echo "export WASI_SDK = ${WAS_SDK}" >> $@
+	echo "export WASI_SDK = ${WASI_SDK}" >> $@
 	echo "export BUILD_DIR := $(abspath .)" >> $@
 	echo "export MICROKIT_BOARD ?= ${MICROKIT_BOARD}" >> $@
 	echo "export MICROKIT_SDK ?= ${MICROKIT_SDK}" >> $@
