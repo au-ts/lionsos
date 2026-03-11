@@ -63,40 +63,16 @@ static bool ping_response_enabled = false; /* Whether to reply to ICMP echo requ
 
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
-static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
+static bool enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
     uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
     bool is_host = ((ip_hdr->dst_ip & subnet_mask(router_config.subnet)) !=
         (router_config.ip & subnet_mask(router_config.subnet)));
-
     uint8_t code = is_host ? ICMP_DEST_HOST_UNREACHABLE : ICMP_DEST_NET_UNREACHABLE;
-
-    int err = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, code, pkt_vaddr);
-    if (!err) {
-        notify_icmp = true;
-    }
-
-    return err;
-}
-
-static void enqueue_icmp_ping(net_buff_desc_t buffer)
-{
-    uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
-
-    int err = icmp_enqueue_echo_reply(&icmp_queue, pkt_vaddr);
-    if (!err) {
-        notify_icmp = true;
-    }
-}
-
-static void enqueue_icmp_timeout(net_buff_desc_t buffer) {
-    uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
-
-    int err = icmp_enqueue_error(&icmp_queue, ICMP_TTL_EXCEED, ICMP_TIME_EXCEEDED_TTL, pkt_vaddr);
-    if (!err) {
-        notify_icmp = true;
-    }
+    bool enqueued = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, code, pkt_vaddr);
+    notify_icmp |= enqueued;
+    return enqueued;
 }
 
 /* Determine if the routing interface matches the interface receiving the packet*/
@@ -168,8 +144,8 @@ static void process_arp_waiting(void)
             /* Invalid response, drop packet associated with the IP address */
             pkt_waiting_node_t *node = root;
             for (uint16_t i = 0; i < root->num_children + 1; i++) {
-                err = enqueue_icmp_unreachable(node->buffer);
-                if (FW_DEBUG_OUTPUT && err) {
+                bool icmp_enqueued = enqueue_icmp_unreachable(node->buffer);
+                if (FW_DEBUG_OUTPUT && !icmp_enqueued) {
                     sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP unreachable!\n",
                         fw_frmt_str[router_config.interface]);
                 }
@@ -218,7 +194,7 @@ static void route(void)
 
                 icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
                 if (icmp_hdr->type == ICMP_ECHO_REQ) {
-                    enqueue_icmp_ping(buffer);
+                    notify_icmp |= icmp_enqueue_echo_reply(&icmp_queue, data_vaddr + buffer.io_or_offset);
                     /* Return the original buffer */
                     err = fw_enqueue(&rx_free, &buffer);
                     assert(!err);
@@ -235,7 +211,7 @@ static void route(void)
              * handled by the protocol virtualiser.
              */
             if (eth_hdr->ethtype != htons(ETH_TYPE_IP) || ip_hdr->ttl <= 1) {
-                enqueue_icmp_timeout(buffer);
+                notify_icmp |= icmp_enqueue_error(&icmp_queue, ICMP_TTL_EXCEED, ICMP_TIME_EXCEEDED_TTL, data_vaddr + buffer.io_or_offset);
                 err = fw_enqueue(&rx_free, &buffer);
                 assert(!err);
                 returned = true;
@@ -324,8 +300,7 @@ static void route(void)
                 (arp == NULL && fw_queue_full(&arp_req_queue))) {
 
                 if (arp != NULL && arp->state == ARP_STATE_UNREACHABLE) {
-                    int icmp_err = enqueue_icmp_unreachable(buffer);
-                    if (icmp_err) {
+                    if (!enqueue_icmp_unreachable(buffer)) {
                         sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP unreachable!\n",
                             fw_frmt_str[router_config.interface]);
                     }
@@ -498,13 +473,9 @@ void notified(microkit_channel ch)
          * This is the channel between the ARP component and the
          * routing component
          */
-        sddf_printf("%sROUTING LOG: Notified by ARP module\n",
-            fw_frmt_str[router_config.interface]);
         process_arp_waiting();
     } else {
         /* Router has been notified by a filter */
-        sddf_printf("%sROUTING LOG: Notified by filter module\n",
-            fw_frmt_str[router_config.interface]);
         route();
     }
 

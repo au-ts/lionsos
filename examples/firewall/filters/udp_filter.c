@@ -34,16 +34,12 @@ fw_filter_state_t filter_state;
 /* ICMP request queue to send unreachable messages to ICMP module */
 static bool notify_icmp;
 
-static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
+static bool enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
     uintptr_t pkt_vaddr = (uintptr_t)(net_config.rx_data.vaddr + buffer.io_or_offset);
-
-    int err = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, ICMP_DEST_PORT_UNREACHABLE, pkt_vaddr);
-    if (!err) {
-        notify_icmp = true;
-    }
-
-    return err;
+    bool enqueued = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, ICMP_DEST_PORT_UNREACHABLE, pkt_vaddr);
+    notify_icmp |= enqueued;
+    return enqueued;
 }
 
 static void filter(void)
@@ -64,9 +60,10 @@ static void filter(void)
             uint16_t rule_id = 0;
             fw_action_t action = fw_filter_find_action(&filter_state, ip_hdr->src_ip, udp_hdr->src_port,
                                                                    ip_hdr->dst_ip, udp_hdr->dst_port, &rule_id);
-
-            /* Add an established connection in shared memory for corresponding filter */
-            if (action == FILTER_ACT_CONNECT) {
+                                                       
+            switch (action) {
+            case FILTER_ACT_CONNECT:
+                /* Add an established connection in shared memory for corresponding filter */
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_hdr->src_ip, udp_hdr->src_port,
                                                                                 ip_hdr->dst_ip, udp_hdr->dst_port, rule_id);
 
@@ -82,11 +79,9 @@ static void filter(void)
                         fw_frmt_str[filter_config.interface], rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
                         ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port), fw_filter_err_str[fw_err]);
                 }
-            }
-
-            /* Transmit the packet to the routing component */
-            if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED || action == FILTER_ACT_ALLOW) {
-
+            case FILTER_ACT_ESTABLISHED:
+            case FILTER_ACT_ALLOW:
+                /* Transmit the packet to the routing component */
                 /* Reset the checksum as it's recalculated in hardware */
                 #ifdef NETWORK_HW_HAS_CHECKSUM
                 udp_hdr->check = 0;
@@ -108,22 +103,10 @@ static void filter(void)
                             ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
                     }
                 }
-            } else if (action == FILTER_ACT_DROP) {
-                /* Return the buffer to the rx virtualiser */
-                err = net_enqueue_free(&rx_queue, buffer);
-                assert(!err);
-                returned = true;
-
-                if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("%sUDP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[filter_config.interface], rule_id,
-                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
-                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
-                }
-            } else if (action == FILTER_ACT_REJECT) {
+                break;
+            case FILTER_ACT_REJECT:
                 /* Enqueue an ICMP port unreachable message */
-                err = enqueue_icmp_unreachable(buffer);
-                assert(!err);
+                assert(enqueue_icmp_unreachable(buffer));
 
                 /* Return the buffer to the rx virtualiser */
                 err = net_enqueue_free(&rx_queue, buffer);
@@ -136,9 +119,23 @@ static void filter(void)
                         ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
                         ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
                 }
+            case FILTER_ACT_DROP:
+                /* Return the buffer to the rx virtualiser */
+                err = net_enqueue_free(&rx_queue, buffer);
+                assert(!err);
+                returned = true;
+
+                if (FW_DEBUG_OUTPUT) {
+                    sddf_printf("%sUDP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
+                        fw_frmt_str[filter_config.interface], rule_id,
+                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(udp_hdr->src_port),
+                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(udp_hdr->dst_port));
+                }
+                break;
+            default:
+                break;
             }
         }
-
         net_request_signal_active(&rx_queue);
         reprocess = false;
 
@@ -149,8 +146,6 @@ static void filter(void)
     }
 
     if (returned) {
-        sddf_printf("%sUDP filter returned packets to RX virtualiser\n The action is %s\n",
-            fw_frmt_str[filter_config.interface], fw_filter_action_str[filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action]);
         microkit_deferred_notify(net_config.rx.id);
     }
 
@@ -241,8 +236,8 @@ void notified(microkit_channel ch)
 
     if (notify_icmp) {
         if (FW_DEBUG_OUTPUT) {
-        sddf_printf("%sUDP filter notifying ICMP module on channel %u\n",
-            fw_frmt_str[filter_config.interface], filter_config.icmp_module.ch);
+            sddf_printf("%sUDP filter notifying ICMP module on channel %u\n",
+                fw_frmt_str[filter_config.interface], filter_config.icmp_module.ch);
         }
         notify_icmp = false;
         microkit_notify(filter_config.icmp_module.ch);

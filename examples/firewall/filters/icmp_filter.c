@@ -34,16 +34,12 @@ fw_filter_state_t filter_state;
 /* ICMP request queue to send unreachable messages to ICMP module */
 static bool notify_icmp;
 
-static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
+static bool enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
     uintptr_t pkt_vaddr = (uintptr_t)(net_config.rx_data.vaddr + buffer.io_or_offset);
-
-    int err = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, ICMP_DEST_PORT_UNREACHABLE, pkt_vaddr);
-    if (!err) {
-        notify_icmp = true;
-    }
-
-    return err;
+    bool enqueued = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, ICMP_DEST_PORT_UNREACHABLE, pkt_vaddr);
+    notify_icmp |= enqueued;
+    return enqueued;
 }
 
 static void filter(void)
@@ -131,8 +127,7 @@ static void filter(void)
                     returned = true;
                 } else {
                     /* Enqueue an ICMP port unreachable message */
-                    err = enqueue_icmp_unreachable(buffer);
-                    assert(!err);
+                    enqueue_icmp_unreachable(buffer);
 
                     /* Return the buffer to the rx virtualiser */
                     err = net_enqueue_free(&rx_queue, buffer);

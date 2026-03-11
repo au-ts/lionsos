@@ -94,7 +94,6 @@ typedef struct __attribute__((__packed__)) icmp_dest {
 } icmp_dest_t;
 
 #define ICMP_DEST_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_dest_t))
-#define ICMP_DEST_OFFSET ICMP_PAYLOAD_OFFSET
 
 /* ----------------- 5 - ICMP REDIRECT MSG ---------------------------*/
 typedef struct __attribute__((__packed__)) icmp_redirect {
@@ -107,7 +106,6 @@ typedef struct __attribute__((__packed__)) icmp_redirect {
 } icmp_redirect_t;
 
 #define ICMP_REDIRECT_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_redirect_t))
-#define ICMP_REDIRECT_OFFSET ICMP_PAYLOAD_OFFSET
 
 /* ----------------- 8 - Echo Request / 0 - Echo Reply ---------------------------*/
 typedef struct __attribute__((__packed__)) icmp_echo {
@@ -116,11 +114,11 @@ typedef struct __attribute__((__packed__)) icmp_echo {
     /* Sequence number */
     uint16_t seq;
     /* Payload data follows */
+    uint8_t data[FW_ICMP_ECHO_PAYLOAD_LEN];
 } icmp_echo_t;
 
 /* Total length of ICMP echo request/reply packet with maximum payload */
 #define ICMP_ECHO_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_echo_t) + FW_ICMP_ECHO_PAYLOAD_LEN)
-#define ICMP_ECHO_OFFSET ICMP_PAYLOAD_OFFSET
 
 /* ----------------- 11 - Time Exceeded ---------------------------*/
 typedef struct __attribute__((__packed__)) icmp_time_exceeded {
@@ -133,8 +131,6 @@ typedef struct __attribute__((__packed__)) icmp_time_exceeded {
 } icmp_time_exceeded_t;
 
 #define ICMP_TIME_EXCEEDED_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_time_exceeded_t))
-#define ICMP_TIME_EXCEEDED_OFFSET ICMP_PAYLOAD_OFFSET
-
 
 /* ----------------- Firewall Data Types (Internal Use) --------------------------- */
 
@@ -217,9 +213,9 @@ static inline bool icmp_is_error_message(uint8_t type)
  * @param code ICMP code (e.g., ICMP_DEST_PORT_UNREACHABLE).
  * @param pkt_vaddr Virtual address of the packet data.
  *
- * @return 0 on success, non-zero on failure.
+ * @return true on success, false if the queue is full.
  */
-static inline int icmp_enqueue_error(fw_queue_t *icmp_queue, uint8_t type, uint8_t code, uintptr_t pkt_vaddr)
+static inline bool icmp_enqueue_error(fw_queue_t *icmp_queue, uint8_t type, uint8_t code, uintptr_t pkt_vaddr)
 {
     icmp_req_t req = {0};
     req.type = type;
@@ -236,7 +232,7 @@ static inline int icmp_enqueue_error(fw_queue_t *icmp_queue, uint8_t type, uint8
     uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
     memcpy(req.dest.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
 
-    return fw_enqueue(icmp_queue, &req);
+    return fw_enqueue(icmp_queue, &req) == 0;
 }
 
 /**
@@ -245,14 +241,14 @@ static inline int icmp_enqueue_error(fw_queue_t *icmp_queue, uint8_t type, uint8
  * @param icmp_queue Pointer to the ICMP queue to enqueue the request.
  * @param pkt_vaddr Virtual address of the packet data.
  *
- * @return 0 on success, non-zero on failure.
+ * @return true on success, false if the queue is full.
  */
-static inline int icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt_vaddr)
+static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt_vaddr)
 {
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
     /* Extract echo id and sequence from the ICMP echo header */
-    icmp_echo_t *echo_hdr = (icmp_echo_t *)(pkt_vaddr + ICMP_ECHO_OFFSET);
+    icmp_echo_t *echo_hdr = (icmp_echo_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET);
     uint16_t echo_id = ntohs(echo_hdr->id);
     uint16_t echo_seq = ntohs(echo_hdr->seq);
 
@@ -280,7 +276,7 @@ static inline int icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt_
     uint8_t *payload_data = (uint8_t *)(pkt_vaddr + ICMP_ECHO_OFFSET + sizeof(icmp_echo_t));
     memcpy(req.echo.data, payload_data, payload_len);
 
-    return fw_enqueue(icmp_queue, &req);
+    return fw_enqueue(icmp_queue, &req) == 0;
 }
 
 /**

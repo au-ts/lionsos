@@ -93,16 +93,14 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
             ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + icmp_total_len);
 
             /* Construct ICMP echo reply: 4 bytes (id + seq) */
-            icmp_echo_t *icmp_echo = (icmp_echo_t *)(pkt_vaddr + ICMP_ECHO_OFFSET);
+            icmp_echo_t *icmp_echo = (icmp_echo_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET);
 
             /* Set Echo-specific fields from the request */
             icmp_echo->id = htons(req->echo.echo_id);
             icmp_echo->seq = htons(req->echo.echo_seq);
 
             /* Copy the actual Echo payload data (the 'ping' data) */
-            uint8_t *echo_payload_dst = (uint8_t *)(icmp_echo + 1);
-            memcpy(echo_payload_dst, req->echo.data, req->echo.payload_len);
-
+            memcpy(icmp_echo->data, req->echo.data, req->echo.payload_len);
             break;
         }
 
@@ -114,7 +112,7 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
             ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_DEST_LEN);
 
             /* Construct ICMP destination unreachable packet */
-            icmp_dest_t *icmp_dest = (icmp_dest_t *)(pkt_vaddr + ICMP_DEST_OFFSET);
+            icmp_dest_t *icmp_dest = (icmp_dest_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET);
 
             /* Unused must be set to 0, as well as optional fields we are not currently using */
             icmp_dest->unused = 0;
@@ -135,7 +133,7 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
             ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_TIME_EXCEEDED_LEN);
 
             /* Construct ICMP time exceeded packet */
-            icmp_time_exceeded_t *icmp_time_exceeded = (icmp_time_exceeded_t *)(pkt_vaddr + ICMP_TIME_EXCEEDED_OFFSET);
+            icmp_time_exceeded_t *icmp_time_exceeded = (icmp_time_exceeded_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET);
 
             /* Unused must be set to 0 */
             icmp_time_exceeded->unused = 0;
@@ -154,7 +152,7 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
             ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_REDIRECT_LEN);
 
             /* Construct ICMP redirect packet */
-            icmp_redirect_t *icmp_redirect = (icmp_redirect_t *)(pkt_vaddr + ICMP_REDIRECT_OFFSET);
+            icmp_redirect_t *icmp_redirect = (icmp_redirect_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET);
 
             /* Set the gateway IP address*/
             icmp_redirect->gateway_ip = req->redirect.gateway_ip;
