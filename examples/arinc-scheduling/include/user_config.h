@@ -7,6 +7,10 @@
 // and will be patched into the scheduler at system build time
 
 typedef struct user_schedule {
+    // This hyper period is the time for one cycle of the schedule
+    // It must be greater than the total of timeslices, and any excess
+    // in this hyperperiod will be padded out automatically
+    uint64_t hyperperiod;
     uint64_t timeslices[MAX_PARTITIONS];
     // @kwinter: In the future, will also need to keep track of
     // all the PD's in a partition so that we can easily suspend them

@@ -88,7 +88,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     # These are the channels to the sPD of a partition
     part_ch = [0, 1, 2]
 
-    user_schedule = UserSchedule(part_timeslices, part_ch)
+    user_schedule = UserSchedule(4000000000, part_timeslices, part_ch)
 
     # @kwinter: For now make these all children of the scheduler.
     # Once microkit supports handing TCBs to different PD's we will
