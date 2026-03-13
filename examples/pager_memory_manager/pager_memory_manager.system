@@ -6,14 +6,12 @@
 -->
 
 <!-- TODOS:
-    - unbacked mappings
-    - blk 
-    - add example as child.
     - the code assumes that the index of pager is 0, memory manager is 1 and child is 2...
     - memory region is unbacked, that means that maybe the pager can't access the data in there either... hopefully not.
 
     blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
     blk_system.add_client(pager, partition=partition)
+
  -->
 <system>
     <memory_region name="heap1" size="0x80_000" backed="false"/>
