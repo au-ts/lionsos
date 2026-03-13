@@ -48,35 +48,33 @@ static void filter(void)
             fw_action_t action = fw_filter_find_action(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port, ip_hdr->dst_ip,
                                                        tcp_hdr->dst_port, &rule_id);
 
-            /* Add an established connection in shared memory for corresponding filter */
-            if (action == FILTER_ACT_CONNECT) {
+            switch (action) {
+            case FILTER_ACT_CONNECT: {
+                /* Add an established connection in shared memory for corresponding filter */
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port,
-                                                                ip_hdr->dst_ip, tcp_hdr->dst_port, rule_id);
+                                                                                ip_hdr->dst_ip, tcp_hdr->dst_port, rule_id);
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
-                    sddf_printf(
-                        "%sTCP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[filter_config.interface], rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                        htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                        htons(tcp_hdr->dst_port));
+                    sddf_printf("%sTCP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
+                        fw_frmt_str[filter_config.interface], rule_id,
+                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
+                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
-                    sddf_printf("%sTCP FILTER LOG: could not establish connection for rule %u: (ip %s, port %u) -> (ip "
-                                "%s, port %u): %s\n",
-                                fw_frmt_str[filter_config.interface], rule_id,
-                                ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                                ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port),
-                                fw_filter_err_str[fw_err]);
+                    sddf_printf("%sTCP FILTER LOG: could not establish connection for rule %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
+                        fw_frmt_str[filter_config.interface],
+                        rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
+                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port), fw_filter_err_str[fw_err]);
                 }
             }
-
-            /* Transmit the packet to the routing component */
-            if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED || action == FILTER_ACT_ALLOW) {
-                /* Reset the checksum as it's recalculated in hardware */
-#ifdef NETWORK_HW_HAS_CHECKSUM
+            case FILTER_ACT_ESTABLISHED:
+            case FILTER_ACT_ALLOW: {
+                /* Transmit the packet to the routing component */
+                /* Reset the checksum if it's recalculated in hardware */
+                #ifdef NETWORK_HW_HAS_CHECKSUM
                 tcp_hdr->check = 0;
-#endif
+                #endif
 
                 err = fw_enqueue(&router_queue, &buffer);
                 assert(!err);
@@ -85,18 +83,20 @@ static void filter(void)
                 if (FW_DEBUG_OUTPUT) {
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
                         sddf_printf("%sTCP filter transmitting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                                    fw_frmt_str[filter_config.interface], rule_id,
-                                    ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
+                            fw_frmt_str[filter_config.interface], rule_id,
+                            ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
+                            ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                     } else if (action == FILTER_ACT_ESTABLISHED) {
-                        sddf_printf(
-                            "%sTCP filter transmitting via external rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
+                        sddf_printf("%sTCP filter transmitting via external rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                             fw_frmt_str[filter_config.interface], rule_id,
                             ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
                             ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                     }
                 }
-            } else if (action == FILTER_ACT_DROP) {
+                break;
+            }
+            case FILTER_ACT_DROP:
+            default: {
                 /* Return the buffer to the rx virtualiser */
                 err = net_enqueue_free(&rx_queue, buffer);
                 assert(!err);
@@ -104,11 +104,12 @@ static void filter(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf("%sTCP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                                fw_frmt_str[filter_config.interface], rule_id,
-                                ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                                ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
+                        fw_frmt_str[filter_config.interface], rule_id,
+                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
+                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                 }
-            }
+                break;
+            }}
         }
 
         net_request_signal_active(&rx_queue);
@@ -156,6 +157,13 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         uint8_t dst_subnet = microkit_mr_get(FILTER_ARG_DST_SUBNET);
         bool src_port_any = microkit_mr_get(FILTER_ARG_SRC_ANY_PORT);
         bool dst_port_any = microkit_mr_get(FILTER_ARG_DST_ANY_PORT);
+
+        /* TCP filter does not support this action */
+        if (action == 0 || action > FW_FILTER_NUM_ACTIONS || !filter_config.webserver.actions[action - 1]) {
+            microkit_mr_set(FILTER_RET_ERR, FILTER_ERR_UNSUPPORTED_ACTION);
+            return microkit_msginfo_new(0, 1);
+        }
+
         uint16_t rule_id = 0;
         fw_filter_err_t err = fw_filter_add_rule(&filter_state, src_ip, src_port, dst_ip, dst_port, src_subnet,
                                                  dst_subnet, src_port_any, dst_port_any, action, &rule_id);

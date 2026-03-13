@@ -59,6 +59,7 @@ static bool tx_webserver; /* Packet has been transmitted to the webserver */
 static bool returned; /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp; /* Arp request has been enqueued */
 static bool notify_icmp; /* Request has been enqueued to ICMP module */
+static bool ping_response_enabled = false; /* Whether to reply to ICMP echo requests */
 
 /* Masks for checking whether it is a broadcast address or not */
 #define MULTICAST_IP_MASK 0xf0000000
@@ -68,30 +69,16 @@ const uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
-static int enqueue_icmp_unreachable(net_buff_desc_t buffer)
+static bool enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
-    icmp_req_t req = { 0 };
-    req.type = ICMP_DEST_UNREACHABLE;
-    req.code = ICMP_DEST_HOST_UNREACHABLE;
-
-    /* Copy ethernet header into ICMP request */
     uintptr_t pkt_vaddr = data_vaddr + buffer.io_or_offset;
-    memcpy(&req.eth_hdr, (void *)pkt_vaddr, ETH_HDR_LEN);
-
-    /* Copy IP header into ICMP request */
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
-    memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
-
-    /* Copy first bytes of data if applicable */
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
-    memcpy(req.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
-
-    int err = fw_enqueue(&icmp_queue, &req);
-    if (!err) {
-        notify_icmp = true;
-    }
-
-    return err;
+    bool is_host = ((ip_hdr->dst_ip & subnet_mask(router_config.subnet)) !=
+        (router_config.ip & subnet_mask(router_config.subnet)));
+    uint8_t code = is_host ? ICMP_DEST_HOST_UNREACHABLE : ICMP_DEST_NET_UNREACHABLE;
+    bool enqueued = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, code, pkt_vaddr);
+    notify_icmp |= enqueued;
+    return enqueued;
 }
 
 static void transmit_packet(net_buff_desc_t buffer, uint8_t *mac_addr)
@@ -145,8 +132,8 @@ static void process_arp_waiting(void)
             /* Invalid response, drop packet associated with the IP address */
             pkt_waiting_node_t *node = root;
             for (uint16_t i = 0; i < root->num_children + 1; i++) {
-                err = enqueue_icmp_unreachable(node->buffer);
-                if (FW_DEBUG_OUTPUT && err) {
+                bool icmp_enqueued = enqueue_icmp_unreachable(node->buffer);
+                if (FW_DEBUG_OUTPUT && !icmp_enqueued) {
                     sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP unreachable!\n",
                                  fw_frmt_str[router_config.interface]);
                 }
@@ -180,22 +167,6 @@ static void route(void)
             eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
             ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
-            /*
-             * Decrement the TTL field. If it reaches 0 protocol is
-             * that we drop the packet in this router.
-             *
-             * NOTE: We drop non-IPv4 packets. This case should be
-             * handled by the protocol virtualiser.
-             */
-            if (eth_hdr->ethtype != htons(ETH_TYPE_IP) || ip_hdr->ttl <= 1) {
-                err = fw_enqueue(&rx_free, &buffer);
-                assert(!err);
-                returned = true;
-                continue;
-            }
-
-            ip_hdr->ttl -= 1;
-
             if (FW_DEBUG_OUTPUT) {
                 sddf_printf("%sRouter received packet for ip %s with buffer number %lu\n",
                             fw_frmt_str[router_config.interface], ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
@@ -220,6 +191,30 @@ static void route(void)
                 assert(!err);
                 returned = true;
                 continue;
+            }
+
+            /* --- Handle ICMP echo request to firewall's own IP --- */
+            if (eth_hdr->ethtype == htons(ETH_TYPE_IP) &&
+                ip_hdr->protocol == IPV4_PROTO_ICMP &&
+                ip_hdr->dst_ip == router_config.in_ip) {
+
+                if (!ping_response_enabled) {
+                    /* Ping responses are disabled, return buffer */
+                    err = fw_enqueue(&rx_free, &buffer);
+                    assert(!err);
+                    returned = true;
+                    continue;
+                }
+
+                icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
+                if (icmp_hdr->type == ICMP_ECHO_REQ) {
+                    notify_icmp |= icmp_enqueue_echo_reply(&icmp_queue, data_vaddr + buffer.io_or_offset);
+                    /* Return the original buffer */
+                    err = fw_enqueue(&rx_free, &buffer);
+                    assert(!err);
+                    returned = true;
+                    continue;
+                }
             }
 
             /* Find the next hop address. */
@@ -249,21 +244,6 @@ static void route(void)
                             ipaddr_to_string(next_hop, ip_addr_buf1), interface);
             }
 
-            /* No route, drop packet  */
-            if (interface == ROUTING_OUT_NONE
-                || (router_config.interface == FW_EXTERNAL_INTERFACE_ID && interface == ROUTING_OUT_SELF)) {
-
-                if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("%sRouter found no route for ip %s, dropping packet\n",
-                                fw_frmt_str[router_config.interface], ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0));
-                }
-
-                err = fw_enqueue(&rx_free, &buffer);
-                assert(!err);
-                returned = true;
-                continue;
-            }
-
             /* Packet destined for webserver */
             if (router_config.interface == FW_INTERNAL_INTERFACE_ID && interface == ROUTING_OUT_SELF) {
                 tcp_hdr_t *tcp_pkt = (tcp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
@@ -288,6 +268,40 @@ static void route(void)
                 continue;
             }
 
+            /*
+             * Decrement the TTL field. If it reaches 0 protocol is
+             * that we drop the packet in this router.
+             *
+             * NOTE: We drop non-IPv4 packets. This case should be
+             * handled by the protocol virtualiser.
+             */
+            if (eth_hdr->ethtype != htons(ETH_TYPE_IP) || ip_hdr->ttl <= 1) {
+                notify_icmp |= icmp_enqueue_error(&icmp_queue, ICMP_TTL_EXCEED, ICMP_TIME_EXCEEDED_TTL, data_vaddr + buffer.io_or_offset);
+                err = fw_enqueue(&rx_free, &buffer);
+                assert(!err);
+                returned = true;
+                continue;
+            }
+
+            ip_hdr->ttl -= 1;
+
+            /* No route, drop packet  */
+            if (interface == ROUTING_OUT_NONE
+                || (router_config.interface == FW_EXTERNAL_INTERFACE_ID && interface == ROUTING_OUT_SELF)) {
+
+                if (FW_DEBUG_OUTPUT) {
+                    sddf_printf("%sRouter found no route for ip %s, dropping packet\n",
+                                fw_frmt_str[router_config.interface], ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0));
+                }
+
+                enqueue_icmp_unreachable(buffer);
+
+                err = fw_enqueue(&rx_free, &buffer);
+                assert(!err);
+                returned = true;
+                continue;
+            }
+
             fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table, next_hop);
             /* destination unreachable or no space to store packet or send ARP request, drop packet */
             if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE)
@@ -295,8 +309,7 @@ static void route(void)
                 || (arp == NULL && fw_queue_full(&arp_req_queue))) {
 
                 if (arp != NULL && arp->state == ARP_STATE_UNREACHABLE) {
-                    int icmp_err = enqueue_icmp_unreachable(buffer);
-                    if (icmp_err) {
+                    if (!enqueue_icmp_unreachable(buffer)) {
                         sddf_dprintf("%sROUTING LOG: Could not enqueue ICMP unreachable!\n",
                                      fw_frmt_str[router_config.interface]);
                     }
@@ -331,7 +344,6 @@ static void route(void)
 
                 continue;
             }
-
             /* valid arp entry found, transmit packet */
             transmit_packet(buffer, arp->mac_addr);
         }
@@ -416,6 +428,16 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         }
 
         microkit_mr_set(ROUTER_RET_ERR, err);
+        return microkit_msginfo_new(0, 1);
+    }
+    case FW_SET_PING_RESPONSE: {
+        ping_response_enabled = (bool)microkit_mr_get(0);
+        if (FW_DEBUG_OUTPUT) {
+            sddf_printf("%sRouter ping response %s\n",
+                fw_frmt_str[router_config.interface],
+                ping_response_enabled ? "enabled" : "disabled");
+        }
+        microkit_mr_set(0, 0); /* success */
         return microkit_msginfo_new(0, 1);
     }
     default:

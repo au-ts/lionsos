@@ -44,7 +44,7 @@ FONT_RED=$(printf '\033[31m')
 FONT_RESET=$(printf '\033[0m')
 
 REGEX_REACHABLE='[1-9][0-9]* received'
-REGEX_UNREACHABLE='Destination host unreachable'
+REGEX_UNREACHABLE='Destination Net Unreachable'
 
 TEMPLATE_SRC='$src_ip, $src_port, $src_subnet'
 TEMPLATE_DEST='$dest_ip, $dest_port, $dest_subnet'
@@ -288,32 +288,23 @@ test_icmp_ping_unreachable_host_external_to_internal() {
 }
 
 test_icmp_ping_firewall_from_internal_network() {
-    # Prevent test from running, but correctly report skip count
-    print_info "${INFO_SKIPPING_TEST}"
-    startSkipping
-    assertEquals 1 1
+    ip netns exec int \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INT_IP}" > "${RECEIVED}" 2>&1
 
-    # ip netns exec int \
-    #     ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INT_IP}" > "${RECEIVED}" 2>&1
-
-    # if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-    #     fail "${ERROR_NO_ECHO_RESPONSE}"
-    #     print_log
-    # fi
+    if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_NO_ECHO_RESPONSE}"
+        print_log
+    fi
 }
 
 test_icmp_ping_firewall_from_external_network() {
-    print_info "${INFO_SKIPPING_TEST}"
-    startSkipping
-    assertEquals 1 1
+    ip netns exec ext \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_EXT_IP}" > "${RECEIVED}" 2>&1
 
-    # ip netns exec ext \
-    #     ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_EXT_IP}" > "${RECEIVED}" 2>&1
-
-    # if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-    #     fail "${ERROR_NO_ECHO_RESPONSE}"
-    #     print_log
-    # fi
+    if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_NO_ECHO_RESPONSE}"
+        print_log
+    fi
 }
 
 #
