@@ -448,6 +448,11 @@ def fw_shared_region(
 
 
 def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
+    filter_actions = {
+        ip_protocol_udp: [1, 1, 1, 1],
+        ip_protocol_tcp: [1, 1, 0, 1],
+        ip_protocol_icmp: [1, 1, 1, 1],
+    }
     serial_node = dtb.node(board.serial)
     assert serial_node is not None
     ethernet_node0 = dtb.node(board.ethernet0)
@@ -693,13 +698,17 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     )
 
     icmp_module_config = FwIcmpModuleConfig(
-        list(ip_to_int(ip) for ip in ips),
-        [icmp_ext_router_conn[1], icmp_int_router_conn[1]],
-        2,
+        [FwIcmpModuleInterfaceConfig([], 0, icmp_ext_router_conn[1], [],),
+         FwIcmpModuleInterfaceConfig([], 0, icmp_int_router_conn[1], [],)]
     )
 
     networks[int_net]["icmp_module"] = icmp_int_router_conn[0]
     networks[ext_net]["icmp_module"] = icmp_ext_router_conn[0]
+
+    icmp_module_config = FwIcmpModuleConfig(
+        [FwIcmpModuleInterfaceConfig([], 0, icmp_ext_router_conn[1], [],),
+         FwIcmpModuleInterfaceConfig([], 0, icmp_int_router_conn[1], [],)]
+    )
 
     # Create webserver config
     webserver_config = FwWebserverConfig(
@@ -717,6 +726,10 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         in_virt = network["in_virt"]
         arp_req = network["arp_req"]
         arp_resp = network["arp_resp"]
+
+        # Set IP and MAC for ICMP module interface
+        icmp_module_config.interfaces[network["num"]].mac_addr = network["mac"]
+        icmp_module_config.interfaces[network["num"]].ip = network["ip"]
 
         # Create a firewall data connection between router and output virt with
         # the rx dma region as data region
@@ -869,6 +882,18 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 dma_buffer_queue_region.region_size,
             )
 
+            # Create a firewall connection for UDP and ICMP filters to send ICMP requests to ICMP module
+            filter_icmp_conn = None
+            if protocol == ip_protocol_udp or protocol == ip_protocol_icmp:
+                filter_icmp_conn = fw_connection(
+                    filter_pd,
+                    icmp_module,
+                    icmp_queue_buffer.capacity,
+                    icmp_queue_region.region_size,
+                )
+                # Store ICMP module's end of the connection
+                icmp_module_config.interfaces[network["num"]].filters.append(filter_icmp_conn[1])
+
             # Connect filter as rx only network client
             network["in_net"].add_client_with_copier(filter_pd, tx=False)
             network["configs"][in_virt].active_client_ethtypes.append(eththype_ip)
@@ -906,6 +931,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 FILTER_ACTION_ALLOW,
                 filter_rules[0],
                 filter_rules_buffer.capacity,
+                filter_actions[protocol],
             )
 
             webserver_filter_config = FwWebserverFilterConfig(
@@ -914,6 +940,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 FILTER_ACTION_ALLOW,
                 filter_rules[1],
                 filter_rules_buffer.capacity,
+                filter_actions[protocol],
             )
 
             # Create filter config
@@ -925,6 +952,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
                 None,
                 None,
                 rule_bitmap_region,
+                filter_icmp_conn[0] if filter_icmp_conn else None,
             )
 
             network["configs"][router].filters.append((filter_router_conn[1]))
@@ -956,8 +984,6 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     networks[int_net]["configs"][networks[int_net]["router"]].rx_active = (
         router_webserver_conn[0]
     )
-
-    # Add ICMP module
 
     # Create filter instance regions
     for protocol, filter_pd in networks[int_net]["filters"].items():
