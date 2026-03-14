@@ -1,11 +1,9 @@
 # Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
 import argparse
 import subprocess
-import shutil
 from os import path
-from dataclasses import dataclass
-from typing import List
 from importlib.metadata import version
+from sdfgen_helper import copy_elf, update_elf_section
 
 from sdfgen import SystemDescription, Sddf, DeviceTree
 
@@ -18,12 +16,12 @@ from pyfw.specs import TrackedNet, FirewallMemoryRegion
 from pyfw.component_arp import ArpRequester, ArpResponder
 from pyfw.component_filter import Filter
 from pyfw.component_icmp import IcmpModule
-from pyfw.component_models import InterfacePriorities, FwNetworkInterface
 from pyfw.component_net_virt import NetVirtRx, NetVirtTx
-from pyfw.component_router import RouterInterface, Router
+from pyfw.component_router import Router
 from pyfw.component_webserver import Webserver
 import pyfw.constants
 from pyfw.constants import (
+    BOARDS,
     interfaces,
     supported_protocols,
     webserver_tx_interface_idx,
@@ -32,84 +30,19 @@ from pyfw.constants import (
     arp_eth_opcode_request,
     arp_eth_opcode_response,
     eththype_ip,
-    htons
 )
 
 SDF_ProtectionDomain = SystemDescription.ProtectionDomain
 SDF_Channel = SystemDescription.Channel
 
-
-# TODO: why are these repeated from sdfgen_helper?
 # TODO: Why are build artifacts in the pyfw code directory (both config structs and __init__)?
 # TODO Can we still import from config structs in the build directory?
-def copy_elf(source_elf: str, new_elf: str, elf_number=None):
-    """Creates a new elf with elf_number as prefix. Adds '.elf' to elf strings."""
-    source_elf += ".elf"
-    if elf_number is not None:
-        new_elf += str(elf_number)
-    new_elf += ".elf"
-    assert path.isfile(source_elf)
-    return shutil.copyfile(source_elf, new_elf)
-
-
-def update_elf_section(obj_copy: str, elf_name: str, section_name: str, data_name: str):
-    """Copies data region data_name into section_name of elf_name."""
-    assert path.isfile(elf_name)
-    assert path.isfile(data_name)
-    assert (
-        subprocess.run(
-            [obj_copy, "--update-section", "." + section_name + "=" + data_name, elf_name]
-        ).returncode
-        == 0
-    )
-
-
-@dataclass
-class Board:
-    name: str
-    arch: SystemDescription.Arch
-    paddr_top: int
-    serial: str
-    timer: str
-    ethernet0: str
-    ethernet1: str
-
-
-BOARDS: List[Board] = [
-    Board(
-        name="qemu_virt_aarch64",
-        arch=SystemDescription.Arch.AARCH64,
-        paddr_top=0x6_0000_000,
-        serial="pl011@9000000",
-        timer="timer",
-        ethernet0="virtio_mmio@a003c00",
-        ethernet1="virtio_mmio@a003e00",
-    ),
-    Board(
-        name="imx8mp_iotgate",
-        arch=SystemDescription.Arch.AARCH64,
-        paddr_top=0x70_000_000,
-        serial="soc@0/bus@30800000/serial@30890000",
-        timer="soc@0/bus@30000000/timer@302d0000",
-        ethernet0="soc@0/bus@30800000/ethernet@30bf0000",  # DWMAC
-        ethernet1="soc@0/bus@30800000/ethernet@30be0000",  # IMX
-    ),
-]
-
+# CALLUM: the __init__ is a python package identifier, this is being used when mypy runs otherwise it complains
+# CALLUM: the config structs can be generated into the build directory but for type resolution I still have to symlink it
 
 def generate(sdf_file: str, dtb: DeviceTree) -> None:
-
-    fw_interfaces = [
-        FwNetworkInterface(iface,
-                           # TODO: Bad solution... Also maybe worth un-flipping, will have to change qemu command
-                           board.ethernet1 if iface.index == 0 else board.ethernet0,
-                           InterfacePriorities()
-                        ) for iface in interfaces
-    ]
-
-    # Phase 1: Create interfaces and component classes
-    for iface in fw_interfaces:
-
+    # Create interfaces and component classes
+    for iface in interfaces:
         iface.ethernet_driver = SDF_ProtectionDomain(
             f"ethernet_driver{iface.index}",
             f"eth_driver{iface.index}.elf",
@@ -133,9 +66,11 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
             f"rx_dma_region{iface.index}", dma_buffer_region.region_size, physical=True,
         )
 
-        ethernet_node = dtb.node(iface.ethernet_node_path)
+        # CALLUM: not sure what you had in mind as the ideal solution here, I changed it to at least make it clear when looking at constants.py which ethernet device you are selecting for each interface now
+        ethernet_node_path = board.ethernet_node_path(iface.board_ethernet)
+        ethernet_node = dtb.node(ethernet_node_path)
         assert ethernet_node is not None, (
-            f"Could not find device tree node: {iface.ethernet_node_path}"
+            f"Could not find device tree node: {ethernet_node_path}"
         )
 
         iface.net_system = TrackedNet(
@@ -154,7 +89,7 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
     webserver = Webserver()
     icmp_module = IcmpModule()
 
-    # Phase 2: Create timer and serial subsystems
+    # Create timer and serial subsystems
     serial_node = dtb.node(board.serial)
     assert serial_node is not None
     timer_node = dtb.node(board.timer)
@@ -176,24 +111,19 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
     serial_system.add_client(icmp_module.pd)
 
     # Register all PDs
-    register_pds(fw_interfaces, timer_driver, serial_driver, serial_virt_tx,
-                 router, webserver, icmp_module)
+    register_pds(timer_driver, serial_driver, serial_virt_tx, router, webserver, icmp_module)
 
-    # Phase 3: Wire per-interface connections
-    wire_interface_connections(
-        fw_interfaces, router, webserver, serial_system, timer_system
-    )
+    # Wire per-interface connections
+    wire_interface_connections(router, serial_system, timer_system)
 
-    # Phase 4: Wire global component connections
-    wire_virtualiser_connections(fw_interfaces)
-    wire_icmp_connections(fw_interfaces, router, icmp_module)
-    webserver_lib_sddf_lwip = wire_webserver_connections(fw_interfaces, router, webserver)
+    # Wire global component connections
+    wire_virtualiser_connections()
+    wire_icmp_connections(router, icmp_module)
+    webserver_lib_sddf_lwip = wire_webserver_connections(router, webserver)
 
-    # Phase 5: Finalize configs
-    finalize_all_fw_configs(fw_interfaces, router, webserver, icmp_module)
-
-    # Phase 6: Connect sDDF systems and serialize subsystems
-    for iface in fw_interfaces:
+    # Connect sDDF systems and serialize subsystems
+    for iface in interfaces:
+        assert iface.net_system is not None
         assert iface.net_system.connect()
         assert iface.net_system.serialise_config(iface.out_dir)
 
@@ -205,8 +135,8 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
     assert webserver_lib_sddf_lwip.connect()
     assert webserver_lib_sddf_lwip.serialise_config(pyfw.constants.output_dir)
 
-    # Serialize firewall configs
-    serialize_all_fw_configs(fw_interfaces, router, webserver, icmp_module, obj_copy)
+    # Serialize firewall configs; component serialisation finalises configs first.
+    serialize_all_fw_configs(router, webserver, icmp_module, obj_copy)
 
     # Render SDF
     with open(f"{pyfw.constants.output_dir}/{sdf_file}", "w+") as f:
@@ -214,7 +144,6 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
 
 
 def register_pds(
-    fw_interfaces: List[FwNetworkInterface],
     timer_driver: SDF_ProtectionDomain,
     serial_driver: SDF_ProtectionDomain,
     serial_virt_tx: SDF_ProtectionDomain,
@@ -226,11 +155,21 @@ def register_pds(
     for pd in [timer_driver, serial_driver, serial_virt_tx, webserver.pd, icmp_module.pd, router.pd]:
         pyfw.constants.sdf.add_pd(pd)
 
-    for iface in fw_interfaces:
-        for component in [iface.tx_virtualiser, iface.rx_virtualiser, iface.arp_requester, iface.arp_responder]:
+    for iface in interfaces:
+        assert iface.tx_virtualiser is not None
+        assert iface.rx_virtualiser is not None
+        assert iface.arp_requester is not None
+        assert iface.arp_responder is not None
+        for component in [
+            iface.tx_virtualiser,
+            iface.rx_virtualiser,
+            iface.arp_requester,
+            iface.arp_responder,
+        ]:
             copy_elf(component.pd.program_image[:-5], component.pd.program_image[:-5], iface.index)
             pyfw.constants.sdf.add_pd(component.pd)
 
+        assert iface.ethernet_driver is not None
         pyfw.constants.sdf.add_pd(iface.ethernet_driver)
 
         for ip_filter in iface.filters.values():
@@ -239,21 +178,22 @@ def register_pds(
 
 
 def wire_interface_connections(
-    fw_interfaces: List[FwNetworkInterface],
     router: Router,
-    webserver: Webserver,
     serial_system: Sddf.Serial,
     timer_system: Sddf.Timer,
 ) -> None:
     """Connect components which are duplicated per network interface"""
-    for iface in fw_interfaces:
+    for iface in interfaces:
 
         # ARP responder receives and transmits net traffic
+        assert iface.rx_virtualiser is not None
+        assert iface.arp_responder is not None
         iface.rx_virtualiser.add_active_net_client(
             iface.arp_responder, ethtype_arp, arp_eth_opcode_request, tx = True
         )
 
         # ARP requester receives and transmits net traffic
+        assert iface.arp_requester is not None
         iface.rx_virtualiser.add_active_net_client(
             iface.arp_requester, ethtype_arp, arp_eth_opcode_response, tx = True
         )
@@ -275,16 +215,15 @@ def wire_interface_connections(
                 ip_filter.connect_router(router)
             )
 
-            # Filter is configurable using the webserver
-            webserver_conn = ip_filter.connect_webserver(webserver)
-
         # Router needs access to the Rx DMA region
+        assert iface.rx_dma_region is not None
         router.interfaces[iface.index].data = iface.rx_dma_region.map(router.pd, "rw")
 
         # Router returns dropped packets to the Rx virtualiser
         router.interfaces[iface.index].rx_free = iface.rx_virtualiser.add_free_fw_client(router)
 
         # Router transmits packets to the Tx virtualiser
+        assert iface.tx_virtualiser is not None
         router.interfaces[iface.index].tx_active = iface.tx_virtualiser.add_active_fw_client(router)
 
         # Add serial clients
@@ -295,43 +234,47 @@ def wire_interface_connections(
         timer_system.add_client(iface.arp_requester.pd)
 
 
-def wire_virtualiser_connections(
-    fw_interfaces: List[FwNetworkInterface],
-) -> None:
+def wire_virtualiser_connections() -> None:
     """Wire Rx DMA region access and DMA buffer return queues between virtualisers."""
 
-    for tx_virtualiser in list(interface.tx_virtualiser for interface in fw_interfaces):
-        for interface in fw_interfaces:
+    for tx_virtualiser in list(interface.tx_virtualiser for interface in interfaces):
+        for interface in interfaces:
             # Tx virtualiser returns freed packets to the Rx virtualiser
+            assert interface.rx_virtualiser is not None
+            assert tx_virtualiser is not None
+            assert interface.rx_dma_region is not None
             free_conn = interface.rx_virtualiser.add_free_fw_client(tx_virtualiser)
             tx_virtualiser.add_free_fw_client(free_conn, interface.rx_dma_region, interface.index)
 
 
 def wire_webserver_connections(
-    fw_interfaces: List[FwNetworkInterface],
     router: Router,
     webserver: Webserver,
 ) -> Sddf.Lwip:
     # TODO: Currently we make an assumption that the webserver can only transmit out one interface (See git issues)
-    tx_interface = fw_interfaces[webserver_tx_interface_idx]
+    tx_interface = interfaces[webserver_tx_interface_idx]
 
     # Webserver is a transmit net client
+    assert tx_interface.net_system is not None
     tx_interface.net_system.add_client_with_copier(webserver.pd, rx=False)
 
     # Webserver uses lib sDDF LWIP
     webserver_lib_sddf_lwip = Sddf.Lwip(pyfw.constants.sdf, tx_interface.net_system._net, webserver.pd)
 
     # Webserver is an ARP client of its output interface
+    assert tx_interface.arp_requester is not None
     webserver.arp_queue = tx_interface.arp_requester.add_arp_client(webserver)
 
     # Connect Webserver and router
     webserver.router = router.connect_webserver(webserver)
 
-    for iface in fw_interfaces:
+    for iface in interfaces:
         # Webserver needs access to the Rx DMA region
+        assert iface.rx_dma_region is not None
         webserver.interfaces[iface.index].data = iface.rx_dma_region.map(webserver.pd, "rw")
 
         # Webserver returns buffers to the Rx virtualiser
+        assert iface.rx_virtualiser is not None
         webserver.interfaces[iface.index].rx_free = iface.rx_virtualiser.add_free_fw_client(webserver)
 
         # Webserver needs to be connected to all filters
@@ -344,41 +287,25 @@ def wire_webserver_connections(
 
 
 def wire_icmp_connections(
-    fw_interfaces: List[FwNetworkInterface],
     router: Router,
     icmp_module: IcmpModule,
 ) -> None:
     """Wire ICMP module connections."""
-    for iface in fw_interfaces:
+    for iface in interfaces:
+        assert iface.net_system is not None
         iface.net_system.add_client_with_copier(icmp_module.pd, rx=False)
 
     router.icmp_module = icmp_module.connect_router(router)
 
 
-def finalize_all_fw_configs(
-    fw_interfaces: List[FwNetworkInterface],
-    router: Router,
-    webserver: Webserver,
-    icmp_module: IcmpModule,
-) -> None:
-    """Finalize configs for all components."""
-    for iface in fw_interfaces:
-        for component in iface.all_components():
-            component.finalize_config()
-    router.finalize_config()
-    webserver.finalize_config()
-    icmp_module.finalize_config()
-
-
 def serialize_all_fw_configs(
-    fw_interfaces: List[FwNetworkInterface],
     router: Router,
     webserver: Webserver,
     icmp_module: IcmpModule,
     obj_copy_path: str,
 ) -> None:
     """Serialize configs to data files and update ELF sections."""
-    for iface in fw_interfaces:
+    for iface in interfaces:
         for component in iface.all_components():
             data_path = f"{iface.out_dir}/firewall_config_{component.name}.data"
             with open(data_path, "wb+") as f:

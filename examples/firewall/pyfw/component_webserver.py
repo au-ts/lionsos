@@ -3,11 +3,16 @@
 from sdfgen import SystemDescription
 from pyfw.component_base import Component
 from pyfw.config_structs import (
+    EthHwaddrLen,
+    FwMaxFilters,
+    FwMaxInterfaceNameLen,
+    FwMaxInterfaces,
     FwWebserverConfig,
     FwWebserverInterfaceConfig,
 )
 from pyfw.constants import (
     interfaces,
+    supported_protocols,
     webserver_tx_interface_idx,
 )
 
@@ -30,7 +35,7 @@ class Webserver(Component, FwWebserverConfig):
         )
 
         # Create per-interface resources
-        self._interfaces = []
+        self._interfaces: list[FwWebserverInterfaceConfig] = []
         for iface in interfaces:
             self._interfaces.append(FwWebserverInterfaceConfig(
                 iface.mac_list,
@@ -50,8 +55,18 @@ class Webserver(Component, FwWebserverConfig):
             webserver_tx_interface_idx,
         )
 
-    def finalize_config(self) -> FwWebserverConfig:
-        # TODO: Finish checking assertions
+    def finalise_config(self) -> None:
+        assert len(self.interfaces) == len(interfaces)
+        assert len(self.interfaces) <= FwMaxInterfaces
         assert self.router is not None
         assert self.arp_queue is not None
-        return self
+
+        for iface in self.interfaces:
+            assert len(iface.mac_addr) == EthHwaddrLen
+            assert iface.ip is not None and iface.ip != 0
+            assert iface.name != ""
+            assert len(iface.name) <= FwMaxInterfaceNameLen
+            assert iface.data is not None
+            assert iface.rx_free is not None
+            assert len(iface.filters) == len(supported_protocols)
+            assert len(iface.filters) <= FwMaxFilters

@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from typing import Tuple, List
+from dataclasses import dataclass, field
 from sdfgen import SystemDescription
 from pyfw.memory_layout import (
     FirewallDataStructure,
@@ -7,38 +6,37 @@ from pyfw.memory_layout import (
     UINT64_BYTES,
 )
 from pyfw.config_structs import FwRule
+from pyfw.component_interface import NetworkInterface
+
+### ----------------------------------------------------------------------- ###
+### Data Classes controlling system "constants"
+### ----------------------------------------------------------------------- ###
+
+@dataclass(frozen=True)
+class Board:
+    name: str
+    arch: SystemDescription.Arch
+    paddr_top: int
+    serial: str
+    timer: str
+    ethernet0: str
+    ethernet1: str
+
+    def ethernet_node_path(self, slot: str) -> str:
+        assert slot in ("ethernet0", "ethernet1")
+        return getattr(self, slot)
 
 ### ----------------------------------------------------------------------- ###
 ### System constants set pre-build, or immediately by the metaprogram ###
 ### ----------------------------------------------------------------------- ###
 sdf: SystemDescription
 
-@dataclass
-class NetworkInterface:
-    index: int
-    name: str
-    mac: Tuple[int, ...]
-    ip: str
-    subnet_bits: int
-
-    @property
-    def ip_int(self) -> int:
-        import ipaddress
-
-        ip_split = self.ip.split(".")
-        ip_split.reverse()
-        reversed_ip = ".".join(ip_split)
-        return int(ipaddress.IPv4Address(reversed_ip))
-
-    @property
-    def mac_list(self) -> List[int]:
-        return list(self.mac)
-
 # Network interface configuration
 interfaces = [
     NetworkInterface(
         index=0,
         name="external",
+        board_ethernet="ethernet0",
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x18),
         ip="172.16.2.1",
         subnet_bits=16,
@@ -46,9 +44,31 @@ interfaces = [
     NetworkInterface(
         index=1,
         name="internal",
+        board_ethernet="ethernet1",
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x10),
         ip="192.168.1.1",
         subnet_bits=24,
+    ),
+]
+
+BOARDS = [
+    Board(
+        name="qemu_virt_aarch64",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x6_0000_000,
+        serial="pl011@9000000",
+        timer="timer",
+        ethernet0="virtio_mmio@a003c00",
+        ethernet1="virtio_mmio@a003e00",
+    ),
+    Board(
+        name="imx8mp_iotgate",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x70_000_000,
+        serial="soc@0/bus@30800000/serial@30890000",
+        timer="soc@0/bus@30000000/timer@302d0000",
+        ethernet0="soc@0/bus@30800000/ethernet@30bf0000",  # DWMAC
+        ethernet1="soc@0/bus@30800000/ethernet@30be0000",  # IMX
     ),
 ]
 

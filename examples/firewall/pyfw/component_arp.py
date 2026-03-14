@@ -3,7 +3,9 @@
 from sdfgen import SystemDescription
 from pyfw.component_base import Component
 from pyfw.config_structs import (
+    EthHwaddrLen,
     FwArpConnection,
+    FwMaxArpRequesterClients,
     FwArpRequesterConfig,
     FwArpResponderConfig,
     RegionResource,
@@ -92,12 +94,11 @@ class ArpRequester(Component, FwArpRequesterConfig):
         client_cache_region = self._arp_cache_mr.map(client.pd, "r")
         return client_cache_region
 
-    def finalize_config(self) -> FwArpRequesterConfig:
-        # TODO: Finish checking assertions
-        assert self.arp_cache is not None
-        assert self.arp_cache_capacity > 0
+    def finalise_config(self) -> None:
+        assert len(self.mac_addr) == EthHwaddrLen
+        assert self.ip is not None and self.ip != 0
         assert len(self.arp_clients) > 0
-        return self
+        assert len(self.arp_clients) <= FwMaxArpRequesterClients
 
 class ArpResponder(Component, FwArpResponderConfig):
     def __init__(
@@ -122,8 +123,6 @@ class ArpResponder(Component, FwArpResponderConfig):
             net_interface.ip_int,
         )
 
-    def finalize_config(self) -> FwArpResponderConfig:
-        # TODO: Finish checking assertions
-        assert len(self.mac_addr) != 0
-        assert self.ip != 0
-        return self
+    def finalise_config(self) -> None:
+        assert len(self.mac_addr) == EthHwaddrLen
+        assert self.ip is not None and self.ip != 0

@@ -361,6 +361,7 @@ void init(void)
                       iface->arp_queue.capacity);
         fw_arp_table_init(&arp_table[interface], (fw_arp_entry_t *)iface->arp_cache.vaddr, iface->arp_cache_capacity);
 
+        /* Initialise the packet waiting queue from mapped in memory */
         assert(iface->packet_queue.vaddr != 0);
         pkt_waiting_init(&pkt_waiting_queue[interface], (void *)iface->packet_queue.vaddr,
                          iface->packet_queue_capacity);

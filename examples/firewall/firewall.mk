@@ -10,6 +10,7 @@ SDDF := $(LIONSOS)/dep/sddf
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 TOOLCHAIN ?= clang
+PYTHON ?= python3
 SUPPORTED_BOARDS := \
 	imx8mp_iotgate \
 	qemu_virt_aarch64
@@ -32,6 +33,10 @@ FIREWALL_ARP := $(FIREWALL_SRC_DIR)/arp
 METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
 
 SDFGEN_HELPER := $(FIREWALL_SRC_DIR)/sdfgen_helper.py
+PYFW_GENERATED_PKG := $(BUILD_DIR)/pyfw_generated
+PYFW_GENERATED_INIT := $(PYFW_GENERATED_PKG)/__init__.py
+PYFW_GENERATED_CONFIGS := $(PYFW_GENERATED_PKG)/config_structs.py
+PYFW_CONFIG_LINK := $(FIREWALL_SRC_DIR)/pyfw/config_structs.py
 # Headers containing config structs and dependencies
 FIREWALL_CONFIG_HEADERS := \
 	$(SDDF)/include/sddf/resources/common.h \
@@ -123,10 +128,20 @@ include $(FIREWALL_NET_COMPONENTS)/firewall_network_components.mk
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
-$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
+$(PYFW_GENERATED_INIT):
+	mkdir -p $(PYFW_GENERATED_PKG)
+	touch $@
+
+$(PYFW_GENERATED_CONFIGS): $(SDFGEN_HELPER) $(FIREWALL_CONFIG_HEADERS) | $(PYFW_GENERATED_INIT)
 	$(PYTHON) $(SDFGEN_HELPER) \
 		--configs "$(FIREWALL_CONFIG_HEADERS)" \
-		--output $(FIREWALL_SRC_DIR)/pyfw/config_structs.py
+		--output $@
+
+$(PYFW_CONFIG_LINK): $(PYFW_GENERATED_CONFIGS)
+	rm -f $@
+	ln -s $(PYFW_GENERATED_CONFIGS) $@
+
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5) $(PYFW_GENERATED_CONFIGS) $(PYFW_CONFIG_LINK)
 	PYTHONPATH=$(FIREWALL_SRC_DIR):${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) \
 		--sddf $(SDDF) --board $(MICROKIT_BOARD) \
 		--dtb $(DTB) --output . --sdf $(SYSTEM_FILE) \

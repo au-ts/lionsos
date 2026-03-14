@@ -4,6 +4,7 @@ from sdfgen import SystemDescription
 from pyfw.component_base import Component
 from pyfw.config_structs import (
     FwConnectionResource,
+    FwMaxInterfaces,
     FwIcmpModuleConfig,
 )
 from pyfw.constants import (
@@ -63,7 +64,8 @@ class IcmpModule(Component, FwIcmpModuleConfig):
             ch.pd_b_id,
         )
 
-    def finalize_config(self) -> FwIcmpModuleConfig:
-        # TODO: Finish checking assertions
+    def finalise_config(self) -> None:
+        assert self.num_interfaces is not None
+        assert self.num_interfaces == len(self.ips)
+        assert self.num_interfaces <= FwMaxInterfaces
         assert self.router is not None
-        return self

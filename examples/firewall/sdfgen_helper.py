@@ -210,6 +210,20 @@ def cNameToPName(c_name):
 
     return p_name
 
+def fieldTypeHint(field):
+    if field.c_type in Struct.all_structs:
+        inner_type = field.p_class[:-6]
+    else:
+        inner_type = p_class_to_p_type[field.p_class]
+
+    if len(field.n_size):
+        if field.c_type == "char":
+            inner_type = "str"
+        else:
+            inner_type = f"List[{inner_type}]"
+
+    return f"Optional[{inner_type}]"
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -318,7 +332,7 @@ if __name__ == '__main__':
     with open(p_classes_out, "w") as out:
 
         # Import modules
-        out.write("from typing import List\n")
+        out.write("from typing import List, Optional\n")
         out.write("from ctypes import *\n\n")
 
         if Macro.unknown_macros or Struct.unknown_types:
@@ -396,7 +410,15 @@ if __name__ == '__main__':
         out.write("\n")
 
         # Create serializable structs
-        out.write("class Serializable():\n    def serialise(self):\n        return bytes(self.to_struct())\n\n")
+        out.write(
+            "class Serializable():\n"
+            "    section_name: str\n\n"
+            "    def finalise_config(self) -> None:\n"
+            "        pass\n\n"
+            "    def serialise(self):\n"
+            "        self.finalise_config()\n"
+            "        return bytes(self.to_struct())\n\n"
+        )
         for struct in Struct.all_structs.values():
 
             # Create arguments
@@ -404,23 +426,16 @@ if __name__ == '__main__':
             for field in struct.fields.values():
                 if field.c_name[:4] == "num_" and field.c_name[4:] in struct.fields:
                     continue
-                list_start = ""
-                list_end = ""
-                if len(field.n_size):
-                    list_start = "List["
-                    list_end = "]"
-
-                if field.c_type in Struct.all_structs:
-                    out.write(f", {field.c_name}: {list_start}{field.p_class[:-6]}{list_end}")
-                else:
-                    out.write(f", {field.c_name}: {list_start}{p_class_to_p_type[field.p_class]}{list_end}")
+                out.write(f", {field.c_name}: {fieldTypeHint(field)}")
             out.write("):\n")
 
             # Initialise field objects
             for field in struct.fields.values():
                 if field.c_name[:4] == "num_" and field.c_name[4:] in struct.fields:
                     continue
-                if len(field.n_size):
+                if len(field.n_size) and field.c_type == "char":
+                    out.write(" " * 8 + f"self.{field.c_name} = {field.c_name} if {field.c_name} is not None else \"\"\n")
+                elif len(field.n_size):
                     out.write(" " * 8 + f"self.{field.c_name} = {field.c_name} if {field.c_name} is not None else []\n")
                 else:
                     out.write(" " * 8 + f"self.{field.c_name} = {field.c_name}\n")

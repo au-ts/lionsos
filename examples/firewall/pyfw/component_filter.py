@@ -5,6 +5,8 @@ from pyfw.component_base import Component
 from pyfw.config_structs import (
     FwConnectionResource,
     FwFilterConfig,
+    FwMaxInitialFilterRules,
+    FwMaxInterfaces,
     FwWebserverFilterConfig,
 )
 from pyfw.constants import (
@@ -26,7 +28,7 @@ SDF_Channel = SystemDescription.Channel
 
 class Filter(Component, FwFilterConfig):
     """Per-interface protocol filter."""
-    instance_regions = dict()
+    instance_regions: dict[int, list[FirewallMemoryRegion]] = {}
 
     def __init__(
         self,
@@ -102,9 +104,11 @@ class Filter(Component, FwFilterConfig):
        pyfw.constants.sdf.add_channel(web_update_ch)
 
        # Update filter config
+       assert self.webserver is not None
        self.webserver.ch = web_update_ch.pd_b_id
 
        # Return webserver config
+       assert self.webserver.protocol is not None
        return FwWebserverFilterConfig(
                 self.webserver.protocol,
                 web_update_ch.pd_a_id,
@@ -139,16 +143,22 @@ class Filter(Component, FwFilterConfig):
 
         )
 
-    def finalize_config(self) -> FwFilterConfig:
-        # TODO: Finish checking assertions
+    def finalise_config(self) -> None:
         assert self.router is not None
+        assert self.webserver is not None
         assert self.internal_instances is not None
-        assert self.rule_id_bitmap is not None
+        webserver_config = self.webserver
+        assert len(self.initial_rules) > 0
+        assert len(self.initial_rules) <= FwMaxInitialFilterRules
+        assert webserver_config.ch is not None
+        assert webserver_config.protocol is not None
+        protocol_regions = Filter.instance_regions[webserver_config.protocol]
+        assert len(interfaces) == len(protocol_regions)
+        assert len(protocol_regions) <= FwMaxInterfaces
 
-        assert len(interfaces) == len(Filter.instance_regions[self.webserver.protocol])
-        # Map in the instance region of each filter
-        for instance in Filter.instance_regions[self.webserver.protocol]:
-            if instance == self._local_instance_mr:
-                continue
-            self.external_instances.append(instance.map(self.pd, "r"))
-        return self
+        # Build external instance mappings
+        self.external_instances = [
+            instance.map(self.pd, "r") for instance in protocol_regions if instance != self._local_instance_mr
+        ]
+        assert len(self.external_instances) == len(protocol_regions) - 1
+        assert len(self.external_instances) <= FwMaxInterfaces
