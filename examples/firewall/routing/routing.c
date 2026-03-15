@@ -212,10 +212,20 @@ static void route(void)
                     continue;
                 }
 
-                if (ip_hdr->protocol == IPV4_PROTO_ICMP && ip_hdr->dst_ip == router_config.interfaces[interface].ip) {
+                /* ICMP ECHO can ping an interface different to what the pkt arrived on */
+                if (ip_hdr->protocol == IPV4_PROTO_ICMP) {
+                    bool matching_ip = false;
+                    uint8_t matching_interface = 0;
+                    for (uint8_t i = 0; i < router_config.num_interfaces; i++) {
+                        if (ip_hdr->dst_ip == router_config.interfaces[i].ip) {
+                            matching_ip = true;
+                            matching_interface = i;
+                            break;
+                        }
+                    }
                     icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
-                    if (icmp_hdr->type == ICMP_ECHO_REQ) {
-                        if (ping_response_enabled[interface]) {
+                    if (matching_ip && icmp_hdr->type == ICMP_ECHO_REQ) {
+                        if (ping_response_enabled[matching_interface]) {
                             notify_icmp |= icmp_enqueue_echo_reply(&icmp_queue, pkt_vaddr, interface);
                         }
                         err = fw_enqueue(&rx_free[interface], &buffer);
@@ -424,16 +434,16 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         bool ping_state = microkit_mr_get(ROUTER_PING_ARG_PING_STATE);
         if (interface >= router_config.num_interfaces) {
             if (FW_DEBUG_OUTPUT) {
+                sddf_printf("ROUTING LOG: invalid interface selected during PING PPC");
+            }
+            microkit_mr_set(ROUTER_RET_ERR, ROUTING_ERR_INVALID_INTERFACE);
+        } else {
+            if (FW_DEBUG_OUTPUT) {
                 sddf_printf("ROUTING LOG: ping response %s on interface %u\n", ping_state ? "enabled" : "disabled",
                             interface);
             }
             ping_response_enabled[interface] = ping_state;
             microkit_mr_set(ROUTER_RET_ERR, ROUTING_ERR_OKAY); /* success */
-        } else {
-            if (FW_DEBUG_OUTPUT) {
-                sddf_printf("ROUTING LOG: invalid interface selected during PING PPC");
-            }
-            microkit_mr_set(ROUTER_RET_ERR, ROUTING_ERR_INVALID_INTERFACE);
         }
 
         return microkit_msginfo_new(0, 1);

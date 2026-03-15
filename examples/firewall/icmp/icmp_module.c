@@ -89,6 +89,9 @@ static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmi
             /* Destination is the sender */
         ip_hdr->dst_ip = req->ip_hdr.src_ip;
 
+            /* Source ip is original dst ip */
+        ip_hdr->src_ip = req->ip_hdr.dst_ip;
+
             /* Total length of ICMP destination unreachable IP packet */
         uint16_t icmp_total_len = (uint16_t)(ICMP_COMMON_HDR_LEN + sizeof(icmp_echo_t) + req->echo.payload_len);
         ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + icmp_total_len);

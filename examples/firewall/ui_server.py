@@ -117,7 +117,7 @@ def tupleToMac(macList):
         raise OSError(OSErrInternalError, OSErrStrings[OSErrInternalError])
 
     # Switch big to little endian
-    hexList = list(map(lambda digit: hex(digit)[2:], macList))
+    hexList = list(map(lambda digit: hex(int(digit))[2:], macList))
 
     # Ensure digits are in the right format
     for i in range(len(hexList)):
@@ -149,6 +149,25 @@ def interfaceStringToInt(componentType, interfaceStr):
 app = Microdot()
 
 ###### Interface methods ######
+
+# Get all interface details in a single request
+@app.route("/api/interfaces", methods=["GET"])
+def interfaceAll(request):
+    try:
+        count = lions_firewall.interface_count_get()
+        ifaces = []
+        for i in range(count):
+            name = lions_firewall.interface_name_get(i)
+            mac = tupleToMac(lions_firewall.interface_mac_get(i))
+            ip = intToIp(lions_firewall.interface_ip_get(i))
+            ifaces.append({"interface": name, "mac": mac, "ip": ip})
+        return {"interfaces": ifaces}
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: interfaceAll: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 500
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: interfaceAll: {exception}.")
+        return {"error": UnknownErrStr}, 500
 
 # Get the number of interfaces
 @app.route("/api/interfaces/count", methods=["GET"])
@@ -506,28 +525,27 @@ def index(request):
       document.addEventListener("DOMContentLoaded", function() {
         var tbody = document.getElementById("interfaces-body");
         tbody.innerHTML = "";
-        fetch("/api/interfaces/count")
+        fetch("/api/interfaces")
           .then(function(response) { return response.json(); })
           .then(function(data) {
-            for (let i = 0; i < data.count; i++) {
-              fetch("/api/interfaces/" + i)
-                .then(function(response) { return response.json(); })
-                .then(function(info) {
-                  let row = document.createElement("tr");
-                  row.innerHTML = "<td>" + info.interface + "</td>" +
-                                  "<td>" + info.mac + "</td>" +
-                                  "<td>" + info.ip + "</td>";
-                  tbody.appendChild(row);
-                })
-                .catch(function(err) {
-                  let row = document.createElement("tr");
-                  row.innerHTML = "<td colspan='3'>Error retrieving interface " + i + "</td>";
-                  tbody.appendChild(row);
-                });
+            if (data.error) {
+              tbody.innerHTML = "<tr><td colspan='3'>Error: " + data.error + "</td></tr>";
+              return;
             }
+            if (data.interfaces.length === 0) {
+              tbody.innerHTML = "<tr><td colspan='3'>No interfaces configured</td></tr>";
+              return;
+            }
+            data.interfaces.forEach(function(info) {
+              var row = document.createElement("tr");
+              row.innerHTML = "<td>" + info.interface + "</td>" +
+                              "<td>" + info.mac + "</td>" +
+                              "<td>" + info.ip + "</td>";
+              tbody.appendChild(row);
+            });
           })
           .catch(function(err) {
-            tbody.innerHTML = "<tr><td colspan='3'>Error retrieving interface count</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='3'>Error retrieving interfaces</td></tr>";
           });
       });
     </script>
@@ -586,26 +604,17 @@ def config(request):
         var interfaceMap = {};
 
         function loadInterfaces() {
-          return fetch("/api/interfaces/count")
+          return fetch("/api/interfaces")
             .then(function(response) { return response.json(); })
             .then(function(data) {
-              var requests = [];
-              for (let i = 0; i < data.count; i++) {
-                requests.push(
-                  fetch("/api/interfaces/" + i)
-                    .then(function(response) { return response.json(); })
-                    .then(function(info) { interfaceMap[i] = info.interface; })
-                );
-              }
-              return Promise.all(requests);
-            })
-            .then(function() {
+              if (data.error) { return; }
               var select = document.getElementById("new-interface");
               select.innerHTML = "";
-              Object.keys(interfaceMap).forEach(function(id) {
+              data.interfaces.forEach(function(info, i) {
+                interfaceMap[i] = info.interface;
                 var opt = document.createElement("option");
-                opt.value = id;
-                opt.textContent = interfaceMap[id];
+                opt.value = i;
+                opt.textContent = info.interface;
                 select.appendChild(opt);
               });
             });
@@ -782,23 +791,18 @@ def rules(request, protocol):
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         function loadInterfaces() {
-          return fetch("/api/interfaces/count")
+          return fetch("/api/interfaces")
             .then(function(response) { return response.json(); })
             .then(function(data) {
-              var requests = [];
-              for (let i = 0; i < data.count; i++) {
-                requests.push(
-                  fetch("/api/interfaces/" + i)
-                    .then(function(response) { return response.json(); })
-                    .then(function(info) {
-                      var option = document.createElement("option");
-                      option.value = i;
-                      option.textContent = info.interface;
-                      document.getElementById("rules-interface").appendChild(option);
-                    })
-                );
-              }
-              return Promise.all(requests);
+              if (data.error) { return; }
+              var select = document.getElementById("rules-interface");
+              select.innerHTML = "";
+              data.interfaces.forEach(function(info, i) {
+                var option = document.createElement("option");
+                option.value = i;
+                option.textContent = info.interface;
+                select.appendChild(option);
+              });
             });
         }
 
@@ -1074,21 +1078,15 @@ def ping_settings(request):
         });
         interfaceSelect.addEventListener('change', loadPingStatus);
 
-        fetch('/api/interfaces/count')
+        fetch('/api/interfaces')
           .then(function(response) { return response.json(); })
           .then(function(data) {
-            var requests = [];
-            for (let i = 0; i < data.count; i++) {
-              requests.push(
-                fetch('/api/interfaces/' + i)
-                  .then(function(response) { return response.json(); })
-              );
+            if (data.error) {
+              updateStatus({ error: data.error });
+              return;
             }
-            return Promise.all(requests);
-          })
-          .then(function(interfaceInfos) {
             interfaceSelect.innerHTML = '';
-            interfaceInfos.forEach(function(info, index) {
+            data.interfaces.forEach(function(info, index) {
               var option = document.createElement('option');
               option.value = String(index);
               option.textContent = info.interface;

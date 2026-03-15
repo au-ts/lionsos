@@ -439,7 +439,7 @@ if __name__ == '__main__':
             for field in struct.fields.values():
                 out.write(" " * 8)
                 if len(field.n_size) and field.c_type == "char":
-                    out.write(f"{field.c_name}_arg = bytes(create_string_buffer(bytes(self.{field.c_name}, encoding=\"ascii\"), size=len(self.{field.c_name})))")
+                    out.write(f"{field.c_name}_arg = bytes(create_string_buffer(bytes(self.{field.c_name}, encoding=\"ascii\"), size={field.e_size}))")
                 elif len(field.n_size) and field.c_type not in Struct.all_structs:
                     out.write(f"{field.c_name}_arg = self.{field.c_name} + [{field.p_class}()] * ({field.e_size} - len(self.{field.c_name}))")
                 elif len(field.n_size) and field.c_type in Struct.all_structs:
