@@ -26,9 +26,9 @@ __attribute__((__section__(".net_config_1"))) net_client_config_t net_config_1;
 
 net_client_config_t *net_configs[FW_MAX_INTERFACES] = { &net_config_0, &net_config_1 };
 
-net_queue_handle_t net_queue[FW_NUM_INTERFACES];
+net_queue_handle_t net_queue[FW_MAX_INTERFACES];
 fw_queue_t router_icmp_queue;
-fw_queue_t filter_icmp_queue[FW_NUM_INTERFACES][FW_MAX_FILTERS];
+fw_queue_t filter_icmp_queue[FW_MAX_INTERFACES][FW_MAX_FILTERS];
 
 static bool process_icmp_request(icmp_req_t *req, uint8_t out_int, bool *transmitted)
 {

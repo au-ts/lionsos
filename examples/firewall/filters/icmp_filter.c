@@ -37,7 +37,8 @@ static bool notify_icmp;
 static bool enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
     uintptr_t pkt_vaddr = (uintptr_t)(net_config.rx_data.vaddr + buffer.io_or_offset);
-    bool enqueued = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, ICMP_DEST_PORT_UNREACHABLE, pkt_vaddr);
+    bool enqueued = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, ICMP_DEST_PORT_UNREACHABLE, pkt_vaddr,
+                                       filter_config.interface);
     notify_icmp |= enqueued;
     return enqueued;
 }
@@ -263,11 +264,12 @@ void init(void)
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr, sizeof(net_buff_desc_t),
                   filter_config.router.capacity);
 
-    fw_queue_init(&icmp_queue, filter_config.icmp_module.queue.vaddr,
-        sizeof(icmp_req_t), filter_config.icmp_module.capacity);
+    fw_queue_init(&icmp_queue, filter_config.icmp_module.queue.vaddr, sizeof(icmp_req_t),
+                  filter_config.icmp_module.capacity);
 
     fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr,
                          filter_config.webserver.rules_capacity, filter_config.internal_instances.vaddr,
                          filter_config.external_instances, filter_config.instances_capacity,
-                         filter_config.initial_rules, filter_config.num_initial_rules, filter_config.num_external_instances);
+                         filter_config.initial_rules, filter_config.num_initial_rules,
+                         filter_config.num_external_instances);
 }

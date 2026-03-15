@@ -52,18 +52,18 @@ pkts_waiting_t pkt_waiting_queue[FW_MAX_INTERFACES];        /* Queues holding pa
 fw_routing_table_t *routing_table; /* Table holding next hop data for subnets */
 
 /* Booleans to keep track of which components need to be notified */
-static bool tx_net[FW_MAX_INTERFACES];                  /* Packet has been transmitted to the network tx virtualiser */
-static bool tx_webserver;                               /* Packet has been transmitted to the webserver */
-static bool returned[FW_MAX_INTERFACES];                /* Buffer has been returned to the rx virtualiser */
-static bool notify_arp[FW_MAX_INTERFACES];              /* Arp request has been enqueued */
-static bool notify_icmp;                                /* Request has been enqueued to ICMP module */
-static bool ping_response_enabled = false;              /* Whether to reply to ICMP echo requests */
+static bool tx_net[FW_MAX_INTERFACES];      /* Packet has been transmitted to the network tx virtualiser */
+static bool tx_webserver;                   /* Packet has been transmitted to the webserver */
+static bool returned[FW_MAX_INTERFACES];    /* Buffer has been returned to the rx virtualiser */
+static bool notify_arp[FW_MAX_INTERFACES];  /* Arp request has been enqueued */
+static bool notify_icmp;                    /* Request has been enqueued to ICMP module */
+static bool ping_response_enabled[FW_MAX_INTERFACES] = { false }; /* Whether to reply to ICMP echo requests */
 
 /* Masks for checking whether it is a broadcast address or not */
 #define MULTICAST_IP_MASK 0xf0000000
 #define MULTICAST_IP_ADDR 0xe0000000
 #define BROADCAST_IP_ADDR 0xffffffff
-const uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+const uint8_t broadcast_mac_addr[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
@@ -74,8 +74,9 @@ static bool enqueue_icmp_unreachable(fw_buff_desc_t buffer)
 
     /* Copy IP header into ICMP request */
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
-    bool is_host = ((ip_hdr->dst_ip & subnet_mask(router_config.interfaces[src_interface].subnet)) !=
-        (router_config.interfaces[src_interface].ip & subnet_mask(router_config.interfaces[src_interface].subnet)));
+    bool is_host = ((ip_hdr->dst_ip & subnet_mask(router_config.interfaces[src_interface].subnet))
+                    != (router_config.interfaces[src_interface].ip
+                        & subnet_mask(router_config.interfaces[src_interface].subnet)));
     uint8_t code = is_host ? ICMP_DEST_HOST_UNREACHABLE : ICMP_DEST_NET_UNREACHABLE;
     bool enqueued = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, code, pkt_vaddr, src_interface);
     notify_icmp |= enqueued;
@@ -113,7 +114,6 @@ static void transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t ou
 
 static void process_arp_waiting(uint8_t out_interface)
 {
-    pkts_waiting_t *waiting_queue = &pkt_waiting_queue[out_interface];
     while (!fw_queue_empty(&arp_resp_queue[out_interface])) {
         fw_arp_request_t response;
         int err = fw_dequeue(&arp_resp_queue[out_interface], &response);
@@ -204,19 +204,18 @@ static void route(void)
                 }
 
                 if (ip_hdr->ttl <= 1) {
-                    notify_icmp |= icmp_enqueue_error(&icmp_queue, ICMP_TTL_EXCEED, ICMP_TIME_EXCEEDED_TTL,
-                                                      pkt_vaddr, interface);
+                    notify_icmp |= icmp_enqueue_error(&icmp_queue, ICMP_TTL_EXCEED, ICMP_TIME_EXCEEDED_TTL, pkt_vaddr,
+                                                      interface);
                     err = fw_enqueue(&rx_free[interface], &buffer);
                     assert(!err);
                     returned[interface] = true;
                     continue;
                 }
 
-                if (ip_hdr->protocol == IPV4_PROTO_ICMP &&
-                    ip_hdr->dst_ip == router_config.interfaces[interface].ip) {
+                if (ip_hdr->protocol == IPV4_PROTO_ICMP && ip_hdr->dst_ip == router_config.interfaces[interface].ip) {
                     icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
                     if (icmp_hdr->type == ICMP_ECHO_REQ) {
-                        if (ping_response_enabled) {
+                        if (ping_response_enabled[interface]) {
                             notify_icmp |= icmp_enqueue_echo_reply(&icmp_queue, pkt_vaddr, interface);
                         }
                         err = fw_enqueue(&rx_free[interface], &buffer);
@@ -228,9 +227,6 @@ static void route(void)
 
                 /* Packet destined for webserver */
                 if (ip_hdr->dst_ip == router_config.interfaces[interface].ip) {
-                    if (FW_DEBUG_OUTPUT) {
-                        sddf_printf("Router transmitted packet to webserver on interface %u\n", interface);
-                    }
                     tcp_hdr_t *tcp_pkt = (tcp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
                     if (ip_hdr->protocol != WEBSERVER_PROTOCOL || tcp_pkt->dst_port != htons(WEBSERVER_PORT)) {
                         err = fw_enqueue(&rx_free[interface], &buffer);
@@ -239,12 +235,12 @@ static void route(void)
                         continue;
                     }
 
-                    err = fw_enqueue(&webserver, &buffer);
+                    err = fw_enqueue(&webserver, &fw_buffer);
                     assert(!err);
                     tx_webserver = true;
 
                     if (FW_DEBUG_OUTPUT) {
-                        sddf_printf("Router transmitted packet to webserver from interface %u\n", interface);
+                        sddf_printf("Router transmitted packet from interface %u to webserver\n", interface);
                     }
                     continue;
                 }
@@ -282,7 +278,6 @@ static void route(void)
                 assert(out_interface < router_config.num_interfaces);
 
                 fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table[out_interface], next_hop);
-                pkts_waiting_t *waiting_queue = &pkt_waiting_queue[out_interface];
                 /* destination unreachable or no space to store packet or send ARP
                  * request, drop packet */
                 if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE)
