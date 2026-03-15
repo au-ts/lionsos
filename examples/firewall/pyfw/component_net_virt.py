@@ -40,10 +40,10 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
         # Initialise Rx virtualiser config class
         FwNetVirtRxConfig.__init__(
             self,
-            net_interface.index,
-            [],
-            [],
-            [],
+            interface=net_interface.index,
+            active_client_ethtypes=[],
+            active_client_subtypes=[],
+            free_clients=[],
         )
 
     def add_active_net_client(self,
@@ -59,6 +59,8 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
 
         # CALLUM: I find this odd, shouldn't the C config be an array of structs?
         # Set what traffic gets forwarded to the client
+        assert self.active_client_ethtypes is not None
+        assert self.active_client_subtypes is not None
         self.active_client_ethtypes.append(ethtype)
         self.active_client_subtypes.append(subtype)
 
@@ -73,19 +75,23 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
         ch = SDF_Channel(self.pd, client.pd)
         pyfw.constants.sdf.add_channel(ch)
 
+        assert self.free_clients is not None
         self.free_clients.append(FwConnectionResource(
-            queue.map(self.pd, "rw"),
-            dma_buffer_queue.capacity,
-            ch.pd_a_id,
+            queue=queue.map(self.pd, "rw"),
+            capacity=dma_buffer_queue.capacity,
+            ch=ch.pd_a_id,
         ))
 
         return FwConnectionResource(
-            queue.map(client.pd, "rw"),
-            dma_buffer_queue.capacity,
-            ch.pd_b_id,
+            queue=queue.map(client.pd, "rw"),
+            capacity=dma_buffer_queue.capacity,
+            ch=ch.pd_b_id,
         )
 
     def finalise_config(self) -> None:
+        assert self.free_clients is not None
+        assert self.active_client_ethtypes is not None
+        assert self.active_client_subtypes is not None
         assert len(self.free_clients) > 0
         assert len(self.free_clients) <= FwMaxFwClients
         assert len(self.active_client_ethtypes) > 0
@@ -117,10 +123,10 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
         # Initialise Tx virtualiser config class
         FwNetVirtTxConfig.__init__(
             self,
-            net_interface.index,
-            [],
-            [],
-            [],
+            interface=net_interface.index,
+            active_clients=[],
+            data_regions=[],
+            free_clients=[],
         )
 
     def add_active_fw_client(self, client: Component) -> FwConnectionResource:
@@ -134,16 +140,17 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
         ch = SDF_Channel(self.pd, client.pd)
         pyfw.constants.sdf.add_channel(ch)
 
+        assert self.active_clients is not None
         self.active_clients.append(FwConnectionResource(
-            queue.map(self.pd, "rw"),
-            dma_buffer_queue.capacity,
-            ch.pd_a_id,
+            queue=queue.map(self.pd, "rw"),
+            capacity=dma_buffer_queue.capacity,
+            ch=ch.pd_a_id,
         ))
 
         return FwConnectionResource(
-            queue.map(client.pd, "rw"),
-            dma_buffer_queue.capacity,
-            ch.pd_b_id,
+            queue=queue.map(client.pd, "rw"),
+            capacity=dma_buffer_queue.capacity,
+            ch=ch.pd_b_id,
         )
 
     # Adds a free firewall client to the Tx virtualiser, allowing it to return
@@ -160,8 +167,12 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
         assert interface_idx not in self._data_regions.keys()
         self._data_regions[interface_idx] = data.map_device(self.pd, "r")
 
+        assert self.free_clients is not None
         self.free_clients.append(
-            FwDataConnectionResource(queue, self._data_regions[interface_idx])
+            FwDataConnectionResource(
+                conn=queue,
+                data=self._data_regions[interface_idx],
+            )
         )
 
     def finalise_config(self) -> None:
@@ -172,6 +183,8 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
 
         # Rebuild the serialised ordering so repeated finalisation is stable.
         self.data_regions = ordered_regions
+        assert self.active_clients is not None
+        assert self.free_clients is not None
         assert len(self.active_clients) > 0
         assert len(self.active_clients) <= FwMaxFwClients
         assert len(self.free_clients) > 0

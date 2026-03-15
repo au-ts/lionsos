@@ -332,6 +332,7 @@ if __name__ == '__main__':
     with open(p_classes_out, "w") as out:
 
         # Import modules
+        out.write("from dataclasses import dataclass, field\n")
         out.write("from typing import List, Optional\n")
         out.write("from ctypes import *\n\n")
 
@@ -420,27 +421,18 @@ if __name__ == '__main__':
             "        return bytes(self.to_struct())\n\n"
         )
         for struct in Struct.all_structs.values():
-
-            # Create arguments
-            out.write(f"class {struct.p_name[:-6]}(Serializable):\n    def __init__(self")
-            for field in struct.fields.values():
-                if field.c_name[:4] == "num_" and field.c_name[4:] in struct.fields:
-                    continue
-                out.write(f", {field.c_name}: {fieldTypeHint(field)}")
-            out.write("):\n")
-
-            # Initialise field objects
+            out.write(f"@dataclass(kw_only=True)\nclass {struct.p_name[:-6]}(Serializable):\n")
             for field in struct.fields.values():
                 if field.c_name[:4] == "num_" and field.c_name[4:] in struct.fields:
                     continue
                 if len(field.n_size) and field.c_type == "char":
-                    out.write(" " * 8 + f"self.{field.c_name} = {field.c_name} if {field.c_name} is not None else \"\"\n")
+                    default_expr = "\"\""
                 elif len(field.n_size):
-                    out.write(" " * 8 + f"self.{field.c_name} = {field.c_name} if {field.c_name} is not None else []\n")
+                    default_expr = "field(default_factory=list)"
                 else:
-                    out.write(" " * 8 + f"self.{field.c_name} = {field.c_name}\n")
-            out.write(" " * 8 + f"self.section_name = \"{struct.c_name[:-2]}\"\n")
-            out.write("\n")
+                    default_expr = "None"
+                out.write(" " * 4 + f"{field.c_name}: {fieldTypeHint(field)} = {default_expr}\n")
+            out.write(" " * 4 + f"section_name: str = field(init=False, default=\"{struct.c_name[:-2]}\")\n\n")
 
             # Define serializable class to struct function
             out.write(" " * 4 + f"def to_struct(self) -> {struct.p_name}:\n")

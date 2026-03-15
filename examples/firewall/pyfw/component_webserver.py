@@ -37,36 +37,42 @@ class Webserver(Component, FwWebserverConfig):
         # Create per-interface resources
         self._interfaces: list[FwWebserverInterfaceConfig] = []
         for iface in interfaces:
-            self._interfaces.append(FwWebserverInterfaceConfig(
-                iface.mac_list,
-                iface.ip_int,
-                iface.name,
-                [],
-                None,
-                None)
-        )
+            self._interfaces.append(
+                FwWebserverInterfaceConfig(
+                    mac_addr=iface.mac_list,
+                    ip=iface.ip_int,
+                    name=iface.name,
+                    filters=[],
+                    data=None,
+                    rx_free=None,
+                )
+            )
 
         # Initialise Router config class
         FwWebserverConfig.__init__(
             self,
-            self._interfaces,
-            None,
-            None,
-            webserver_tx_interface_idx,
+            interfaces=self._interfaces,
+            router=None,
+            arp_queue=None,
+            tx_interface=webserver_tx_interface_idx,
         )
 
     def finalise_config(self) -> None:
+        assert self.interfaces is not None
         assert len(self.interfaces) == len(interfaces)
         assert len(self.interfaces) <= FwMaxInterfaces
         assert self.router is not None
         assert self.arp_queue is not None
 
         for iface in self.interfaces:
+            assert iface.mac_addr is not None
             assert len(iface.mac_addr) == EthHwaddrLen
             assert iface.ip is not None and iface.ip != 0
             assert iface.name != ""
+            assert iface.name is not None
             assert len(iface.name) <= FwMaxInterfaceNameLen
             assert iface.data is not None
             assert iface.rx_free is not None
+            assert iface.filters is not None
             assert len(iface.filters) == len(supported_protocols)
             assert len(iface.filters) <= FwMaxFilters

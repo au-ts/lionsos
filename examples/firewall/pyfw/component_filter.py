@@ -12,6 +12,7 @@ from pyfw.config_structs import (
 from pyfw.constants import (
     interfaces,
     supported_protocols,
+    supported_filter_actions,
     initial_rules,
     filter_instances_buffer,
     filter_instances_region,
@@ -80,19 +81,21 @@ class Filter(Component, FwFilterConfig):
         # Initialise filter config class
         FwFilterConfig.__init__(
             self,
-            iface_index,
-            None,
-            self._local_instance_mr.map(self.pd, "rw"),
-            [],
-            filter_instances_buffer.capacity,
-            FwWebserverFilterConfig(
-                protocol,
-                None,
-                self._filter_rules_mr.map(self.pd, "rw"),
-                filter_rules_buffer.capacity,
+            interface=iface_index,
+            router=None,
+            internal_instances=self._local_instance_mr.map(self.pd, "rw"),
+            external_instances=[],
+            instances_capacity=filter_instances_buffer.capacity,
+            webserver=FwWebserverFilterConfig(
+                protocol=protocol,
+                ch=None,
+                rules=self._filter_rules_mr.map(self.pd, "rw"),
+                rules_capacity=filter_rules_buffer.capacity,
+                actions=supported_filter_actions.copy(),
             ),
-            rule_id_bitmap_mr.map(self.pd, "rw"),
-            initial_rules[iface_index][protocol]
+            rule_id_bitmap=rule_id_bitmap_mr.map(self.pd, "rw"),
+            icmp_module=None,
+            initial_rules=initial_rules[iface_index][protocol],
         )
 
     def connect_webserver(self, webserver: Component) -> FwWebserverFilterConfig:
@@ -109,11 +112,13 @@ class Filter(Component, FwFilterConfig):
 
        # Return webserver config
        assert self.webserver.protocol is not None
+       assert self.webserver.actions is not None
        return FwWebserverFilterConfig(
-                self.webserver.protocol,
-                web_update_ch.pd_a_id,
-                web_rules_region,
-                filter_rules_buffer.capacity,
+                protocol=self.webserver.protocol,
+                ch=web_update_ch.pd_a_id,
+                rules=web_rules_region,
+                rules_capacity=filter_rules_buffer.capacity,
+                actions=self.webserver.actions.copy(),
             )
 
     def connect_router(self, router: Component) -> FwConnectionResource:
@@ -129,17 +134,17 @@ class Filter(Component, FwFilterConfig):
 
         # Update filter config
         self.router = FwConnectionResource(
-            router_queue_mr.map(self.pd, "rw"),
-            dma_buffer_queue.capacity,
-            router_ch.pd_a_id,
+            queue=router_queue_mr.map(self.pd, "rw"),
+            capacity=dma_buffer_queue.capacity,
+            ch=router_ch.pd_a_id,
 
         )
 
         # Return router config
         return FwConnectionResource(
-            router_queue_mr.map(router.pd, "rw"),
-            dma_buffer_queue.capacity,
-            router_ch.pd_b_id,
+            queue=router_queue_mr.map(router.pd, "rw"),
+            capacity=dma_buffer_queue.capacity,
+            ch=router_ch.pd_b_id,
 
         )
 
@@ -148,6 +153,7 @@ class Filter(Component, FwFilterConfig):
         assert self.webserver is not None
         assert self.internal_instances is not None
         webserver_config = self.webserver
+        assert self.initial_rules is not None
         assert len(self.initial_rules) > 0
         assert len(self.initial_rules) <= FwMaxInitialFilterRules
         assert webserver_config.ch is not None

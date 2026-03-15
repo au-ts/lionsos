@@ -77,26 +77,29 @@ class Router(Component, FwRouterConfig):
             )
 
             # Create a direct route for interface subnets
-            self._initial_routes.append(FwRoutingEntry(
-                iface.ip_int,
-                iface.subnet_bits,
-                iface.index,
-                0
-            ))
+            self._initial_routes.append(
+                FwRoutingEntry(
+                    ip=iface.ip_int,
+                    subnet=iface.subnet_bits,
+                    interface=iface.index,
+                    next_hop=0,
+                )
+            )
 
             # TODO: Append additional initial routes which can be set in constants.py here
 
         # Initialise Router config class
         FwRouterConfig.__init__(
             self,
-            self._interfaces,
-            FwWebserverRouterConfig(
-                None,
-                self._routing_table_mr.map(self.pd, "rw"),
-                routing_table_buffer.capacity,
-                None),
-            self._initial_routes,
-            None,
+            interfaces=self._interfaces,
+            webserver=FwWebserverRouterConfig(
+                routing_ch=None,
+                routing_table=self._routing_table_mr.map(self.pd, "rw"),
+                routing_table_capacity=routing_table_buffer.capacity,
+                rx_active=None,
+            ),
+            initial_routes=self._initial_routes,
+            icmp_module=None,
         )
 
     def connect_webserver(
@@ -108,10 +111,10 @@ class Router(Component, FwRouterConfig):
         # Webserver needs read-only access to routing table
         router_webserver_config = self.webserver
         webserver_router_config = FwWebserverRouterConfig(
-            None,
-            self._routing_table_mr.map(webserver.pd, "r"),
-            routing_table_buffer.capacity,
-            None,
+            routing_ch=None,
+            routing_table=self._routing_table_mr.map(webserver.pd, "r"),
+            routing_table_capacity=routing_table_buffer.capacity,
+            rx_active=None,
         )
 
         # Router transmits to the webserver
@@ -125,15 +128,15 @@ class Router(Component, FwRouterConfig):
         pyfw.constants.sdf.add_channel(ch)
 
         router_webserver_config.rx_active = FwConnectionResource(
-            queue.map(self.pd, "rw"),
-            dma_buffer_queue.capacity,
-            ch.pd_a_id,
+            queue=queue.map(self.pd, "rw"),
+            capacity=dma_buffer_queue.capacity,
+            ch=ch.pd_a_id,
         )
 
         webserver_router_config.rx_active = FwConnectionResource(
-            queue.map(webserver.pd, "rw"),
-            dma_buffer_queue.capacity,
-            ch.pd_b_id,
+            queue=queue.map(webserver.pd, "rw"),
+            capacity=dma_buffer_queue.capacity,
+            ch=ch.pd_b_id,
         )
 
         # Router needs channel to webserver for routing table updates
@@ -147,6 +150,8 @@ class Router(Component, FwRouterConfig):
 
 
     def finalise_config(self) -> None:
+        assert self.interfaces is not None
+        assert self.initial_routes is not None
         assert len(self.interfaces) == len(interfaces)
         assert len(self.interfaces) <= FwMaxInterfaces
         assert len(self.initial_routes) >= len(interfaces)
@@ -159,6 +164,7 @@ class Router(Component, FwRouterConfig):
         assert self.icmp_module is not None
 
         for iface in self.interfaces:
+            assert iface.mac_addr is not None
             assert len(iface.mac_addr) == EthHwaddrLen
             assert iface.ip is not None and iface.ip != 0
             assert iface.subnet is not None and iface.subnet > 0
@@ -167,6 +173,7 @@ class Router(Component, FwRouterConfig):
             assert iface.data is not None
             assert iface.arp_queue is not None
             assert iface.arp_cache is not None
+            assert iface.filters is not None
             assert len(iface.filters) == len(supported_protocols)
             assert len(iface.filters) <= FwMaxFilters
             assert iface.packet_queue is not None

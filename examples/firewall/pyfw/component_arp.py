@@ -46,12 +46,12 @@ class ArpRequester(Component, FwArpRequesterConfig):
         # Initialise ARP requester config class
         FwArpRequesterConfig.__init__(
             self,
-            net_interface.index,
-            net_interface.mac_list,
-            net_interface.ip_int,
-            [],
-            self._arp_cache_mr.map(self.pd, "rw"),
-            arp_cache_buffer.capacity,
+            interface=net_interface.index,
+            mac_addr=net_interface.mac_list,
+            ip=net_interface.ip_int,
+            arp_clients=[],
+            arp_cache=self._arp_cache_mr.map(self.pd, "rw"),
+            arp_cache_capacity=arp_cache_buffer.capacity,
         )
 
 
@@ -81,6 +81,7 @@ class ArpRequester(Component, FwArpRequesterConfig):
         ch = SDF_Channel(client.pd, self.pd)
         pyfw.constants.sdf.add_channel(ch)
 
+        assert self.arp_clients is not None
         self.arp_clients.append(
             FwArpConnection(request=arp_req_region, response=arp_res_region,
                                    capacity=arp_queue_buffer.capacity, ch=ch.pd_b_id)
@@ -95,8 +96,10 @@ class ArpRequester(Component, FwArpRequesterConfig):
         return client_cache_region
 
     def finalise_config(self) -> None:
+        assert self.mac_addr is not None
         assert len(self.mac_addr) == EthHwaddrLen
         assert self.ip is not None and self.ip != 0
+        assert self.arp_clients is not None
         assert len(self.arp_clients) > 0
         assert len(self.arp_clients) <= FwMaxArpRequesterClients
 
@@ -118,11 +121,12 @@ class ArpResponder(Component, FwArpResponderConfig):
         # Initialise ARP requester config class
         FwArpResponderConfig.__init__(
             self,
-            net_interface.index,
-            net_interface.mac_list,
-            net_interface.ip_int,
+            interface=net_interface.index,
+            mac_addr=net_interface.mac_list,
+            ip=net_interface.ip_int,
         )
 
     def finalise_config(self) -> None:
+        assert self.mac_addr is not None
         assert len(self.mac_addr) == EthHwaddrLen
         assert self.ip is not None and self.ip != 0

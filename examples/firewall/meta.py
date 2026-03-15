@@ -73,6 +73,8 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
             f"Could not find device tree node: {ethernet_node_path}"
         )
 
+        assert iface.tx_virtualiser is not None
+        assert iface.rx_virtualiser is not None
         iface.net_system = TrackedNet(
             ethernet_node,
             iface.ethernet_driver,
@@ -199,6 +201,7 @@ def wire_interface_connections(
         )
 
         # Router is an ARP requester client
+        assert router.interfaces is not None
         router.interfaces[iface.index].arp_queue = iface.arp_requester.add_arp_client(router)
 
         # Router needs access to the ARP cache
@@ -211,9 +214,10 @@ def wire_interface_connections(
             )
 
             # Filter transmits traffic to the router
-            router.interfaces[iface.index].filters.append(
-                ip_filter.connect_router(router)
-            )
+            router_filters = router.interfaces[iface.index].filters
+            assert router_filters is not None
+            router_filters.append(ip_filter.connect_router(router))
+
 
         # Router needs access to the Rx DMA region
         assert iface.rx_dma_region is not None
@@ -271,6 +275,7 @@ def wire_webserver_connections(
     for iface in interfaces:
         # Webserver needs access to the Rx DMA region
         assert iface.rx_dma_region is not None
+        assert webserver.interfaces is not None
         webserver.interfaces[iface.index].data = iface.rx_dma_region.map(webserver.pd, "rw")
 
         # Webserver returns buffers to the Rx virtualiser
@@ -279,7 +284,9 @@ def wire_webserver_connections(
 
         # Webserver needs to be connected to all filters
         for ip_filter in iface.filters.values():
-            webserver.interfaces[iface.index].filters.append(
+            filters = webserver.interfaces[iface.index].filters
+            assert filters is not None
+            filters.append(
                 ip_filter.connect_webserver(webserver)
             )
 
@@ -294,6 +301,7 @@ def wire_icmp_connections(
     for iface in interfaces:
         assert iface.net_system is not None
         iface.net_system.add_client_with_copier(icmp_module.pd, rx=False)
+        icmp_module.connect_interface_filters(iface=iface)
 
     router.icmp_module = icmp_module.connect_router(router)
 

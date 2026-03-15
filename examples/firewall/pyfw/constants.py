@@ -85,13 +85,26 @@ supported_protocols = {0x01: "icmp", 0x06: "tcp", 0x11: "udp"}
 
 FILTER_ACTION_ALLOW = 1
 FILTER_ACTION_DROP = 2
-FILTER_ACTION_CONNECT = 3
+FILTER_ACTION_REJECT = 3
+FILTER_ACTION_CONNECT = 4
+supported_filter_actions = [1, 1, 1, 1]
 
 # Initial rules - protocol->rule dictionary for each interface
 # The first rule must always be the default action
 def default_action_rule(action: int) -> FwRule:
     assert action in (FILTER_ACTION_ALLOW, FILTER_ACTION_DROP, FILTER_ACTION_CONNECT)
-    return FwRule(action, 0, 0, 0, 0, 0, 0, True, True, 0)
+    return FwRule(
+        action=action,
+        src_ip=0,
+        dst_ip=0,
+        src_port=0,
+        dst_port=0,
+        src_subnet=0,
+        dst_subnet=0,
+        src_port_any=True,
+        dst_port_any=True,
+        rule_id=0,
+    )
 
 initial_rules = [
     {
