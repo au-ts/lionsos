@@ -396,38 +396,51 @@ void init(void)
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     switch (microkit_msginfo_get_label(msginfo)) {
+
     case FW_ADD_ROUTE: {
-        uint32_t ip = microkit_mr_get(ROUTER_ARG_IP);
-        uint8_t subnet = microkit_mr_get(ROUTER_ARG_SUBNET);
-        uint32_t next_hop = microkit_mr_get(ROUTER_ARG_NEXT_HOP);
-        uint8_t interface = microkit_mr_get(ROUTER_ARG_INTERFACE);
+        uint32_t ip = microkit_mr_get(ROUTER_ADD_ARG_IP);
+        uint8_t subnet = microkit_mr_get(ROUTER_ADD_ARG_SUBNET);
+        uint32_t next_hop = microkit_mr_get(ROUTER_ADD_ARG_NEXT_HOP);
+        uint8_t interface = microkit_mr_get(ROUTER_ADD_ARG_INTERFACE);
 
         fw_routing_err_t err = fw_routing_table_add_route(routing_table, interface, ip, subnet, next_hop);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("Router add route. (ip %s, mask %u, next hop %s): %s\n", ipaddr_to_string(ip, ip_addr_buf0),
-                        subnet, ipaddr_to_string(next_hop, ip_addr_buf1), fw_routing_err_str[err]);
+            sddf_printf("ROUTING_LOG: add route. (ip %s, mask %u, next hop %s): %s\n",
+                        ipaddr_to_string(ip, ip_addr_buf0), subnet, ipaddr_to_string(next_hop, ip_addr_buf1),
+                        fw_routing_err_str[err]);
         }
         microkit_mr_set(ROUTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
     case FW_DEL_ROUTE: {
-        uint16_t route_id = microkit_mr_get(ROUTER_ARG_ROUTE_ID);
+        uint16_t route_id = microkit_mr_get(ROUTER_DELETE_ARG_ROUTE_ID);
         fw_routing_err_t err = fw_routing_table_remove_route(routing_table, route_id);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("Router delete route %u: %s\n", route_id, fw_routing_err_str[err]);
+            sddf_printf("ROUTING LOG: delete route %u: %s\n", route_id, fw_routing_err_str[err]);
         }
 
         microkit_mr_set(ROUTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
     case FW_SET_PING_RESPONSE: {
-        ping_response_enabled = (bool)microkit_mr_get(0);
-        if (FW_DEBUG_OUTPUT) {
-            sddf_printf("Router ping response %s\n", ping_response_enabled ? "enabled" : "disabled");
+        uint8_t interface = microkit_mr_get(ROUTER_PING_ARG_INTERFACE);
+        bool ping_state = microkit_mr_get(ROUTER_PING_ARG_PING_STATE);
+        if (interface >= router_config.num_interfaces) {
+            if (FW_DEBUG_OUTPUT) {
+                sddf_printf("ROUTING LOG: ping response %s on interface %u\n", ping_state ? "enabled" : "disabled",
+                            interface);
+            }
+            ping_response_enabled[interface] = ping_state;
+            microkit_mr_set(ROUTER_RET_ERR, ROUTING_ERR_OKAY); /* success */
+        } else {
+            if (FW_DEBUG_OUTPUT) {
+                sddf_printf("ROUTING LOG: invalid interface selected during PING PPC");
+            }
+            microkit_mr_set(ROUTER_RET_ERR, ROUTING_ERR_INVALID_INTERFACE);
         }
-        microkit_mr_set(0, 0); /* success */
+
         return microkit_msginfo_new(0, 1);
     }
     default:

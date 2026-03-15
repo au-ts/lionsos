@@ -131,13 +131,13 @@ def tupleToMac(macList):
     return mac
 
 def interfaceStringToInt(componentType, interfaceStr):
-  if componentType == "router":
-      for i in range(numInterfaces):
-        if interfaceStr == interfaceStrings[1-i]:
-            return i
-  elif componentType == "filter":
-    for i in range(numInterfaces):
-        if interfaceStr == interfaceStrings[i]:
+    interface_count = lions_firewall.interface_count_get()
+    interface_names = [
+        lions_firewall.interface_name_get(i) for i in range(interface_count)
+    ]
+
+    for i in range(interface_count):
+        if interfaceStr == interface_names[i]:
             return i
 
     print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
@@ -423,7 +423,7 @@ def setPingResponse(request, interfaceStr, enabled):
         interface = interfaceStringToInt("filter", interfaceStr)
         lions_firewall.ping_response_set(interface, bool(enabled))
         return {
-            "interface": interfaceStringsCap[interface],
+            "interface": interfaceStr,
             "ping_enabled": bool(enabled)
         }
     except OSError as OSErr:
@@ -440,7 +440,7 @@ def getPing(request, interfaceStr):
 
         enabled = lions_firewall.ping_response_get(interface)
         return {
-            "interface": interfaceStringsCap[interface],
+            "interface": interfaceStr,
             "ping_enabled": bool(enabled)
         }
     except OSError as OSErr:
@@ -1006,65 +1006,99 @@ def ping_settings(request):
   </nav>
 
     <h2>Toggle Ping Response</h2>
-    <p>Control whether the firewall responds to ICMP echo requests (ping) on each interface. Default disabled for all interfaces.</p>
+    <p>Control whether the firewall responds to ICMP echo requests (ping) on the selected interface. Default disabled for all interfaces.</p>
 
-    <div id="ping-controls-container"></div>
+    <div class="default-action-container" style="max-width: 18rem;">
+      <label for="ping-interface">Interface</label>
+      <select id="ping-interface"></select>
+    </div>
+
+    <div class="default-action-container">
+      <h3 id="ping-interface-title">Ping Status</h3>
+      <div>
+        <button id="enable-ping-btn">Enable Ping</button>
+        <button id="disable-ping-btn">Disable Ping</button>
+        <span id="ping-status">Loading...</span>
+      </div>
+    </div>
 
     <script>
-      function togglePing(interfaceName, enabled) {
+      function selectedInterfaceName() {
+        var select = document.getElementById('ping-interface');
+        return select.options[select.selectedIndex].text;
+      }
+
+      function updateStatus(statusData) {
+        var statusSpan = document.getElementById('ping-status');
+        if (statusData.error) {
+          statusSpan.textContent = 'Error: ' + statusData.error;
+          statusSpan.style.color = 'red';
+        } else {
+          statusSpan.textContent = statusData.ping_enabled ? 'Enabled' : 'Disabled';
+          statusSpan.style.color = statusData.ping_enabled ? 'green' : 'gray';
+        }
+      }
+
+      function loadPingStatus() {
+        var interfaceName = selectedInterfaceName();
+        document.getElementById('ping-interface-title').textContent = interfaceName + ' Ping Status';
+        fetch('/api/ping/' + interfaceName + '/')
+          .then(function(response) { return response.json(); })
+          .then(function(data) { updateStatus(data); })
+          .catch(function() {
+            updateStatus({ error: 'Error loading status' });
+          });
+      }
+
+      function togglePing(enabled) {
+        var interfaceName = selectedInterfaceName();
         fetch('/api/ping/' + interfaceName + '/' + (enabled ? 1 : 0), {
           method: 'POST'
         })
-        .then(response => response.json())
-        .then(data => {
-          var statusSpan = document.getElementById(interfaceName + '-status');
-          if (data.error) {
-            statusSpan.textContent = 'Error: ' + data.error;
-            statusSpan.style.color = 'red';
-          } else {
-            statusSpan.textContent = data.ping_enabled ? 'Enabled' : 'Disabled';
-            statusSpan.style.color = data.ping_enabled ? 'green' : 'gray';
-          }
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+          updateStatus(data);
         })
-        .catch(err => {
+        .catch(function() {
           alert('Error toggling ping response');
         });
       }
 
       document.addEventListener("DOMContentLoaded", function() {
-        const container = document.getElementById('ping-controls-container');
-        const interfaceNames = ['internal', 'external'];
-
-        interfaceNames.forEach(interfaceName => {
-            const interfaceDiv = document.createElement('div');
-            interfaceDiv.className = 'ping-control';
-
-            interfaceDiv.innerHTML = `
-                <h3>${interfaceName.charAt(0).toUpperCase() + interfaceName.slice(1)}</h3>
-                <button onclick="togglePing('${interfaceName}', true)">Enable Ping</button>
-                <button onclick="togglePing('${interfaceName}', false)">Disable Ping</button>
-                <span id="${interfaceName}-status">Loading...</span>
-            `;
-            container.appendChild(interfaceDiv);
-
-            fetch('/api/ping/' + interfaceName + '/')
-                .then(response => response.json())
-                .then(data => {
-                    const statusSpan = document.getElementById(interfaceName + '-status');
-                    if (data.error) {
-                        statusSpan.textContent = 'Error: ' + data.error;
-                        statusSpan.style.color = 'red';
-                    } else {
-                        statusSpan.textContent = data.ping_enabled ? 'Enabled' : 'Disabled';
-                        statusSpan.style.color = data.ping_enabled ? 'green' : 'gray';
-                    }
-                })
-                .catch(err => {
-                    const statusSpan = document.getElementById(interfaceName + '-status');
-                    statusSpan.textContent = 'Error loading status';
-                    statusSpan.style.color = 'red';
-                });
+        var interfaceSelect = document.getElementById('ping-interface');
+        document.getElementById('enable-ping-btn').addEventListener('click', function() {
+          togglePing(true);
         });
+        document.getElementById('disable-ping-btn').addEventListener('click', function() {
+          togglePing(false);
+        });
+        interfaceSelect.addEventListener('change', loadPingStatus);
+
+        fetch('/api/interfaces/count')
+          .then(function(response) { return response.json(); })
+          .then(function(data) {
+            var requests = [];
+            for (let i = 0; i < data.count; i++) {
+              requests.push(
+                fetch('/api/interfaces/' + i)
+                  .then(function(response) { return response.json(); })
+              );
+            }
+            return Promise.all(requests);
+          })
+          .then(function(interfaceInfos) {
+            interfaceSelect.innerHTML = '';
+            interfaceInfos.forEach(function(info, index) {
+              var option = document.createElement('option');
+              option.value = String(index);
+              option.textContent = info.interface;
+              interfaceSelect.appendChild(option);
+            });
+            loadPingStatus();
+          })
+          .catch(function() {
+            updateStatus({ error: 'Error loading interfaces' });
+          });
       });
     </script>
   </body>
