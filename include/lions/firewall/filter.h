@@ -35,14 +35,15 @@ typedef enum {
     FILTER_ERR_UNSUPPORTED_ACTION
 } fw_filter_err_t;
 
-static const char *fw_filter_err_str[] = { "Ok.", "Out of memory error.", "Duplicate entry.", "Clashing entry.",
-                                           "Invalid rule ID.", "Unsupported action." };
+static const char *fw_filter_err_str[] = {
+    "Ok.", "Out of memory error.", "Duplicate entry.", "Clashing entry.", "Invalid rule ID.", "Unsupported action."
+};
 
 typedef enum {
     /* allow traffic */
     FILTER_ACT_ALLOW = 1,
     /* drop traffic */
-	FILTER_ACT_DROP = 2,
+    FILTER_ACT_DROP = 2,
     /* reject traffic (send back icmp unreachable) */
     FILTER_ACT_REJECT = 3,
     /* allow traffic, and additionally any return traffic */

@@ -62,7 +62,7 @@ typedef enum {
     /* no error */
     ARP_ERR_OKAY = 0,
     /* data structure is full */
-	ARP_ERR_FULL,
+    ARP_ERR_FULL,
     /* arp entry invalid */
     ARP_ERR_INVALID
 } fw_arp_error_t;
@@ -114,9 +114,7 @@ typedef struct fw_arp_request {
  * @param entries virtual address of arp entries.
  * @param capacity capacity of arp table.
  */
-static inline void fw_arp_table_init(fw_arp_table_t *table,
-                              void *entries,
-                              uint16_t capacity)
+static inline void fw_arp_table_init(fw_arp_table_t *table, void *entries, uint16_t capacity)
 {
     table->entries = (fw_arp_entry_t *)entries;
     table->capacity = capacity;
@@ -130,8 +128,7 @@ static inline void fw_arp_table_init(fw_arp_table_t *table,
  *
  * @return address of arp entry of NULL.
  */
-static inline fw_arp_entry_t *fw_arp_table_find_entry(fw_arp_table_t *table,
-                                               uint32_t ip)
+static inline fw_arp_entry_t *fw_arp_table_find_entry(fw_arp_table_t *table, uint32_t ip)
 {
     for (uint16_t i = 0; i < table->capacity; i++) {
         fw_arp_entry_t *entry = table->entries + i;
@@ -181,11 +178,8 @@ static inline fw_arp_request_t fw_arp_response_from_entry(fw_arp_entry_t *entry)
  *
  * @return error status.
  */
-static inline fw_arp_error_t fw_arp_table_add_entry(fw_arp_table_t *table,
-                                       fw_arp_entry_state_t state,
-                                       uint32_t ip,
-                                       uint8_t *mac_addr,
-                                       uint8_t client)
+static inline fw_arp_error_t fw_arp_table_add_entry(fw_arp_table_t *table, fw_arp_entry_state_t state, uint32_t ip,
+                                                    uint8_t *mac_addr, uint8_t client)
 {
     if (state == ARP_STATE_REACHABLE && mac_addr == NULL) {
         return ARP_ERR_INVALID;

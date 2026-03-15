@@ -52,14 +52,15 @@ static void filter(void)
             case FILTER_ACT_CONNECT: {
                 /* Add an established connection in shared memory for corresponding filter */
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port,
-                                                                                ip_hdr->dst_ip, tcp_hdr->dst_port, rule_id);
+                                                                ip_hdr->dst_ip, tcp_hdr->dst_port, rule_id);
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
-                    sddf_printf("TCP filter on interface %u establishing connection via rule %u: (ip %s, port %u) -> "
-                                "(ip %s, port %u)\n",
-                                filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                                htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                                htons(tcp_hdr->dst_port));
+                    sddf_printf(
+                        "TCP FILTER LOG: on interface %u establishing connection via rule %u: (ip %s, port %u) -> "
+                        "(ip %s, port %u)\n",
+                        filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                        htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                        htons(tcp_hdr->dst_port));
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
@@ -74,9 +75,9 @@ static void filter(void)
             case FILTER_ACT_ALLOW: {
                 /* Transmit the packet to the routing component */
                 /* Reset the checksum if it's recalculated in hardware */
-                #ifdef NETWORK_HW_HAS_CHECKSUM
+#ifdef NETWORK_HW_HAS_CHECKSUM
                 tcp_hdr->check = 0;
-                #endif
+#endif
 
                 err = fw_enqueue(&router_queue, &buffer);
                 assert(!err);
@@ -84,17 +85,19 @@ static void filter(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
-                        sddf_printf("TCP filter on interface %u transmitting via rule %u: (ip %s, port %u) -> (ip %s, "
-                                    "port %u)\n",
-                                    filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                                    htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                                    htons(tcp_hdr->dst_port));
+                        sddf_printf(
+                            "TCP FILTER LOG: on interface %u transmitting via rule %u: (ip %s, port %u) -> (ip %s, "
+                            "port %u)\n",
+                            filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                            htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                            htons(tcp_hdr->dst_port));
                     } else if (action == FILTER_ACT_ESTABLISHED) {
-                        sddf_printf("TCP filter on interface %u transmitting via external rule %u: (ip %s, port %u) -> "
-                                    "(ip %s, port %u)\n",
-                                    filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                                    htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                                    htons(tcp_hdr->dst_port));
+                        sddf_printf(
+                            "TCP FILTER LOG: on interface %u transmitting via external rule %u: (ip %s, port %u) -> "
+                            "(ip %s, port %u)\n",
+                            filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                            htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                            htons(tcp_hdr->dst_port));
                     }
                 }
                 break;
@@ -108,13 +111,14 @@ static void filter(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf(
-                        "TCP filter on interface %u dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
+                        "TCP FILTER LOG: on interface %u dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
                         htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
                         htons(tcp_hdr->dst_port));
                 }
                 break;
-            }}
+            }
+            }
         }
 
         net_request_signal_active(&rx_queue);
@@ -142,8 +146,8 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         fw_action_t action = microkit_mr_get(FILTER_ARG_ACTION);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("TCP filter on interface %u changing default action from %u to %u\n", filter_config.interface,
-                        filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
+            sddf_printf("TCP FILTER LOG: on interface %u changing default action from %u to %u\n",
+                        filter_config.interface, filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
         }
 
         fw_filter_err_t err = fw_filter_update_default_action(&filter_state, action);
@@ -174,12 +178,12 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
                                                  dst_subnet, src_port_any, dst_port_any, action, &rule_id);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("TCP filter on interface %u create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> "
-                        "(ip %s, mask %u, port %u, any_port %u): %s\n",
-                        filter_config.interface, rule_id, ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet,
-                        htons(src_port), src_port_any, fw_filter_action_str[action],
-                        ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, htons(dst_port), dst_port_any,
-                        fw_filter_err_str[err]);
+            sddf_printf(
+                "TCP FILTER LOG: on interface %u create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> "
+                "(ip %s, mask %u, port %u, any_port %u): %s\n",
+                filter_config.interface, rule_id, ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet, htons(src_port),
+                src_port_any, fw_filter_action_str[action], ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet,
+                htons(dst_port), dst_port_any, fw_filter_err_str[err]);
         }
 
         microkit_mr_set(FILTER_RET_ERR, err);
@@ -191,7 +195,7 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         fw_filter_err_t err = fw_filter_remove_rule(&filter_state, rule_id);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("TCP filter on interface %u remove rule id %u: %s\n", filter_config.interface, rule_id,
+            sddf_printf("TCP FILTER LOG: on interface %u remove rule id %u: %s\n", filter_config.interface, rule_id,
                         fw_filter_err_str[err]);
         }
 
@@ -230,5 +234,6 @@ void init(void)
     fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr,
                          filter_config.webserver.rules_capacity, filter_config.internal_instances.vaddr,
                          filter_config.external_instances, filter_config.instances_capacity,
-                         filter_config.initial_rules, filter_config.num_initial_rules, filter_config.num_external_instances);
+                         filter_config.initial_rules, filter_config.num_initial_rules,
+                         filter_config.num_external_instances);
 }

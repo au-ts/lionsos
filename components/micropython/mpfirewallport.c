@@ -122,6 +122,11 @@ net_sddf_err_t mpfirewall_handle_arp(struct pbuf *p)
         return SDDF_LWIP_ERR_NO_BUF;
     }
 
+    if (FW_DEBUG_OUTPUT) {
+        dlog("Enqueued ARP request for ip %s on tx interface %u", ipaddr_to_string(arp_pkt->ipdst_addr, ip_addr_buf0),
+             fw_config.tx_interface);
+    }
+
     notify_arp = true;
     return SDDF_LWIP_ERR_OK;
 }
@@ -132,6 +137,11 @@ void mpfirewall_process_arp(void)
         fw_arp_request_t response;
         int err = fw_dequeue(&arp_resp_queue, &response);
         assert(!err);
+
+        if (FW_DEBUG_OUTPUT) {
+            dlog("Dequeued ARP response for ip %s with state %u", ipaddr_to_string(response.ip, ip_addr_buf0),
+                 response.state);
+        }
 
         if (response.state == ARP_STATE_REACHABLE) {
             fill_arp(response.ip, response.mac_addr);
@@ -171,6 +181,11 @@ void mpfirewall_process_rx(void)
         fw_buff_desc_t buffer;
         int err = fw_dequeue(&rx_active, &buffer);
         assert(!err);
+
+        if (FW_DEBUG_OUTPUT) {
+            dlog("Dequeued firewall rx buffer=%lu len=%u interface=%u tx_interface=%u", buffer.offset / NET_BUFFER_SIZE,
+                 buffer.len, buffer.interface, fw_config.tx_interface);
+        }
 
         // TODO: Currently the webserver can only transmit out one interface. So
         // if traffic is received on a non transmission interface, it is

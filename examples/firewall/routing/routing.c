@@ -187,9 +187,9 @@ static void route(void)
                  * retransmitted, thus it is explicitly dropped. Multicast traffic
                  * is not currently handled by the firewall.
                  */
-                if (ip_hdr->dst_ip == BROADCAST_IP_ADDR ||
-                    !memcmp(eth_hdr->ethdst_addr, broadcast_mac_addr, ETH_HWADDR_LEN) ||
-                    (ip_hdr->dst_ip & MULTICAST_IP_MASK) == MULTICAST_IP_ADDR) {
+                if (ip_hdr->dst_ip == BROADCAST_IP_ADDR
+                    || !memcmp(eth_hdr->ethdst_addr, broadcast_mac_addr, ETH_HWADDR_LEN)
+                    || (ip_hdr->dst_ip & MULTICAST_IP_MASK) == MULTICAST_IP_ADDR) {
                     err = fw_enqueue(&rx_free[interface], &buffer);
                     assert(!err);
                     returned[interface] = true;
@@ -257,7 +257,8 @@ static void route(void)
                 assert(fw_err == ROUTING_ERR_OKAY);
 
                 if (FW_DEBUG_OUTPUT && next_hop != FW_ROUTING_NONEXTHOP) {
-                    sddf_printf("Router converted ip %s to next hop ip %s arrived on interface %u, exiting on out interface %u\n",
+                    sddf_printf("Router converted ip %s to next hop ip %s arrived on interface %u, exiting on out "
+                                "interface %u\n",
                                 ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
                                 ipaddr_to_string(next_hop, ip_addr_buf1), interface, out_interface);
                 }
@@ -268,7 +269,9 @@ static void route(void)
                         sddf_printf("Router found no route for ip %s, dropping packet\n",
                                     ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0));
                     }
-                    fw_buff_desc_t fw_buffer = { .offset = buffer.io_or_offset, .len = buffer.len, .region_id = interface };
+                    fw_buff_desc_t fw_buffer = { .offset = buffer.io_or_offset,
+                                                 .len = buffer.len,
+                                                 .interface = interface };
                     enqueue_icmp_unreachable(fw_buffer);
                     err = fw_enqueue(&rx_free[interface], &buffer);
                     assert(!err);
