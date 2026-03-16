@@ -1,4 +1,5 @@
 #include <microkit.h>
+#include <stdbool.h>
 
 #define MAX_PDS 64
 #define NUM_PT_ENTRIES 128
