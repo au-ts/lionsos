@@ -1,3 +1,6 @@
+#ifndef FRAME_TABLE_H
+#define FRAME_TABLE_H
+
 #include "types.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -19,7 +22,7 @@ static inline void move_hand(uint32_t pd_idx) {
  * Used to calculate the offset of the frame to get the address of the frame within the pager.
  */
 uintptr_t get_frame_offset(uintptr_t frame_addr, int pd_idx) {
-    return (frame_addr - frame_table[pd_idx]) / sizeof(FrameInfo);
+    return (frame_addr - (uintptr_t)frame_table[pd_idx]) / sizeof(FrameInfo);
 }
 
 /**
@@ -37,7 +40,7 @@ static FrameInfo *get_frame(uint32_t pd_idx) {
         wshand[pd_idx]->page->recently_used = false;
         // map as ro again or do I want to unmap it?
         // maybe I want to unmap it... so that reads are counted as well.
-        microkit_arm_page_unmap(wshand->cap);
+        microkit_arm_page_unmap(wshand[pd_idx]->cap);
         move_hand(pd_idx);
     // } else if (time - wshand[pd_idx]->last_accessed < TAU)
     // {
@@ -50,3 +53,5 @@ static FrameInfo *get_frame(uint32_t pd_idx) {
 
     return get_frame(pd_idx);
 }
+
+#endif

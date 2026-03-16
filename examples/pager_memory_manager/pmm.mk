@@ -91,7 +91,8 @@ include ${SDDF}/serial/components/serial_components.mk
 ${IMAGES}: libsddf_util_debug.a
 
 # TODO: 
-pager.o: ${TOP}/pager.c ${TOP}/pagerfile.h ${TOP}/frame_table.h ${TOP}/types.h
+
+pager.o: ${TOP}/pager.c ${TOP}/pagefile.h ${TOP}/frame_table.h ${TOP}/types.h
 	$(CC) -c $(CFLAGS) -I. $< -o pager.o
 pager.elf: pager.o libsddf_util.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@

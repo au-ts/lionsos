@@ -1,3 +1,6 @@
+#ifndef TYPES_H
+#define TYPES_H
+
 #include <microkit.h>
 #include <stdbool.h>
 
@@ -80,3 +83,5 @@ uintptr_t malloc() {
     microkit_ppcall(MM_PPC_NUM, message);
     return microkit_mr_get(0);
 }
+
+#endif

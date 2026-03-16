@@ -1,3 +1,5 @@
+#ifndef PAGEFILE_H
+#define PAGEFILE_H
 // to get free pagefile slot in O(1).
 int pagefile_size = 0;
 int pagefile_freed_slots_stack[256];
@@ -24,3 +26,5 @@ int get_request_id() {
     }
     return ++request_id;
 }
+
+#endif

@@ -1,5 +1,6 @@
 #include <microkit.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include "types.h"
 #include "pagefile.h"
 #include "frame_table.h"
@@ -54,7 +55,7 @@ frame_pd_id *frames = (frame_pd_id *) unmapped_frames_addr;
 uintptr_t current_faults[MAX_PDS] = {-1};
 
 // this is where the heaps are all located.
-char *heaps = FRAME_DATA;
+char *heaps = (char *)FRAME_DATA;
 
 char *get_frame_data(int pd_idx, uintptr_t frame_offset) {
     return heaps + ((pd_idx - PD_IDX_OFFSET) * HEAP_SIZE + (frame_offset * 4096));
@@ -84,10 +85,10 @@ void init(void)
 
     // initialise and check blk queue and config
     assert(blk_config_check_magic(&blk_config));
-    LOG_CLIENT("config check\n");
+    // LOG_CLIENT("config check\n");
     blk_queue_init(&blk_queue, blk_config.virt.req_queue.vaddr, blk_config.virt.resp_queue.vaddr,
                    blk_config.virt.num_buffers);
-    LOG_CLIENT("queue init\n");
+    // LOG_CLIENT("queue init\n");
 
     // initialise the frame caps.
     int frame_indicies[MAX_PDS] = {0};
@@ -96,7 +97,7 @@ void init(void)
         frame_pd_id *cur_frame = &frames[i];
         int pd_idx = cur_frame->pd_idx;
 
-        frame_table[pd_idx][frame_indicies[pd_idx]] = { .cap = cur_frame->frame_cap, .last_accessed = 0, page = NULL, .next = ++frame_indicies[pd_idx], };
+        frame_table[pd_idx][frame_indicies[pd_idx]] = { .cap = cur_frame->frame_cap, .last_accessed = 0, page = NULL, .next = ++frame_indicies[pd_idx] };
     }
 
     
