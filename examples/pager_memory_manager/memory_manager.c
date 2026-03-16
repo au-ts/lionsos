@@ -26,11 +26,11 @@ static int64_t do_malloc(microkit_child pd) {
 /**
  * free the 4k block of memory which this addr is at.
  */
-static int64_t do_free(uintptr_t addr, microkit_child pd) {
-    struct mmap_node* ptr = node_pool[pd][INDEX_INTO_MMAP_ARRAY(addr)];
+static void do_free(uintptr_t addr, microkit_child pd) {
+    struct mmap_node* ptr = &node_pool[pd][INDEX_INTO_MMAP_ARRAY(addr)];
     // remove from used_nodes
     if (used_nodes[pd] == ptr) {
-        used_nodes = ptr->next;
+        used_nodes[pd] = ptr->next;
     } else {
         ptr->prev->next = ptr->next;
     }
@@ -38,6 +38,7 @@ static int64_t do_free(uintptr_t addr, microkit_child pd) {
     // add to free_nodes
     ptr->next = free_nodes[pd];
     free_nodes[pd] = ptr;
+
 }
 
 void init(void)
@@ -45,7 +46,7 @@ void init(void)
     // for each theoretically existing PD, push nodes into free nodes LL.
     for (int i = 0; i < MAX_PDS; ++i) {
         for (int j = 0; j < NUM_PT_ENTRIES; ++j) {
-            node[i][j].addr = BRK_START + j * 4096;
+            node_pool[i][j].addr = BRK_START + j * 4096;
             node_pool[i][j].next = free_nodes[i];
             free_nodes[i] = &node_pool[i][j];
         }
@@ -59,15 +60,15 @@ void init(void)
  */
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
-    uint32_t inst = seL4_GetMR(msginfo, 0);
-    uint32_t pd = seL4_GetMR(msginfo, 1);
+    uint32_t inst = seL4_GetMR(0);
+    uint32_t pd = seL4_GetMR(1);
     // 0 is free, 1 is malloc
     if (inst) {
-        uintptr_t addr = seL4_GetMR(msginfo, 2);
-        free(addr, pd);
+        uintptr_t addr = seL4_GetMR(2);
+        do_free(addr, pd);
         return microkit_msginfo_new(0, 0);
     } else {
-        return microkit_msginfo_new(0, malloc(pd));
+        return microkit_msginfo_new(0, do_malloc(pd));
     }
     
 }

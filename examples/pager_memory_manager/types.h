@@ -10,6 +10,7 @@
 #define TAU 10 // not too sure what the optimal number for this would be. maybe this is not useful...
 #define PAGEFILE ".pagefile"
 #define MM_PPC_NUM 1
+#define NULL 0
 
 
 struct mmap_node
@@ -70,12 +71,12 @@ struct page_request_info {
 void free(uintptr_t addr) {
     microkit_msginfo message = microkit_msginfo_new(0, 2);
     microkit_mr_set(0, 0);
-    microkit_ppcall(MM_PPC_NUM);
+    microkit_ppcall(MM_PPC_NUM, message);
 }
 
 uintptr_t malloc() {
     microkit_msginfo message = microkit_msginfo_new(0, 1);
     microkit_mr_set(0, 1);
-    microkit_ppcall(MM_PPC_NUM);
+    microkit_ppcall(MM_PPC_NUM, message);
     return microkit_mr_get(0);
 }
