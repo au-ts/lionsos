@@ -59,7 +59,7 @@ static bool tx_webserver; /* Packet has been transmitted to the webserver */
 static bool returned; /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp; /* Arp request has been enqueued */
 static bool notify_icmp; /* Request has been enqueued to ICMP module */
-static bool ping_response_enabled = false; /* Whether to reply to ICMP echo requests */
+static bool ping_response_enabled = true; /* Whether to reply to ICMP echo requests */
 
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
