@@ -161,6 +161,6 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
 		-drive file=qemu_disk,if=none,format=raw,id=hd \
-		-device virtio-blk-device,drive=hd \
-		-device virtio-net-device,netdev=netdev0 \
+		-device virtio-blk-device,drive=hd,bus=virtio-mmio-bus.1 \
+		-device virtio-net-device,netdev=netdev0,bus=virtio-mmio-bus.0 \
 		-netdev user,id=netdev0,hostfwd=tcp::5560-10.0.2.15:5560,hostfwd=tcp::5561-10.0.2.15:5561

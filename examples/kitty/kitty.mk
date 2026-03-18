@@ -225,7 +225,7 @@ qemu: $(IMAGE_FILE)
 			-serial mon:stdio \
 			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
 			-m size=2G \
-			-device virtio-net-device,netdev=netdev0 \
+			-device virtio-net-device,netdev=netdev0,bus=virtio-mmio-bus.0 \
 			-netdev user,id=netdev0 \
 			-global virtio-mmio.force-legacy=false \
 			-device virtio-gpu-pci
