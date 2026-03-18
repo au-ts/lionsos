@@ -27,7 +27,7 @@ def backend_fn(test_config: common.TestConfig, loader_img: Path) -> HardwareBack
         # fmt: off
         backend.invocation_args.extend([
             "-global", "virtio-mmio.force-legacy=false",
-            "-device", "virtio-net-device,netdev=netdev0",
+            "-device", "virtio-net-device,netdev=netdev0,bus=virtio-mmio-bus.0",
             "-netdev", "user,id=netdev0",
             "-device", "virtio-gpu-pci",
         ])

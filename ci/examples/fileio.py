@@ -43,7 +43,7 @@ def backend_fn(test_config: common.TestConfig, loader_img: Path) -> HardwareBack
         backend.invocation_args.extend([
             "-global", "virtio-mmio.force-legacy=false",
             "-drive", "file={},if=none,format=raw,id=hd".format(disk_path),
-            "-device", "virtio-blk-device,drive=hd",
+            "-device", "virtio-blk-device,drive=hd,bus=virtio-mmio-bus.1",
         ])
         # fmt: on
 
