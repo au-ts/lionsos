@@ -10,9 +10,11 @@
     zig-overlay.url = "github:mitchellh/zig-overlay";
     sdfgen.url = "github:au-ts/microkit_sdf_gen/0.28.1";
     sdfgen.inputs.nixpkgs.follows = "nixpkgs";
+    systems-ci.url = "github:au-ts/systems-ci/main";
+    systems-ci.flake = false;
   };
 
-  outputs = { nixpkgs, zig-overlay, sdfgen, ... }:
+  outputs = { nixpkgs, zig-overlay, sdfgen, systems-ci, ... }:
     let
       microkit-version = "2.1.0-dev.12+2d5a1a6";
       microkit-url = "https://trustworthy.systems/Downloads/microkit/";
@@ -47,8 +49,13 @@
 
               pysdfgen = sdfgen.packages.${system}.pysdfgen.override { zig = zig; pythonPackages = pkgs.python312Packages; };
 
+              ts_ci = pkgs.callPackage "${systems-ci}/ts_ci/package.nix" {
+                python3Packages = pkgs.python312Packages;
+              };
+
               pythonTool = pkgs.python312.withPackages (ps: [
                 pysdfgen
+                ts_ci
               ]);
             in
             # mkShellNoCC, because we do not want the cc from stdenv to leak into this shell
