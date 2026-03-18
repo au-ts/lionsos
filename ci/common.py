@@ -39,20 +39,33 @@ def example_build_path(test_config: TestConfig):
     )
 
 
-def loader_img_path(
-    test_config: TestConfig,
-):
-    return example_build_path(test_config) / "bin" / "loader.img"
-
-
 def backend_fn(
     test_config: TestCase,
     loader_img: Path,
 ) -> HardwareBackend:
 
     if test_config.is_qemu():
-        # TODO
-        raise NotImplementedError(f"unknown qemu board {test_config.board}")
+        QEMU_COMMON_FLAGS = (
+            # fmt: off
+            "-m", "size=2G",
+            "-serial", "mon:stdio",
+            "-nographic",
+            "-d", "guest_errors",
+            # fmt: on
+        )
+
+        if test_config.board == "qemu_virt_aarch64":
+            return QemuBackend(
+                "qemu-system-aarch64",
+                # fmt: off
+                "-machine", "virt,virtualization=on",
+                "-cpu", "cortex-a53",
+                "-device", f"loader,file={loader_img.resolve()},addr=0x70000000,cpu-num=0",
+                # fmt: on
+                *QEMU_COMMON_FLAGS,
+            )
+        else:
+            raise NotImplementedError(f"unknown qemu board {test_config.board}")
 
     else:
         mq_boards: list[str] = MACHINE_QUEUE_BOARDS[test_config.board]
@@ -67,7 +80,6 @@ BackendFunction = Callable[["TestConfig", Path], HardwareBackend]
 # Implements 'TestCase' protocol
 @dataclass(order=True, frozen=True)
 class TestConfig(TestCase):
-    test: str
     example: str
     board: str
     config: str
@@ -82,13 +94,13 @@ class TestConfig(TestCase):
         return self.board.startswith("qemu")
 
     def pretty_name(self) -> str:
-        return f"{self.test} for {self.example} on {self.board} ({self.config})"
+        return f"{self.example} on {self.board} ({self.config})"
 
     def backend(self, loader_img: Path) -> HardwareBackend:
         return self.backend_fn(self, loader_img)
 
     def loader_img(self) -> Path:
-        return example_build_path(self) / "bin" / "loader.img"
+        return example_build_path(self) / f"{self.example}.img"
 
     async def run(self, backend: HardwareBackend) -> None:
         await self.test_fn(backend, self)
@@ -96,7 +108,6 @@ class TestConfig(TestCase):
     def log_file_path(self, logs_dir: Path, now: datetime) -> Path:
         return (
             logs_dir
-            / self.test
             / self.example
             / self.board
             / self.config
@@ -109,18 +120,15 @@ def test_case_summary(tests: list[TestConfig]):
         return "   (none)"
 
     lines = []
-    for test, subtests in itertools.groupby(tests, key=lambda c: c.test):
-        lines.append(f"--- Test: {test} ---")
+    for example, subtests in itertools.groupby(tests, key=lambda c: c.example):
+        lines.append(f"--- Example: {example} ---")
 
-        for ex, subsubtests in itertools.groupby(subtests, key=lambda c: c.example):
-            lines.append(f"  ~~~ Example: {ex} ~~~")
-
-            for board, group in itertools.groupby(subsubtests, key=lambda c: c.board):
-                lines.append(
-                    "    - {}: {}".format(
-                        board, ", ".join(f"{c.config}/{c.build_system}" for c in group)
-                    )
+        for board, group in itertools.groupby(subtests, key=lambda c: c.board):
+            lines.append(
+                " - {}: {}".format(
+                    board, ", ".join(f"{c.config}/make" for c in group)
                 )
+            )
 
     return "\n".join(lines)
 
@@ -135,11 +143,9 @@ def subset_test_cases(
         implies = lambda a, b: not a or b
         return all(
             [
-                (test.test in filters.tests),
                 (test.example in filters.examples),
                 (test.board in filters.boards),
                 (test.config in filters.configs),
-                (test.build_system in filters.build_systems),
                 (implies(filters.only_qemu is True, test.is_qemu())),
                 (implies(filters.only_qemu is False, not test.is_qemu())),
             ]
@@ -152,9 +158,6 @@ def run_tests(tests: list[TestConfig]) -> None:
     parser = argparse.ArgumentParser(description="Run tests")
 
     filters = parser.add_argument_group(title="filters")
-    filters.add_argument(
-        "--tests", default={test.test for test in tests}, action=ArgparseActionList
-    )
     filters.add_argument(
         "--examples",
         default={test.example for test in tests},
