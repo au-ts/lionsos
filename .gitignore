@@ -6,3 +6,5 @@ docs/book/
 .#*
 __pycache__
 config_structs.py
+ci_build/
+ci_logs/
