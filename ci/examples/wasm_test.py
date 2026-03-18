@@ -44,6 +44,7 @@ def backend_fn(test_config: common.TestConfig, loader_img: Path) -> HardwareBack
             "-global", "virtio-mmio.force-legacy=false",
             "-drive", "file={},if=none,format=raw,id=hd".format(disk_path),
             "-device", "virtio-blk-device,drive=hd",
+            "-netdev", "user,id=netdev0,hostfwd=tcp::5560-10.0.2.15:5560,hostfwd=tcp::5561-10.0.2.15:5561",
         ])
         # fmt: on
 
@@ -62,19 +63,15 @@ def backend_fn(test_config: common.TestConfig, loader_img: Path) -> HardwareBack
 
 async def test(backend: HardwareBackend, test_config: common.TestConfig):
     async with asyncio.timeout(30):
-        await wait_for_output(backend, b"MP|INFO: initialising!\r\n")
-        await wait_for_output(backend, b"MicroPython v1")
-        await wait_for_output(backend, b"\r\n")
-        await wait_for_output(backend, b">>> ")
+        await wait_for_output(backend, b"WAMR | Starting WAMR...\r\n")
 
-        # TODO: ??? What is the test ???
-        # TODO: Probably need to set up NFS
+        # TODO: ??? What is the test ??? ethernet_driver crashes for me
 
 
 # export
 TEST_CASES = matrix.generate_example_test_cases(
-    "fileio",
-    matrix.EXAMPLES["fileio"],
+    "wasm_test",
+    matrix.EXAMPLES["wasm_test"],
     test_fn=test,
     backend_fn=backend_fn,
     no_output_timeout_s=matrix.NO_OUTPUT_DEFAULT_TIMEOUT_S,
