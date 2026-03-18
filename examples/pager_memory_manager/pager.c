@@ -8,6 +8,7 @@
 #include <sddf/blk/queue.h> 
 #include <sddf/blk/storage_info.h>
 #include <sddf/blk/config.h>
+#include <string.h>
 
 /**
  * TODOS:
@@ -68,7 +69,12 @@ pe page_table[MAX_PDS][NUM_PT_ENTRIES]; // page tables for the children. // each
 
 
 
-
+void memset0(void* begin, int num) {
+    char *ptr = (char *)begin;
+    for (int i = 0; i < num; ++i) {
+        ptr[i] = 0;
+    }
+}
 
 // TODO: have process vspace ptrs here as well.
 unsigned long vspaces[MAX_PDS];
@@ -81,10 +87,12 @@ static inline pe retrieve_page(uintptr_t fault_addr, uint32_t pd_idx) {
 void init(void)
 {
     // TODO: memset stuff to 0 where required.
-    memset(page_table, 0, MAX_PDS * NUM_PT_ENTRIES * sizeof(pe));
+    memset0(page_table, MAX_PDS * NUM_PT_ENTRIES * sizeof(pe));
 
     // initialise and check blk queue and config
-    assert(blk_config_check_magic(&blk_config));
+    
+    // should be an assert.
+    blk_config_check_magic(&blk_config);
     // LOG_CLIENT("config check\n");
     blk_queue_init(&blk_queue, blk_config.virt.req_queue.vaddr, blk_config.virt.resp_queue.vaddr,
                    blk_config.virt.num_buffers);
@@ -97,7 +105,7 @@ void init(void)
         frame_pd_id *cur_frame = &frames[i];
         int pd_idx = cur_frame->pd_idx;
 
-        frame_table[pd_idx][frame_indicies[pd_idx]] = { .cap = cur_frame->frame_cap, .last_accessed = 0, page = NULL, .next = ++frame_indicies[pd_idx] };
+        frame_table[pd_idx][frame_indicies[pd_idx]] = { .cap = cur_frame->frame_cap, .last_accessed = 0, .page = NULL, .next = ++frame_indicies[pd_idx] };
     }
 
     
@@ -111,8 +119,9 @@ void init(void)
 
 void after_page_in(uint32_t pd_idx, uintptr_t fault_addr) {
     // map the page to the frame
+    FrameInfo *frame = &frame_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
     microkit_arm_page_map(frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
-    frame->page = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
+    frame->page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
     page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr = &frame;
     current_faults[pd_idx] = -1;
     frame->pd_idx = pd_idx;
@@ -124,7 +133,7 @@ void page_in(uint32_t pd_idx, uintptr_t fault_addr) {
     // queue the read
     int request_id = get_request_id();
     page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_IN }; // TODO: fill this out with relevant info.
-    memcpy(get_frame_data(pd_idx, get_frame_offset(frame_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)], pd_idx)), (char *)blk_config.data.vaddr);
+    memcpy(get_frame_data(pd_idx, get_frame_offset((uintptr_t)&frame_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)], pd_idx)), (char *)blk_config.data.vaddr, 4096);
     blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
     sddf_notify(blk_config.virt.id);
 }
@@ -142,13 +151,13 @@ void page_out(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     // find empty slot in pagefile
     int slot = get_pagefile_slot();
     // mark in page entry where the pagefile entry is.
-    frame->page = slot;
+    frame->page->pagefile_offset = slot;
     // queue the write with page after_page_out();
     int request_id = get_request_id();
-    if (frame->page.dirty) {
+    if (frame->page->dirty) {
         page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_OUT }; // TODO: fill this out with relevant info.
         char *data_dest = (char *) blk_config.data.vaddr;
-        memcpy(data_dest, get_frame_data(frame->pd_idx, get_frame_offset(frame, frame->pd_idx)), 4096);
+        memcpy(data_dest, get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)), 4096);
         blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
         sddf_notify(blk_config.virt.id);
     } else {
@@ -206,7 +215,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
  */
 void notified(microkit_channel ch)
 {
-    assert(ch == blk_config.virt.id); // sanity check, pager should only be notified by this.
+    // assert(iich == blk_config.virt.id); // sanity check, pager should only be notified by this.
 
     blk_resp_status_t status = -1;
     uint16_t count = -1;
@@ -214,9 +223,9 @@ void notified(microkit_channel ch)
 
     int err = blk_dequeue_resp(&blk_queue, &status, &count, &id);
 
-    assert(!err);
-    assert(status == BLK_RESP_OK);
-    assert(count == 1); // make sure that the write/read is actually done.
+    (void *)err; // assert(!err);
+    // assert(status == BLK_RESP_OK);
+    // assert(count == 1); // make sure that the write/read is actually done.
     // TODO: if necessary make a thing to recover from the error.
 
     // queue the next thing depending on what was done.

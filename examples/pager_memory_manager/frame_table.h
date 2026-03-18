@@ -2,6 +2,7 @@
 #define FRAME_TABLE_H
 
 #include "types.h"
+#include <microkit.h>
 #include <stdint.h>
 #include <stddef.h>
 
