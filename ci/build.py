@@ -49,7 +49,7 @@ def build(args: argparse.Namespace, test_config: common.TestConfig):
             f"MICROKIT_SDK={args.microkit_sdk}",
             f"MICROKIT_BOARD={test_config.board}",
             f"MICROKIT_CONFIG={test_config.config}",
-            *(test_config.extra_build_args)
+            *(test_config.extra_build_args),
         ],
         check=True,
     )
@@ -81,7 +81,6 @@ if __name__ == "__main__":
 
         example_matrix = matrix_product(
             common.TestConfig,
-            test=[None],
             example=[example_name],
             board=options["boards"],
             config=options["configs"],

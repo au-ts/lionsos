@@ -13,6 +13,50 @@ from .common import TestConfig, TestFunction, BackendFunction
 NO_OUTPUT_DEFAULT_TIMEOUT_S: int = 60
 
 
+def generate_example_test_cases(
+    example: str,
+    example_matrix: _ExampleMatrixType,
+    test_fn: TestFunction,
+    backend_fn: BackendFunction,
+    no_output_timeout_s: int,
+) -> list[TestConfig]:
+    def listify(s: str | Sequence[str]) -> Sequence[str]:
+        if isinstance(s, str):
+            return [s]
+        else:
+            return s
+
+    matrix = set(
+        matrix_product(
+            TestConfig,
+            example=[example],
+            board=example_matrix["boards"],
+            config=example_matrix["configs"],
+            extra_build_args=[example_matrix.get("extra_build_args", tuple())],
+            test_fn=[test_fn],
+            backend_fn=[backend_fn],
+            no_output_timeout_s=[no_output_timeout_s],
+        )
+    )
+
+    for exclude in example_matrix["tests_exclude"]:
+        to_exclude = set(
+            matrix_product(
+                TestConfig,
+                example=[example],
+                board=listify(exclude.get("board", example_matrix["boards"])),
+                config=listify(exclude.get("config", example_matrix["configs"])),
+                extra_build_args=[example_matrix.get("extra_build_args", tuple())],
+                test_fn=[test_fn],
+                backend_fn=[backend_fn],
+                no_output_timeout_s=[no_output_timeout_s],
+            )
+        )
+        matrix -= to_exclude
+
+    return list(matrix)
+
+
 EXAMPLES: dict[str, _ExampleMatrixType] = {
     "fileio": {
         "configs": ["debug"],
@@ -36,10 +80,10 @@ EXAMPLES: dict[str, _ExampleMatrixType] = {
             "qemu_virt_aarch64",
         ],
         "tests_exclude": [],
-        "extra_build_args": [
+        "extra_build_args": (
             "NFS_SERVER=0.0.0.0",
             "NFS_DIRECTORY=test",
-        ],
+        ),
     },
     "posix_test": {
         "configs": ["debug"],
@@ -70,11 +114,11 @@ EXAMPLES: dict[str, _ExampleMatrixType] = {
             "qemu_virt_aarch64",
         ],
         "tests_exclude": [],
-        "extra_build_args": [
+        "extra_build_args": (
             "NFS_SERVER=0.0.0.0",
             "NFS_DIRECTORY=test",
             "WEBSITE_DIR=www",
-        ],
+        ),
     },
 }
 
@@ -105,8 +149,9 @@ if TYPE_CHECKING:
     # only works in py3.11+, so we use a string below
     from typing import NotRequired
 
+
 class _ExampleMatrixType(TypedDict):
     configs: list[Literal["debug", "release", "benchmark"]]
     boards: list[_BoardNames]
     tests_exclude: list[dict[str, str]]
-    extra_build_args: "NotRequired[list[str]]"
+    extra_build_args: "NotRequired[tuple[str, ...]]"
