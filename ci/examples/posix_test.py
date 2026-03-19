@@ -3,14 +3,17 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import asyncio
+import io
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import types
+from typing import Iterator, Literal, Self
 
 from ts_ci import (
+    log,
     HardwareBackend,
     QemuBackend,
     wait_for_output,
@@ -22,7 +25,6 @@ from ci import common, matrix
 
 LIONSOS = Path(__file__).parents[2]
 mkvirtdisk = (LIONSOS / "dep" / "sddf" / "tools" / "mkvirtdisk").resolve()
-
 
 def backend_fn(test_config: common.TestConfig, loader_img: Path) -> HardwareBackend:
     backend = common.backend_fn(test_config, loader_img)
@@ -64,9 +66,23 @@ def backend_fn(test_config: common.TestConfig, loader_img: Path) -> HardwareBack
 
 async def test(backend: HardwareBackend, test_config: common.TestConfig):
     async with asyncio.timeout(30):
-        await wait_for_output(backend, b"WAMR | Starting WAMR...\r\n")
 
-        # TODO: ??? What is the test ??? ethernet_driver crashes for me
+        await wait_for_output(backend, b"POSIX_TEST|core|START\r\n")
+        await wait_for_output(backend, b"POSIX_TEST|core|PASS\r\n")
+
+        log.info("posix_test core passed")
+
+        await wait_for_output(backend, b"POSIX_TEST|file|START\r\n")
+        await wait_for_output(backend, b"POSIX_TEST|file|PASS\r\n")
+
+        log.info("posix_test file passed")
+
+        await wait_for_output(backend, b"POSIX_TEST|server|START\r\n")
+        await wait_for_output(backend, b"POSIX_TEST|client|START\r\n")
+        await wait_for_output(backend, b"POSIX_TEST|server|PASS\r\n")
+        await wait_for_output(backend, b"POSIX_TEST|client|PASS\r\n")
+
+        log.info("posix_test server/client passed")
 
 
 # export
