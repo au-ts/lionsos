@@ -8,7 +8,7 @@ from typing import List, Tuple
 from sdfgen import SystemDescription, Sddf, DeviceTree
 from importlib.metadata import version
 
-assert version('sdfgen').split(".")[1] == "25", "Unexpected sdfgen version"
+assert version('sdfgen').split(".")[1] == "29", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
@@ -107,7 +107,7 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
     serial_system = Sddf.Serial(sdf, uart_node, uart_driver, serial_virt_tx)
 
-    debugger = ProtectionDomain("debugger", "debugger.elf", priority=97, budget=20000, stack_size=0x20000, child_pts=True)
+    debugger = ProtectionDomain("debugger", "debugger.elf", priority=97, budget=20000, stack_size=0x20000)
     debugger_net_copier = ProtectionDomain(
         "debugger_net_copier", "network_copy.elf", priority=98, budget=20000
     )
@@ -123,7 +123,8 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
     small_map = Map(small_mapping_region, 0x900000, "rw", setvar_vaddr="small_mapping_mr")
     debugger.add_map(small_map)
 
-    large_mapping_region = MemoryRegion(sdf, "large_region", 0x200000, page_size=MemoryRegion.PageSize.LargePage)
+    # large_mapping_region = MemoryRegion(sdf, "large_region", 0x200000, page_size=MemoryRegion.PageSize.LargePage)
+    large_mapping_region = MemoryRegion(sdf, "large_region", 0x200000)
     sdf.add_mr(large_mapping_region)
     large_map = Map(large_mapping_region, 0xa00000, "rw", setvar_vaddr="large_mapping_mr")
     debugger.add_map(large_map)
@@ -135,6 +136,11 @@ def generate(sdf_file: str, output_dir: str, dtb: DeviceTree):
         ping,
         pong
     ]
+
+    debuggee_pts = SystemDescription.PageTables(setvar="table_metadata")
+    debuggee_pts.add_entry(ping.name, index=0)
+    debuggee_pts.add_entry(pong.name, index=1)
+    debugger.set_page_tables(debuggee_pts)
 
     pds = [
         debugger,
