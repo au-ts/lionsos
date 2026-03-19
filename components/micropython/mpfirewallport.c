@@ -209,6 +209,7 @@ void init_firewall_webserver(void)
 {
     for (uint8_t i = 0; i < FW_NUM_INTERFACES; i++) {
         webserver_state[i].routing_table = fw_config.interfaces[i].router.routing_table.vaddr;
+        webserver_state[i].ping_enabled = true;
 
         for (uint8_t j = 0; j < fw_config.interfaces[i].num_filters; j++) {
             webserver_state[i].filter_states[j].rule_table = fw_config.interfaces[i].filters[j].rules.vaddr;
