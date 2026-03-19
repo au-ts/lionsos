@@ -3,6 +3,7 @@
 
 #include <microkit.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #define MAX_PDS 64
 #define NUM_PT_ENTRIES 128
@@ -33,12 +34,14 @@ typedef struct Rights {
     bool grant_reply;
 } Rights;
 
-typedef struct Cap {
-    uint32_t object;
-    Rights rights;
-    bool cached;
-    bool executable;
-} Cap;
+// typedef struct Cap {
+//     uint32_t object;
+//     Rights rights;
+//     bool cached;
+//     bool executable;
+// } Cap;
+
+typedef unsigned long long Cap;
 
 typedef struct microkit_data {
     Cap frame_cap;

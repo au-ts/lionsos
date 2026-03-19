@@ -1,25 +1,26 @@
 #include <microkit.h>
-
+#include <types.h>
+#include <stdint.h>
 void init(void)
 {
     // I have 128 heap frames, I want to do paging stuff here.
     char *mappings[256];
     for (int i = 0; i < 256; ++i) {
-        mappings[i] = malloc();
+        mappings[i] = (char *)malloc();
         mappings[i][10] = 'c';
     }
 
     for (int i = 0; i < 256; ++i) {
-        free(mappings[i]);
+        free((uintptr_t)mappings[i]);
     }
 
     for (int i = 0; i < 256; ++i) {
-        mappings[i] = malloc();
+        mappings[i] = (char *)malloc();
         // mappings[i][10] = 'c';
     }
 
     for (int i = 0; i < 256; ++i) {
-        free(mappins[i]);
+        free((uintptr_t)mappings[i]);
     }
 }
 

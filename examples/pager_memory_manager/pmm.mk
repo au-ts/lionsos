@@ -46,7 +46,7 @@ ifdef PARTITION
 endif
 
 IMAGE_FILE := loader.img
-# REPORT_FILE  := report.txt
+REPORT_FILE  := report.txt
 SYSTEM_FILE := pager_memory_manager.system
 
 

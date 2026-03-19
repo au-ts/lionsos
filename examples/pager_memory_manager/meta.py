@@ -44,7 +44,7 @@ def generate(
 
     # add my memory regions and other things
     heap1 = SystemDescription.MemoryRegion(sdf, "heap1", 0x80000, backed=False)
-
+    sdf.add_mr(heap1)
     pager_heap_map = SystemDescription.Map(heap1, 0x8000000000, "rw")
     user_heap_map = SystemDescription.Map(heap1, 0x8000000000, "rw")
     pager.add_map(pager_heap_map)

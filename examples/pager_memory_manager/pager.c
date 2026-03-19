@@ -10,6 +10,7 @@
 #include <sddf/blk/config.h>
 #include <string.h>
 
+
 /**
  * TODOS:
  * - I need to map the heap frames to the pager in the .system file.
@@ -50,7 +51,7 @@ static blk_queue_handle_t blk_queue;
 
 
 
-frame_pd_id *frames = (frame_pd_id *) unmapped_frames_addr;
+frame_pd_id *frames;
 
 // so that we don't process the same fault multiple times.
 uintptr_t current_faults[MAX_PDS] = {-1};
@@ -90,7 +91,7 @@ void init(void)
     memset0(page_table, MAX_PDS * NUM_PT_ENTRIES * sizeof(pe));
 
     // initialise and check blk queue and config
-    
+    frames = (frame_pd_id *) unmapped_frames_addr;
     // should be an assert.
     blk_config_check_magic(&blk_config);
     // LOG_CLIENT("config check\n");
@@ -105,7 +106,7 @@ void init(void)
         frame_pd_id *cur_frame = &frames[i];
         int pd_idx = cur_frame->pd_idx;
 
-        frame_table[pd_idx][frame_indicies[pd_idx]] = { .cap = cur_frame->frame_cap, .last_accessed = 0, .page = NULL, .next = ++frame_indicies[pd_idx] };
+        frame_table[pd_idx][frame_indicies[pd_idx]] = (FrameInfo){ .cap = cur_frame->frame_cap, .last_accessed = 0, .page = NULL, .next = ++frame_indicies[pd_idx] };
     }
 
     
@@ -120,7 +121,7 @@ void init(void)
 void after_page_in(uint32_t pd_idx, uintptr_t fault_addr) {
     // map the page to the frame
     FrameInfo *frame = &frame_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
-    microkit_arm_page_map(frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
+    microkit_arm_page_map_ro(frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
     frame->page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
     page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr = &frame;
     current_faults[pd_idx] = -1;
@@ -132,7 +133,7 @@ void page_in(uint32_t pd_idx, uintptr_t fault_addr) {
     int slot = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].pagefile_offset;
     // queue the read
     int request_id = get_request_id();
-    page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_IN }; // TODO: fill this out with relevant info.
+    page_continuations[request_id] = (struct page_request_info){ .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_IN }; // TODO: fill this out with relevant info.
     memcpy(get_frame_data(pd_idx, get_frame_offset((uintptr_t)&frame_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)], pd_idx)), (char *)blk_config.data.vaddr, 4096);
     blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
     sddf_notify(blk_config.virt.id);
@@ -155,7 +156,7 @@ void page_out(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     // queue the write with page after_page_out();
     int request_id = get_request_id();
     if (frame->page->dirty) {
-        page_continuations[request_id] = { .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_OUT }; // TODO: fill this out with relevant info.
+        page_continuations[request_id] = (struct page_request_info){ .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_OUT }; // TODO: fill this out with relevant info.
         char *data_dest = (char *) blk_config.data.vaddr;
         memcpy(data_dest, get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)), 4096);
         blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
@@ -221,9 +222,10 @@ void notified(microkit_channel ch)
     uint16_t count = -1;
     uint32_t id = -1;
 
-    int err = blk_dequeue_resp(&blk_queue, &status, &count, &id);
+    // int err = blk_dequeue_resp(&blk_queue, &status, &count, &id);
+    blk_dequeue_resp(&blk_queue, &status, &count, &id);
 
-    (void *)err; // assert(!err);
+    // assert(!err);
     // assert(status == BLK_RESP_OK);
     // assert(count == 1); // make sure that the write/read is actually done.
     // TODO: if necessary make a thing to recover from the error.
