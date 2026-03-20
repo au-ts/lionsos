@@ -10,6 +10,8 @@
 
 #define PINGPONG_CHANNEL 0
 
+int test_global = 40;
+
 void init() {
 	int a = 1;
 	int *b = NULL;

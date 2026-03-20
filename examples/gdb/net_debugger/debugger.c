@@ -88,7 +88,7 @@ static int socket_fd;
 bool tcp_initialized = false;
 static bool debugger_initialized = false;
 
-uint32_t gdb_read_word(uint16_t client, uintptr_t addr, seL4_Word *val)
+uint32_t gdb_read_word(uint16_t client, uintptr_t addr, char *val)
 {
     libvspace_read_word(client, addr, val);
 }
@@ -97,6 +97,18 @@ uint32_t gdb_write_word(uint16_t client, uintptr_t addr, seL4_Word val)
 {
     libvspace_write_word(client, addr, val);
 }
+
+uint32_t gdb_read_bytes(uint16_t client, uintptr_t start_addr, char *buff, uint64_t nbytes)
+{
+    libvspace_read_bytes(client, start_addr, buff, nbytes);
+}
+
+uint32_t gdb_write_bytes(uint16_t client, uintptr_t start_addr, char *buff, uint64_t nbytes)
+{
+    libvspace_write_bytes(client, start_addr, buff, nbytes);
+}
+
+
 
 void _putchar(char character) {
     microkit_dbg_putc(character);

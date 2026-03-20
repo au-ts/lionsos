@@ -1,0 +1,4 @@
+1c1
+< build/ping.elf:	file format elf64-littleaarch64
+---
+> /Users/krishnanwinter/Documents/TS/lionsos_gdb_example/lionsos/examples/gdb/build/ping.elf:	file format elf64-littleaarch64
