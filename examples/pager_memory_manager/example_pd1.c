@@ -16,7 +16,7 @@ void init(void)
 
     for (int i = 0; i < 256; ++i) {
         mappings[i] = (char *)malloc();
-        // mappings[i][10] = 'c';
+        mappings[i][10] = 'c';
     }
 
     for (int i = 0; i < 256; ++i) {

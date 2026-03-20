@@ -19,6 +19,7 @@ static int64_t do_malloc(microkit_child pd) {
     struct mmap_node *ptr = free_nodes[pd];
     free_nodes[pd] = ptr->next;
     ptr->next = used_nodes[pd];
+    used_nodes[pd]->prev = ptr;
     used_nodes[pd] = ptr;
     return ptr->addr;
 }
@@ -33,6 +34,7 @@ static void do_free(uintptr_t addr, microkit_child pd) {
         used_nodes[pd] = ptr->next;
     } else {
         ptr->prev->next = ptr->next;
+        ptr->next->prev = ptr->prev;
     }
     
     // add to free_nodes

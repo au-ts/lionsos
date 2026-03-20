@@ -19,6 +19,9 @@ def generate(
     nvme: bool,  # hack to select NVMe or Virtio
 ):
     blk_node = None
+    if dtb is not None:
+         blk_node = dtb.node(board.blk)
+    
     blk_driver = ProtectionDomain(
         "blk_driver", "blk_driver.elf", priority=200, stack_size=0x2000
     )
@@ -49,6 +52,9 @@ def generate(
     user_heap_map = SystemDescription.Map(heap1, 0x8000000000, "rw")
     pager.add_map(pager_heap_map)
     client.add_map(user_heap_map)
+    exmmc = SystemDescription.Channel(a=client, b=memory_manager, a_id=2, b_id=2, pp_a=True)
+    # exmmc = SystemDescription.Channel(a=memory_manager, b=client, a_id=2, b_id=2)
+    sdf.add_channel(exmmc)
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
             f.write(sdf.render())
@@ -77,4 +83,4 @@ if __name__ == "__main__":
         with open(args.dtb, "rb") as f:
             dtb = DeviceTree(f.read())
 
-    generate(args.sdf, args.output, dtb, args.need_timer, args.nvme)
+    generate(args.sdf, args.output, dtb, False, args.nvme)

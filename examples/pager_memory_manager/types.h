@@ -13,7 +13,7 @@
 #define INDEX_INTO_MMAP_ARRAY(x) (ROUND_DOWN_TO_4K(x)) / 4096
 #define TAU 10 // not too sure what the optimal number for this would be. maybe this is not useful...
 #define PAGEFILE ".pagefile"
-#define MM_PPC_NUM 1
+#define MM_PPC_NUM 2
 #define NULL 0
 
 
