@@ -50,19 +50,6 @@ static const char *fw_os_err_str[] = {
     "Unsupported action for the protocol selected."
 };
 
-static bool is_action_supported_for_filter(fw_webserver_filter_config_t *filter, uint8_t action)
-{
-    if (action == 0 || action > FW_FILTER_NUM_ACTIONS) {
-        return false;
-    }
-
-    if (filter->actions[action - 1]) {
-        return true;
-    }
-
-    return false;
-}
-
 /* Convert a routing error to OS error */
 static fw_os_err_t fw_routing_err_to_os_err(fw_routing_err_t routing_err)
 {
@@ -105,16 +92,52 @@ static fw_os_err_t filter_err_to_os_err(fw_filter_err_t filter_err)
     }
 }
 
+/* Prints and raises an OS error. */
+static void raise_error(fw_os_err_t err)
+{
+    sddf_printf("WEBSERVER|LOG: %s\n", fw_os_err_str[err]);
+    mp_raise_OSError(err);
+}
+
+/* Checks if an interface index is valid. Raises a micropython error if invalid. */
+static bool check_interface_index(uint8_t interface_idx)
+{
+    if (interface_idx >= fw_config.num_interfaces) {
+        raise_error(OS_ERR_INVALID_INTERFACE);
+        return false;
+    }
+    return true;
+}
+
 /* Find the index of a filter matching the given protocol on an interface.
- * Returns -1 if no matching filter is found. */
-static int8_t find_filter_index(uint8_t interface_idx, uint16_t protocol)
+ * Raises a micropython error and returns FW_MAX_FILTERS if no matching filter
+ * is found. */
+static uint8_t find_filter_index(uint8_t interface_idx, uint16_t protocol)
 {
     for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_filters; i++) {
         if (fw_config.interfaces[interface_idx].filters[i].protocol == protocol) {
-            return (int8_t)i;
+            return i;
         }
     }
-    return -1;
+
+    raise_error(OS_ERR_INVALID_PROTOCOL);
+    return FW_MAX_FILTERS;
+}
+
+/* Checks whether a filter supports an action. Raises a micropython action is
+unsupported. */
+static bool is_action_supported_for_filter(fw_webserver_filter_config_t *filter, uint8_t action)
+{
+    if (action == 0 || action > FW_FILTER_NUM_ACTIONS) {
+        return false;
+    }
+
+    if (filter->actions[action - 1]) {
+        return true;
+    }
+
+    raise_error(OS_ERR_UNSUPPORTED_ACTION);
+    return false;
 }
 
 /* Get number of configured interfaces */
@@ -129,9 +152,7 @@ static MP_DEFINE_CONST_FUN_OBJ_0(interface_count_obj, interface_count);
 static mp_obj_t interface_get_mac(mp_obj_t interface_idx_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= fw_config.num_interfaces) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
 
@@ -149,9 +170,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(interface_get_mac_obj, interface_get_mac);
 static mp_obj_t interface_get_name(mp_obj_t interface_idx_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= fw_config.num_interfaces) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
 
@@ -165,9 +184,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(interface_get_name_obj, interface_get_name);
 static mp_obj_t interface_get_ip(mp_obj_t interface_idx_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= fw_config.num_interfaces) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
 
@@ -180,32 +197,26 @@ static MP_DEFINE_CONST_FUN_OBJ_1(interface_get_ip_obj, interface_get_ip);
 static mp_obj_t route_add(mp_uint_t n_args, const mp_obj_t *args)
 {
     if (n_args != 4) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_ARGUMENTS]);
-        mp_raise_OSError(OS_ERR_INVALID_ARGUMENTS);
+        raise_error(OS_ERR_INVALID_ARGUMENTS);
         return mp_const_none;
     }
 
     uint8_t interface_idx = mp_obj_get_int(args[0]);
-    if (interface_idx >= fw_config.num_interfaces) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
-
     uint32_t ip = mp_obj_get_int(args[1]);
     uint8_t subnet = mp_obj_get_int(args[2]);
     uint32_t next_hop = mp_obj_get_int(args[3]);
+    microkit_mr_set(ROUTER_ADD_ARG_IP, ip);
+    microkit_mr_set(ROUTER_ADD_ARG_SUBNET, subnet);
+    microkit_mr_set(ROUTER_ADD_ARG_NEXT_HOP, next_hop);
+    microkit_mr_set(ROUTER_ADD_ARG_INTERFACE, interface_idx);
 
-    microkit_mr_set(ROUTER_ARG_IP, ip);
-    microkit_mr_set(ROUTER_ARG_SUBNET, subnet);
-    microkit_mr_set(ROUTER_ARG_NEXT_HOP, next_hop);
-    microkit_mr_set(ROUTER_ARG_INTERFACE, interface_idx);
-
-    (void)microkit_ppcall(fw_config.router.routing_ch, microkit_msginfo_new(FW_ADD_ROUTE, 5));
+    (void)microkit_ppcall(fw_config.router.routing_ch, microkit_msginfo_new(ROUTER_ADD_ROUTE, ROUTER_ADD_NUM_ARGS));
     fw_os_err_t os_err = fw_routing_err_to_os_err(microkit_mr_get(ROUTER_RET_ERR));
     if (os_err != OS_ERR_OKAY) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[os_err]);
-        mp_raise_OSError(os_err);
+        raise_error(os_err);
         return mp_obj_new_int_from_uint(os_err);
     }
 
@@ -218,13 +229,11 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR(route_add_obj, 4, route_add);
 static mp_obj_t route_delete(mp_obj_t route_id_in)
 {
     uint16_t route_id = mp_obj_get_int(route_id_in);
-
-    microkit_mr_set(ROUTER_ARG_ROUTE_ID, route_id);
-    (void)microkit_ppcall(fw_config.router.routing_ch, microkit_msginfo_new(FW_DEL_ROUTE, 1));
+    microkit_mr_set(ROUTER_DELETE_ARG_ROUTE_ID, route_id);
+    (void)microkit_ppcall(fw_config.router.routing_ch, microkit_msginfo_new(ROUTER_DEL_ROUTE, ROUTER_DELETE_NUM_ARGS));
     fw_os_err_t os_err = fw_routing_err_to_os_err(microkit_mr_get(ROUTER_RET_ERR));
     if (os_err != OS_ERR_OKAY) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[os_err]);
-        mp_raise_OSError(os_err);
+        raise_error(os_err);
         return mp_obj_new_int_from_uint(os_err);
     }
 
@@ -234,31 +243,26 @@ static mp_obj_t route_delete(mp_obj_t route_id_in)
 static MP_DEFINE_CONST_FUN_OBJ_1(route_delete_obj, route_delete);
 
 /* Enable or disable ICMP ping responses on an interface */
-static mp_obj_t ping_response_set(mp_obj_t interface_idx_in, mp_obj_t enable_in) {
+static mp_obj_t ping_response_set(mp_obj_t interface_idx_in, mp_obj_t enable_in)
+{
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n",
-                    fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
-
     bool enable = mp_obj_is_true(enable_in);
+    microkit_mr_set(ROUTER_PING_ARG_PING_STATE, enable ? 1 : 0);
+    microkit_mr_set(ROUTER_PING_ARG_INTERFACE, interface_idx);
 
-    microkit_mr_set(0, enable ? 1 : 0);
-    microkit_msginfo msginfo =
-        microkit_ppcall(fw_config.interfaces[interface_idx].router.routing_ch,
-                    microkit_msginfo_new(FW_SET_PING_RESPONSE, 1));
-
-    uint32_t result = microkit_mr_get(0);
-    if (result != 0) {
-        sddf_dprintf("WEBSERVER|LOG: Failed to set ping response\n");
-        mp_raise_OSError(OS_ERR_INTERNAL_ERROR);
+    microkit_msginfo msginfo = microkit_ppcall(fw_config.router.routing_ch,
+                                               microkit_msginfo_new(ROUTER_SET_PING_RESPONSE, ROUTER_PING_NUM_ARGS));
+    fw_os_err_t os_err = fw_routing_err_to_os_err(microkit_mr_get(ROUTER_RET_ERR));
+    if (os_err != OS_ERR_OKAY) {
+        raise_error(os_err);
         return mp_const_none;
     }
 
     /* Store the state of the ping response */
-    webserver_state[interface_idx].ping_enabled = enable;
+    fw_interface_state[interface_idx].ping_enabled = enable;
 
     return mp_const_none;
 }
@@ -266,22 +270,20 @@ static mp_obj_t ping_response_set(mp_obj_t interface_idx_in, mp_obj_t enable_in)
 static MP_DEFINE_CONST_FUN_OBJ_2(ping_response_set_obj, ping_response_set);
 
 /* Get status of ICMP ping responses on an interface */
-static mp_obj_t ping_response_get(mp_obj_t interface_idx_in) {
+static mp_obj_t ping_response_get(mp_obj_t interface_idx_in)
+{
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n",
-                    fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
 
-    return mp_obj_new_bool(webserver_state[interface_idx].ping_enabled);
+    return mp_obj_new_bool(fw_interface_state[interface_idx].ping_enabled);
 }
 
 static MP_DEFINE_CONST_FUN_OBJ_1(ping_response_get_obj, ping_response_get);
 
 /* Count the number of routes in an interface routing table */
-static mp_obj_t route_count(mp_obj_t interface_idx_in)
+static mp_obj_t route_count()
 {
     return mp_obj_new_int_from_uint(fw_routing_table->size);
 }
@@ -293,8 +295,7 @@ static mp_obj_t route_get_nth(mp_obj_t route_idx_in)
 {
     uint16_t route_idx = mp_obj_get_int(route_idx_in);
     if (route_idx >= fw_routing_table->size) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_ROUTE_NUM]);
-        mp_raise_OSError(OS_ERR_INVALID_ROUTE_NUM);
+        raise_error(OS_ERR_INVALID_ROUTE_NUM);
         return mp_const_none;
     }
 
@@ -320,9 +321,7 @@ static mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args)
     }
 
     uint8_t interface_idx = mp_obj_get_int(args[0]);
-    if (interface_idx >= fw_config.num_interfaces) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
 
@@ -338,35 +337,29 @@ static mp_obj_t rule_add(mp_uint_t n_args, const mp_obj_t *args)
     uint8_t action = mp_obj_get_int(args[10]);
 
     int8_t protocol_match = find_filter_index(interface_idx, protocol);
-    if (protocol_match < 0) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
-        mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    if (protocol_match == FW_MAX_FILTERS) {
         return mp_const_none;
     }
 
-    if (!is_action_supported_for_filter(&fw_config.interfaces[interface_idx].filters[protocol_match],
-                                        action)) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_UNSUPPORTED_ACTION]);
-        mp_raise_OSError(OS_ERR_UNSUPPORTED_ACTION);
+    if (!is_action_supported_for_filter(&fw_config.interfaces[interface_idx].filters[protocol_match], action)) {
         return mp_const_none;
     }
 
-    microkit_mr_set(FILTER_ARG_ACTION, action);
-    microkit_mr_set(FILTER_ARG_SRC_IP, src_ip);
-    microkit_mr_set(FILTER_ARG_SRC_PORT, src_port);
-    microkit_mr_set(FILTER_ARG_SRC_ANY_PORT, src_port_any);
-    microkit_mr_set(FILTER_ARG_SRC_SUBNET, src_subnet);
-    microkit_mr_set(FILTER_ARG_DST_IP, dst_ip);
-    microkit_mr_set(FILTER_ARG_DST_PORT, dst_port);
-    microkit_mr_set(FILTER_ARG_DST_ANY_PORT, dst_port_any);
-    microkit_mr_set(FILTER_ARG_DST_SUBNET, dst_subnet);
+    microkit_mr_set(FILTER_ADD_ARG_ACTION, action);
+    microkit_mr_set(FILTER_ADD_ARG_SRC_IP, src_ip);
+    microkit_mr_set(FILTER_ADD_ARG_SRC_SUBNET, src_subnet);
+    microkit_mr_set(FILTER_ADD_ARG_SRC_PORT, src_port);
+    microkit_mr_set(FILTER_ADD_ARG_SRC_ANY_PORT, src_port_any);
+    microkit_mr_set(FILTER_ADD_ARG_DST_IP, dst_ip);
+    microkit_mr_set(FILTER_ADD_ARG_DST_SUBNET, dst_subnet);
+    microkit_mr_set(FILTER_ADD_ARG_DST_PORT, dst_port);
+    microkit_mr_set(FILTER_ADD_ARG_DST_ANY_PORT, dst_port_any);
 
     (void)microkit_ppcall(fw_config.interfaces[interface_idx].filters[protocol_match].ch,
-                          microkit_msginfo_new(FW_ADD_RULE, 10));
+                          microkit_msginfo_new(FILTER_ADD_RULE, FILTER_ADD_NUM_ARGS));
     fw_os_err_t os_err = filter_err_to_os_err(microkit_mr_get(FILTER_RET_ERR));
     if (os_err != OS_ERR_OKAY) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[os_err]);
-        mp_raise_OSError(os_err);
+        raise_error(os_err);
         return mp_obj_new_int_from_uint(os_err);
     }
 
@@ -380,28 +373,23 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR(rule_add_obj, 11, rule_add);
 static mp_obj_t rule_delete(mp_obj_t interface_idx_in, mp_obj_t rule_id_in, mp_obj_t protocol_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= fw_config.num_interfaces) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
 
     uint16_t rule_id = mp_obj_get_int(rule_id_in);
     uint16_t protocol = mp_obj_get_int(protocol_in);
     int8_t protocol_match = find_filter_index(interface_idx, protocol);
-    if (protocol_match < 0) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
-        mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    if (protocol_match == FW_MAX_FILTERS) {
         return mp_const_none;
     }
 
-    microkit_mr_set(FILTER_ARG_RULE_ID, rule_id);
+    microkit_mr_set(FILTER_DELETE_ARG_RULE_ID, rule_id);
     (void)microkit_ppcall(fw_config.interfaces[interface_idx].filters[protocol_match].ch,
-                          microkit_msginfo_new(FW_DEL_RULE, 2));
+                          microkit_msginfo_new(FILTER_DEL_RULE, FILTER_DELETE_NUM_ARGS));
     fw_os_err_t os_err = filter_err_to_os_err(microkit_mr_get(FILTER_RET_ERR));
     if (os_err != OS_ERR_OKAY) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[os_err]);
-        mp_raise_OSError(os_err);
+        raise_error(os_err);
         return mp_obj_new_int_from_uint(os_err);
     }
 
@@ -414,17 +402,13 @@ static MP_DEFINE_CONST_FUN_OBJ_3(rule_delete_obj, rule_delete);
 static mp_obj_t rule_count(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= fw_config.num_interfaces) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
 
     uint16_t protocol = mp_obj_get_int(protocol_in);
     int8_t protocol_match = find_filter_index(interface_idx, protocol);
-    if (protocol_match < 0) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
-        mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    if (protocol_match == FW_MAX_FILTERS) {
         return mp_const_none;
     }
 
@@ -437,35 +421,27 @@ static MP_DEFINE_CONST_FUN_OBJ_2(rule_count_obj, rule_count);
 static mp_obj_t filter_set_default_action(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp_obj_t action_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= fw_config.num_interfaces) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
 
     uint16_t protocol = mp_obj_get_int(protocol_in);
     uint8_t action = mp_obj_get_int(action_in);
     int8_t protocol_match = find_filter_index(interface_idx, protocol);
-    if (protocol_match < 0) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
-        mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    if (protocol_match == FW_MAX_FILTERS) {
         return mp_const_none;
     }
 
-    if (!is_action_supported_for_filter(&fw_config.interfaces[interface_idx].filters[protocol_match],
-                                        action)) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_UNSUPPORTED_ACTION]);
-        mp_raise_OSError(OS_ERR_UNSUPPORTED_ACTION);
+    if (!is_action_supported_for_filter(&fw_config.interfaces[interface_idx].filters[protocol_match], action)) {
         return mp_const_none;
     }
 
-    microkit_mr_set(FILTER_ARG_ACTION, action);
+    microkit_mr_set(FILTER_SET_DEFAULT_ARG_ACTION, action);
     (void)microkit_ppcall(fw_config.interfaces[interface_idx].filters[protocol_match].ch,
-                          microkit_msginfo_new(FW_SET_DEFAULT_ACTION, 1));
+                          microkit_msginfo_new(FILTER_SET_DEFAULT_ACTION, FILTER_DEFAULT_NUM_ARGS));
     fw_os_err_t os_err = filter_err_to_os_err(microkit_mr_get(FILTER_RET_ERR));
     if (os_err != OS_ERR_OKAY) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[os_err]);
-        mp_raise_OSError(os_err);
+        raise_error(os_err);
         return mp_obj_new_int_from_uint(os_err);
     }
 
@@ -478,17 +454,13 @@ static MP_DEFINE_CONST_FUN_OBJ_3(filter_set_default_action_obj, filter_set_defau
 static mp_obj_t filter_get_default_action(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= fw_config.num_interfaces) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
 
     uint16_t protocol = mp_obj_get_int(protocol_in);
     int8_t protocol_match = find_filter_index(interface_idx, protocol);
-    if (protocol_match < 0) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
-        mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    if (protocol_match == FW_MAX_FILTERS) {
         return mp_const_none;
     }
 
@@ -502,25 +474,20 @@ static MP_DEFINE_CONST_FUN_OBJ_2(filter_get_default_action_obj, filter_get_defau
 static mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp_obj_t rule_idx_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= fw_config.num_interfaces) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
 
     uint16_t protocol = mp_obj_get_int(protocol_in);
     uint16_t rule_idx = mp_obj_get_int(rule_idx_in);
     int8_t protocol_match = find_filter_index(interface_idx, protocol);
-    if (protocol_match < 0) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
-        mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    if (protocol_match == FW_MAX_FILTERS) {
         return mp_const_none;
     }
 
     if (rule_idx == DEFAULT_ACTION_IDX
         || rule_idx >= fw_interface_state[interface_idx].filter_states[protocol_match].rule_table->size) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_RULE_NUM]);
-        mp_raise_OSError(OS_ERR_INVALID_RULE_NUM);
+        raise_error(OS_ERR_INVALID_RULE_NUM);
         return mp_const_none;
     }
 
@@ -543,14 +510,14 @@ static mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp
 static MP_DEFINE_CONST_FUN_OBJ_3(rule_get_nth_obj, rule_get_nth);
 
 static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
-    { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lions_firewall)},
-    { MP_ROM_QSTR(MP_QSTR_interface_ip_get), MP_ROM_PTR(&interface_get_ip_obj)},
-    { MP_ROM_QSTR(MP_QSTR_route_delete), MP_ROM_PTR(&route_delete_obj)},
-    { MP_ROM_QSTR(MP_QSTR_route_get_nth), MP_ROM_PTR(&route_get_nth_obj)},
-    { MP_ROM_QSTR(MP_QSTR_ping_response_set), MP_ROM_PTR(&ping_response_set_obj)},
-    { MP_ROM_QSTR(MP_QSTR_ping_response_get), MP_ROM_PTR(&ping_response_get_obj)},
-    { MP_ROM_QSTR(MP_QSTR_rule_delete), MP_ROM_PTR(&rule_delete_obj)},
-    { MP_ROM_QSTR(MP_QSTR_rule_get_nth), MP_ROM_PTR(&rule_get_nth_obj)},
+    { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lions_firewall) },
+    { MP_ROM_QSTR(MP_QSTR_interface_ip_get), MP_ROM_PTR(&interface_get_ip_obj) },
+    { MP_ROM_QSTR(MP_QSTR_route_delete), MP_ROM_PTR(&route_delete_obj) },
+    { MP_ROM_QSTR(MP_QSTR_route_get_nth), MP_ROM_PTR(&route_get_nth_obj) },
+    { MP_ROM_QSTR(MP_QSTR_ping_response_set), MP_ROM_PTR(&ping_response_set_obj) },
+    { MP_ROM_QSTR(MP_QSTR_ping_response_get), MP_ROM_PTR(&ping_response_get_obj) },
+    { MP_ROM_QSTR(MP_QSTR_rule_delete), MP_ROM_PTR(&rule_delete_obj) },
+    { MP_ROM_QSTR(MP_QSTR_rule_get_nth), MP_ROM_PTR(&rule_get_nth_obj) },
     { MP_ROM_QSTR(MP_QSTR_interface_mac_get), MP_ROM_PTR(&interface_get_mac_obj) },
     { MP_ROM_QSTR(MP_QSTR_interface_count_get), MP_ROM_PTR(&interface_count_obj) },
     { MP_ROM_QSTR(MP_QSTR_interface_name_get), MP_ROM_PTR(&interface_get_name_obj) },

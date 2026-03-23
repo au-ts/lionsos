@@ -59,8 +59,8 @@ fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, 
     return ROUTING_ERR_OKAY;
 }
 
-fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table, uint8_t interface, uint32_t ip,
-                                                   uint8_t subnet, uint32_t next_hop)
+fw_routing_err_t fw_routing_table_add_route(fw_routing_table_t *table, uint8_t interface, uint32_t ip, uint8_t subnet,
+                                            uint32_t next_hop)
 {
     /* Default routes must specify a next hop! */
     if ((subnet == 0) && (next_hop == FW_ROUTING_NONEXTHOP)) {
@@ -113,16 +113,15 @@ fw_routing_err_t fw_routing_table_remove_route(fw_routing_table_t *table, uint16
 }
 
 void fw_routing_table_init(fw_routing_table_t **table, void *table_vaddr, uint16_t capacity,
-                                  fw_routing_entry_t *initial_routes, uint8_t num_initial_routes)
+                           fw_routing_entry_t *initial_routes, uint8_t num_initial_routes)
 {
     *table = (fw_routing_table_t *)table_vaddr;
     (*table)->capacity = capacity;
     (*table)->size = 0;
 
     for (uint8_t r = 0; r < num_initial_routes; r++) {
-        fw_routing_err_t err = fw_routing_table_add_route(*table, initial_routes[r].interface,
-                                                          initial_routes[r].ip, initial_routes[r].subnet,
-                                                          initial_routes[r].next_hop);
+        fw_routing_err_t err = fw_routing_table_add_route(*table, initial_routes[r].interface, initial_routes[r].ip,
+                                                          initial_routes[r].subnet, initial_routes[r].next_hop);
 
         assert(err == ROUTING_ERR_OKAY);
     }

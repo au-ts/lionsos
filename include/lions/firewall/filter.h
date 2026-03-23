@@ -35,14 +35,15 @@ typedef enum {
     FILTER_ERR_UNSUPPORTED_ACTION
 } fw_filter_err_t;
 
-static const char *fw_filter_err_str[] = { "Ok.", "Out of memory error.", "Duplicate entry.", "Clashing entry.",
-                                           "Invalid rule ID.", "Unsupported action." };
+static const char *fw_filter_err_str[] = {
+    "Ok.", "Out of memory error.", "Duplicate entry.", "Clashing entry.", "Invalid rule ID.", "Unsupported action."
+};
 
 typedef enum {
     /* allow traffic */
     FILTER_ACT_ALLOW = 1,
     /* drop traffic */
-	FILTER_ACT_DROP = 2,
+    FILTER_ACT_DROP = 2,
     /* reject traffic (send back icmp unreachable) */
     FILTER_ACT_REJECT = 3,
     /* allow traffic, and additionally any return traffic */
@@ -131,24 +132,30 @@ typedef struct fw_filter_state {
 } fw_filter_state_t;
 
 /* PP call parameters for webserver to call filters and update rules */
-#define FW_SET_DEFAULT_ACTION 0
-#define FW_ADD_RULE 1
-#define FW_DEL_RULE 2
+typedef enum fw_filter_pp_type {
+    FILTER_SET_DEFAULT_ACTION = 0,
+    FILTER_ADD_RULE,
+    FILTER_DEL_RULE,
+} fw_filter_pp_type_t;
+
+typedef enum { FILTER_SET_DEFAULT_ARG_ACTION = 0, FILTER_DEFAULT_NUM_ARGS } fw_filter_default_args_t;
 
 typedef enum {
-    FILTER_ARG_ACTION = 0,
-    FILTER_ARG_RULE_ID = 1,
-    FILTER_ARG_SRC_IP = 2,
-    FILTER_ARG_SRC_PORT = 3,
-    FILTER_ARG_DST_IP = 4,
-    FILTER_ARG_DST_PORT = 5,
-    FILTER_ARG_SRC_SUBNET = 6,
-    FILTER_ARG_DST_SUBNET = 7,
-    FILTER_ARG_SRC_ANY_PORT = 8,
-    FILTER_ARG_DST_ANY_PORT = 9
-} fw_args_t;
+    FILTER_ADD_ARG_ACTION = 0,
+    FILTER_ADD_ARG_SRC_IP,
+    FILTER_ADD_ARG_SRC_SUBNET,
+    FILTER_ADD_ARG_SRC_PORT,
+    FILTER_ADD_ARG_SRC_ANY_PORT,
+    FILTER_ADD_ARG_DST_IP,
+    FILTER_ADD_ARG_DST_SUBNET,
+    FILTER_ADD_ARG_DST_PORT,
+    FILTER_ADD_ARG_DST_ANY_PORT,
+    FILTER_ADD_NUM_ARGS
+} fw_filter_add_args_t;
 
-typedef enum { FILTER_RET_ERR = 0, FILTER_RET_RULE_ID = 1 } fw_ret_args_t;
+typedef enum { FILTER_DELETE_ARG_RULE_ID = 0, FILTER_DELETE_NUM_ARGS } fw_filter_delete_args_t;
+
+typedef enum { FILTER_RET_ERR = 0, FILTER_RET_RULE_ID = 1 } fw_filter_ret_args_t;
 
 /* The rule ID allocation bitmap uses blocks of 64 bits */
 #define RULE_ID_BITMAP_BLK_SIZE 64

@@ -32,6 +32,7 @@ FIREWALL_ARP := $(FIREWALL_SRC_DIR)/arp
 METAPROGRAM := $(FIREWALL_SRC_DIR)/meta.py
 
 SDFGEN_HELPER := $(FIREWALL_SRC_DIR)/sdfgen_helper.py
+PYFW_GENERATED_CONFIG := config_structs.py
 # Headers containing config structs and dependencies
 FIREWALL_CONFIG_HEADERS := \
 	$(SDDF)/include/sddf/resources/common.h \
@@ -123,10 +124,13 @@ include $(FIREWALL_NET_COMPONENTS)/firewall_network_components.mk
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
-$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5)
+$(PYFW_GENERATED_CONFIG): $(SDFGEN_HELPER) $(FIREWALL_CONFIG_HEADERS)
+	touch __init__.py
 	$(PYTHON) $(SDFGEN_HELPER) \
 		--configs "$(FIREWALL_CONFIG_HEADERS)" \
-		--output $(FIREWALL_SRC_DIR)/pyfw/config_structs.py
+		--output $@
+
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5) $(PYFW_GENERATED_CONFIG)
 	PYTHONPATH=$(FIREWALL_SRC_DIR):${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) \
 		--sddf $(SDDF) --board $(MICROKIT_BOARD) \
 		--dtb $(DTB) --output . --sdf $(SYSTEM_FILE) \

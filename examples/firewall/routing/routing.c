@@ -27,7 +27,6 @@ __attribute__((__section__(".serial_client_config"))) serial_client_config_t ser
 __attribute__((__section__(".fw_router_config"))) fw_router_config_t router_config;
 
 /* Port that the webserver is on. */
-#define WEBSERVER_PROTOCOL 0x06
 #define WEBSERVER_PORT 80
 
 serial_queue_handle_t serial_tx_queue_handle;
@@ -52,31 +51,29 @@ pkts_waiting_t pkt_waiting_queue[FW_MAX_INTERFACES];        /* Queues holding pa
 fw_routing_table_t *routing_table; /* Table holding next hop data for subnets */
 
 /* Booleans to keep track of which components need to be notified */
-static bool tx_net[FW_MAX_INTERFACES];                  /* Packet has been transmitted to the network tx virtualiser */
-static bool tx_webserver;                               /* Packet has been transmitted to the webserver */
-static bool returned[FW_MAX_INTERFACES];                /* Buffer has been returned to the rx virtualiser */
-static bool notify_arp[FW_MAX_INTERFACES];              /* Arp request has been enqueued */
-static bool notify_icmp;                                /* Request has been enqueued to ICMP module */
-static bool ping_response_enabled = false;              /* Whether to reply to ICMP echo requests */
+static bool tx_net[FW_MAX_INTERFACES];      /* Packet has been transmitted to the network tx virtualiser */
+static bool tx_webserver;                   /* Packet has been transmitted to the webserver */
+static bool returned[FW_MAX_INTERFACES];    /* Buffer has been returned to the rx virtualiser */
+static bool notify_arp[FW_MAX_INTERFACES];  /* Arp request has been enqueued */
+static bool notify_icmp;                    /* Request has been enqueued to ICMP module */
+static bool ping_response_enabled[FW_MAX_INTERFACES] = { false }; /* Whether to reply to ICMP echo requests */
 
 /* Masks for checking whether it is a broadcast address or not */
 #define MULTICAST_IP_MASK 0xf0000000
 #define MULTICAST_IP_ADDR 0xe0000000
 #define BROADCAST_IP_ADDR 0xffffffff
-const uint8_t broadcast_mac_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+const uint8_t broadcast_mac_addr[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
 /* Enqueue a request to the ICMP module to transmit a destination unreachable
 packet back to source */
-static bool enqueue_icmp_unreachable(fw_buff_desc_t buffer)
+static bool enqueue_icmp_unreachable(fw_buff_desc_t buffer, uint32_t next_hop)
 {
     uint8_t src_interface = buffer.interface;
     uintptr_t pkt_vaddr = data_vaddr[src_interface] + buffer.offset;
 
     /* Copy IP header into ICMP request */
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
-    bool is_host = ((ip_hdr->dst_ip & subnet_mask(router_config.interfaces[src_interface].subnet)) !=
-        (router_config.interfaces[src_interface].ip & subnet_mask(router_config.interfaces[src_interface].subnet)));
-    uint8_t code = is_host ? ICMP_DEST_HOST_UNREACHABLE : ICMP_DEST_NET_UNREACHABLE;
+    uint8_t code = (next_hop == ip_hdr->dst_ip) ? ICMP_DEST_HOST_UNREACHABLE : ICMP_DEST_NET_UNREACHABLE;
     bool enqueued = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, code, pkt_vaddr, src_interface);
     notify_icmp |= enqueued;
     return enqueued;
@@ -94,7 +91,7 @@ static void transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t ou
     /* Transmit packet out the NIC */
     if (FW_DEBUG_OUTPUT) {
         sddf_printf(
-            "Router sending packet received on interface %u out of interface %u for ip %s with buffer number %lu\n",
+            "ROUTING_LOG: sending packet received on interface %u out of interface %u for ip %s with buffer number %lu\n",
             buffer.interface, out_interface, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
             buffer.offset / NET_BUFFER_SIZE);
     }
@@ -113,14 +110,13 @@ static void transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t ou
 
 static void process_arp_waiting(uint8_t out_interface)
 {
-    pkts_waiting_t *waiting_queue = &pkt_waiting_queue[out_interface];
     while (!fw_queue_empty(&arp_resp_queue[out_interface])) {
         fw_arp_request_t response;
         int err = fw_dequeue(&arp_resp_queue[out_interface], &response);
         assert(!err);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("Router dequeuing response for ip %s on interface %u and MAC[0]= %x, MAC[5] = %x\n",
+            sddf_printf("ROUTING_LOG: dequeuing response for ip %s on interface %u and MAC[0]= %x, MAC[5] = %x\n",
                         ipaddr_to_string(response.ip, ip_addr_buf0), out_interface, response.mac_addr[0],
                         response.mac_addr[5]);
         }
@@ -129,7 +125,7 @@ static void process_arp_waiting(uint8_t out_interface)
         pkt_waiting_node_t *root = pkt_waiting_find_node(&pkt_waiting_queue[out_interface], response.ip);
         if (!root) {
             if (FW_DEBUG_OUTPUT) {
-                sddf_printf("Received arp response but no corresponding packet is waiting.");
+                sddf_printf("ROUTING_LOG: received arp response but no corresponding packet is waiting.");
             }
             continue;
         }
@@ -139,7 +135,7 @@ static void process_arp_waiting(uint8_t out_interface)
             /* Invalid response, drop packet associated with the IP address */
             pkt_waiting_node_t *node = root;
             for (uint16_t i = 0; i < root->num_children + 1; i++) {
-                bool icmp_enqueued = enqueue_icmp_unreachable(node->buffer);
+                bool icmp_enqueued = enqueue_icmp_unreachable(node->buffer, root->ip);
                 if (FW_DEBUG_OUTPUT && !icmp_enqueued) {
                     sddf_dprintf("ROUTING LOG: Could not enqueue ICMP unreachable on interface %u!\n",
                                  node->buffer.interface);
@@ -179,7 +175,7 @@ static void route(void)
                 ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
                 if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("Router received packet on interface %u for ip %s with buffer number %lu\n", interface,
+                    sddf_printf("ROUTING_LOG: received packet on interface %u for ip %s with buffer number %lu\n", interface,
                                 ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0), buffer.io_or_offset / NET_BUFFER_SIZE);
                 }
                 /*
@@ -187,9 +183,9 @@ static void route(void)
                  * retransmitted, thus it is explicitly dropped. Multicast traffic
                  * is not currently handled by the firewall.
                  */
-                if (ip_hdr->dst_ip == BROADCAST_IP_ADDR ||
-                    !memcmp(eth_hdr->ethdst_addr, broadcast_mac_addr, ETH_HWADDR_LEN) ||
-                    (ip_hdr->dst_ip & MULTICAST_IP_MASK) == MULTICAST_IP_ADDR) {
+                if (ip_hdr->dst_ip == BROADCAST_IP_ADDR
+                    || !memcmp(eth_hdr->ethdst_addr, broadcast_mac_addr, ETH_HWADDR_LEN)
+                    || (ip_hdr->dst_ip & MULTICAST_IP_MASK) == MULTICAST_IP_ADDR) {
                     err = fw_enqueue(&rx_free[interface], &buffer);
                     assert(!err);
                     returned[interface] = true;
@@ -203,52 +199,43 @@ static void route(void)
                     continue;
                 }
 
-                if (ip_hdr->ttl <= 1) {
-                    notify_icmp |= icmp_enqueue_error(&icmp_queue, ICMP_TTL_EXCEED, ICMP_TIME_EXCEEDED_TTL,
-                                                      pkt_vaddr, interface);
+                /* Check if packet destined for the firewall */
+                if (ip_hdr->dst_ip == router_config.interfaces[interface].ip) {
+                    /* Check for webserver traffic */
+                    tcp_hdr_t *tcp_pkt = (tcp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
+                    if (ip_hdr->protocol == IPV4_PROTO_TCP && tcp_pkt->dst_port == htons(WEBSERVER_PORT)) {
+                        err = fw_enqueue(&webserver, &fw_buffer);
+                        assert(!err);
+                        tx_webserver = true;
+
+                        if (FW_DEBUG_OUTPUT) {
+                            sddf_printf("ROUTING_LOG: transmitted packet from interface %u to webserver\n", interface);
+                        }
+
+                        continue;
+                    }
+
+                    /* Check for ICMP pings */
+                    icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
+                    if (ip_hdr->protocol == IPV4_PROTO_ICMP && icmp_hdr->type == ICMP_ECHO_REQ
+                        && ping_response_enabled[interface]) {
+                            notify_icmp |= icmp_enqueue_echo_reply(&icmp_queue, pkt_vaddr, interface);
+                    }
+
                     err = fw_enqueue(&rx_free[interface], &buffer);
                     assert(!err);
                     returned[interface] = true;
                     continue;
                 }
 
-                if (ip_hdr->protocol == IPV4_PROTO_ICMP &&
-                    ip_hdr->dst_ip == router_config.interfaces[interface].ip) {
-                    icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
-                    if (icmp_hdr->type == ICMP_ECHO_REQ) {
-                        if (ping_response_enabled) {
-                            notify_icmp |= icmp_enqueue_echo_reply(&icmp_queue, pkt_vaddr, interface);
-                        }
-                        err = fw_enqueue(&rx_free[interface], &buffer);
-                        assert(!err);
-                        returned[interface] = true;
-                        continue;
-                    }
-                }
-
-                /* Packet destined for webserver */
-                if (ip_hdr->dst_ip == router_config.interfaces[interface].ip) {
-                    if (FW_DEBUG_OUTPUT) {
-                        sddf_printf("Router transmitted packet to webserver on interface %u\n", interface);
-                    }
-                    tcp_hdr_t *tcp_pkt = (tcp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
-                    if (ip_hdr->protocol != WEBSERVER_PROTOCOL || tcp_pkt->dst_port != htons(WEBSERVER_PORT)) {
-                        err = fw_enqueue(&rx_free[interface], &buffer);
-                        assert(!err);
-                        returned[interface] = true;
-                        continue;
-                    }
-
-                    err = fw_enqueue(&webserver, &buffer);
+                if (ip_hdr->ttl <= 1) {
+                    notify_icmp |= icmp_enqueue_error(&icmp_queue, ICMP_TTL_EXCEED, ICMP_TIME_EXCEEDED_TTL, pkt_vaddr,
+                                                      interface);
+                    err = fw_enqueue(&rx_free[interface], &buffer);
                     assert(!err);
-                    tx_webserver = true;
-
-                    if (FW_DEBUG_OUTPUT) {
-                        sddf_printf("Router transmitted packet to webserver from interface %u\n", interface);
-                    }
+                    returned[interface] = true;
                     continue;
                 }
-
                 ip_hdr->ttl -= 1;
 
                 uint32_t next_hop = ip_hdr->dst_ip;
@@ -256,30 +243,30 @@ static void route(void)
                 fw_routing_err_t fw_err = fw_routing_find_route(routing_table, &next_hop, &out_interface);
                 assert(fw_err == ROUTING_ERR_OKAY);
 
-                if (FW_DEBUG_OUTPUT && next_hop != FW_ROUTING_NONEXTHOP) {
-                    sddf_printf("Router converted ip %s to next hop ip %s arrived on interface %u, exiting on out interface %u\n",
-                                ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
-                                ipaddr_to_string(next_hop, ip_addr_buf1), interface, out_interface);
-                }
-
-                /* No route, drop packet  */
-                if (next_hop == FW_ROUTING_NONEXTHOP) {
+                if (next_hop == FW_ROUTING_NONEXTHOP || next_hop == router_config.interfaces[out_interface].ip) {
+                    /* No route or destined for the firewall but received on the wrong interface, drop packet  */
                     if (FW_DEBUG_OUTPUT) {
-                        sddf_printf("Router found no route for ip %s, dropping packet\n",
+                        sddf_printf("ROUTING_LOG: found no route for ip %s or received on the wrong interface, dropping packet\n",
                                     ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0));
                     }
-                    fw_buff_desc_t fw_buffer = { .offset = buffer.io_or_offset, .len = buffer.len, .region_id = interface };
-                    enqueue_icmp_unreachable(fw_buffer);
+                    fw_buff_desc_t fw_buffer = { .offset = buffer.io_or_offset,
+                                                 .len = buffer.len,
+                                                 .interface = interface };
+                    enqueue_icmp_unreachable(fw_buffer, next_hop);
                     err = fw_enqueue(&rx_free[interface], &buffer);
                     assert(!err);
                     returned[interface] = true;
                     continue;
+                } else {
+                    if (FW_DEBUG_OUTPUT) {
+                        sddf_printf("ROUTING_LOG: converted ip %s to next hop ip %s arrived on interface %u, exiting on out "
+                                    "interface %u\n",
+                                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
+                                    ipaddr_to_string(next_hop, ip_addr_buf1), interface, out_interface);
+                    }
                 }
 
-                assert(out_interface < router_config.num_interfaces);
-
                 fw_arp_entry_t *arp = fw_arp_table_find_entry(&arp_table[out_interface], next_hop);
-                pkts_waiting_t *waiting_queue = &pkt_waiting_queue[out_interface];
                 /* destination unreachable or no space to store packet or send ARP
                  * request, drop packet */
                 if ((arp != NULL && arp->state == ARP_STATE_UNREACHABLE)
@@ -288,7 +275,7 @@ static void route(void)
                     || (arp == NULL && fw_queue_full(&arp_req_queue[out_interface]))) {
 
                     if (arp != NULL && arp->state == ARP_STATE_UNREACHABLE) {
-                        int icmp_err = enqueue_icmp_unreachable(fw_buffer);
+                        int icmp_err = enqueue_icmp_unreachable(fw_buffer, next_hop);
                         if (icmp_err) {
                             sddf_dprintf("ROUTING LOG: Could not enqueue ICMP unreachable!\n");
                         }
@@ -361,6 +348,7 @@ void init(void)
                       iface->arp_queue.capacity);
         fw_arp_table_init(&arp_table[interface], (fw_arp_entry_t *)iface->arp_cache.vaddr, iface->arp_cache_capacity);
 
+        /* Initialise the packet waiting queue from mapped in memory */
         assert(iface->packet_queue.vaddr != 0);
         pkt_waiting_init(&pkt_waiting_queue[interface], (void *)iface->packet_queue.vaddr,
                          iface->packet_queue_capacity);
@@ -375,7 +363,7 @@ void init(void)
                           router_config.num_initial_routes);
 
     if (FW_DEBUG_OUTPUT) {
-        sddf_printf("Routing table initialized with %u entries:\n", routing_table->size);
+        sddf_printf("ROUTING_LOG: routing table initialized with %u entries:\n", routing_table->size);
         for (uint16_t i = 0; i < routing_table->size; i++) {
             sddf_printf("  Route %u: ip=%s subnet=%u interface=%u next_hop=%s\n", i,
                         ipaddr_to_string(routing_table->entries[i].ip, ip_addr_buf0), routing_table->entries[i].subnet,
@@ -392,38 +380,47 @@ void init(void)
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     switch (microkit_msginfo_get_label(msginfo)) {
-    case FW_ADD_ROUTE: {
-        uint32_t ip = microkit_mr_get(ROUTER_ARG_IP);
-        uint8_t subnet = microkit_mr_get(ROUTER_ARG_SUBNET);
-        uint32_t next_hop = microkit_mr_get(ROUTER_ARG_NEXT_HOP);
-        uint8_t interface = microkit_mr_get(ROUTER_ARG_INTERFACE);
+
+    case ROUTER_ADD_ROUTE: {
+        uint32_t ip = microkit_mr_get(ROUTER_ADD_ARG_IP);
+        uint8_t subnet = microkit_mr_get(ROUTER_ADD_ARG_SUBNET);
+        uint32_t next_hop = microkit_mr_get(ROUTER_ADD_ARG_NEXT_HOP);
+        uint8_t interface = microkit_mr_get(ROUTER_ADD_ARG_INTERFACE);
+        assert(interface < router_config.num_interfaces);
 
         fw_routing_err_t err = fw_routing_table_add_route(routing_table, interface, ip, subnet, next_hop);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("Router add route. (ip %s, mask %u, next hop %s): %s\n", ipaddr_to_string(ip, ip_addr_buf0),
-                        subnet, ipaddr_to_string(next_hop, ip_addr_buf1), fw_routing_err_str[err]);
+            sddf_printf("ROUTING_LOG: add route. (ip %s, mask %u, next hop %s): %s\n",
+                        ipaddr_to_string(ip, ip_addr_buf0), subnet, ipaddr_to_string(next_hop, ip_addr_buf1),
+                        fw_routing_err_str[err]);
         }
         microkit_mr_set(ROUTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
-    case FW_DEL_ROUTE: {
-        uint16_t route_id = microkit_mr_get(ROUTER_ARG_ROUTE_ID);
+    case ROUTER_DEL_ROUTE: {
+        uint16_t route_id = microkit_mr_get(ROUTER_DELETE_ARG_ROUTE_ID);
         fw_routing_err_t err = fw_routing_table_remove_route(routing_table, route_id);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("Router delete route %u: %s\n", route_id, fw_routing_err_str[err]);
+            sddf_printf("ROUTING LOG: delete route %u: %s\n", route_id, fw_routing_err_str[err]);
         }
 
         microkit_mr_set(ROUTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
-    case FW_SET_PING_RESPONSE: {
-        ping_response_enabled = (bool)microkit_mr_get(0);
+    case ROUTER_SET_PING_RESPONSE: {
+        uint8_t interface = microkit_mr_get(ROUTER_PING_ARG_INTERFACE);
+        assert(interface < router_config.num_interfaces);
+        bool ping_state = microkit_mr_get(ROUTER_PING_ARG_PING_STATE);
+
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("Router ping response %s\n", ping_response_enabled ? "enabled" : "disabled");
+            sddf_printf("ROUTING LOG: ping response %s on interface %u\n", ping_state ? "enabled" : "disabled",
+                        interface);
         }
-        microkit_mr_set(0, 0); /* success */
+
+        ping_response_enabled[interface] = ping_state;
+        microkit_mr_set(ROUTER_RET_ERR, ROUTING_ERR_OKAY);
         return microkit_msginfo_new(0, 1);
     }
     default:

@@ -114,7 +114,7 @@ static void process_requests()
             assert(!err);
 
             if (FW_DEBUG_OUTPUT) {
-                sddf_printf("ARP requester processing client %u request for ip %s on interface %u\n", client,
+                sddf_printf("ARP REQUESTER LOG: processing client %u request for ip %s on interface %u\n", client,
                             ipaddr_to_string(request.ip, ip_addr_buf0), arp_config.interface);
             }
 
@@ -162,7 +162,7 @@ static void process_responses()
                                 fw_enqueue(&arp_resp_queue[client], &response);
                                 notify_client[client] = true;
                                 if (FW_DEBUG_OUTPUT) {
-                                    sddf_printf("ARP requester received response for client %u, ip %s. MAC[0] = %x, "
+                                    sddf_printf("ARP REQUESTER LOG: received response for client %u, ip %s. MAC[0] = %x, "
                                                 "MAC[5] = %x on interface %u\n",
                                                 client, ipaddr_to_string(arp_resp->ipsrc_addr, ip_addr_buf0),
                                                 arp_resp->hwsrc_addr[0], arp_resp->hwsrc_addr[5], arp_config.interface);
@@ -227,7 +227,7 @@ static uint16_t process_retries(void)
             /* Resend the ARP request out to the network */
 
             if (FW_DEBUG_OUTPUT) {
-                sddf_printf("ARP requester attempting to resend request for ip %s on interface %u\n",
+                sddf_printf("ARP REQUESTER LOG: attempting to resend request for ip %s on interface %u\n",
                             ipaddr_to_string(entry->ip, ip_addr_buf0), arp_config.interface);
             }
 
@@ -242,7 +242,7 @@ static uint16_t process_retries(void)
                 transmitted = true;
 
                 if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("ARP requester resent request for ip %s on interface %u\n",
+                    sddf_printf("ARP REQUESTER LOG: resent request for ip %s on interface %u\n",
                                 ipaddr_to_string(entry->ip, ip_addr_buf0), arp_config.interface);
                 }
             }
@@ -313,7 +313,7 @@ void notified(microkit_channel ch)
             uint16_t retries = process_retries();
 
             if (FW_DEBUG_OUTPUT && retries > 0) {
-                sddf_printf("ARP requester processed %u retries for tick %lu on interface %u\n", retries,
+                sddf_printf("ARP REQUESTER LOG: processed %u retries for tick %lu on interface %u\n", retries,
                             ticks_to_flush, arp_config.interface);
             }
 
@@ -321,7 +321,7 @@ void notified(microkit_channel ch)
             uint16_t flushed = arp_table_flush();
 
             if (FW_DEBUG_OUTPUT && flushed > 0) {
-                sddf_printf("ARP requester flushed %u entries from cache on interface %u\n", flushed,
+                sddf_printf("ARP REQUESTER LOG: flushed %u entries from cache on interface %u\n", flushed,
                             arp_config.interface);
             }
 

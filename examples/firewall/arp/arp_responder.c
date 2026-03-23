@@ -93,7 +93,7 @@ static void receive(void)
                     if (arp_pkt->ipdst_addr == arp_config.ip) {
 
                         if (FW_DEBUG_OUTPUT) {
-                            sddf_printf("ARP Responder replying for ip %s on interface %u\n",
+                            sddf_printf("ARP RESPONDER LOG: replying for ip %s on interface %u\n",
                                         ipaddr_to_string(arp_pkt->ipdst_addr, ip_addr_buf0), arp_config.interface);
                         }
 

@@ -37,7 +37,8 @@ static bool notify_icmp;
 static bool enqueue_icmp_unreachable(net_buff_desc_t buffer)
 {
     uintptr_t pkt_vaddr = (uintptr_t)(net_config.rx_data.vaddr + buffer.io_or_offset);
-    bool enqueued = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, ICMP_DEST_PORT_UNREACHABLE, pkt_vaddr);
+    bool enqueued = icmp_enqueue_error(&icmp_queue, ICMP_DEST_UNREACHABLE, ICMP_DEST_PORT_UNREACHABLE, pkt_vaddr,
+                                       filter_config.interface);
     notify_icmp |= enqueued;
     return enqueued;
 }
@@ -64,14 +65,14 @@ static void filter(void)
             case FILTER_ACT_CONNECT: {
                 /* Add an established connection in shared memory for corresponding filter */
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_hdr->src_ip, ICMP_FILTER_DUMMY_PORT,
-                                                                                ip_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, rule_id);
+                                                                ip_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, rule_id);
 
                 if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
-                    sddf_printf("ICMP filter on interface %u establishing connection via rule %u: (ip %s, port %u) -> "
-                                "(ip %s, port %u)\n",
-                                filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                                ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                                ICMP_FILTER_DUMMY_PORT);
+                    sddf_printf(
+                        "ICMP FILTER LOG: on interface %u establishing connection via rule %u: (ip %s, port %u) -> "
+                        "(ip %s, port %u)\n",
+                        filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                        ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
@@ -86,10 +87,10 @@ static void filter(void)
             case FILTER_ACT_ALLOW: {
                 /* Transmit the packet to the routing component */
                 /* Reset the checksum if it's recalculated in hardware */
-                #ifdef NETWORK_HW_HAS_CHECKSUM
+#ifdef NETWORK_HW_HAS_CHECKSUM
                 icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
                 icmp_hdr->check = 0;
-                #endif
+#endif
 
                 err = fw_enqueue(&router_queue, &buffer);
                 assert(!err);
@@ -97,17 +98,19 @@ static void filter(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
-                        sddf_printf("ICMP filter on interface %u transmitting via rule %u: (ip %s, port %u) -> (ip %s, "
-                                    "port %u)\n",
-                                    filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                                    ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                                    ICMP_FILTER_DUMMY_PORT);
+                        sddf_printf(
+                            "ICMP FILTER LOG: on interface %u transmitting via rule %u: (ip %s, port %u) -> (ip %s, "
+                            "port %u)\n",
+                            filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                            ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                            ICMP_FILTER_DUMMY_PORT);
                     } else if (action == FILTER_ACT_ESTABLISHED) {
-                        sddf_printf("ICMP filter on interface %u transmitting via external rule %u: (ip %s, port %u) "
-                                    "-> (ip %s, port %u)\n",
-                                    filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                                    ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                                    ICMP_FILTER_DUMMY_PORT);
+                        sddf_printf(
+                            "ICMP FILTER LOG: on interface %u transmitting via external rule %u: (ip %s, port %u) "
+                            "-> (ip %s, port %u)\n",
+                            filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                            ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                            ICMP_FILTER_DUMMY_PORT);
                     }
                 }
                 break;
@@ -122,10 +125,11 @@ static void filter(void)
                 }
 
                 if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("%sICMP filter rejecting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[filter_config.interface], rule_id,
-                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), ICMP_FILTER_DUMMY_PORT,
-                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
+                    sddf_printf("ICMP FILTER LOG: on interface %u, filter rejecting via rule %u: (ip %s, port %u) -> "
+                                "(ip %s, port %u)\n",
+                                filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                                ICMP_FILTER_DUMMY_PORT);
                 }
             }
             case FILTER_ACT_DROP:
@@ -137,12 +141,13 @@ static void filter(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     sddf_printf(
-                        "ICMP filter on interface %u dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
+                        "ICMP FILTER LOG: on interface %u dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
                         filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
                         ICMP_FILTER_DUMMY_PORT, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), ICMP_FILTER_DUMMY_PORT);
                 }
                 break;
-            }}
+            }
+            }
         }
 
         net_request_signal_active(&rx_queue);
@@ -166,12 +171,12 @@ static void filter(void)
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     switch (microkit_msginfo_get_label(msginfo)) {
-    case FW_SET_DEFAULT_ACTION: {
-        fw_action_t action = microkit_mr_get(FILTER_ARG_ACTION);
+    case FILTER_SET_DEFAULT_ACTION: {
+        fw_action_t action = microkit_mr_get(FILTER_SET_DEFAULT_ARG_ACTION);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("ICMP filter on interface %u changing default action from %u to %u\n", filter_config.interface,
-                        filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
+            sddf_printf("ICMP FILTER LOG: on interface %u changing default action from %u to %u\n",
+                        filter_config.interface, filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
         }
 
         fw_filter_err_t err = fw_filter_update_default_action(&filter_state, action);
@@ -180,12 +185,12 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         microkit_mr_set(FILTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
-    case FW_ADD_RULE: {
-        fw_action_t action = microkit_mr_get(FILTER_ARG_ACTION);
-        uint32_t src_ip = microkit_mr_get(FILTER_ARG_SRC_IP);
-        uint32_t dst_ip = microkit_mr_get(FILTER_ARG_DST_IP);
-        uint8_t src_subnet = microkit_mr_get(FILTER_ARG_SRC_SUBNET);
-        uint8_t dst_subnet = microkit_mr_get(FILTER_ARG_DST_SUBNET);
+    case FILTER_ADD_RULE: {
+        fw_action_t action = microkit_mr_get(FILTER_ADD_ARG_ACTION);
+        uint32_t src_ip = microkit_mr_get(FILTER_ADD_ARG_SRC_IP);
+        uint32_t dst_ip = microkit_mr_get(FILTER_ADD_ARG_DST_IP);
+        uint8_t src_subnet = microkit_mr_get(FILTER_ADD_ARG_SRC_SUBNET);
+        uint8_t dst_subnet = microkit_mr_get(FILTER_ADD_ARG_DST_SUBNET);
 
         /* ICMP filter does not support this action */
         if (action == 0 || action > FW_FILTER_NUM_ACTIONS || !filter_config.webserver.actions[action - 1]) {
@@ -199,24 +204,24 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
                                                  &rule_id);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("ICMP filter on interface %u create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> "
-                        "(ip %s, mask %u, port %u, any_port %u): %s\n",
-                        filter_config.interface, rule_id, ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet,
-                        ICMP_FILTER_DUMMY_PORT, false, fw_filter_action_str[action],
-                        ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, ICMP_FILTER_DUMMY_PORT, false,
-                        fw_filter_err_str[err]);
+            sddf_printf(
+                "ICMP FILTER LOG: on interface %u create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> "
+                "(ip %s, mask %u, port %u, any_port %u): %s\n",
+                filter_config.interface, rule_id, ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet,
+                ICMP_FILTER_DUMMY_PORT, false, fw_filter_action_str[action], ipaddr_to_string(dst_ip, ip_addr_buf1),
+                dst_subnet, ICMP_FILTER_DUMMY_PORT, false, fw_filter_err_str[err]);
         }
 
         microkit_mr_set(FILTER_RET_ERR, err);
         microkit_mr_set(FILTER_RET_RULE_ID, rule_id);
         return microkit_msginfo_new(0, 2);
     }
-    case FW_DEL_RULE: {
-        uint16_t rule_id = microkit_mr_get(FILTER_ARG_RULE_ID);
+    case FILTER_DEL_RULE: {
+        uint16_t rule_id = microkit_mr_get(FILTER_DELETE_ARG_RULE_ID);
         fw_filter_err_t err = fw_filter_remove_rule(&filter_state, rule_id);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("ICMP filter on interface %u remove rule id %u: %s\n", filter_config.interface, rule_id,
+            sddf_printf("ICMP FILTER LOG: on interface %u remove rule id %u: %s\n", filter_config.interface, rule_id,
                         fw_filter_err_str[err]);
         }
 
@@ -242,8 +247,8 @@ void notified(microkit_channel ch)
     }
 
     if (notify_icmp) {
-        sddf_printf("%sICMP filter notifying ICMP module on channel %u\n",
-            fw_frmt_str[filter_config.interface], filter_config.icmp_module.ch);
+        sddf_printf("ICMP FILTER LOG: on interface %u filter notifying ICMP module on channel %u\n",
+                    filter_config.interface, filter_config.icmp_module.ch);
         notify_icmp = false;
         microkit_notify(filter_config.icmp_module.ch);
     }
@@ -259,11 +264,12 @@ void init(void)
     fw_queue_init(&router_queue, filter_config.router.queue.vaddr, sizeof(net_buff_desc_t),
                   filter_config.router.capacity);
 
-    fw_queue_init(&icmp_queue, filter_config.icmp_module.queue.vaddr,
-        sizeof(icmp_req_t), filter_config.icmp_module.capacity);
+    fw_queue_init(&icmp_queue, filter_config.icmp_module.queue.vaddr, sizeof(icmp_req_t),
+                  filter_config.icmp_module.capacity);
 
     fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr,
                          filter_config.webserver.rules_capacity, filter_config.internal_instances.vaddr,
                          filter_config.external_instances, filter_config.instances_capacity,
-                         filter_config.initial_rules, filter_config.num_initial_rules, filter_config.num_external_instances);
+                         filter_config.initial_rules, filter_config.num_initial_rules,
+                         filter_config.num_external_instances);
 }

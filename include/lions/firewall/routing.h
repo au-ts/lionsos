@@ -31,23 +31,29 @@ typedef enum {
     /* node ID does not point to a valid node */
     ROUTING_ERR_INVALID_ID,
     /* route is invalid */
-    ROUTING_ERR_INVALID_ROUTE
+    ROUTING_ERR_INVALID_ROUTE,
 } fw_routing_err_t;
 
 extern const char *fw_routing_err_str[];
 
 /* PP call parameters for webserver to call router and update routing table */
-#define FW_ADD_ROUTE 0
-#define FW_DEL_ROUTE 1
-#define FW_SET_PING_RESPONSE 2
+typedef enum fw_routing_pp_type {
+    ROUTER_ADD_ROUTE = 0,
+    ROUTER_DEL_ROUTE,
+    ROUTER_SET_PING_RESPONSE,
+} fw_routing_pp_type_t;
 
 typedef enum {
-    ROUTER_ARG_ROUTE_ID = 0,
-    ROUTER_ARG_IP,
-    ROUTER_ARG_SUBNET,
-    ROUTER_ARG_NEXT_HOP,
-    ROUTER_ARG_INTERFACE
-} fw_router_args_t;
+    ROUTER_ADD_ARG_IP = 0,
+    ROUTER_ADD_ARG_SUBNET,
+    ROUTER_ADD_ARG_NEXT_HOP,
+    ROUTER_ADD_ARG_INTERFACE,
+    ROUTER_ADD_NUM_ARGS,
+} fw_router_add_args_t;
+
+typedef enum { ROUTER_DELETE_ARG_ROUTE_ID = 0, ROUTER_DELETE_NUM_ARGS } fw_router_delete_args_t;
+
+typedef enum { ROUTER_PING_ARG_INTERFACE = 0, ROUTER_PING_ARG_PING_STATE, ROUTER_PING_NUM_ARGS } fw_router_ping_args_t;
 
 typedef enum { ROUTER_RET_ERR = 0 } fw_router_ret_args_t;
 

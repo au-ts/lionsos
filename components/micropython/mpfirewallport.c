@@ -61,9 +61,8 @@ static void firewall_interface_free_buffer(struct pbuf *buf)
     pbuf_custom_offset_t *pbuf = (pbuf_custom_offset_t *)buf;
     SYS_ARCH_PROTECT(old_level);
     fw_buff_desc_t buffer = { pbuf->offset, 0 };
-    assert(pbuf->region_id <= fw_config.num_interfaces);
-    fw_enqueue(&rx_free[pbuf->region_id], &buffer);
-    notify_rx[pbuf->region_id] = true;
+    fw_enqueue(&rx_free[fw_config.tx_interface], &buffer);
+    notify_rx[fw_config.tx_interface] = true;
     sddf_lwip_pbuf_pool_free(pbuf);
     SYS_ARCH_UNPROTECT(old_level);
 }
@@ -122,6 +121,11 @@ net_sddf_err_t mpfirewall_handle_arp(struct pbuf *p)
         return SDDF_LWIP_ERR_NO_BUF;
     }
 
+    if (FW_DEBUG_OUTPUT) {
+        dlog("Enqueued ARP request for ip %s on tx interface %u", ipaddr_to_string(arp_pkt->ipdst_addr, ip_addr_buf0),
+             fw_config.tx_interface);
+    }
+
     notify_arp = true;
     return SDDF_LWIP_ERR_OK;
 }
@@ -132,6 +136,11 @@ void mpfirewall_process_arp(void)
         fw_arp_request_t response;
         int err = fw_dequeue(&arp_resp_queue, &response);
         assert(!err);
+
+        if (FW_DEBUG_OUTPUT) {
+            dlog("Dequeued ARP response for ip %s with state %u", ipaddr_to_string(response.ip, ip_addr_buf0),
+                 response.state);
+        }
 
         if (response.state == ARP_STATE_REACHABLE) {
             fill_arp(response.ip, response.mac_addr);
@@ -172,6 +181,11 @@ void mpfirewall_process_rx(void)
         int err = fw_dequeue(&rx_active, &buffer);
         assert(!err);
 
+        if (FW_DEBUG_OUTPUT) {
+            dlog("Dequeued firewall rx buffer=%lu len=%u interface=%u tx_interface=%u", buffer.offset / NET_BUFFER_SIZE,
+                 buffer.len, buffer.interface, fw_config.tx_interface);
+        }
+
         // TODO: Currently the webserver can only transmit out one interface. So
         // if traffic is received on a non transmission interface, it is
         // immediately returned
@@ -184,7 +198,6 @@ void mpfirewall_process_rx(void)
         }
 
         pbuf->offset = buffer.offset;
-        pbuf->region_id = buffer.interface;
         pbuf->custom.custom_free_function = firewall_interface_free_buffer;
 
         struct pbuf *p = pbuf_alloced_custom(
