@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <os/sddf.h>
@@ -17,6 +18,8 @@
 #include <lions/firewall/config.h>
 #include <lions/firewall/ethernet.h>
 #include <lions/firewall/ip.h>
+#include <lions/firewall/tcp.h>
+#include <lions/firewall/udp.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/nat_module.h>
 
@@ -109,15 +112,18 @@ static void rx_return(void)
                 if (ethtype == ETH_TYPE_IP)
                 {
                     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(buffer_vaddr + IPV4_HDR_OFFSET);
-                    bool is_inbound = ip_hdr->src_ip != fw_config.interface;
+                    /* RX path receives packets from external network, so they are inbound */
+                    bool is_inbound = true;
 
                     int nat_result = NAT_SUCCESS;
-                    if (ip_hdr->protocol == IPPROTO_TCP)
+                    if (ip_hdr->protocol == IPV4_PROTO_TCP)
                     {
+                        sddf_printf("virt_rx: About to translate TCP, nat_tcp_module.port_table=%p\n", nat_tcp_module.port_table);
                         nat_result = nat_module_translate(&nat_tcp_module, buffer_vaddr, &buffer, is_inbound);
                     }
-                    else if (ip_hdr->protocol == IPPROTO_UDP)
+                    else if (ip_hdr->protocol == IPV4_PROTO_UDP)
                     {
+                        sddf_printf("virt_rx: About to translate UDP, nat_udp_module.port_table=%p\n", nat_udp_module.port_table);
                         nat_result = nat_module_translate(&nat_udp_module, buffer_vaddr, &buffer, is_inbound);
                     }
 
@@ -266,8 +272,6 @@ void init(void)
     /* Initialize NAT modules if enabled */
     if (fw_config.nat_enabled)
     {
-        fw_nat_webserver_state_t *webserver_state = (fw_nat_webserver_state_t *)fw_config.webserver_state.vaddr;
-
         for (int i = 0; i < fw_config.num_nat_configs; i++)
         {
             fw_virt_rx_nat_config_t *nat_cfg = &fw_config.nat_configs[i];
@@ -277,25 +281,36 @@ void init(void)
                 continue;
             }
 
+            /* Get webserver state from THIS NAT config */
+            fw_nat_webserver_state_t *webserver_state =
+                (fw_nat_webserver_state_t *)nat_cfg->webserver_state.vaddr;
+
+            sddf_printf("DEBUG virt_rx: webserver_state vaddr=%p, interface=%u\n",
+                        webserver_state, fw_config.interface);
+
             /* Get the interface configuration for this NAT config */
             fw_nat_interface_config_t *interface_config = &nat_cfg->interface_config;
             fw_nat_port_table_t *port_table = (fw_nat_port_table_t *)interface_config->port_table.vaddr;
+
+            sddf_printf("DEBUG virt_rx: protocol=%u, port_table vaddr=%p, base_port=%u, capacity=%u\n",
+                        nat_cfg->protocol, port_table, interface_config->base_port, interface_config->ports_capacity);
 
             /* Determine protocol-specific offsets */
             size_t src_port_off, dst_port_off, check_off;
             bool check_enabled;
 
-            if (nat_cfg->protocol == IPPROTO_TCP)
+            if (nat_cfg->protocol == IPV4_PROTO_TCP)
             {
-                src_port_off = TCP_SRC_PORT_OFF;
-                dst_port_off = TCP_DST_PORT_OFF;
-                check_off = TCP_CHECK_OFF;
+                src_port_off = offsetof(tcp_hdr_t, src_port);
+                dst_port_off = offsetof(tcp_hdr_t, dst_port);
+                check_off = offsetof(tcp_hdr_t, check);
                 check_enabled = true;
 
                 /* Initialize TCP NAT module */
+                sddf_printf("DEBUG virt_rx: About to init TCP NAT, port_table=%p\n", port_table);
                 int result = nat_module_init(&nat_tcp_module,
                                              fw_config.interface,
-                                             IPPROTO_TCP,
+                                             IPV4_PROTO_TCP,
                                              interface_config,
                                              port_table,
                                              webserver_state,
@@ -304,18 +319,20 @@ void init(void)
                                              check_off,
                                              check_enabled);
                 assert(result == NAT_SUCCESS);
+                sddf_printf("DEBUG virt_rx: TCP NAT init SUCCESS\n");
             }
-            else if (nat_cfg->protocol == IPPROTO_UDP)
+            else if (nat_cfg->protocol == IPV4_PROTO_UDP)
             {
-                src_port_off = UDP_SRC_PORT_OFF;
-                dst_port_off = UDP_DST_PORT_OFF;
-                check_off = UDP_CHECK_OFF;
+                src_port_off = offsetof(udp_hdr_t, src_port);
+                dst_port_off = offsetof(udp_hdr_t, dst_port);
+                check_off = offsetof(udp_hdr_t, check);
                 check_enabled = true;
 
                 /* Initialize UDP NAT module */
+                sddf_printf("DEBUG virt_rx: About to init UDP NAT, port_table=%p\n", port_table);
                 int result = nat_module_init(&nat_udp_module,
                                              fw_config.interface,
-                                             IPPROTO_UDP,
+                                             IPV4_PROTO_UDP,
                                              interface_config,
                                              port_table,
                                              webserver_state,
@@ -324,6 +341,7 @@ void init(void)
                                              check_off,
                                              check_enabled);
                 assert(result == NAT_SUCCESS);
+                sddf_printf("DEBUG virt_rx: UDP NAT init SUCCESS\n");
             }
         }
     }
