@@ -8,8 +8,10 @@
 #include <sddf/blk/queue.h> 
 #include <sddf/blk/storage_info.h>
 #include <sddf/blk/config.h>
+#include <sddf/util/printf.h>
 #include <string.h>
 
+// i need to find out what the pd idxs are.
 
 /**
  * TODOS:
@@ -87,7 +89,7 @@ static inline pe retrieve_page(uintptr_t fault_addr, uint32_t pd_idx) {
 
 void init(void)
 {
-    // TODO: memset stuff to 0 where required.
+    // // TODO: memset stuff to 0 where required.
     memset0(page_table, MAX_PDS * NUM_PT_ENTRIES * sizeof(pe));
 
     // initialise and check blk queue and config
@@ -101,11 +103,12 @@ void init(void)
 
     // initialise the frame caps.
     int frame_indicies[MAX_PDS] = {0};
+    sddf_printf("number of frames %d\n", num_frames);
     for (int i = 0; i < num_frames; ++i) {
         uint32_t next = i + 1, prev = i - 1;
         frame_pd_id *cur_frame = &frames[i];
         int pd_idx = cur_frame->pd_idx;
-
+        sddf_dprintf("frame from pd %d\n", pd_idx);
         frame_table[pd_idx][frame_indicies[pd_idx]] = (FrameInfo){ .cap = cur_frame->frame_cap, .last_accessed = 0, .page = NULL, .next = ++frame_indicies[pd_idx] };
     }
 
@@ -171,19 +174,20 @@ void page_out(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr) {
 /**
  * The vm fault may occur for one of two reasons:
  * - RO perms, need to set the dirtybit/used
- * - Actual VM fault.
+ * - Actual VM fault
+ * - THE PROBLEM IS THAT THE PD INDEX IS DIFFERENT FROM THE CHILD NUM...
  */
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
     ++time;
     // TODO: this is when the child has a vm fault...
     uintptr_t fault_addr = microkit_mr_get(1); // I am not sure if this is the right mr number so will need to check later.
-    uint32_t pd_idx = microkit_mr_get(0);
-
+    uint32_t pd_idx = child;
+    sddf_dprintf("fault with child %d\n", child);
     // check if I just need to remap with write perms.
-    FrameInfo *old_frame = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr;
+    FrameInfo *old_frame = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr; // old frame is null or garbage...
     pe *page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
-    if (old_frame->page == page) {
+    if (old_frame && old_frame->page == page) {
         // microkit_arm_page_unmap(old_frame->cap); // I don't know if I actually need to unmap the frame. maybe this is an unnecessary step...
         microkit_arm_page_map_rw(old_frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
         // i need to mark the page as dirty and recently used

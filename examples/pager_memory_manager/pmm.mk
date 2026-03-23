@@ -94,17 +94,17 @@ ${IMAGES}: libsddf_util_debug.a
 
 pager.o: ${TOP}/pager.c ${TOP}/pagefile.h ${TOP}/frame_table.h ${TOP}/types.h
 	$(CC) -c $(CFLAGS) -I. $< -o pager.o
-pager.elf: pager.o libsddf_util.a
+pager.elf: pager.o libsddf_util_debug.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 memory_manager.o: ${TOP}/memory_manager.c ${TOP}/types.h
 	$(CC) -c $(CFLAGS) -I. $< -o memory_manager.o
-memory_manager.elf: memory_manager.o libsddf_util.a
+memory_manager.elf: memory_manager.o libsddf_util_debug.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 example_pd1.o: ${TOP}/example_pd1.c 
 	$(CC) -c $(CFLAGS) -I. $< -o example_pd1.o
-example_pd1.elf: example_pd1.o libsddf_util.a
+example_pd1.elf: example_pd1.o libsddf_util_debug.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)

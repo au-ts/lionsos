@@ -1,26 +1,32 @@
 #include <microkit.h>
 #include <types.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <sddf/util/printf.h>
+#define NM 256
+
 void init(void)
 {
+    // sddf_dprintf("hello \n");
     // I have 128 heap frames, I want to do paging stuff here.
-    char *mappings[256];
-    for (int i = 0; i < 256; ++i) {
-        mappings[i] = (char *)malloc();
+    char *mappings[NM];
+    for (int i = 0; i < NM; ++i) {
+        mappings[i] = (char *)mymalloc();
+        mappings[i][10] = 'c';
+    }
+    struct mmap_node *n = NULL;
+    n->addr = (uintptr_t) NULL; 
+    for (int i = 0; i < NM; ++i) {
+        myfree((uintptr_t)mappings[i]);
+    }
+
+    for (int i = 0; i < NM; ++i) {
+        mappings[i] = (char *)mymalloc();
         mappings[i][10] = 'c';
     }
 
-    for (int i = 0; i < 256; ++i) {
-        free((uintptr_t)mappings[i]);
-    }
-
-    for (int i = 0; i < 256; ++i) {
-        mappings[i] = (char *)malloc();
-        mappings[i][10] = 'c';
-    }
-
-    for (int i = 0; i < 256; ++i) {
-        free((uintptr_t)mappings[i]);
+    for (int i = 0; i < NM; ++i) {
+        myfree((uintptr_t)mappings[i]);
     }
 }
 

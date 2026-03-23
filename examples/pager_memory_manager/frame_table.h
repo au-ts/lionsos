@@ -5,6 +5,7 @@
 #include <microkit.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 
 unsigned long long time = 0; // Working set clock.
 
@@ -31,6 +32,7 @@ uintptr_t get_frame_offset(uintptr_t frame_addr, int pd_idx) {
  * currently recursive, may/may not want to change.
  */
 static FrameInfo *get_frame(uint32_t pd_idx) {
+    // printf("\nget frame callled with pd_idx of %d\n", pd_idx);
     if (!wshand[pd_idx]->page) {
         FrameInfo *ret = wshand[pd_idx];
         move_hand(pd_idx);

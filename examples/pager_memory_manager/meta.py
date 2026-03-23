@@ -52,7 +52,7 @@ def generate(
     user_heap_map = SystemDescription.Map(heap1, 0x8000000000, "rw")
     pager.add_map(pager_heap_map)
     client.add_map(user_heap_map)
-    exmmc = SystemDescription.Channel(a=client, b=memory_manager, a_id=2, b_id=2, pp_a=True)
+    exmmc = SystemDescription.Channel(a=client, b=memory_manager, a_id=0, b_id=0, pp_a=True)
     # exmmc = SystemDescription.Channel(a=memory_manager, b=client, a_id=2, b_id=2)
     sdf.add_channel(exmmc)
 

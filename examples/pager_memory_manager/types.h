@@ -6,15 +6,14 @@
 #include <stdint.h>
 
 #define MAX_PDS 64
-#define NUM_PT_ENTRIES 128
+#define NUM_PT_ENTRIES 300
 #define BRK_START 0x8000000000
 #define MMAP_START 0x9000000000
 #define ROUND_DOWN_TO_4K(x) ((x) & ~(4096 - 1))
 #define INDEX_INTO_MMAP_ARRAY(x) (ROUND_DOWN_TO_4K(x)) / 4096
 #define TAU 10 // not too sure what the optimal number for this would be. maybe this is not useful...
 #define PAGEFILE ".pagefile"
-#define MM_PPC_NUM 2
-#define NULL 0
+#define MM_PPC_NUM 0
 
 
 struct mmap_node
@@ -74,13 +73,14 @@ struct page_request_info {
     enum paging_state state;
 };
 
-void free(uintptr_t addr) {
+void myfree(uintptr_t addr) {
     microkit_msginfo message = microkit_msginfo_new(0, 2);
     microkit_mr_set(0, 0);
+    microkit_mr_set(1, addr);
     microkit_ppcall(MM_PPC_NUM, message);
 }
 
-uintptr_t malloc() {
+uintptr_t mymalloc() {
     microkit_msginfo message = microkit_msginfo_new(0, 1);
     microkit_mr_set(0, 1);
     microkit_ppcall(MM_PPC_NUM, message);
