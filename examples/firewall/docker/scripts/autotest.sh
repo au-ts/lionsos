@@ -320,7 +320,7 @@ test_icmp_ping_firewall_from_internal_network() {
         --output /dev/null \
         --header 'Content-Type: application/json' \
         --request 'POST' \
-        "http://${FW_INT_IP}/api/ping/internal/1")
+        "http://${FW_INT_IP}/api/ping/1/1")
 
     # Check if the response contains an error
     error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
@@ -346,7 +346,7 @@ test_icmp_ping_firewall_from_external_network() {
         --output /dev/null \
         --header 'Content-Type: application/json' \
         --request 'POST' \
-        "http://${FW_INT_IP}/api/ping/external/1")
+        "http://${FW_INT_IP}/api/ping/0/1")
 
     # Check if the response contains an error
     error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')

@@ -362,3 +362,4 @@ if __name__ == "__main__":
 # Encode as many types as we can, for type checking later (maybe return non-optional type through method, assertion in  method)
 # Think up a convention for which "connection" method belongs to which class
 # Check old PR comments for additional TODOs
+# TODO: Autotests should not be hardcoded with strings

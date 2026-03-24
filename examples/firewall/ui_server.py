@@ -117,7 +117,7 @@ def tupleToMac(macList):
         raise OSError(OSErrInternalError, OSErrStrings[OSErrInternalError])
 
     # Switch big to little endian
-    hexList = list(map(lambda digit: hex(digit)[2:], macList))
+    hexList = list(map(lambda digit: hex(int(digit))[2:], macList))
 
     # Ensure digits are in the right format
     for i in range(len(hexList)):
@@ -130,51 +130,31 @@ def tupleToMac(macList):
     mac = ":".join(hexList)
     return mac
 
-def interfaceStringToInt(componentType, interfaceStr):
-  if componentType == "router":
-      for i in range(numInterfaces):
-        if interfaceStr == interfaceStrings[1-i]:
-            return i
-  elif componentType == "filter":
-    for i in range(numInterfaces):
-        if interfaceStr == interfaceStrings[i]:
-            return i
-
-    print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
-    raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
-
-
 ############ Route APIs ############
 
 app = Microdot()
 
 ###### Interface methods ######
 
-# Get the number of interfaces
-@app.route("/api/interfaces/count", methods=["GET"])
-def interfaceCount(request):
-    return {"count": lions_firewall.interface_count_get()}
-
-# Get interface details
-@app.route("/api/interfaces/<int:interfaceInt>", methods=["GET"])
-def interfaceDetails(request, interfaceInt):
+# Get all interface details
+@app.route("/api/interfaces", methods=["GET"])
+def getInterfaces(request):
     try:
-        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
-            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
-            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
-
-        return {
-            "interface": lions_firewall.interface_name_get(interfaceInt),
-            "mac": tupleToMac(lions_firewall.interface_mac_get(interfaceInt)),
-            "ip": intToIp(lions_firewall.interface_ip_get(interfaceInt)),
-        }
+        count = lions_firewall.interface_count_get()
+        interfaces = []
+        for i in range(count):
+            interfaces.append({
+                "interface": lions_firewall.interface_name_get(i),
+                "mac": tupleToMac(lions_firewall.interface_mac_get(i)),
+                "ip": intToIp(lions_firewall.interface_ip_get(i))
+            })
+        return {"interfaces": interfaces}
     except OSError as OSErr:
-        print(f"UI SERVER|ERR: OS Error: interfaceDetails: {OSErrStrings[OSErr.errno]}")
+        print(f"UI SERVER|ERR: OS Error: getInterfaces: {OSErrStrings[OSErr.errno]}")
         return {"error": OSErrStrings[OSErr.errno]}, 404
     except Exception as exception:
-        print(f"UI SERVER|ERR: Unknown Error: interfaceDetails: {exception}.")
+        print(f"UI SERVER|ERR: Unknown Error: getInterfaces: {exception}.")
         return {"error": UnknownErrStr}, 404
-
 
 ###### Routing config methods ######
 
@@ -263,9 +243,8 @@ def addRoute(request):
 @app.route("/api/rules/<string:protocolStr>/<int:interfaceInt>", methods=["GET"])
 def getRules(request, protocolStr, interfaceInt):
     try:
-        interface = interfaceInt
-        if interface < 0 or interface >= lions_firewall.interface_count_get():
-            print(f"UI SERVER|ERR: Supplied interface integer {interface} does not match existing interfaces.")
+        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
+            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
             raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
         if protocolStr not in protocolNums.keys():
@@ -273,11 +252,11 @@ def getRules(request, protocolStr, interfaceInt):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
-        defaultAction = lions_firewall.filter_get_default_action(interface, protocol)
+        defaultAction = lions_firewall.filter_get_default_action(interfaceInt, protocol)
         rules = []
         # ignore default rule at position 0
-        for i in range(defaultActionRuleIdx + 1, lions_firewall.rule_count(interface, protocol)):
-            rule = lions_firewall.rule_get_nth(interface, protocol, i)
+        for i in range(defaultActionRuleIdx + 1, lions_firewall.rule_count(interfaceInt, protocol)):
+            rule = lions_firewall.rule_get_nth(interfaceInt, protocol, i)
             rules.append({
                 "id": rule[0],
                 "src_ip": intToIp(rule[1]),
@@ -303,9 +282,8 @@ def getRules(request, protocolStr, interfaceInt):
 @app.route("/api/rules/<string:protocolStr>/<int:ruleId>/<int:interfaceInt>", methods=["DELETE"])
 def deleteRule(request, protocolStr, ruleId, interfaceInt):
     try:
-        interface = interfaceInt
-        if interface < 0 or interface >= lions_firewall.interface_count_get():
-            print(f"UI SERVER|ERR: Supplied interface integer {interface} does not match existing interfaces.")
+        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
+            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
             raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
         if protocolStr not in protocolNums.keys():
@@ -313,7 +291,7 @@ def deleteRule(request, protocolStr, ruleId, interfaceInt):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
-        lions_firewall.rule_delete(interface, ruleId, protocol)
+        lions_firewall.rule_delete(interfaceInt, ruleId, protocol)
         return {"status": "ok"}
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: deleteRule: {OSErrStrings[OSErr.errno]}")
@@ -327,9 +305,8 @@ def deleteRule(request, protocolStr, ruleId, interfaceInt):
 @app.route("/api/rules/<string:protocolStr>/default/<int:action>/<int:interfaceInt>", methods=["POST"])
 def setDefaultAction(request, protocolStr, action, interfaceInt):
     try:
-        interface = interfaceInt
-        if interface < 0 or interface >= lions_firewall.interface_count_get():
-            print(f"UI SERVER|ERR: Supplied interface integer {interface} does not match existing interfaces.")
+        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
+            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
             raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
         if protocolStr not in protocolNums.keys():
@@ -337,7 +314,7 @@ def setDefaultAction(request, protocolStr, action, interfaceInt):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
-        lions_firewall.filter_set_default_action(interface, protocol, action)
+        lions_firewall.filter_set_default_action(interfaceInt, protocol, action)
         return {"status": "ok"}, 201
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: setDefaultAction: {OSErrStrings[OSErr.errno]}")
@@ -417,15 +394,15 @@ def addRule(request, protocolStr):
 
 ###### Ping Response methods ######
 # Set ping response for an interface
-@app.route('/api/ping/<string:interfaceStr>/<int:enabled>', methods=['POST'])
-def setPingResponse(request, interfaceStr, enabled):
+@app.route("/api/ping/<int:interfaceInt>/<int:enabled>", methods=["POST"])
+def setPingResponse(request, interfaceInt, enabled):
     try:
-        interface = interfaceStringToInt("filter", interfaceStr)
-        lions_firewall.ping_response_set(interface, bool(enabled))
-        return {
-            "interface": interfaceStringsCap[interface],
-            "ping_enabled": bool(enabled)
-        }
+        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
+            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
+            raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
+
+        lions_firewall.ping_response_set(interfaceInt, bool(enabled))
+        return {"status": "ok", "ping_enabled": bool(enabled)}
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: setPingResponse: {OSErrStrings[OSErr.errno]}")
         return {"error": OSErrStrings[OSErr.errno]}, 404
@@ -433,16 +410,15 @@ def setPingResponse(request, interfaceStr, enabled):
         print(f"UI SERVER|ERR: Unknown Error: setPingResponse: {exception}.")
         return {"error": UnknownErrStr}, 404
 
-@app.route('/api/ping/<string:interfaceStr>/', methods=['GET'])
-def getPing(request, interfaceStr):
+@app.route("/api/ping/<int:interfaceInt>", methods=["GET"])
+def getPing(request, interfaceInt):
     try:
-        interface = interfaceStringToInt("filter", interfaceStr)
+        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
+            print(f"UI SERVER|ERR: Supplied interface integer {interfaceInt} does not match existing interfaces.")
+            raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
-        enabled = lions_firewall.ping_response_get(interface)
-        return {
-            "interface": interfaceStringsCap[interface],
-            "ping_enabled": bool(enabled)
-        }
+        enabled = lions_firewall.ping_response_get(interfaceInt)
+        return {"ping_enabled": bool(enabled)}
     except OSError as OSErr:
         print(f"UI SERVER|ERR: OS Error: getRules: {OSErrStrings[OSErr.errno]}")
         return {"error": OSErrStrings[OSErr.errno]}, 404
@@ -506,28 +482,27 @@ def index(request):
       document.addEventListener("DOMContentLoaded", function() {
         var tbody = document.getElementById("interfaces-body");
         tbody.innerHTML = "";
-        fetch("/api/interfaces/count")
+        fetch("/api/interfaces")
           .then(function(response) { return response.json(); })
           .then(function(data) {
-            for (let i = 0; i < data.count; i++) {
-              fetch("/api/interfaces/" + i)
-                .then(function(response) { return response.json(); })
-                .then(function(info) {
-                  let row = document.createElement("tr");
-                  row.innerHTML = "<td>" + info.interface + "</td>" +
-                                  "<td>" + info.mac + "</td>" +
-                                  "<td>" + info.ip + "</td>";
-                  tbody.appendChild(row);
-                })
-                .catch(function(err) {
-                  let row = document.createElement("tr");
-                  row.innerHTML = "<td colspan='3'>Error retrieving interface " + i + "</td>";
-                  tbody.appendChild(row);
-                });
+            if (data.error) {
+              tbody.innerHTML = "<tr><td colspan='3'>Error: " + data.error + "</td></tr>";
+              return;
             }
+            if (data.interfaces.length === 0) {
+              tbody.innerHTML = "<tr><td colspan='3'>No interfaces found</td></tr>";
+              return;
+            }
+            data.interfaces.forEach(function(info) {
+              var row = document.createElement("tr");
+              row.innerHTML = "<td>" + info.interface + "</td>" +
+                              "<td>" + info.mac + "</td>" +
+                              "<td>" + info.ip + "</td>";
+              tbody.appendChild(row);
+            });
           })
           .catch(function(err) {
-            tbody.innerHTML = "<tr><td colspan='3'>Error retrieving interface count</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='3'>Error retrieving interfaces</td></tr>";
           });
       });
     </script>
@@ -586,26 +561,17 @@ def config(request):
         var interfaceMap = {};
 
         function loadInterfaces() {
-          return fetch("/api/interfaces/count")
+          return fetch("/api/interfaces")
             .then(function(response) { return response.json(); })
             .then(function(data) {
-              var requests = [];
-              for (let i = 0; i < data.count; i++) {
-                requests.push(
-                  fetch("/api/interfaces/" + i)
-                    .then(function(response) { return response.json(); })
-                    .then(function(info) { interfaceMap[i] = info.interface; })
-                );
-              }
-              return Promise.all(requests);
-            })
-            .then(function() {
+              if (data.error) { return; }
               var select = document.getElementById("new-interface");
               select.innerHTML = "";
-              Object.keys(interfaceMap).forEach(function(id) {
+              data.interfaces.forEach(function(info, i) {
+                interfaceMap[i] = info.interface;
                 var opt = document.createElement("option");
-                opt.value = id;
-                opt.textContent = interfaceMap[id];
+                opt.value = i;
+                opt.textContent = info.interface;
                 select.appendChild(opt);
               });
             });
@@ -782,23 +748,18 @@ def rules(request, protocol):
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         function loadInterfaces() {
-          return fetch("/api/interfaces/count")
+          return fetch("/api/interfaces")
             .then(function(response) { return response.json(); })
             .then(function(data) {
-              var requests = [];
-              for (let i = 0; i < data.count; i++) {
-                requests.push(
-                  fetch("/api/interfaces/" + i)
-                    .then(function(response) { return response.json(); })
-                    .then(function(info) {
-                      var option = document.createElement("option");
-                      option.value = i;
-                      option.textContent = info.interface;
-                      document.getElementById("rules-interface").appendChild(option);
-                    })
-                );
-              }
-              return Promise.all(requests);
+              if (data.error) { return; }
+              var select = document.getElementById("rules-interface");
+              select.innerHTML = "";
+              data.interfaces.forEach(function(info, i) {
+                var option = document.createElement("option");
+                option.value = i;
+                option.textContent = info.interface;
+                select.appendChild(option);
+              });
             });
         }
 
@@ -1006,65 +967,94 @@ def ping_settings(request):
   </nav>
 
     <h2>Toggle Ping Response</h2>
-    <p>Control whether the firewall responds to ICMP echo requests (ping) on each interface. Default disabled for all interfaces.</p>
+    <p>Control whether the firewall responds to ICMP echo requests (ping) on the selected interface. Default disabled for all interfaces.</p>
 
-    <div id="ping-controls-container"></div>
+    <div class="default-action-container" style="max-width: 18rem;">
+      <label for="ping-interface">Interface</label>
+      <select id="ping-interface"></select>
+    </div>
+
+    <div class="default-action-container">
+      <h3 id="ping-interface-title">Ping Status</h3>
+      <div>
+        <button id="enable-ping-btn">Enable Ping</button>
+        <button id="disable-ping-btn">Disable Ping</button>
+        <span id="ping-status">Loading...</span>
+      </div>
+    </div>
 
     <script>
-      function togglePing(interfaceName, enabled) {
-        fetch('/api/ping/' + interfaceName + '/' + (enabled ? 1 : 0), {
+      function selectedInterfaceName() {
+        var select = document.getElementById('ping-interface');
+        return select.options[select.selectedIndex].text;
+      }
+
+      function updateStatus(statusData) {
+        var statusSpan = document.getElementById('ping-status');
+        if (statusData.error) {
+          statusSpan.textContent = 'Error: ' + statusData.error;
+          statusSpan.style.color = 'red';
+        } else {
+          statusSpan.textContent = statusData.ping_enabled ? 'Enabled' : 'Disabled';
+          statusSpan.style.color = statusData.ping_enabled ? 'green' : 'gray';
+        }
+      }
+
+      function loadPingStatus() {
+        var interfaceName = selectedInterfaceName();
+        var interfaceNum = Number(document.getElementById('ping-interface').value)
+        document.getElementById('ping-interface-title').textContent = interfaceName + ' Ping Status';
+        fetch('/api/ping/' + interfaceNum)
+          .then(function(response) { return response.json(); })
+          .then(function(data) { updateStatus(data); })
+          .catch(function() {
+            updateStatus({ error: 'Could not load status' });
+          });
+      }
+
+      function togglePing(enabled) {
+        var interfaceNum = Number(document.getElementById('ping-interface').value)
+        fetch('/api/ping/' + interfaceNum + '/' + (enabled ? 1 : 0), {
           method: 'POST'
         })
-        .then(response => response.json())
-        .then(data => {
-          var statusSpan = document.getElementById(interfaceName + '-status');
-          if (data.error) {
-            statusSpan.textContent = 'Error: ' + data.error;
-            statusSpan.style.color = 'red';
-          } else {
-            statusSpan.textContent = data.ping_enabled ? 'Enabled' : 'Disabled';
-            statusSpan.style.color = data.ping_enabled ? 'green' : 'gray';
-          }
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+          updateStatus(data);
         })
-        .catch(err => {
+        .catch(function() {
           alert('Error toggling ping response');
         });
       }
 
       document.addEventListener("DOMContentLoaded", function() {
-        const container = document.getElementById('ping-controls-container');
-        const interfaceNames = ['internal', 'external'];
-
-        interfaceNames.forEach(interfaceName => {
-            const interfaceDiv = document.createElement('div');
-            interfaceDiv.className = 'ping-control';
-
-            interfaceDiv.innerHTML = `
-                <h3>${interfaceName.charAt(0).toUpperCase() + interfaceName.slice(1)}</h3>
-                <button onclick="togglePing('${interfaceName}', true)">Enable Ping</button>
-                <button onclick="togglePing('${interfaceName}', false)">Disable Ping</button>
-                <span id="${interfaceName}-status">Loading...</span>
-            `;
-            container.appendChild(interfaceDiv);
-
-            fetch('/api/ping/' + interfaceName + '/')
-                .then(response => response.json())
-                .then(data => {
-                    const statusSpan = document.getElementById(interfaceName + '-status');
-                    if (data.error) {
-                        statusSpan.textContent = 'Error: ' + data.error;
-                        statusSpan.style.color = 'red';
-                    } else {
-                        statusSpan.textContent = data.ping_enabled ? 'Enabled' : 'Disabled';
-                        statusSpan.style.color = data.ping_enabled ? 'green' : 'gray';
-                    }
-                })
-                .catch(err => {
-                    const statusSpan = document.getElementById(interfaceName + '-status');
-                    statusSpan.textContent = 'Error loading status';
-                    statusSpan.style.color = 'red';
-                });
+        var interfaceSelect = document.getElementById('ping-interface');
+        document.getElementById('enable-ping-btn').addEventListener('click', function() {
+          togglePing(true);
         });
+        document.getElementById('disable-ping-btn').addEventListener('click', function() {
+          togglePing(false);
+        });
+        interfaceSelect.addEventListener('change', loadPingStatus);
+
+        fetch('/api/interfaces')
+          .then(function(response) { return response.json(); })
+          .then(function(data) {
+            if (data.error) {
+              updateStatus({ error: data.error });
+              return;
+            }
+            interfaceSelect.innerHTML = '';
+            data.interfaces.forEach(function(info, index) {
+              var option = document.createElement('option');
+              option.value = index;
+              option.textContent = info.interface;
+              interfaceSelect.appendChild(option);
+            });
+            loadPingStatus();
+          })
+          .catch(function() {
+            updateStatus({ error: 'Error loading interfaces' });
+          });
       });
     </script>
   </body>
