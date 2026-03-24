@@ -88,68 +88,55 @@ static int mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf,
     return err;
 }
 
-/**
- *  Perform a read to I2C bus address `addr` with data from `buf`. This function
- *  will automatically copy the supplied data into the I2C data region.
- *
- *  NOTE: we only support 7-bit addressing currently.
- */
-int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, bool stop) {
-    uint8_t flag_mask = stop ? I2C_FLAG_READ|I2C_FLAG_STOP : I2C_FLAG_READ;
-    return mp_i2c_dispatch(self, addr, buf, len, flag_mask);
-}
-
-int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
-    // Write is implied by lack of a read flag
-    uint8_t flag_mask = 0;
-    return mp_i2c_dispatch(self, addr, buf, len, flag_mask);
-}
-
 static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_machine_i2c_buf_t *bufs, unsigned int flags) {
     machine_i2c_obj_t *self = MP_OBJ_TO_PTR(obj);
 
-    /* Before doing any transfer operations, we must claim the bus address. */
-    /* TODO: we should provide a wrapper API for this like in the timer API */
-    microkit_msginfo msginfo = microkit_msginfo_new(I2C_BUS_CLAIM, 1);
-    microkit_mr_set(I2C_BUS_SLOT, addr);
-    msginfo = microkit_ppcall(i2c_config.virt.id, msginfo);
-    seL4_Word claim_label = microkit_msginfo_get_label(msginfo);
-    if (claim_label == I2C_FAILURE) {
-       mp_raise_msg_varg(&mp_type_RuntimeError,
-                          MP_ERROR_TEXT("I2C(%d): Could not claim bus address %d"), self->port, addr);
-        return -MP_EPERM;
-    }
 
     size_t remain_len = 0;
     for (size_t i = 0; i < n; ++i) {
         remain_len += bufs[i].len;
     }
 
+    uint8_t sddf_flags = 0;
+    if (flags & MP_MACHINE_I2C_FLAG_STOP) {
+        flags &= ~MP_MACHINE_I2C_FLAG_STOP;
+        sddf_flags |= I2C_FLAG_STOP;
+    }
+    if (flags & MP_MACHINE_I2C_FLAG_READ) {
+        flags &= ~MP_MACHINE_I2C_FLAG_READ;
+        sddf_flags |= I2C_FLAG_READ;
+    }
+    if (flags != 0) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("I2C(%d): unsupported flags 0x%x"), self->port, flags);
+        return -MP_EINVAL;
+    }
+
+    /* Before doing any transfer operations, we must claim the bus address. */
+    if (!i2c_bus_claim(i2c_config.virt.id, addr)) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("I2C(%d): Could not claim bus address %d"), self->port, addr);
+        return -MP_EPERM;
+    }
+
+    // TODO: We can remove the double copy here by making mp_i2c_dispatch support copying the bufs
+    //       or copy the bufs directly here.
     int num_acks = 0; // only valid for write; for read it'll be 0
     int ret = 0;
     for (; n--; ++bufs) {
         remain_len -= bufs->len;
-        if (flags & MP_MACHINE_I2C_FLAG_READ) {
-            ret = i2c_read(self, addr, bufs->buf, bufs->len, flags & MP_MACHINE_I2C_FLAG_STOP);
-        } else {
-            ret = i2c_write(self, addr, bufs->buf, bufs->len);
-        }
+        ret = mp_i2c_dispatch(self, addr, bufs->buf, bufs->len, sddf_flags);
         if (ret < 0) {
-            msginfo = microkit_msginfo_new(I2C_BUS_RELEASE, 1);
-            microkit_mr_set(I2C_BUS_SLOT, addr);
-            msginfo = microkit_ppcall(i2c_config.virt.id, msginfo);
-            seL4_Word release_label = microkit_msginfo_get_label(msginfo);
-            assert(release_label == I2C_SUCCESS);
+            // FIXME: not an assert...
+            assert(i2c_bus_release(i2c_config.virt.id, addr));
             return ret;
         }
+
         num_acks += ret;
     }
 
-    msginfo = microkit_msginfo_new(I2C_BUS_RELEASE, 1);
-    microkit_mr_set(I2C_BUS_SLOT, addr);
-    msginfo = microkit_ppcall(i2c_config.virt.id, msginfo);
-    seL4_Word release_label = microkit_msginfo_get_label(msginfo);
-    assert(release_label == I2C_SUCCESS);
+    // FIXME: not an assert.
+    assert(i2c_bus_release(i2c_config.virt.id, addr));
 
     return num_acks;
 }
