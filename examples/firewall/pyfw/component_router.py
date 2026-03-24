@@ -4,6 +4,7 @@ from sdfgen import SystemDescription
 from pyfw.component_base import Component
 from pyfw.constants import (
     BuildConstants,
+    initial_routes,
     interfaces,
     supported_protocols,
     arp_packet_queue_buffer,
@@ -83,7 +84,8 @@ class Router(Component, FwRouterConfig):
                 )
             )
 
-        # TODO: Append additional initial routes which can be set in constants.py here
+        for route in initial_routes:
+            self._initial_routes.append(route)
 
         # Initialise Router config class
         FwRouterConfig.__init__(

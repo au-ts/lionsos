@@ -1,6 +1,6 @@
 # Copyright 2026, UNSW SPDX-License-Identifier: BSD-2-Clause
 
-from typing import Optional
+from typing import Optional, List
 from sdfgen import SystemDescription
 from pyfw.board import Board
 from pyfw.memory_layout import (
@@ -9,7 +9,7 @@ from pyfw.memory_layout import (
     UINT64_BYTES,
 )
 from pyfw.component_net_interface import NetworkInterface
-from build.config_structs import FwRule
+from build.config_structs import FwRule, FwRoutingEntry
 
 ### ----------------------------------------------------------------------- ###
 ### System constants set pre-build, or immediately by the metaprogram ###
@@ -85,7 +85,7 @@ interfaces = [
     ),
 ]
 
-# FUTURE WORK: Currently the webserver can only transmit out interface 1
+# Currently the webserver can only transmit out interface 1
 webserver_tx_interface_idx = 1
 
 ### ----------------------------------------------------------------------- ###
@@ -105,23 +105,28 @@ supported_filter_actions = {
     0x11: [1, 1, 1, 1]
 }
 
-# Initial rules - protocol->rule dictionary for each interface
-# The first rule must always be the default action
-def default_action_rule(action: int) -> FwRule:
+def construct_rule(action: int, src_ip: int, src_subnet: int, src_port: int, src_port_any: bool,
+                   dst_ip: int, dst_subnet: int, dst_port: int, dst_port_any: bool) -> FwRule:
     assert action in (FILTER_ACTION_ALLOW, FILTER_ACTION_DROP, FILTER_ACTION_CONNECT)
     return FwRule(
         action=action,
-        src_ip=0,
-        dst_ip=0,
-        src_port=0,
-        dst_port=0,
-        src_subnet=0,
-        dst_subnet=0,
-        src_port_any=True,
-        dst_port_any=True,
+        src_ip=src_ip,
+        dst_ip=dst_ip,
+        src_port=src_port,
+        dst_port=dst_port,
+        src_subnet=src_subnet,
+        dst_subnet=dst_subnet,
+        src_port_any=src_port_any,
+        dst_port_any=dst_port_any,
         rule_id=0,
     )
 
+def default_action_rule(action: int) -> FwRule:
+    assert action in (FILTER_ACTION_ALLOW, FILTER_ACTION_DROP, FILTER_ACTION_CONNECT)
+    return construct_rule(action, 0, 0, 0, True, 0, 0, 0, True)
+
+# Initial rules - protocol->rule dictionary for each interface
+# The first rule must always be the default action
 initial_rules = [
     {
         0x01: [default_action_rule(FILTER_ACTION_ALLOW)],
@@ -134,6 +139,17 @@ initial_rules = [
         0x11: [default_action_rule(FILTER_ACTION_ALLOW)],
     },
 ]
+
+### ----------------------------------------------------------------------- ###
+### Routing ###
+### ----------------------------------------------------------------------- ###
+
+def construct_route(ip: int, subnet: int, interface: int, next_hop: int) -> FwRoutingEntry:
+    assert interface < len(interfaces)
+    return FwRoutingEntry(ip=ip, subnet=subnet, interface=interface, next_hop=next_hop)
+
+# Initial routes, in addition to the direct routes for hosts on each interface's subnet
+initial_routes: List[FwRoutingEntry] = []
 
 ### ----------------------------------------------------------------------- ###
 ### Firewall Data Structures & Memory Regions ###

@@ -84,7 +84,7 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
             iface.rx_dma_region.mr,
             interface_index=iface.index,
         )
-        # TODO: Needs optional type here
+
         iface.rx_virtualiser._sddf_net = iface.net_system
 
         if not path.isdir(iface.out_dir):
@@ -262,7 +262,7 @@ def wire_webserver_connections(
     webserver: Webserver,
     router: Router,
 ) -> Sddf.Lwip:
-    # FUTURE WORK Currently we make an assumption that the webserver can only transmit out one interface (See git issues)
+
     tx_interface = fw_interfaces[webserver_tx_interface_idx]
 
     # Webserver is a transmit net client
@@ -353,13 +353,3 @@ if __name__ == "__main__":
     resolve_region_sizes()
 
     generate(args.sdf, dtb)
-
-# BIG TODO:
-# Run auto-test script, fix any issues
-# Makefile dependency tracking for python files
-# Test connect rule and webserver
-# Fix up all code TODOs FUTURE WORK
-# Encode as many types as we can, for type checking later (maybe return non-optional type through method, assertion in  method)
-# Think up a convention for which "connection" method belongs to which class
-# Check old PR comments for additional TODOs
-# TODO: Autotests should not be hardcoded with strings
