@@ -201,6 +201,12 @@ static void generate_icmp(void)
     /* Process ICMP requests from filters */
     for (uint8_t iface = 0; iface < icmp_config.num_interfaces; iface++) {
         for (uint8_t filter_idx = 0; filter_idx < icmp_config.interfaces[iface].num_filters; filter_idx++) {
+
+            /* Filter does not have an ICMP connection */
+            if (!icmp_config.interfaces[iface].filters[filter_idx].capacity) {
+                continue;
+            }
+
             while (!fw_queue_empty(&filter_icmp_queue[iface][filter_idx])) {
                 icmp_req_t req = { 0 };
                 int err = fw_dequeue(&filter_icmp_queue[iface][filter_idx], &req);
@@ -242,16 +248,22 @@ void init(void)
     /* Setup the queue with the router. */
     fw_queue_init(&router_icmp_queue, icmp_config.router.queue.vaddr, sizeof(icmp_req_t), icmp_config.router.capacity);
 
-    for (int out = 0; out < icmp_config.num_interfaces; out++) {
+    for (int iface = 0; iface < icmp_config.num_interfaces; iface++) {
         /* Setup transmit queues with the transmit virtualisers. */
-        net_queue_init(&net_queue[out], net_configs[out]->tx.free_queue.vaddr, net_configs[out]->tx.active_queue.vaddr,
-                       net_configs[out]->tx.num_buffers);
-        net_buffers_init(&net_queue[out], 0);
+        net_queue_init(&net_queue[iface], net_configs[iface]->tx.free_queue.vaddr, net_configs[iface]->tx.active_queue.vaddr,
+                       net_configs[iface]->tx.num_buffers);
+        net_buffers_init(&net_queue[iface], 0);
 
         /* Setup queues with filters */
-        for (int i = 0; i < icmp_config.interfaces[out].num_filters; i++) {
-            fw_queue_init(&filter_icmp_queue[out][i], icmp_config.interfaces[out].filters[i].queue.vaddr,
-                          sizeof(icmp_req_t), icmp_config.interfaces[out].filters[i].capacity);
+        for (int i = 0; i < icmp_config.interfaces[iface].num_filters; i++) {
+
+            /* Filter does not have an ICMP connection */
+            if (!icmp_config.interfaces[iface].filters[i].capacity) {
+                continue;
+            }
+
+            fw_queue_init(&filter_icmp_queue[iface][i], icmp_config.interfaces[iface].filters[i].queue.vaddr,
+                          sizeof(icmp_req_t), icmp_config.interfaces[iface].filters[i].capacity);
         }
     }
 }

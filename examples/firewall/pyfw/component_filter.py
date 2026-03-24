@@ -1,15 +1,12 @@
-# Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
+# Copyright 2026, UNSW SPDX-License-Identifier: BSD-2-Clause
 
 from sdfgen import SystemDescription
 from pyfw.component_base import Component
-from pyfw.config_structs import (
-    FwConnectionResource,
-    FwFilterConfig,
-    FwWebserverFilterConfig,
-)
 from pyfw.constants import (
     interfaces,
+    BuildConstants,
     supported_protocols,
+    supported_filter_actions,
     initial_rules,
     filter_instances_buffer,
     filter_instances_region,
@@ -19,14 +16,18 @@ from pyfw.constants import (
     dma_buffer_queue,
     dma_buffer_queue_region,
 )
-import pyfw.constants
 from pyfw.specs import FirewallMemoryRegion
+from build.config_structs import (
+    FwConnectionResource,
+    FwFilterConfig,
+    FwWebserverFilterConfig,
+)
 
 SDF_Channel = SystemDescription.Channel
 
 class Filter(Component, FwFilterConfig):
     """Per-interface protocol filter."""
-    instance_regions = dict()
+    instance_regions: dict[int, list[FirewallMemoryRegion]] = {}
 
     def __init__(
         self,
@@ -78,19 +79,21 @@ class Filter(Component, FwFilterConfig):
         # Initialise filter config class
         FwFilterConfig.__init__(
             self,
-            iface_index,
-            None,
-            self._local_instance_mr.map(self.pd, "rw"),
-            [],
-            filter_instances_buffer.capacity,
-            FwWebserverFilterConfig(
-                protocol,
-                None,
-                self._filter_rules_mr.map(self.pd, "rw"),
-                filter_rules_buffer.capacity,
+            interface=iface_index,
+            router=None,
+            internal_instances=self._local_instance_mr.map(self.pd, "rw"),
+            external_instances=[],
+            instances_capacity=filter_instances_buffer.capacity,
+            webserver=FwWebserverFilterConfig(
+                protocol=protocol,
+                ch=None,
+                rules=self._filter_rules_mr.map(self.pd, "rw"),
+                rules_capacity=filter_rules_buffer.capacity,
+                actions=supported_filter_actions[protocol],
             ),
-            rule_id_bitmap_mr.map(self.pd, "rw"),
-            initial_rules[iface_index][protocol]
+            rule_id_bitmap=rule_id_bitmap_mr.map(self.pd, "rw"),
+            icmp_module=None,
+            initial_rules=initial_rules[iface_index][protocol],
         )
 
     def connect_webserver(self, webserver: Component) -> FwWebserverFilterConfig:
@@ -99,17 +102,21 @@ class Filter(Component, FwFilterConfig):
 
        # Create filter-webserver channel
        web_update_ch = SDF_Channel(webserver.pd, self.pd, pp_a=True)
-       pyfw.constants.sdf.add_channel(web_update_ch)
+       BuildConstants.sdf().add_channel(web_update_ch)
 
        # Update filter config
+       assert self.webserver is not None
        self.webserver.ch = web_update_ch.pd_b_id
 
        # Return webserver config
+       assert self.webserver.protocol is not None
+       assert self.webserver.actions is not None
        return FwWebserverFilterConfig(
-                self.webserver.protocol,
-                web_update_ch.pd_a_id,
-                web_rules_region,
-                filter_rules_buffer.capacity,
+                protocol=self.webserver.protocol,
+                ch=web_update_ch.pd_a_id,
+                rules=web_rules_region,
+                rules_capacity=filter_rules_buffer.capacity,
+                actions=self.webserver.actions,
             )
 
     def connect_router(self, router: Component) -> FwConnectionResource:
@@ -121,34 +128,28 @@ class Filter(Component, FwFilterConfig):
 
         # Create filter-router channel
         router_ch = SDF_Channel(self.pd, router.pd)
-        pyfw.constants.sdf.add_channel(router_ch)
+        BuildConstants.sdf().add_channel(router_ch)
 
         # Update filter config
         self.router = FwConnectionResource(
-            router_queue_mr.map(self.pd, "rw"),
-            dma_buffer_queue.capacity,
-            router_ch.pd_a_id,
+            queue=router_queue_mr.map(self.pd, "rw"),
+            capacity=dma_buffer_queue.capacity,
+            ch=router_ch.pd_a_id,
 
         )
 
         # Return router config
         return FwConnectionResource(
-            router_queue_mr.map(router.pd, "rw"),
-            dma_buffer_queue.capacity,
-            router_ch.pd_b_id,
+            queue=router_queue_mr.map(router.pd, "rw"),
+            capacity=dma_buffer_queue.capacity,
+            ch=router_ch.pd_b_id,
 
         )
 
-    def finalize_config(self) -> FwFilterConfig:
-        # TODO: Finish checking assertions
-        assert self.router is not None
-        assert self.internal_instances is not None
-        assert self.rule_id_bitmap is not None
-
-        assert len(interfaces) == len(Filter.instance_regions[self.webserver.protocol])
-        # Map in the instance region of each filter
-        for instance in Filter.instance_regions[self.webserver.protocol]:
-            if instance == self._local_instance_mr:
-                continue
-            self.external_instances.append(instance.map(self.pd, "r"))
-        return self
+    def finalise_config(self) -> None:
+        # Create external instance mappings
+        external_mrs = Filter.instance_regions[self.webserver.protocol]
+        self.external_instances = [
+            instance_mr.map(self.pd, "r") for instance_mr in external_mrs if instance_mr != self._local_instance_mr
+        ]
+        assert len(self.external_instances) == len(interfaces) - 1

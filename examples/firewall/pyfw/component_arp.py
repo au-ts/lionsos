@@ -1,22 +1,23 @@
-# Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
+# Copyright 2026, UNSW SPDX-License-Identifier: BSD-2-Clause
 
 from sdfgen import SystemDescription
 from pyfw.component_base import Component
-from pyfw.config_structs import (
+from pyfw.constants import (
+    arp_cache_buffer,
+    arp_cache_region,
+    arp_queue_buffer,
+    arp_queue_region,
+    BuildConstants,
+)
+from pyfw.component_net_interface import NetworkInterface
+from pyfw.specs import FirewallMemoryRegion
+from build.config_structs import (
+    EthHwaddrLen,
     FwArpConnection,
     FwArpRequesterConfig,
     FwArpResponderConfig,
     RegionResource,
 )
-from pyfw.constants import (
-    NetworkInterface,
-    arp_cache_buffer,
-    arp_cache_region,
-    arp_queue_buffer,
-    arp_queue_region,
-)
-import pyfw.constants
-from pyfw.specs import FirewallMemoryRegion
 
 SDF_Channel = SystemDescription.Channel
 
@@ -36,7 +37,7 @@ class ArpRequester(Component, FwArpRequesterConfig):
         )
 
         # Create an ARP entry cache
-        self._arp_cache_mr = FirewallMemoryRegion(
+        self._arp_cache_mr: FirewallMemoryRegion = FirewallMemoryRegion(
             "arp_cache_" + self.name,
             arp_cache_region.region_size,
         )
@@ -44,12 +45,12 @@ class ArpRequester(Component, FwArpRequesterConfig):
         # Initialise ARP requester config class
         FwArpRequesterConfig.__init__(
             self,
-            net_interface.index,
-            net_interface.mac_list,
-            net_interface.ip_int,
-            [],
-            self._arp_cache_mr.map(self.pd, "rw"),
-            arp_cache_buffer.capacity,
+            interface=net_interface.index,
+            mac_addr=net_interface.mac_list,
+            ip=net_interface.ip_int,
+            arp_clients=[],
+            arp_cache=self._arp_cache_mr.map(self.pd, "rw"),
+            arp_cache_capacity=arp_cache_buffer.capacity,
         )
 
 
@@ -77,8 +78,9 @@ class ArpRequester(Component, FwArpRequesterConfig):
         arp_res_region = arp_res_mr.map(self.pd, "rw")
 
         ch = SDF_Channel(client.pd, self.pd)
-        pyfw.constants.sdf.add_channel(ch)
+        BuildConstants.sdf().add_channel(ch)
 
+        assert self.arp_clients is not None
         self.arp_clients.append(
             FwArpConnection(request=arp_req_region, response=arp_res_region,
                                    capacity=arp_queue_buffer.capacity, ch=ch.pd_b_id)
@@ -92,12 +94,9 @@ class ArpRequester(Component, FwArpRequesterConfig):
         client_cache_region = self._arp_cache_mr.map(client.pd, "r")
         return client_cache_region
 
-    def finalize_config(self) -> FwArpRequesterConfig:
-        # TODO: Finish checking assertions
-        assert self.arp_cache is not None
-        assert self.arp_cache_capacity > 0
-        assert len(self.arp_clients) > 0
-        return self
+    def finalise_config(self) -> None:
+        assert self.mac_addr is not None and len(self.mac_addr) == EthHwaddrLen
+        assert self.ip is not None and self.ip != 0
 
 class ArpResponder(Component, FwArpResponderConfig):
     def __init__(
@@ -117,13 +116,11 @@ class ArpResponder(Component, FwArpResponderConfig):
         # Initialise ARP requester config class
         FwArpResponderConfig.__init__(
             self,
-            net_interface.index,
-            net_interface.mac_list,
-            net_interface.ip_int,
+            interface=net_interface.index,
+            mac_addr=net_interface.mac_list,
+            ip=net_interface.ip_int,
         )
 
-    def finalize_config(self) -> FwArpResponderConfig:
-        # TODO: Finish checking assertions
-        assert len(self.mac_addr) != 0
-        assert self.ip != 0
-        return self
+    def finalise_config(self) -> None:
+        assert self.mac_addr is not None and len(self.mac_addr) == EthHwaddrLen
+        assert self.ip is not None and self.ip != 0

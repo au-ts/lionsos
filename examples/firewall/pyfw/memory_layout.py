@@ -1,6 +1,4 @@
-# Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
-
-from __future__ import annotations
+# Copyright 2026, UNSW SPDX-License-Identifier: BSD-2-Clause
 
 import subprocess
 from os import path
@@ -25,7 +23,7 @@ class FirewallDataStructure:
         size: int = 0,
         entry_size: int = 0,
         capacity: int = 1,
-        size_formula: Optional[Callable[[FirewallDataStructure], int]] = None,
+        size_formula: Optional[Callable[['FirewallDataStructure'], int]] = None,
         elf_name: Optional[str] = None,
         c_name: Optional[str] = None,
     ) -> None:
@@ -80,7 +78,7 @@ def _default_region_size_formula(data_structures: list[FirewallDataStructure]) -
 
 
 class FirewallMemoryRegions:
-    regions: list[FirewallMemoryRegions] = []
+    regions: list['FirewallMemoryRegions'] = []
 
     def __init__(
         self,

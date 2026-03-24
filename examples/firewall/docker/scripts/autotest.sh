@@ -10,6 +10,8 @@
 # - INT_HOST_IP
 # - EXT_BAD_HOST_IP
 # - INT_BAD_HOST_IP
+# - EXT_BAD_NET_IP
+# - INT_BAD_NET_IP
 # - FW_INT_IP
 # - FW_INT_SUBNET
 # - FW_EXT_IP
@@ -30,7 +32,9 @@
 EXIT_SUCCESS=0
 
 ERROR_NO_ECHO_RESPONSE='Did not receive echo response'
-ERROR_UNREACHABLE='Did not receive destination host unreachable'
+ERROR_HOST_UNREACHABLE='Did not receive destination host unreachable'
+ERROR_NET_UNREACHABLE='Did not receive destination net unreachable'
+ERROR_FAILED_ENABLE_PING='Could not enable ping response'
 ERROR_TRANSMIT_FAILED='Failed to transmit data'
 ERROR_DATA_INCORRECT='The received data is different to what was sent'
 ERROR_DATA_WAS_NOT_DROPPED='Firewall traffic was not dropped'
@@ -44,7 +48,8 @@ FONT_RED=$(printf '\033[31m')
 FONT_RESET=$(printf '\033[0m')
 
 REGEX_REACHABLE='[1-9][0-9]* received'
-REGEX_UNREACHABLE='Destination Net Unreachable'
+REGEX_HOST_UNREACHABLE='Destination Host Unreachable'
+REGEX_NET_UNREACHABLE='Destination Net Unreachable'
 
 TEMPLATE_SRC='$src_ip, $src_port, $src_subnet'
 TEMPLATE_DEST='$dest_ip, $dest_port, $dest_subnet'
@@ -268,8 +273,8 @@ test_icmp_ping_unreachable_host_internal_to_external() {
         ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${EXT_BAD_HOST_IP}" \
         > "${RECEIVED}" 2>&1
 
-    if ! grep -Eq --ignore-case "${REGEX_UNREACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_UNREACHABLE}"
+    if ! grep -Eq --ignore-case "${REGEX_HOST_UNREACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_HOST_UNREACHABLE}"
         print_log
     fi
 }
@@ -281,13 +286,51 @@ test_icmp_ping_unreachable_host_external_to_internal() {
         ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INT_BAD_HOST_IP}" \
         > "${RECEIVED}" 2>&1
 
-    if ! grep -Eq --ignore-case "${REGEX_UNREACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_UNREACHABLE}"
+    if ! grep -Eq --ignore-case "${REGEX_HOST_UNREACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_HOST_UNREACHABLE}"
+        print_log
+    fi
+}
+
+test_icmp_ping_unreachable_net_internal_to_external() {
+    ip netns exec int \
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${EXT_BAD_NET_IP}" \
+        > "${RECEIVED}" 2>&1
+
+    if ! grep -Eq --ignore-case "${REGEX_NET_UNREACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_NET_UNREACHABLE}"
+        print_log
+    fi
+}
+
+test_icmp_ping_unreachable_net_external_to_internal() {
+    ip netns exec ext \
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INT_BAD_NET_IP}" \
+        > "${RECEIVED}" 2>&1
+
+    if ! grep -Eq --ignore-case "${REGEX_NET_UNREACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_NET_UNREACHABLE}"
         print_log
     fi
 }
 
 test_icmp_ping_firewall_from_internal_network() {
+    # Ensure ping responsiveness is turned on
+    response=$(curl --silent \
+        --output /dev/null \
+        --header 'Content-Type: application/json' \
+        --request 'POST' \
+        "http://${FW_INT_IP}/api/ping/internal/1")
+
+    # Check if the response contains an error
+    error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
+
+    if [ ! -z "${error}" ]; then
+        fail "${ERROR_FAILED_ENABLE_PING}"
+        print_log
+        return
+    fi
+
     ip netns exec int \
         ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INT_IP}" > "${RECEIVED}" 2>&1
 
@@ -298,6 +341,22 @@ test_icmp_ping_firewall_from_internal_network() {
 }
 
 test_icmp_ping_firewall_from_external_network() {
+    # Ensure ping responsiveness is turned on
+    response=$(curl --silent \
+        --output /dev/null \
+        --header 'Content-Type: application/json' \
+        --request 'POST' \
+        "http://${FW_INT_IP}/api/ping/external/1")
+
+    # Check if the response contains an error
+    error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
+
+    if [ ! -z "${error}" ]; then
+        fail "${ERROR_FAILED_ENABLE_PING}"
+        print_log
+        return
+    fi
+
     ip netns exec ext \
         ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_EXT_IP}" > "${RECEIVED}" 2>&1
 
@@ -474,7 +533,7 @@ test_rule_application_and_removal() {
         --output /dev/null \
         --header 'Content-Type: application/json' \
         --request 'DELETE' \
-        "http://${FW_INT_IP}/api/rules/tcp/${rule_id}/external")
+        "http://${FW_INT_IP}/api/rules/tcp/${rule_id}/${FIREWALL_EXTERNAL_INTERFACE}")
 
     # Check if the response contains an error
     error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')

@@ -1,54 +1,40 @@
-# Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
+# Copyright 2026, UNSW SPDX-License-Identifier: BSD-2-Clause
+
 from typing import Optional
 from sdfgen import SystemDescription, Sddf, DeviceTree
-from pyfw.config_structs import (
+from pyfw.constants import BuildConstants
+from build.config_structs import (
     RegionResource,
     DeviceRegionResource,
 )
-import pyfw.constants
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Channel = SystemDescription.Channel
 
-# TODO: IS there any reason to define these separately, not within the FirewallMemoryRegion class methods?
-def fw_map(pd, mr, perms):
-    """Map a memory region into a protection domain, return the Mapping."""
-    pd_map = Map(mr, pd.get_map_vaddr(mr), perms=perms)
-    pd.add_map(pd_map)
-    return pd_map
-
-
-def fw_resource(pd_map, size):
-    """Create a RegionResource from a Mapping and size."""
-    return RegionResource(vaddr=pd_map.vaddr, size=size)
-
-
-def fw_device_resource(pd_map, mr):
-    """Create a DeviceRegionResource from a Mapping and its physical MR."""
-    return DeviceRegionResource(region=fw_resource(pd_map, mr.size), io_addr=mr.paddr)
-
-
 class FirewallMemoryRegion:
     """Unified memory region: create MR, add to SDF, map into PDs."""
 
     def __init__(self, name, size, physical=False):
-        self.mr = MemoryRegion(pyfw.constants.sdf, name, size, physical=physical)
+        self.mr = MemoryRegion(BuildConstants.sdf(), name, size, physical=physical)
         self.size = size
         self.physical = physical
-        pyfw.constants.sdf.add_mr(self.mr)
+        BuildConstants.sdf().add_mr(self.mr)
 
-    def map(self, pd, perms="rw"):
+    def map(self, pd, perms="rw") -> RegionResource:
         """Map the MR into pd with given perms. Returns RegionResource."""
-        pd_map = fw_map(pd, self.mr, perms)
-        return fw_resource(pd_map, self.size)
+        pd_map = Map(self.mr, pd.get_map_vaddr(self.mr), perms=perms)
+        pd.add_map(pd_map)
+        return RegionResource(vaddr=pd_map.vaddr, size=self.size)
 
-    def map_device(self, pd, perms="rw"):
-        """Map the MR into pd with given perms. Returns DeviceRegionResource."""
+    def map_device(self, pd, perms="rw") -> DeviceRegionResource:
+        """Map the physical MR into pd with given perms. Returns DeviceRegionResource."""
         assert self.physical
-        pd_map = fw_map(pd, self.mr, perms)
-        return fw_device_resource(pd_map, self.mr)
+        pd_map = Map(self.mr, pd.get_map_vaddr(self.mr), perms=perms)
+        pd.add_map(pd_map)
+        region_resource = RegionResource(vaddr=pd_map.vaddr, size=self.size)
+        return DeviceRegionResource(region=region_resource, io_addr=self.mr.paddr)
 
 
 class TrackedNet:
@@ -60,12 +46,12 @@ class TrackedNet:
         driver: ProtectionDomain,
         virt_tx: ProtectionDomain,
         virt_rx: ProtectionDomain,
-        rx_dma_region: Optional[MemoryRegion],
+        rx_dma_region: MemoryRegion,
         *,
         interface_index: int,
     ):
         self._net = Sddf.Net(
-            pyfw.constants.sdf, ethernet_node, driver, virt_tx, virt_rx, rx_dma_region
+            BuildConstants.sdf(), ethernet_node, driver, virt_tx, virt_rx, rx_dma_region
         )
         self._driver = driver
         self._virt_tx = virt_tx

@@ -1,14 +1,16 @@
-# Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
+# Copyright 2026, UNSW SPDX-License-Identifier: BSD-2-Clause
 
 from sdfgen import SystemDescription
 from pyfw.component_base import Component
-from pyfw.config_structs import (
-    FwWebserverConfig,
-    FwWebserverInterfaceConfig,
-)
 from pyfw.constants import (
     interfaces,
+    supported_protocols,
     webserver_tx_interface_idx,
+)
+from build.config_structs import (
+    EthHwaddrLen,
+    FwWebserverConfig,
+    FwWebserverInterfaceConfig,
 )
 
 SDF_Channel = SystemDescription.Channel
@@ -30,28 +32,32 @@ class Webserver(Component, FwWebserverConfig):
         )
 
         # Create per-interface resources
-        self._interfaces = []
+        self._interfaces: list[FwWebserverInterfaceConfig] = []
         for iface in interfaces:
-            self._interfaces.append(FwWebserverInterfaceConfig(
-                iface.mac_list,
-                iface.ip_int,
-                iface.name,
-                [],
-                None,
-                None)
-        )
+            self._interfaces.append(
+                FwWebserverInterfaceConfig(
+                    mac_addr=iface.mac_list,
+                    ip=iface.ip_int,
+                    name=iface.name,
+                    filters=[],
+                    data=None,
+                    rx_free=None,
+                )
+            )
 
-        # Initialise Router config class
+        # Initialise Webserver config class
         FwWebserverConfig.__init__(
             self,
-            self._interfaces,
-            None,
-            None,
-            webserver_tx_interface_idx,
+            interfaces=self._interfaces,
+            router=None,
+            arp_queue=None,
+            tx_interface=webserver_tx_interface_idx,
         )
 
-    def finalize_config(self) -> FwWebserverConfig:
-        # TODO: Finish checking assertions
-        assert self.router is not None
-        assert self.arp_queue is not None
-        return self
+    def finalise_config(self) -> None:
+        assert self.interfaces is not None and len(self.interfaces) == len(interfaces)
+        for iface in self.interfaces:
+            assert iface.mac_addr is not None and len(iface.mac_addr) == EthHwaddrLen
+            assert iface.ip is not None and iface.ip != 0
+            assert iface.name is not None and iface.name != ""
+            assert iface.filters is not None and len(iface.filters) == len(supported_protocols)

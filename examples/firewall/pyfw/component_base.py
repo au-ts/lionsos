@@ -1,13 +1,11 @@
-# Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
+# Copyright 2026, UNSW SPDX-License-Identifier: BSD-2-Clause
 
+from abc import ABC, abstractmethod
 from sdfgen import SystemDescription
+from build.config_structs import Serializable
 
 ProtectionDomain = SystemDescription.ProtectionDomain
-
-def encode_iface_name(name: str) -> str:
-      return name.encode("ascii", "ignore")[:63].decode("ascii")
-
-class Component:
+class Component(ABC, Serializable):
     """Base class for all system components."""
 
     def __init__(
@@ -31,3 +29,13 @@ class Component:
     @property
     def name(self) -> str:
         return self.pd.name
+
+    @abstractmethod
+    # We force all sub-classes of this base class to implement a finalise_config
+    # method, which allows the class creator to ensure that the fields of each
+    # class object have been initialised correctly prior to serialisation. The
+    # serialisation method which is ultimately called when serialising the
+    # configuration struct is responsible for calling each object's
+    # finalise_config method prior to serialisation.
+    def finalise_config(self) -> None:
+        pass

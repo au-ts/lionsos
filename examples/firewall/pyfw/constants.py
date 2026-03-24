@@ -1,44 +1,76 @@
-from dataclasses import dataclass
-from typing import Tuple, List
+# Copyright 2026, UNSW SPDX-License-Identifier: BSD-2-Clause
+
+from typing import Optional
 from sdfgen import SystemDescription
+from pyfw.board import Board
 from pyfw.memory_layout import (
     FirewallDataStructure,
     FirewallMemoryRegions,
     UINT64_BYTES,
 )
-from pyfw.config_structs import FwRule
+from pyfw.component_net_interface import NetworkInterface
+from build.config_structs import FwRule
 
 ### ----------------------------------------------------------------------- ###
 ### System constants set pre-build, or immediately by the metaprogram ###
 ### ----------------------------------------------------------------------- ###
-sdf: SystemDescription
 
-@dataclass
-class NetworkInterface:
-    index: int
-    name: str
-    mac: Tuple[int, ...]
-    ip: str
-    subnet_bits: int
+BOARDS = [
+    Board(
+        name="qemu_virt_aarch64",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x6_0000_000,
+        serial="pl011@9000000",
+        timer="timer",
+        ethernet0="virtio_mmio@a003c00",
+        ethernet1="virtio_mmio@a003e00",
+    ),
+    Board(
+        name="imx8mp_iotgate",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x70_000_000,
+        serial="soc@0/bus@30800000/serial@30890000",
+        timer="soc@0/bus@30000000/timer@302d0000",
+        ethernet0="soc@0/bus@30800000/ethernet@30bf0000",  # DWMAC
+        ethernet1="soc@0/bus@30800000/ethernet@30be0000",  # IMX
+    ),
+]
 
-    @property
-    def ip_int(self) -> int:
-        import ipaddress
+class BuildConstants:
+    # System description file
+    _sdf: Optional[SystemDescription] = None
 
-        ip_split = self.ip.split(".")
-        ip_split.reverse()
-        reversed_ip = ".".join(ip_split)
-        return int(ipaddress.IPv4Address(reversed_ip))
+    # Root output directory
+    _output_dir: Optional[str] = None
 
-    @property
-    def mac_list(self) -> List[int]:
-        return list(self.mac)
+    @classmethod
+    def set_sdf(cls, sdf: SystemDescription) -> None:
+        assert cls._sdf is None
+        assert sdf is not None
+        cls._sdf = sdf
+
+    @classmethod
+    def sdf(cls) -> SystemDescription:
+        assert cls._sdf is not None
+        return cls._sdf
+
+    @classmethod
+    def set_output_dir(cls, output_dir: str) -> None:
+        assert cls._output_dir is None
+        assert output_dir is not None
+        cls._output_dir = output_dir
+
+    @classmethod
+    def output_dir(cls) -> str:
+        assert cls._output_dir is not None
+        return cls._output_dir
 
 # Network interface configuration
 interfaces = [
     NetworkInterface(
         index=0,
         name="external",
+        board_ethernet="ethernet1",
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x18),
         ip="172.16.2.1",
         subnet_bits=16,
@@ -46,16 +78,14 @@ interfaces = [
     NetworkInterface(
         index=1,
         name="internal",
+        board_ethernet="ethernet0",
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x10),
         ip="192.168.1.1",
         subnet_bits=24,
     ),
 ]
 
-# Root output directory
-output_dir: str
-
-# TODO: Webserver can only transmit out one interface
+# FUTURE WORK: Currently the webserver can only transmit out interface 1
 webserver_tx_interface_idx = 1
 
 ### ----------------------------------------------------------------------- ###
@@ -65,13 +95,32 @@ supported_protocols = {0x01: "icmp", 0x06: "tcp", 0x11: "udp"}
 
 FILTER_ACTION_ALLOW = 1
 FILTER_ACTION_DROP = 2
-FILTER_ACTION_CONNECT = 3
+FILTER_ACTION_REJECT = 3
+FILTER_ACTION_CONNECT = 4
+
+# If a filter supports action n, index n-1 is set to 1
+supported_filter_actions = {
+    0x01: [1, 1, 1, 1],
+    0x06: [1, 1, 0, 1],
+    0x11: [1, 1, 1, 1]
+}
 
 # Initial rules - protocol->rule dictionary for each interface
 # The first rule must always be the default action
 def default_action_rule(action: int) -> FwRule:
     assert action in (FILTER_ACTION_ALLOW, FILTER_ACTION_DROP, FILTER_ACTION_CONNECT)
-    return FwRule(action, 0, 0, 0, 0, 0, 0, True, True, 0)
+    return FwRule(
+        action=action,
+        src_ip=0,
+        dst_ip=0,
+        src_port=0,
+        dst_port=0,
+        src_subnet=0,
+        dst_subnet=0,
+        src_port_any=True,
+        dst_port_any=True,
+        rule_id=0,
+    )
 
 initial_rules = [
     {

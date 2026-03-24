@@ -174,7 +174,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5) $(PYFW_
 
 	$(OBJCOPY) --update-section .net_config_0=net_data0/net_client_icmp_module.data icmp_module.elf
 
-# TODO: webserver should be able to transmit out all interfaces via the router
+# FUTURE WORK: webserver should be able to transmit out all interfaces via the router
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_micropython.data micropython.elf
 
