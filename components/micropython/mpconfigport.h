@@ -90,25 +90,10 @@ typedef long mp_off_t;
 // We need to provide a declaration/definition of alloca().
 #include <alloca.h>
 
-// Define the port's name and hardware.
-#if defined(CONFIG_PLAT_ODROIDC4)
-#define MICROPY_HW_BOARD_NAME "Odroid-C4"
-#define MICROPY_HW_MCU_NAME   "Cortex A55"
-#elif defined(CONFIG_PLAT_IMX8MM_EVK)
-#define MICROPY_HW_BOARD_NAME "i.MX 8M Mini"
-#define MICROPY_HW_MCU_NAME   "Cortex A53"
-#elif defined(CONFIG_PLAT_IMX8MP_EVK)
-#define MICROPY_HW_BOARD_NAME "i.MX 8MP"
-#define MICROPY_HW_MCU_NAME   "Cortex A53"
-#elif defined(CONFIG_PLAT_MAAXBOARD)
-#define MICROPY_HW_BOARD_NAME "MaaXBoard"
-#define MICROPY_HW_MCU_NAME   "Cortex A53"
-#elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
-#define MICROPY_HW_BOARD_NAME "QEMU virt AArch64"
-#define MICROPY_HW_MCU_NAME   "Cortex A53"
-#else
-#error "Unknown platform given for MicroPython config"
-#endif
+#define MICROPY_BANNER_MACHINE "LionsOS"
+// FIXME: should be able to include extmod/modplatform.h and this would work
+//        but...
+// #define MICROPY_PY_SYS_PLATFORM "LionsOS"
 
 #define MP_STATE_PORT MP_STATE_VM
 
