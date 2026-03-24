@@ -44,6 +44,8 @@ FIREWALL_CONFIG_HEADERS := \
 	$(LIONSOS)/include/lions/firewall/routing.h \
 	$(LIONSOS)/include/lions/firewall/config.h
 
+PYFW_CLASS_FILES := $(wildcard $(FIREWALL_SRC_DIR)/pyfw/*)
+
 IMAGES := arp_requester.elf arp_responder.elf routing.elf micropython.elf \
 		  firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
 		  timer_driver.elf serial_driver.elf serial_virt_tx.elf \
@@ -130,7 +132,7 @@ $(PYFW_GENERATED_CONFIG): $(SDFGEN_HELPER) $(FIREWALL_CONFIG_HEADERS)
 		--configs "$(FIREWALL_CONFIG_HEADERS)" \
 		--output $@
 
-$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5) $(PYFW_GENERATED_CONFIG)
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5) $(PYFW_GENERATED_CONFIG) $(PYFW_CLASS_FILES)
 	PYTHONPATH=$(FIREWALL_SRC_DIR):${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) \
 		--sddf $(SDDF) --board $(MICROKIT_BOARD) \
 		--dtb $(DTB) --output . --sdf $(SYSTEM_FILE) \
