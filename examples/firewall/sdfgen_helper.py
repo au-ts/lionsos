@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2025, UNSW SPDX-License-Identifier: BSD-2-Clause
+# Copyright 2026, UNSW SPDX-License-Identifier: BSD-2-Clause
 
 import argparse
 import sys
@@ -9,37 +9,41 @@ import shutil
 from os import path
 
 ### Explanation
-# Since this script generates the python classes that will be used by the metaprogram, it will
-# typically be run before the build process and whenever a configuration struct is changed. It will
-# generate a python struct class and serialisable class for each struct definition in each C header
-# that it is passed. These classes make the process of creating a meta program much simpler and less
-# error prone. Run the script on all the config headers used by your system (that are not serialised
-# by the sdfgen tool) before creating your meta program and you can import the generated classes
-# into your meta program and use them to create data files to be copied into your elfs.
+# Since this script generates the python classes that will be used by the
+# metaprogram, it will typically be run before the build process and whenever a
+# configuration struct is changed. It will generate a python struct class and
+# serialisable class for each struct definition in each C header that it is
+# passed. These classes make the process of creating a meta program much simpler
+# and less error prone. Run the script on all the config headers used by your
+# system (that are not serialised by the sdfgen tool) before creating your meta
+# program and you can import the generated classes into your meta program and
+# use them to create data files to be copied into your elfs.
 
-# This script also contains a couple of other useful functions for creating copies of elf files and
-# updating elf sections with the data files serialised by the generated classes.
+# This script also contains a couple of other useful functions for creating
+# copies of elf files and updating elf sections with the data files serialised
+# by the generated classes.
 
 ### Assumptions
-# If macros or types are found in config files that are not defined, the script will output them
-# upon termination and will not create the python classes. If the unknown type is a c type, simply
-# add it to the c_type_to_p_class dictionary. If macros are unknown, their values can be passed to
-# the script as arguments. If a C type is unknown and defined in another header, either include this
-# header in the files passed to the script, or temporarily add the definition to one of the config
-# files passed to generate the the python classes, then remove before building your system.
+# If macros or types are found in config files that are not defined, the script
+# will output them upon termination and will not create the python classes. If
+# the unknown type is a c type, simply add it to the c_type_to_p_class
+# dictionary. If a C type is unknown and defined in another header, include this
+# header in the files passed to the script.
 #
-# The script assumes that config headers are passed in order of dependencies, so be sure to pass
-# files containing definitions that are used in other files first.
+# The script assumes that config headers are passed in order of dependencies, so
+# be sure to pass files containing definitions that are used in other files
+# first.
 #
 # The script assumes that all comments are across entire lines.
 #
-# Currently the script only supports simple single value macro substitutions and will fail to
-# recognise more complex expressions.
+# Currently the script only supports simple single value macro substitutions and
+# will fail to recognise more complex expressions.
 #
-# This script assumes that a struct field with the prefix "num_" refers to the length of another
-# field if the substring following "num_" is equal to the name of the other field. If this is true,
-# the field prefixed with "num_" will not be treated as a separate field to the matching field, and
-# instead will be set to the length of the matching field.
+# This script assumes that a struct field with the prefix "num_" refers to the
+# length of another field if the substring following "num_" is equal to the name
+# of the other field. If this is true, the field prefixed with "num_" will not
+# be treated as a separate field to the matching field, and instead will be set
+# to the length of the matching field.
 
 # Creates a new elf with elf_number as prefix. Adds ".elf" to elf strings
 def copy_elf(source_elf: str, new_elf: str, elf_number = None):
@@ -56,6 +60,7 @@ def update_elf_section(obj_copy: str, elf_name: str, section_name: str, data_nam
     assert path.isfile(data_name)
     assert subprocess.run([obj_copy, "--update-section", "." + section_name + "=" + data_name, elf_name]).returncode == 0
 
+# Regex matching on any c name
 c_name_regex = r"[a-zA-Z_][a-zA-Z0-9_]{0,63}"
 # Currently we only support digits and macros for array sizes
 c_value_regex = c_name_regex + r"|0b[01]+|0x[a-fA-F0-9]+|[0-9]+"
@@ -210,22 +215,28 @@ def cNameToPName(c_name):
 
     return p_name
 
+def fieldTypeHint(field):
+    if field.c_type in Struct.all_structs:
+        inner_type = field.p_class[:-6]
+    else:
+        inner_type = p_class_to_p_type[field.p_class]
+
+    if len(field.n_size):
+        if field.c_type == "char":
+            inner_type = "str"
+        else:
+            inner_type = f"List[{inner_type}]"
+
+    return f"Optional[{inner_type}]"
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Accept values for unknown Macros
     parser.add_argument("--output", required=True)
     parser.add_argument("--configs", required=True)
-    parser.add_argument("--macros", required=False)
     args = parser.parse_args()
-
     p_classes_out = args.output
-
-    # Store argument passed macros
-    if args.macros:
-        for macro_def in args.macros.split(" "):
-            macro_val = macro_def.split("=")
-            Macro(macro_val[0], macro_val[1])
 
     # Extract struct files
     c_headers = args.configs.split(" ")
@@ -318,7 +329,8 @@ if __name__ == '__main__':
     with open(p_classes_out, "w") as out:
 
         # Import modules
-        out.write("from typing import List\n")
+        out.write("from dataclasses import dataclass, field\n")
+        out.write("from typing import List, Optional\n")
         out.write("from ctypes import *\n\n")
 
         if Macro.unknown_macros or Struct.unknown_types:
@@ -396,43 +408,40 @@ if __name__ == '__main__':
         out.write("\n")
 
         # Create serializable structs
-        out.write("class Serializable():\n    def serialise(self):\n        return bytes(self.to_struct())\n\n")
+        out.write(
+            "class Serializable():\n"
+            "    section_name: str\n\n"
+            "    def finalise_config(self) -> None:\n"
+            "        pass\n\n"
+            "    def serialise(self):\n"
+            "        self.finalise_config()\n"
+            "        return bytes(self.to_struct())\n\n"
+        )
         for struct in Struct.all_structs.values():
-
-            # Create arguments
-            out.write(f"class {struct.p_name[:-6]}(Serializable):\n    def __init__(self")
+            out.write(f"@dataclass(kw_only=True)\nclass {struct.p_name[:-6]}(Serializable):\n")
             for field in struct.fields.values():
                 if field.c_name[:4] == "num_" and field.c_name[4:] in struct.fields:
                     continue
-                list_start = ""
-                list_end = ""
-                if len(field.n_size):
-                    list_start = "List["
-                    list_end = "]"
-
-                if field.c_type in Struct.all_structs:
-                    out.write(f", {field.c_name}: {list_start}{field.p_class[:-6]}{list_end}")
+                if len(field.n_size) and field.c_type == "char":
+                    default_expr = "\"\""
+                elif len(field.n_size):
+                    default_expr = "field(default_factory=list)"
                 else:
-                    out.write(f", {field.c_name}: {list_start}{p_class_to_p_type[field.p_class]}{list_end}")
-            out.write("):\n")
-
-            # Initialise field objects
-            for field in struct.fields.values():
-                if field.c_name[:4] == "num_" and field.c_name[4:] in struct.fields:
-                    continue
-                if len(field.n_size):
-                    out.write(" " * 8 + f"self.{field.c_name} = {field.c_name} if {field.c_name} is not None else []\n")
-                else:
-                    out.write(" " * 8 + f"self.{field.c_name} = {field.c_name}\n")
-            out.write(" " * 8 + f"self.section_name = \"{struct.c_name[:-2]}\"\n")
-            out.write("\n")
+                    default_expr = "None"
+                out.write(" " * 4 + f"{field.c_name}: {fieldTypeHint(field)} = {default_expr}\n")
+            out.write(" " * 4 + f"section_name: str = field(init=False, default=\"{struct.c_name[:-2]}\")\n\n")
 
             # Define serializable class to struct function
             out.write(" " * 4 + f"def to_struct(self) -> {struct.p_name}:\n")
             for field in struct.fields.values():
+                if field.c_name[:4] != "num_" or field.c_name[4:] not in struct.fields:
+                    out.write(" " * 8 + f"assert self.{field.c_name} != None\n")
+                if len(field.n_size):
+                    out.write(" " * 8 + f"assert len(self.{field.c_name}) > 0\n")
+                    out.write(" " * 8 + f"assert len(self.{field.c_name}) <= {field.e_size}\n")
                 out.write(" " * 8)
                 if len(field.n_size) and field.c_type == "char":
-                    out.write(f"{field.c_name}_arg = bytes(create_string_buffer(bytes(self.{field.c_name}, encoding=\"ascii\"), size=len(self.{field.c_name})))")
+                    out.write(f"{field.c_name}_arg = bytes(create_string_buffer(bytes(self.{field.c_name}, encoding=\"ascii\"), size={field.e_size}))")
                 elif len(field.n_size) and field.c_type not in Struct.all_structs:
                     out.write(f"{field.c_name}_arg = self.{field.c_name} + [{field.p_class}()] * ({field.e_size} - len(self.{field.c_name}))")
                 elif len(field.n_size) and field.c_type in Struct.all_structs:
