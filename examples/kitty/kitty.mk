@@ -152,7 +152,12 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 %.o: %.c ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
-$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
+NFS_ARGS := $(shell echo ${NFS_SERVER} ${NFS_DIRECTORY} | shasum | sed 's/  *-.*//')
+.NFS_ARGS-${NFS_ARGS}:
+	rm -f .NFS_ARGS*
+	> $@
+
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) .NFS_ARGS-${NFS_ARGS}
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) \
 		--sddf $(SDDF) --board $(MICROKIT_BOARD) \
 		--dtb $(DTB) --output . --sdf $(SYSTEM_FILE) \
