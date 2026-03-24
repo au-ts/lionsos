@@ -10,7 +10,7 @@ from pyfw.constants import (
     supported_protocols,
 )
 from pyfw.specs import FirewallMemoryRegion
-from build.config_structs import (
+from config_structs import (
     RegionResource,
     FwConnectionResource,
     FwIcmpModuleInterfaceConfig,

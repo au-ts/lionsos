@@ -7,7 +7,7 @@ from pyfw.constants import (
     supported_protocols,
     webserver_tx_interface_idx,
 )
-from build.config_structs import (
+from config_structs import (
     EthHwaddrLen,
     FwWebserverConfig,
     FwWebserverInterfaceConfig,

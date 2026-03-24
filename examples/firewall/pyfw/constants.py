@@ -9,7 +9,7 @@ from pyfw.memory_layout import (
     UINT64_BYTES,
 )
 from pyfw.component_net_interface import NetworkInterface
-from build.config_structs import FwRule, FwRoutingEntry
+from config_structs import FwRule, FwRoutingEntry
 
 ### ----------------------------------------------------------------------- ###
 ### System constants set pre-build, or immediately by the metaprogram ###

@@ -11,7 +11,7 @@ from pyfw.constants import (
 )
 from pyfw.component_net_interface import NetworkInterface
 from pyfw.specs import FirewallMemoryRegion
-from build.config_structs import (
+from config_structs import (
     EthHwaddrLen,
     FwArpConnection,
     FwArpRequesterConfig,

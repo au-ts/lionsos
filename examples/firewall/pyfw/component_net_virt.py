@@ -9,7 +9,7 @@ from pyfw.constants import (
     dma_buffer_queue_region,
 )
 from pyfw.specs import FirewallMemoryRegion, TrackedNet
-from build.config_structs import (
+from config_structs import (
     DeviceRegionResource,
     FwConnectionResource,
     FwDataConnectionResource,

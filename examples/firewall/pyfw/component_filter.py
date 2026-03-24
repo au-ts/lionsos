@@ -17,7 +17,7 @@ from pyfw.constants import (
     dma_buffer_queue_region,
 )
 from pyfw.specs import FirewallMemoryRegion
-from build.config_structs import (
+from config_structs import (
     FwConnectionResource,
     FwFilterConfig,
     FwWebserverFilterConfig,

@@ -3,7 +3,7 @@
 from typing import Optional
 from sdfgen import SystemDescription, Sddf, DeviceTree
 from pyfw.constants import BuildConstants
-from build.config_structs import (
+from config_structs import (
     RegionResource,
     DeviceRegionResource,
 )

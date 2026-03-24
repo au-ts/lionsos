@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from sdfgen import SystemDescription
-from build.config_structs import Serializable
+from config_structs import Serializable
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 class Component(ABC, Serializable):
