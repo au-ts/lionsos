@@ -120,11 +120,12 @@ static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
     }
 
     // TODO: We can remove the double copy here by making mp_i2c_dispatch support copying the bufs
-    //       or copy the bufs directly here.
+    //       or copy the bufs directly here. Or we could use the transfer_single
     int num_acks = 0; // only valid for write; for read it'll be 0
     int ret = 0;
     for (; n--; ++bufs) {
         remain_len -= bufs->len;
+        // XXXX: if there are multiple buffers there will be multiple stops...?
         ret = mp_i2c_dispatch(self, addr, bufs->buf, bufs->len, sddf_flags);
         if (ret < 0) {
             // FIXME: not an assert...
