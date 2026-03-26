@@ -229,8 +229,8 @@ static void generate_icmp(void)
         assert(!err);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("ICMP MODULE LOG: processing router ICMP request type %u code %u using interface %u\n", req.type,
-                        req.code, req.out_interface);
+            sddf_printf("ICMP MODULE LOG: processing router ICMP request type %u code %u using interface %u\n",
+                        req.type, req.code, req.out_interface);
         }
 
         process_icmp_request(&req, transmitted);
@@ -250,8 +250,8 @@ void init(void)
 
     for (int iface = 0; iface < icmp_config.num_interfaces; iface++) {
         /* Setup transmit queues with the transmit virtualisers. */
-        net_queue_init(&net_queue[iface], net_configs[iface]->tx.free_queue.vaddr, net_configs[iface]->tx.active_queue.vaddr,
-                       net_configs[iface]->tx.num_buffers);
+        net_queue_init(&net_queue[iface], net_configs[iface]->tx.free_queue.vaddr,
+                       net_configs[iface]->tx.active_queue.vaddr, net_configs[iface]->tx.num_buffers);
         net_buffers_init(&net_queue[iface], 0);
 
         /* Setup queues with filters */

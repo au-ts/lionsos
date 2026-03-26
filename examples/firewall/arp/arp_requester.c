@@ -161,10 +161,11 @@ static void process_responses()
                                 fw_enqueue(&arp_resp_queue[client], &response);
                                 notify_client[client] = true;
                                 if (FW_DEBUG_OUTPUT) {
-                                    sddf_printf("ARP REQUESTER LOG: received response for client %u, ip %s. MAC[0] = %x, "
-                                                "MAC[5] = %x on interface %u\n",
-                                                client, ipaddr_to_string(arp_resp->ipsrc_addr, ip_addr_buf0),
-                                                arp_resp->hwsrc_addr[0], arp_resp->hwsrc_addr[5], arp_config.interface);
+                                    sddf_printf(
+                                        "ARP REQUESTER LOG: received response for client %u, ip %s. MAC[0] = %x, "
+                                        "MAC[5] = %x on interface %u\n",
+                                        client, ipaddr_to_string(arp_resp->ipsrc_addr, ip_addr_buf0),
+                                        arp_resp->hwsrc_addr[0], arp_resp->hwsrc_addr[5], arp_config.interface);
                                 }
                             }
                         }
