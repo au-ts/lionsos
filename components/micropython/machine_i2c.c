@@ -106,6 +106,10 @@ static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
         flags &= ~MP_MACHINE_I2C_FLAG_READ;
         sddf_flags |= I2C_FLAG_READ;
     }
+    if (flags & MP_MACHINE_I2C_FLAG_WRITE1) {
+        flags &= ~MP_MACHINE_I2C_FLAG_WRITE1;
+        sddf_flags |= I2C_FLAG_WRRD;
+    }
     if (flags != 0) {
         mp_raise_msg_varg(&mp_type_RuntimeError,
                           MP_ERROR_TEXT("I2C(%d): unsupported flags 0x%x"), self->port, flags);
