@@ -60,6 +60,13 @@ static i2c_err_t mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t
     uint8_t *i2c_data = (uint8_t *) i2c_config.data.vaddr;
     memcpy(i2c_data, buf, len);
 
+    // micropython expects the results of the writeread to be written back
+    // offset past after the address; sDDF doesn't.
+    if (flag_mask & I2C_FLAG_WRRD) {
+        len--;
+        buf++;
+    }
+
     // Perform read
     int ret = sddf_i2c_nb_dispatch(&libi2c_config, (i2c_addr_t) addr,
                                    i2c_data, (uint16_t) len, flag_mask);
@@ -103,6 +110,10 @@ static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
     if (flags & MP_MACHINE_I2C_FLAG_READ) {
         flags &= ~MP_MACHINE_I2C_FLAG_READ;
         sddf_flags |= I2C_FLAG_READ;
+    }
+    if (flags & MP_MACHINE_I2C_FLAG_WRITE1) {
+        flags &= ~MP_MACHINE_I2C_FLAG_WRITE1;
+        sddf_flags |= I2C_FLAG_WRRD;
     }
     if (flags != 0) {
         mp_raise_msg_varg(&mp_type_RuntimeError,
@@ -187,6 +198,7 @@ static void machine_i2c_print(const mp_print_t *print, mp_obj_t self_in, mp_prin
 }
 
 static const mp_machine_i2c_p_t machine_i2c_p = {
+    .transfer_supports_write1 = true,
     .transfer = machine_i2c_transfer
 };
 
