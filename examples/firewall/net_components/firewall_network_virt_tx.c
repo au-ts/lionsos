@@ -12,7 +12,12 @@
 #include <sddf/util/printf.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
+#include <lions/firewall/ethernet.h>
+#include <lions/firewall/ip.h>
+#include <lions/firewall/tcp.h>
+#include <lions/firewall/udp.h>
 #include <lions/firewall/queue.h>
+#include <lions/firewall/nat_module.h>
 
 __attribute__((__section__(".net_virt_tx_config"))) net_virt_tx_config_t config;
 __attribute__((__section__(".fw_net_virt_tx_config"))) fw_net_virt_tx_config_t fw_config;
@@ -22,6 +27,10 @@ net_queue_handle_t tx_queue_clients[SDDF_NET_MAX_CLIENTS];
 
 fw_queue_t fw_free_clients[FW_MAX_FW_CLIENTS];
 fw_queue_t fw_active_clients[FW_MAX_FW_CLIENTS];
+
+/* NAT modules for TCP and UDP */
+static nat_module_t nat_tcp_module;
+static nat_module_t nat_udp_module;
 
 static int extract_offset_net_client(uintptr_t *phys)
 {
@@ -70,6 +79,33 @@ static void tx_provide(void)
                 }
 
                 uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.clients[client].data.region.vaddr;
+
+                /* Apply SNAT if enabled */
+                if (fw_config.nat_enabled) {
+                    uint16_t ethtype = htons(((eth_hdr_t *)buffer_vaddr)->ethtype);
+                    if (ethtype == ETH_TYPE_IP) {
+                        ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(buffer_vaddr + IPV4_HDR_OFFSET);
+                        /* TX path sends packets to external network, so they are outbound */
+                        bool is_inbound = false;
+
+                        int nat_result = NAT_SUCCESS;
+                        if (ip_hdr->protocol == IPV4_PROTO_TCP) {
+                            nat_result = nat_module_translate(&nat_tcp_module, buffer_vaddr, &buffer, is_inbound);
+                        } else if (ip_hdr->protocol == IPV4_PROTO_UDP) {
+                            nat_result = nat_module_translate(&nat_udp_module, buffer_vaddr, &buffer, is_inbound);
+                        }
+
+                        /* Drop packet if NAT translation fails */
+                        if (nat_result != NAT_SUCCESS) {
+                            sddf_dprintf("VIRT TX LOG, Interface %u: SNAT translation failed for protocol %u, dropping packet\n",
+                                        fw_config.interface, ip_hdr->protocol);
+                            err = net_enqueue_free(&tx_queue_clients[client], buffer);
+                            assert(!err);
+                            continue;
+                        }
+                    }
+                }
+
                 cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
                 buffer.io_or_offset = buffer.io_or_offset + config.clients[client].data.io_addr;
 
@@ -99,6 +135,31 @@ static void tx_provide(void)
             assert(buffer.interface < fw_config.num_data_regions);
 
             uintptr_t buffer_vaddr = buffer.offset + (uintptr_t)fw_config.data_regions[buffer.interface].region.vaddr;
+
+            /* Apply SNAT if enabled */
+            if (fw_config.nat_enabled) {
+                uint16_t ethtype = htons(((eth_hdr_t *)buffer_vaddr)->ethtype);
+                if (ethtype == ETH_TYPE_IP) {
+                    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(buffer_vaddr + IPV4_HDR_OFFSET);
+                    /* TX path sends packets to external network, so they are outbound */
+                    bool is_inbound = false;
+
+                    int nat_result = NAT_SUCCESS;
+                    if (ip_hdr->protocol == IPV4_PROTO_TCP) {
+                        nat_result = nat_module_translate(&nat_tcp_module, buffer_vaddr, (net_buff_desc_t *)&buffer, is_inbound);
+                    } else if (ip_hdr->protocol == IPV4_PROTO_UDP) {
+                        nat_result = nat_module_translate(&nat_udp_module, buffer_vaddr, (net_buff_desc_t *)&buffer, is_inbound);
+                    }
+
+                    /* Drop packet if NAT translation fails */
+                    if (nat_result != NAT_SUCCESS) {
+                        sddf_dprintf("VIRT TX LOG, Interface %u: SNAT translation failed for protocol %u, dropping packet\n",
+                                    fw_config.interface, ip_hdr->protocol);
+                        continue;
+                    }
+                }
+            }
+
             cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
             uintptr_t io_addr = buffer.offset + fw_config.data_regions[buffer.interface].io_addr;
 
@@ -193,5 +254,67 @@ void init(void)
         fw_queue_init(&fw_free_clients[i], fw_config.free_clients[i].conn.queue.vaddr, sizeof(net_buff_desc_t),
                       fw_config.free_clients[i].conn.capacity);
     }
+
+    /* Initialize NAT modules if enabled */
+    if (fw_config.nat_enabled) {
+        for (int i = 0; i < fw_config.num_nat_configs; i++) {
+            fw_virt_rx_nat_config_t *nat_cfg = &fw_config.nat_configs[i];
+
+            if (!nat_cfg->enabled) {
+                continue;
+            }
+
+            /* Get webserver state from parent fw_config (shared across all protocols) */
+            fw_nat_webserver_state_t *webserver_state =
+                (fw_nat_webserver_state_t *)fw_config.webserver_state.vaddr;
+
+            /* Get the interface configuration for this NAT config */
+            fw_nat_interface_config_t *interface_config = &nat_cfg->interface_config;
+            fw_nat_port_table_t *port_table = (fw_nat_port_table_t *)interface_config->port_table.vaddr;
+
+            /* Determine protocol-specific offsets */
+            size_t src_port_off, dst_port_off, check_off;
+            bool check_enabled;
+
+            if (nat_cfg->protocol == IPV4_PROTO_TCP) {
+                src_port_off = offsetof(tcp_hdr_t, src_port);
+                dst_port_off = offsetof(tcp_hdr_t, dst_port);
+                check_off = offsetof(tcp_hdr_t, check);
+                check_enabled = true;
+
+                /* Initialize TCP NAT module */
+                int result = nat_module_init(&nat_tcp_module,
+                                             fw_config.interface,
+                                             IPV4_PROTO_TCP,
+                                             interface_config,
+                                             port_table,
+                                             webserver_state,
+                                             src_port_off,
+                                             dst_port_off,
+                                             check_off,
+                                             check_enabled);
+                assert(result == NAT_SUCCESS);
+            } else if (nat_cfg->protocol == IPV4_PROTO_UDP) {
+                src_port_off = offsetof(udp_hdr_t, src_port);
+                dst_port_off = offsetof(udp_hdr_t, dst_port);
+                check_off = offsetof(udp_hdr_t, check);
+                check_enabled = true;
+
+                /* Initialize UDP NAT module */
+                int result = nat_module_init(&nat_udp_module,
+                                             fw_config.interface,
+                                             IPV4_PROTO_UDP,
+                                             interface_config,
+                                             port_table,
+                                             webserver_state,
+                                             src_port_off,
+                                             dst_port_off,
+                                             check_off,
+                                             check_enabled);
+                assert(result == NAT_SUCCESS);
+            }
+        }
+    }
+
     tx_provide();
 }

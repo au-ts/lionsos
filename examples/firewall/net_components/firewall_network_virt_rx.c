@@ -10,13 +10,17 @@
 #include <sddf/network/queue.h>
 #include <sddf/network/config.h>
 #include <sddf/util/util.h>
+#include <sddf/util/printf.h>
 #include <sddf/util/cache.h>
 #include <lions/firewall/arp.h>
 #include <lions/firewall/checksum.h>
 #include <lions/firewall/config.h>
 #include <lions/firewall/ethernet.h>
 #include <lions/firewall/ip.h>
+#include <lions/firewall/tcp.h>
+#include <lions/firewall/udp.h>
 #include <lions/firewall/queue.h>
+#include <lions/firewall/nat_module.h>
 
 __attribute__((__section__(".net_virt_rx_config"))) net_virt_rx_config_t config;
 __attribute__((__section__(".fw_net_virt_rx_config"))) fw_net_virt_rx_config_t fw_config;
@@ -25,6 +29,10 @@ net_queue_handle_t rx_queue_drv;
 net_queue_handle_t rx_queue_clients[SDDF_NET_MAX_CLIENTS];
 
 fw_queue_t fw_free_clients[FW_MAX_FW_CLIENTS];
+
+/* NAT modules for TCP and UDP */
+static nat_module_t nat_tcp_module;
+static nat_module_t nat_udp_module;
 
 /* Boolean to indicate whether a packet has been enqueued into the driver's free queue during notification handling */
 static bool notify_drv;
@@ -86,6 +94,35 @@ static void rx_return(void)
             //
             // [1]: https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Instructions/DC-IVAC--Data-or-unified-Cache-line-Invalidate-by-VA-to-PoC
             cache_clean_and_invalidate(buffer_vaddr, buffer_vaddr + buffer.len);
+
+            /* Apply NAT translation if enabled */
+            if (fw_config.nat_enabled) {
+                uint16_t ethtype = htons(((eth_hdr_t *)buffer_vaddr)->ethtype);
+                if (ethtype == ETH_TYPE_IP) {
+                    ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(buffer_vaddr + IPV4_HDR_OFFSET);
+                    /* RX path receives packets from external network, so they are inbound */
+                    bool is_inbound = true;
+
+                    int nat_result = NAT_SUCCESS;
+                    if (ip_hdr->protocol == IPV4_PROTO_TCP) {
+                        nat_result = nat_module_translate(&nat_tcp_module, buffer_vaddr, &buffer, is_inbound);
+                    } else if (ip_hdr->protocol == IPV4_PROTO_UDP) {
+                        nat_result = nat_module_translate(&nat_udp_module, buffer_vaddr, &buffer, is_inbound);
+                    }
+
+                    /* Drop packet if NAT translation fails */
+                    if (nat_result != NAT_SUCCESS) {
+                        sddf_dprintf("VIRT RX LOG, Interface %u: NAT translation failed for protocol %u, dropping packet\n",
+                                    fw_config.interface, ip_hdr->protocol);
+                        buffer.io_or_offset = buffer.io_or_offset + config.data.io_addr;
+                        err = net_enqueue_free(&rx_queue_drv, buffer);
+                        assert(!err);
+                        notify_drv = true;
+                        continue;
+                    }
+                }
+            }
+
             int client = get_protocol_match(buffer_vaddr);
             if (client >= 0) {
                 err = net_enqueue_active(&rx_queue_clients[client], buffer);
@@ -199,6 +236,67 @@ void init(void)
     for (int i = 0; i < fw_config.num_free_clients; i++) {
         fw_queue_init(&fw_free_clients[i], fw_config.free_clients[i].queue.vaddr, sizeof(net_buff_desc_t),
                       fw_config.free_clients[i].capacity);
+    }
+
+    /* Initialize NAT modules if enabled */
+    if (fw_config.nat_enabled) {
+        for (int i = 0; i < fw_config.num_nat_configs; i++) {
+            fw_virt_rx_nat_config_t *nat_cfg = &fw_config.nat_configs[i];
+
+            if (!nat_cfg->enabled) {
+                continue;
+            }
+
+            /* Get webserver state from parent fw_config (shared across all protocols) */
+            fw_nat_webserver_state_t *webserver_state =
+                (fw_nat_webserver_state_t *)fw_config.webserver_state.vaddr;
+
+            /* Get the interface configuration for this NAT config */
+            fw_nat_interface_config_t *interface_config = &nat_cfg->interface_config;
+            fw_nat_port_table_t *port_table = (fw_nat_port_table_t *)interface_config->port_table.vaddr;
+
+            /* Determine protocol-specific offsets */
+            size_t src_port_off, dst_port_off, check_off;
+            bool check_enabled;
+
+            if (nat_cfg->protocol == IPV4_PROTO_TCP) {
+                src_port_off = offsetof(tcp_hdr_t, src_port);
+                dst_port_off = offsetof(tcp_hdr_t, dst_port);
+                check_off = offsetof(tcp_hdr_t, check);
+                check_enabled = true;
+
+                /* Initialize TCP NAT module */
+                int result = nat_module_init(&nat_tcp_module,
+                                             fw_config.interface,
+                                             IPV4_PROTO_TCP,
+                                             interface_config,
+                                             port_table,
+                                             webserver_state,
+                                             src_port_off,
+                                             dst_port_off,
+                                             check_off,
+                                             check_enabled);
+                assert(result == NAT_SUCCESS);
+            } else if (nat_cfg->protocol == IPV4_PROTO_UDP) {
+                src_port_off = offsetof(udp_hdr_t, src_port);
+                dst_port_off = offsetof(udp_hdr_t, dst_port);
+                check_off = offsetof(udp_hdr_t, check);
+                check_enabled = true;
+
+                /* Initialize UDP NAT module */
+                int result = nat_module_init(&nat_udp_module,
+                                             fw_config.interface,
+                                             IPV4_PROTO_UDP,
+                                             interface_config,
+                                             port_table,
+                                             webserver_state,
+                                             src_port_off,
+                                             dst_port_off,
+                                             check_off,
+                                             check_enabled);
+                assert(result == NAT_SUCCESS);
+            }
+        }
     }
 
     if (net_require_signal_free(&rx_queue_drv)) {
