@@ -101,13 +101,13 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
     for iface in fw_interfaces:
         # Configure TCP NAT
         iface.rx_virtualiser.add_nat_config(
-            protocol=supported_protocols['tcp'],  # 0x06
+            protocol=0x06,  # TCP
             base_port=49152,
             capacity=512,
             interface_ip=iface.ip
         )
         iface.tx_virtualiser.add_nat_config(
-            protocol=supported_protocols['tcp'],
+            protocol=0x06,  # TCP
             base_port=49152,
             capacity=512,
             interface_ip=iface.ip
@@ -115,13 +115,13 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
 
         # Configure UDP NAT
         iface.rx_virtualiser.add_nat_config(
-            protocol=supported_protocols['udp'],  # 0x11
+            protocol=0x11,  # UDP
             base_port=49152,
             capacity=512,
             interface_ip=iface.ip
         )
         iface.tx_virtualiser.add_nat_config(
-            protocol=supported_protocols['udp'],
+            protocol=0x11,  # UDP
             base_port=49152,
             capacity=512,
             interface_ip=iface.ip

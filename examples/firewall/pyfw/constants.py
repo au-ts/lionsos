@@ -264,11 +264,13 @@ filter_instances_region = FirewallMemoryRegions(
 
 # --------------------------------------------- #
 # NAT port table - stores ephemeral port mappings per interface/protocol
+# Using manual sizes since NAT structs are not in early-built ELFs
 nat_port_table_wrapper = FirewallDataStructure(
-    elf_name="firewall_network_virt_rx0.elf", c_name="fw_nat_port_table"
+    entry_size=16  # fw_nat_port_table_t header (size, largest_index, free_head)
 )
 nat_port_table_buffer = FirewallDataStructure(
-    elf_name="firewall_network_virt_rx0.elf", c_name="fw_nat_port_mapping_t", capacity=512
+    entry_size=32,  # fw_nat_port_mapping_t (src_ip, src_port, next_free, is_valid, last_used_ts)
+    capacity=512
 )
 nat_port_table_region = FirewallMemoryRegions(
     data_structures=[nat_port_table_wrapper, nat_port_table_buffer]
@@ -277,7 +279,8 @@ nat_port_table_region = FirewallMemoryRegions(
 # --------------------------------------------- #
 # NAT webserver state - shared SNAT configuration
 nat_webserver_state_buffer = FirewallDataStructure(
-    elf_name="firewall_network_virt_rx0.elf", c_name="fw_nat_webserver_state_t", capacity=1
+    entry_size=24,  # fw_nat_webserver_state_t (interfaces[2] * 4 bytes + 8 bytes timeout)
+    capacity=1
 )
 nat_webserver_state_region = FirewallMemoryRegions(
     data_structures=[nat_webserver_state_buffer]
