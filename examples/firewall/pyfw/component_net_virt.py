@@ -7,6 +7,9 @@ from pyfw.constants import (
     BuildConstants,
     dma_buffer_queue,
     dma_buffer_queue_region,
+    nat_port_table_region,
+    nat_webserver_state_region,
+    supported_protocols,
 )
 from pyfw.specs import FirewallMemoryRegion, TrackedNet
 from config_structs import (
@@ -15,6 +18,9 @@ from config_structs import (
     FwDataConnectionResource,
     FwNetVirtRxConfig,
     FwNetVirtTxConfig,
+    FwNatInterfaceConfig,
+    FwVirtRxNatConfig,
+    RegionResource,
 )
 
 SDF_Channel = SystemDescription.Channel
@@ -34,6 +40,7 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
 
         # Store the network interface so sDDF net clients can be added
         self._sddf_net: TrackedNet = sddf_net
+        self._net_interface = net_interface
 
         # Initialise Rx virtualiser config class
         FwNetVirtRxConfig.__init__(
@@ -90,6 +97,40 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
             ch=ch.pd_b_id,
         )
 
+    def add_nat_config(self, protocol: int, base_port: int, capacity: int, interface_ip: str) -> None:
+        """Configure NAT for a specific protocol (TCP or UDP)"""
+        # Create port table memory region for this protocol
+        port_table_mr = FirewallMemoryRegion(
+            f"nat_port_table_rx{self._net_interface.index}_proto{protocol}",
+            nat_port_table_region.region_size
+        )
+
+        # Create NAT interface config
+        interface_config = FwNatInterfaceConfig(
+            base_port=base_port,
+            ports_capacity=capacity,
+            port_table=port_table_mr.map(self.pd, "rw"),
+            ip=self._net_interface.ip_int
+        )
+
+        # Create NAT config for this protocol
+        nat_config = FwVirtRxNatConfig(
+            interface_config=interface_config,
+            protocol=protocol,
+            enabled=True
+        )
+
+        assert self.nat_configs is not None
+        self.nat_configs.append(nat_config)
+
+    def set_nat_webserver_state(self, webserver_state_region: FirewallMemoryRegion) -> None:
+        """Map shared webserver NAT state region"""
+        self.webserver_state = webserver_state_region.map(self.pd, "rw")
+
+    def enable_nat(self) -> None:
+        """Enable NAT processing"""
+        self.nat_enabled = True
+
     def finalise_config(self) -> None:
         assert self.active_client_ethtypes is not None
         assert self.active_client_subtypes is not None
@@ -113,6 +154,7 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
 
         # Store data region as a dictionary to be sorted into list upon finalisation
         self._data_regions: dict[int, DeviceRegionResource] = {}
+        self._net_interface = net_interface
 
         # Initialise Tx virtualiser config class
         FwNetVirtTxConfig.__init__(
@@ -171,6 +213,40 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
                 data=self._data_regions[interface_idx],
             )
         )
+
+    def add_nat_config(self, protocol: int, base_port: int, capacity: int, interface_ip: str) -> None:
+        """Configure NAT for a specific protocol (TCP or UDP)"""
+        # Create port table memory region for this protocol
+        port_table_mr = FirewallMemoryRegion(
+            f"nat_port_table_tx{self._net_interface.index}_proto{protocol}",
+            nat_port_table_region.region_size
+        )
+
+        # Create NAT interface config
+        interface_config = FwNatInterfaceConfig(
+            base_port=base_port,
+            ports_capacity=capacity,
+            port_table=port_table_mr.map(self.pd, "rw"),
+            ip=int(self._net_interface.ip_int) if hasattr(self._net_interface, 'ip_int') else 0
+        )
+
+        # Create NAT config for this protocol
+        nat_config = FwVirtRxNatConfig(
+            interface_config=interface_config,
+            protocol=protocol,
+            enabled=True
+        )
+
+        assert self.nat_configs is not None
+        self.nat_configs.append(nat_config)
+
+    def set_nat_webserver_state(self, webserver_state_region: FirewallMemoryRegion) -> None:
+        """Map shared webserver NAT state region"""
+        self.webserver_state = webserver_state_region.map(self.pd, "rw")
+
+    def enable_nat(self) -> None:
+        """Enable NAT processing"""
+        self.nat_enabled = True
 
     def finalise_config(self) -> None:
         assert self.data_regions is not None and len(self.data_regions) == 0

@@ -33,6 +33,7 @@ from pyfw.constants import (
     arp_eth_opcode_request,
     arp_eth_opcode_response,
     eththype_ip,
+    nat_webserver_state_region,
 )
 from pyfw.component_fw_interface import FirewallInterface
 
@@ -89,6 +90,50 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
 
         if not path.isdir(iface.out_dir):
             assert subprocess.run(["mkdir", iface.out_dir]).returncode == 0
+
+    # Configure NAT for all interfaces
+    # Create shared webserver NAT state region
+    nat_webserver_state_mr = FirewallMemoryRegion(
+        "nat_webserver_state",
+        nat_webserver_state_region.region_size
+    )
+
+    for iface in fw_interfaces:
+        # Configure TCP NAT
+        iface.rx_virtualiser.add_nat_config(
+            protocol=supported_protocols['tcp'],  # 0x06
+            base_port=49152,
+            capacity=512,
+            interface_ip=iface.ip
+        )
+        iface.tx_virtualiser.add_nat_config(
+            protocol=supported_protocols['tcp'],
+            base_port=49152,
+            capacity=512,
+            interface_ip=iface.ip
+        )
+
+        # Configure UDP NAT
+        iface.rx_virtualiser.add_nat_config(
+            protocol=supported_protocols['udp'],  # 0x11
+            base_port=49152,
+            capacity=512,
+            interface_ip=iface.ip
+        )
+        iface.tx_virtualiser.add_nat_config(
+            protocol=supported_protocols['udp'],
+            base_port=49152,
+            capacity=512,
+            interface_ip=iface.ip
+        )
+
+        # Set shared webserver state for both RX and TX
+        iface.rx_virtualiser.set_nat_webserver_state(nat_webserver_state_mr)
+        iface.tx_virtualiser.set_nat_webserver_state(nat_webserver_state_mr)
+
+        # Enable NAT
+        iface.rx_virtualiser.enable_nat()
+        iface.tx_virtualiser.enable_nat()
 
     router = Router()
     webserver = Webserver()
