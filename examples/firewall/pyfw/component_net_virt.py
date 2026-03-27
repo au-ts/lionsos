@@ -42,6 +42,9 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
             active_client_ethtypes=[],
             active_client_subtypes=[],
             free_clients=[],
+            nat_enabled=False,
+            webserver_state=None,
+            nat_configs=[],
         )
 
     def add_active_net_client(self,
@@ -118,6 +121,9 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
             active_clients=[],
             data_regions=[],
             free_clients=[],
+            nat_enabled=False,
+            webserver_state=None,
+            nat_configs=[],
         )
 
     def add_active_fw_client(self, client: Component) -> FwConnectionResource:
