@@ -102,13 +102,14 @@ static i2c_err_t mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t
     return err;
 }
 
-static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_machine_i2c_buf_t *bufs, unsigned int flags) {
+// We use i2c_transfer_single because it makes it easier for us to deal with everything
+// and when we do the conversion ourselves from multiple buffers to many we need to
+// deal with STOP or flag conditions etc in a manner similar to __i2c_dispatch
+// So let's not, for simplicity. This entails double copies etc
+// (it also makes handling WRRD a little jank, as we need to assume that addrsize == 1)
+static int machine_i2c_transfer_single(mp_obj_base_t *obj, uint16_t addr, size_t len, uint8_t *buf, unsigned int flags) {
     machine_i2c_obj_t *self = MP_OBJ_TO_PTR(obj);
 
-    size_t remain_len = 0;
-    for (size_t i = 0; i < n; ++i) {
-        remain_len += bufs[i].len;
-    }
     debug_printf("transfer_single: addr=0x%x, buf_len=%ld, buf=%p, flags=0x%x\n", addr, len, buf, flags);
 
     uint8_t sddf_flags = 0;
@@ -140,28 +141,38 @@ static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
         return -MP_EPERM;
     }
 
-    // TODO: We can remove the double copy here by making mp_i2c_dispatch support copying the bufs
-    //       or copy the bufs directly here. Or we could use the transfer_single
-    int num_acks = 0; // only valid for write; for read it'll be 0
-    int ret = 0;
-    for (; n--; ++bufs) {
-        remain_len -= bufs->len;
-        // XXXX: if there are multiple buffers there will be multiple stops...?
-        ret = mp_i2c_dispatch(self, addr, bufs->buf, bufs->len, sddf_flags);
-        if (ret < 0) {
-            // FIXME: not an assert.
-            assert(i2c_bus_release(i2c_config.virt.id, addr));
-            return ret;
-        }
+    i2c_err_t err = mp_i2c_dispatch(self, addr, buf, len, sddf_flags);
 
-        num_acks += ret;
-    }
     debug_printf("machine_i2c_transfer: done (err: %d)\n", err);
 
-    // FIXME: not an assert.
+    // always release the bus regardless of the return (FIXME: not-assert)
     assert(i2c_bus_release(i2c_config.virt.id, addr));
 
-    return num_acks;
+    if (err != I2C_ERR_OK) {
+        switch (err) {
+        case I2C_ERR_QUEUE:
+            return -MP_EFAULT;
+
+        case I2C_ERR_MALFORMED_TRANSACTION:
+        case I2C_ERR_MALFORMED_HEADER:
+            // Internal error.
+            return -MP_EIO;
+
+        case I2C_ERR_UNPERMITTED_ADDR:
+            return -MP_EACCES;
+        case I2C_ERR_TIMEOUT:
+        case I2C_ERR_NACK:
+            return -MP_ETIMEDOUT;
+
+        case I2C_ERR_NOREAD:
+        case I2C_ERR_BADSEQ:
+        case I2C_ERR_OTHER:
+        default:
+            return -MP_EIO;
+        }
+    } else {
+        return len;
+    }
 }
 
 mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
@@ -212,7 +223,8 @@ static void machine_i2c_print(const mp_print_t *print, mp_obj_t self_in, mp_prin
 
 static const mp_machine_i2c_p_t machine_i2c_p = {
     .transfer_supports_write1 = true,
-    .transfer = machine_i2c_transfer
+    .transfer = mp_machine_i2c_transfer_adaptor,
+    .transfer_single = machine_i2c_transfer_single
 };
 
 MP_DEFINE_CONST_OBJ_TYPE(
