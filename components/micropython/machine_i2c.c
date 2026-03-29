@@ -20,6 +20,14 @@
 
 #if MICROPY_PY_MACHINE_I2C && MICROPY_HW_ENABLE_HW_I2C
 
+// #define DEBUG_MPY_MACHINE_I2C
+
+#ifdef DEBUG_MPY_MACHINE_I2C
+    #define debug_printf(...)   mp_printf(&mp_plat_print, "machine_i2c.c: " __VA_ARGS__)
+#else
+    #define debug_printf(...)
+#endif
+
 extern bool i2c_enabled;
 extern i2c_client_config_t i2c_config;
 extern i2c_queue_handle_t i2c_queue_handle;
@@ -101,17 +109,21 @@ static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
     for (size_t i = 0; i < n; ++i) {
         remain_len += bufs[i].len;
     }
+    debug_printf("transfer_single: addr=0x%x, buf_len=%ld, buf=%p, flags=0x%x\n", addr, len, buf, flags);
 
     uint8_t sddf_flags = 0;
     if (flags & MP_MACHINE_I2C_FLAG_STOP) {
+        debug_printf("     : flag stop\n");
         flags &= ~MP_MACHINE_I2C_FLAG_STOP;
         sddf_flags |= I2C_FLAG_STOP;
     }
     if (flags & MP_MACHINE_I2C_FLAG_READ) {
+        debug_printf("     : flag read\n");
         flags &= ~MP_MACHINE_I2C_FLAG_READ;
         sddf_flags |= I2C_FLAG_READ;
     }
     if (flags & MP_MACHINE_I2C_FLAG_WRITE1) {
+        debug_printf("     : write-read\n");
         flags &= ~MP_MACHINE_I2C_FLAG_WRITE1;
         sddf_flags |= I2C_FLAG_WRRD;
     }
@@ -144,6 +156,7 @@ static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
 
         num_acks += ret;
     }
+    debug_printf("machine_i2c_transfer: done (err: %d)\n", err);
 
     // FIXME: not an assert.
     assert(i2c_bus_release(i2c_config.virt.id, addr));
