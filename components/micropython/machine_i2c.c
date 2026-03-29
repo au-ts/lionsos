@@ -38,7 +38,7 @@ machine_i2c_obj_t i2c_bus_objs[I2C_MAX_BUSES] = {};
 
 #define I2C_DEFAULT_TIMEOUT_US (50000) // 50ms
 
-static int mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, uint8_t flag_mask) {
+static i2c_err_t mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, uint8_t flag_mask) {
     if (addr >= (1 << 7)) {
         mp_raise_msg_varg(&mp_type_RuntimeError,
                           MP_ERROR_TEXT("I2C only supports 7-bit addresses."),
@@ -62,7 +62,7 @@ static int mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf,
 
     // Perform read
     int ret = sddf_i2c_nb_dispatch(&libi2c_config, (i2c_addr_t) addr,
-                                i2c_data, (uint16_t) len, flag_mask);
+                                   i2c_data, (uint16_t) len, flag_mask);
 
     if (ret != I2C_ERR_OK) {
         mp_raise_msg_varg(&mp_type_RuntimeError,
@@ -78,13 +78,12 @@ static int mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf,
     i2c_addr_t returned_addr = 0;
     i2c_err_t err = sddf_i2c_nb_return(&libi2c_config, &returned_addr, &err_cmd_idx);
     assert(returned_addr == (i2c_addr_t)addr);
+
     /* If we were reading, copy out response data */
-    if (flag_mask & I2C_FLAG_READ) {
-        if (err == I2C_ERR_OK) {
-            memcpy(buf, i2c_data, len);
-            return 0;
-        }
+    if (flag_mask & I2C_FLAG_READ && err == I2C_ERR_OK) {
+        memcpy(buf, i2c_data, len);
     }
+
     return err;
 }
 
@@ -140,7 +139,7 @@ static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
         num_acks += ret;
     }
 
-    // FIXME: not an assert.
+    // always release the bus regardless of the return (FIXME: not-assert)
     assert(i2c_bus_release(i2c_config.virt.id, addr));
 
     return num_acks;
