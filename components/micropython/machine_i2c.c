@@ -58,7 +58,7 @@ static int mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf,
     // Copy buffer into data region. We assume that nobody else touches the i2c
     // data region in this PD.
     uint8_t *i2c_data = (uint8_t *) i2c_config.data.vaddr;
-    memcpy(buf, i2c_data, len);
+    memcpy(i2c_data, buf, len);
 
     // Perform read
     int ret = sddf_i2c_nb_dispatch(&libi2c_config, (i2c_addr_t) addr,
