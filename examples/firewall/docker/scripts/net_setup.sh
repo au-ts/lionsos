@@ -6,11 +6,11 @@
 # Create bridges to connect namespaces to taps
 ip link add br0 type bridge
 ip link set br0 up
-ip addr add ${EXT_ROOT_IP}/${FW_EXT_SUBNET} dev br0
+ip addr add ${INTERFACE0_ROOT_IP}/${FW_INTERFACE0_SUBNET} dev br0
 
 ip link add br1 type bridge
 ip link set br1 up
-ip addr add ${INT_ROOT_IP}/${FW_INT_SUBNET} dev br1
+ip addr add ${INTERFACE1_ROOT_IP}/${FW_INTERFACE1_SUBNET} dev br1
 
 # Create taps for the firewall
 ip tuntap add dev tap0 mode tap user $(id -u)
@@ -21,33 +21,33 @@ ip tuntap add dev tap1 mode tap user $(id -u)
 ip link set tap1 up
 ip link set tap1 master br1
 
-# Create namespaces, 0 = external side, 1 = internal side
-ip netns add ext
-ip netns add int
+# Create namespaces, 0 = interface0 side, 1 = interface1 side
+ip netns add namespace0
+ip netns add namespace1
 
 # Create veths to connect namespaces to bridges
-ip link add br0-ext type veth peer name ext-br0
-ip link add br1-int type veth peer name int-br1
+ip link add br0-namespace0 type veth peer name namespace0-br0
+ip link add br1-namespace1 type veth peer name namespace1-br1
 
 # Attach veth to namespaces and bridges
-ip link set ext-br0 netns ext
-ip link set br0-ext master br0
-ip link set int-br1 netns int
-ip link set br1-int master br1
+ip link set namespace0-br0 netns namespace0
+ip link set br0-namespace0 master br0
+ip link set namespace1-br1 netns namespace1
+ip link set br1-namespace1 master br1
 
 # Assign ip address on the namespace side of the veths
-ip -n ext addr add ${EXT_HOST_IP}/${FW_EXT_SUBNET} dev ext-br0
-ip -n int addr add ${INT_HOST_IP}/${FW_INT_SUBNET} dev int-br1
+ip -n namespace0 addr add ${INTERFACE0_HOST_IP}/${FW_INTERFACE0_SUBNET} dev namespace0-br0
+ip -n namespace1 addr add ${INTERFACE1_HOST_IP}/${FW_INTERFACE1_SUBNET} dev namespace1-br1
 
 # Set the veth interfaces to up
-ip -n ext link set ext-br0 up
-ip link set br0-ext up
-ip -n int link set int-br1 up
-ip link set br1-int up
+ip -n namespace0 link set namespace0-br0 up
+ip link set br0-namespace0 up
+ip -n namespace1 link set namespace1-br1 up
+ip link set br1-namespace1 up
 
 # Add default routes to namespaces via the firewall
-ip -n ext route add default via ${FW_EXT_IP}
-ip -n int route add default via ${FW_INT_IP}
+ip -n namespace0 route add default via ${FW_INTERFACE0_IP}
+ip -n namespace1 route add default via ${FW_INTERFACE1_IP}
 
 # Disable bridge/VLAN filtering
 ip link set dev br0 type bridge stp_state 0 vlan_filtering 0
