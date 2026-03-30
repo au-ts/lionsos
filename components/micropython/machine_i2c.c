@@ -20,7 +20,7 @@
 
 #if MICROPY_PY_MACHINE_I2C && MICROPY_HW_ENABLE_HW_I2C
 
-#define DEBUG_MPY_MACHINE_I2C
+// #define DEBUG_MPY_MACHINE_I2C
 
 #ifdef DEBUG_MPY_MACHINE_I2C
     #define debug_printf(...)   mp_printf(&mp_plat_print, "machine_i2c.c: " __VA_ARGS__)
