@@ -1,25 +1,12 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
 # Copyright 2026, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 
 # The following tests run within the Docker container and assume that the
 # firewall is running and is configured per the `firewall_configuration.sh`
-# script. From that script, we use the following values
-# - INTERFACE0_HOST_IP
-# - INTERFACE1_HOST_IP
-# - INTERFACE0_BAD_HOST_IP
-# - INTERFACE1_BAD_HOST_IP
-# - INTERFACE0_BAD_NET_IP
-# - INTERFACE1_BAD_NET_IP
-# - FW_INTERFACE1_IP
-# - FW_INTERFACE1_SUBNET
-# - FW_INTERFACE0_IP
-# - FW_INTERFACE0_SUBNET
-#
-# Additionally, the tests expect that allow rules exist for traffic on
-# `UDP_PORT` and `TCP_PORT` for `INTERFACE0_HOST_IP` and `INTERFACE1_HOST_IP`.
-#
+# script.
+
 # The shUnit2 framework is used for setup, teardown and temporary file handling.
 # For further information on shUnit2 and its execution behaviour, please refer
 # to the quickstart guide available at:
@@ -41,7 +28,7 @@ ERROR_DATA_WAS_NOT_DROPPED='Firewall traffic was not dropped'
 ERROR_FAILED_TO_APPLY_RULE='Failed to apply firewall rule'
 ERROR_FAILED_TO_REMOVE_RULE='Failed to remove firewall rule'
 ERROR_RULE_STILL_APPLIED='Firewall rule is still applied'
-INFO_SKIPPING_TEST='Skipping (feature not implemented yet)'
+ERROR_INVALID_INTERFACE_COUNT='INTERFACE_COUNT must be at least 2'
 
 FONT_HEADER=$(printf '\033[1m\033[36m')
 FONT_RED=$(printf '\033[31m')
@@ -56,20 +43,16 @@ TEMPLATE_DEST='$dest_ip, $dest_port, $dest_subnet'
 TEMPLATE_ACTION='$interface, $action'
 TEMPLATE_JSON="{ ${TEMPLATE_SRC}, ${TEMPLATE_DEST}, ${TEMPLATE_ACTION} }"
 
-INTERFACE0_NAMESPACE='namespace0'
-INTERFACE1_NAMESPACE='namespace1'
-FIREWALL_INTERFACE0=0
+INTERFACE_COUNT=${INTERFACE_COUNT:-0}
+WEBSERVER_INTERFACE=1
 FIREWALL_ACTION_DROP=2
 
-#
-# Setup and teardown
-#
-
-# Executed once before starting tests
-#
 oneTimeSetUp() {
-    # Test ports
-    #
+    if [ "${INTERFACE_COUNT}" -lt 2 ]; then
+        print_warning "${ERROR_INVALID_INTERFACE_COUNT}"
+        exit 1
+    fi
+
     UDP_PORT=50000
     TCP_PORT=60000
 
@@ -99,7 +82,7 @@ oneTimeSetUp() {
     USE_RANDOM_DATA=true
     SIZE_BYTES=4096
 
-    if [ "$USE_RANDOM_DATA" = true ]; then
+    if [ "${USE_RANDOM_DATA}" = true ]; then
         generate_test_data "${SIZE_BYTES}" "${SENT}"
     elif [ ! -f "${TEST_DATA}" ]; then
         print_warning 'Warning: The file specified in TEST_DATA does not exist'
@@ -119,22 +102,20 @@ oneTimeSetUp() {
         print_header 'Container network interfaces'
         ifconfig
 
-        print_header 'Interface0 network interfaces'
-        ip netns exec "${INTERFACE0_NAMESPACE}" ifconfig
-
-        print_header 'Interface1 network interfaces'
-        ip netns exec "${INTERFACE1_NAMESPACE}" ifconfig
+        for iface in $(all_interfaces); do
+            print_header "Interface${iface} network interfaces"
+            ip netns exec "namespace${iface}" ifconfig
+        done
     fi
 
     if [ "${SHOW_ROUTES}" = true ]; then
         print_header 'Container routes'
         ip route
 
-        print_header 'Interface0 network routes'
-        ip netns exec "${INTERFACE0_NAMESPACE}" ip route
-
-        print_header 'Interface1 network routes'
-        ip netns exec "${INTERFACE1_NAMESPACE}" ip route
+        for iface in $(all_interfaces); do
+            print_header "Interface${iface} network routes"
+            ip netns exec "namespace${iface}" ip route
+        done
     fi
 
     # If firewall debug messages are enabled and the messages are redirected to
@@ -162,7 +143,7 @@ oneTimeSetUp() {
             printf '\n%s %s\n' 'Session log will be saved to' "'${SESSION_LOG}'"
         fi
 
-        if [ "$CLOBBER_SESSION_LOG" = true ]; then
+        if [ "${CLOBBER_SESSION_LOG}" = true ]; then
             cp /dev/null "${SESSION_LOG}"
         fi
     else
@@ -174,7 +155,7 @@ oneTimeSetUp() {
     # be displayed on the console.
     TEST_DEBUG=false
 
-    print_header 'Running firewall tests...'
+    print_header "Running firewall tests across ${INTERFACE_COUNT} interfaces..."
 }
 
 # Executed before each test
@@ -227,7 +208,7 @@ print_file() {
     header=$1
     data_file=$2
 
-    print_header "$1"
+    print_header "${header}"
     cat "${data_file}"
     printf '\n'
 }
@@ -247,20 +228,13 @@ generate_test_data() {
 #
 # Internet Control Message Protocol (ICMP) tests
 #
+run_ping_host_test() {
+    src_iface=$1
+    dst_iface=$2
 
-test_icmp_ping_host_interface1_to_interface0() {
-    ip netns exec "${INTERFACE1_NAMESPACE}" \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${INTERFACE0_HOST_IP}" > "${RECEIVED}" 2>&1
-
-    if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_NO_ECHO_RESPONSE}"
-        print_log
-    fi
-}
-
-test_icmp_ping_host_interface0_to_interface1() {
-    ip netns exec "${INTERFACE0_NAMESPACE}" \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${INTERFACE1_HOST_IP}" > "${RECEIVED}" 2>&1
+    ip netns exec "namespace${src_iface}" \
+        ping -c "${COUNT}" -w "${TIMEOUT}" \
+        "$(interface_value "INTERFACE${dst_iface}_HOST_IP")" > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_NO_ECHO_RESPONSE}"
@@ -268,11 +242,15 @@ test_icmp_ping_host_interface0_to_interface1() {
     fi
 }
 
-test_icmp_ping_unreachable_host_interface1_to_interface0() {
+run_unreachable_host_test() {
+    src_iface=$1
+    dst_iface=$2
+
     print_info "This may take up to ${LONG_TIMEOUT} seconds..."
 
-    ip netns exec "${INTERFACE1_NAMESPACE}" \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INTERFACE0_BAD_HOST_IP}" \
+    ip netns exec "namespace${src_iface}" \
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" \
+        "$(interface_value "INTERFACE${dst_iface}_BAD_HOST_IP")" \
         > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_HOST_UNREACHABLE}" "${RECEIVED}"; then
@@ -281,22 +259,13 @@ test_icmp_ping_unreachable_host_interface1_to_interface0() {
     fi
 }
 
-test_icmp_ping_unreachable_host_interface0_to_interface1() {
-    print_info "This may take up to ${LONG_TIMEOUT} seconds..."
+run_unreachable_net_test() {
+    src_iface=$1
+    dst_iface=$2
 
-    ip netns exec "${INTERFACE0_NAMESPACE}" \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INTERFACE1_BAD_HOST_IP}" \
-        > "${RECEIVED}" 2>&1
-
-    if ! grep -Eq --ignore-case "${REGEX_HOST_UNREACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_HOST_UNREACHABLE}"
-        print_log
-    fi
-}
-
-test_icmp_ping_unreachable_net_interface1_to_interface0() {
-    ip netns exec "${INTERFACE1_NAMESPACE}" \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INTERFACE0_BAD_NET_IP}" \
+    ip netns exec "namespace${src_iface}" \
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" \
+        "$(interface_value "INTERFACE${dst_iface}_BAD_NET_IP")" \
         > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_NET_UNREACHABLE}" "${RECEIVED}"; then
@@ -305,62 +274,26 @@ test_icmp_ping_unreachable_net_interface1_to_interface0() {
     fi
 }
 
-test_icmp_ping_unreachable_net_interface0_to_interface1() {
-    ip netns exec "${INTERFACE0_NAMESPACE}" \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INTERFACE1_BAD_NET_IP}" \
-        > "${RECEIVED}" 2>&1
+run_firewall_ping_test() {
+    iface=$1
 
-    if ! grep -Eq --ignore-case "${REGEX_NET_UNREACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_NET_UNREACHABLE}"
-        print_log
-    fi
-}
-
-test_icmp_ping_firewall_from_interface1_network() {
     # Ensure ping responsiveness is turned on
-    response=$(curl --silent \
-        --output /dev/null \
-        --header 'Content-Type: application/json' \
-        --request 'POST' \
-        "http://${FW_INTERFACE1_IP}/api/ping/1/1")
+    response=$(api_request POST "/api/ping/${iface}/1") || {
+        fail "${ERROR_FAILED_ENABLE_PING}"
+        print_log
+        return
+    }
 
     # Check if the response contains an error
-    error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
-
-    if [ ! -z "${error}" ]; then
+    if printf '%s' "${response}" | grep -q '"error"'; then
         fail "${ERROR_FAILED_ENABLE_PING}"
         print_log
         return
     fi
 
-    ip netns exec "${INTERFACE1_NAMESPACE}" \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INTERFACE1_IP}" > "${RECEIVED}" 2>&1
-
-    if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_NO_ECHO_RESPONSE}"
-        print_log
-    fi
-}
-
-test_icmp_ping_firewall_from_interface0_network() {
-    # Ensure ping responsiveness is turned on
-    response=$(curl --silent \
-        --output /dev/null \
-        --header 'Content-Type: application/json' \
-        --request 'POST' \
-        "http://${FW_INTERFACE1_IP}/api/ping/0/1")
-
-    # Check if the response contains an error
-    error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
-
-    if [ ! -z "${error}" ]; then
-        fail "${ERROR_FAILED_ENABLE_PING}"
-        print_log
-        return
-    fi
-
-    ip netns exec "${INTERFACE0_NAMESPACE}" \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INTERFACE0_IP}" > "${RECEIVED}" 2>&1
+    ip netns exec "namespace${iface}" \
+        ping -c "${COUNT}" -w "${TIMEOUT}" \
+        "$(interface_value "FW_INTERFACE${iface}_IP")" > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_NO_ECHO_RESPONSE}"
@@ -371,45 +304,21 @@ test_icmp_ping_firewall_from_interface0_network() {
 #
 # Transmission Control Protocol (TCP) tests
 #
+run_tcp_test() {
+    src_iface=$1
+    dst_iface=$2
 
-test_tcp_interface1_to_interface0() {
-    # Listen for traffic on the interface0 host
-    ip netns exec "${INTERFACE0_NAMESPACE}" \
-        nc -l "${TCP_PORT}" > "${RECEIVED}" &
+    # Listen for traffic on dst host
+    ip netns exec "namespace${dst_iface}" nc -l "${TCP_PORT}" > "${RECEIVED}" &
+    listener=$!
 
-    # Send traffic, from the interface1 host, to the interface0 host
-    ip netns exec "${INTERFACE1_NAMESPACE}" \
-        nc -w "${TIMEOUT}" -N "${INTERFACE0_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+    # Send traffic, from the src host, to the dst host
+    ip netns exec "namespace${src_iface}" \
+        nc -w "${TIMEOUT}" -N "$(interface_value "INTERFACE${dst_iface}_HOST_IP")" "${TCP_PORT}" < "${SENT}"
     exit_code=$?
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
-        listener=$!
-        kill "${listener}" > /dev/null 2>&1
-        fail "${ERROR_TRANSMIT_FAILED}"
-        print_log
-        return
-    fi
-
-    # Verify that the data was transmitted correctly
-    if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_DATA_INCORRECT}"
-        print_log
-    fi
-}
-
-test_tcp_interface0_to_interface1() {
-    # Listen for traffic on the interface1 host
-    ip netns exec "${INTERFACE1_NAMESPACE}" \
-        nc -l "${TCP_PORT}" > "${RECEIVED}" &
-
-    # Send traffic, from the interface0 host, to the interface1 host
-    ip netns exec "${INTERFACE0_NAMESPACE}" \
-        nc -w "${TIMEOUT}" -N "${INTERFACE1_HOST_IP}" "${TCP_PORT}" < "${SENT}"
-    exit_code=$?
-
-    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
-        listener=$!
-        kill "${listener}" > /dev/null 2>&1
+        stop_listener_if_running "${listener}"
         fail "${ERROR_TRANSMIT_FAILED}"
         print_log
         return
@@ -425,45 +334,20 @@ test_tcp_interface0_to_interface1() {
 #
 # User Datagram Protocol (UDP) tests
 #
+run_udp_test() {
+    src_iface=$1
+    dst_iface=$2
 
-test_udp_interface1_to_interface0() {
-    # Listen for traffic on the interface0 host
-    ip netns exec "${INTERFACE0_NAMESPACE}" \
-        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+    # Listen for traffic on the dst host
+    ip netns exec "namespace${dst_iface}" nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+    listener=$!
 
-    # Send traffic, from the interface1 host, to the interface0 host
-    ip netns exec "${INTERFACE1_NAMESPACE}" \
-        nc -u -q "${TIMEOUT}" "${INTERFACE0_HOST_IP}" "${UDP_PORT}" < "${SENT}"
+    # Send traffic, from the src host, to the dst host
+    ip netns exec "namespace${src_iface}" \
+        nc -u -q "${TIMEOUT}" "$(interface_value "INTERFACE${dst_iface}_HOST_IP")" "${UDP_PORT}" < "${SENT}"
     exit_code=$?
 
-    listener=$!
-    kill "${listener}" > /dev/null 2>&1
-
-    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
-        fail "${ERROR_TRANSMIT_FAILED}"
-        print_log
-        return
-    fi
-
-    # Verify that the data was transmitted correctly
-    if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_DATA_INCORRECT}"
-        print_log
-    fi
-}
-
-test_udp_interface0_to_interface1() {
-    # Listen for traffic on the interface1 host
-    ip netns exec "${INTERFACE1_NAMESPACE}" \
-        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
-
-    # Send traffic, from the interface0 host, to the interface1 host
-    ip netns exec "${INTERFACE0_NAMESPACE}" \
-        nc -u -q "${TIMEOUT}" "${INTERFACE1_HOST_IP}" "${UDP_PORT}" < "${SENT}"
-    exit_code=$?
-
-    listener=$!
-    kill "${listener}" > /dev/null 2>&1
+    stop_listener_if_running "${listener}"
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
         fail "${ERROR_TRANSMIT_FAILED}"
@@ -481,48 +365,49 @@ test_udp_interface0_to_interface1() {
 #
 # Rule tests
 #
+run_rule_application_and_removal_test() {
+    src_iface=$1
+    dst_iface=$2
 
-test_rule_application_and_removal() {
     # The default rule for traffic on each interface is to allow it, so we setup
     # a drop traffic rule and verify that we receive no traffic.
 
     # Craft a JSON request with the rule's parameters
     json=$(jq \
         --null-input \
-        --argjson interface "${FIREWALL_INTERFACE0}" \
+        --argjson interface "${src_iface}" \
         --argjson action "${FIREWALL_ACTION_DROP}" \
-        --arg src_ip "${INTERFACE0_HOST_IP}" \
+        --arg src_ip "$(interface_value "INTERFACE${src_iface}_HOST_IP")" \
         --arg src_port "" \
-        --argjson src_subnet "${FW_INTERFACE0_SUBNET}" \
-        --arg dest_ip "${INTERFACE1_HOST_IP}" \
+        --argjson src_subnet "$(interface_value "FW_INTERFACE${src_iface}_SUBNET")" \
+        --arg dest_ip "$(interface_value "INTERFACE${dst_iface}_HOST_IP")" \
         --arg dest_port "${TCP_PORT}" \
-        --argjson dest_subnet "${FW_INTERFACE1_SUBNET}" \
+        --argjson dest_subnet "$(interface_value "FW_INTERFACE${dst_iface}_SUBNET")" \
         "${TEMPLATE_JSON}")
 
     # Apply the rule
-    response=$(curl --silent \
-        --header 'Content-Type: application/json' \
-        --request 'POST' \
-        --data "$json" "http://${FW_INTERFACE1_IP}/api/rules/tcp")
+    response=$(api_request POST '/api/rules/tcp' "${json}") || {
+        fail "${ERROR_FAILED_TO_APPLY_RULE}"
+        return
+    }
 
     # Extract the rule's ID
-    rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
-
+    rule_id=$(printf '%s' "${response}" | jq -r '.rule.id // empty')
     if [ -z "${rule_id}" ]; then
         fail "${ERROR_FAILED_TO_APPLY_RULE}"
+        print_log
         return
     fi
 
-    # Listen for traffic on the interface1 host
-    ip netns exec "${INTERFACE1_NAMESPACE}" \
-        nc -l "${TCP_PORT}" > "${RECEIVED}" &
-
-    # Attempt to send traffic, from the interface0 host, to the interface1 host
-    ip netns exec "${INTERFACE0_NAMESPACE}" \
-        nc -w "${TIMEOUT}" -N "${INTERFACE1_HOST_IP}" "${TCP_PORT}" < "${SENT}"
-
+    # Listen for traffic on the dst host
+    ip netns exec "namespace${dst_iface}" nc -l "${TCP_PORT}" > "${RECEIVED}" &
     listener=$!
-    kill "${listener}" > /dev/null 2>&1
+
+    # Attempt to send traffic, from the src host, to the dst host
+    ip netns exec "namespace${src_iface}" \
+        nc -w "${TIMEOUT}" -N "$(interface_value "INTERFACE${dst_iface}_HOST_IP")" "${TCP_PORT}" < "${SENT}"
+
+    stop_listener_if_running "${listener}"
 
     # Verify that no data was received
     if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
@@ -531,16 +416,14 @@ test_rule_application_and_removal() {
     fi
 
     # Remove the rule
-    response=$(curl --silent \
-        --output /dev/null \
-        --header 'Content-Type: application/json' \
-        --request 'DELETE' \
-        "http://${FW_INTERFACE1_IP}/api/rules/tcp/${rule_id}/${FIREWALL_INTERFACE0}")
+    response=$(api_request DELETE "/api/rules/tcp/${rule_id}/${src_iface}") || {
+        fail "${ERROR_FAILED_TO_REMOVE_RULE}"
+        print_log
+        return
+    }
 
     # Check if the response contains an error
-    error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
-
-    if [ ! -z "${error}" ]; then
+    if printf '%s' "${response}" | grep -q '"error"'; then
         fail "${ERROR_FAILED_TO_REMOVE_RULE}"
         print_log
         return
@@ -549,16 +432,15 @@ test_rule_application_and_removal() {
     # Verify that the rule was removed; in other words, data transmission should
     # now succeed
 
-    # Listen for traffic on the interface1 host
-    ip netns exec "${INTERFACE1_NAMESPACE}" \
-        nc -l "${TCP_PORT}" > "${RECEIVED}" &
-
-    # Send traffic, from the interface0 host, to the interface1 host
-    ip netns exec "${INTERFACE0_NAMESPACE}" \
-        nc -w "${TIMEOUT}" -N "${INTERFACE1_HOST_IP}" "${TCP_PORT}" < "${SENT}"
-
+    # Listen for traffic on the dst host
+    ip netns exec "namespace${dst_iface}" nc -l "${TCP_PORT}" > "${RECEIVED}" &
     listener=$!
-    kill "${listener}" > /dev/null 2>&1
+
+    # Send traffic, from the src host, to the dst host
+    ip netns exec "namespace${src_iface}" \
+        nc -w "${TIMEOUT}" -N "$(interface_value "INTERFACE${dst_iface}_HOST_IP")" "${TCP_PORT}" < "${SENT}"
+
+    stop_listener_if_running "${listener}"
 
     # Verify that the data was transmitted correctly
     if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
@@ -567,9 +449,119 @@ test_rule_application_and_removal() {
     fi
 }
 
-#
-# shUnit
-#
+interface_value() {
+    local var_name=$1
+    printf '%s' "${!var_name}"
+}
+
+all_interfaces() {
+    iface=0
+    while [ "${iface}" -lt "${INTERFACE_COUNT}" ]; do
+        printf '%s\n' "${iface}"
+        iface=$((iface + 1))
+    done
+}
+
+api_base_url() {
+    printf 'http://%s' "$(interface_value "FW_INTERFACE${WEBSERVER_INTERFACE}_IP")"
+}
+
+api_request() {
+    method=$1
+    path=$2
+
+    shift 2
+
+    if [ "$#" -gt 0 ]; then
+        curl --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --request "${method}" \
+            --data "$1" \
+            "$(api_base_url)${path}"
+    else
+        curl --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --request "${method}" \
+            "$(api_base_url)${path}"
+    fi
+}
+
+stop_listener_if_running() {
+    listener_pid=$1
+
+    if kill -0 "${listener_pid}" > /dev/null 2>&1; then
+        kill "${listener_pid}" > /dev/null 2>&1
+    fi
+}
+
+define_generated_tests() {
+    for iface in $(all_interfaces); do
+        eval "
+test_icmp_ping_firewall_from_interface${iface}_network() {
+    run_firewall_ping_test ${iface}
+}
+"
+    done
+
+    for src_iface in $(all_interfaces); do
+        for dst_iface in $(all_interfaces); do
+            if [ "${src_iface}" -eq "${dst_iface}" ]; then
+                continue
+            fi
+
+            eval "
+test_icmp_ping_host_interface${src_iface}_to_interface${dst_iface}() {
+    run_ping_host_test ${src_iface} ${dst_iface}
+}
+
+test_icmp_ping_unreachable_host_interface${src_iface}_to_interface${dst_iface}() {
+    run_unreachable_host_test ${src_iface} ${dst_iface}
+}
+
+test_icmp_ping_unreachable_net_interface${src_iface}_to_interface${dst_iface}() {
+    run_unreachable_net_test ${src_iface} ${dst_iface}
+}
+
+test_tcp_interface${src_iface}_to_interface${dst_iface}() {
+    run_tcp_test ${src_iface} ${dst_iface}
+}
+
+test_udp_interface${src_iface}_to_interface${dst_iface}() {
+    run_udp_test ${src_iface} ${dst_iface}
+}
+
+test_rule_application_and_removal_interface${src_iface}_to_interface${dst_iface}() {
+    run_rule_application_and_removal_test ${src_iface} ${dst_iface}
+}
+"
+        done
+    done
+}
+
+define_generated_tests
+
+suite() {
+    local iface src_iface dst_iface
+
+    for iface in $(all_interfaces); do
+        suite_addTest "test_icmp_ping_firewall_from_interface${iface}_network"
+    done
+
+    for src_iface in $(all_interfaces); do
+        for dst_iface in $(all_interfaces); do
+            if [ "${src_iface}" -eq "${dst_iface}" ]; then
+                continue
+            fi
+
+            suite_addTest "test_icmp_ping_host_interface${src_iface}_to_interface${dst_iface}"
+            suite_addTest "test_icmp_ping_unreachable_host_interface${src_iface}_to_interface${dst_iface}"
+            suite_addTest "test_icmp_ping_unreachable_net_interface${src_iface}_to_interface${dst_iface}"
+            suite_addTest "test_tcp_interface${src_iface}_to_interface${dst_iface}"
+            suite_addTest "test_udp_interface${src_iface}_to_interface${dst_iface}"
+            suite_addTest "test_rule_application_and_removal_interface${src_iface}_to_interface${dst_iface}"
+        done
+    done
+}
 
 # Once shUnit2 has been sourced, it will find all functions that begin with the
 # name `test` and add them to a list to be executed. The source statement should

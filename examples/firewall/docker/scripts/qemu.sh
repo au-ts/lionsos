@@ -3,17 +3,35 @@
 
 #!/bin/bash
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 IMAGE_FILE=${1}
 QEMU=${2}
 
-${QEMU:-qemu-system-aarch64} -machine virt,virtualization=on \
-        -cpu cortex-a53 \
-        -serial mon:stdio \
-        -device loader,file=${IMAGE_FILE:-/mnt/lionsOS/examples/firewall/build/firewall.img},addr=0x70000000,cpu-num=0 \
-        -m size=2G \
-        -nographic \
-        -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
-        -device virtio-net-device,netdev=net0,mac=00:01:c0:39:d5:18 \
-        -netdev tap,id=net1,ifname=tap1,script=no,downscript=no \
-        -device virtio-net-device,netdev=net1,mac=00:01:c0:39:d5:10 \
-        -global virtio-mmio.force-legacy=false
+source "${SCRIPT_DIR}/firewall_configuration.sh"
+
+interface_mac() {
+    local idx=$1
+    local var_name="FW_INTERFACE${idx}_MAC"
+    printf '%s' "${!var_name}"
+}
+
+qemu_args=(
+    -machine virt,virtualization=on
+    -cpu cortex-a53
+    -serial mon:stdio
+    -device "loader,file=${IMAGE_FILE:-/mnt/lionsOS/examples/firewall/build/firewall.img},addr=0x70000000,cpu-num=0"
+    -m size=2G
+    -nographic
+)
+
+for ((idx = 0; idx < INTERFACE_COUNT; idx++)); do
+    qemu_args+=(
+        -netdev "tap,id=net${idx},ifname=tap${idx},script=no,downscript=no"
+        -device "virtio-net-device,netdev=net${idx},mac=$(interface_mac "${idx}")"
+    )
+done
+
+qemu_args+=(-global virtio-mmio.force-legacy=false)
+
+"${QEMU:-qemu-system-aarch64}" "${qemu_args[@]}"

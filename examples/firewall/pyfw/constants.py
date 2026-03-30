@@ -22,7 +22,7 @@ BOARDS = [
         paddr_top=0x6_0000_000,
         serial="pl011@9000000",
         timer="timer",
-        ethernet=("virtio_mmio@a003e00", "virtio_mmio@a003c00", "virtio_mmio@a003a00")
+        ethernet=("virtio_mmio@a003e00", "virtio_mmio@a003c00") #, "virtio_mmio@a003a00")
     ),
     Board(
         name="imx8mp_iotgate",
@@ -90,14 +90,14 @@ interfaces = [
         subnet_bits=24,
     ),
     # Comment out interface2 when building for 2-interface boards.
-    NetworkInterface(
-        index=2,
-        name="interface2",
-        board_ethernet_idx=2,
-        mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x12),
-        ip="10.0.2.1",
-        subnet_bits=24,
-    ),
+    # NetworkInterface(
+    #     index=2,
+    #     name="interface2",
+    #     board_ethernet_idx=2,
+    #     mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x12),
+    #     ip="10.0.2.1",
+    #     subnet_bits=24,
+    # ),
 ]
 
 # Currently the webserver can only transmit out interface 1
@@ -153,11 +153,11 @@ initial_rules = [
         0x06: [default_action_rule(FILTER_ACTION_ALLOW)],
         0x11: [default_action_rule(FILTER_ACTION_ALLOW)],
     },
-    {
-        0x01: [default_action_rule(FILTER_ACTION_ALLOW)],
-        0x06: [default_action_rule(FILTER_ACTION_ALLOW)],
-        0x11: [default_action_rule(FILTER_ACTION_ALLOW)],
-    },
+    # {
+    #     0x01: [default_action_rule(FILTER_ACTION_ALLOW)],
+    #     0x06: [default_action_rule(FILTER_ACTION_ALLOW)],
+    #     0x11: [default_action_rule(FILTER_ACTION_ALLOW)],
+    # },
 ]
 
 ### ----------------------------------------------------------------------- ###
