@@ -102,6 +102,48 @@ static i2c_err_t mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t
     return err;
 }
 
+// Bugfix: https://github.com/micropython/micropython/issues/19011
+int mp_machine_i2c_transfer_adaptor_bugfix(mp_obj_base_t *self, uint16_t addr, size_t n, mp_machine_i2c_buf_t *bufs, unsigned int flags) {
+    size_t len;
+    uint8_t *buf;
+    if (n == 1) {
+        // Use given single buffer
+        len = bufs[0].len;
+        buf = bufs[0].buf;
+    } else {
+        // Combine buffers into a single one
+        len = 0;
+        for (size_t i = 0; i < n; ++i) {
+            len += bufs[i].len;
+        }
+        buf = m_new(uint8_t, len);
+        if (!(flags & MP_MACHINE_I2C_FLAG_READ) || (flags & MP_MACHINE_I2C_FLAG_WRITE1)) {
+            len = 0;
+            for (size_t i = 0; i < n; ++i) {
+                memcpy(buf + len, bufs[i].buf, bufs[i].len);
+                len += bufs[i].len;
+            }
+        }
+    }
+
+    mp_machine_i2c_p_t *i2c_p = (mp_machine_i2c_p_t *)MP_OBJ_TYPE_GET_SLOT(self->type, protocol);
+    int ret = i2c_p->transfer_single(self, addr, len, buf, flags);
+
+    if (n > 1) {
+        if (flags & MP_MACHINE_I2C_FLAG_READ) {
+            // Copy data from single buffer to individual ones
+            len = 0;
+            for (size_t i = 0; i < n; ++i) {
+                memcpy(bufs[i].buf, buf + len, bufs[i].len);
+                len += bufs[i].len;
+            }
+        }
+        m_del(uint8_t, buf, len);
+    }
+
+    return ret;
+}
+
 // We use i2c_transfer_single because it makes it easier for us to deal with everything
 // and when we do the conversion ourselves from multiple buffers to many we need to
 // deal with STOP or flag conditions etc in a manner similar to __i2c_dispatch
@@ -223,7 +265,7 @@ static void machine_i2c_print(const mp_print_t *print, mp_obj_t self_in, mp_prin
 
 static const mp_machine_i2c_p_t machine_i2c_p = {
     .transfer_supports_write1 = true,
-    .transfer = mp_machine_i2c_transfer_adaptor,
+    .transfer = mp_machine_i2c_transfer_adaptor_bugfix,
     .transfer_single = machine_i2c_transfer_single
 };
 
