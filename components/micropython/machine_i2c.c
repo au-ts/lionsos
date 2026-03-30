@@ -217,7 +217,8 @@ mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
 }
 
 static void machine_i2c_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
-
+    machine_i2c_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    mp_printf(print, "I2C(%u, freq=400kHz)", self->port);
 }
 
 static const mp_machine_i2c_p_t machine_i2c_p = {
