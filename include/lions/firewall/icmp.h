@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 #include <lions/firewall/ip.h>
 #include <lions/firewall/queue.h>
@@ -118,7 +119,7 @@ typedef struct __attribute__((__packed__)) icmp_echo {
 } icmp_echo_t;
 
 /* Total length of ICMP echo request/reply packet with maximum payload */
-#define ICMP_ECHO_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_echo_t) + FW_ICMP_ECHO_PAYLOAD_LEN)
+#define ICMP_ECHO_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_echo_t))
 
 /* ----------------- 11 - Time Exceeded ---------------------------*/
 typedef struct __attribute__((__packed__)) icmp_time_exceeded {
@@ -232,8 +233,9 @@ static inline bool icmp_enqueue_error(fw_queue_t *icmp_queue, uint8_t type, uint
     memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
 
     /* Copy first bytes of data if applicable */
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
-    memcpy(req.dest.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
+    uint8_t ip_hdr_len = ipv4_header_length(ip_hdr);
+    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - ip_hdr_len);
+    memcpy(req.dest.data, (void *)(pkt_vaddr + transport_layer_offset(ip_hdr)), to_copy);
 
     return fw_enqueue(icmp_queue, &req) == 0;
 }
@@ -252,13 +254,13 @@ static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
     /* Extract echo id and sequence from the ICMP echo header */
-    icmp_echo_t *echo_hdr = (icmp_echo_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET);
+    icmp_echo_t *echo_hdr = (icmp_echo_t *)(pkt_vaddr + transport_layer_offset(ip_hdr) + ICMP_COMMON_HDR_LEN);
     uint16_t echo_id = ntohs(echo_hdr->id);
     uint16_t echo_seq = ntohs(echo_hdr->seq);
 
     /* Calculate payload length */
     uint16_t icmp_total_len = htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr);
-    uint16_t payload_len = icmp_total_len - ICMP_COMMON_HDR_LEN - (sizeof(icmp_echo_t) - FW_ICMP_ECHO_PAYLOAD_LEN);
+    uint16_t payload_len = icmp_total_len - ICMP_COMMON_HDR_LEN - offsetof(icmp_echo_t, data);
     if (payload_len > FW_ICMP_ECHO_PAYLOAD_LEN) {
         payload_len = FW_ICMP_ECHO_PAYLOAD_LEN;
     }
@@ -278,7 +280,8 @@ static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt
     memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
 
     /* Copy payload */
-    uint8_t *payload_data = (uint8_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET + (sizeof(icmp_echo_t) - FW_ICMP_ECHO_PAYLOAD_LEN));
+    uint8_t *payload_data = (uint8_t *)(pkt_vaddr + transport_layer_offset(ip_hdr) + ICMP_COMMON_HDR_LEN
+                                        + offsetof(icmp_echo_t, data));
     memcpy(req.echo.data, payload_data, payload_len);
 
     return fw_enqueue(icmp_queue, &req) == 0;
@@ -309,8 +312,8 @@ static inline int icmp_enqueue_redirect(fw_queue_t *icmp_queue, uint8_t code, ui
 
     /* Set gateway IP and copy first bytes of data */
     req.redirect.gateway_ip = gateway_ip;
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - IPV4_HDR_LEN_MIN);
-    memcpy(req.redirect.data, (void *)(pkt_vaddr + IPV4_HDR_OFFSET + IPV4_HDR_LEN_MIN), to_copy);
+    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr));
+    memcpy(req.redirect.data, (void *)(pkt_vaddr + transport_layer_offset(ip_hdr)), to_copy);
 
     return fw_enqueue(icmp_queue, &req);
 }
