@@ -50,6 +50,9 @@
 #define MICROPY_EPOCH_IS_1970 (1)
 #define MICROPY_PY_SYS_STDFILES (1)
 #define MICROPY_KBD_EXCEPTION (1)
+#define MICROPY_PY_BUILTINS_HELP    (1)
+#define MICROPY_PY_BUILTINS_HELP_MODULES (1)
+#define MICROPY_PY_MACHINE_MEMX (1)
 
 #ifdef ENABLE_SERIAL_STDIO
 #define MICROPY_PY_SYS_STDFILES (1)
@@ -61,9 +64,7 @@
 #define MICROPY_HW_ENABLE_HW_I2C (1)
 #define MICROPY_PY_MACHINE_I2C_TRANSFER_WRITE1 (1)
 
-#ifdef ENABLE_FRAMEBUFFER
 #define MICROPY_PY_FRAMEBUF (1)
-#endif
 
 #define MICROPY_FLOAT_IMPL (MICROPY_FLOAT_IMPL_FLOAT)
 
@@ -79,8 +80,8 @@
 // #define MICROPY_PY_TIME_INCLUDEFILE             "modtime.c"
 
 // Allocate 16MB for the heap
-#define MICROPY_HEAP_SIZE      (0x1000000)
-#define MICROPY_STACK_SIZE      (0x100000)
+#define MICROPY_HEAP_SIZE      (0x10000)
+#define MICROPY_STACK_SIZE      (0x10000)
 
 // Type definitions for the specific machine.
 
