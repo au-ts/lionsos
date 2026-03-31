@@ -108,13 +108,8 @@ static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
     machine_i2c_obj_t *self = MP_OBJ_TO_PTR(obj);
 
     /* Before doing any transfer operations, we must claim the bus address. */
-    /* TODO: we should provide a wrapper API for this like in the timer API */
-    microkit_msginfo msginfo = microkit_msginfo_new(I2C_BUS_CLAIM, 1);
-    microkit_mr_set(I2C_BUS_SLOT, addr);
-    msginfo = microkit_ppcall(i2c_config.virt.id, msginfo);
-    seL4_Word claim_label = microkit_msginfo_get_label(msginfo);
-    if (claim_label == I2C_FAILURE) {
-       mp_raise_msg_varg(&mp_type_RuntimeError,
+    if (!i2c_bus_claim(i2c_config.virt.id, addr)) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
                           MP_ERROR_TEXT("I2C(%d): Could not claim bus address %d"), self->port, addr);
         return -MP_EPERM;
     }
@@ -134,22 +129,15 @@ static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
             ret = i2c_write(self, addr, bufs->buf, bufs->len);
         }
         if (ret < 0) {
-            msginfo = microkit_msginfo_new(I2C_BUS_RELEASE, 1);
-            microkit_mr_set(I2C_BUS_SLOT, addr);
-            msginfo = microkit_ppcall(i2c_config.virt.id, msginfo);
-            seL4_Word release_label = microkit_msginfo_get_label(msginfo);
             // FIXME: not an assert.
-            assert(release_label == I2C_SUCCESS);
+            assert(i2c_bus_release(i2c_config.virt.id, addr));
             return ret;
         }
         num_acks += ret;
     }
 
-    msginfo = microkit_msginfo_new(I2C_BUS_RELEASE, 1);
-    microkit_mr_set(I2C_BUS_SLOT, addr);
-    seL4_Word release_label = microkit_msginfo_get_label(msginfo);
     // FIXME: not an assert.
-    assert(release_label == I2C_SUCCESS);
+    assert(i2c_bus_release(i2c_config.virt.id, addr));
 
     return num_acks;
 }
