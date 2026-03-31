@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import List
 from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 from importlib.metadata import version
+from board import BOARDS
 
 assert version("sdfgen").split(".")[1] == "28", "Unexpected sdfgen version"
 
@@ -12,42 +13,6 @@ ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Channel = SystemDescription.Channel
-
-
-@dataclass
-class Board:
-    name: str
-    arch: SystemDescription.Arch
-    paddr_top: int
-    serial: str
-    timer: str
-    ethernet: str
-    blk: str
-    blk_partition: int
-
-
-BOARDS: List[Board] = [
-    Board(
-        name="qemu_virt_aarch64",
-        arch=SystemDescription.Arch.AARCH64,
-        paddr_top=0x6_0000_000,
-        serial="pl011@9000000",
-        timer="timer",
-        ethernet="virtio_mmio@a003c00",
-        blk="virtio_mmio@a003e00",
-        blk_partition=0,
-    ),
-    Board(
-        name="maaxboard",
-        arch=SystemDescription.Arch.AARCH64,
-        paddr_top=0x7_0000_000,
-        serial="soc@0/bus@30800000/serial@30860000",
-        timer="soc@0/bus@30000000/timer@302d0000",
-        ethernet="soc@0/bus@30800000/ethernet@30be0000",
-        blk="soc@0/bus@30800000/mmc@30b40000",
-        blk_partition=3,
-    ),
-]
 
 
 def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
@@ -138,7 +103,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     # Filesystem for test_file
     fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
     fs = LionsOs.FileSystem.Fat(
-        sdf, fatfs, test_file, blk=blk_system, partition=board.blk_partition
+        sdf, fatfs, test_file, blk=blk_system, partition=board.partition
     )
 
     if board.name == "maaxboard":

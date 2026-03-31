@@ -9,6 +9,23 @@
 #include <stdint.h>
 #include <sddf/util/util.h>
 
+#define FW_MAX_INTERFACES 4
+
+/**
+ * Firewall buffer descriptor. An extension of a network buffer description
+ * allowing the buffer's region to be tracked. Used in queues which hold buffers
+ * belonging to multiple regions for address translation and returning when
+ * freed.
+ */
+typedef struct fw_buff_desc {
+    /* offset of buffer within buffer memory region */
+    uint64_t offset;
+    /* length of data inside buffer */
+    uint16_t len;
+    /* id of memory region buffer belongs to */
+    uint8_t interface;
+} fw_buff_desc_t;
+
 /**
  * Convert a 16 bit unsigned from host byte order to network byte order.
  *
@@ -57,15 +74,6 @@ static inline uint16_t ntohs(uint16_t n)
 /* Subnet value of N means IPs must match on highest N bits. IP addresses are
 stored big-endian, so mask byte order must be swapped for subnet match. */
 #define subnet_mask(n) htonl((uint32_t)(0xffffffffUL << (32 - (n))))
-
-/* Firewall ID number used by components to identify which interface they
-are connected to */
-#define FW_EXTERNAL_INTERFACE_ID 0
-#define FW_INTERNAL_INTERFACE_ID 1
-
-/* Firewall component print formatting string to identify which interface
-component is printing */
-static const char *fw_frmt_str[] = { "EXT --> INT | ", "INT --> EXT | " };
 
 #define IPV4_ADDR_BUFLEN 16
 
