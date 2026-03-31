@@ -238,8 +238,8 @@ void mpfirewall_handle_notify(void)
 void init_firewall_webserver(void)
 {
     fw_routing_table = fw_config.router.routing_table.vaddr;
-        webserver_state[i].ping_enabled = true;
     for (uint8_t i = 0; i < fw_config.num_interfaces; i++) {
+        fw_interface_state[i].ping_enabled = true;
         for (uint8_t j = 0; j < fw_config.interfaces[i].num_filters; j++) {
             fw_interface_state[i].filter_states[j].rule_table = fw_config.interfaces[i].filters[j].rules.vaddr;
         }
