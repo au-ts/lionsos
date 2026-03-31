@@ -56,23 +56,14 @@ SRC_C = \
 	mphalport.c \
 	modtime.c \
 	modinterrupt.c \
+	modmachine.c \
+	machine_i2c.c \
 	mpfirewallport.c \
 	modfs_raw.c \
 	vfs_fs_file.c \
 	vfs_fs.c \
 	fs/helpers.c \
 	frozen_content.c \
-	extmod/modtime.c \
-	extmod/vfs.c \
-	extmod/modos.c \
-	extmod/vfs_reader.c \
-	extmod/modasyncio.c \
-	extmod/modselect.c \
-	extmod/modlwip.c \
-	extmod/modre.c \
-	extmod/moddeflate.c \
-	extmod/moductypes.c \
-	extmod/modjson.c \
 	shared/readline/readline.c \
 	shared/runtime/gchelper_generic.c \
 	shared/runtime/pyexec.c \
@@ -91,10 +82,6 @@ ifdef EXEC_MODULE
 CFLAGS += -DEXEC_MODULE=\"$(EXEC_MODULE)\"
 endif
 
-# I2C setup
-SRC_C += modmachine.c machine_i2c.c extmod/machine_i2c.c
-SRC_QSTR += modmachine.c machine_i2c.c
-
 ifdef ENABLE_FRAMEBUFFER
 SRC_C += modfb.c extmod/modframebuf.c
 SRC_QSTR += modfb.c
@@ -111,7 +98,7 @@ CFLAGS += -DENABLE_SERIAL_STDIO
 endif
 
 # Define the required object files.
-OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
+OBJ = $(PY_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 
 FS_HELPERS_LIBC := $(MICROPYTHON_LIBC)
 include $(LIONSOS)/lib/fs/helpers/fs_helpers.mk

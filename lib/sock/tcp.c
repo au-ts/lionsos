@@ -38,7 +38,7 @@
 #define SOCK_SUCC 0
 #define SOCK_ERR  1
 
-#define MAX_SOCKETS 10
+#define MAX_SOCKETS 0
 #define MAX_LISTEN_BACKLOG 10
 #define SOCKET_BUF_SIZE 0x200000ll
 
