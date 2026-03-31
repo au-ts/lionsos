@@ -20,6 +20,14 @@
 
 #if MICROPY_PY_MACHINE_I2C && MICROPY_HW_ENABLE_HW_I2C
 
+// #define DEBUG_MPY_MACHINE_I2C
+
+#ifdef DEBUG_MPY_MACHINE_I2C
+    #define debug_printf(...)   mp_printf(&mp_plat_print, "machine_i2c.c: " __VA_ARGS__)
+#else
+    #define debug_printf(...)
+#endif
+
 extern bool i2c_enabled;
 extern i2c_client_config_t i2c_config;
 extern i2c_queue_handle_t i2c_queue_handle;
@@ -60,6 +68,13 @@ static i2c_err_t mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t
     uint8_t *i2c_data = (uint8_t *) i2c_config.data.vaddr;
     memcpy(i2c_data, buf, len);
 
+    // micropython expects the results of the writeread to be written back
+    // offset past after the address; sDDF doesn't.
+    if (flag_mask & I2C_FLAG_WRRD) {
+        len--;
+        buf++;
+    }
+
     // Perform read
     int ret = sddf_i2c_nb_dispatch(&libi2c_config, (i2c_addr_t) addr,
                                    i2c_data, (uint16_t) len, flag_mask);
@@ -87,25 +102,79 @@ static i2c_err_t mp_i2c_dispatch(machine_i2c_obj_t *self, uint16_t addr, uint8_t
     return err;
 }
 
-/**
- *  Perform a read to I2C bus address `addr` with data from `buf`. This function
- *  will automatically copy the supplied data into the I2C data region.
- *
- *  NOTE: we only support 7-bit addressing currently.
- */
-int i2c_read(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len, bool stop) {
-    uint8_t flag_mask = stop ? I2C_FLAG_READ|I2C_FLAG_STOP : I2C_FLAG_READ;
-    return mp_i2c_dispatch(self, addr, buf, len, flag_mask);
+// Bugfix: https://github.com/micropython/micropython/issues/19011
+int mp_machine_i2c_transfer_adaptor_bugfix(mp_obj_base_t *self, uint16_t addr, size_t n, mp_machine_i2c_buf_t *bufs, unsigned int flags) {
+    size_t len;
+    uint8_t *buf;
+    if (n == 1) {
+        // Use given single buffer
+        len = bufs[0].len;
+        buf = bufs[0].buf;
+    } else {
+        // Combine buffers into a single one
+        len = 0;
+        for (size_t i = 0; i < n; ++i) {
+            len += bufs[i].len;
+        }
+        buf = m_new(uint8_t, len);
+        if (!(flags & MP_MACHINE_I2C_FLAG_READ) || (flags & MP_MACHINE_I2C_FLAG_WRITE1)) {
+            len = 0;
+            for (size_t i = 0; i < n; ++i) {
+                memcpy(buf + len, bufs[i].buf, bufs[i].len);
+                len += bufs[i].len;
+            }
+        }
+    }
+
+    mp_machine_i2c_p_t *i2c_p = (mp_machine_i2c_p_t *)MP_OBJ_TYPE_GET_SLOT(self->type, protocol);
+    int ret = i2c_p->transfer_single(self, addr, len, buf, flags);
+
+    if (n > 1) {
+        if (flags & MP_MACHINE_I2C_FLAG_READ) {
+            // Copy data from single buffer to individual ones
+            len = 0;
+            for (size_t i = 0; i < n; ++i) {
+                memcpy(bufs[i].buf, buf + len, bufs[i].len);
+                len += bufs[i].len;
+            }
+        }
+        m_del(uint8_t, buf, len);
+    }
+
+    return ret;
 }
 
-int i2c_write(machine_i2c_obj_t *self, uint16_t addr, uint8_t *buf, size_t len) {
-    // Write is implied by lack of a read flag
-    uint8_t flag_mask = 0;
-    return mp_i2c_dispatch(self, addr, buf, len, flag_mask);
-}
-
-static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_machine_i2c_buf_t *bufs, unsigned int flags) {
+// We use i2c_transfer_single because it makes it easier for us to deal with everything
+// and when we do the conversion ourselves from multiple buffers to many we need to
+// deal with STOP or flag conditions etc in a manner similar to __i2c_dispatch
+// So let's not, for simplicity. This entails double copies etc
+// (it also makes handling WRRD a little jank, as we need to assume that addrsize == 1)
+static int machine_i2c_transfer_single(mp_obj_base_t *obj, uint16_t addr, size_t len, uint8_t *buf, unsigned int flags) {
     machine_i2c_obj_t *self = MP_OBJ_TO_PTR(obj);
+
+    debug_printf("transfer_single: addr=0x%x, buf_len=%ld, buf=%p, flags=0x%x\n", addr, len, buf, flags);
+
+    uint8_t sddf_flags = 0;
+    if (flags & MP_MACHINE_I2C_FLAG_STOP) {
+        debug_printf("     : flag stop\n");
+        flags &= ~MP_MACHINE_I2C_FLAG_STOP;
+        sddf_flags |= I2C_FLAG_STOP;
+    }
+    if (flags & MP_MACHINE_I2C_FLAG_READ) {
+        debug_printf("     : flag read\n");
+        flags &= ~MP_MACHINE_I2C_FLAG_READ;
+        sddf_flags |= I2C_FLAG_READ;
+    }
+    if (flags & MP_MACHINE_I2C_FLAG_WRITE1) {
+        debug_printf("     : write-read\n");
+        flags &= ~MP_MACHINE_I2C_FLAG_WRITE1;
+        sddf_flags |= I2C_FLAG_WRRD;
+    }
+    if (flags != 0) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("I2C(%d): unsupported flags 0x%x"), self->port, flags);
+        return -MP_EINVAL;
+    }
 
     /* Before doing any transfer operations, we must claim the bus address. */
     if (!i2c_bus_claim(i2c_config.virt.id, addr)) {
@@ -114,32 +183,38 @@ static int machine_i2c_transfer(mp_obj_base_t *obj, uint16_t addr, size_t n, mp_
         return -MP_EPERM;
     }
 
-    size_t remain_len = 0;
-    for (size_t i = 0; i < n; ++i) {
-        remain_len += bufs[i].len;
-    }
+    i2c_err_t err = mp_i2c_dispatch(self, addr, buf, len, sddf_flags);
 
-    int num_acks = 0; // only valid for write; for read it'll be 0
-    int ret = 0;
-    for (; n--; ++bufs) {
-        remain_len -= bufs->len;
-        if (flags & MP_MACHINE_I2C_FLAG_READ) {
-            ret = i2c_read(self, addr, bufs->buf, bufs->len, flags & MP_MACHINE_I2C_FLAG_STOP);
-        } else {
-            ret = i2c_write(self, addr, bufs->buf, bufs->len);
-        }
-        if (ret < 0) {
-            // FIXME: not an assert.
-            assert(i2c_bus_release(i2c_config.virt.id, addr));
-            return ret;
-        }
-        num_acks += ret;
-    }
+    debug_printf("machine_i2c_transfer: done (err: %d)\n", err);
 
-    // FIXME: not an assert.
+    // always release the bus regardless of the return (FIXME: not-assert)
     assert(i2c_bus_release(i2c_config.virt.id, addr));
 
-    return num_acks;
+    if (err != I2C_ERR_OK) {
+        switch (err) {
+        case I2C_ERR_QUEUE:
+            return -MP_EFAULT;
+
+        case I2C_ERR_MALFORMED_TRANSACTION:
+        case I2C_ERR_MALFORMED_HEADER:
+            // Internal error.
+            return -MP_EIO;
+
+        case I2C_ERR_UNPERMITTED_ADDR:
+            return -MP_EACCES;
+        case I2C_ERR_TIMEOUT:
+        case I2C_ERR_NACK:
+            return -MP_ETIMEDOUT;
+
+        case I2C_ERR_NOREAD:
+        case I2C_ERR_BADSEQ:
+        case I2C_ERR_OTHER:
+        default:
+            return -MP_EIO;
+        }
+    } else {
+        return len;
+    }
 }
 
 mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
@@ -189,7 +264,9 @@ static void machine_i2c_print(const mp_print_t *print, mp_obj_t self_in, mp_prin
 }
 
 static const mp_machine_i2c_p_t machine_i2c_p = {
-    .transfer = machine_i2c_transfer
+    .transfer_supports_write1 = true,
+    .transfer = mp_machine_i2c_transfer_adaptor_bugfix,
+    .transfer_single = machine_i2c_transfer_single
 };
 
 MP_DEFINE_CONST_OBJ_TYPE(
