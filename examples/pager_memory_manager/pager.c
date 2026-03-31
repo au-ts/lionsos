@@ -172,7 +172,7 @@ void page_out(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr) {
         blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
         sddf_notify(blk_config.virt.id);
     } else {
-        microkit_arm_page_unmap(((FrameInfo *)page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr)->cap);
+        microkit_arm_page_unmap(frame->cap);
         after_page_out(frame, pd_idx, fault_addr);
     }
     
@@ -198,7 +198,8 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     pe *page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
     // if (old_frame) sddf_printf("old frame is %p and page is %p\n", page, old_frame->page);
     if (old_frame && old_frame->page == page) {
-        // microkit_arm_page_unmap(old_frame->cap); // I don't know if I actually need to unmap the frame. maybe this is an unnecessary step...
+        // int err = microkit_arm_page_unmap(old_frame->cap); // I don't know if I actually need to unmap the frame. maybe this is an unnecessary step...
+        // sddf_printf("err num is %d\n", err);
         int err = microkit_arm_page_map_rw(old_frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
         sddf_printf("err num is %d, addr is %p, vspace is %d\n", err, fault_addr, vspaces[pd_idx]);
         // i need to mark the page as dirty and recently used
@@ -250,7 +251,7 @@ void notified(microkit_channel ch)
     // queue the next thing depending on what was done.
     if (page_continuations[id].state == PAGE_OUT) {
         // unmap the frame.
-        microkit_arm_page_unmap(((FrameInfo *) page_table[page_continuations[id].pd_idx][INDEX_INTO_MMAP_ARRAY(page_continuations[id].fault_addr)].frame_addr)->cap);
+        microkit_arm_page_unmap(page_continuations[id].frame->cap);
         after_page_out( page_continuations[id].frame, page_continuations[id].pd_idx, page_continuations[id].fault_addr);
     } else {
         after_page_in(page_continuations[id].frame, page_continuations[id].pd_idx, page_continuations[id].fault_addr);

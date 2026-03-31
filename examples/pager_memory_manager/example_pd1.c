@@ -3,30 +3,29 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <sddf/util/printf.h>
-#define NM 256
+#define NUMMAPS 256
 
 void init(void)
 {
     sddf_dprintf("hello from example pd 1\n");
     // I have 128 heap frames, I want to do paging stuff here.
-    char *mappings[NM];
-    for (int i = 0; i < NM; ++i) {
+    char *mappings[NUMMAPS];
+    for (int i = 0; i < NUMMAPS; ++i) {
         mappings[i] = (char *)mymalloc();
-        sddf_dprintf("got return from mymalloc %p\n", mappings[i]);
+        sddf_dprintf("got return from mymalloc %p and the index is %d\n", mappings[i], i);
         mappings[i][10] = 'c';
     }
-    struct mmap_node *n = NULL;
-    n->addr = (uintptr_t) NULL; 
-    for (int i = 0; i < NM; ++i) {
+
+    for (int i = 0; i < NUMMAPS; ++i) {
         myfree((uintptr_t)mappings[i]);
     }
 
-    for (int i = 0; i < NM; ++i) {
+    for (int i = 0; i < NUMMAPS; ++i) {
         mappings[i] = (char *)mymalloc();
         mappings[i][10] = 'c';
     }
 
-    for (int i = 0; i < NM; ++i) {
+    for (int i = 0; i < NUMMAPS; ++i) {
         myfree((uintptr_t)mappings[i]);
     }
 }

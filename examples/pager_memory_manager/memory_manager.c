@@ -15,11 +15,15 @@ struct mmap_node node_pool[MAX_PDS][NUM_PT_ENTRIES];
 struct mmap_node *used_nodes[MAX_PDS] = {NULL};
 struct mmap_node *free_nodes[MAX_PDS] = {NULL};
 
+static int counter = 0;
+
 /**
  * Allocates the next free 4K block.
  * Returns the address on success, or -1 on failure.
  */
 static int64_t do_malloc(microkit_channel pd) {
+    ++counter;
+    sddf_printf("malloc counter = %d\n", counter);
     if (pd >= MAX_PDS) return -1;
 
     struct mmap_node *ptr = free_nodes[pd];
@@ -47,6 +51,7 @@ static int64_t do_malloc(microkit_channel pd) {
  * Returns 0 on success, -1 on failure.
  */
 static int do_free(uintptr_t addr, microkit_channel pd) {
+    --counter;
     if (pd >= MAX_PDS) return -1;
 
     // Validate address is within range and aligned
