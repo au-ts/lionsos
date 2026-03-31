@@ -41,7 +41,9 @@ ERROR_DATA_WAS_NOT_DROPPED='Firewall traffic was not dropped'
 ERROR_FAILED_TO_APPLY_RULE='Failed to apply firewall rule'
 ERROR_FAILED_TO_REMOVE_RULE='Failed to remove firewall rule'
 ERROR_RULE_STILL_APPLIED='Firewall rule is still applied'
+ERROR_ICMP_REJECT_NOT_RETURNED='Did not receive ICMP reject response for UDP traffic'
 INFO_SKIPPING_TEST='Skipping (feature not implemented yet)'
+ERROR_TIMEOUT='Did not receive timeout'
 
 FONT_HEADER=$(printf '\033[1m\033[36m')
 FONT_RED=$(printf '\033[31m')
@@ -50,6 +52,8 @@ FONT_RESET=$(printf '\033[0m')
 REGEX_REACHABLE='[1-9][0-9]* received'
 REGEX_HOST_UNREACHABLE='Destination Host Unreachable'
 REGEX_NET_UNREACHABLE='Destination Net Unreachable'
+REGEX_TIMEOUT='Time to live exceeded'
+REGEX_UDP_REJECT='Destination (Host|Net|Port) Unreachable|Connection refused|No route to host'
 
 TEMPLATE_SRC='$src_ip, $src_port, $src_subnet'
 TEMPLATE_DEST='$dest_ip, $dest_port, $dest_subnet'
@@ -57,7 +61,9 @@ TEMPLATE_ACTION='$interface, $action'
 TEMPLATE_JSON="{ ${TEMPLATE_SRC}, ${TEMPLATE_DEST}, ${TEMPLATE_ACTION} }"
 
 FIREWALL_EXTERNAL_INTERFACE=0
+FIREWALL_INTERNAL_INTERFACE=0
 FIREWALL_ACTION_DROP=2
+FIREWALL_ACTION_REJECT=3
 
 #
 # Setup and teardown
@@ -80,6 +86,7 @@ oneTimeSetUp() {
     COUNT=1
     TIMEOUT=1
     LONG_TIMEOUT=7
+    TIMEOUT_TTL=1
 
     # Temporary files
     #
@@ -362,6 +369,29 @@ test_icmp_ping_firewall_from_external_network() {
 
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_NO_ECHO_RESPONSE}"
+        print_log
+    fi
+}
+
+test_icmp_ping_timeout_host_int_to_ext() {
+    ip netns exec int \
+        ping -c "${COUNT}" -t "${TIMEOUT_TTL}" "${EXT_HOST_IP}" \
+        > "${RECEIVED}" 2>&1
+
+    if ! grep -Eq --ignore-case "${REGEX_TIMEOUT}" "${RECEIVED}"; then
+        print_file 'Ping output' "${RECEIVED}"
+        fail "${ERROR_TIMEOUT}"
+        print_log
+    fi
+}
+
+test_icmp_ping_timeout_host_ext_to_int() {
+    ip netns exec ext \
+        ping -c "${COUNT}" -t "${TIMEOUT_TTL}" "${INT_HOST_IP}" \
+        > "${RECEIVED}" 2>&1
+
+    if ! grep -Eq --ignore-case "${REGEX_TIMEOUT}" "${RECEIVED}"; then
+        fail "${ERROR_TIMEOUT}"
         print_log
     fi
 }
