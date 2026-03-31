@@ -6,6 +6,11 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <os/sddf.h>
+#include <sddf/blk/queue.h> 
+#include <sddf/blk/storage_info.h>
+#include <sddf/blk/config.h>
+#include <sddf/util/printf.h>
 
 unsigned long long time = 0; // Working set clock.
 
@@ -32,7 +37,7 @@ uintptr_t get_frame_offset(uintptr_t frame_addr, int pd_idx) {
  * currently recursive, may/may not want to change.
  */
 static FrameInfo *get_frame(uint32_t pd_idx) {
-    // printf("\nget frame callled with pd_idx of %d\n", pd_idx);
+    sddf_printf("\nget frame callled with pd_idx of %d\n", pd_idx);
     if (!wshand[pd_idx]->page) {
         FrameInfo *ret = wshand[pd_idx];
         move_hand(pd_idx);
@@ -43,6 +48,7 @@ static FrameInfo *get_frame(uint32_t pd_idx) {
         wshand[pd_idx]->page->recently_used = false;
         // map as ro again or do I want to unmap it?
         // maybe I want to unmap it... so that reads are counted as well.
+        sddf_printf("unmap called with frame cap %d\n", wshand[pd_idx]->cap);
         microkit_arm_page_unmap(wshand[pd_idx]->cap);
         move_hand(pd_idx);
     // } else if (time - wshand[pd_idx]->last_accessed < TAU)

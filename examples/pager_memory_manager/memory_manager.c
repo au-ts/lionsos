@@ -7,107 +7,127 @@
 #include <stdio.h>
 #include <sddf/util/printf.h>
 
-// I should have a list of free and used 
+#define MM_MALLOC 1
+#define MM_FREE   0
 
-// pool of mmap nodes
-struct mmap_node node_pool[MAX_PDS][NUM_PT_ENTRIES]; 
+// Pool of mmap nodes
+struct mmap_node node_pool[MAX_PDS][NUM_PT_ENTRIES];
 struct mmap_node *used_nodes[MAX_PDS] = {NULL};
 struct mmap_node *free_nodes[MAX_PDS] = {NULL};
 
 /**
  * Allocates the next free 4K block.
+ * Returns the address on success, or -1 on failure.
  */
 static int64_t do_malloc(microkit_channel pd) {
-    // if (pd > 63)  {
-    //     struct mmap_node *thing = free_nodes[pd];
-    //     return -1;
-    // }
+    if (pd >= MAX_PDS) return -1;
+
     struct mmap_node *ptr = free_nodes[pd];
     if (!ptr) return -1;
+
+    // Remove from free list
     free_nodes[pd] = ptr->next;
+    if (free_nodes[pd]) {
+        free_nodes[pd]->prev = NULL;
+    }
+
+    // Add to used list (insert at head)
     ptr->next = used_nodes[pd];
+    ptr->prev = NULL;
     if (used_nodes[pd]) {
         used_nodes[pd]->prev = ptr;
     }
     used_nodes[pd] = ptr;
-    if (free_nodes[pd]) free_nodes[pd]->prev = NULL;
-    ptr->prev = NULL; // this might be unecessary.
-    return ptr->addr;
+
+    return (int64_t)ptr->addr;
 }
 
 /**
- * free the 4k block of memory which this addr is at.
+ * Free the 4K block of memory at this addr.
+ * Returns 0 on success, -1 on failure.
  */
-static void do_free(uintptr_t addr, microkit_channel pd) {
-    struct mmap_node* ptr = &node_pool[pd][INDEX_INTO_MMAP_ARRAY(addr)];
-    // remove from used_nodes
-    // sddf_printf("\n\nThe channel PD is %d\n\n", pd);
+static int do_free(uintptr_t addr, microkit_channel pd) {
+    if (pd >= MAX_PDS) return -1;
+
+    // Validate address is within range and aligned
+    if (addr < BRK_START || addr & 0xFFF) return -1;
+
+    uintptr_t index = INDEX_INTO_MMAP_ARRAY(addr);
+    if (index >= NUM_PT_ENTRIES) return -1;
+
+    struct mmap_node *ptr = &node_pool[pd][index];
+
+    // Remove from used list
     if (used_nodes[pd] == ptr) {
         used_nodes[pd] = ptr->next;
-        if (used_nodes[pd]) used_nodes[pd]->prev = NULL; // this might be unecessary.
+        if (used_nodes[pd]) {
+            used_nodes[pd]->prev = NULL;
+        }
     } else {
+        if (!ptr->prev) {
+            // Node is not in the used list — double free or invalid
+            return -1;
+        }
         ptr->prev->next = ptr->next;
         if (ptr->next) {
             ptr->next->prev = ptr->prev;
         }
     }
-    
-    // add to free_nodes
-    ptr->next = free_nodes[pd];
-    free_nodes[pd] = ptr;
-    ptr->prev = NULL; // this may be unecessary.
 
+    // Add to free list (insert at head)
+    ptr->next = free_nodes[pd];
+    ptr->prev = NULL;
+    if (free_nodes[pd]) {
+        free_nodes[pd]->prev = ptr;
+    }
+    free_nodes[pd] = ptr;
+
+    return 0;
 }
 
 void init(void)
 {
-    sddf_dprintf("hello \n");
-    // for each theoretically existing PD, push nodes into free nodes LL.
+    sddf_dprintf("hello from memory manager\n");
     for (int i = 0; i < MAX_PDS; ++i) {
+        free_nodes[i] = NULL;
+        used_nodes[i] = NULL;
         for (int j = 0; j < NUM_PT_ENTRIES; ++j) {
-            node_pool[i][j].addr = BRK_START + j * 4096;
+            node_pool[i][j].addr = BRK_START + (uintptr_t)j * 4096;
+            node_pool[i][j].prev = NULL;
             node_pool[i][j].next = free_nodes[i];
-            node_pool[i][j].prev = NULL; // This might be unecessary.
 
             if (free_nodes[i]) {
-                free_nodes[i]->prev = &node_pool[i][j];   // 🔥 THIS IS THE MISSING LINE
+                free_nodes[i]->prev = &node_pool[i][j];
             }
             free_nodes[i] = &node_pool[i][j];
         }
     }
 }
 
-
-/**
- * TODOS: 
- * - check if the way that I am doing the MR stuff is correct.
- */
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     uint32_t inst = seL4_GetMR(0);
-    // 0 is free, 1 is malloc
-    if (inst) {
-        return microkit_msginfo_new(0, do_malloc(ch));
-    } else {
+
+    if (inst == MM_MALLOC) {
+        microkit_msginfo ret = microkit_msginfo_new(0, 1);
+        seL4_SetMR(0, do_malloc(ch));
+        return ret;
+    } else if (inst == MM_FREE) {
         uintptr_t addr = seL4_GetMR(2);
-        do_free(addr, ch);
+        int result = do_free(addr, ch);
+        return microkit_msginfo_new(0, 0);
+    } else {
+        sddf_printf("unknown instruction\n");
         return microkit_msginfo_new(0, 0);
     }
-    
 }
-
-// NOT USED BELOW:
 
 void notified(microkit_channel ch)
 {
-    // this may not be required
+    // Not used
 }
 
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
-    // not required.
     return seL4_False;
 }
-
-
-

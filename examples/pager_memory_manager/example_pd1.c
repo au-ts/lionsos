@@ -7,11 +7,12 @@
 
 void init(void)
 {
-    // sddf_dprintf("hello \n");
+    sddf_dprintf("hello from example pd 1\n");
     // I have 128 heap frames, I want to do paging stuff here.
     char *mappings[NM];
     for (int i = 0; i < NM; ++i) {
         mappings[i] = (char *)mymalloc();
+        sddf_dprintf("got return from mymalloc %p\n", mappings[i]);
         mappings[i][10] = 'c';
     }
     struct mmap_node *n = NULL;
