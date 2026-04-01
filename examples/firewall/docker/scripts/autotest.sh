@@ -410,6 +410,40 @@ test_icmp_ping_firewall_disabled_from_internal_network() {
     fi
 }
 
+test_icmp_ping_firewall_disabled_from_external_network() {
+    # Disable ping responsiveness on the external interface.
+    response=$(curl --silent \
+        --header 'Content-Type: application/json' \
+        --request 'POST' \
+        "http://${FW_INT_IP}/api/ping/0/0")
+
+    if echo "${response}" | grep -q '"error"'; then
+        fail "${ERROR_FAILED_DISABLE_PING}"
+        print_log
+        return
+    fi
+
+    ip netns exec ext \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_EXT_IP}" > "${RECEIVED}" 2>&1
+
+    if grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_UNEXPECTED_ECHO_RESPONSE}"
+        print_file 'Ping output' "${RECEIVED}"
+        print_log
+    fi
+
+    # Restore ping responsiveness so subsequent tests are unaffected.
+    response=$(curl --silent \
+        --header 'Content-Type: application/json' \
+        --request 'POST' \
+        "http://${FW_INT_IP}/api/ping/0/1")
+
+    if echo "${response}" | grep -q '"error"'; then
+        fail "${ERROR_FAILED_ENABLE_PING}"
+        print_log
+    fi
+}
+
 test_icmp_ping_timeout_host_int_to_ext() {
     ip netns exec int \
         ping -c "${COUNT}" -t "${TIMEOUT_TTL}" "${EXT_HOST_IP}" \
