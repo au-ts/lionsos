@@ -40,7 +40,7 @@
  */
 #define FRAME_DATA 0x8000000000
 
-#define PD_IDX_OFFSET 2 // this is to index into the frame data, 2 because pager and memory manager will be the first 2 indicies.
+#define PD_IDX_OFFSET 3 // this is to index into the frame data, 2 because pager and memory manager will be the first 2 indicies.
 #define HEAP_SIZE 128 * 4096
 
 uint64_t unmapped_frames_addr;
@@ -127,8 +127,13 @@ void init(void)
     
 }
 
-void after_page_in(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr) {
+void after_page_in(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr, bool paged_in) {
     // map the page to the frame
+    if (paged_in) {
+        sddf_printf("doing memcpy after paging in addr of frame data is \n", get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)));
+        memcpy(get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)),
+       (char *)blk_config.data.vaddr, 4096);
+    }
     sddf_printf("after page in cap %d\n", frame->cap);
     microkit_arm_page_map_ro(frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
     frame->page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
@@ -144,8 +149,10 @@ void page_in(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     // queue the read
     int request_id = get_request_id();
     page_continuations[request_id] = (struct page_request_info){ .frame = frame, .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_IN }; // TODO: fill this out with relevant info.
-    memcpy(get_frame_data(pd_idx, get_frame_offset((uintptr_t)&frame_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)], pd_idx)), (char *)blk_config.data.vaddr, 4096);
-    blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
+    blk_enqueue_req(&blk_queue, BLK_REQ_READ, 0, slot, 1, request_id);
+    // memcpy(get_frame_data(pd_idx, get_frame_offset((uintptr_t)&frame_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)], pd_idx)), (char *)blk_config.data.vaddr, 4096);
+    
+    
     sddf_notify(blk_config.virt.id);
 }
 
@@ -154,7 +161,7 @@ void after_page_out(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     if (page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr) {
         page_in(frame, pd_idx, fault_addr);
     } else {
-        after_page_in(frame, pd_idx, fault_addr);
+        after_page_in(frame, pd_idx, fault_addr, false);
     }
 }
 
@@ -254,7 +261,7 @@ void notified(microkit_channel ch)
         microkit_arm_page_unmap(page_continuations[id].frame->cap);
         after_page_out( page_continuations[id].frame, page_continuations[id].pd_idx, page_continuations[id].fault_addr);
     } else {
-        after_page_in(page_continuations[id].frame, page_continuations[id].pd_idx, page_continuations[id].fault_addr);
+        after_page_in(page_continuations[id].frame, page_continuations[id].pd_idx, page_continuations[id].fault_addr, true);
     }
 
 }

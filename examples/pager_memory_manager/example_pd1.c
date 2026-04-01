@@ -22,6 +22,7 @@ void init(void)
 
     for (int i = 0; i < NUMMAPS; ++i) {
         mappings[i] = (char *)mymalloc();
+        sddf_dprintf("got return from mymalloc %p and the index is %d\n", mappings[i], i);
         mappings[i][10] = 'c';
     }
 

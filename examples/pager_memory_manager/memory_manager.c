@@ -51,6 +51,7 @@ static int64_t do_malloc(microkit_channel pd) {
  * Returns 0 on success, -1 on failure.
  */
 static int do_free(uintptr_t addr, microkit_channel pd) {
+    sddf_printf("free called at addr %px\n", addr);
     --counter;
     if (pd >= MAX_PDS) return -1;
 
@@ -118,7 +119,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         seL4_SetMR(0, do_malloc(ch));
         return ret;
     } else if (inst == MM_FREE) {
-        uintptr_t addr = seL4_GetMR(2);
+        uintptr_t addr = seL4_GetMR(1);
         int result = do_free(addr, ch);
         return microkit_msginfo_new(0, 0);
     } else {
