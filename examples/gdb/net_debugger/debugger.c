@@ -354,8 +354,7 @@ void init(void)
     sddf_lwip_maybe_notify();
 
     // Setup the mapping regions for libvspace to use.
-    libvspace_set_small_mapping_region(small_mapping_mr);
-    libvspace_set_large_mapping_region(large_mapping_mr);
+    libvspace_init_mapping_regions(small_mapping_mr, large_mapping_mr);
 }
 
 void fault_message() {
