@@ -23,8 +23,9 @@
 __attribute__((__section__(".fw_icmp_module_config"))) fw_icmp_module_config_t icmp_config;
 __attribute__((__section__(".net_config_0"))) net_client_config_t net_config_0;
 __attribute__((__section__(".net_config_1"))) net_client_config_t net_config_1;
+__attribute__((__section__(".net_config_2"))) net_client_config_t net_config_2;
 
-net_client_config_t *net_configs[FW_MAX_INTERFACES] = { &net_config_0, &net_config_1 };
+net_client_config_t *net_configs[FW_MAX_INTERFACES] = { &net_config_0, &net_config_1, &net_config_2 };
 
 net_queue_handle_t net_queue[FW_MAX_INTERFACES];
 fw_queue_t router_icmp_queue;
