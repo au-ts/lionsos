@@ -48,7 +48,6 @@ typedef struct __attribute__((__packed__)) icmp_hdr {
                                (1 << ICMP_PARAM_PROBLEM) | \
                                (1 << ICMP_REDIRECT_MSG))
 
-
 /* ICMP destination unreachable sub-type codes */
 #define ICMP_DEST_NET_UNREACHABLE 0
 #define ICMP_DEST_HOST_UNREACHABLE 1
@@ -197,14 +196,9 @@ typedef struct icmp_req {
  */
 static inline bool icmp_is_error_message(uint8_t type)
 {
-    return (type == ICMP_DEST_UNREACHABLE ||
-            type == ICMP_REDIRECT_MSG ||
-            type == ICMP_SRC_QUENCH ||
-            type == ICMP_TTL_EXCEED ||
-            type == ICMP_PARAM_PROBLEM);
+    return (type == ICMP_DEST_UNREACHABLE || type == ICMP_REDIRECT_MSG || type == ICMP_SRC_QUENCH
+            || type == ICMP_TTL_EXCEED || type == ICMP_PARAM_PROBLEM);
 }
-
-
 
 /**
  * Enqueue an ICMP request to send back to the source.
@@ -217,9 +211,10 @@ static inline bool icmp_is_error_message(uint8_t type)
  *
  * @return true on success, false if the queue is full.
  */
-static inline bool icmp_enqueue_error(fw_queue_t *icmp_queue, uint8_t type, uint8_t code, uintptr_t pkt_vaddr, uint8_t out_interface)
+static inline bool icmp_enqueue_error(fw_queue_t *icmp_queue, uint8_t type, uint8_t code, uintptr_t pkt_vaddr,
+                                      uint8_t out_interface)
 {
-    icmp_req_t req = {0};
+    icmp_req_t req = { 0 };
     req.type = type;
     req.code = code;
     req.out_interface = out_interface;
@@ -263,7 +258,7 @@ static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt
         payload_len = FW_ICMP_ECHO_PAYLOAD_LEN;
     }
 
-    icmp_req_t req = {0};
+    icmp_req_t req = { 0 };
     req.type = ICMP_ECHO_REPLY;
     req.code = 0;
     req.out_interface = out_interface;
@@ -278,7 +273,8 @@ static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt
     memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
 
     /* Copy payload */
-    uint8_t *payload_data = (uint8_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET + (sizeof(icmp_echo_t) - FW_ICMP_ECHO_PAYLOAD_LEN));
+    uint8_t *payload_data = (uint8_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET
+                                        + (sizeof(icmp_echo_t) - FW_ICMP_ECHO_PAYLOAD_LEN));
     memcpy(req.echo.data, payload_data, payload_len);
 
     return fw_enqueue(icmp_queue, &req) == 0;
@@ -296,7 +292,7 @@ static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt
  */
 static inline int icmp_enqueue_redirect(fw_queue_t *icmp_queue, uint8_t code, uintptr_t pkt_vaddr, uint32_t gateway_ip)
 {
-    icmp_req_t req = {0};
+    icmp_req_t req = { 0 };
     req.type = ICMP_REDIRECT_MSG;
     req.code = code;
 
@@ -327,7 +323,7 @@ static inline int icmp_enqueue_redirect(fw_queue_t *icmp_queue, uint8_t code, ui
  */
 static inline int icmp_is_error_type(int type)
 {
-    if ( (1 << type) & ICMP_ERROR_TYPES_MASK) {
+    if ((1 << type) & ICMP_ERROR_TYPES_MASK) {
         return true;
     }
     return false;
