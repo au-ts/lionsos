@@ -52,16 +52,16 @@ LIBS += -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_
 
 # Define the required source files.
 SRC_C = \
+	machine_i2c.c \
+	modmachine.c \
+	modfs_raw.c \
+	vfs_fs.c \
+	vfs_fs_file.c \
 	micropython.c \
 	mphalport.c \
 	modtime.c \
 	modinterrupt.c \
-	modmachine.c \
-	machine_i2c.c \
 	mpfirewallport.c \
-	modfs_raw.c \
-	vfs_fs_file.c \
-	vfs_fs.c \
 	fs/helpers.c \
 	frozen_content.c \
 	shared/readline/readline.c \
@@ -75,7 +75,15 @@ SRC_C = \
 	$(MICROPYTHON_USER_C_MODULES)
 
 # Define source files containung qstrs.
-SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c vfs_fs_file.c vfs_fs.c modfs_raw.c $(MICROPYTHON_USER_C_MODULES)
+SRC_QSTR += \
+	shared/readline/readline.c \
+	shared/runtime/pyexec.c \
+	machine_i2c.c \
+	modmachine.c \
+	modfs_raw.c \
+	vfs_fs.c \
+	vfs_fs_file.c \
+	$(MICROPYTHON_USER_C_MODULES)
 
 # Frozen module to execute; otherwise run REPL
 ifdef EXEC_MODULE
