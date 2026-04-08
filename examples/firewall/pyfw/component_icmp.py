@@ -4,7 +4,6 @@ from sdfgen import SystemDescription
 from pyfw.component_base import Component
 from pyfw.constants import (
     BuildConstants,
-    interfaces,
     icmp_queue_buffer,
     icmp_queue_region,
     supported_protocols,
@@ -42,7 +41,7 @@ class IcmpModule(Component, FwIcmpModuleConfig):
                     ip=interface.ip_int,
                     filters=[],
                 )
-                for interface in interfaces
+                for interface in BuildConstants.interfaces()
             ],
             router=None,
         )
@@ -117,6 +116,6 @@ class IcmpModule(Component, FwIcmpModuleConfig):
         return filter_connection
 
     def finalise_config(self) -> None:
-        assert self.interfaces is not None and len(self.interfaces) == len(interfaces)
+        assert self.interfaces is not None and len(self.interfaces) == len(BuildConstants.interfaces())
         for iface in self.interfaces:
             assert iface.filters is not None and len(iface.filters) == len(supported_protocols)

@@ -28,38 +28,68 @@ export HOST_HTTP_PORT=8080
 
 # -------------- Firewall Network Config -------------- #
 
-# Firewall internal IP address
-export FW_EXT_IP=172.16.2.1
+# Number of firewall interfaces configured for QEMU testing.
+export INTERFACE_COUNT=3
 
-# Firewall external subnet network bits
-export FW_EXT_SUBNET=12
+# Firewall interface0 MAC address
+export FW_INTERFACE0_MAC=00:01:c0:39:d5:18
 
-# External root IP address
-export EXT_ROOT_IP=172.16.2.2
+# Firewall interface0 IP address
+export FW_INTERFACE0_IP=172.16.2.1
 
-# External forwarding host IP address
-export EXT_HOST_IP=172.16.2.200
+# Firewall interface0 subnet network bits
+export FW_INTERFACE0_SUBNET=12
 
-# Firewall internal IP address
-export FW_INT_IP=192.168.1.1
+# Interface0 root IP address
+export INTERFACE0_ROOT_IP=172.16.2.2
 
-# Firewall internal subnet network bits
-export FW_INT_SUBNET=24
+# Interface0 forwarding host IP address
+export INTERFACE0_HOST_IP=172.16.2.200
 
-# Internal root IP address
-export INT_ROOT_IP=192.168.1.2
+# Firewall interface1 MAC address
+export FW_INTERFACE1_MAC=00:01:c0:39:d5:10
 
-# Internal forwarding host IP address
-export INT_HOST_IP=192.168.1.100
+# Firewall interface1 IP address
+export FW_INTERFACE1_IP=192.168.1.1
 
-# External non-existant host IP address
-export EXT_BAD_HOST_IP=172.16.2.201
+# Firewall interface1 subnet network bits
+export FW_INTERFACE1_SUBNET=24
 
-# Internal non-existant host IP address
-export INT_BAD_HOST_IP=192.168.1.101
+# Interface1 root IP address
+export INTERFACE1_ROOT_IP=192.168.1.2
 
-# External unknown network host IP address
-export EXT_BAD_NET_IP=173.16.2.201
+# Interface1 forwarding host IP address
+export INTERFACE1_HOST_IP=192.168.1.100
 
-# Internal unknown network host IP address
-export INT_BAD_NET_IP=193.168.1.101
+# Firewall interface2 MAC address
+export FW_INTERFACE2_MAC=00:01:c0:39:d5:12
+
+# Firewall interface2 IP address
+export FW_INTERFACE2_IP=10.0.2.1
+
+# Firewall interface2 subnet network bits
+export FW_INTERFACE2_SUBNET=24
+
+# Interface2 root IP address
+export INTERFACE2_ROOT_IP=10.0.2.2
+
+# Interface2 forwarding host IP address
+export INTERFACE2_HOST_IP=10.0.2.100
+
+# Interface0 non-existant host IP address
+export INTERFACE0_BAD_HOST_IP=172.16.2.201
+
+# Interface1 non-existant host IP address
+export INTERFACE1_BAD_HOST_IP=192.168.1.101
+
+# Interface2 non-existant host IP address
+export INTERFACE2_BAD_HOST_IP=10.0.2.101
+
+# Interface0 unknown network host IP address
+export INTERFACE0_BAD_NET_IP=173.16.2.201
+
+# Interface1 unknown network host IP address
+export INTERFACE1_BAD_NET_IP=193.168.1.101
+
+# Interface2 unknown network host IP address
+export INTERFACE2_BAD_NET_IP=10.0.3.101
