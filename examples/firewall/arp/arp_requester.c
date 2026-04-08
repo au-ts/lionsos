@@ -95,7 +95,6 @@ static void process_requests()
                 /* Reply immediately */
                 fw_arp_request_t response = fw_arp_response_from_entry(entry);
                 fw_enqueue(&arp_resp_queue[client], &response);
-                fw_enqueue(&arp_resp_queue[client], &request);
                 notify_client[client] = true;
                 continue;
             } else if (entry != NULL && entry->state == ARP_STATE_PENDING) {
