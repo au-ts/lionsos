@@ -37,7 +37,6 @@ uintptr_t get_frame_offset(uintptr_t frame_addr, int pd_idx) {
  * currently recursive, may/may not want to change.
  */
 static FrameInfo *get_frame(uint32_t pd_idx) {
-    // sddf_printf("\nget frame callled with pd_idx of %d\n", pd_idx);
     if (!wshand[pd_idx]->page) {
         FrameInfo *ret = wshand[pd_idx];
         move_hand(pd_idx);
@@ -46,14 +45,8 @@ static FrameInfo *get_frame(uint32_t pd_idx) {
 
     if (wshand[pd_idx]->page->recently_used) {
         wshand[pd_idx]->page->recently_used = false;
-        // map as ro again or do I want to unmap it?
-        // maybe I want to unmap it... so that reads are counted as well.
-        // sddf_printf("unmap called with frame cap %d\n", wshand[pd_idx]->cap);
         microkit_arm_page_unmap(wshand[pd_idx]->cap);
         move_hand(pd_idx);
-    // } else if (time - wshand[pd_idx]->last_accessed < TAU)
-    // {
-    //     move_hand(pd_idx); // this has potential to cause infinite loop if I don't increment time.
     } else {
         FrameInfo *ret = wshand[pd_idx];
         move_hand(pd_idx);

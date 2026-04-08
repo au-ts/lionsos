@@ -35,13 +35,6 @@ typedef struct Rights {
     bool grant_reply;
 } Rights;
 
-// typedef struct Cap {
-//     uint32_t object;
-//     Rights rights;
-//     bool cached;
-//     bool executable;
-// } Cap;
-
 typedef unsigned long long Cap;
 
 typedef struct microkit_data {
@@ -49,19 +42,33 @@ typedef struct microkit_data {
     uintptr_t pd_idx;
 } frame_pd_id;
 
-typedef struct page_entry {
-    void *frame_addr;
+typedef struct pe {
+    struct FrameInfo *frame_addr;
+    int pagefile_offset;
     bool dirty;
     bool recently_used;
-    uint32_t pagefile_offset;
-} pe; // might need more stuff here.
+
+    /* MGLRU fields */
+    uint8_t gen;
+    bool in_memory;
+    struct pe *prev;
+    struct pe *next;
+} pe;
+
+// typedef struct FrameInfo {
+//     Cap cap;
+//     uint64_t last_accessed; // for working set.
+//     pe *page; // the page this frame is mapped to.
+//     uint32_t next;
+//     int pd_idx;
+// } FrameInfo;
 
 typedef struct FrameInfo {
-    Cap cap;
-    uint64_t last_accessed; // for working set.
-    pe *page; // the page this frame is mapped to.
+    seL4_CPtr cap;
+    uint64_t last_accessed;
+    pe *page;
     uint32_t next;
-    int pd_idx;
+    uint32_t pd_idx;
 } FrameInfo;
 
 enum paging_state {
@@ -80,7 +87,6 @@ struct page_request_info {
  * This actually should wipe the data an the page tables etc...
  */
 void myfree(uint16_t mm, uintptr_t addr) {
-    // sddf_printf("free called\n");
     microkit_msginfo message = microkit_msginfo_new(0, 2);
     microkit_mr_set(0, 0);
     microkit_mr_set(1, addr);
@@ -88,7 +94,6 @@ void myfree(uint16_t mm, uintptr_t addr) {
 }
 
 uintptr_t mymalloc(uint64_t mm) {
-    // sddf_printf("malloc called\n");
     microkit_msginfo message = microkit_msginfo_new(0, 1);
     microkit_mr_set(0, 1);
     microkit_ppcall(mm, message);

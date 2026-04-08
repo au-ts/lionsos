@@ -23,7 +23,6 @@ static int counter = 0;
  */
 static int64_t do_malloc(microkit_channel pd) {
     ++counter;
-    // sddf_printf("malloc counter = %d\n", counter);
     if (pd >= MAX_PDS) return -1;
 
     struct mmap_node *ptr = free_nodes[pd];
@@ -35,7 +34,6 @@ static int64_t do_malloc(microkit_channel pd) {
         free_nodes[pd]->prev = NULL;
     }
 
-    // Add to used list (insert at head)
     ptr->next = used_nodes[pd];
     ptr->prev = NULL;
     if (used_nodes[pd]) {
@@ -51,11 +49,8 @@ static int64_t do_malloc(microkit_channel pd) {
  * Returns 0 on success, -1 on failure.
  */
 static int do_free(uintptr_t addr, microkit_channel pd) {
-    // sddf_printf("free called at addr %px\n", addr);
     --counter;
     if (pd >= MAX_PDS) return -1;
-
-    // Validate address is within range and aligned
     if (addr < BRK_START || addr & 0xFFF) return -1;
 
     uintptr_t index = INDEX_INTO_MMAP_ARRAY(addr);
@@ -71,7 +66,6 @@ static int do_free(uintptr_t addr, microkit_channel pd) {
         }
     } else {
         if (!ptr->prev) {
-            // Node is not in the used list — double free or invalid
             return -1;
         }
         ptr->prev->next = ptr->next;
@@ -80,7 +74,7 @@ static int do_free(uintptr_t addr, microkit_channel pd) {
         }
     }
 
-    // Add to free list (insert at head)
+
     ptr->next = free_nodes[pd];
     ptr->prev = NULL;
     if (free_nodes[pd]) {
