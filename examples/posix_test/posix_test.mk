@@ -24,7 +24,7 @@ IMAGES := \
 	network_virt_rx.elf \
 	network_copy.elf \
 	blk_virt.elf \
-	blk_driver.elf
+	blk_driver.elf \
 
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit

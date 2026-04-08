@@ -18,6 +18,10 @@ def generate(
     need_timer: bool,
     nvme: bool,  # hack to select NVMe or Virtio
 ):
+    timer_node = dtb.node(board.timer)
+    assert timer_node is not None
+    timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=254)
+    timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
     blk_node = None
     if dtb is not None:
          blk_node = dtb.node(board.blk)
@@ -64,6 +68,10 @@ def generate(
     # exmmc = SystemDescription.Channel(a=memory_manager, b=client, a_id=2, b_id=2)
     sdf.add_channel(exmmc)
     sdf.add_channel(exmmc2)
+
+    timer_system.add_client(pager)
+    assert timer_system.connect()
+    assert timer_system.serialise_config(output_dir)
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
             f.write(sdf.render())

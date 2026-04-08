@@ -59,7 +59,7 @@ SPEC = $(BUILD_DIR)/capdl_spec.json
 
 
 
-IMAGES := blk_driver.elf blk_virt.elf memory_manager.elf pager.elf example_pd1.elf example_pd2.elf
+IMAGES := blk_driver.elf blk_virt.elf memory_manager.elf pager.elf example_pd1.elf example_pd2.elf timer_driver.elf 
 CFLAGS +=  -Wall -Wno-unused-function -Wno-unused-command-line-argument \
 		  -I$(SDDF)/include \
 		  -I$(SDDF)/include/microkit \
@@ -88,6 +88,7 @@ include ${SDDF}/drivers/blk/${BLK_DRIV_DIR}/blk_driver.mk
 include ${SDDF}/util/util.mk
 include ${SDDF}/blk/components/blk_components.mk
 include ${SDDF}/serial/components/serial_components.mk
+include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
 
 ${IMAGES}: libsddf_util_debug.a
 
@@ -121,6 +122,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .blk_driver_config=blk_driver.data blk_driver.elf
 	$(OBJCOPY) --update-section .blk_virt_config=blk_virt.data blk_virt.elf
 	$(OBJCOPY) --update-section .blk_client_config=blk_client_pager.data pager.elf
+	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 	touch $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
