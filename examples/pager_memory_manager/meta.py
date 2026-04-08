@@ -29,6 +29,7 @@ def generate(
         "blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000
     )
     client = ProtectionDomain("example_pd1", "example_pd1.elf", priority=1)
+    client2 = ProtectionDomain("example_pd2", "example_pd2.elf", priority=1)
     pager = ProtectionDomain("pager", "pager.elf", priority=198)
     memory_manager = ProtectionDomain("memory_manager", "memory_manager.elf", priority=197)
     blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
@@ -37,6 +38,7 @@ def generate(
 
     pds = [blk_driver, blk_virt, pager, memory_manager]
     pager.add_child_pd(client)
+    pager.add_child_pd(client2)
     for pd in pds:
             sdf.add_pd(pd)
 
@@ -48,13 +50,20 @@ def generate(
     # add my memory regions and other things
     heap1 = SystemDescription.MemoryRegion(sdf, "heap1", 0x80000, backed=False)
     sdf.add_mr(heap1)
-    pager_heap_map = SystemDescription.Map(heap1, 0x8000000000, "rw")
+    heap2 = SystemDescription.MemoryRegion(sdf, "heap2", 0x80000, backed=False)
+    sdf.add_mr(heap2)
+    # pager_heap_map = SystemDescription.Map(heap1, 0x8000000000, "rw")
+    # pager_heap_map2 = SystemDescription.Map(heap2, 0x9000000000, "rw")
     user_heap_map = SystemDescription.Map(heap1, 0x8000000000, "rw")
-    pager.add_map(pager_heap_map)
+    user_heap_map2 = SystemDescription.Map(heap2, 0x8000000000, "rw")
+    # pager.add_map(pager_heap_map)
     client.add_map(user_heap_map)
+    client2.add_map(user_heap_map2)
     exmmc = SystemDescription.Channel(a=client, b=memory_manager, a_id=0, b_id=0, pp_a=True)
+    exmmc2 = SystemDescription.Channel(a=client2, b=memory_manager, a_id=1, b_id=1, pp_a=True)
     # exmmc = SystemDescription.Channel(a=memory_manager, b=client, a_id=2, b_id=2)
     sdf.add_channel(exmmc)
+    sdf.add_channel(exmmc2)
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
             f.write(sdf.render())

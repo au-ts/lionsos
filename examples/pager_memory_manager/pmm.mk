@@ -54,11 +54,12 @@ SYSTEM_FILE := pager_memory_manager.system
 TOP := ${LIONSOS}/examples/pager_memory_manager
 CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
+SPEC = $(BUILD_DIR)/capdl_spec.json
 
 
 
 
-IMAGES := blk_driver.elf blk_virt.elf memory_manager.elf pager.elf example_pd1.elf
+IMAGES := blk_driver.elf blk_virt.elf memory_manager.elf pager.elf example_pd1.elf example_pd2.elf
 CFLAGS +=  -Wall -Wno-unused-function -Wno-unused-command-line-argument \
 		  -I$(SDDF)/include \
 		  -I$(SDDF)/include/microkit \
@@ -107,6 +108,11 @@ example_pd1.o: ${TOP}/example_pd1.c
 example_pd1.elf: example_pd1.o libsddf_util_debug.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
+example_pd2.o: ${TOP}/example_pd2.c 
+	$(CC) -c $(CFLAGS) -I. $< -o example_pd2.o
+example_pd2.elf: example_pd2.o libsddf_util_debug.a
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) \
 		$(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB)\
@@ -118,7 +124,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	touch $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
-	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)  --capdl-json $(SPEC)
 
 qemu_disk:
 	$(SDDF)/tools/mkvirtdisk disk 1 512 16777216 GPT

@@ -23,7 +23,7 @@ static int counter = 0;
  */
 static int64_t do_malloc(microkit_channel pd) {
     ++counter;
-    sddf_printf("malloc counter = %d\n", counter);
+    // sddf_printf("malloc counter = %d\n", counter);
     if (pd >= MAX_PDS) return -1;
 
     struct mmap_node *ptr = free_nodes[pd];
@@ -51,7 +51,7 @@ static int64_t do_malloc(microkit_channel pd) {
  * Returns 0 on success, -1 on failure.
  */
 static int do_free(uintptr_t addr, microkit_channel pd) {
-    sddf_printf("free called at addr %px\n", addr);
+    // sddf_printf("free called at addr %px\n", addr);
     --counter;
     if (pd >= MAX_PDS) return -1;
 

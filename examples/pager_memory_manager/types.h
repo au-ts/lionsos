@@ -76,19 +76,22 @@ struct page_request_info {
     enum paging_state state;
 };
 
-void myfree(uintptr_t addr) {
-    sddf_printf("free called\n");
+/**
+ * This actually should wipe the data an the page tables etc...
+ */
+void myfree(uint16_t mm, uintptr_t addr) {
+    // sddf_printf("free called\n");
     microkit_msginfo message = microkit_msginfo_new(0, 2);
     microkit_mr_set(0, 0);
     microkit_mr_set(1, addr);
-    microkit_ppcall(MM_PPC_NUM, message);
+    microkit_ppcall(mm, message);
 }
 
-uintptr_t mymalloc() {
-    sddf_printf("malloc called\n");
+uintptr_t mymalloc(uint64_t mm) {
+    // sddf_printf("malloc called\n");
     microkit_msginfo message = microkit_msginfo_new(0, 1);
     microkit_mr_set(0, 1);
-    microkit_ppcall(MM_PPC_NUM, message);
+    microkit_ppcall(mm, message);
     return microkit_mr_get(0);
 }
 

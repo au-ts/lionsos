@@ -40,7 +40,6 @@
  */
 #define FRAME_DATA 0x8000000000
 
-#define PD_IDX_OFFSET 3 // this is to index into the frame data, 2 because pager and memory manager will be the first 2 indicies.
 #define HEAP_SIZE 128 * 4096
 
 uint64_t unmapped_frames_addr;
@@ -64,7 +63,7 @@ uintptr_t current_faults[MAX_PDS] = {-1};
 char *heaps = (char *)FRAME_DATA;
 
 char *get_frame_data(int pd_idx, uintptr_t frame_offset) {
-    return heaps + ((pd_idx - PD_IDX_OFFSET) * HEAP_SIZE + (frame_offset * 4096));
+    return heaps + (frame_offset * 4096);
 }
 
 // stuff required for the vm fault handling
@@ -121,8 +120,9 @@ void init(void)
         }
         
     }
-    for (int i = 0; i < 10; ++i) {
-        sddf_printf("vspace at id %d is %d\n", i, vspaces[i]);
+    for (int i = 0; i < 65; ++i) {
+        // sddf_printf("vspace at id %d is %d\n", i, vspaces[i]);
+        
     }
     
 }
@@ -130,11 +130,11 @@ void init(void)
 void after_page_in(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr, bool paged_in) {
     // map the page to the frame
     if (paged_in) {
-        sddf_printf("doing memcpy after paging in addr of frame data is \n", get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)));
+        // sddf_printf("doing memcpy after paging in addr of frame data is \n", get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)));
         memcpy(get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)),
        (char *)blk_config.data.vaddr, 4096);
     }
-    sddf_printf("after page in cap %d\n", frame->cap);
+    // sddf_printf("after page in cap %d\n", frame->cap);
     microkit_arm_page_map_ro(frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
     frame->page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
     page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr = frame;
@@ -143,7 +143,7 @@ void after_page_in(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr, bool
 }
 
 void page_in(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr) {
-    sddf_printf("paging in\n");
+    // sddf_printf("paging in\n");
     // get the slot
     int slot = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].pagefile_offset;
     // queue the read
@@ -193,7 +193,6 @@ void page_out(FrameInfo *frame, uint32_t pd_idx, uintptr_t fault_addr) {
  */
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
-    child += 3; // this is necessary as the child num should be same as pd index or everything just  falls apart.
     ++time;
     // TODO: this is when the child has a vm fault...
     uintptr_t fault_addr = microkit_mr_get(1); // I am not sure if this is the right mr number so will need to check later.
@@ -208,7 +207,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         // int err = microkit_arm_page_unmap(old_frame->cap); // I don't know if I actually need to unmap the frame. maybe this is an unnecessary step...
         // sddf_printf("err num is %d\n", err);
         int err = microkit_arm_page_map_rw(old_frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
-        sddf_printf("err num is %d, addr is %p, vspace is %d\n", err, fault_addr, vspaces[pd_idx]);
+        // sddf_printf("err num is %d, addr is %p, vspace is %d, frame cap is %d, pdid is %d\n", err, fault_addr, vspaces[pd_idx], old_frame->cap, pd_idx);
         // i need to mark the page as dirty and recently used
         page->recently_used = true;
         page->dirty = true;
@@ -228,7 +227,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     // frame has a associated page, therefore we need to page out.
     if (frame->page) { 
         // TODO: The page out should page out the frame's page, not the faulting page...
-        sddf_printf("paging out\n");
+        // sddf_printf("paging out\n");
         page_out(frame, pd_idx, fault_addr);
     } else {
         after_page_out(frame, pd_idx, fault_addr);
@@ -249,7 +248,7 @@ void notified(microkit_channel ch)
 
     // int err = blk_dequeue_resp(&blk_queue, &status, &count, &id);
     blk_dequeue_resp(&blk_queue, &status, &count, &id);
-    sddf_printf("pager notified with status %d\n", page_continuations[id].state);
+    // sddf_printf("pager notified with status %d\n", page_continuations[id].state);
     // assert(!err);
     // assert(status == BLK_RESP_OK);
     // assert(count == 1); // make sure that the write/read is actually done.

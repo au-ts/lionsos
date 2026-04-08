@@ -31,7 +31,7 @@ void init(void)
     for (int i = 0; i < NUMMAPS; ++i) {
         myfree(memory_manager_ep, (uintptr_t)mappings[i]);
     }
-    sddf_printf("example pd 1 done!\n");
+    sddf_printf("example pd 2 done!\n");
 }
 
 
