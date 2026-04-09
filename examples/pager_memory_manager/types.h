@@ -45,14 +45,6 @@ typedef struct microkit_data {
 typedef struct pe {
     struct FrameInfo *frame_addr;
     int pagefile_offset;
-    bool dirty;
-    bool recently_used;
-
-    /* MGLRU fields */
-    uint8_t gen;
-    bool in_memory;
-    struct pe *prev;
-    struct pe *next;
 } pe;
 
 // typedef struct FrameInfo {
@@ -68,6 +60,7 @@ typedef struct FrameInfo {
     uint64_t last_accessed;
     pe *page;
     uint32_t next;
+    uint32_t prev;
     uint32_t pd_idx;
 } FrameInfo;
 
@@ -99,5 +92,25 @@ uintptr_t mymalloc(uint64_t mm) {
     microkit_ppcall(mm, message);
     return microkit_mr_get(0);
 }
+
+/**
+ * if page is not null that means it is mapped
+ */
+typedef struct frame {
+    struct frame *next;
+    struct frame *prev;
+    seL4_CPtr cap;
+    pe *page;
+    uint32_t pd_idx;
+    bool referenced;
+    bool dirty;
+    bool active;
+} tl_frame_t;
+
+struct list {
+    tl_frame_t *head;
+    tl_frame_t *tail;
+    int size;
+};
 
 #endif
