@@ -14,19 +14,23 @@ void init(void)
     char *mappings[NUMMAPS];
     for (int i = 0; i < NUMMAPS; ++i) {
         mappings[i] = (char *)mymalloc(memory_manager_ep);
-        // sddf_dprintf("got return from mymalloc %p and the index is %d\n", mappings[i], i);
+        sddf_dprintf("got return from mymalloc %p and the index is %d\n", mappings[i], i);
         mappings[i][10] = 'c';
+        sddf_printf("did the write \n");
     }
+    sddf_printf("stage 1 done \n");
 
     for (int i = 0; i < NUMMAPS; ++i) {
         myfree(memory_manager_ep, (uintptr_t)mappings[i]);
     }
+    sddf_printf("stage 2 done \n");
 
     for (int i = 0; i < NUMMAPS; ++i) {
         mappings[i] = (char *)mymalloc(memory_manager_ep);
         // sddf_dprintf("got return from mymalloc %p and the index is %d\n", mappings[i], i);
         mappings[i][10] = 'c';
     }
+    sddf_printf("stage 3 done \n");
 
     for (int i = 0; i < NUMMAPS; ++i) {
         myfree(memory_manager_ep, (uintptr_t)mappings[i]);

@@ -12,6 +12,11 @@
 #include <sddf/blk/config.h>
 #include <sddf/util/printf.h>
 
+static void remove_from_list(struct list *l, tl_frame_t *node);
+static void push_head(struct list *l, tl_frame_t *node);
+void promote_page(tl_frame_t *frame); // Added prototype for forward reference
+static void refill_inactive(int pd_idx, int num);
+
 static struct list activelist[MAX_PDS];
 static struct list inactivelist[MAX_PDS];
 
@@ -94,6 +99,7 @@ static void push_head(struct list *l, tl_frame_t *node) {
 static void refill_inactive(int pd_idx, int num) {
     while (num) {
         tl_frame_t *ptr = activelist[pd_idx].tail;
+        if (ptr == NULL) return; // prevent infinite loops.
         while (ptr != NULL) {
             if (ptr->referenced) {
                 // move to head
@@ -108,10 +114,6 @@ static void refill_inactive(int pd_idx, int num) {
             }
         }
     }
-}
-
-inline void clear_frame(tl_frame_t *frame) {
-    frame->dirty = false;
 }
 
 
@@ -131,7 +133,7 @@ tl_frame_t *get_frame(uint32_t pd_idx) {
 
     tl_frame_t *ef = inactivelist[pd_idx].tail;
     promote_page(ef);
-    clear_frame(ef);
+    // clear_frame(ef);
     return ef;
 }
 

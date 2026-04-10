@@ -40,7 +40,7 @@ def generate(
     partition = int(args.partition) if args.partition else board.partition
     blk_system.add_client(pager, partition=partition)
 
-    pds = [blk_driver, blk_virt, pager, memory_manager]
+    pds = [blk_driver, blk_virt, pager, memory_manager, timer_driver]
     pager.add_child_pd(client)
     pager.add_child_pd(client2)
     for pd in pds:
