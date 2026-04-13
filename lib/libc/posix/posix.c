@@ -15,7 +15,6 @@
 #include <autoconf.h>
 #include <assert.h>
 #include <fcntl.h>
-#include <limits.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -28,45 +27,99 @@
 #include <sys/syscall.h>
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
+#include <sddf/timer/config.h>
+#include <sddf/timer/client.h>
+#include <sddf/timer/protocol.h>
 
 #include <lions/posix/posix.h>
-#include <lions/posix/tcp.h>
-#include <lions/util.h>
 
-extern void *__sysinfo;
-static muslcsys_syscall_t syscall_table[MUSLC_NUM_SYSCALLS] = {0};
+//TODO: fix to use header; have issue with providing correct libmicrokitco_opts.h
+void microkit_cothread_wait_on_channel(const microkit_channel wake_on);
 
-long sys_clock_gettime(va_list ap) {
+extern size_t __sysinfo;
+extern timer_client_config_t timer_config;
+static muslcsys_syscall_t syscall_table[MUSLC_NUM_SYSCALLS] = { 0 };
+
+static long sys_clock_gettime(va_list ap) {
     clockid_t clk_id = va_arg(ap, clockid_t);
-    (void)clk_id;
     struct timespec *tp = va_arg(ap, struct timespec *);
 
-    uint64_t rtc = 0;
+    // we alias CLOCK_REALTIME to CLOCK_MONOTONIC for now
+    if (clk_id != CLOCK_MONOTONIC && clk_id != CLOCK_REALTIME) {
+        return -EINVAL;
+    }
 
-    tp->tv_sec = rtc / 1000;
-    tp->tv_nsec = (rtc % 1000) * 1000000;
+    if (tp == NULL) {
+        return -EFAULT;
+    }
+
+    uint64_t rtc = sddf_timer_time_now(timer_config.driver_id);
+
+    tp->tv_sec = rtc / NS_IN_S;
+    tp->tv_nsec = rtc % NS_IN_S;
 
     return 0;
 }
 
-long sys_getpid(va_list ap) { return 0; }
+static long sys_nanosleep(va_list ap) {
+    const struct timespec *req = va_arg(ap, const struct timespec *);
+    struct timespec *rem = va_arg(ap, struct timespec *);
 
-long sys_getuid(va_list ap) {
+    if (req == NULL) {
+        return -EFAULT;
+    }
+
+    if (req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec >= NS_IN_S) {
+        return -EINVAL;
+    }
+
+    uint64_t sleep_ns = (uint64_t)req->tv_sec * NS_IN_S + (uint64_t)req->tv_nsec;
+    uint64_t start_time = sddf_timer_time_now(timer_config.driver_id);
+    uint64_t target_time = start_time + sleep_ns;
+
+    sddf_timer_set_timeout(timer_config.driver_id, sleep_ns);
+
+    // Loop until target time reached
+    // May wake spuriously due to timer expiring for other reasons
+    while (sddf_timer_time_now(timer_config.driver_id) < target_time) {
+        microkit_cothread_wait_on_channel(timer_config.driver_id);
+    }
+
+    // No signal interruption support - always sleep full duration
+    if (rem != NULL) {
+        rem->tv_sec = 0;
+        rem->tv_nsec = 0;
+    }
+
+    return 0;
+}
+
+static long sys_getpid(va_list ap) {
+    (void)ap;
+    return 0;
+}
+
+static long sys_getuid(va_list ap) {
     (void)ap;
     return 501;
 }
 
-long sys_getgid(va_list ap) {
+static long sys_getgid(va_list ap) {
     (void)ap;
     return 501;
 }
 
-long sys_getrandom(va_list ap) {
+// FIXME: this is deliberately insecure for now
+static long sys_getrandom(va_list ap) {
     void *buf = va_arg(ap, void *);
     size_t buflen = va_arg(ap, size_t);
     unsigned flags = va_arg(ap, unsigned);
 
     (void)flags;
+
+    if (buf == NULL) {
+        return -EFAULT;
+    }
 
     size_t bytes_written = 0;
 
@@ -85,32 +138,31 @@ long sys_getrandom(va_list ap) {
     return bytes_written;
 }
 
-void debug_error(long num) { dlog("error doing syscall: %d", num); }
-
-int pthread_setcancelstate(int state, int *oldstate) {
-    (void)state;
-    (void)oldstate;
-    return 0;
-}
-
-long sel4_vsyscall(long sysnum, ...) {
+static long sel4_vsyscall(long sysnum, ...) {
     va_list al;
     va_start(al, sysnum);
     muslcsys_syscall_t syscall;
+    long ret;
 
     if (sysnum < 0 || sysnum >= ARRAY_SIZE(syscall_table)) {
-        debug_error(sysnum);
-        return -ENOSYS;
+        fprintf(stderr, "POSIX|ERROR: Invalid syscall number: %ld\n", sysnum);
+        ret = -ENOSYS;
+        goto cleanup;
     } else {
         syscall = syscall_table[sysnum];
     }
+
     /* Check a syscall is implemented there */
     if (!syscall) {
-        debug_error(sysnum);
-        return -ENOSYS;
+        fprintf(stderr, "POSIX|ERROR: Unimplemented syscall number: %ld\n", sysnum);
+        ret = -ENOSYS;
+        goto cleanup;
     }
+
     /* Call it */
-    long ret = syscall(al);
+    ret = syscall(al);
+
+cleanup:
     va_end(al);
     return ret;
 }
@@ -124,19 +176,23 @@ void libc_define_syscall(int syscall_num, muslcsys_syscall_t syscall_func) {
 void libc_init_mem();
 void libc_init_io();
 void libc_init_file();
-void libc_init_sock();
+void libc_init_sock(libc_socket_config_t *);
 
-void libc_init() {
+void libc_init(libc_socket_config_t *socket_config) {
     /* Syscall table init */
-    __sysinfo = sel4_vsyscall;
+    __sysinfo = (size_t)sel4_vsyscall;
     libc_init_mem();
     libc_init_io();
     libc_init_file();
-    libc_init_sock();
 
-    syscall_table[__NR_getpid] = sys_getpid;
-    syscall_table[__NR_clock_gettime] = sys_clock_gettime;
-    syscall_table[__NR_getuid] = sys_getuid;
-    syscall_table[__NR_getgid] = sys_getgid;
-    syscall_table[__NR_getrandom] = sys_getrandom;
+    if (socket_config != NULL) {
+        libc_init_sock(socket_config);
+    }
+
+    libc_define_syscall(__NR_clock_gettime, sys_clock_gettime);
+    libc_define_syscall(__NR_nanosleep, sys_nanosleep);
+    libc_define_syscall(__NR_getpid, sys_getpid);
+    libc_define_syscall(__NR_getuid, sys_getuid);
+    libc_define_syscall(__NR_getgid, sys_getgid);
+    libc_define_syscall(__NR_getrandom, sys_getrandom);
 }

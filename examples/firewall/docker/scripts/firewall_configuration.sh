@@ -57,3 +57,9 @@ export EXT_BAD_HOST_IP=172.16.2.201
 
 # Internal non-existant host IP address
 export INT_BAD_HOST_IP=192.168.1.101
+
+# External unknown network host IP address
+export EXT_BAD_NET_IP=173.16.2.201
+
+# Internal unknown network host IP address
+export INT_BAD_NET_IP=193.168.1.101

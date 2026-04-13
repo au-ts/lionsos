@@ -38,7 +38,10 @@ SYSTEM_FILE := webserver.system
 CFLAGS += \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit
+	-I$(SDDF)/include/microkit \
+	-I$(LIBMICROKITCO_PATH) \
+	-I$(LWIP)/include
+
 include $(LIONSOS)/lib/libc/libc.mk
 
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
@@ -54,7 +57,7 @@ include $(LIONSOS)/components/micropython/micropython.mk
 manifest.py: webserver.py config.py
 webserver.py: $(MICRODOT) config.py
 
-config.py: ${CHECK_FLAGS_BOARD_MD5}
+config.py:
 	echo "base_dir='$(WEBSITE_DIR)'" > config.py
 
 %.py: ${WEBSERVER_SRC_DIR}/%.py
@@ -112,7 +115,7 @@ qemu: ${IMAGE_FILE}
 			-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
 			-m size=2G \
 			-nographic \
-			-device virtio-net-device,netdev=netdev0 \
+			-device virtio-net-device,netdev=netdev0,bus=virtio-mmio-bus.0 \
 			-netdev user,id=netdev0,hostfwd=tcp::5555-10.0.2.16:80 \
 			-global virtio-mmio.force-legacy=false
 

@@ -9,13 +9,13 @@ from sdfgen import SystemDescription, Sddf, Vmm, DeviceTree, LionsOs
 from importlib.metadata import version
 from board import BOARDS
 
-assert version('sdfgen').split(".")[1] == "27", "Unexpected sdfgen version"
+assert version('sdfgen').split(".")[1] == "28", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 VirtualMachine = SystemDescription.VirtualMachine
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
-Irq = SystemDescription.Irq
+Irq = SystemDescription.IrqConventional
 Channel = SystemDescription.Channel
 
 

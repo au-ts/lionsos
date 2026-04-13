@@ -5,4 +5,5 @@
 
 #pragma once
 
+// Event + WAMR cothread.
 #define LIBMICROKITCO_MAX_COTHREADS 2

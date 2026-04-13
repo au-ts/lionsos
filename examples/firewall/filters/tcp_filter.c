@@ -52,174 +52,39 @@ static void filter(void)
             tcp_hdr_t *tcp_hdr = (tcp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
 
             uint16_t rule_id = 0;
-            fw_tcp_instance_t *instance = NULL;
-            // Courtney: Now call a special TCP filter find action function, not
-            // generic. It optionally returns a pointer to the connection
-            // instance if it exists.
-            fw_action_t action = fw_tcp_filter_find_action(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port,
-                                                                   ip_hdr->dst_ip, tcp_hdr->dst_port, &rule_id, &instance);
+            fw_action_t action = fw_filter_find_action(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port, ip_hdr->dst_ip,
+                                                       tcp_hdr->dst_port, &rule_id);
 
-            if (action == FILTER_ACT_CONNECT || action == FILTER_ACT_ESTABLISHED) {
+            switch (action) {
+            case FILTER_ACT_CONNECT: {
+                /* Add an established connection in shared memory for corresponding filter */
+                fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port,
+                                                                ip_hdr->dst_ip, tcp_hdr->dst_port, rule_id);
 
-                /* Extract TCP packet info */
-                bool syn = tcp_hdr->syn;
-                bool ack = tcp_hdr->ack;
-                bool fin = tcp_hdr->fin;
-                uint32_t seq = htonl(tcp_hdr->seq);
-                uint32_t ack_seq = htonl(tcp_hdr->ack_seq);
+                if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
+                    sddf_printf(
+                        "TCP FILTER LOG: on interface %u establishing connection via rule %u: (ip %s, port %u) -> "
+                        "(ip %s, port %u)\n",
+                        filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                        htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                        htons(tcp_hdr->dst_port));
+                }
 
-                /* Extract TCP state */
-                fw_tcp_interface_state_t *local_state = NULL;
-                fw_tcp_interface_state_t *extern_state = NULL;
-                fw_tcp_conn_state_t conn_state = TCP_NONE;
-                fw_filter_err_t fw_err = fw_tcp_extract_state(&filter_state, instance, &local_state, &extern_state, &conn_state);
-                assert(fw_err == FILTER_ERR_OKAY);
-                switch (conn_state) {
-                    case TCP_NONE:
-
-                        /* Only syn packets permitted. */
-                        if (!(syn && !ack && !fin)) {
-                            break;
-                        }
-
-                        /* Create a new TCP instance */
-                        fw_err = fw_tcp_filter_add_instance(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port,
-                                                                            ip_hdr->dst_ip, tcp_hdr->dst_port,
-                                                                            rule_id, seq, &instance);
-                        if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
-                            sddf_printf("%sTCP filter establishing connection via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                                fw_frmt_str[filter_config.interface], rule_id,
-                                ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                                ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
-                        }
-
-                        if (fw_err == FILTER_ERR_FULL) {
-                            sddf_printf("%sTCP FILTER LOG: could not establish connection for rule %u: (ip %s, port %u) -> (ip %s, port %u): %s\n",
-                                fw_frmt_str[filter_config.interface], rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                                ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port), fw_filter_err_str[fw_err]);
-                        }
-
-                        transmit = true;
-                        break;
-                    case TCP_SYN_SENT:
-
-                        /* Only syn retry packets permitted. */
-                        if (!((syn && !ack && !fin) && seq == local_state->seq)) {
-                            break;
-                        }
-
-                        transmit = true;
-                        break;
-                    case TCP_SYN_SEEN:
-
-                        /* Only syn-ack responses permitted. */
-                        if (!((syn && ack && !fin) && ack_seq == extern_state->seq + 1)) {
-                            break;
-                        }
-
-                        local_state->flags = fw_tcp_flags_to_bits(syn, ack, fin, false);
-                        local_state->seq = seq;
-                        transmit = true;
-                        break;
-                    case TCP_SYNACK_SENT:
-
-                        /* Only syn-ack retry packets permitted. */
-                        if (!((syn && ack && !fin) && ack_seq == extern_state->seq + 1 && seq == local_state->seq)) {
-                            break;
-                        }
-
-                        transmit = true;
-                        break;
-                    case TCP_SYNACK_SEEN:
-
-                        /* Syn has been received, only final ack permitted */
-                        if (!((!syn && ack && !fin) && ack_seq == extern_state->seq + 1 && seq == local_state->seq + 1)) {
-                            break;
-                        }
-
-                        local_state->flags = fw_tcp_flags_to_bits(syn, ack, fin, false);
-                        local_state->seq = seq;
-                        transmit = true;
-                        break;
-                    case TCP_ESTABLISHED:
-
-                        /* Connection has been established, no more syns permitted. */
-                        if (syn || !ack) {
-                            break;
-                        }
-
-                        local_state->flags = fw_tcp_flags_to_bits(syn, ack, fin, false);
-                        local_state->seq = seq;
-                        transmit = true;
-                        break;
-                    case TCP_FIN_SENT:
-
-                        /* Fin has been sent, no syns or data permitted. Only fin retransmissions and acks. */
-                        if (!(!syn && ack && ((fin && seq == local_state->seq) || (!fin && seq == local_state->seq + 1)))) {
-                            break;
-                        }
-
-                        transmit = true;
-                        break;
-                    case TCP_FIN_SEEN:
-
-                        /* Only this side of the connection permitted to send data, no syns permitted. */
-                        if (syn || !ack) {
-                            break;
-                        }
-
-                        /* If this is a fin-ack, it must acknowledge the fin packet seen. */
-                        if (fin && (ack_seq != extern_state->seq + 1)) {
-                            break;
-                        }
-
-                        local_state->flags = fw_tcp_flags_to_bits(syn, ack, fin, false);
-                        local_state->seq = seq;
-                        transmit = true;
-                        break;
-                    case TCP_FINACK_SENT:
-
-                        /* Fin-ack has been sent, retries permitted only. */
-                        if (!((!syn && fin && ack) && seq == local_state->seq && ack_seq == extern_state->seq + 1)) {
-                            break;
-                        }
-
-                        transmit = true;
-                        break;
-                    case TCP_FINACK_SEEN:
-
-                        /* Only final ack permitted. */
-                        if (!((!syn && !fin && ack) && seq == local_state->seq + 1 && ack_seq == extern_state->seq + 1)) {
-                            break;
-                        }
-
-                        local_state->flags = fw_tcp_flags_to_bits(syn, ack, fin, false);
-                        local_state->seq = seq;
-                        transmit = true;
-                        break;
-                    case TCP_FINAL_ACK_SENT:
-
-                        /* Only final ack re-tries permitted. */
-                        if (!((!syn && !fin && ack) && seq == local_state->seq && ack_seq == extern_state->seq + 1)) {
-                            break;
-                        }
-
-                        transmit = true;
-                        break;
-                    case TCP_CLOSED:
-                    default:    
-
-                        /* Fin handshake complete, final ack received, no more traffic permitted. */
-                        break;
+                if (fw_err == FILTER_ERR_FULL) {
+                    sddf_printf("TCP FILTER LOG: on interface %u could not establish connection for rule %u: (ip %s, "
+                                "port %u) -> (ip %s, port %u): %s\n",
+                                filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                                htons(tcp_hdr->dst_port), fw_filter_err_str[fw_err]);
                 }
             }
-
-            /* Transmit the packet to the routing component */
-            if (transmit || action == FILTER_ACT_ALLOW) {
-                /* Reset the checksum as it's recalculated in hardware */
-                #ifdef NETWORK_HW_HAS_CHECKSUM
+            case FILTER_ACT_ESTABLISHED:
+            case FILTER_ACT_ALLOW: {
+                /* Transmit the packet to the routing component */
+                /* Reset the checksum if it's recalculated in hardware */
+#ifdef NETWORK_HW_HAS_CHECKSUM
                 tcp_hdr->check = 0;
-                #endif
+#endif
 
                 err = fw_enqueue(&router_queue, &buffer);
                 assert(!err);
@@ -230,29 +95,39 @@ static void filter(void)
 
                 if (FW_DEBUG_OUTPUT) {
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
-                        sddf_printf("%sTCP filter transmitting via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                            fw_frmt_str[filter_config.interface], rule_id,
-                            ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                            ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
+                        sddf_printf(
+                            "TCP FILTER LOG: on interface %u transmitting via rule %u: (ip %s, port %u) -> (ip %s, "
+                            "port %u)\n",
+                            filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                            htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                            htons(tcp_hdr->dst_port));
                     } else if (action == FILTER_ACT_ESTABLISHED) {
-                        sddf_printf("%sTCP filter transmitting via external rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                            fw_frmt_str[filter_config.interface], rule_id,
-                            ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                            ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
+                        sddf_printf(
+                            "TCP FILTER LOG: on interface %u transmitting via external rule %u: (ip %s, port %u) -> "
+                            "(ip %s, port %u)\n",
+                            filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                            htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                            htons(tcp_hdr->dst_port));
                     }
                 }
-            } else {
+                break;
+            }
+            case FILTER_ACT_DROP:
+            default: {
                 /* Return the buffer to the rx virtualiser */
                 err = net_enqueue_free(&rx_queue, buffer);
                 assert(!err);
                 returned = true;
 
                 if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("%sTCP filter dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        fw_frmt_str[filter_config.interface], rule_id,
-                        ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0), htons(tcp_hdr->src_port),
-                        ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
+                    sddf_printf(
+                        "TCP FILTER LOG: on interface %u dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
+                        filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                        htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                        htons(tcp_hdr->dst_port));
                 }
+                break;
+            }
             }
         }
 
@@ -274,64 +149,72 @@ static void filter(void)
     }
 }
 
-seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
+microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     switch (microkit_msginfo_get_label(msginfo)) {
-    case FW_SET_DEFAULT_ACTION: {
-        fw_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
+    case FILTER_SET_DEFAULT_ACTION: {
+        fw_action_t action = microkit_mr_get(FILTER_SET_DEFAULT_ARG_ACTION);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("%sTCP filter changing default action from %u to %u\n",
-                fw_frmt_str[filter_config.interface], filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
+            sddf_printf("TCP FILTER LOG: on interface %u changing default action from %u to %u\n",
+                        filter_config.interface, filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
         }
 
         fw_filter_err_t err = fw_filter_update_default_action(&filter_state, action);
         assert(err == FILTER_ERR_OKAY);
 
-        seL4_SetMR(FILTER_RET_ERR, err);
+        microkit_mr_set(FILTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
-    case FW_ADD_RULE: {
-        fw_action_t action = seL4_GetMR(FILTER_ARG_ACTION);
-        uint32_t src_ip = seL4_GetMR(FILTER_ARG_SRC_IP);
-        uint16_t src_port = seL4_GetMR(FILTER_ARG_SRC_PORT);
-        uint32_t dst_ip = seL4_GetMR(FILTER_ARG_DST_IP);
-        uint16_t dst_port = seL4_GetMR(FILTER_ARG_DST_PORT);
-        uint8_t src_subnet = seL4_GetMR(FILTER_ARG_SRC_SUBNET);
-        uint8_t dst_subnet = seL4_GetMR(FILTER_ARG_DST_SUBNET);
-        bool src_port_any = seL4_GetMR(FILTER_ARG_SRC_ANY_PORT);
-        bool dst_port_any = seL4_GetMR(FILTER_ARG_DST_ANY_PORT);
-        uint16_t rule_id = 0;
-        fw_filter_err_t err = fw_filter_add_rule(&filter_state, src_ip, src_port,
-            dst_ip, dst_port, src_subnet, dst_subnet, src_port_any, dst_port_any, action, &rule_id);
+    case FILTER_ADD_RULE: {
+        fw_action_t action = microkit_mr_get(FILTER_ADD_ARG_ACTION);
+        uint32_t src_ip = microkit_mr_get(FILTER_ADD_ARG_SRC_IP);
+        uint16_t src_port = microkit_mr_get(FILTER_ADD_ARG_SRC_PORT);
+        uint32_t dst_ip = microkit_mr_get(FILTER_ADD_ARG_DST_IP);
+        uint16_t dst_port = microkit_mr_get(FILTER_ADD_ARG_DST_PORT);
+        uint8_t src_subnet = microkit_mr_get(FILTER_ADD_ARG_SRC_SUBNET);
+        uint8_t dst_subnet = microkit_mr_get(FILTER_ADD_ARG_DST_SUBNET);
+        bool src_port_any = microkit_mr_get(FILTER_ADD_ARG_SRC_ANY_PORT);
+        bool dst_port_any = microkit_mr_get(FILTER_ADD_ARG_DST_ANY_PORT);
 
-        if (FW_DEBUG_OUTPUT) {
-            sddf_printf("%sTCP filter create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> (ip %s, mask %u, port %u, any_port %u): %s\n",
-                fw_frmt_str[filter_config.interface], rule_id,
-                ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet, htons(src_port), src_port_any, fw_filter_action_str[action],
-                ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, htons(dst_port), dst_port_any, fw_filter_err_str[err]);
+        /* TCP filter does not support this action */
+        if (action == 0 || action > FW_FILTER_NUM_ACTIONS || !filter_config.webserver.actions[action - 1]) {
+            microkit_mr_set(FILTER_RET_ERR, FILTER_ERR_UNSUPPORTED_ACTION);
+            return microkit_msginfo_new(0, 1);
         }
 
-        seL4_SetMR(FILTER_RET_ERR, err);
-        seL4_SetMR(FILTER_RET_RULE_ID, rule_id);
+        uint16_t rule_id = 0;
+        fw_filter_err_t err = fw_filter_add_rule(&filter_state, src_ip, src_port, dst_ip, dst_port, src_subnet,
+                                                 dst_subnet, src_port_any, dst_port_any, action, &rule_id);
+
+        if (FW_DEBUG_OUTPUT) {
+            sddf_printf(
+                "TCP FILTER LOG: on interface %u create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> "
+                "(ip %s, mask %u, port %u, any_port %u): %s\n",
+                filter_config.interface, rule_id, ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet, htons(src_port),
+                src_port_any, fw_filter_action_str[action], ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet,
+                htons(dst_port), dst_port_any, fw_filter_err_str[err]);
+        }
+
+        microkit_mr_set(FILTER_RET_ERR, err);
+        microkit_mr_set(FILTER_RET_RULE_ID, rule_id);
         return microkit_msginfo_new(0, 2);
     }
-    case FW_DEL_RULE: {
-        uint16_t rule_id = seL4_GetMR(FILTER_ARG_RULE_ID);
+    case FILTER_DEL_RULE: {
+        uint16_t rule_id = microkit_mr_get(FILTER_DELETE_ARG_RULE_ID);
         fw_filter_err_t err = fw_filter_remove_rule(&filter_state, rule_id);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("%sTCP remove rule id %u: %s\n",
-                fw_frmt_str[filter_config.interface], rule_id, fw_filter_err_str[err]);
+            sddf_printf("TCP FILTER LOG: on interface %u remove rule id %u: %s\n", filter_config.interface, rule_id,
+                        fw_filter_err_str[err]);
         }
 
-        seL4_SetMR(FILTER_RET_ERR, err);
+        microkit_mr_set(FILTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
     default:
-        sddf_printf("%sTCP FILTER LOG: unknown request %lu on channel %u\n",
-            fw_frmt_str[filter_config.interface],
-            microkit_msginfo_get_label(msginfo), ch);
+        sddf_printf("TCP FILTER LOG: on interface %u unknown request %lu on channel %u\n", filter_config.interface,
+                    microkit_msginfo_get_label(msginfo), ch);
         break;
     }
 
@@ -343,8 +226,8 @@ void notified(microkit_channel ch)
     if (ch == net_config.rx.id) {
         filter();
     } else {
-        sddf_dprintf("%sTCP FILTER LOG: Received notification on unknown channel: %d!\n",
-            fw_frmt_str[filter_config.interface], ch);
+        sddf_dprintf("TCP FILTER LOG: on interface %u, received notification on unknown channel: %d!\n",
+                     filter_config.interface, ch);
     }
 }
 
@@ -353,12 +236,14 @@ void init(void)
     assert(net_config_check_magic((void *)&net_config));
 
     net_queue_init(&rx_queue, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,
-        net_config.rx.num_buffers);
+                   net_config.rx.num_buffers);
 
-    fw_queue_init(&router_queue, filter_config.router.queue.vaddr,
-        sizeof(net_buff_desc_t), filter_config.router.capacity);
+    fw_queue_init(&router_queue, filter_config.router.queue.vaddr, sizeof(net_buff_desc_t),
+                  filter_config.router.capacity);
 
-    fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr, filter_config.webserver.rules_capacity,
-        filter_config.local_instances.vaddr, filter_config.extern_instances.vaddr, filter_config.instances_capacity,
-        (fw_action_t)filter_config.webserver.default_action);
+    fw_filter_state_init(&filter_state, filter_config.webserver.rules.vaddr, filter_config.rule_id_bitmap.vaddr,
+                         filter_config.webserver.rules_capacity, filter_config.internal_instances.vaddr,
+                         filter_config.external_instances, filter_config.instances_capacity,
+                         filter_config.initial_rules, filter_config.num_initial_rules,
+                         filter_config.num_external_instances);
 }
