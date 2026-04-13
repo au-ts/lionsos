@@ -48,8 +48,7 @@ micropython.elf: FORCE mpy-cross \
 		MICROKIT_SDK=$(MICROKIT_SDK) \
 		MICROKIT_BOARD=$(MICROKIT_BOARD) \
 		MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
-		CPU=$(CPU) \
-		TARGET=$(TARGET) \
+		CFLAGS_ARCH='$(CFLAGS_ARCH)' \
 		USE_CC=$(CC) \
 		USE_LD=$(LD) \
 		USE_SIZE=llvm-size \

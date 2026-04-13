@@ -51,9 +51,9 @@ $(MUSL):
 
 # Avoids a musl ./configure error when we have -MD:
 # At the "checking compiler works" step, without this it tries to create /dev/null.d
-$(MUSL)/lib/libc.a $(LIONS_LIBC)/include: CFLAGS += -MF musl.d
+$(MUSL)/lib/libc.a $(LIONS_LIBC)/include &: CFLAGS += -MF musl.d
 
-$(MUSL)/lib/libc.a $(LIONS_LIBC)/include: ${MUSL_SRC}/Makefile | $(MUSL) $(LIBC)
+$(MUSL)/lib/libc.a $(LIONS_LIBC)/include &: ${MUSL_SRC}/Makefile | $(MUSL) $(LIBC)
 	cd ${MUSL} && CC=$(CC) CFLAGS="$(CFLAGS)" AR=$(AR) RANLIB=$(RANLIB) \
 		${MUSL_SRC}/configure --target=$(TARGET) --srcdir=${MUSL_SRC} --prefix=$(MUSL) \
 		--includedir=$(LIONS_LIBC)/include --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
