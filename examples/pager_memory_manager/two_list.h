@@ -19,7 +19,7 @@ static void refill_inactive(int pd_idx, int num);
 
 static struct list activelist[MAX_PDS];
 static struct list inactivelist[MAX_PDS];
-
+static struct list freelist[MAX_PDS];
 tl_frame_t frame_table[MAX_PDS][NUM_PT_ENTRIES]; // this is a static list of frames
 int free_frames_idx[MAX_PDS] = {-1};
 
@@ -30,6 +30,7 @@ inline void init_frame(frame_pd_id *current_frame) {
     int pd_idx = current_frame->pd_idx;
     ++free_frames_idx[pd_idx];
     frame_table[pd_idx][free_frames_idx[pd_idx]] = (tl_frame_t){ .cap = current_frame->frame_cap, .page = NULL, .next = NULL, .prev = NULL, .active = false, .dirty = false };
+    push_head(&freelist[pd_idx], &frame_table[pd_idx][free_frames_idx[pd_idx]]);
 }
 
 /**
@@ -119,22 +120,50 @@ static void refill_inactive(int pd_idx, int num) {
 
 // this is only called during eviction, so frame should be cleared.
 tl_frame_t *get_frame(uint32_t pd_idx) {
-    if (free_frames_idx[pd_idx] != -1) {
-        tl_frame_t *frame = &frame_table[pd_idx][free_frames_idx[pd_idx]];
-        --free_frames_idx[pd_idx];
+    // If we have free frames, use one
+    if (freelist[pd_idx].head != NULL) {
+        tl_frame_t *frame = freelist[pd_idx].head;
+        remove_from_list(&freelist[pd_idx], frame);
         push_head(&activelist[pd_idx], frame);
+        frame->active = true;
         return frame;
     }
 
-    // TODO: see if this is appropriate.
+    // Otherwise, evict from inactive/active
     if (inactivelist[pd_idx].size < 2) {
         refill_inactive(pd_idx, NUM_PT_ENTRIES / 2);
     }
 
     tl_frame_t *ef = inactivelist[pd_idx].tail;
     promote_page(ef);
-    // clear_frame(ef);
     return ef;
+}
+
+/**
+ * Frees a frame: removes it from the active/inactive list 
+ * and adds it back to the free frames pool.
+ */
+void free_frame(tl_frame_t *frame) {
+    if (frame == NULL) return;
+    
+    // 1. Unmap hardware
+    microkit_arm_page_unmap(frame->cap);
+    
+    // 2. Remove from active/inactive list
+    if (frame->active) {
+        remove_from_list(&activelist[frame->pd_idx], frame);
+    } else {
+        remove_from_list(&inactivelist[frame->pd_idx], frame);
+    }
+
+    // 3. Reset metadata
+    frame->page = NULL;
+    frame->active = false;
+    frame->dirty = false;
+    frame->referenced = false;
+    
+    // 4. Add to free list
+    push_head(&freelist[frame->pd_idx], frame);
 }
 
 #endif

@@ -65,9 +65,11 @@ def generate(
     client2.add_map(user_heap_map2)
     exmmc = SystemDescription.Channel(a=client, b=memory_manager, a_id=0, b_id=0, pp_a=True)
     exmmc2 = SystemDescription.Channel(a=client2, b=memory_manager, a_id=1, b_id=1, pp_a=True)
+    mpc = SystemDescription.Channel(a=memory_manager, b=pager, a_id=16, b_id=16, pp_a=True)
     # exmmc = SystemDescription.Channel(a=memory_manager, b=client, a_id=2, b_id=2)
     sdf.add_channel(exmmc)
     sdf.add_channel(exmmc2)
+    sdf.add_channel(mpc)
 
     timer_system.add_client(pager)
     assert timer_system.connect()

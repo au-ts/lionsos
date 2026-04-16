@@ -22,6 +22,7 @@ void init(void)
 
     for (int i = 0; i < NUMMAPS; ++i) {
         myfree(memory_manager_ep, (uintptr_t)mappings[i]);
+        sddf_printf("free %d\n", i);
     }
     sddf_printf("stage 2 done \n");
 
@@ -34,6 +35,7 @@ void init(void)
 
     for (int i = 0; i < NUMMAPS; ++i) {
         myfree(memory_manager_ep, (uintptr_t)mappings[i]);
+        
     }
     sddf_printf("example pd 1 done!\n");
 }

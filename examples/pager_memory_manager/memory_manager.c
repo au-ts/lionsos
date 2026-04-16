@@ -9,6 +9,7 @@
 
 #define MM_MALLOC 1
 #define MM_FREE   0
+#define PAGER_CHANNEL 16
 
 // Pool of mmap nodes
 struct mmap_node node_pool[MAX_PDS][NUM_PT_ENTRIES];
@@ -81,6 +82,15 @@ static int do_free(uintptr_t addr, microkit_channel pd) {
         free_nodes[pd]->prev = ptr;
     }
     free_nodes[pd] = ptr;
+
+    // i need to free on the pager side as well.
+    /**
+     * This assumes that the pd is the same as the child id.
+     */
+    microkit_msginfo message = microkit_msginfo_new(0, 2);
+    microkit_mr_set(0, pd);
+    microkit_mr_set(1, ROUND_DOWN_TO_4K(addr));
+    microkit_ppcall(PAGER_CHANNEL, message);
 
     return 0;
 }
