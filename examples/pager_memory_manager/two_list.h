@@ -97,6 +97,7 @@ static void push_head(struct list *l, tl_frame_t *node) {
 }
 
 static void refill_inactive(int pd_idx, int num) {
+    sddf_printf("refilling inactive\n");
     while (num) {
         tl_frame_t *ptr = activelist[pd_idx].tail;
         if (ptr == NULL) return; // prevent infinite loops.
