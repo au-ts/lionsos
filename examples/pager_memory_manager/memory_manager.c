@@ -1,6 +1,6 @@
 // Very simple memory manager for the purpose of benchmarking.
 // Malloc and free 4k frames.
-
+// TODO: change this to be a singly linked list.
 #include <microkit.h>
 #include <stdint.h>
 #include "types.h"
