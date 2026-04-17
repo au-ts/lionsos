@@ -42,8 +42,10 @@ typedef struct microkit_data {
     uintptr_t pd_idx;
 } frame_pd_id;
 
+struct frame;
+
 typedef struct pe {
-    struct FrameInfo *frame_addr;
+    struct frame *frame_addr;
     int pagefile_offset;
 } pe;
 
@@ -72,7 +74,7 @@ enum paging_state {
 struct page_request_info {
     uint32_t pd_idx;
     uintptr_t fault_addr;
-    FrameInfo *frame;
+    struct frame *frame;
     enum paging_state state;
 };
 

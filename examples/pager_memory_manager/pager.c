@@ -95,7 +95,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
 {
     sddf_printf("in the fault handler\n");
     // TODO: make sure that i map as rw and with a dirty bit if the fault is a write fault.
-    uintptr_t fault_addr = microkit_mr_get(1);
+    uintptr_t fault_addr = ROUND_DOWN_TO_4K(microkit_mr_get(1));
     uint64_t fsr = microkit_mr_get(2);
     bool is_write = (fsr >> 1) & 1;
     uint32_t pd_idx = child;
@@ -105,7 +105,10 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     if (old_frame) {
         old_frame->referenced = true;
         if (is_write) old_frame->dirty = true;
-        microkit_arm_page_map_rw(old_frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
+        
+        int err = microkit_arm_page_map_rw(old_frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
+        if (err) return seL4_False;
+        sddf_printf("Mapping frame %p to VAddr %p in PD %d the original addr is %p is write? %d\n", old_frame->cap, fault_addr, pd_idx, old_frame->page, is_write);
         return seL4_True;
     }
 
@@ -218,14 +221,28 @@ void page_out(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     memcpy(data_dest, get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)), 4096);
     blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
     sddf_notify(blk_config.virt.id);
+
+    // make sure to do the metadata stuff
+    pe *page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
+    page->frame_addr = NULL;
 }
 
-
-
-// NOT USED BELOW:
+/**
+ * This is when a free is called.
+ */
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
-    // TODO: this may not be required.
+    int pd_idx = microkit_mr_get(0);
+    uintptr_t addr = microkit_mr_get(1);
+
+    pe *page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(addr)];
+    tl_frame_t *frame = page->frame_addr;
+    page->frame_addr = NULL;
+    mark_pagefile_slot_free(page->pagefile_offset);
+
+    // i also need to add this frame to the free list.
+    sddf_printf("freeing the frame\n");
+    free_frame(frame);
 }
 
 
