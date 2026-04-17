@@ -64,7 +64,15 @@ static inline pe retrieve_page(uintptr_t fault_addr, uint32_t pd_idx) {
 
 void init(void)
 {
+    // initialise the page table
     memset0(page_table, MAX_PDS * NUM_PT_ENTRIES * sizeof(pe));
+    // i need to set the pagefile slot as -1 i think.
+    for (int i = 0; i < MAX_PDS; ++i) {
+        for (int j = 0; j < NUM_PT_ENTRIES; ++j) {
+            page_table[i][j].pagefile_offset = -1;
+        }
+    } 
+    
 
     // initialise and check blk queue and config
     frames = (frame_pd_id *) unmapped_frames_addr;
@@ -133,6 +141,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     } else if (frame->page) {
         sddf_printf("just unmap\n");
         microkit_arm_page_unmap(frame->cap);
+        frame->page->frame_addr = NULL;
     }
     after_page_out(frame, pd_idx, fault_addr);
     return seL4_True;
@@ -202,7 +211,7 @@ void page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
 
 void after_page_out(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     // check whether or not I need to page in or not.
-    if (page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr) {
+    if (page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].pagefile_offset != -1) {
         page_in(frame, pd_idx, fault_addr);
     } else {
         after_page_in(frame, pd_idx, fault_addr, false);
@@ -238,10 +247,10 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
     pe *page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(addr)];
     tl_frame_t *frame = page->frame_addr;
     page->frame_addr = NULL;
-    mark_pagefile_slot_free(page->pagefile_offset);
+    mark_pagefile_slot_free(page);
 
     // i also need to add this frame to the free list.
-    sddf_printf("freeing the frame\n");
+    sddf_printf("freeing the frame %p, the next frame is %p %p\n", frame, frame->prev, frame->next);
     free_frame(frame);
 }
 

@@ -1,6 +1,8 @@
 #ifndef PAGEFILE_H
 #define PAGEFILE_H
 
+#include "types.h"
+
 static int pagefile_size = 0;
 static int pagefile_freed_slots_stack[4000];
 static int pagefile_stack_ptr = 0;
@@ -12,8 +14,9 @@ static inline int get_pagefile_slot() {
     return ++pagefile_size;
 }
 
-static inline void mark_pagefile_slot_free(int idx) {
-    pagefile_freed_slots_stack[pagefile_stack_ptr++] = idx;
+static inline void mark_pagefile_slot_free(pe *page) {
+    pagefile_freed_slots_stack[pagefile_stack_ptr++] = page->pagefile_offset;
+    page->pagefile_offset = -1;
 }
 
 // this is to store info to continue the things.
