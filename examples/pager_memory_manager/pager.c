@@ -160,7 +160,7 @@ void notified(microkit_channel ch)
 
     // int err = blk_dequeue_resp(&blk_queue, &status, &count, &id);
     blk_dequeue_resp(&blk_queue, &status, &count, &id);
-    sddf_printf("pager notified with status %d\n", page_continuations[id].state);
+    // sddf_printf("pager notified with status %d\n", page_continuations[id].state);
     // assert(!err);
     // assert(status == BLK_RESP_OK);
     // assert(count == 1); // make sure that the write/read is actually done.
@@ -182,11 +182,9 @@ void notified(microkit_channel ch)
 void after_page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr, bool paged_in) {
     // map the page to the frame
     if (paged_in) {
-        // sddf_printf("doing memcpy after paging in addr of frame data is \n", get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)));
         memcpy(get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)),
        (char *)blk_config.data.vaddr, 4096);
     }
-    // sddf_printf("after page in cap %d\n", frame->cap);
     microkit_arm_page_map_ro(frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr)); // TODO: maybe i should do rw if a write fault 
     frame->page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
     page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr = frame;
@@ -196,7 +194,6 @@ void after_page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr, boo
 }
 
 void page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
-    // sddf_printf("paging in\n");
     // get the slot
     int slot = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].pagefile_offset;
     // queue the read
@@ -250,7 +247,6 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
     mark_pagefile_slot_free(page);
 
     // i also need to add this frame to the free list.
-    sddf_printf("freeing the frame %p, the next frame is %p %p\n", frame, frame->prev, frame->next);
     free_frame(frame);
 }
 
