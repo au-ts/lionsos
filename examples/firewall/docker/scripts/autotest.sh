@@ -6,19 +6,19 @@
 # The following tests run within the Docker container and assume that the
 # firewall is running and is configured per the `firewall_configuration.sh`
 # script. From that script, we use the following values
-# - EXT_HOST_IP
-# - INT_HOST_IP
-# - EXT_BAD_HOST_IP
-# - INT_BAD_HOST_IP
-# - EXT_BAD_NET_IP
-# - INT_BAD_NET_IP
-# - FW_INT_IP
-# - FW_INT_SUBNET
-# - FW_EXT_IP
-# - FW_EXT_SUBNET
+# - INTERFACE0_HOST_IP
+# - INTERFACE1_HOST_IP
+# - INTERFACE0_BAD_HOST_IP
+# - INTERFACE1_BAD_HOST_IP
+# - INTERFACE0_BAD_NET_IP
+# - INTERFACE1_BAD_NET_IP
+# - FW_INTERFACE1_IP
+# - FW_INTERFACE1_SUBNET
+# - FW_INTERFACE0_IP
+# - FW_INTERFACE0_SUBNET
 #
 # Additionally, the tests expect that allow rules exist for traffic on
-# `UDP_PORT` and `TCP_PORT` for `EXT_HOST_IP` and `INT_HOST_IP`.
+# `UDP_PORT` and `TCP_PORT` for `INTERFACE0_HOST_IP` and `INTERFACE1_HOST_IP`.
 #
 # The shUnit2 framework is used for setup, teardown and temporary file handling.
 # For further information on shUnit2 and its execution behaviour, please refer
@@ -56,7 +56,9 @@ TEMPLATE_DEST='$dest_ip, $dest_port, $dest_subnet'
 TEMPLATE_ACTION='$interface, $action'
 TEMPLATE_JSON="{ ${TEMPLATE_SRC}, ${TEMPLATE_DEST}, ${TEMPLATE_ACTION} }"
 
-FIREWALL_EXTERNAL_INTERFACE=0
+INTERFACE0_NAMESPACE='namespace0'
+INTERFACE1_NAMESPACE='namespace1'
+FIREWALL_INTERFACE0=0
 FIREWALL_ACTION_DROP=2
 
 #
@@ -117,22 +119,22 @@ oneTimeSetUp() {
         print_header 'Container network interfaces'
         ifconfig
 
-        print_header 'External network interfaces'
-        ip netns exec ext ifconfig
+        print_header 'Interface0 network interfaces'
+        ip netns exec "${INTERFACE0_NAMESPACE}" ifconfig
 
-        print_header 'Internal network interfaces'
-        ip netns exec int ifconfig
+        print_header 'Interface1 network interfaces'
+        ip netns exec "${INTERFACE1_NAMESPACE}" ifconfig
     fi
 
     if [ "${SHOW_ROUTES}" = true ]; then
         print_header 'Container routes'
         ip route
 
-        print_header 'External network routes'
-        ip netns exec ext ip route
+        print_header 'Interface0 network routes'
+        ip netns exec "${INTERFACE0_NAMESPACE}" ip route
 
-        print_header 'Internal network routes'
-        ip netns exec int ip route
+        print_header 'Interface1 network routes'
+        ip netns exec "${INTERFACE1_NAMESPACE}" ip route
     fi
 
     # If firewall debug messages are enabled and the messages are redirected to
@@ -246,9 +248,9 @@ generate_test_data() {
 # Internet Control Message Protocol (ICMP) tests
 #
 
-test_icmp_ping_host_internal_to_external() {
-    ip netns exec int \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${EXT_HOST_IP}" > "${RECEIVED}" 2>&1
+test_icmp_ping_host_interface1_to_interface0() {
+    ip netns exec "${INTERFACE1_NAMESPACE}" \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${INTERFACE0_HOST_IP}" > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_NO_ECHO_RESPONSE}"
@@ -256,9 +258,9 @@ test_icmp_ping_host_internal_to_external() {
     fi
 }
 
-test_icmp_ping_host_external_to_internal() {
-    ip netns exec ext \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${INT_HOST_IP}" > "${RECEIVED}" 2>&1
+test_icmp_ping_host_interface0_to_interface1() {
+    ip netns exec "${INTERFACE0_NAMESPACE}" \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${INTERFACE1_HOST_IP}" > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_NO_ECHO_RESPONSE}"
@@ -266,11 +268,11 @@ test_icmp_ping_host_external_to_internal() {
     fi
 }
 
-test_icmp_ping_unreachable_host_internal_to_external() {
+test_icmp_ping_unreachable_host_interface1_to_interface0() {
     print_info "This may take up to ${LONG_TIMEOUT} seconds..."
 
-    ip netns exec int \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${EXT_BAD_HOST_IP}" \
+    ip netns exec "${INTERFACE1_NAMESPACE}" \
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INTERFACE0_BAD_HOST_IP}" \
         > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_HOST_UNREACHABLE}" "${RECEIVED}"; then
@@ -279,11 +281,11 @@ test_icmp_ping_unreachable_host_internal_to_external() {
     fi
 }
 
-test_icmp_ping_unreachable_host_external_to_internal() {
+test_icmp_ping_unreachable_host_interface0_to_interface1() {
     print_info "This may take up to ${LONG_TIMEOUT} seconds..."
 
-    ip netns exec ext \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INT_BAD_HOST_IP}" \
+    ip netns exec "${INTERFACE0_NAMESPACE}" \
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INTERFACE1_BAD_HOST_IP}" \
         > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_HOST_UNREACHABLE}" "${RECEIVED}"; then
@@ -292,9 +294,9 @@ test_icmp_ping_unreachable_host_external_to_internal() {
     fi
 }
 
-test_icmp_ping_unreachable_net_internal_to_external() {
-    ip netns exec int \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${EXT_BAD_NET_IP}" \
+test_icmp_ping_unreachable_net_interface1_to_interface0() {
+    ip netns exec "${INTERFACE1_NAMESPACE}" \
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INTERFACE0_BAD_NET_IP}" \
         > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_NET_UNREACHABLE}" "${RECEIVED}"; then
@@ -303,9 +305,9 @@ test_icmp_ping_unreachable_net_internal_to_external() {
     fi
 }
 
-test_icmp_ping_unreachable_net_external_to_internal() {
-    ip netns exec ext \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INT_BAD_NET_IP}" \
+test_icmp_ping_unreachable_net_interface0_to_interface1() {
+    ip netns exec "${INTERFACE0_NAMESPACE}" \
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${INTERFACE1_BAD_NET_IP}" \
         > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_NET_UNREACHABLE}" "${RECEIVED}"; then
@@ -314,13 +316,13 @@ test_icmp_ping_unreachable_net_external_to_internal() {
     fi
 }
 
-test_icmp_ping_firewall_from_internal_network() {
+test_icmp_ping_firewall_from_interface1_network() {
     # Ensure ping responsiveness is turned on
     response=$(curl --silent \
         --output /dev/null \
         --header 'Content-Type: application/json' \
         --request 'POST' \
-        "http://${FW_INT_IP}/api/ping/1/1")
+        "http://${FW_INTERFACE1_IP}/api/ping/1/1")
 
     # Check if the response contains an error
     error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
@@ -331,8 +333,8 @@ test_icmp_ping_firewall_from_internal_network() {
         return
     fi
 
-    ip netns exec int \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INT_IP}" > "${RECEIVED}" 2>&1
+    ip netns exec "${INTERFACE1_NAMESPACE}" \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INTERFACE1_IP}" > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_NO_ECHO_RESPONSE}"
@@ -340,13 +342,13 @@ test_icmp_ping_firewall_from_internal_network() {
     fi
 }
 
-test_icmp_ping_firewall_from_external_network() {
+test_icmp_ping_firewall_from_interface0_network() {
     # Ensure ping responsiveness is turned on
     response=$(curl --silent \
         --output /dev/null \
         --header 'Content-Type: application/json' \
         --request 'POST' \
-        "http://${FW_INT_IP}/api/ping/0/1")
+        "http://${FW_INTERFACE1_IP}/api/ping/0/1")
 
     # Check if the response contains an error
     error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
@@ -357,8 +359,8 @@ test_icmp_ping_firewall_from_external_network() {
         return
     fi
 
-    ip netns exec ext \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_EXT_IP}" > "${RECEIVED}" 2>&1
+    ip netns exec "${INTERFACE0_NAMESPACE}" \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INTERFACE0_IP}" > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_NO_ECHO_RESPONSE}"
@@ -370,14 +372,14 @@ test_icmp_ping_firewall_from_external_network() {
 # Transmission Control Protocol (TCP) tests
 #
 
-test_tcp_internal_to_external() {
-    # Listen for traffic on the external host
-    ip netns exec ext \
+test_tcp_interface1_to_interface0() {
+    # Listen for traffic on the interface0 host
+    ip netns exec "${INTERFACE0_NAMESPACE}" \
         nc -l "${TCP_PORT}" > "${RECEIVED}" &
 
-    # Send traffic, from the internal host, to the external host
-    ip netns exec int \
-        nc -w "${TIMEOUT}" -N "${EXT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+    # Send traffic, from the interface1 host, to the interface0 host
+    ip netns exec "${INTERFACE1_NAMESPACE}" \
+        nc -w "${TIMEOUT}" -N "${INTERFACE0_HOST_IP}" "${TCP_PORT}" < "${SENT}"
     exit_code=$?
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
@@ -395,14 +397,14 @@ test_tcp_internal_to_external() {
     fi
 }
 
-test_tcp_external_to_internal() {
-    # Listen for traffic on the internal host
-    ip netns exec int \
+test_tcp_interface0_to_interface1() {
+    # Listen for traffic on the interface1 host
+    ip netns exec "${INTERFACE1_NAMESPACE}" \
         nc -l "${TCP_PORT}" > "${RECEIVED}" &
 
-    # Send traffic, from the external host, to the internal host
-    ip netns exec ext \
-        nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+    # Send traffic, from the interface0 host, to the interface1 host
+    ip netns exec "${INTERFACE0_NAMESPACE}" \
+        nc -w "${TIMEOUT}" -N "${INTERFACE1_HOST_IP}" "${TCP_PORT}" < "${SENT}"
     exit_code=$?
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
@@ -424,14 +426,14 @@ test_tcp_external_to_internal() {
 # User Datagram Protocol (UDP) tests
 #
 
-test_udp_internal_to_external() {
-    # Listen for traffic on the external host
-    ip netns exec ext \
+test_udp_interface1_to_interface0() {
+    # Listen for traffic on the interface0 host
+    ip netns exec "${INTERFACE0_NAMESPACE}" \
         nc -ul "${UDP_PORT}" > "${RECEIVED}" &
 
-    # Send traffic, from the internal host, to the external host
-    ip netns exec int \
-        nc -u -q "${TIMEOUT}" "${EXT_HOST_IP}" "${UDP_PORT}" < "${SENT}"
+    # Send traffic, from the interface1 host, to the interface0 host
+    ip netns exec "${INTERFACE1_NAMESPACE}" \
+        nc -u -q "${TIMEOUT}" "${INTERFACE0_HOST_IP}" "${UDP_PORT}" < "${SENT}"
     exit_code=$?
 
     listener=$!
@@ -450,14 +452,14 @@ test_udp_internal_to_external() {
     fi
 }
 
-test_udp_external_to_internal() {
-    # Listen for traffic on the internal host
-    ip netns exec int \
+test_udp_interface0_to_interface1() {
+    # Listen for traffic on the interface1 host
+    ip netns exec "${INTERFACE1_NAMESPACE}" \
         nc -ul "${UDP_PORT}" > "${RECEIVED}" &
 
-    # Send traffic, from the external host, to the internal host
-    ip netns exec ext \
-        nc -u -q "${TIMEOUT}" "${INT_HOST_IP}" "${UDP_PORT}" < "${SENT}"
+    # Send traffic, from the interface0 host, to the interface1 host
+    ip netns exec "${INTERFACE0_NAMESPACE}" \
+        nc -u -q "${TIMEOUT}" "${INTERFACE1_HOST_IP}" "${UDP_PORT}" < "${SENT}"
     exit_code=$?
 
     listener=$!
@@ -487,21 +489,21 @@ test_rule_application_and_removal() {
     # Craft a JSON request with the rule's parameters
     json=$(jq \
         --null-input \
-        --argjson interface "${FIREWALL_EXTERNAL_INTERFACE}" \
+        --argjson interface "${FIREWALL_INTERFACE0}" \
         --argjson action "${FIREWALL_ACTION_DROP}" \
-        --arg src_ip "${EXT_HOST_IP}" \
+        --arg src_ip "${INTERFACE0_HOST_IP}" \
         --arg src_port "" \
-        --argjson src_subnet "${FW_EXT_SUBNET}" \
-        --arg dest_ip "${INT_HOST_IP}" \
+        --argjson src_subnet "${FW_INTERFACE0_SUBNET}" \
+        --arg dest_ip "${INTERFACE1_HOST_IP}" \
         --arg dest_port "${TCP_PORT}" \
-        --argjson dest_subnet "${FW_INT_SUBNET}" \
+        --argjson dest_subnet "${FW_INTERFACE1_SUBNET}" \
         "${TEMPLATE_JSON}")
 
     # Apply the rule
     response=$(curl --silent \
         --header 'Content-Type: application/json' \
         --request 'POST' \
-        --data "$json" "http://${FW_INT_IP}/api/rules/tcp")
+        --data "$json" "http://${FW_INTERFACE1_IP}/api/rules/tcp")
 
     # Extract the rule's ID
     rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
@@ -511,13 +513,13 @@ test_rule_application_and_removal() {
         return
     fi
 
-    # Listen for traffic on the internal host
-    ip netns exec int \
+    # Listen for traffic on the interface1 host
+    ip netns exec "${INTERFACE1_NAMESPACE}" \
         nc -l "${TCP_PORT}" > "${RECEIVED}" &
 
-    # Attempt to send traffic, from the external host, to the internal host
-    ip netns exec ext \
-        nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+    # Attempt to send traffic, from the interface0 host, to the interface1 host
+    ip netns exec "${INTERFACE0_NAMESPACE}" \
+        nc -w "${TIMEOUT}" -N "${INTERFACE1_HOST_IP}" "${TCP_PORT}" < "${SENT}"
 
     listener=$!
     kill "${listener}" > /dev/null 2>&1
@@ -533,7 +535,7 @@ test_rule_application_and_removal() {
         --output /dev/null \
         --header 'Content-Type: application/json' \
         --request 'DELETE' \
-        "http://${FW_INT_IP}/api/rules/tcp/${rule_id}/${FIREWALL_EXTERNAL_INTERFACE}")
+        "http://${FW_INTERFACE1_IP}/api/rules/tcp/${rule_id}/${FIREWALL_INTERFACE0}")
 
     # Check if the response contains an error
     error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
@@ -547,13 +549,13 @@ test_rule_application_and_removal() {
     # Verify that the rule was removed; in other words, data transmission should
     # now succeed
 
-    # Listen for traffic on the internal host
-    ip netns exec int \
+    # Listen for traffic on the interface1 host
+    ip netns exec "${INTERFACE1_NAMESPACE}" \
         nc -l "${TCP_PORT}" > "${RECEIVED}" &
 
-    # Send traffic, from the external host, to the internal host
-    ip netns exec ext \
-        nc -w "${TIMEOUT}" -N "${INT_HOST_IP}" "${TCP_PORT}" < "${SENT}"
+    # Send traffic, from the interface0 host, to the interface1 host
+    ip netns exec "${INTERFACE0_NAMESPACE}" \
+        nc -w "${TIMEOUT}" -N "${INTERFACE1_HOST_IP}" "${TCP_PORT}" < "${SENT}"
 
     listener=$!
     kill "${listener}" > /dev/null 2>&1

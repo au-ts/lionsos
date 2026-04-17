@@ -3,11 +3,9 @@
 from sdfgen import SystemDescription
 from pyfw.component_base import Component
 from pyfw.constants import (
-    interfaces,
     BuildConstants,
     supported_protocols,
     supported_filter_actions,
-    initial_rules,
     filter_instances_buffer,
     filter_instances_region,
     filter_rules_buffer,
@@ -76,6 +74,8 @@ class Filter(Component, FwFilterConfig):
             filter_rule_bitmap_region.region_size,
         )
 
+        initial_rules = BuildConstants.initial_rules()
+        assert iface_index < len(initial_rules)
         # Initialise filter config class
         FwFilterConfig.__init__(
             self,
@@ -152,4 +152,4 @@ class Filter(Component, FwFilterConfig):
         self.external_instances = [
             instance_mr.map(self.pd, "r") for instance_mr in external_mrs if instance_mr != self._local_instance_mr
         ]
-        assert len(self.external_instances) == len(interfaces) - 1
+        assert len(self.external_instances) == len(BuildConstants.interfaces()) - 1
