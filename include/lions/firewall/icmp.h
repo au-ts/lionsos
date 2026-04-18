@@ -118,7 +118,8 @@ typedef struct __attribute__((__packed__)) icmp_echo {
 } icmp_echo_t;
 
 /* Total length of ICMP echo request/reply packet with maximum payload */
-#define ICMP_ECHO_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_echo_t) + FW_ICMP_ECHO_PAYLOAD_LEN)
+#define ICMP_ECHO_LEN (ICMP_COMMON_HDR_LEN + sizeof(icmp_echo_t))
+#define ICMP_ECHO_NO_DATA_LEN ((sizeof(icmp_echo_t) - FW_ICMP_ECHO_PAYLOAD_LEN))
 
 /* ----------------- 11 - Time Exceeded ---------------------------*/
 typedef struct __attribute__((__packed__)) icmp_time_exceeded {
@@ -258,7 +259,7 @@ static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt
 
     /* Calculate payload length */
     uint16_t icmp_total_len = htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr);
-    uint16_t payload_len = icmp_total_len - ICMP_COMMON_HDR_LEN - (sizeof(icmp_echo_t) - FW_ICMP_ECHO_PAYLOAD_LEN);
+    uint16_t payload_len = icmp_total_len - ICMP_COMMON_HDR_LEN - ICMP_ECHO_NO_DATA_LEN;
     if (payload_len > FW_ICMP_ECHO_PAYLOAD_LEN) {
         payload_len = FW_ICMP_ECHO_PAYLOAD_LEN;
     }
@@ -278,7 +279,7 @@ static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt
     memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
 
     /* Copy payload */
-    uint8_t *payload_data = (uint8_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET + (sizeof(icmp_echo_t) - FW_ICMP_ECHO_PAYLOAD_LEN));
+    uint8_t *payload_data = (uint8_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET + ICMP_ECHO_NO_DATA_LEN);
     memcpy(req.echo.data, payload_data, payload_len);
 
     return fw_enqueue(icmp_queue, &req) == 0;
