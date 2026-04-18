@@ -43,8 +43,8 @@ ERROR_FAILED_TO_APPLY_RULE='Failed to apply firewall rule'
 ERROR_FAILED_TO_REMOVE_RULE='Failed to remove firewall rule'
 ERROR_RULE_STILL_APPLIED='Firewall rule is still applied'
 ERROR_ICMP_REJECT_NOT_APPLIED='ICMP reject rule did not block ping traffic or send a destination port unreachable message'
-ERROR_UDP_REJECT_UNEXPECTED_OUTPUT='UDP reject rule did not send a destination port unreachable message`
-ERROR_UNEXPECTED_ECHO_RESPONSE='Received echo response when ping responsiveness is disabled`
+ERROR_UDP_REJECT_UNEXPECTED_OUTPUT='UDP reject rule did not send a destination port unreachable message'
+ERROR_UNEXPECTED_ECHO_RESPONSE='Received echo response when ping responsiveness is disabled'
 INFO_SKIPPING_TEST='Skipping (feature not implemented yet)'
 ERROR_TIMEOUT='Did not receive time to live exceeded message'
 
@@ -471,7 +471,7 @@ test_icmp_reject_int_to_ext() {
         ping -c "${COUNT}" -w "${TIMEOUT}" "${EXT_HOST_IP}" > "${RECEIVED}" 2>&1
 
     # Ping should not succeed while the reject rule is active.
-    if grep -Eq --ignore-case "${REGEX_DESTINATION_PORT_UNREACHABLE}" "${RECEIVED}"; then
+    if ! grep -Eq --ignore-case "${REGEX_DESTINATION_PORT_UNREACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_ICMP_REJECT_NOT_APPLIED}"
         print_file 'Ping output' "${RECEIVED}"
         print_log
@@ -523,7 +523,7 @@ test_icmp_reject_ext_to_int() {
         ping -c "${COUNT}" -w "${TIMEOUT}" "${INT_HOST_IP}" > "${RECEIVED}" 2>&1
 
     # Ping should not succeed while the reject rule is active.
-    if grep -Eq --ignore-case "${REGEX_DESTINATION_PORT_UNREACHABLE}" "${RECEIVED}"; then
+    if ! grep -Eq --ignore-case "${REGEX_DESTINATION_PORT_UNREACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_ICMP_REJECT_NOT_APPLIED}"
         print_file 'Ping output' "${RECEIVED}"
         print_log
