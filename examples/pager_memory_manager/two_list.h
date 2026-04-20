@@ -98,7 +98,6 @@ static void push_head(struct list *l, tl_frame_t *node) {
 }
 
 static void refill_inactive(int pd_idx, int num) {
-    sddf_printf("refilling inactive\n");
     while (num) {
         tl_frame_t *ptr = activelist[pd_idx].tail;
         if (ptr == NULL) return; // prevent infinite loops.
@@ -145,17 +144,14 @@ tl_frame_t *get_frame(uint32_t pd_idx) {
  * and adds it back to the free frames pool.
  */
 void free_frame(tl_frame_t *frame) {
-    sddf_printf("in free frame\n");
     if (frame == NULL) return;
     
     // 1. Unmap hardware
     microkit_arm_page_unmap(frame->cap);
     // 2. Remove from active/inactive list
     if (frame->active) {
-        sddf_printf("fram is in activelist\n");
         remove_from_list(&activelist[frame->pd_idx], frame);
     } else {
-        sddf_printf("frame is in inactivelist\n");
         remove_from_list(&inactivelist[frame->pd_idx], frame);
     }
 

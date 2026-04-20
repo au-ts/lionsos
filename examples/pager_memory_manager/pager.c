@@ -101,7 +101,6 @@ void init(void)
  */
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
-    sddf_printf("in the fault handler\n");
     // TODO: make sure that i map as rw and with a dirty bit if the fault is a write fault.
     uintptr_t fault_addr = ROUND_DOWN_TO_4K(microkit_mr_get(1));
     uint64_t fsr = microkit_mr_get(2);
@@ -116,7 +115,6 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         
         int err = microkit_arm_page_map_rw(old_frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
         if (err) return seL4_False;
-        sddf_printf("Mapping frame %p to VAddr %p in PD %d the original addr is %p is write? %d\n", old_frame->cap, fault_addr, pd_idx, old_frame->page, is_write);
         return seL4_True;
     }
 
@@ -130,16 +128,14 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     } else {
         current_faults[pd_idx] = ROUND_DOWN_TO_4K(fault_addr);
     }
-    sddf_printf("before get frame\n");
+
     tl_frame_t *frame = get_frame(pd_idx);
-    sddf_printf("before the if cases\n");
+
     if (frame->dirty) {
         // do a page out
-        sddf_printf("page out is queued\n");
         page_out(frame, pd_idx, fault_addr);
         return seL4_True;
     } else if (frame->page) {
-        sddf_printf("just unmap\n");
         microkit_arm_page_unmap(frame->cap);
         frame->page->frame_addr = NULL;
     }
@@ -160,7 +156,6 @@ void notified(microkit_channel ch)
 
     // int err = blk_dequeue_resp(&blk_queue, &status, &count, &id);
     blk_dequeue_resp(&blk_queue, &status, &count, &id);
-    // sddf_printf("pager notified with status %d\n", page_continuations[id].state);
     // assert(!err);
     // assert(status == BLK_RESP_OK);
     // assert(count == 1); // make sure that the write/read is actually done.
