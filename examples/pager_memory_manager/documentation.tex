@@ -1,0 +1,34 @@
+\documentclass{article}
+\usepackage{hyperref}
+
+\begin{document}
+
+\section{How To Use}
+\begin{enumerate}
+    \item Git clone seL4 from \href{https://github.com/SEL4/sel4}{seL4}.
+    \item Setup sdfgen: \begin{enumerate}
+        \item Clone microkit\_sdf\_gen from \href{https://github.com/au-ts/microkit_sdf_gen}{sdfgen}.
+        \item Git checkout to the branch: joshua/unbacked\_mrs.
+        \item Build the sdfgen library following the README.md instructions.
+    \end{enumerate}
+    \item Setup microkit: \begin{enumerate}
+        \item Clone microkit from \href{git@github.com:au-ts/microkit.git}{microkit}.
+        \item Git checkout to the branch joshua/send\_frames\_to\_pd.
+        \item Build microkit following the DEVELOPER.md instructions.
+        \item When building, use these flags: `--board=qemu\_virt\_aarch64 --configs=debug --skip-docs --skip-tar'
+    \end{enumerate}
+    \item Create LionsOS environment: \begin{enumerate}
+        \item Clone \href{https://github.com/au-ts/lionsos}{LionsOS} 
+        \item Git checkout to the branch joshua/userland\_pager.
+        \item Copy the pager\_memory\_manager from examples.
+        \item Add your applications, using the \texttt{mymalloc()} and \texttt{myfree()} functions and with a global variable int named \texttt{memory\_manager\_ep}.
+        \item Create the \texttt{meta.py} file as one would normally.
+        \item Inside the meta file, create a memory region with the backed argument as false for each application that uses \texttt{mymalloc()} and \texttt{myfree()}.
+        \item Map these \textit{heaps} to each application.
+        \item Create channels with ppc allowed from application to memory manager for each application that has a heap.
+        \item Run the program. 
+    \end{enumerate}
+    
+\end{enumerate}
+\section{Implementation Details}
+\end{document}

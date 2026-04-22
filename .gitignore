@@ -5,3 +5,6 @@ docs/book/
 \#*#
 .#*
 __pycache__
+examples/pager_memory_manager/documentation.**
+!examples/pager_memory_manager/documentation.tex
+!examples/pager_memory_manager/documentation.pdf
