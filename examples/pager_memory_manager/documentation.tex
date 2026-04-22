@@ -1,6 +1,8 @@
 \documentclass{article}
 \usepackage{hyperref}
-
+\usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, calc, decorations.pathmorphing}
 \begin{document}
 
 \section{How To Use}
@@ -31,4 +33,88 @@
     
 \end{enumerate}
 \section{Implementation Details}
+
+\begin{figure}[H]
+    \centering
+    
+    
+\begin{tikzpicture}[
+font=\sffamily,
+>=Latex,
+node distance=2.8cm and 3.2cm,
+box/.style={
+draw,
+rounded corners=10pt,
+very thick,
+minimum width=4.1cm,
+minimum height=2.0cm,
+align=center,
+fill=#1!12
+},
+flow/.style={->, very thick},
+backflow/.style={->, very thick, dashed},
+lab/.style={midway, fill=white, inner sep=1.5pt, font=\small\itshape}
+]
+
+% Nodes
+\node[box=blue] (user) {User Program};
+\node[box=violet, right=of user] (mm) {Memory Manager};
+\node[box=teal, below=of user] (page) {Page};
+\node[box=orange, right=of page] (blk) {Blk Device};
+
+% User <-> Memory manager
+\draw[flow, bend left=18]
+(user.east) to node[lab, above] {malloc()} (mm.west);
+
+\draw[flow, bend left=10]
+(user.east) to node[lab, above right] {free()} ($(mm.west)+(0,-0.35)$);
+
+\draw[backflow, bend left=30]
+($(mm.west)+(0,-0.65)$) to node[lab, below] {remap / return memory} ($(user.east)+(0,-0.65)$);
+
+% User -> Page fault
+\draw[flow, bend right=28]
+(user.south) to node[lab, left] {VM fault} (page.north);
+
+% Memory manager -> Page
+\draw[flow]
+(mm.south) -- node[lab, right] {free()} (page.north);
+
+% Page <-> Block device
+\draw[flow, bend left=8]
+(page.east) to node[lab, above] {page in/out} (blk.west);
+
+\draw[backflow, bend left=8]
+(blk.west) to node[lab, below] {notify} (page.east);
+
+\end{tikzpicture}
+
+\caption{System Diagram for Pager and Memory Manager}
+\end{figure}
+\subsection{Design Problems}
+LionsOS is a static operating system. What this means is that all applications and memory regions etc. are loaded before runtime and these applications run for the lifetime of the system. This forms a problem regarding the implementation of the pager and memory manager on LionsOS as the memory manager is supposed to grant extra memory to a protection domain on request. However, where should this memory come from? It is important to note that the microkit currently does not support the retyping of memory in userland. This means that it is impossible without extensively changing microkit to even change the page tables during runtime. The solution to this problem that I have come up with is to give each protection domain a memory region which acts like a heap. This heap is of course fixed in size, but through paging, we can have it such that the heap seems as large as required from the perspective of the protection domain. \textit{Note: this implementation is only a proof of concept design to run benchmarks to compare paging performance against Linux.}
+\subsection{Limitations of the Design}
+\begin{itemize}
+    \item There is a static upper limit of the number of protection domains that are supported by the pager, defined as \texttt{MAX\_PDS}.
+    \item Protection domains that are to be supported by the pager must be specified as `children' of the pager in the system description file.
+    \item The `children' of the pager must have an ID less than \texttt{MAX\_PDS}.
+    \item The memory manager only allocates 4k size blocks.
+    \item The Pager must be named `pager' in the system description file.
+    \item The number of available frames is fixed upon loading the system.
+    \item The `heap' allocated to by the memory manager always starts at 0x8000000000.
+    \item The `heap' must be specified in the system description file as an unbacked memory region. 
+    \item Protection domains are singlethreaded.
+    \item `Child' protection domains of the pager do not have other faults except page faults. 
+\end{itemize} 
+\subsection{sdfgen}
+In order to support such a heap described in section 2.1, we need to implement a memory region which actually remains unmapped from the vspace of the protection domain of the client. In order to do this, we need to have a flag in the memory region object of the system description file to mark a memory region to remain unmapped. This memory region also needs to have its frame caps to be accessible by and mapped into the pager protection domain to do paging operations. In order to support this, I have added a new optional boolean field identified as `backed'. By default memory regions are backed=true, and if they are backed=false, mappings are not done, only the page table structures are created, the memory region mapped to a protection domain named `pager' and the frame caps passed to the protection domain named `pager'. 
+\\\\
+This is implemented in \href{https://github.com/au-ts/microkit_sdf_gen}{sdfgen} in branch `joshua/unbacked\_mrs' as an additional optional field in the constructor of \texttt{MemoryRegion}. It is also possible to bypass the sdfgen entirely by writing up the system description file by hand and including an attribute `backed=false' in the memory region xml object.
+\subsection{microkit}
+
+\subsection{LionsOS}
+\subsubsection{user application}
+\subsubsection{memory manager}
+\subsubsection{pager}
+
 \end{document}
