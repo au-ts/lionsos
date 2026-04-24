@@ -71,6 +71,8 @@ void init(void)
         for (int j = 0; j < NUM_PT_ENTRIES; ++j) {
             page_table[i][j].pagefile_offset = -1;
         }
+        free_frames_idx[i] = -1;
+        current_faults[i] = -1;
     } 
     
 
@@ -100,7 +102,8 @@ void init(void)
  * - THE PROBLEM IS THAT THE PD INDEX IS DIFFERENT FROM THE CHILD NUM...
  */
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
-{
+{   
+    // sddf_printf("fault happened\n");
     // TODO: make sure that i map as rw and with a dirty bit if the fault is a write fault.
     uintptr_t fault_addr = ROUND_DOWN_TO_4K(microkit_mr_get(1));
     uint64_t fsr = microkit_mr_get(2);
@@ -128,7 +131,6 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     } else {
         current_faults[pd_idx] = ROUND_DOWN_TO_4K(fault_addr);
     }
-
     tl_frame_t *frame = get_frame(pd_idx);
 
     if (frame->dirty) {
@@ -136,8 +138,16 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         page_out(frame, pd_idx, fault_addr);
         return seL4_True;
     } else if (frame->page) {
-        microkit_arm_page_unmap(frame->cap);
-        frame->page->frame_addr = NULL;
+        if (frame->page->pagefile_offset != -1) {
+            // gotta do a page out because there is no pagefile for this frame.
+            page_out(frame, pd_idx, fault_addr);
+            return seL4_True;
+        } else {
+            // not dirty so can just do a unmap (old pagefile slot is good enough)
+            microkit_arm_page_unmap(frame->cap);
+            frame->page->frame_addr = NULL;
+        }
+        
     }
     after_page_out(frame, pd_idx, fault_addr);
     return seL4_True;
@@ -189,8 +199,10 @@ void after_page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr, boo
 }
 
 void page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
+    
     // get the slot
     int slot = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].pagefile_offset;
+    sddf_printf("paging in pfs = %d\n", slot);
     // queue the read
     int request_id = get_request_id();
     page_continuations[request_id] = (struct page_request_info){ .frame = frame, .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_IN }; // TODO: fill this out with relevant info.
@@ -213,6 +225,7 @@ void after_page_out(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
 void page_out(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     // find empty slot in pagefile
     int slot = get_pagefile_slot();
+    sddf_printf("paging out at slot %d\n", slot);
     // mark in page entry where the pagefile entry is.
     frame->page->pagefile_offset = slot;
     // queue the write with page after_page_out();

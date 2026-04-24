@@ -11,7 +11,7 @@ static inline int get_pagefile_slot() {
     if (pagefile_stack_ptr) {
         return pagefile_freed_slots_stack[--pagefile_stack_ptr];
     }
-    return ++pagefile_size;
+    return pagefile_size++;
 }
 
 static inline void mark_pagefile_slot_free(pe *page) {
@@ -27,7 +27,7 @@ int get_request_id() {
         request_id = 0;
         return 9;
     }
-    return ++request_id;
+    return request_id++;
 }
 
 #endif
