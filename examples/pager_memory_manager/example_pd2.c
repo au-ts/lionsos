@@ -9,9 +9,6 @@ uint64_t memory_manager_ep;
 
 void init(void)
 {
-    for (int i = 0; i < 99999; ++i) {
-        sddf_printf(".");
-    };
     sddf_dprintf("hello from example pd 2\n");
     // I have 128 heap frames, I want to do paging stuff here.
     char *mappings[NUMMAPS];

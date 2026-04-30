@@ -167,21 +167,21 @@ void notified(microkit_channel ch)
     uint32_t id = -1;
 
     // int err = blk_dequeue_resp(&blk_queue, &status, &count, &id);
-    blk_dequeue_resp(&blk_queue, &status, &count, &id);
-    // assert(!err);
-    // assert(status == BLK_RESP_OK);
-    // assert(count == 1); // make sure that the write/read is actually done.
-    // TODO: if necessary make a thing to recover from the error.
+    while (blk_dequeue_resp(&blk_queue, &status, &count, &id) != -1) {
+        // assert(!err);
+        // assert(status == BLK_RESP_OK);
+        // assert(count == 1); // make sure that the write/read is actually done.
+        // TODO: if necessary make a thing to recover from the error.
 
-    // queue the next thing depending on what was done.
-    if (page_continuations[id].state == PAGE_OUT) {
-        // unmap the frame.
-        microkit_arm_page_unmap(page_continuations[id].frame->cap);
-        after_page_out( page_continuations[id].frame, page_continuations[id].pd_idx, page_continuations[id].fault_addr);
-    } else {
-        after_page_in(page_continuations[id].frame, page_continuations[id].pd_idx, page_continuations[id].fault_addr, true);
+        // queue the next thing depending on what was done.
+        if (page_continuations[id].state == PAGE_OUT) {
+            // unmap the frame.
+            microkit_arm_page_unmap(page_continuations[id].frame->cap);
+            after_page_out( page_continuations[id].frame, page_continuations[id].pd_idx, page_continuations[id].fault_addr);
+        } else {
+            after_page_in(page_continuations[id].frame, page_continuations[id].pd_idx, page_continuations[id].fault_addr, true);
+        }
     }
-
 }
 
 
