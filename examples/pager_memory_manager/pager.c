@@ -118,10 +118,10 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         
         int err = microkit_arm_page_map_rw(old_frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
         if (err) return seL4_False;
+        // sddf_printf("rw given\n");
         return seL4_True;
     }
 
-    // actual vm fault.
 
     // check that the fault is not currently being served
     // assuming that PD's are singlethreaded, they should be stuck relaying the same VM fault.
@@ -131,14 +131,14 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     } else {
         current_faults[pd_idx] = ROUND_DOWN_TO_4K(fault_addr);
     }
+    // sddf_printf("before get frame\n");
     tl_frame_t *frame = get_frame(pd_idx);
-
     if (frame->dirty) {
         // do a page out
         page_out(frame, pd_idx, fault_addr);
         return seL4_True;
     } else if (frame->page) {
-        if (frame->page->pagefile_offset != -1) {
+        if (frame->page->pagefile_offset == -1) {
             // gotta do a page out because there is no pagefile for this frame.
             page_out(frame, pd_idx, fault_addr);
             return seL4_True;
@@ -202,7 +202,7 @@ void page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     
     // get the slot
     int slot = page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].pagefile_offset;
-    sddf_printf("paging in pfs = %d\n", slot);
+    // sddf_printf("paging in pfs = %d\n", slot);
     // queue the read
     int request_id = get_request_id();
     page_continuations[request_id] = (struct page_request_info){ .frame = frame, .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_IN }; // TODO: fill this out with relevant info.
@@ -225,9 +225,10 @@ void after_page_out(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
 void page_out(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     // find empty slot in pagefile
     int slot = get_pagefile_slot();
-    sddf_printf("paging out at slot %d\n", slot);
+    // sddf_printf("paging out at slot %d\n", slot);
     // mark in page entry where the pagefile entry is.
-    frame->page->pagefile_offset = slot;
+    pe* page = frame->page;
+    page->pagefile_offset = slot;
     // queue the write with page after_page_out();
     int request_id = get_request_id();
     page_continuations[request_id] = (struct page_request_info){ .frame = frame, .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_OUT }; // TODO: fill this out with relevant info.
@@ -237,7 +238,8 @@ void page_out(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     sddf_notify(blk_config.virt.id);
 
     // make sure to do the metadata stuff
-    pe *page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
+    // pe *page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
+    // page->frame_addr = NULL;
     page->frame_addr = NULL;
 }
 

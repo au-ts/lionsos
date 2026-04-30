@@ -67,59 +67,59 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
 
 void init(void)
 {
-    // sddf_printf("Starting pager test...\n");
+    sddf_printf("Starting pager test...\n");
 
-    // char *mappings[NUMMAPS];
+    char *mappings[NUMMAPS];
 
-    // // 1. Allocate and write unique values
-    // for (int i = 0; i < NUMMAPS; ++i) {
-    //     mappings[i] = (char *)mymalloc(memory_manager_ep);
+    // 1. Allocate and write unique values
+    for (int i = 0; i < NUMMAPS; ++i) {
+        mappings[i] = (char *)mymalloc(memory_manager_ep);
 
-    //     if (!mappings[i]) {
-    //         sddf_printf("Allocation failed at %d\n", i);
-    //         return;
-    //     }
+        if (!mappings[i]) {
+            sddf_printf("Allocation failed at %d\n", i);
+            return;
+        }
 
-    //     // Write identifiable pattern
-    //     for (int j = 0; j < PAGE_SIZE; j += 512) {
-    //         mappings[i][j] = (char)i;
-    //     }
-    // }
+        // Write identifiable pattern
+        for (int j = 0; j < PAGE_SIZE; j += 512) {
+            mappings[i][j] = (char)i;
+        }
+    }
 
-    // sddf_printf("Initial writes done.\n");
+    sddf_printf("Initial writes done.\n");
 
-    // // 2. Read back to force page-ins and verify correctness
-    // for (int i = 0; i < NUMMAPS; ++i) {
-    //     for (int j = 0; j < PAGE_SIZE; j += 512) {
-    //         sddf_printf("This is %d\n", i);
-    //         if (mappings[i][j] != (char)i) {
-    //             sddf_printf("Data mismatch at page %d offset %d was %d\n", i, j, mappings[i][j]);
-    //         }
-    //     }
-    // }
+    // 2. Read back to force page-ins and verify correctness
+    for (int i = 0; i < NUMMAPS; ++i) {
+        for (int j = 0; j < PAGE_SIZE; j += 512) {
+            // sddf_printf("This is %d\n", i);
+            if (mappings[i][j] != (char)i) {
+                sddf_printf("Data mismatch at page %d offset %d was %d\n", i, j, mappings[i][j]);
+            }
+        }
+    }
 
-    // sddf_printf("Verification after eviction passed.\n");
+    sddf_printf("Verification after eviction passed.\n");
 
-    // // 3. Free everything
-    // for (int i = 0; i < NUMMAPS; ++i) {
-    //     myfree(memory_manager_ep, (uintptr_t)mappings[i]);
-    // }
+    // 3. Free everything
+    for (int i = 0; i < NUMMAPS; ++i) {
+        myfree(memory_manager_ep, (uintptr_t)mappings[i]);
+    }
 
-    // sddf_printf("Free completed.\n");
+    sddf_printf("Free completed.\n");
 
-    // // 4. Reallocate and ensure reuse works
-    // for (int i = 0; i < NUMMAPS; ++i) {
-    //     mappings[i] = (char *)mymalloc(memory_manager_ep);
+    // 4. Reallocate and ensure reuse works
+    for (int i = 0; i < NUMMAPS; ++i) {
+        mappings[i] = (char *)mymalloc(memory_manager_ep);
 
-    //     if (!mappings[i]) {
-    //         sddf_printf("Re-allocation failed at %d\n", i);
-    //         return;
-    //     }
+        if (!mappings[i]) {
+            sddf_printf("Re-allocation failed at %d\n", i);
+            return;
+        }
 
-    //     mappings[i][0] = 42;
-    // }
+        mappings[i][0] = 42;
+    }
 
-    // sddf_printf("Re-allocation test passed.\n");
+    sddf_printf("Re-allocation test passed.\n");
 
-    // sddf_printf("Pager test SUCCESS.\n");
+    sddf_printf("Pager test SUCCESS.\n");
 }

@@ -40,16 +40,8 @@ uintptr_t get_frame_offset(uintptr_t frame_addr, int pd_idx) {
     return (frame_addr - (uintptr_t)frame_table[pd_idx]) / sizeof(tl_frame_t);
 }
 
-void push_head_active(tl_frame_t *frame) {
-    if (frame->active) {
-        remove_from_list(&activelist[frame->pd_idx], frame);
-        push_head(&activelist[frame->pd_idx], frame);
-    } else {
-        promote_page(frame);
-    }
-}
-
 void promote_page(tl_frame_t *frame) {
+    // sddf_printf("promote\n");
     remove_from_list(&inactivelist[frame->pd_idx], frame);
     push_head(&activelist[frame->pd_idx], frame);
     frame->active = true;
@@ -59,6 +51,7 @@ void promote_page(tl_frame_t *frame) {
  * returns the prev frame.
  */
 tl_frame_t *demote_page(tl_frame_t *frame) {
+    // sddf_printf("demote\n");
     tl_frame_t *prev = frame->prev;
     remove_from_list(&activelist[frame->pd_idx], frame);
     push_head(&inactivelist[frame->pd_idx], frame);
@@ -67,6 +60,7 @@ tl_frame_t *demote_page(tl_frame_t *frame) {
 }
 
 static void remove_from_list(struct list *l, tl_frame_t *node) {
+    // sddf_printf("removing from list, list has size %d\n", l->size);
     if (l->size == 1) {
         l->head = NULL;
         l->tail = NULL;
@@ -98,6 +92,7 @@ static void push_head(struct list *l, tl_frame_t *node) {
 }
 
 static void refill_inactive(int pd_idx, int num) {
+    // sddf_printf("refilling inactive");
     while (num) {
         tl_frame_t *ptr = activelist[pd_idx].tail;
         if (ptr == NULL) return; // prevent infinite loops.
@@ -120,6 +115,7 @@ static void refill_inactive(int pd_idx, int num) {
 
 // this is only called during eviction, so frame should be cleared.
 tl_frame_t *get_frame(uint32_t pd_idx) {
+    // sddf_printf("getting frame\n");
     // If we have free frames, use one
     if (freelist[pd_idx].head != NULL) {
         tl_frame_t *frame = freelist[pd_idx].head;
