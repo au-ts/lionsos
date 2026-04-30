@@ -9,29 +9,35 @@ uint64_t memory_manager_ep;
 
 void init(void)
 {
-    // sddf_dprintf("hello from example pd 2\n");
-    // // I have 128 heap frames, I want to do paging stuff here.
-    // char *mappings[NUMMAPS];
-    // for (int i = 0; i < NUMMAPS; ++i) {
-    //     mappings[i] = (char *)mymalloc(memory_manager_ep);
-    //     // sddf_dprintf("got return from mymalloc %p and the index is %d\n", mappings[i], i);
-    //     mappings[i][10] = 'c';
-    // }
+    for (int i = 0; i < 99999; ++i) {
+        sddf_printf(".");
+    };
+    sddf_dprintf("hello from example pd 2\n");
+    // I have 128 heap frames, I want to do paging stuff here.
+    char *mappings[NUMMAPS];
+    for (int i = 0; i < NUMMAPS; ++i) {
+        mappings[i] = (char *)mymalloc(memory_manager_ep);
+        // sddf_dprintf("got return from mymalloc %p and the index is %d\n", mappings[i], i);
+        mappings[i][10] = 'c';
+    }
 
-    // for (int i = 0; i < NUMMAPS; ++i) {
-    //     myfree(memory_manager_ep, (uintptr_t)mappings[i]);
-    // }
+    for (int i = 0; i < NUMMAPS; ++i) {
+        myfree(memory_manager_ep, (uintptr_t)mappings[i]);
+    }
 
-    // for (int i = 0; i < NUMMAPS; ++i) {
-    //     mappings[i] = (char *)mymalloc(memory_manager_ep);
-    //     // sddf_dprintf("got return from mymalloc %p and the index is %d\n", mappings[i], i);
-    //     mappings[i][10] = 'c';
-    // }
+    for (int i = 0; i < NUMMAPS; ++i) {
+        mappings[i] = (char *)mymalloc(memory_manager_ep);
+        // sddf_dprintf("got return from mymalloc %p and the index is %d\n", mappings[i], i);
+        mappings[i][10] = 'c';
+    }
 
-    // for (int i = 0; i < NUMMAPS; ++i) {
-    //     myfree(memory_manager_ep, (uintptr_t)mappings[i]);
+    for (int i = 0; i < NUMMAPS; ++i) {
+        myfree(memory_manager_ep, (uintptr_t)mappings[i]);
+    }
+    sddf_printf("example pd 2 done!\n");
+    // for (int i = 0; i < 400; ++i) {
+    //     sddf_printf("example pd 2 done!\n");
     // }
-    // sddf_printf("example pd 2 done!\n");
 }
 
 

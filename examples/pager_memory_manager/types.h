@@ -115,4 +115,9 @@ struct list {
     int size;
 };
 
+struct fault_info {
+    uintptr_t addr;
+    bool write;
+};
+
 #endif

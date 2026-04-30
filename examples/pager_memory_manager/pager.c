@@ -31,7 +31,7 @@ static blk_queue_handle_t blk_queue;
 frame_pd_id *frames;
 
 // so that we don't process the same fault multiple times.
-uintptr_t current_faults[MAX_PDS] = {-1};
+struct fault_info current_faults[MAX_PDS];
 
 // this is where the heaps are all located.
 char *heaps = (char *)FRAME_DATA;
@@ -72,7 +72,7 @@ void init(void)
             page_table[i][j].pagefile_offset = -1;
         }
         free_frames_idx[i] = -1;
-        current_faults[i] = -1;
+        current_faults[i] = (struct fault_info){ .addr = -1, .write = false};
     } 
     
 
@@ -117,6 +117,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         if (is_write) old_frame->dirty = true;
         
         int err = microkit_arm_page_map_rw(old_frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
+        if (err) sddf_printf("there is an error\n");
         if (err) return seL4_False;
         // sddf_printf("rw given\n");
         return seL4_True;
@@ -126,10 +127,11 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     // check that the fault is not currently being served
     // assuming that PD's are singlethreaded, they should be stuck relaying the same VM fault.
     // TODO: later see if it is possible to prevent this relaying.
-    if (current_faults[pd_idx] == ROUND_DOWN_TO_4K(fault_addr)) {
+    if (current_faults[pd_idx].addr == ROUND_DOWN_TO_4K(fault_addr)) {
         return seL4_True;
     } else {
-        current_faults[pd_idx] = ROUND_DOWN_TO_4K(fault_addr);
+        current_faults[pd_idx].addr = ROUND_DOWN_TO_4K(fault_addr);
+        current_faults[pd_idx].write = is_write;
     }
     // sddf_printf("before get frame\n");
     tl_frame_t *frame = get_frame(pd_idx);
@@ -190,12 +192,17 @@ void after_page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr, boo
         memcpy(get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)),
        (char *)blk_config.data.vaddr, 4096);
     }
-    microkit_arm_page_map_ro(frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr)); // TODO: maybe i should do rw if a write fault 
+    if (current_faults[pd_idx].write) {
+        microkit_arm_page_map_rw(frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
+        frame->dirty = true;
+    } else {
+        microkit_arm_page_map_ro(frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
+        frame->dirty = false;
+    }
     frame->page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
     page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)].frame_addr = frame;
-    current_faults[pd_idx] = -1;
+    current_faults[pd_idx].addr = -1;
     frame->pd_idx = pd_idx;
-    frame->dirty = false; // TODO: do some extra thinking about this because maybe it should start dirty if write fault.
 }
 
 void page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
@@ -254,7 +261,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
     pe *page = &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(addr)];
     tl_frame_t *frame = page->frame_addr;
     page->frame_addr = NULL;
-    mark_pagefile_slot_free(page);
+    if (page->pagefile_offset != -1) mark_pagefile_slot_free(page);
 
     // i also need to add this frame to the free list.
     free_frame(frame);
