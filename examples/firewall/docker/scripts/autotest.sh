@@ -335,14 +335,14 @@ test_icmp_ping_firewall_from_internal_network() {
             --header 'Content-Type: application/json' \
             --request 'POST' \
             "http://${FW_INT_IP}/api/ping/1/0"
+    fi
 
-        ip netns exec int \
-            ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INT_IP}" > "${RECEIVED}" 2>&1
+    ip netns exec int \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INT_IP}" > "${RECEIVED}" 2>&1
 
-        if grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-            fail "${ERROR_UNEXPECTED_ECHO_RESPONSE}"
-            print_log
-        fi
+    if grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_UNEXPECTED_ECHO_RESPONSE}"
+        print_log
     fi
 
     # Turn ping on and check for a response.
@@ -380,14 +380,14 @@ test_icmp_ping_firewall_from_external_network() {
             --header 'Content-Type: application/json' \
             --request 'POST' \
             "http://${FW_INT_IP}/api/ping/0/0"
+    fi
 
-        ip netns exec ext \
-            ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_EXT_IP}" > "${RECEIVED}" 2>&1
+    ip netns exec ext \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_EXT_IP}" > "${RECEIVED}" 2>&1
 
-        if grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-            fail "${ERROR_UNEXPECTED_ECHO_RESPONSE}"
-            print_log
-        fi
+    if grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_UNEXPECTED_ECHO_RESPONSE}"
+        print_log
     fi
 
     curl --silent \
