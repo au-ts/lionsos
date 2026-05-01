@@ -29,7 +29,7 @@ int free_frames_idx[MAX_PDS] = {-1};
 inline void init_frame(frame_pd_id *current_frame) {
     int pd_idx = current_frame->pd_idx;
     ++free_frames_idx[pd_idx];
-    frame_table[pd_idx][free_frames_idx[pd_idx]] = (tl_frame_t){ .cap = current_frame->frame_cap, .page = NULL, .next = NULL, .prev = NULL, .active = false, .dirty = false };
+    frame_table[pd_idx][free_frames_idx[pd_idx]] = (tl_frame_t){ .oaddr = (uintptr_t)current_frame, .cap = current_frame->frame_cap, .page = NULL, .next = NULL, .prev = NULL, .active = false, .dirty = false };
     push_head(&freelist[pd_idx], &frame_table[pd_idx][free_frames_idx[pd_idx]]);
 }
 
@@ -159,6 +159,7 @@ void free_frame(tl_frame_t *frame) {
     
     // 4. Add to free list
     push_head(&freelist[frame->pd_idx], frame);
+    memset(get_frame_data(frame), 0, 4096);
 }
 
 #endif

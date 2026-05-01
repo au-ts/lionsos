@@ -16,7 +16,10 @@
 #define TAU 10 // not too sure what the optimal number for this would be. maybe this is not useful...
 #define PAGEFILE ".pagefile"
 #define MM_PPC_NUM 0
+#define FRAME_DATA 0x8000000000
 
+extern uintptr_t frame_map_addr;
+uintptr_t frame_map_addr = 0;
 
 struct mmap_node
 {
@@ -107,6 +110,7 @@ typedef struct frame {
     bool referenced;
     bool dirty;
     bool active;
+    uintptr_t oaddr;
 } tl_frame_t;
 
 struct list {
@@ -119,5 +123,9 @@ struct fault_info {
     uintptr_t addr;
     bool write;
 };
+
+char *get_frame_data(tl_frame_t *frame) {
+    return (char *)(FRAME_DATA + (((frame->oaddr - frame_map_addr) / sizeof(frame_pd_id)) * 4096)); 
+}
 
 #endif

@@ -12,7 +12,7 @@
 #include <string.h>
 #include "pager.h"
 
-#define FRAME_DATA 0x8000000000
+// #define FRAME_DATA 0x8000000000
 
 #define HEAP_SIZE 128 * 4096
 
@@ -36,9 +36,7 @@ struct fault_info current_faults[MAX_PDS];
 // this is where the heaps are all located.
 char *heaps = (char *)FRAME_DATA;
 
-char *get_frame_data(int pd_idx, uintptr_t frame_offset) {
-    return heaps + (frame_offset * 4096);
-}
+
 
 // stuff required for the vm fault handling
 // I cannot have actual page tables due to missing malloc.
@@ -92,6 +90,7 @@ void init(void)
         frame_pd_id *cur_frame = &frames[i];
         init_frame(cur_frame);
     }
+    frame_map_addr = (uintptr_t)frames;
 }
 
 /**
@@ -189,7 +188,7 @@ void notified(microkit_channel ch)
 void after_page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr, bool paged_in) {
     // map the page to the frame
     if (paged_in) {
-        memcpy(get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)),
+        memcpy(get_frame_data(frame),
        (char *)blk_config.data.vaddr, 4096);
     }
     if (current_faults[pd_idx].write) {
@@ -240,7 +239,7 @@ void page_out(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
     int request_id = get_request_id();
     page_continuations[request_id] = (struct page_request_info){ .frame = frame, .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_OUT }; // TODO: fill this out with relevant info.
     char *data_dest = (char *) blk_config.data.vaddr;
-    memcpy(data_dest, get_frame_data(frame->pd_idx, get_frame_offset((uintptr_t)frame, frame->pd_idx)), 4096);
+    memcpy(data_dest, get_frame_data(frame), 4096);
     blk_enqueue_req(&blk_queue, BLK_REQ_WRITE, 0, slot, 1, request_id);
     sddf_notify(blk_config.virt.id);
 

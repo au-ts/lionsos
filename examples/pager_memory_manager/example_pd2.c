@@ -32,9 +32,6 @@ void init(void)
         myfree(memory_manager_ep, (uintptr_t)mappings[i]);
     }
     sddf_printf("example pd 2 done!\n");
-    // for (int i = 0; i < 400; ++i) {
-    //     sddf_printf("example pd 2 done!\n");
-    // }
 }
 
 

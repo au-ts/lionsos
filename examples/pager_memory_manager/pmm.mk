@@ -60,7 +60,7 @@ SPEC = $(BUILD_DIR)/capdl_spec.json
 
 
 IMAGES := blk_driver.elf blk_virt.elf memory_manager.elf pager.elf example_pd1.elf example_pd2.elf timer_driver.elf 
-CFLAGS +=  -Wall -Wno-unused-function -Wno-unused-command-line-argument \
+CFLAGS +=  -O3 -Wall -Wno-unused-function -Wno-unused-command-line-argument \
 		  -I$(SDDF)/include \
 		  -I$(SDDF)/include/microkit \
 		  -I$(CONFIGS_INCLUDE)
