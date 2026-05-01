@@ -326,7 +326,7 @@ test_icmp_ping_unreachable_net_external_to_internal() {
 }
 
 test_icmp_ping_firewall_from_internal_network() {
-    original_status=$(curl --silent "http://${FW_INT_IP}/api/ping/1" | sed -E 's/.*"enabled": (true|false).*/\1/')
+    original_status=$(curl --silent "http://${FW_INT_IP}/api/ping/1" | sed -E 's/.*enabled": (true|false).*/\1/')
 
     if [ "${original_status}" = "true" ]; then
         # Disable ping
@@ -371,7 +371,7 @@ test_icmp_ping_firewall_from_internal_network() {
 }
 
 test_icmp_ping_firewall_from_external_network() {
-    original_status=$(curl --silent "http://${FW_INT_IP}/api/ping/0" | sed -E 's/.*"enabled": (true|false).*/\1/')
+    original_status=$(curl --silent "http://${FW_INT_IP}/api/ping/0" | sed -E 's/.*enabled": (true|false).*/\1/')
 
     if [ "${original_status}" = "true" ]; then
         # Disable ping

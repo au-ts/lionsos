@@ -56,7 +56,7 @@ static bool tx_webserver;                   /* Packet has been transmitted to th
 static bool returned[FW_MAX_INTERFACES];    /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp[FW_MAX_INTERFACES];  /* Arp request has been enqueued */
 static bool notify_icmp;                    /* Request has been enqueued to ICMP module */
-static bool ping_response_enabled[FW_MAX_INTERFACES] = { true }; /* Whether to reply to ICMP echo requests */
+static bool ping_response_enabled[FW_MAX_INTERFACES] = { true , true }; /* Whether to reply to ICMP echo requests */
 
 /* Masks for checking whether it is a broadcast address or not */
 #define MULTICAST_IP_MASK 0xf0000000
