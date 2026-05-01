@@ -18,7 +18,6 @@
 
 uint64_t unmapped_frames_addr;
 uint64_t num_frames;
-uint32_t pager_vspace;
 uint64_t thing;
 
 // TODO: figure out where I need to outline this...
