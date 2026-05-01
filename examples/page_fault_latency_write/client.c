@@ -1,9 +1,8 @@
 #include <microkit.h>
-#include <types.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <sddf/util/printf.h>
-#include <sddf/benchmark/
+#include <sddf/benchmark/bench.h>
 
 #define BRK_START 0x8000000000 
 
@@ -12,9 +11,13 @@
 
 void init(void)
 {
-
+    // create a unbacked variable.
+    int *i = BRK_START;
     // start benchmark
-    
+    // attempt write on unbacked page.
+    *i = 1;
+    // end benchmark
+    assert(*i == 1);
 }
 
 
