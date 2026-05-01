@@ -8,7 +8,8 @@
 #
 
 SUPPORTED_BOARDS := \
-	qemu_virt_aarch64
+	qemu_virt_aarch64 \
+	maaxboard
 
 
 
@@ -37,6 +38,8 @@ MICROKIT_CONFIG ?= debug
 ifeq ($(strip $(NVME)),1)
 	BLK_DRIV_DIR := nvme
 	QEMU_BLK_ARGS := -device nvme,drive=hd,serial=TEST1234,addr=0x4.0
+# else
+# 	BLK_DRIV_DIR := virtio/mmio/
 endif
 
 # Allow to user to specify a custom partition
@@ -127,6 +130,14 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)  --capdl-json $(SPEC)
+
+maaxboard_disk: $(SDDF)/tools/mkvirtdisk disk 1 512 16777216 GPT
+
+maaxboard: ${IMAGE_FILE} maaxboard_disk
+	$(QEMU) $(QEMU_ARCH_ARGS) $(QEMU_BLK_ARGS) \
+	    -nographic \
+	    -d guest_errors \
+	    -drive file=disk,if=none,format=raw,id=hd
 
 qemu_disk:
 	$(SDDF)/tools/mkvirtdisk disk 1 512 16777216 GPT
