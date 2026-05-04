@@ -1,0 +1,154 @@
+#
+# Copyright 2024, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# This Makefile is copied into the build directory
+# and operated on from there.
+#
+
+SUPPORTED_BOARDS := \
+	qemu_virt_aarch64 \
+	maaxboard
+
+
+
+ifeq ($(strip $(MICROKIT_SDK)),)
+$(error MICROKIT_SDK must be specified)
+endif
+
+ifeq ($(strip $(SDDF)),)
+$(error SDDF must be specified)
+endif
+
+ifeq ($(strip $(LIONSOS)),)
+$(error LIONSOS must be specified)
+endif
+
+ifeq ($(strip $(TOOLCHAIN)),)
+	TOOLCHAIN := clang
+endif
+
+
+
+BUILD_DIR ?= build
+MICROKIT_CONFIG ?= debug
+
+# Hack - need better way to configure which driver
+ifeq ($(strip $(NVME)),1)
+	BLK_DRIV_DIR := nvme
+	QEMU_BLK_ARGS := -device nvme,drive=hd,serial=TEST1234,addr=0x4.0
+# else
+# 	BLK_DRIV_DIR := virtio/mmio/
+endif
+
+# Allow to user to specify a custom partition
+PARTITION :=
+ifdef PARTITION
+	PARTITION_ARG := --partition $(PARTITION)
+endif
+
+IMAGE_FILE := loader.img
+REPORT_FILE  := report.txt
+SYSTEM_FILE := pager_memory_manager.system
+
+
+
+TOP := ${LIONSOS}/examples/pager_memory_manager
+CONFIGS_INCLUDE := ${TOP}
+SDDF_CUSTOM_LIBC := 1
+SPEC = $(BUILD_DIR)/capdl_spec.json
+
+
+
+
+IMAGES := blk_driver.elf blk_virt.elf memory_manager.elf pager.elf example_pd1.elf example_pd2.elf timer_driver.elf 
+CFLAGS +=  -O3 -Wall -Wno-unused-function -Wno-unused-command-line-argument \
+		  -I$(SDDF)/include \
+		  -I$(SDDF)/include/microkit \
+		  -I$(CONFIGS_INCLUDE)
+
+LDFLAGS := -L$(BOARD_DIR)/lib
+LIBS := --start-group -lmicrokit -Tmicrokit.ld libsddf_util_debug.a --end-group
+
+METAPROGRAM := $(TOP)/meta.py
+
+BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
+# SERIAL_DRIVER := $(SDDF)/drivers/serial/${UART_DRIV_DIR}
+
+all: $(IMAGE_FILE)
+
+include ${SDDF}/tools/make/board/common.mk
+include ${SDDF}/drivers/blk/${BLK_DRIV_DIR}/blk_driver.mk
+# include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk
+
+# ifdef BLK_NEED_TIMER
+# include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
+# IMAGES += timer_driver.elf
+# export BLK_NEED_TIMER
+# endif
+
+include ${SDDF}/util/util.mk
+include ${SDDF}/blk/components/blk_components.mk
+include ${SDDF}/serial/components/serial_components.mk
+include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
+
+${IMAGES}: libsddf_util_debug.a
+
+# TODO: 
+
+pager.o: ${TOP}/pager.c ${TOP}/pagefile.h ${TOP}/frame_table.h ${TOP}/types.h
+	$(CC) -c $(CFLAGS) -I. $< -o pager.o
+pager.elf: pager.o libsddf_util_debug.a
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+memory_manager.o: ${TOP}/memory_manager.c ${TOP}/types.h
+	$(CC) -c $(CFLAGS) -I. $< -o memory_manager.o
+memory_manager.elf: memory_manager.o libsddf_util_debug.a
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+example_pd1.o: ${TOP}/example_pd1.c 
+	$(CC) -c $(CFLAGS) -I. $< -o example_pd1.o
+example_pd1.elf: example_pd1.o libsddf_util_debug.a
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+example_pd2.o: ${TOP}/example_pd2.c 
+	$(CC) -c $(CFLAGS) -I. $< -o example_pd2.o
+example_pd2.elf: example_pd2.o libsddf_util_debug.a
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
+	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) \
+		$(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB)\
+		--output . --sdf $(SYSTEM_FILE) $(PARTITION_ARG) 
+	$(OBJCOPY) --update-section .device_resources=blk_driver_device_resources.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_driver_config=blk_driver.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_virt_config=blk_virt.data blk_virt.elf
+	$(OBJCOPY) --update-section .blk_client_config=blk_client_pager.data pager.elf
+	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
+	touch $@
+
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
+	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)  --capdl-json $(SPEC)
+
+maaxboard_disk: $(SDDF)/tools/mkvirtdisk disk 1 512 16777216 GPT
+
+maaxboard: ${IMAGE_FILE} maaxboard_disk
+	$(QEMU) $(QEMU_ARCH_ARGS) $(QEMU_BLK_ARGS) \
+	    -nographic \
+	    -d guest_errors \
+	    -drive file=disk,if=none,format=raw,id=hd
+
+qemu_disk:
+	$(SDDF)/tools/mkvirtdisk disk 1 512 16777216 GPT
+
+qemu: ${IMAGE_FILE} qemu_disk
+	$(QEMU) $(QEMU_ARCH_ARGS) $(QEMU_BLK_ARGS) \
+	    -nographic \
+	    -d guest_errors \
+	    -drive file=disk,if=none,format=raw,id=hd
+
+# clean::
+# 	rm -f client.o
+# clobber:: clean
+# 	rm -f client.elf ${IMAGE_FILE} ${REPORT_FILE}
