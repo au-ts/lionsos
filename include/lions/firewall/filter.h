@@ -44,7 +44,7 @@ typedef enum {
     FILTER_ACT_ALLOW = 1,
     /* drop traffic */
     FILTER_ACT_DROP = 2,
-    /* reject traffic (send back icmp unreachable) */
+    /* reject traffic (drop traffic and send back icmp unreachable) */
     FILTER_ACT_REJECT = 3,
     /* allow traffic, and additionally any return traffic */
     FILTER_ACT_CONNECT = 4,
