@@ -16,6 +16,9 @@ override BUILD_DIR := $(abspath ${BUILD_DIR})
 export BUILD_DIR
 export SDDF := $(abspath ../../dep/sddf)
 override MICROKIT_SDK := $(abspath ${MICROKIT_SDK})
+BENCHMARK := $(SDDF)/benchmark
+SERIAL_COMPONENTS := $(SDDF)/serial/components
+UART_DRIVER := $(SDDF)/drivers/serial/$(UART_DRIV_DIR)
 
 IMAGE_FILE := ${BUILD_DIR}/loader.img # maybe this line needs to be changed...
 # REPORT_FILE := ${BUILD_DIR}/report.txt
@@ -88,7 +91,7 @@ SPEC = $(BUILD_DIR)/capdl_spec.json
 
 
 
-IMAGES := pager.elf client.elf timer_driver.elf 
+IMAGES := pager.elf client.elf timer_driver.elf benchmark.elf idle.elf serial_driver.elf serial_virt_tx.elf
 CFLAGS +=  -O3 -Wall -Wno-unused-function -Wno-unused-command-line-argument \
 		  -I$(SDDF)/include \
 		  -I$(SDDF)/include/microkit \
@@ -115,6 +118,7 @@ include ${SDDF}/tools/make/board/common.mk
 include ${SDDF}/util/util.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
+include ${BENCHMARK}/benchmark.mk
 
 ${IMAGES}: libsddf_util_debug.a
 
@@ -135,6 +139,10 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) \
 		$(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB)\
 		--output . --sdf $(SYSTEM_FILE) $(PARTITION_ARG) 
+	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
+	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 	touch $@
 
