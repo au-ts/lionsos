@@ -216,10 +216,10 @@ static void route(void)
                     }
 
                     /* Check for ICMP pings */
-                    icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
+                    icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
                     if (ip_hdr->protocol == IPV4_PROTO_ICMP && icmp_hdr->type == ICMP_ECHO_REQ
                         && ping_response_enabled[interface]) {
-                            notify_icmp |= icmp_enqueue_echo_reply(&icmp_queue, pkt_vaddr, interface);
+                        notify_icmp |= icmp_enqueue_echo_reply(&icmp_queue, pkt_vaddr, interface);
                     }
 
                     err = fw_enqueue(&rx_free[interface], &buffer);
