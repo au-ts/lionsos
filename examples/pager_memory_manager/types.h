@@ -120,7 +120,6 @@ struct list {
 };
 
 struct fault_info {
-    uintptr_t addr;
     uintptr_t pc;
     bool write;
 };

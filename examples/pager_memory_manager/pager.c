@@ -75,7 +75,7 @@ void init(void)
             page_table[i][j].pagefile_offset = -1;
         }
         free_frames_idx[i] = -1;
-        current_faults[i] = (struct fault_info){ .addr = -1, .write = false, .pc = -1};
+        current_faults[i] = (struct fault_info){ .write = false, .pc = -1};
     } 
     
 
@@ -117,13 +117,14 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     pe *page = retrieve_page(fault_addr, pd_idx);
     tl_frame_t *old_frame = page->frame_addr;
     current_faults[child].pc = microkit_mr_get(0);
+    current_faults[child].write = is_write;
     if (old_frame) {
         old_frame->referenced = true;
         if (is_write) old_frame->dirty = true;
         
         int err = microkit_arm_page_map_rw(old_frame->cap, vspaces[pd_idx], ROUND_DOWN_TO_4K(fault_addr));
         if (err) sddf_printf("there is an error\n");
-        if (err) return seL4_False;
+        if (err) return seL4_True;
         // sddf_printf("before returning true\n");
         microkit_pd_restart(child, current_faults[child].pc);
         return seL4_True;
@@ -133,12 +134,12 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     if (frame->dirty) {
         // do a page out
         page_out(frame, pd_idx, fault_addr);
-        return seL4_False;
+        return seL4_True;
     } else if (frame->page) {
         if (frame->page->pagefile_offset == -1) {
             // gotta do a page out because there is no pagefile for this frame.
             page_out(frame, pd_idx, fault_addr);
-            return seL4_False;
+            return seL4_True;
         } else {
             // not dirty so can just do a unmap (old pagefile slot is good enough)
             microkit_arm_page_unmap(frame->cap);
@@ -147,7 +148,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         
     }
     after_page_out(frame, pd_idx, fault_addr);
-    return seL4_False;
+    return seL4_True;
 }
 
 /**
@@ -200,12 +201,11 @@ void after_page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr, boo
     }
     frame->page = retrieve_page(fault_addr, pd_idx);
     retrieve_page(fault_addr, pd_idx)->frame_addr = frame;
-    current_faults[pd_idx].addr = -1;
     frame->pd_idx = pd_idx;
     // sddf_printf("sending from reply cap\n");
     // sddf_printf("before returning true\n");
     microkit_pd_restart(pd_idx, current_faults[pd_idx].pc);
-    microkit_send(4);
+    // microkit_send(4);
 }
 
 void page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
