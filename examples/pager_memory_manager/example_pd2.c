@@ -19,6 +19,7 @@ void init(void)
     }
 
     for (int i = 0; i < NUMMAPS; ++i) {
+        // sddf_printf("about to free %p %d\n", mappings[i], i);
         myfree(memory_manager_ep, (uintptr_t)mappings[i]);
     }
 

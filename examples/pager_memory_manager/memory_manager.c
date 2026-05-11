@@ -11,8 +11,10 @@
 #define MM_FREE   0
 #define PAGER_CHANNEL 16
 
+#define NUM_MMAPS (NUM_PT_ENTRIES / 2)
+
 // Pool of mmap nodes
-struct mmap_node node_pool[MAX_PDS][NUM_PT_ENTRIES];
+struct mmap_node node_pool[MAX_PDS][NUM_MMAPS];
 struct mmap_node *used_nodes[MAX_PDS] = {NULL};
 struct mmap_node *free_nodes[MAX_PDS] = {NULL};
 
@@ -24,9 +26,11 @@ static int counter = 0;
  */
 static int64_t do_malloc(microkit_channel pd) {
     ++counter;
+    if (pd >= MAX_PDS) sddf_printf("pd is bigger\n");
     if (pd >= MAX_PDS) return -1;
 
     struct mmap_node *ptr = free_nodes[pd];
+    // sddf_printf(" ptr is %d\n", ptr);
     if (!ptr) return -1;
 
     // Remove from free list
@@ -51,11 +55,13 @@ static int64_t do_malloc(microkit_channel pd) {
  */
 static int do_free(uintptr_t addr, microkit_channel pd) {
     --counter;
+    if ((pd >= MAX_PDS) || (addr < BRK_START || addr & 0xFFF)) sddf_printf("something sonw %p %d\n", addr, pd);
     if (pd >= MAX_PDS) return -1;
     if (addr < BRK_START || addr & 0xFFF) return -1;
 
     uintptr_t index = INDEX_INTO_MMAP_ARRAY(addr);
-    if (index >= NUM_PT_ENTRIES) return -1;
+    if (index >= NUM_MMAPS) sddf_printf("something wone\n");
+    if (index >= NUM_MMAPS) return -1;
 
     struct mmap_node *ptr = &node_pool[pd][index];
 
@@ -66,9 +72,6 @@ static int do_free(uintptr_t addr, microkit_channel pd) {
             used_nodes[pd]->prev = NULL;
         }
     } else {
-        if (!ptr->prev) {
-            return -1;
-        }
         ptr->prev->next = ptr->next;
         if (ptr->next) {
             ptr->next->prev = ptr->prev;
@@ -101,7 +104,7 @@ void init(void)
     for (int i = 0; i < MAX_PDS; ++i) {
         free_nodes[i] = NULL;
         used_nodes[i] = NULL;
-        for (int j = 0; j < NUM_PT_ENTRIES; ++j) {
+        for (int j = 0; j < NUM_MMAPS; ++j) {
             node_pool[i][j].addr = BRK_START + (uintptr_t)j * 4096;
             node_pool[i][j].prev = NULL;
             node_pool[i][j].next = free_nodes[i];
@@ -116,6 +119,7 @@ void init(void)
 
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
+    // sddf_printf("mm counter = %d\n", counter);
     uint32_t inst = seL4_GetMR(0);
 
     if (inst == MM_MALLOC) {

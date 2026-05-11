@@ -32,8 +32,8 @@ def generate(
     blk_virt = ProtectionDomain(
         "blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000
     )
-    client = ProtectionDomain("example_pd1", "example_pd1.elf", priority=1, backed = False)
-    client2 = ProtectionDomain("example_pd2", "example_pd2.elf", priority=1, backed = False)
+    client = ProtectionDomain("example_pd1", "example_pd1.elf", priority=1, backed = True)
+    client2 = ProtectionDomain("example_pd2", "example_pd2.elf", priority=1, backed = True)
     pager = ProtectionDomain("pager", "pager.elf", priority=198)
     memory_manager = ProtectionDomain("memory_manager", "memory_manager.elf", priority=197)
     blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
@@ -41,8 +41,8 @@ def generate(
     blk_system.add_client(pager, partition=partition)
 
     pds = [blk_driver, blk_virt, pager, memory_manager, timer_driver]
-    pager.add_child_pd(client)
-    pager.add_child_pd(client2)
+    pager.add_child_pd(client, 0)
+    pager.add_child_pd(client2, 1)
     for pd in pds:
             sdf.add_pd(pd)
 

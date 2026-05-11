@@ -8,7 +8,7 @@
 #include <sddf/util/printf.h>
 
 #define MAX_PDS 64
-#define NUM_PT_ENTRIES 300
+#define NUM_PT_ENTRIES 600
 #define BRK_START 0x8000000000 
 #define MMAP_START 0x9000000000
 #define ROUND_DOWN_TO_4K(x) ((x) & ~(4096 - 1))
@@ -121,6 +121,7 @@ struct list {
 
 struct fault_info {
     uintptr_t addr;
+    uintptr_t pc;
     bool write;
 };
 
