@@ -17,6 +17,7 @@
 #include <lions/firewall/ip.h>
 #include <lions/firewall/tcp.h>
 #include <lions/firewall/queue.h>
+#include <lions/firewall/tcp_filter.h>
 
 __attribute__((__section__(".fw_filter_config"))) fw_filter_config_t filter_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
@@ -29,6 +30,11 @@ fw_queue_t router_queue;
 /* Holds filtering rules and state */
 fw_filter_state_t filter_state;
 
+/* Current tick, used to track aging instances */
+// Courtney: This has not yet been implemented, i.e. the TCP filter does not yet
+// have access to the timer driver and thus does not receive ticks.
+uint64_t curr_tick = 0;
+
 static void filter(void)
 {
     bool transmitted = false;
@@ -37,6 +43,7 @@ static void filter(void)
     while (reprocess) {
         while (!net_queue_empty_active(&rx_queue)) {
             net_buff_desc_t buffer;
+            bool transmit = false;
             int err = net_dequeue_active(&rx_queue, &buffer);
             assert(!err);
 
@@ -82,6 +89,9 @@ static void filter(void)
                 err = fw_enqueue(&router_queue, &buffer);
                 assert(!err);
                 transmitted = true;
+
+                /* Update timestamp */
+                instance->timestamp = curr_tick;
 
                 if (FW_DEBUG_OUTPUT) {
                     if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
