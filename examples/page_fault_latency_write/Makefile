@@ -16,10 +16,9 @@ override BUILD_DIR := $(abspath ${BUILD_DIR})
 export BUILD_DIR
 export SDDF := $(abspath ../../dep/sddf)
 override MICROKIT_SDK := $(abspath ${MICROKIT_SDK})
-
+SMP_CONFIG ?=core_config/single_core.json
 SERIAL_COMPONENTS := $(SDDF)/serial/components
 UART_DRIVER := $(SDDF)/drivers/serial/$(UART_DRIV_DIR)
-# BENCHMARK := $(SDDF)/benchmark
 IMAGE_FILE := ${BUILD_DIR}/loader.img # maybe this line needs to be changed...
 REPORT_FILE := ${BUILD_DIR}/report.txt
 

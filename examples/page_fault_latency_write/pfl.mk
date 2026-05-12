@@ -42,14 +42,14 @@ endif
 IMAGE_FILE := loader.img
 REPORT_FILE  := report.txt
 SYSTEM_FILE := pfl.system
-
-
-
+BENCHMARK := $(SDDF)/benchmark
+SERIAL_COMPONENTS := $(SDDF)/serial/components
+UART_DRIVER := $(SDDF)/drivers/serial/$(UART_DRIV_DIR)
 TOP := ${LIONSOS}/examples/page_fault_latency_write
 CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
 SPEC = $(BUILD_DIR)/capdl_spec.json
-
+vpath %.c ${SDDF} ${LIONSOS}/examples/page_fault_latency_write
 
 
 
@@ -95,7 +95,7 @@ client.elf: client.o libsddf_util_debug.a
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) \
 		$(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB)\
-		--output . --sdf $(SYSTEM_FILE) $(PARTITION_ARG) 
+		--output . --sdf $(SYSTEM_FILE) --objcopy $(OBJCOPY) $(PARTITION_ARG) --smp ../core_config/single_core.json
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
@@ -109,7 +109,8 @@ $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 include ${SDDF}/util/util.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
-include ${SDDF}/benchmark/benchmark.mk
+include ${BENCHMARK}/benchmark.mk
+include ${UART_DRIVER}arm/serial_driver.mk
 
 
 qemu_disk:

@@ -176,7 +176,7 @@ def generate(
 ):
     timer_node = dtb.node(board.timer)
     assert timer_node is not None
-    timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=254)
+    timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=254, cpu=get_core("timer_driver"))
     timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
 
     if dtb is not None:
@@ -201,11 +201,11 @@ def generate(
     )
     serial_system = Sddf.Serial(sdf, uart_node, uart_driver, serial_virt_tx)
 
-
-    client = ProtectionDomain("example_pd1", "example_pd1.elf", priority=1)
+    # client_elf = copy_elf("client", "client", 0)
+    client = ProtectionDomain("client", "client.elf", priority=1)
     pager = ProtectionDomain("pager", "pager.elf", priority=198)
 
-    pds = [pager, client, timer_driver]
+    pds = [pager, timer_driver]
     pager.add_child_pd(client)
 
     for pd in pds:
@@ -227,7 +227,6 @@ def generate(
     # maybe i need to add some clients to the uart driver as well. idk when i need to use the timer though.
 
     child_pds = [
-        client,
         timer_driver,
         uart_driver,
         serial_virt_tx,
@@ -343,6 +342,36 @@ def generate(
 
     assert timer_system.connect()
     assert timer_system.serialise_config(output_dir)
+    assert serial_system.connect()
+    assert serial_system.serialise_config(output_dir)
+
+    with open(f"{output_dir}/benchmark_client_config.data", "wb+") as f:
+        f.write(bench_client_config.serialise())
+    update_elf_section(
+        "client.elf", "benchmark_client_config", "benchmark_client_config"
+    )
+
+    for i in range(num_cores):
+        core = core_objs[i]["core"]
+        update_elf_section(
+            core_objs[i]["bench_elf"],
+            "serial_client_config",
+            "serial_client_bench",
+            core,
+        )
+
+        with open(f"{output_dir}/benchmark_config{core}.data", "wb+") as f:
+            f.write(core_objs[i]["bench_config"].serialise())
+        update_elf_section(
+            core_objs[i]["bench_elf"], "benchmark_config", "benchmark_config", core
+        )
+
+        with open(f"{output_dir}/benchmark_idle_config{core}.data", "wb+") as f:
+            f.write(core_objs[i]["idle_config"].serialise())
+        update_elf_section(
+            core_objs[i]["idle_elf"], "benchmark_config", "benchmark_idle_config", core
+        )
+
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
             f.write(sdf.render())
@@ -358,6 +387,8 @@ if __name__ == "__main__":
     parser.add_argument("--need_timer", action="store_true", default=False)
     parser.add_argument("--nvme", action="store_true", default=False)
     parser.add_argument("--partition")
+    parser.add_argument("--objcopy", required=True)
+    parser.add_argument("--smp", required=True)
 
     args = parser.parse_args()
 
