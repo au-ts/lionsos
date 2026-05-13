@@ -74,7 +74,7 @@ void init(void)
     // 1. Allocate and write unique values
     for (int i = 0; i < NUMMAPS; ++i) {
         mappings[i] = (char *)mymalloc(memory_manager_ep);
-
+        // sddf_printf("the mapping number is %p\n", mappings[i]);
         if (!mappings[i]) {
             sddf_printf("Allocation failed at %d\n", i);
             return;
@@ -83,6 +83,7 @@ void init(void)
         // Write identifiable pattern
         for (int j = 0; j < PAGE_SIZE; j += 512) {
             mappings[i][j] = (char)i;
+            // sddf_printf("the written number is %d\n", mappings[i][j]);
         }
     }
 
@@ -90,8 +91,11 @@ void init(void)
 
     // 2. Read back to force page-ins and verify correctness
     for (int i = 0; i < NUMMAPS; ++i) {
+        // sddf_printf("the degree is %p\n", mappings[i]);
         for (int j = 0; j < PAGE_SIZE; j += 512) {
             // sddf_printf("This is %d\n", i);
+            char k = mappings[i][j];
+            // sddf_printf("past %p\n", k);
             if (mappings[i][j] != (char)i) {
                 sddf_printf("Data mismatch at page %d offset %d was %d\n", i, j, mappings[i][j]);
             }
@@ -122,4 +126,8 @@ void init(void)
     sddf_printf("Re-allocation test passed.\n");
 
     sddf_printf("Pager test SUCCESS.\n");
+
+    // while (true) {
+    //     sddf_printf("/");
+    // }
 }

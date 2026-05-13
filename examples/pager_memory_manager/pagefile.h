@@ -10,9 +10,11 @@ static int pagefile_stack_ptr = 0;
 static inline int get_pagefile_slot() {
     if (pagefile_stack_ptr) {
         // sddf_printf("pagefile slot num is %d\n", pagefile_freed_slots_stack[pagefile_stack_ptr - 1]);
+        // if (!pagefile_freed_slots_stack[pagefile_stack_ptr - 1]) sddf_printf("returning zero\n"); 
         return pagefile_freed_slots_stack[--pagefile_stack_ptr];
     }
     // sddf_printf("pagefile slot num is %d\n", pagefile_size);
+    // if (!pagefile_size) sddf_printf("returning zero\n"); 
     return pagefile_size++;
 }
 

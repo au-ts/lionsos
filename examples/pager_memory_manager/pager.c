@@ -57,10 +57,10 @@ unsigned int vspaces[MAX_PDS];
 
 static inline pe *retrieve_page(uintptr_t fault_addr, uint32_t pd_idx) {
     if (fault_addr > MMAP_START) {
-        if (INDEX_INTO_MMAP_ARRAY(fault_addr) - 134217128 < 300) sddf_printf("somehow the thing is less than 300\n");
+        if (INDEX_INTO_MMAP_ARRAY(fault_addr) - 134217128 < 300) sddf_printf("somehow the thing is less than 300 %p %d\n", fault_addr, INDEX_INTO_MMAP_ARRAY(fault_addr) - 134217128);
         return &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr) - 134217128];
     }
-    if (INDEX_INTO_MMAP_ARRAY(fault_addr) > 299) sddf_printf("somethow thte thing is greater than 299 %d\n", INDEX_INTO_MMAP_ARRAY(fault_addr));
+    if (INDEX_INTO_MMAP_ARRAY(fault_addr) > 299) sddf_printf("somethow thte thing is greater than 299 %d %p\n", INDEX_INTO_MMAP_ARRAY(fault_addr), fault_addr);
     return &page_table[pd_idx][INDEX_INTO_MMAP_ARRAY(fault_addr)];
 }
 
@@ -110,6 +110,8 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     microkit_pd_stop(child);
     // TODO: make sure that i map as rw and with a dirty bit if the fault is a write fault.
     uintptr_t fault_addr = ROUND_DOWN_TO_4K(microkit_mr_get(1));
+    if (fault_addr == 0) sddf_printf("some weird fault happened %d\n", microkit_mr_get(1));
+    // sddf_printf("some weird fault happened %d\n", microkit_msginfo_get_label(msginfo));
     uint64_t fsr = microkit_mr_get(2);
     bool is_write = (fsr >> 1) & 1;
     uint32_t pd_idx = child;
@@ -165,6 +167,7 @@ void notified(microkit_channel ch)
     // int err = blk_dequeue_resp(&blk_queue, &status, &count, &id);
     while (blk_dequeue_resp(&blk_queue, &status, &count, &id) != -1) {
         // assert(!err);
+        // if (status != BLK_RESP_OK) {sddf_printf("")}
         // assert(status == BLK_RESP_OK);
         // assert(count == 1); // make sure that the write/read is actually done.
         // TODO: if necessary make a thing to recover from the error.
@@ -187,6 +190,7 @@ void after_page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr, boo
     if (paged_in) {
         memcpy(get_frame_data(frame),
        (char *)blk_config.data.vaddr, 4096);
+
     }
     int err = 0;
     if (current_faults[pd_idx].write) {
@@ -205,13 +209,15 @@ void after_page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr, boo
     // sddf_printf("sending from reply cap\n");
     // sddf_printf("before returning true\n");
     microkit_pd_restart(pd_idx, current_faults[pd_idx].pc);
+    if (frame->page->pagefile_offset != -1) mark_pagefile_slot_free(frame->page);
     // microkit_send(4);
 }
 
 void page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
-    // sddf_printf("paging in %p\n", fault_addr);
+    
     // get the slot
     int slot = retrieve_page(fault_addr, pd_idx)->pagefile_offset;
+    // if (fault_addr > MMAP_START) sddf_printf("paging in slot %d page %p\n", slot, retrieve_page(fault_addr, pd_idx));
     // queue the read
     int request_id = get_request_id();
     page_continuations[request_id] = (struct page_request_info){ .frame = frame, .pd_idx = pd_idx, .fault_addr = fault_addr, .state = PAGE_IN }; // TODO: fill this out with relevant info.
@@ -229,8 +235,10 @@ void after_page_out(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
 }
 
 void page_out(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr) {
+    
     // find empty slot in pagefile
     int slot = get_pagefile_slot();
+    // if (frame->page == 0x0000000003CB8E8) sddf_printf("paging out slot %d\n", slot);
     // mark in page entry where the pagefile entry is.
     pe* page = frame->page;
     page->pagefile_offset = slot;
