@@ -45,7 +45,7 @@ def generate(
     blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
 
 
-    client = ProtectionDomain("client", "client.elf", priority=1, backed = True)
+    client = ProtectionDomain("client", "client.elf", priority=1, backed = False)
     pager = ProtectionDomain("pager", "pager.elf", priority=198)
     pager.add_child_pd(client)
     # add my memory regions and other things

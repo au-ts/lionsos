@@ -40,7 +40,7 @@ ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
 	TIMER_DRIV_DIR := imx
 	CPU := cortex-a53
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
-	BLK_DRIV_DIR := virtio/mmio
+	BLK_DRIV_DIR := virtio/pci
 	SERIAL_DRIV_DIR := arm
 	TIMER_DRIV_DIR := arm
 	IMAGES += blk_driver.elf
@@ -106,11 +106,13 @@ CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
 SPEC = $(BUILD_DIR)/capdl_spec.json
 
-DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
-DTB := $(MICROKIT_BOARD).dtb
+# DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
+# $(DTB): $(DTS)
+# 	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
 
 FAT := $(LIONSOS)/components/fs/fat
 
+include $(SDDF)/tools/make/board/common.mk
 
 CFLAGS := \
 	-mtune=$(CPU) \
@@ -128,7 +130,8 @@ CFLAGS := \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
-	-I$(LIBMICROKITCO_PATH)
+	-I$(LIBMICROKITCO_PATH) \
+	-I$(TOP)
 include $(LIONSOS)/lib/libc/libc.mk
 
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
@@ -162,16 +165,18 @@ include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
 include ${SDDF}/libco/libco.mk
 include ${BLK_DRIVER}/blk_driver.mk
 include ${BLK_COMPONENTS}/blk_components.mk
+include $(SDDF)/drivers/network/$(NET_DRIV_DIR)/eth_driver.mk
 
 FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
 FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIONSOS)/components/fs/fat/fat.mk
 
-LIBMICROKITCO_CFLAGS := -I$(TOP)/libmicrokitco_opts.h
+LIBMICROKITCO_CFLAGS_client := -O2 -I$(TOP)
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
+$(info libpath is $(LIBMICROKITCO_PATH))
 
-$(info opt dir is $(TOP)/libmicrokitco_opts.h)
+$(info opt dir is $(LIBMICROKITCO_CFLAGS))
 # LIBMICROKITCO_CFLAGS := -O2 -I/path/to/libmicrokitco_opts.h
 # include libmicrokitco.mk
 # my_program.elf: libmicrokitco.a
@@ -194,7 +199,7 @@ pager.elf: pager.o libsddf_util_debug.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 client.o: ${TOP}/client.c 
 	$(CC) -c $(CFLAGS) -I. $< -o client.o
-client.elf: client.o libsddf_util_debug.a libmicrokitco.a
+client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 
