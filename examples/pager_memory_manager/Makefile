@@ -16,9 +16,8 @@ override BUILD_DIR := $(abspath ${BUILD_DIR})
 export BUILD_DIR
 export SDDF := $(abspath ../../dep/sddf)
 override MICROKIT_SDK := $(abspath ${MICROKIT_SDK})
-
-IMAGE_FILE := ${BUILD_DIR}/loader.img # maybe this line needs to be changed...
-# REPORT_FILE := ${BUILD_DIR}/report.txt
+export MICROKIT_CONFIG ?= debug
+IMAGE_FILE := ${BUILD_DIR}/loader.img 
 
 all: ${IMAGE_FILE} 
 
@@ -31,5 +30,10 @@ maaxboard ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORC
 ${BUILD_DIR}/Makefile: pmm.mk
 	mkdir -p ${BUILD_DIR}
 	cp pmm.mk $@
+
+submodules:
+	git submodule update --init $(LIONSOS)/dep/musllibc
+	git submodule update --init $(LIONSOS)/dep/sddf
+	git submodule update --init $(LIONSOS)/dep/libmicrokitco
 
 FORCE:
