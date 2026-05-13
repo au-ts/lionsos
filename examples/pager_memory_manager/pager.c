@@ -204,6 +204,7 @@ void after_page_in(tl_frame_t *frame, uint32_t pd_idx, uintptr_t fault_addr, boo
     frame->pd_idx = pd_idx;
     // sddf_printf("sending from reply cap\n");
     // sddf_printf("before returning true\n");
+    if (frame->page->pagefile_offset != -1) mark_pagefile_slot_free(frame->page);
     microkit_pd_restart(pd_idx, current_faults[pd_idx].pc);
     // microkit_send(4);
 }
