@@ -21,7 +21,7 @@
  */
 #define MORECORE_AREA_BYTE_SIZE 0x100000
 // i think this makes the malloc thing reserve the heap area.
-static alignas(8) char *morecore_area = 0x8000000000;
+static alignas(8) char *morecore_area = (char *)0x8000000000;
 
 /* Pointer to free space in the morecore area. */
 static uintptr_t morecore_base = (uintptr_t)0x8000000000;
