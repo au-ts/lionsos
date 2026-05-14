@@ -205,7 +205,7 @@ def generate(
     client = ProtectionDomain("client", "client.elf", priority=1)
     pager = ProtectionDomain("pager", "pager.elf", priority=198)
 
-    pds = [pager, timer_driver]
+    pds = [pager]
     pager.add_child_pd(client)
 
     for pd in pds:
@@ -283,8 +283,8 @@ def generate(
         # Create benchmarking start and stop channels
         if i == 0:
             # First active core is notified by benchmarking client
-            core_objs[i]["start_ch"] = Channel(client, core_objs[i]["bench_pd"])
-            core_objs[i]["stop_ch"] = Channel(client, core_objs[i]["bench_pd"])
+            core_objs[i]["start_ch"] = Channel(pager, core_objs[i]["bench_pd"])
+            core_objs[i]["stop_ch"] = Channel(pager, core_objs[i]["bench_pd"])
         else:
             # Other cores are notified by benchmark PD on previous core
             core_objs[i]["start_ch"] = Channel(
@@ -348,7 +348,7 @@ def generate(
     with open(f"{output_dir}/benchmark_client_config.data", "wb+") as f:
         f.write(bench_client_config.serialise())
     update_elf_section(
-        "client.elf", "benchmark_client_config", "benchmark_client_config"
+        "pager.elf", "benchmark_client_config", "benchmark_client_config"
     )
 
     for i in range(num_cores):
