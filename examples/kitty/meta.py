@@ -96,17 +96,13 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     sdf.add_channel(Channel(micropython, vmm, a_id=0, b_id=0))
 
     if board.name == "qemu_virt_aarch64":
-        passthrough_irqs = [Irq(x) for x in [35, 36, 37, 38] ]
-        vmm_system.add_passthrough_device(dtb.node("intc@8000000/v2m@8020000"))
-        for addr in range(0xa000000, 0xa004000, 0x200):
-            vmm_system.add_passthrough_device(dtb.node(f"virtio_mmio@{hex(addr)[2:]}"), irqs = [])
+        passthrough_irqs = []
+        devices = []
 
-        # Other pass-through devices
-        devices = [
-            ("pcie", 0x1000000, 0x4010000000),
-            ("pcie_config", 0x1000000, 0x10000000),
-            ("pcie_bus", 0x1000000, 0x8000000000)
-        ]
+        # Only pass through the GPU's virtio-mmio page (bus.8 = 0xa001000).
+        # Since the VM gets the entire page, avoid placing other QEMU devices on
+        # buses 9-15 or they will be guest-accessible.
+        vmm_system.add_passthrough_device(dtb.node("virtio_mmio@a001000"))
     elif board.name == "odroidc4":
         passthrough_irqs = [Irq(5)]
         devices = []
