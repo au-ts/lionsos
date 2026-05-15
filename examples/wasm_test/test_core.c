@@ -13,6 +13,7 @@
 #include <sys/random.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #define TEST_COMPONENT "core"
 #include "test_helpers.h"
