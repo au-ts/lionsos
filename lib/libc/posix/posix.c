@@ -119,6 +119,11 @@ static long sys_getgid(va_list ap) {
     return 501;
 }
 
+static long sys_set_tid_address(va_list ap) {
+    (void)ap;
+    return 0;
+}
+
 // FIXME: this is deliberately insecure for now
 static long sys_getrandom(va_list ap) {
     void *buf = va_arg(ap, void *);
@@ -205,6 +210,7 @@ void libc_init(libc_socket_config_t *socket_config) {
     libc_define_syscall(__NR_getuid, sys_getuid);
     libc_define_syscall(__NR_getgid, sys_getgid);
     libc_define_syscall(__NR_getrandom, sys_getrandom);
+    libc_define_syscall(__NR_set_tid_address, sys_set_tid_address);
 
     /*
      * Let libc initialise itself
