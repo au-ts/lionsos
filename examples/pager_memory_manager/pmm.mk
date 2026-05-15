@@ -40,7 +40,7 @@ ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
 	TIMER_DRIV_DIR := imx
 	CPU := cortex-a53
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
-	BLK_DRIV_DIR := virtio/pci
+# 	BLK_DRIV_DIR := virtio/mmio
 	SERIAL_DRIV_DIR := arm
 	TIMER_DRIV_DIR := arm
 	IMAGES += blk_driver.elf
@@ -149,7 +149,7 @@ ${CHECK_FLAGS_BOARD_MD5}:
 
 
 METAPROGRAM := $(TOP)/meta.py
-
+$(info blk driver dir is $(BLK_DRIV_DIR))
 BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
 BLK_COMPONENTS := $(SDDF)/blk/components
 # SERIAL_DRIVER := $(SDDF)/drivers/serial/${UART_DRIV_DIR}
@@ -229,6 +229,9 @@ $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 qemu_disk:
 	$(LIONSOS)/dep/sddf/tools/mkvirtdisk $@ 1 512 16777216 GPT
 
+# qemu_disk:
+# 	$(SDDF)/tools/mkvirtdisk disk 1 512 16777216 GPT
+
 qemu: ${IMAGE_FILE} qemu_disk
 	$(QEMU) -machine virt,virtualization=on \
 		-cpu cortex-a53 \
@@ -239,7 +242,7 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
 		-drive file=qemu_disk,if=none,format=raw,id=hd \
-		-device virtio-blk-device,drive=hd
+		-device virtio-blk-device,drive=hd,bus=virtio-mmio-bus.1 
 
 
 # $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)

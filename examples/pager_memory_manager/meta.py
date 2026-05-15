@@ -47,7 +47,9 @@ def generate(
 
     client = ProtectionDomain("client", "client.elf", priority=1, backed = False)
     pager = ProtectionDomain("pager", "pager.elf", priority=198)
+    partition =  board.partition
     pager.add_child_pd(client)
+    blk_system.add_client(pager, partition=partition)
     # add my memory regions and other things
     heap1 = SystemDescription.MemoryRegion(sdf, "heap1", 0x80000, backed=False)
     sdf.add_mr(heap1)

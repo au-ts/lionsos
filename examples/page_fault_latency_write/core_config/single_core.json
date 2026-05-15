@@ -1,0 +1,14 @@
+{
+    "timer_driver": 0,
+    "serial_driver": 0,
+    "serial_virt_tx": 0,
+    "ethernet_driver": 0,
+    "net_virt_tx": 0,
+    "net_virt_rx": 0,
+    "client": 0,
+    "client0_net_copier": 0,
+    "pager": 0,
+    "client1_net_copier": 0,
+    "uart_driver": 0,
+    "example_pd1": 0
+}
