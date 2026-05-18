@@ -106,7 +106,9 @@ static long sys_nanosleep(va_list ap) {
 
 static long sys_getpid(va_list ap) {
     (void)ap;
-    return 0;
+
+    // PID == TID for a single-threaded process
+    return 1;
 }
 
 static long sys_getuid(va_list ap) {
@@ -121,7 +123,11 @@ static long sys_getgid(va_list ap) {
 
 static long sys_set_tid_address(va_list ap) {
     (void)ap;
-    return 0;
+
+    // This syscall eventually returns the caller's thread ID
+    // Since we're in a single-threaded environment, PID == TID *but* 0 doesn't work
+    // since the pthreads library assumes 0 is an invalid TID
+    return 1;
 }
 
 // FIXME: this is deliberately insecure for now
