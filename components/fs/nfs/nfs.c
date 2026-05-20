@@ -45,6 +45,8 @@ struct fs_queue *fs_command_queue;
 struct fs_queue *fs_completion_queue;
 char *fs_share;
 
+static char libc_heap[0x100000];
+
 struct nfs_context *nfs;
 
 net_queue_handle_t net_rx_handle;
@@ -119,7 +121,7 @@ void init(void) {
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size,
                       serial_config.tx.data.vaddr);
 
-    libc_init(&socket_config);
+    libc_init(&socket_config, libc_heap, sizeof(libc_heap));
     continuation_pool_init();
 
     net_queue_init(&net_rx_handle, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,

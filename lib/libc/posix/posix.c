@@ -194,15 +194,18 @@ void libc_define_syscall(int syscall_num, muslcsys_syscall_t syscall_func) {
     syscall_table[syscall_num] = syscall_func;
 }
 
-void libc_init_mem();
+void libc_init_mem(void *, size_t);
 void libc_init_io();
 void libc_init_file();
 void libc_init_sock(libc_socket_config_t *);
 
-void libc_init(libc_socket_config_t *socket_config) {
-    /* Syscall table init */
+void libc_init(libc_socket_config_t *socket_config, void *heap, size_t heap_size) {
     __sysinfo = (size_t)sel4_vsyscall;
-    libc_init_mem();
+
+    if (heap != NULL && heap_size > 0) {
+        libc_init_mem(heap, heap_size);
+    }
+
     libc_init_io();
     libc_init_file();
 

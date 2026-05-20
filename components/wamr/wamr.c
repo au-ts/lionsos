@@ -57,6 +57,8 @@ fs_queue_t *fs_command_queue;
 fs_queue_t *fs_completion_queue;
 char *fs_share;
 
+static char libc_heap[0x100000];
+
 serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
 
@@ -74,7 +76,7 @@ static void netif_status_callback(char *ip_addr) {
 }
 
 static void wamr_main() {
-    libc_init(&socket_config);
+    libc_init(&socket_config, libc_heap, sizeof(libc_heap));
 
     printf("WAMR | Starting WAMR...\n");
 

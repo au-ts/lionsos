@@ -69,6 +69,8 @@ bool serial_rx_enabled;
 
 #define LIBC_COTHREAD_STACK_SIZE 0x10000
 static char libc_cothread_stack[LIBC_COTHREAD_STACK_SIZE];
+
+static char libc_heap[0x100000];
 static co_control_t co_controller_mem;
 
 static bool dhcp_ready = false;
@@ -739,7 +741,7 @@ void run_tests(void) {
 }
 
 void cont(void) {
-    libc_init(&socket_config);
+    libc_init(&socket_config, libc_heap, sizeof(libc_heap));
 
     if (net_enabled) {
         net_queue_init(&net_rx_handle, net_config.rx.free_queue.vaddr, net_config.rx.active_queue.vaddr,

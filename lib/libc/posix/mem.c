@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <assert.h>
 #include <errno.h>
-#include <stdalign.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -13,18 +14,9 @@
 
 #define PAGE_SIZE 0x1000
 
-/*
- * Statically allocated morecore area.
- *
- * This is rather terrible, but is the simplest option without a
- * huge amount of infrastructure.
- */
-#define MORECORE_AREA_BYTE_SIZE 0x100000
-static alignas(8) char morecore_area[MORECORE_AREA_BYTE_SIZE];
-
-/* Pointer to free space in the morecore area. */
-static uintptr_t morecore_base = (uintptr_t)&morecore_area;
-static uintptr_t morecore_top = (uintptr_t)&morecore_area[MORECORE_AREA_BYTE_SIZE];
+static char *morecore_area;
+static uintptr_t morecore_base;
+static uintptr_t morecore_top;
 
 /* Actual morecore implementation
    On Linux, the brk syscall returns the current break on failure. We mimic
@@ -33,7 +25,7 @@ static uintptr_t morecore_top = (uintptr_t)&morecore_area[MORECORE_AREA_BYTE_SIZ
 static long sys_brk(va_list ap) {
     uintptr_t newbrk = va_arg(ap, uintptr_t);
 
-    if (newbrk <= morecore_top && newbrk >= (uintptr_t)&morecore_area[0]) {
+    if (newbrk <= morecore_top && newbrk >= (uintptr_t)morecore_area) {
         return morecore_base = newbrk;
     }
 
@@ -84,7 +76,13 @@ static long sys_mprotect(va_list ap) {
     return 0;
 }
 
-void libc_init_mem() {
+void libc_init_mem(void *area, size_t size) {
+    assert(area != NULL && size != 0);
+
+    morecore_area = area;
+    morecore_base = (uintptr_t)area;
+    morecore_top = morecore_base + size;
+
     libc_define_syscall(__NR_brk, sys_brk);
     libc_define_syscall(__NR_mmap, sys_mmap);
     libc_define_syscall(__NR_munmap, sys_munmap);
