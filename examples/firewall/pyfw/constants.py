@@ -279,7 +279,7 @@ nat_port_table_region = FirewallMemoryRegions(
 # --------------------------------------------- #
 # NAT webserver state - shared SNAT configuration
 nat_webserver_state_buffer = FirewallDataStructure(
-    entry_size=24,  # fw_nat_webserver_state_t (interfaces[2] * 4 bytes + 8 bytes timeout)
+    entry_size=64,  # fw_nat_webserver_state_t - extra space for alignment/padding
     capacity=1
 )
 nat_webserver_state_region = FirewallMemoryRegions(

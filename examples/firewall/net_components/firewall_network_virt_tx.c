@@ -265,6 +265,10 @@ void init(void)
             }
 
             /* Get webserver state from parent fw_config (shared across all protocols) */
+            if (fw_config.webserver_state.vaddr == 0) {
+                sddf_dprintf("TX VIRT NAT ERROR: webserver_state vaddr is NULL!\n");
+                continue;
+            }
             fw_nat_webserver_state_t *webserver_state =
                 (fw_nat_webserver_state_t *)fw_config.webserver_state.vaddr;
 

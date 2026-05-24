@@ -6,11 +6,13 @@ from pyfw.constants import (
     interfaces,
     supported_protocols,
     webserver_tx_interface_idx,
+    nat_webserver_state_region,
 )
 from config_structs import (
     EthHwaddrLen,
     FwWebserverConfig,
     FwWebserverInterfaceConfig,
+    FwWebserverNatProtocolConfig,
 )
 
 SDF_Channel = SystemDescription.Channel
@@ -52,7 +54,18 @@ class Webserver(Component, FwWebserverConfig):
             router=None,
             arp_queue=None,
             tx_interface=webserver_tx_interface_idx,
+            nat_state=[],
         )
+
+    def add_nat_state(self, protocol, webserver_state_region):
+        """Add NAT state region for a protocol"""
+        from pyfw.specs import FirewallMemoryRegion
+        nat_config = FwWebserverNatProtocolConfig(
+            protocol=protocol,
+            region=webserver_state_region.map(self.pd, "rw")
+        )
+        assert self.nat_state is not None
+        self.nat_state.append(nat_config)
 
     def finalise_config(self) -> None:
         assert self.interfaces is not None and len(self.interfaces) == len(interfaces)

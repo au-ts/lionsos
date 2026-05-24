@@ -34,6 +34,7 @@ from pyfw.constants import (
     arp_eth_opcode_response,
     eththype_ip,
     nat_webserver_state_region,
+    nat_port_table_region,
 )
 from pyfw.component_fw_interface import FirewallInterface
 
@@ -91,53 +92,86 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
         if not path.isdir(iface.out_dir):
             assert subprocess.run(["mkdir", iface.out_dir]).returncode == 0
 
-    # Configure NAT for all interfaces
+    # Configure NAT - only enable on external interface (interface 0)
     # Create shared webserver NAT state region
     nat_webserver_state_mr = FirewallMemoryRegion(
         "nat_webserver_state",
         nat_webserver_state_region.region_size
     )
 
+    # Create shared port tables for each interface (shared between RX and TX)
+    # so DNAT (RX) can find mappings created by SNAT (TX)
+    tcp_port_tables = {}
+    udp_port_tables = {}
+
     for iface in fw_interfaces:
-        # Configure TCP NAT
-        iface.rx_virtualiser.add_nat_config(
+        tcp_port_tables[iface.index] = FirewallMemoryRegion(
+            f"nat_port_table_iface{iface.index}_tcp",
+            nat_port_table_region.region_size
+        )
+        udp_port_tables[iface.index] = FirewallMemoryRegion(
+            f"nat_port_table_iface{iface.index}_udp",
+            nat_port_table_region.region_size
+        )
+
+    # Configure NAT on all interfaces (required for config serialization)
+    # but only enable on interface 0 (external)
+    for iface in fw_interfaces:
+        # Configure TCP NAT - RX and TX share the same port table
+        iface.rx_virtualiser.add_nat_config_with_port_table(
             protocol=0x06,  # TCP
             base_port=49152,
             capacity=512,
-            interface_ip=iface.ip
+            interface_ip=iface.ip,
+            snat_ip=iface.ip,
+            port_table_mr=tcp_port_tables[iface.index]
         )
-        iface.tx_virtualiser.add_nat_config(
+        iface.tx_virtualiser.add_nat_config_with_port_table(
             protocol=0x06,  # TCP
             base_port=49152,
             capacity=512,
-            interface_ip=iface.ip
+            interface_ip=iface.ip,
+            snat_ip=iface.ip,
+            port_table_mr=tcp_port_tables[iface.index]
         )
 
-        # Configure UDP NAT
-        iface.rx_virtualiser.add_nat_config(
+        # Configure UDP NAT - RX and TX share the same port table
+        iface.rx_virtualiser.add_nat_config_with_port_table(
             protocol=0x11,  # UDP
             base_port=49152,
             capacity=512,
-            interface_ip=iface.ip
+            interface_ip=iface.ip,
+            snat_ip=iface.ip,
+            port_table_mr=udp_port_tables[iface.index]
         )
-        iface.tx_virtualiser.add_nat_config(
+        iface.tx_virtualiser.add_nat_config_with_port_table(
             protocol=0x11,  # UDP
             base_port=49152,
             capacity=512,
-            interface_ip=iface.ip
+            interface_ip=iface.ip,
+            snat_ip=iface.ip,
+            port_table_mr=udp_port_tables[iface.index]
         )
 
-        # Set shared webserver state for both RX and TX
+        # Set shared webserver state
         iface.rx_virtualiser.set_nat_webserver_state(nat_webserver_state_mr)
         iface.tx_virtualiser.set_nat_webserver_state(nat_webserver_state_mr)
 
-        # Enable NAT
-        iface.rx_virtualiser.enable_nat()
-        iface.tx_virtualiser.enable_nat()
+        # Map RX DMA region for NAT packet modification (DNAT needs write access)
+        iface.rx_virtualiser.set_nat_dma_region(iface.rx_dma_region)
+
+    # Enable NAT only on external interface (interface 0)
+    external_iface = fw_interfaces[0]
+    external_iface.rx_virtualiser.enable_nat()
+    external_iface.tx_virtualiser.enable_nat()
 
     router = Router()
     webserver = Webserver()
     icmp_module = IcmpModule()
+
+    # Configure webserver NAT state (shared with network virtualizers)
+    webserver.add_nat_state(0x06, nat_webserver_state_mr)  # TCP
+    webserver.add_nat_state(0x11, nat_webserver_state_mr)  # UDP
 
     # Create timer and serial subsystems
     serial_node = dtb.node(board.serial)

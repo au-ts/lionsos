@@ -73,11 +73,11 @@ typedef struct fw_pseudo_header {
  * @param dst_ip Destination IP address in big endian byte order.
  * @return The calculated 16-bit Internet Checksum.
  */
-uint16_t calculate_transport_checksum(void *pkt,
-                                      uint16_t len,
-                                      uint8_t protocol,
-                                      uint32_t src_ip,
-                                      uint32_t dst_ip)
+static inline uint16_t calculate_transport_checksum(void *pkt,
+                                                     uint16_t len,
+                                                     uint8_t protocol,
+                                                     uint32_t src_ip,
+                                                     uint32_t dst_ip)
 {
     uint32_t sum = 0;
     uint16_t *pkt_ptr = (uint16_t *)pkt;

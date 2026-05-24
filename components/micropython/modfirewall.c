@@ -12,6 +12,7 @@
 #include <lions/firewall/filter.h>
 #include <lions/firewall/ip.h>
 #include <lions/firewall/routing.h>
+#include <lions/firewall/nat_module.h>
 
 #include "mpfirewallport.h"
 
@@ -509,6 +510,98 @@ static mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp
 
 static MP_DEFINE_CONST_FUN_OBJ_3(rule_get_nth_obj, rule_get_nth);
 
+/* NAT API functions */
+static mp_obj_t set_snat_ip(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp_obj_t snat_in)
+{
+    uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
+    if (interface_idx >= FW_NUM_INTERFACES) {
+        sddf_dprintf("WEBSERVER|LOG: %s\n",
+                    fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
+        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+        return mp_const_none;
+    }
+
+    uint8_t protocol = mp_obj_get_int(protocol_in);
+    uint32_t snat = mp_obj_get_int(snat_in);
+
+    /* Find the NAT state for this protocol */
+    for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
+        if (fw_config.nat_state[i].protocol == protocol) {
+            fw_nat_webserver_state_t *webserver_state = (fw_nat_webserver_state_t *)fw_config.nat_state[i].region.vaddr;
+            webserver_state->interfaces[interface_idx].snat = snat;
+            return mp_const_none;
+        }
+    }
+
+    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
+    mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_3(set_snat_ip_obj, set_snat_ip);
+
+static mp_obj_t get_snat_ip(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
+{
+    uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
+    if (interface_idx >= FW_NUM_INTERFACES) {
+        sddf_dprintf("WEBSERVER|LOG: %s\n",
+                    fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
+        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+        return mp_const_none;
+    }
+
+    uint8_t protocol = mp_obj_get_int(protocol_in);
+    for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
+        if (fw_config.nat_state[i].protocol == protocol) {
+            fw_nat_webserver_state_t *webserver_state = (fw_nat_webserver_state_t *)fw_config.nat_state[i].region.vaddr;
+            return mp_obj_new_int_from_uint(webserver_state->interfaces[interface_idx].snat);
+        }
+    }
+
+    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
+    mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_2(get_snat_ip_obj, get_snat_ip);
+
+static mp_obj_t set_nat_timeout(mp_obj_t protocol_in, mp_obj_t timeout_in)
+{
+    uint8_t protocol = mp_obj_get_int(protocol_in);
+    uint64_t timeout = mp_obj_get_int(timeout_in);
+
+    for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
+        if (fw_config.nat_state[i].protocol == protocol) {
+            fw_nat_webserver_state_t *webserver_state = (fw_nat_webserver_state_t *)fw_config.nat_state[i].region.vaddr;
+            webserver_state->timeout = timeout;
+            return mp_const_none;
+        }
+    }
+
+    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
+    mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_2(set_nat_timeout_obj, set_nat_timeout);
+
+static mp_obj_t get_nat_timeout(mp_obj_t protocol_in)
+{
+    uint8_t protocol = mp_obj_get_int(protocol_in);
+    for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
+        if (fw_config.nat_state[i].protocol == protocol) {
+            fw_nat_webserver_state_t *webserver_state = (fw_nat_webserver_state_t *)fw_config.nat_state[i].region.vaddr;
+            return mp_obj_new_int_from_uint(webserver_state->timeout);
+        }
+    }
+
+    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
+    mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_1(get_nat_timeout_obj, get_nat_timeout);
+
 static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lions_firewall) },
     { MP_ROM_QSTR(MP_QSTR_interface_ip_get), MP_ROM_PTR(&interface_get_ip_obj) },
@@ -527,6 +620,10 @@ static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_rule_count), MP_ROM_PTR(&rule_count_obj) },
     { MP_ROM_QSTR(MP_QSTR_filter_get_default_action), MP_ROM_PTR(&filter_get_default_action_obj) },
     { MP_ROM_QSTR(MP_QSTR_filter_set_default_action), MP_ROM_PTR(&filter_set_default_action_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_snat_ip), MP_ROM_PTR(&set_snat_ip_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_snat_ip), MP_ROM_PTR(&get_snat_ip_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_nat_timeout), MP_ROM_PTR(&set_nat_timeout_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_nat_timeout), MP_ROM_PTR(&get_nat_timeout_obj) },
 };
 
 static MP_DEFINE_CONST_DICT(lions_firewall_module_globals, lions_firewall_module_globals_table);

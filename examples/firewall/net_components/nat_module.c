@@ -14,7 +14,7 @@
 #include <lions/firewall/common.h>
 
 /**
- * Initialize the NAT module
+ * Initialise the NAT module
  */
 int nat_module_init(nat_module_t *nat,
                     uint8_t interface,
@@ -41,9 +41,9 @@ int nat_module_init(nat_module_t *nat,
     nat->dst_port_off = dst_port_off;
     nat->check_off = check_off;
     nat->check_enabled = check_enabled;
-    nat->snat_ip = webserver_state->interfaces[interface].snat;
+    nat->snat_ip = 0;
 
-    /* Initialize statistics */
+    /* Initialise statistics */
     nat->translations_performed = 0;
     nat->translations_failed = 0;
     nat->dnat_hits = 0;
@@ -54,10 +54,9 @@ int nat_module_init(nat_module_t *nat,
         sddf_printf("%s%s NAT Module: initialized\n",
                     "iface",
                     "protocol");
-        sddf_printf("%s%s NAT Module: SNAT IP = %s\n",
+        sddf_printf("%s%s NAT Module: SNAT IP will be read dynamically from webserver_state\n",
                     "iface",
-                    "protocol",
-                    ipaddr_to_string(nat->snat_ip, ip_addr_buf0));
+                    "protocol");
         sddf_printf("%s%s NAT Module: base port = %u, capacity = %u\n",
                     "iface",
                     "protocol",
@@ -96,10 +95,11 @@ int nat_module_translate(nat_module_t *nat,
     uint16_t *dst_port = (uint16_t *)(transport_hdr + nat->dst_port_off);
     uint16_t *check = (uint16_t *)(transport_hdr + nat->check_off);
 
-    /* For now, we'll use 0. The actual implementation will need a time source */
+    /* TODO */
     uint64_t now = 0;
 
     bool recalculate_checksum = false;
+    bool dnat_applied = false;
 
     /* Log packet before translation */
     if (FW_DEBUG_OUTPUT)
@@ -122,34 +122,49 @@ int nat_module_translate(nat_module_t *nat,
     /* DNAT: Check if this is returning traffic */
     if (is_inbound)
     {
-        fw_nat_port_mapping_t *dst_mapping = fw_nat_translate_destination(
-            nat->interface_config,
-            nat->webserver_state,
-            ip_hdr->dst_ip,
-            *dst_port,
-            now);
+        uint32_t snat_ip = nat->webserver_state->interfaces[nat->interface].snat;
 
-        if (dst_mapping)
+        /* Only do DNAT if packet is destined for this interface's SNAT IP */
+        if (ip_hdr->dst_ip == snat_ip)
         {
-            if (FW_DEBUG_OUTPUT)
+            /* Convert dst_port to host byte order for table lookup */
+            uint16_t dst_port_host = htons(*dst_port);
+
+            /* Check if dst_port is in our ephemeral port range */
+            if (dst_port_host >= nat->interface_config->base_port &&
+                dst_port_host < nat->interface_config->base_port + nat->port_table->largest_index)
             {
-                sddf_printf("%s%s NAT Module: returning traffic detected (DNAT)\n",
-                            "iface",
-                            "protocol");
+                uint16_t table_index = dst_port_host - nat->interface_config->base_port;
+                fw_nat_port_mapping_t *mapping = &nat->port_table->mappings[table_index];
+
+                if (mapping->is_valid)
+                {
+                    if (FW_DEBUG_OUTPUT)
+                    {
+                        sddf_printf("%s%s NAT Module: returning traffic detected (DNAT)\n",
+                                    "iface",
+                                    "protocol");
+                    }
+
+                    /* Update timestamp */
+                    mapping->last_used_ts = now;
+
+                    /* Translate destination to original internal address */
+                    *dst_port = mapping->src_port;
+                    ip_hdr->dst_ip = mapping->src_ip;
+                    ip_hdr->check = 0;
+
+                    recalculate_checksum = true;
+                    nat->dnat_hits++;
+                    dnat_applied = true;
+                }
             }
-
-            /* Translate destination to original internal address */
-            *dst_port = dst_mapping->src_port;
-            ip_hdr->dst_ip = dst_mapping->src_ip;
-            ip_hdr->check = 0;
-
-            recalculate_checksum = true;
-            nat->dnat_hits++;
         }
     }
 
-    /* SNAT: If enabled and destination is not this interface */
-    if (nat->snat_ip && ip_hdr->dst_ip != nat->interface_config->ip)
+    /* Skip SNAT if we already did DNAT (returning traffic shouldn't be double-NATed) */
+    uint32_t snat_ip = nat->webserver_state->interfaces[nat->interface].snat;
+    if (!dnat_applied && snat_ip && ip_hdr->dst_ip != nat->interface_config->ip)
     {
         uint16_t ephemeral_port = fw_nat_find_ephemeral_port(
             *nat->interface_config,
@@ -161,7 +176,7 @@ int nat_module_translate(nat_module_t *nat,
         if (ephemeral_port)
         {
             /* Translate source to external interface IP and ephemeral port */
-            ip_hdr->src_ip = nat->snat_ip;
+            ip_hdr->src_ip = snat_ip;
             *src_port = ephemeral_port;
             ip_hdr->check = 0;
 
@@ -173,7 +188,7 @@ int nat_module_translate(nat_module_t *nat,
                 sddf_printf("%s%s NAT Module: SNAT translated to %s:%u\n",
                             "iface",
                             "protocol",
-                            ipaddr_to_string(nat->snat_ip, ip_addr_buf0),
+                            ipaddr_to_string(snat_ip, ip_addr_buf0),
                             htons(*src_port));
             }
         }
@@ -209,7 +224,7 @@ int nat_module_translate(nat_module_t *nat,
 
         /* Also recalculate IP header checksum since we modified addresses */
         ip_hdr->check = 0;
-        uint8_t ihl_bytes = ip_hdr->ihl * 4;  // IHL is in 32-bit words
+        uint8_t ihl_bytes = ip_hdr->ihl * 4; // IHL is in 32-bit words
         ip_hdr->check = fw_internet_checksum(ip_hdr, ihl_bytes);
     }
 
