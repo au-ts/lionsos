@@ -59,6 +59,7 @@
 #define MICROPY_PY_MACHINE (1)
 #define MICROPY_PY_MACHINE_I2C (1)
 #define MICROPY_HW_ENABLE_HW_I2C (1)
+#define MICROPY_PY_MACHINE_I2C_TRANSFER_WRITE1 (1)
 
 #ifdef ENABLE_FRAMEBUFFER
 #define MICROPY_PY_FRAMEBUF (1)
@@ -90,25 +91,7 @@ typedef long mp_off_t;
 // We need to provide a declaration/definition of alloca().
 #include <alloca.h>
 
-// Define the port's name and hardware.
-#if defined(CONFIG_PLAT_ODROIDC4)
-#define MICROPY_HW_BOARD_NAME "Odroid-C4"
-#define MICROPY_HW_MCU_NAME   "Cortex A55"
-#elif defined(CONFIG_PLAT_IMX8MM_EVK)
-#define MICROPY_HW_BOARD_NAME "i.MX 8M Mini"
-#define MICROPY_HW_MCU_NAME   "Cortex A53"
-#elif defined(CONFIG_PLAT_IMX8MP_EVK)
-#define MICROPY_HW_BOARD_NAME "i.MX 8MP"
-#define MICROPY_HW_MCU_NAME   "Cortex A53"
-#elif defined(CONFIG_PLAT_MAAXBOARD)
-#define MICROPY_HW_BOARD_NAME "MaaXBoard"
-#define MICROPY_HW_MCU_NAME   "Cortex A53"
-#elif defined(CONFIG_PLAT_QEMU_ARM_VIRT)
-#define MICROPY_HW_BOARD_NAME "QEMU virt AArch64"
-#define MICROPY_HW_MCU_NAME   "Cortex A53"
-#else
-#error "Unknown platform given for MicroPython config"
-#endif
+#define MICROPY_BANNER_MACHINE "LionsOS"
 
 #define MP_STATE_PORT MP_STATE_VM
 

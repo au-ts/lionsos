@@ -95,7 +95,6 @@ static void process_requests()
                 /* Reply immediately */
                 fw_arp_request_t response = fw_arp_response_from_entry(entry);
                 fw_enqueue(&arp_resp_queue[client], &response);
-                fw_enqueue(&arp_resp_queue[client], &request);
                 notify_client[client] = true;
                 continue;
             } else if (entry != NULL && entry->state == ARP_STATE_PENDING) {
@@ -162,10 +161,11 @@ static void process_responses()
                                 fw_enqueue(&arp_resp_queue[client], &response);
                                 notify_client[client] = true;
                                 if (FW_DEBUG_OUTPUT) {
-                                    sddf_printf("ARP REQUESTER LOG: received response for client %u, ip %s. MAC[0] = %x, "
-                                                "MAC[5] = %x on interface %u\n",
-                                                client, ipaddr_to_string(arp_resp->ipsrc_addr, ip_addr_buf0),
-                                                arp_resp->hwsrc_addr[0], arp_resp->hwsrc_addr[5], arp_config.interface);
+                                    sddf_printf(
+                                        "ARP REQUESTER LOG: received response for client %u, ip %s. MAC[0] = %x, "
+                                        "MAC[5] = %x on interface %u\n",
+                                        client, ipaddr_to_string(arp_resp->ipsrc_addr, ip_addr_buf0),
+                                        arp_resp->hwsrc_addr[0], arp_resp->hwsrc_addr[5], arp_config.interface);
                                 }
                             }
                         }

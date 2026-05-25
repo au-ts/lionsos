@@ -228,7 +228,7 @@ qemu: $(IMAGE_FILE)
 			-device virtio-net-device,netdev=netdev0,bus=virtio-mmio-bus.0 \
 			-netdev user,id=netdev0 \
 			-global virtio-mmio.force-legacy=false \
-			-device virtio-gpu-pci
+			-device virtio-gpu-device,bus=virtio-mmio-bus.8
 
 clean::
 	${RM} -f *.elf .depend* $

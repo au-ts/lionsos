@@ -17,8 +17,8 @@ FROZEN_MANIFEST ?= $(MICROPYTHON_SRC)/extmod/asyncio/manifest.py
 include $(MICROPYTHON_SRC)/py/mkenv.mk
 
 # Override mkenv.mk settings.
-CC = $(USE_CC)
-LD = $(USE_LD)
+CC := $(USE_CC)
+LD := $(USE_LD)
 SIZE := $(USE_SIZE)
 
 # Include py core make definitions.
@@ -45,8 +45,7 @@ CFLAGS += \
 	-Wno-shift-op-parentheses \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
-	-mtune=$(CPU) \
-	-target $(TARGET)
+	$(CFLAGS_ARCH)
 
 LDFLAGS += -L$(BOARD_DIR)/lib -L$(MICROPYTHON_LIBC)/lib
 LIBS += -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a $(BUILD)/libmicrokitco_mp.a

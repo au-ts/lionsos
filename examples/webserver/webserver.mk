@@ -57,7 +57,7 @@ include $(LIONSOS)/components/micropython/micropython.mk
 manifest.py: webserver.py config.py
 webserver.py: $(MICRODOT) config.py
 
-config.py: ${CHECK_FLAGS_BOARD_MD5}
+config.py:
 	echo "base_dir='$(WEBSITE_DIR)'" > config.py
 
 %.py: ${WEBSERVER_SRC_DIR}/%.py

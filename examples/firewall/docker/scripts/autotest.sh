@@ -35,13 +35,18 @@ ERROR_NO_ECHO_RESPONSE='Did not receive echo response'
 ERROR_HOST_UNREACHABLE='Did not receive destination host unreachable'
 ERROR_NET_UNREACHABLE='Did not receive destination net unreachable'
 ERROR_FAILED_ENABLE_PING='Could not enable ping response'
+ERROR_FAILED_DISABLE_PING='Could not disable ping response'
 ERROR_TRANSMIT_FAILED='Failed to transmit data'
 ERROR_DATA_INCORRECT='The received data is different to what was sent'
 ERROR_DATA_WAS_NOT_DROPPED='Firewall traffic was not dropped'
 ERROR_FAILED_TO_APPLY_RULE='Failed to apply firewall rule'
 ERROR_FAILED_TO_REMOVE_RULE='Failed to remove firewall rule'
 ERROR_RULE_STILL_APPLIED='Firewall rule is still applied'
+ERROR_ICMP_REJECT_NOT_APPLIED='ICMP reject rule did not block ping traffic or send a destination port unreachable message'
+ERROR_UDP_REJECT_UNEXPECTED_OUTPUT='UDP reject rule did not send a destination port unreachable message'
+ERROR_UNEXPECTED_ECHO_RESPONSE='Received echo response when ping responsiveness is disabled'
 INFO_SKIPPING_TEST='Skipping (feature not implemented yet)'
+ERROR_TIMEOUT='Did not receive time to live exceeded message'
 
 FONT_HEADER=$(printf '\033[1m\033[36m')
 FONT_RED=$(printf '\033[31m')
@@ -49,15 +54,20 @@ FONT_RESET=$(printf '\033[0m')
 
 REGEX_REACHABLE='[1-9][0-9]* received'
 REGEX_HOST_UNREACHABLE='Destination Host Unreachable'
+REGEX_DESTINATION_PORT_UNREACHABLE='Destination Port Unreachable'
 REGEX_NET_UNREACHABLE='Destination Net Unreachable'
+REGEX_TIMEOUT='Time to live exceeded'
 
 TEMPLATE_SRC='$src_ip, $src_port, $src_subnet'
 TEMPLATE_DEST='$dest_ip, $dest_port, $dest_subnet'
-TEMPLATE_ACTION='$interface, $action'
-TEMPLATE_JSON="{ ${TEMPLATE_SRC}, ${TEMPLATE_DEST}, ${TEMPLATE_ACTION} }"
+TEMPLATE_INTERFACE='$interface'
+TEMPLATE_ACTION='$action'
+TEMPLATE_RULE_JSON="{ ${TEMPLATE_SRC}, ${TEMPLATE_DEST}, ${TEMPLATE_INTERFACE}, ${TEMPLATE_ACTION} }"
 
 FIREWALL_EXTERNAL_INTERFACE=0
+FIREWALL_INTERNAL_INTERFACE=1
 FIREWALL_ACTION_DROP=2
+FIREWALL_ACTION_REJECT=3
 
 #
 # Setup and teardown
@@ -80,6 +90,7 @@ oneTimeSetUp() {
     COUNT=1
     TIMEOUT=1
     LONG_TIMEOUT=7
+    TIMEOUT_TTL=1
 
     # Temporary files
     #
@@ -315,21 +326,31 @@ test_icmp_ping_unreachable_net_external_to_internal() {
 }
 
 test_icmp_ping_firewall_from_internal_network() {
-    # Ensure ping responsiveness is turned on
-    response=$(curl --silent \
+    original_status=$(curl --silent "http://${FW_INT_IP}/api/ping/1" | sed -E 's/.*enabled": (true|false).*/\1/')
+
+    if [ "${original_status}" = "true" ]; then
+        # Disable ping
+        curl --silent \
+            --output /dev/null \
+            --header 'Content-Type: application/json' \
+            --request 'POST' \
+            "http://${FW_INT_IP}/api/ping/1/0"
+    fi
+
+    ip netns exec int \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INT_IP}" > "${RECEIVED}" 2>&1
+
+    if grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_UNEXPECTED_ECHO_RESPONSE}"
+        print_log
+    fi
+
+    # Turn ping on and check for a response.
+    curl --silent \
         --output /dev/null \
         --header 'Content-Type: application/json' \
         --request 'POST' \
-        "http://${FW_INT_IP}/api/ping/1/1")
-
-    # Check if the response contains an error
-    error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
-
-    if [ ! -z "${error}" ]; then
-        fail "${ERROR_FAILED_ENABLE_PING}"
-        print_log
-        return
-    fi
+        "http://${FW_INT_IP}/api/ping/1/1"
 
     ip netns exec int \
         ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_INT_IP}" > "${RECEIVED}" 2>&1
@@ -338,24 +359,42 @@ test_icmp_ping_firewall_from_internal_network() {
         fail "${ERROR_NO_ECHO_RESPONSE}"
         print_log
     fi
+
+    # Restore original status if it was off.
+    if [ "${original_status}" = "false" ]; then
+        curl --silent \
+            --output /dev/null \
+            --header 'Content-Type: application/json' \
+            --request 'POST' \
+            "http://${FW_INT_IP}/api/ping/1/0"
+    fi
 }
 
 test_icmp_ping_firewall_from_external_network() {
-    # Ensure ping responsiveness is turned on
-    response=$(curl --silent \
+    original_status=$(curl --silent "http://${FW_INT_IP}/api/ping/0" | sed -E 's/.*enabled": (true|false).*/\1/')
+
+    if [ "${original_status}" = "true" ]; then
+        # Disable ping
+        curl --silent \
+            --output /dev/null \
+            --header 'Content-Type: application/json' \
+            --request 'POST' \
+            "http://${FW_INT_IP}/api/ping/0/0"
+    fi
+
+    ip netns exec ext \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_EXT_IP}" > "${RECEIVED}" 2>&1
+
+    if grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_UNEXPECTED_ECHO_RESPONSE}"
+        print_log
+    fi
+
+    curl --silent \
         --output /dev/null \
         --header 'Content-Type: application/json' \
         --request 'POST' \
-        "http://${FW_INT_IP}/api/ping/0/1")
-
-    # Check if the response contains an error
-    error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
-
-    if [ ! -z "${error}" ]; then
-        fail "${ERROR_FAILED_ENABLE_PING}"
-        print_log
-        return
-    fi
+        "http://${FW_INT_IP}/api/ping/0/1"
 
     ip netns exec ext \
         ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_EXT_IP}" > "${RECEIVED}" 2>&1
@@ -363,6 +402,248 @@ test_icmp_ping_firewall_from_external_network() {
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
         fail "${ERROR_NO_ECHO_RESPONSE}"
         print_log
+    fi
+
+    if [ "${original_status}" = "false" ]; then
+        curl --silent \
+            --output /dev/null \
+            --header 'Content-Type: application/json' \
+            --request 'POST' \
+            "http://${FW_INT_IP}/api/ping/0/0"
+    fi
+}
+
+
+
+test_icmp_ping_timeout_host_int_to_ext() {
+    ip netns exec int \
+        ping -c "${COUNT}" -t "${TIMEOUT_TTL}" "${EXT_HOST_IP}" \
+        > "${RECEIVED}" 2>&1
+
+    if ! grep -Eq --ignore-case "${REGEX_TIMEOUT}" "${RECEIVED}"; then
+        print_file 'Ping output' "${RECEIVED}"
+        fail "${ERROR_TIMEOUT}"
+        print_log
+    fi
+}
+
+test_icmp_ping_timeout_host_ext_to_int() {
+    ip netns exec ext \
+        ping -c "${COUNT}" -t "${TIMEOUT_TTL}" "${INT_HOST_IP}" \
+        > "${RECEIVED}" 2>&1
+
+    if ! grep -Eq --ignore-case "${REGEX_TIMEOUT}" "${RECEIVED}"; then
+        fail "${ERROR_TIMEOUT}"
+        print_log
+    fi
+}
+
+test_icmp_reject_int_to_ext() {
+    # Craft a JSON request with the rule's parameters.
+    json=$(jq \
+        --null-input \
+        --argjson interface "${FIREWALL_INTERNAL_INTERFACE}" \
+        --argjson action "${FIREWALL_ACTION_REJECT}" \
+        --arg src_ip "${INT_HOST_IP}" \
+        --arg src_port "" \
+        --argjson src_subnet "${FW_INT_SUBNET}" \
+        --arg dest_ip "${EXT_HOST_IP}" \
+        --arg dest_port "" \
+        --argjson dest_subnet "${FW_EXT_SUBNET}" \
+        "${TEMPLATE_RULE_JSON}")
+
+    # Apply the rule.
+    response=$(curl --silent \
+        --header 'Content-Type: application/json' \
+        --request 'POST' \
+        --data "$json" "http://${FW_INT_IP}/api/rules/icmp")
+
+    # Extract the rule's ID.
+    rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
+
+    if [ -z "${rule_id}" ]; then
+        fail "${ERROR_FAILED_TO_APPLY_RULE}"
+        return
+    fi
+
+    # Attempt ICMP echo while reject rule is active.
+    ip netns exec int \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${EXT_HOST_IP}" > "${RECEIVED}" 2>&1
+
+    # Ping should not succeed while the reject rule is active.
+    if ! grep -Eq --ignore-case "${REGEX_DESTINATION_PORT_UNREACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_ICMP_REJECT_NOT_APPLIED}"
+        print_file 'Ping output' "${RECEIVED}"
+        print_log
+    fi
+
+    # Remove the reject rule after the attempt.
+    response=$(curl --silent \
+        --header 'Content-Type: application/json' \
+        --request 'DELETE' \
+        "http://${FW_INT_IP}/api/rules/icmp/${rule_id}/${FIREWALL_INTERNAL_INTERFACE}")
+
+    if echo "${response}" | grep -q '"error"'; then
+        fail "${ERROR_FAILED_TO_REMOVE_RULE}"
+        print_log
+        return
+    fi
+}
+
+test_icmp_reject_ext_to_int() {
+    # Craft a JSON request with the rule's parameters.
+    json=$(jq \
+        --null-input \
+        --argjson interface "${FIREWALL_EXTERNAL_INTERFACE}" \
+        --argjson action "${FIREWALL_ACTION_REJECT}" \
+        --arg src_ip "${EXT_HOST_IP}" \
+        --arg src_port "" \
+        --argjson src_subnet "${FW_EXT_SUBNET}" \
+        --arg dest_ip "${INT_HOST_IP}" \
+        --arg dest_port "" \
+        --argjson dest_subnet "${FW_INT_SUBNET}" \
+        "${TEMPLATE_RULE_JSON}")
+
+    # Apply the rule.
+    response=$(curl --silent \
+        --header 'Content-Type: application/json' \
+        --request 'POST' \
+        --data "$json" "http://${FW_INT_IP}/api/rules/icmp")
+
+    # Extract the rule's ID.
+    rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
+
+    if [ -z "${rule_id}" ]; then
+        fail "${ERROR_FAILED_TO_APPLY_RULE}"
+        return
+    fi
+
+    # Attempt ICMP echo while reject rule is active.
+    ip netns exec ext \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${INT_HOST_IP}" > "${RECEIVED}" 2>&1
+
+    # Ping should not succeed while the reject rule is active.
+    if ! grep -Eq --ignore-case "${REGEX_DESTINATION_PORT_UNREACHABLE}" "${RECEIVED}"; then
+        fail "${ERROR_ICMP_REJECT_NOT_APPLIED}"
+        print_file 'Ping output' "${RECEIVED}"
+        print_log
+    fi
+
+    # Remove the reject rule after the attempt.
+    response=$(curl --silent \
+        --header 'Content-Type: application/json' \
+        --request 'DELETE' \
+        "http://${FW_INT_IP}/api/rules/icmp/${rule_id}/${FIREWALL_EXTERNAL_INTERFACE}")
+
+    if echo "${response}" | grep -q '"error"'; then
+        fail "${ERROR_FAILED_TO_REMOVE_RULE}"
+        print_log
+        return
+    fi
+}
+
+test_icmp_udp_reject_ext_to_int() {
+    # Craft a JSON request with the rule's parameters
+    json=$(jq \
+        --null-input \
+        --argjson interface "${FIREWALL_EXTERNAL_INTERFACE}" \
+        --argjson action "${FIREWALL_ACTION_REJECT}" \
+        --arg src_ip "${EXT_HOST_IP}" \
+        --arg src_port "" \
+        --argjson src_subnet "${FW_EXT_SUBNET}" \
+        --arg dest_ip "${INT_HOST_IP}" \
+        --arg dest_port "${UDP_PORT}" \
+        --argjson dest_subnet "${FW_INT_SUBNET}" \
+        "${TEMPLATE_RULE_JSON}")
+
+    # Apply the rule
+    response=$(curl --silent \
+        --header 'Content-Type: application/json' \
+        --request 'POST' \
+        --data "$json" "http://${FW_INT_IP}/api/rules/udp")
+
+    # Extract the rule's ID
+    rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
+
+    if [ -z "${rule_id}" ]; then
+        fail "${ERROR_FAILED_TO_APPLY_RULE}"
+        return
+    fi
+
+    # Send UDP traffic and capture sender-side output where ICMP reject details
+    # are reported.
+    ip netns exec ext \
+        nc -u -z -w "${LONG_TIMEOUT}" "${INT_HOST_IP}" "${UDP_PORT}" \
+        < "${SENT}" > /dev/null 2> "${RECEIVED}"
+    exit_code=$?
+
+    if [ "${exit_code}" -eq "${EXIT_SUCCESS}" ]; then
+        fail "${ERROR_UDP_REJECT_UNEXPECTED_OUTPUT}"
+        print_log
+    fi
+
+    # Remove the reject rule now that traffic was attempted.
+    response=$(curl --silent \
+        --header 'Content-Type: application/json' \
+        --request 'DELETE' \
+        "http://${FW_INT_IP}/api/rules/udp/${rule_id}/${FIREWALL_EXTERNAL_INTERFACE}")
+
+    if echo "${response}" | grep -q '"error"'; then
+        fail "${ERROR_FAILED_TO_REMOVE_RULE}"
+        print_log
+        return
+    fi
+}
+
+test_icmp_udp_reject_int_to_ext() {
+    # Craft a JSON request with the rule's parameters
+    json=$(jq \
+        --null-input \
+        --argjson interface "${FIREWALL_INTERNAL_INTERFACE}" \
+        --argjson action "${FIREWALL_ACTION_REJECT}" \
+        --arg src_ip "${INT_HOST_IP}" \
+        --arg src_port "" \
+        --argjson src_subnet "${FW_INT_SUBNET}" \
+        --arg dest_ip "${EXT_HOST_IP}" \
+        --arg dest_port "${UDP_PORT}" \
+        --argjson dest_subnet "${FW_EXT_SUBNET}" \
+        "${TEMPLATE_RULE_JSON}")
+
+    # Apply the rule
+    response=$(curl --silent \
+        --header 'Content-Type: application/json' \
+        --request 'POST' \
+        --data "$json" "http://${FW_INT_IP}/api/rules/udp")
+
+    # Extract the rule's ID
+    rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
+
+    if [ -z "${rule_id}" ]; then
+        fail "${ERROR_FAILED_TO_APPLY_RULE}"
+        return
+    fi
+
+    # Send UDP traffic and capture sender-side output.
+    ip netns exec int \
+        nc -u -z -w "${LONG_TIMEOUT}" "${EXT_HOST_IP}" "${UDP_PORT}" \
+        < "${SENT}" > /dev/null 2> "${RECEIVED}"
+    exit_code=$?
+
+    if [ "${exit_code}" -eq "${EXIT_SUCCESS}" ]; then
+        fail "${ERROR_UDP_REJECT_UNEXPECTED_OUTPUT}"
+        print_log
+    fi
+
+    # Remove the reject rule now that traffic was attempted.
+    response=$(curl --silent \
+        --header 'Content-Type: application/json' \
+        --request 'DELETE' \
+        "http://${FW_INT_IP}/api/rules/udp/${rule_id}/${FIREWALL_INTERNAL_INTERFACE}")
+
+    if echo "${response}" | grep -q '"error"'; then
+        fail "${ERROR_FAILED_TO_REMOVE_RULE}"
+        print_log
+        return
     fi
 }
 
@@ -495,7 +776,7 @@ test_rule_application_and_removal() {
         --arg dest_ip "${INT_HOST_IP}" \
         --arg dest_port "${TCP_PORT}" \
         --argjson dest_subnet "${FW_INT_SUBNET}" \
-        "${TEMPLATE_JSON}")
+        "${TEMPLATE_RULE_JSON}")
 
     # Apply the rule
     response=$(curl --silent \

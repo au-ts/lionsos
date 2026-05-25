@@ -36,9 +36,19 @@
 //TODO: fix to use header; have issue with providing correct libmicrokitco_opts.h
 void microkit_cothread_wait_on_channel(const microkit_channel wake_on);
 
+//TODO: fix to use header in "dep/musllibc/src/internal/libc.h"
+void __init_libc(char**, char*);
+void __libc_start_init(void);
+
 extern size_t __sysinfo;
 extern timer_client_config_t timer_config;
 static muslcsys_syscall_t syscall_table[MUSLC_NUM_SYSCALLS] = { 0 };
+
+// __init_libc expects an environment to be passed in
+static char* envp[] = {
+    NULL, /* No environment variables */
+    NULL /* No auxillary vector */
+};
 
 static long sys_clock_gettime(va_list ap) {
     clockid_t clk_id = va_arg(ap, clockid_t);
@@ -96,7 +106,9 @@ static long sys_nanosleep(va_list ap) {
 
 static long sys_getpid(va_list ap) {
     (void)ap;
-    return 0;
+
+    // PID == TID for a single-threaded process
+    return 1;
 }
 
 static long sys_getuid(va_list ap) {
@@ -107,6 +119,15 @@ static long sys_getuid(va_list ap) {
 static long sys_getgid(va_list ap) {
     (void)ap;
     return 501;
+}
+
+static long sys_set_tid_address(va_list ap) {
+    (void)ap;
+
+    // This syscall eventually returns the caller's thread ID
+    // Since we're in a single-threaded environment, PID == TID *but* 0 doesn't work
+    // since the pthreads library assumes 0 is an invalid TID
+    return 1;
 }
 
 // FIXME: this is deliberately insecure for now
@@ -198,4 +219,12 @@ void libc_init(libc_socket_config_t *socket_config, void *heap, size_t heap_size
     libc_define_syscall(__NR_getuid, sys_getuid);
     libc_define_syscall(__NR_getgid, sys_getgid);
     libc_define_syscall(__NR_getrandom, sys_getrandom);
+    libc_define_syscall(__NR_set_tid_address, sys_set_tid_address);
+
+    /*
+     * Let libc initialise itself
+     * This is effectively what __libc_start_main does *apart* from exit(main(argc, argv))
+     */
+    __init_libc(envp, NULL);
+    __libc_start_init();
 }

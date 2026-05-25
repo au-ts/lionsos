@@ -82,7 +82,7 @@ static bool process_icmp_request(icmp_req_t *req, bool *transmitted)
     icmp_hdr->type = req->type;
     icmp_hdr->code = req->code;
 
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - IPV4_HDR_LEN_MIN);
+    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - ipv4_header_length(&req->ip_hdr));
 
     /* Handle each ICMP type separately */
     switch (req->type) {
@@ -91,7 +91,7 @@ static bool process_icmp_request(icmp_req_t *req, bool *transmitted)
         ip_hdr->dst_ip = req->ip_hdr.src_ip;
 
         /* Total length of ICMP destination unreachable IP packet */
-        uint16_t icmp_total_len = (uint16_t)(ICMP_COMMON_HDR_LEN + sizeof(icmp_echo_t) + req->echo.payload_len);
+        uint16_t icmp_total_len = (uint16_t)(ICMP_COMMON_HDR_LEN + offsetof(icmp_echo_t, data) + req->echo.payload_len);
         ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + icmp_total_len);
 
         /* Construct ICMP echo reply: 4 bytes (id + seq) */
@@ -229,8 +229,8 @@ static void generate_icmp(void)
         assert(!err);
 
         if (FW_DEBUG_OUTPUT) {
-            sddf_printf("ICMP MODULE LOG: processing router ICMP request type %u code %u using interface %u\n", req.type,
-                        req.code, req.out_interface);
+            sddf_printf("ICMP MODULE LOG: processing router ICMP request type %u code %u using interface %u\n",
+                        req.type, req.code, req.out_interface);
         }
 
         process_icmp_request(&req, transmitted);
@@ -250,8 +250,8 @@ void init(void)
 
     for (int iface = 0; iface < icmp_config.num_interfaces; iface++) {
         /* Setup transmit queues with the transmit virtualisers. */
-        net_queue_init(&net_queue[iface], net_configs[iface]->tx.free_queue.vaddr, net_configs[iface]->tx.active_queue.vaddr,
-                       net_configs[iface]->tx.num_buffers);
+        net_queue_init(&net_queue[iface], net_configs[iface]->tx.free_queue.vaddr,
+                       net_configs[iface]->tx.active_queue.vaddr, net_configs[iface]->tx.num_buffers);
         net_buffers_init(&net_queue[iface], 0);
 
         /* Setup queues with filters */

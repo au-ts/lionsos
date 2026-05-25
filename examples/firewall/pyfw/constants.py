@@ -22,8 +22,8 @@ BOARDS = [
         paddr_top=0x6_0000_000,
         serial="pl011@9000000",
         timer="timer",
-        ethernet0="virtio_mmio@a003c00",
-        ethernet1="virtio_mmio@a003e00",
+        ethernet0="virtio_mmio@a003e00",
+        ethernet1="virtio_mmio@a003c00",
     ),
     Board(
         name="imx8mp_iotgate",
@@ -70,7 +70,7 @@ interfaces = [
     NetworkInterface(
         index=0,
         name="external",
-        board_ethernet="ethernet1",
+        board_ethernet="ethernet0",
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x18),
         ip="172.16.2.1",
         subnet_bits=16,
@@ -78,7 +78,7 @@ interfaces = [
     NetworkInterface(
         index=1,
         name="internal",
-        board_ethernet="ethernet0",
+        board_ethernet="ethernet1",
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x10),
         ip="192.168.1.1",
         subnet_bits=24,
@@ -107,7 +107,7 @@ supported_filter_actions = {
 
 def construct_rule(action: int, src_ip: int, src_subnet: int, src_port: int, src_port_any: bool,
                    dst_ip: int, dst_subnet: int, dst_port: int, dst_port_any: bool) -> FwRule:
-    assert action in (FILTER_ACTION_ALLOW, FILTER_ACTION_DROP, FILTER_ACTION_CONNECT)
+    assert action in (FILTER_ACTION_ALLOW, FILTER_ACTION_DROP, FILTER_ACTION_CONNECT, FILTER_ACTION_REJECT)
     return FwRule(
         action=action,
         src_ip=src_ip,
