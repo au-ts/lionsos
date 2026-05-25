@@ -78,7 +78,7 @@ class FirewallInterface(NetworkInterface):
         return self._arp_responder
 
     @arp_responder.setter
-    def arp_responder(self, arp_responder: ArpResponder):
+    def arp_responder(self, arp_responder: ArpRequester):
         assert arp_responder is not None
         self._arp_responder = arp_responder
 

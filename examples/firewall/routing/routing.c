@@ -57,7 +57,7 @@ static bool tx_webserver;                   /* Packet has been transmitted to th
 static bool returned[FW_MAX_INTERFACES];    /* Buffer has been returned to the rx virtualiser */
 static bool notify_arp[FW_MAX_INTERFACES];  /* Arp request has been enqueued */
 static bool notify_icmp;                    /* Request has been enqueued to ICMP module */
-static bool ping_response_enabled[FW_MAX_INTERFACES] = { true , true }; /* Whether to reply to ICMP echo requests */
+static bool ping_response_enabled[FW_MAX_INTERFACES] = { false }; /* Whether to reply to ICMP echo requests */
 
 /* Masks for checking whether it is a broadcast address or not */
 #define MULTICAST_IP_MASK 0xf0000000
@@ -91,10 +91,10 @@ static void transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t ou
 
     /* Transmit packet out the NIC */
     if (FW_DEBUG_OUTPUT) {
-        sddf_printf("ROUTING_LOG: sending packet received on interface %u out of interface %u for ip %s with buffer "
-                    "number %lu\n",
-                    buffer.interface, out_interface, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
-                    buffer.offset / NET_BUFFER_SIZE);
+        sddf_printf(
+            "ROUTING_LOG: sending packet received on interface %u out of interface %u for ip %s with buffer number %lu\n",
+            buffer.interface, out_interface, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
+            buffer.offset / NET_BUFFER_SIZE);
     }
 
     /* Checksum needs to be re-calculated as header has been modified */
@@ -176,9 +176,8 @@ static void route(void)
                 ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
                 if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("ROUTING_LOG: received packet on interface %u for ip %s with buffer number %lu\n",
-                                interface, ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
-                                buffer.io_or_offset / NET_BUFFER_SIZE);
+                    sddf_printf("ROUTING_LOG: received packet on interface %u for ip %s with buffer number %lu\n", interface,
+                                ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0), buffer.io_or_offset / NET_BUFFER_SIZE);
                 }
                 /*
                  * Broadcast traffic should not be transmitted across subnets or
@@ -218,10 +217,10 @@ static void route(void)
                     }
 
                     /* Check for ICMP pings */
-                    icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
+                    icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
                     if (ip_hdr->protocol == IPV4_PROTO_ICMP && icmp_hdr->type == ICMP_ECHO_REQ
                         && ping_response_enabled[interface]) {
-                        notify_icmp |= icmp_enqueue_echo_reply(&icmp_queue, pkt_vaddr, interface);
+                            notify_icmp |= icmp_enqueue_echo_reply(&icmp_queue, pkt_vaddr, interface);
                     }
 
                     err = fw_enqueue(&rx_free[interface], &buffer);
@@ -248,8 +247,7 @@ static void route(void)
                 if (next_hop == FW_ROUTING_NONEXTHOP || next_hop == router_config.interfaces[out_interface].ip) {
                     /* No route or destined for the firewall but received on the wrong interface, drop packet  */
                     if (FW_DEBUG_OUTPUT) {
-                        sddf_printf("ROUTING_LOG: found no route for ip %s or received on the wrong interface, "
-                                    "dropping packet\n",
+                        sddf_printf("ROUTING_LOG: found no route for ip %s or received on the wrong interface, dropping packet\n",
                                     ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0));
                     }
                     fw_buff_desc_t fw_buffer = { .offset = buffer.io_or_offset,
@@ -262,11 +260,10 @@ static void route(void)
                     continue;
                 } else {
                     if (FW_DEBUG_OUTPUT) {
-                        sddf_printf(
-                            "ROUTING_LOG: converted ip %s to next hop ip %s arrived on interface %u, exiting on out "
-                            "interface %u\n",
-                            ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0), ipaddr_to_string(next_hop, ip_addr_buf1),
-                            interface, out_interface);
+                        sddf_printf("ROUTING_LOG: converted ip %s to next hop ip %s arrived on interface %u, exiting on out "
+                                    "interface %u\n",
+                                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0),
+                                    ipaddr_to_string(next_hop, ip_addr_buf1), interface, out_interface);
                     }
                 }
 
