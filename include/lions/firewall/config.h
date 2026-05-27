@@ -31,37 +31,32 @@
 
 #define FW_DEBUG_OUTPUT 1
 
-typedef struct fw_connection_resource
-{
+typedef struct fw_connection_resource {
     region_resource_t queue;
     uint16_t capacity;
     uint8_t ch;
 } fw_connection_resource_t;
 
-typedef struct fw_data_connection_resource
-{
+typedef struct fw_data_connection_resource {
     fw_connection_resource_t conn;
     device_region_resource_t data;
 } fw_data_connection_resource_t;
 
 /* NAT interface configuration (used by both RX and TX virtualizers) */
-typedef struct fw_nat_interface_config
-{
+typedef struct fw_nat_interface_config {
     uint16_t base_port;
     uint16_t ports_capacity;
     region_resource_t port_table;
     uint32_t ip;
 } fw_nat_interface_config_t;
 
-typedef struct fw_virt_rx_nat_config
-{
+typedef struct fw_virt_rx_nat_config {
     fw_nat_interface_config_t interface_config;
     uint8_t protocol;
     bool enabled;
 } fw_virt_rx_nat_config_t;
 
-typedef struct fw_net_virt_tx_config
-{
+typedef struct fw_net_virt_tx_config {
     uint8_t interface;
     fw_connection_resource_t active_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_active_clients;
@@ -75,8 +70,7 @@ typedef struct fw_net_virt_tx_config
     uint8_t num_nat_configs;
 } fw_net_virt_tx_config_t;
 
-typedef struct fw_net_virt_rx_config
-{
+typedef struct fw_net_virt_rx_config {
     uint8_t interface;
     uint16_t active_client_ethtypes[SDDF_NET_MAX_CLIENTS];
     uint16_t active_client_subtypes[SDDF_NET_MAX_CLIENTS];
@@ -89,16 +83,14 @@ typedef struct fw_net_virt_rx_config
     uint8_t num_nat_configs;
 } fw_net_virt_rx_config_t;
 
-typedef struct fw_arp_connection
-{
+typedef struct fw_arp_connection {
     region_resource_t request;
     region_resource_t response;
     uint16_t capacity;
     uint8_t ch;
 } fw_arp_connection_t;
 
-typedef struct fw_arp_requester_config
-{
+typedef struct fw_arp_requester_config {
     uint8_t interface;
     uint8_t mac_addr[ETH_HWADDR_LEN];
     uint32_t ip;
@@ -108,23 +100,20 @@ typedef struct fw_arp_requester_config
     uint16_t arp_cache_capacity;
 } fw_arp_requester_config_t;
 
-typedef struct fw_arp_responder_config
-{
+typedef struct fw_arp_responder_config {
     uint8_t interface;
     uint8_t mac_addr[ETH_HWADDR_LEN];
     uint32_t ip;
 } fw_arp_responder_config_t;
 
-typedef struct fw_webserver_router_config
-{
+typedef struct fw_webserver_router_config {
     uint8_t routing_ch;
     region_resource_t routing_table;
     uint16_t routing_table_capacity;
     fw_connection_resource_t rx_active;
 } fw_webserver_router_config_t;
 
-typedef struct fw_router_interface
-{
+typedef struct fw_router_interface {
     uint8_t mac_addr[ETH_HWADDR_LEN];
     uint32_t ip;
     uint32_t subnet;
@@ -140,8 +129,7 @@ typedef struct fw_router_interface
     uint16_t packet_queue_capacity;
 } fw_router_interface_t;
 
-typedef struct fw_router_config
-{
+typedef struct fw_router_config {
     fw_router_interface_t interfaces[FW_MAX_INTERFACES];
     uint8_t num_interfaces;
     fw_webserver_router_config_t webserver;
@@ -150,25 +138,20 @@ typedef struct fw_router_config
     fw_connection_resource_t icmp_module;
 } fw_router_config_t;
 
-typedef struct fw_icmp_module_interface_config
-{
-    /* MAC address of interface */
+typedef struct fw_icmp_module_interface_config {
     uint8_t mac_addr[ETH_HWADDR_LEN];
-    /* IP address of interface */
     uint32_t ip;
     fw_connection_resource_t filters[FW_MAX_FILTERS];
     uint8_t num_filters;
 } fw_icmp_module_interface_config_t;
 
-typedef struct fw_icmp_module_config
-{
+typedef struct fw_icmp_module_config {
     fw_icmp_module_interface_config_t interfaces[FW_MAX_INTERFACES];
     uint8_t num_interfaces;
     fw_connection_resource_t router;
 } fw_icmp_module_config_t;
 
-typedef struct fw_webserver_filter_config
-{
+typedef struct fw_webserver_filter_config {
     uint16_t protocol;
     uint8_t ch;
     region_resource_t rules;
@@ -176,8 +159,7 @@ typedef struct fw_webserver_filter_config
     uint8_t actions[FW_FILTER_NUM_ACTIONS];
 } fw_webserver_filter_config_t;
 
-typedef struct fw_filter_config
-{
+typedef struct fw_filter_config {
     uint8_t interface;
     fw_connection_resource_t router;
     region_resource_t internal_instances;
@@ -191,8 +173,7 @@ typedef struct fw_filter_config
     uint8_t num_initial_rules;
 } fw_filter_config_t;
 
-typedef struct fw_webserver_interface_config
-{
+typedef struct fw_webserver_interface_config {
     uint8_t mac_addr[ETH_HWADDR_LEN];
     uint32_t ip;
     char name[FW_MAX_INTERFACE_NAME_LEN + 1];
@@ -202,19 +183,16 @@ typedef struct fw_webserver_interface_config
     fw_connection_resource_t rx_free;
 } fw_webserver_interface_config_t;
 
-typedef struct fw_webserver_nat_protocol_config
-{
+typedef struct fw_webserver_nat_protocol_config {
     uint8_t protocol;
     region_resource_t region;
 } fw_webserver_nat_protocol_config_t;
 
-typedef struct fw_webserver_config
-{
+typedef struct fw_webserver_config {
     fw_webserver_interface_config_t interfaces[FW_MAX_INTERFACES];
     uint8_t num_interfaces;
     fw_webserver_router_config_t router;
     fw_arp_connection_t arp_queue;
-    // TODO: Temporary work around until webserver transmits via router.
     uint8_t tx_interface;
     fw_webserver_nat_protocol_config_t nat_state[FW_MAX_NAT];
     uint8_t num_nat_state;
