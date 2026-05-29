@@ -967,7 +967,7 @@ def ping_settings(request):
   </nav>
 
     <h2>Toggle Ping Response</h2>
-    <p>Control whether the firewall responds to ICMP echo requests (ping) on the selected interface. Default disabled for all interfaces.</p>
+    <p>Control whether the firewall responds to ICMP echo requests (ping) on the selected interface. Default enabled for all interfaces.</p>
 
     <div class="default-action-container" style="max-width: 18rem;">
       <label for="ping-interface">Interface</label>

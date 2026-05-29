@@ -10,8 +10,8 @@ on:
     branches: [ "main" ]
 
 env:
-  MICROKIT_VERSION: 2.1.0-dev.12+2d5a1a6
-  MICROKIT_URL: https://trustworthy.systems/Downloads/microkit
+  MICROKIT_VERSION: 2.2.0
+  MICROKIT_URL: https://github.com/seL4/microkit/releases/download/2.2.0/
   SDFGEN_VERSION: 0.28.1
 
 jobs:

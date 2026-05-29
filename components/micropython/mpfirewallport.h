@@ -25,7 +25,6 @@ extern fw_webserver_config_t fw_config;
  */
 typedef struct fw_webserver_interface_state {
     fw_filter_state_t filter_states[FW_MAX_FILTERS];
-    uint16_t num_rules[FW_MAX_FILTERS];
     bool ping_enabled;
 } fw_webserver_interface_state_t;
 

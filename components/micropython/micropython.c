@@ -63,6 +63,8 @@ fs_queue_t *fs_command_queue;
 fs_queue_t *fs_completion_queue;
 char *fs_share;
 
+static char libc_heap[0x100000];
+
 serial_queue_handle_t serial_rx_queue_handle;
 serial_queue_handle_t serial_tx_queue_handle;
 
@@ -236,7 +238,7 @@ void init(void) {
     stack_ptrs_arg_array_t costacks = { (uintptr_t) mp_stack };
     microkit_cothread_init(&co_controller_mem, MICROPY_STACK_SIZE, costacks);
 
-    libc_init(&socket_config);
+    libc_init(&socket_config, libc_heap, sizeof(libc_heap));
 
     if (microkit_cothread_spawn(t_mp_entrypoint, NULL) == LIBMICROKITCO_NULL_HANDLE) {
         printf("MP|ERROR: Cannot initialise Micropython cothread\n");

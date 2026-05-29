@@ -39,6 +39,8 @@ bool serial_rx_enabled;
 
 #define LIBC_COTHREAD_STACK_SIZE 0x10000
 static char libc_cothread_stack[LIBC_COTHREAD_STACK_SIZE];
+
+static char libc_heap[0x100000];
 static co_control_t co_controller_mem;
 
 #define TEST_COMPONENT "core"
@@ -219,7 +221,7 @@ void run_tests(void) {
 }
 
 void cont(void) {
-    libc_init(NULL);
+    libc_init(NULL, libc_heap, sizeof(libc_heap));
     run_tests();
 }
 

@@ -116,7 +116,7 @@ static void filter(void)
                 break;
             }
             case FILTER_ACT_REJECT: {
-                icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + ICMP_HDR_OFFSET);
+                icmp_hdr_t *icmp_hdr = (icmp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
                 uint8_t icmp_type = icmp_hdr->type;
                 /* An ICMP error message shouldn't be sent upon reception of another ICMP error message */
                 if (!icmp_is_error_message(icmp_type)) {

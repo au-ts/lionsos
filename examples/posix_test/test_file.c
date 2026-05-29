@@ -44,6 +44,8 @@ bool serial_rx_enabled;
 
 #define LIBC_COTHREAD_STACK_SIZE 0x10000
 static char libc_cothread_stack[LIBC_COTHREAD_STACK_SIZE];
+
+static char libc_heap[0x100000];
 static co_control_t co_controller_mem;
 
 static void blocking_wait(microkit_channel ch) { microkit_cothread_wait_on_channel(ch); }
@@ -732,7 +734,7 @@ void run_tests(void) {
 }
 
 void cont(void) {
-    libc_init(NULL);
+    libc_init(NULL, libc_heap, sizeof(libc_heap));
 
     if (fs_enabled) {
         fs_cmpl_t completion;

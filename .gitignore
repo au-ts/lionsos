@@ -5,3 +5,5 @@ docs/book/
 \#*#
 .#*
 __pycache__
+.clang-format
+microkit-sdk-2.1.0/

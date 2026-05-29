@@ -58,7 +58,7 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
         assert self.active_client_ethtypes is not None
         assert self.active_client_subtypes is not None
         for cli in range(len(self.active_client_ethtypes)):
-            assert self.active_client_ethtypes[cli] != ethtype or self.active_client_subtypes != subtype
+            assert self.active_client_ethtypes[cli] != ethtype or self.active_client_subtypes[cli] != subtype
         # Set what traffic gets forwarded to the client
         self.active_client_ethtypes.append(ethtype)
         self.active_client_subtypes.append(subtype)
