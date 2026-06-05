@@ -66,28 +66,6 @@ actionNums = {
 
 defaultActionRuleIdx = 0
 
-numInterfaces = 2
-
-interfaceStringsRouters = [
-    "internal",
-    "external",
-]
-
-interfaceStringsFilters = [
-    "external",
-    "internal"
-]
-
-interfaceStringsNat = [
-    "external",
-    "internal"
-]
-
-interfaceStringsCap = [
-    "External",
-    "Internal"
-]
-
 ############ Helper Functions ############
 
 def htons(portNum):
@@ -151,23 +129,6 @@ def tupleToMac(macList):
 
     mac = ":".join(hexList)
     return mac
-
-def interfaceStringToInt(componentType, interfaceStr):
-    if componentType == "router":
-        for i in range(numInterfaces):
-            if interfaceStr == interfaceStringsRouters[i]:
-                return i
-    elif componentType == "filter":
-        for i in range(numInterfaces):
-            if interfaceStr == interfaceStringsFilters[i]:
-                return i
-    elif componentType == "nat":
-        for i in range(numInterfaces):
-            if interfaceStr == interfaceStringsNat[i]:
-                return i
-
-    print(f"UI SERVER|ERR: Supplied interface string {interfaceStr} does not match existing interfaces.")
-    raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
 
 ############ Route APIs ############
 

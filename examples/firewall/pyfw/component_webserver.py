@@ -6,7 +6,6 @@ from pyfw.constants import (
     interfaces,
     supported_protocols,
     webserver_tx_interface_idx,
-    nat_webserver_state_region,
 )
 from config_structs import (
     EthHwaddrLen,

@@ -27,8 +27,6 @@
 
 #define FW_FILTER_NUM_ACTIONS 4
 
-#define FW_NUM_INTERFACES 2
-
 #define FW_DEBUG_OUTPUT 1
 
 typedef struct fw_connection_resource {
@@ -72,7 +70,11 @@ typedef struct fw_net_virt_tx_config {
 
 typedef struct fw_net_virt_rx_config {
     uint8_t interface;
+    /* Eth-type of traffic to be routed to each client */
     uint16_t active_client_ethtypes[SDDF_NET_MAX_CLIENTS];
+    /* Sub-type of traffic to be routed to each client. If ethtype == IPv4, this
+    field holds IPv4 protocol numbers. If ethtype == ARP, this field holds ARP
+    opcodes */
     uint16_t active_client_subtypes[SDDF_NET_MAX_CLIENTS];
     fw_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_free_clients;
@@ -139,7 +141,9 @@ typedef struct fw_router_config {
 } fw_router_config_t;
 
 typedef struct fw_icmp_module_interface_config {
+    /* MAC address of interface */
     uint8_t mac_addr[ETH_HWADDR_LEN];
+    /* IP address of interface */
     uint32_t ip;
     fw_connection_resource_t filters[FW_MAX_FILTERS];
     uint8_t num_filters;
@@ -193,6 +197,7 @@ typedef struct fw_webserver_config {
     uint8_t num_interfaces;
     fw_webserver_router_config_t router;
     fw_arp_connection_t arp_queue;
+    // TODO: Temporary work around until webserver transmits via router.
     uint8_t tx_interface;
     fw_webserver_nat_protocol_config_t nat_state[FW_MAX_NAT];
     uint8_t num_nat_state;

@@ -27,7 +27,6 @@
 #include <sddf/network/queue.h>
 #include <sddf/network/lib_sddf_lwip.h>
 #include <lions/firewall/arp.h>
-#include <lions/firewall/nat_module.h>
 #include <lions/fs/config.h>
 #include <lions/firewall/common.h>
 #include <lions/firewall/config.h>
@@ -221,22 +220,6 @@ void init(void) {
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 
     firewall_enabled = (fw_config.router.rx_active.queue.vaddr != NULL);
-
-    // NAT webserver state initialization moved to virtualizers (firewall_network_virt_rx.c)
-    // Virtualizers run first (priority 99) and must initialize before reading SNAT IPs.
-    // Micropython still provides runtime API for updating NAT config via web UI.
-    //
-    // if (firewall_enabled && fw_config.num_nat_state > 0) {
-    //     for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
-    //         fw_nat_webserver_state_t *nat_state = (fw_nat_webserver_state_t *)fw_config.nat_state[i].region.vaddr;
-    //         if (nat_state) {
-    //             for (uint8_t iface_idx = 0; iface_idx < fw_config.num_interfaces; iface_idx++) {
-    //                 nat_state->interfaces[iface_idx].snat = fw_config.interfaces[iface_idx].ip;
-    //             }
-    //             nat_state->timeout = 5000000000ULL; // 5 seconds default
-    //         }
-    //     }
-    // }
 
     if (fs_enabled) {
         fs_set_blocking_wait(blocking_wait);

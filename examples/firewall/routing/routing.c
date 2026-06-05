@@ -5,7 +5,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 #include <os/sddf.h>
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
