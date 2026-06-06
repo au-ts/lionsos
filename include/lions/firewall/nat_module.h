@@ -61,38 +61,27 @@ typedef struct fw_nat_port_table
     fw_nat_port_mapping_t mappings[];
 } fw_nat_port_table_t;
 
-/**
- * Holds webserver state specific to the NAT of a particular interface
- */
-typedef struct fw_nat_webserver_interface_state
-{
-    /* Source NAT IP */
-    uint32_t snat;
-} fw_nat_webserver_interface_state_t;
-
 /* Magic number to indicate webserver_state has been initialized */
 #define FW_NAT_WEBSERVER_STATE_MAGIC 0x4E415457
 
 /**
- * Structure shared with webserver to configure NAT for all interfaces with this protocol
+ * Structure shared with webserver to configure NAT for all interfaces with this protocol.
+ * The SNAT IP is static (from build-time config); only enable/disable and timeout are runtime.
  */
 typedef struct fw_nat_webserver_state
 {
     uint32_t magic; /* Magic number for initialization check */
-    fw_nat_webserver_interface_state_t interfaces[FW_NUM_INTERFACES];
     /* Timeout in nanoseconds */
     uint64_t timeout;
 } fw_nat_webserver_state_t;
 
 /**
  * Find the destination IP address and port for an incoming packet.
- * If the destination IP address matches the source NAT IP address
- * of the NAT on another interface, then the packet corresponds
- * to returning traffic and the port mapping corresponding
- * to that ephemeral port will be returned.
+ * If the destination IP address matches the static IP of an interface's NAT config,
+ * the packet corresponds to returning traffic and the port mapping for that ephemeral
+ * port will be returned.
  *
  * @param interfaces Configuration of NAT for each interface
- * @param state Webserver state containing SNAT IPs
  * @param dst_ip Destination IP address on the packet
  * @param dst_port Destination port in network byte order
  * @param now Current timestamp in nanoseconds
@@ -100,7 +89,6 @@ typedef struct fw_nat_webserver_state
  * @return The original port mapping if it exists, NULL otherwise
  */
 static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interface_config_t interfaces[],
-                                                                  fw_nat_webserver_state_t *state,
                                                                   uint32_t dst_ip,
                                                                   uint16_t dst_port,
                                                                   uint64_t now)
@@ -110,7 +98,7 @@ static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interfa
 
     for (uint16_t i = 0; i < FW_NUM_INTERFACES; i++)
     {
-        if (dst_ip == state->interfaces[i].snat)
+        if (dst_ip == interfaces[i].ip)
         {
             fw_nat_port_table_t *port_table = (fw_nat_port_table_t *)interfaces[i].port_table.vaddr;
 
@@ -252,17 +240,14 @@ typedef struct nat_module
     /* Protocol (IPPROTO_TCP or IPPROTO_UDP) */
     uint8_t protocol;
 
-    /* SNAT IP address for this interface */
-    uint32_t snat_ip;
+    /* Whether NAT is currently enabled (toggled via PPC from webserver) */
+    bool nat_enabled;
 
     /* Port table reference (shared memory) */
     fw_nat_port_table_t *port_table;
 
     /* Interface configuration (shared memory) */
     fw_nat_interface_config_t *interface_config;
-
-    /* Webserver state reference for cross-interface DNAT (shared memory) */
-    fw_nat_webserver_state_t *webserver_state;
 
     /* Byte offsets for protocol-specific header parsing */
     size_t src_port_off; /* Offset to source port in transport header */
@@ -287,7 +272,6 @@ typedef struct nat_module
  * @param protocol Protocol (IPPROTO_TCP or IPPROTO_UDP)
  * @param interface_config Pointer to interface configuration (shared memory)
  * @param port_table Pointer to port table (shared memory)
- * @param webserver_state Pointer to webserver state (shared memory)
  * @param src_port_off Byte offset to source port in transport header
  * @param dst_port_off Byte offset to destination port in transport header
  * @param check_off Byte offset to checksum in transport header
@@ -300,7 +284,6 @@ int nat_module_init(nat_module_t *nat,
                     uint8_t protocol,
                     fw_nat_interface_config_t *interface_config,
                     fw_nat_port_table_t *port_table,
-                    fw_nat_webserver_state_t *webserver_state,
                     size_t src_port_off,
                     size_t dst_port_off,
                     size_t check_off,
@@ -315,7 +298,8 @@ int nat_module_init(nat_module_t *nat,
  * @param nat Pointer to initialized NAT module
  * @param pkt_vaddr Virtual address of packet data
  * @param buffer Buffer descriptor (for potential future use)
- * @param is_inbound True if packet is inbound (from external network)
+ * @param do_dnat True on the inbound (external→internal) path: attempt DNAT before SNAT.
+ *                False on the outbound (internal→external) path: only SNAT applies.
  *
  * @return NAT_SUCCESS on success
  *         NAT_PORT_EXHAUSTED if no ephemeral ports available
@@ -324,7 +308,7 @@ int nat_module_init(nat_module_t *nat,
 int nat_module_translate(nat_module_t *nat,
                          uintptr_t pkt_vaddr,
                          net_buff_desc_t *buffer,
-                         bool is_inbound);
+                         bool do_dnat);
 
 /**
  * Cleanup expired NAT mappings

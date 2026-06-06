@@ -56,12 +56,13 @@ class Webserver(Component, FwWebserverConfig):
             nat_state=[],
         )
 
-    def add_nat_state(self, protocol, webserver_state_region):
-        """Add NAT state region for a protocol"""
-        from pyfw.specs import FirewallMemoryRegion
+    def add_nat_ppc_channel(self, protocol, interface, tx_ch, rx_ch):
+        """Register PPC channels to TX/RX virtualizers for NAT enable/disable"""
         nat_config = FwWebserverNatProtocolConfig(
             protocol=protocol,
-            region=webserver_state_region.map(self.pd, "rw")
+            interface=interface,
+            tx_ch=tx_ch,
+            rx_ch=rx_ch,
         )
         assert self.nat_state is not None
         self.nat_state.append(nat_config)

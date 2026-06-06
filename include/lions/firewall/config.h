@@ -52,6 +52,7 @@ typedef struct fw_virt_rx_nat_config {
     fw_nat_interface_config_t interface_config;
     uint8_t protocol;
     bool enabled;
+    uint8_t webserver_ch; /* PPC channel from webserver for NAT enable/disable */
 } fw_virt_rx_nat_config_t;
 
 typedef struct fw_net_virt_tx_config {
@@ -63,7 +64,6 @@ typedef struct fw_net_virt_tx_config {
     fw_data_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_free_clients;
     bool nat_enabled;
-    region_resource_t webserver_state;
     fw_virt_rx_nat_config_t nat_configs[FW_MAX_NAT];
     uint8_t num_nat_configs;
 } fw_net_virt_tx_config_t;
@@ -79,7 +79,6 @@ typedef struct fw_net_virt_rx_config {
     fw_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_free_clients;
     bool nat_enabled;
-    region_resource_t webserver_state;
     device_region_resource_t nat_dma_region;
     fw_virt_rx_nat_config_t nat_configs[FW_MAX_NAT];
     uint8_t num_nat_configs;
@@ -189,7 +188,9 @@ typedef struct fw_webserver_interface_config {
 
 typedef struct fw_webserver_nat_protocol_config {
     uint8_t protocol;
-    region_resource_t region;
+    uint8_t interface;
+    uint8_t tx_ch; /* PPC channel to TX virtualizer for this protocol/interface */
+    uint8_t rx_ch; /* PPC channel to RX virtualizer for this protocol/interface */
 } fw_webserver_nat_protocol_config_t;
 
 typedef struct fw_webserver_config {

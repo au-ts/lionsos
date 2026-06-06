@@ -428,8 +428,8 @@ def getPing(request, interfaceInt):
 
 ###### NAT configuration methods ######
 
-@app.route('/api/nat/<string:protocolStr>/<string:interfaceStr>/snat', methods=['GET'])
-def get_snat_ip(request, protocolStr, interfaceStr):
+@app.route('/api/nat/<string:protocolStr>/<string:interfaceStr>/enabled', methods=['GET', 'PUT'])
+def nat_enabled_handler(request, protocolStr, interfaceStr):
     try:
         interface = interfaceStringToInt("nat", interfaceStr)
 
@@ -438,66 +438,23 @@ def get_snat_ip(request, protocolStr, interfaceStr):
             raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
         protocol = protocolNums[protocolStr]
 
-        snat = lions_firewall.get_snat_ip(interface, protocol)
-        return {"snat": intToIp(snat) if snat != 0 else ""}
+        if request.method == 'GET':
+            enabled = lions_firewall.nat_get_enabled(interface, protocol)
+            print(f"UI SERVER|NAT GET: iface={interface} proto={hex(protocol)} enabled={enabled}")
+            return {"enabled": bool(enabled)}
+        else:
+            body = request.json
+            if body is None or "enabled" not in body:
+                return {"error": "missing 'enabled' field"}, 400
+            enabled = bool(body["enabled"])
+            print(f"UI SERVER|NAT SET: iface={interface} proto={hex(protocol)} enabled={enabled}")
+            lions_firewall.nat_set_enabled(interface, protocol, enabled)
+            return {"status": "ok"}
     except OSError as OSErr:
-        print(f"UI SERVER|ERR: OS Error: get_snat_ip: {OSErrStrings[OSErr.errno]}")
+        print(f"UI SERVER|ERR: OS Error: nat_enabled_handler: {OSErrStrings[OSErr.errno]}")
         return {"error": OSErrStrings[OSErr.errno]}, 404
     except Exception as exception:
-        print(f"UI SERVER|ERR: Unknown Error: get_snat_ip: {exception}.")
-        return {"error": UnknownErrStr}, 404
-
-@app.route('/api/nat/<string:protocolStr>/<string:interfaceStr>/snat/<string:ipStr>', methods=['PUT'])
-def set_snat_ip(request, protocolStr, interfaceStr, ipStr):
-    try:
-        interface = interfaceStringToInt("nat", interfaceStr)
-
-        if protocolStr not in protocolNums.keys():
-            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
-            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
-        protocol = protocolNums[protocolStr]
-
-        lions_firewall.set_snat_ip(interface, protocol, ipToInt(ipStr) if ipStr != "null" else 0)
-        return {"status": "ok"}
-    except OSError as OSErr:
-        print(f"UI SERVER|ERR: OS Error: set_snat_ip: {OSErrStrings[OSErr.errno]}")
-        return {"error": OSErrStrings[OSErr.errno]}, 404
-    except Exception as exception:
-        print(f"UI SERVER|ERR: Unknown Error: set_snat_ip: {exception}.")
-        return {"error": UnknownErrStr}, 404
-
-@app.route('/api/nat/<string:protocolStr>/timeout', methods=['GET'])
-def get_nat_timeout(request, protocolStr):
-    try:
-        if protocolStr not in protocolNums.keys():
-            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
-            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
-        protocol = protocolNums[protocolStr]
-
-        timeout = lions_firewall.get_nat_timeout(protocol)
-        return {"timeout": timeout / 10**9}
-    except OSError as OSErr:
-        print(f"UI SERVER|ERR: OS Error: get_nat_timeout: {OSErrStrings[OSErr.errno]}")
-        return {"error": OSErrStrings[OSErr.errno]}, 404
-    except Exception as exception:
-        print(f"UI SERVER|ERR: Unknown Error: get_nat_timeout: {exception}.")
-        return {"error": UnknownErrStr}, 404
-
-@app.route('/api/nat/<string:protocolStr>/timeout/<int:timeout>', methods=['PUT'])
-def set_nat_timeout(request, protocolStr, timeout):
-    try:
-        if protocolStr not in protocolNums.keys():
-            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
-            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
-        protocol = protocolNums[protocolStr]
-
-        lions_firewall.set_nat_timeout(protocol, timeout * 10**9)
-        return {"status": "ok"}
-    except OSError as OSErr:
-        print(f"UI SERVER|ERR: OS Error: set_nat_timeout: {OSErrStrings[OSErr.errno]}")
-        return {"error": OSErrStrings[OSErr.errno]}, 404
-    except Exception as exception:
-        print(f"UI SERVER|ERR: Unknown Error: set_nat_timeout: {exception}.")
+        print(f"UI SERVER|ERR: Unknown Error: nat_enabled_handler: {exception}.")
         return {"error": UnknownErrStr}, 404
 
 ############ Web UI routes ############
@@ -1039,146 +996,39 @@ def nat_settings(request):
         <nav>
             <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat_settings">NAT</a> | <a href="/ping_settings">Ping Settings</a>
         </nav>
-        <div>
-            <label for="tcp-timeout">TCP mappings timeout (seconds)</label>
-            <input
-                type="number"
-                name="tcp-timeout"
-                id="tcp-timeout"
-            />
-            <button onClick="updateTimeout('tcp')">Update TCP Timeout</button>
-        </div>
-        <div>
-            <label for="udp-timeout">UDP mappings timeout (seconds)</label>
-            <input
-                type="number"
-                name="udp-timeout"
-                id="udp-timeout"
-            />
-            <button onClick="updateTimeout('udp')">Update UDP Timeout</button>
-        </div>
-        <h2>Internal Interface NAT</h2>
-        <h3>TCP</h3>
-        <div>
-            <input
-                type="checkbox"
-                name="nat-enabled"
-                id="internal-tcp-enabled"
-                onchange="disabledHandler('tcp', 'internal')"
-            />
-            <label for="nat-enabled">NAT enabled?</label><br>
-            <label for="nat-ip">Source NAT IP for this interface</label>
-            <input
-                type="text"
-                name="nat-ip"
-                id="internal-tcp-snat"
-            />
-            <button onClick="updateSnat('tcp', 'internal')">Update NAT settings</button>
-        </div>
-        <h3>UDP</h3>
-        <div>
-            <input
-                type="checkbox"
-                name="nat-enabled"
-                id="internal-udp-enabled"
-                onchange="disabledHandler('udp', 'internal')"
-            />
-            <label for="nat-enabled">NAT enabled?</label><br>
-            <label for="nat-ip">Source NAT IP for this interface</label>
-            <input
-                type="text"
-                name="nat-ip"
-                id="internal-udp-snat"
-            />
-            <button onClick="updateSnat('udp', 'internal')">Update NAT settings</button>
-        </div>
         <h2>External Interface NAT</h2>
+        <p>NAT translates outbound traffic from the internal network using the external interface IP.</p>
         <h3>TCP</h3>
         <div>
-            <input
-                type="checkbox"
-                name="nat-enabled"
-                id="external-tcp-enabled"
-                onchange="disabledHandler('tcp', 'external')"
-            />
-            <label for="nat-enabled">NAT enabled?</label><br>
-            <label for="nat-ip">Source NAT IP for this interface</label>
-            <input
-                type="text"
-                name="nat-ip"
-                id="external-tcp-snat"
-            />
-            <button onClick="updateSnat('tcp', 'external')">Update NAT settings</button>
+            <input type="checkbox" id="external-tcp-enabled" />
+            <label for="external-tcp-enabled">NAT enabled</label>
+            <button onclick="updateNat('tcp', 'external')">Apply</button>
         </div>
         <h3>UDP</h3>
         <div>
-            <input
-                type="checkbox"
-                name="nat-enabled"
-                id="external-udp-enabled"
-                onchange="disabledHandler('udp', 'external')"
-            />
-            <label for="nat-enabled">NAT enabled?</label><br>
-            <label for="nat-ip">Source NAT IP for this interface</label>
-            <input
-                type="text"
-                name="nat-ip"
-                id="external-udp-snat"
-            />
-            <button onClick="updateSnat('udp', 'external')">Update NAT settings</button>
+            <input type="checkbox" id="external-udp-enabled" />
+            <label for="external-udp-enabled">NAT enabled</label>
+            <button onclick="updateNat('udp', 'external')">Apply</button>
         </div>
         <script>
-        const placeholderInterfaceMapping = {
-            "internal": 1,
-            "external": 0
+        const getNat = async (protocol, iface) => {
+            const data = await fetch(`/api/nat/${protocol}/${iface}/enabled`).then(r => r.json());
+            document.querySelector(`#${iface}-${protocol}-enabled`).checked = !!data?.enabled;
         };
 
-        const getTimeout = async (protocol) => {
-            const data = await fetch(`/api/nat/${protocol}/timeout`).then(res => res.json());
-            if (data?.timeout) {
-                document.querySelector(`#${protocol}-timeout`).value = data.timeout;
-            }
+        const updateNat = async (protocol, iface) => {
+            const enabled = document.querySelector(`#${iface}-${protocol}-enabled`).checked;
+            await fetch(`/api/nat/${protocol}/${iface}/enabled`, {
+                method: "PUT",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({enabled})
+            });
         };
-
-        const getSnat = async (protocol, interface) => {
-            const data = await fetch(`/api/nat/${protocol}/${interface}/snat`).then(res => res.json());
-            document.querySelector(`#${interface}-${protocol}-enabled`).checked = !!data?.snat;
-            if (data?.snat) {
-                document.querySelector(`#${interface}-${protocol}-snat`).value = data.snat;
-            }
-            const interfaces = await fetch(`/api/interfaces`).then(res => res.json());
-            document.querySelector(`#${interface}-${protocol}-snat`).placeholder = interfaces.interfaces[placeholderInterfaceMapping[interface]].ip;
-        }
-
-        const updateTimeout = async (protocol) => {
-            const timeout = document.querySelector(`#${protocol}-timeout`).value;
-            await fetch(`/api/nat/${protocol}/timeout/${timeout}`, {method: "PUT"});
-            await getTimeout(protocol);
-        };
-
-        const updateSnat = async (protocol, interface) => {
-            const enabled = document.querySelector(`#${interface}-${protocol}-enabled`).checked;
-            const snat = enabled ? document.querySelector(`#${interface}-${protocol}-snat`).value : "null";
-            await fetch(`/api/nat/${protocol}/${interface}/snat/${snat}`, {method: "PUT"});
-            await getSnat(protocol, interface);
-        }
-
-        const disabledHandler = (protocol, interface) => {
-            document.querySelector(`#${interface}-${protocol}-snat`).disabled = ! document.querySelector(`#${interface}-${protocol}-enabled`).checked;
-        }
 
         window.onload = () => {
-            getTimeout("udp");
-            getTimeout("tcp");
-            getSnat("udp", "internal");
-            getSnat("tcp", "internal");
-            getSnat("udp", "external");
-            getSnat("tcp", "external");
-            disabledHandler("udp", "internal");
-            disabledHandler("tcp", "internal");
-            disabledHandler("udp", "external");
-            disabledHandler("tcp", "external");
-        }
+            getNat("tcp", "external");
+            getNat("udp", "external");
+        };
         </script>
     </body>
 </html>

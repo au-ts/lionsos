@@ -8,7 +8,6 @@ from pyfw.constants import (
     dma_buffer_queue,
     dma_buffer_queue_region,
     nat_port_table_region,
-    nat_webserver_state_region,
     supported_protocols,
 )
 from pyfw.specs import FirewallMemoryRegion, TrackedNet
@@ -50,7 +49,6 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
             active_client_subtypes=[],
             free_clients=[],
             nat_enabled=False,
-            webserver_state=None,
             nat_dma_region=None,
             nat_configs=[],
         )
@@ -124,9 +122,8 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
         assert self.nat_configs is not None
         self.nat_configs.append(nat_config)
 
-    def add_nat_config_with_port_table(self, protocol: int, base_port: int, capacity: int, interface_ip: str, snat_ip: str, port_table_mr: FirewallMemoryRegion) -> None:
+    def add_nat_config_with_port_table(self, protocol: int, base_port: int, capacity: int, interface_ip: str, port_table_mr: FirewallMemoryRegion, webserver_ch: int = 0) -> None:
         """Configure NAT with a shared port table (for RX/TX sharing)"""
-        # Create NAT interface config using provided port table
         interface_config = FwNatInterfaceConfig(
             base_port=base_port,
             ports_capacity=capacity,
@@ -134,19 +131,15 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
             ip=self._net_interface.ip_int
         )
 
-        # Create NAT config for this protocol
         nat_config = FwVirtRxNatConfig(
             interface_config=interface_config,
             protocol=protocol,
-            enabled=True
+            enabled=True,
+            webserver_ch=webserver_ch,
         )
 
         assert self.nat_configs is not None
         self.nat_configs.append(nat_config)
-
-    def set_nat_webserver_state(self, webserver_state_region: FirewallMemoryRegion) -> None:
-        """Map shared webserver NAT state region"""
-        self.webserver_state = webserver_state_region.map(self.pd, "rw")
 
     def set_nat_dma_region(self, dma_region) -> None:
         """Map RX DMA region with write permissions for NAT packet modification"""
@@ -189,7 +182,6 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
             data_regions=[],
             free_clients=[],
             nat_enabled=False,
-            webserver_state=None,
             nat_configs=[],
         )
 
@@ -266,9 +258,8 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
         assert self.nat_configs is not None
         self.nat_configs.append(nat_config)
 
-    def add_nat_config_with_port_table(self, protocol: int, base_port: int, capacity: int, interface_ip: str, snat_ip: str, port_table_mr: FirewallMemoryRegion) -> None:
+    def add_nat_config_with_port_table(self, protocol: int, base_port: int, capacity: int, interface_ip: str, port_table_mr: FirewallMemoryRegion, webserver_ch: int = 0) -> None:
         """Configure NAT with a shared port table (for RX/TX sharing)"""
-        # Create NAT interface config using provided port table
         interface_config = FwNatInterfaceConfig(
             base_port=base_port,
             ports_capacity=capacity,
@@ -276,19 +267,15 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
             ip=self._net_interface.ip_int
         )
 
-        # Create NAT config for this protocol
         nat_config = FwVirtRxNatConfig(
             interface_config=interface_config,
             protocol=protocol,
-            enabled=True
+            enabled=True,
+            webserver_ch=webserver_ch,
         )
 
         assert self.nat_configs is not None
         self.nat_configs.append(nat_config)
-
-    def set_nat_webserver_state(self, webserver_state_region: FirewallMemoryRegion) -> None:
-        """Map shared webserver NAT state region"""
-        self.webserver_state = webserver_state_region.map(self.pd, "rw")
 
     def enable_nat(self) -> None:
         """Enable NAT processing"""
