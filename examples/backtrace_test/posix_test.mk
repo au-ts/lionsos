@@ -44,7 +44,7 @@ CFLAGS += \
 	-I$(LWIP)/include \
 	-I$(LIBUNWIND)/include \
 	-DMAX_FDS=8 \
-	-funwind-tables
+	-funwind-tables -O0
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -119,4 +119,4 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-netdev user,id=netdev0,hostfwd=tcp::5560-10.0.2.15:5560,hostfwd=tcp::5561-10.0.2.15:5561 \
 
 libunwind.a:
-	echo "Please paste libunwind.a in here!"
+	$(error "Please paste libunwind.a in here!")

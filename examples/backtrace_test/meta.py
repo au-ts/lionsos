@@ -23,8 +23,8 @@ def generate(sdf_path: str, output_dir: str):
     ]
     backtracer = ProtectionDomain("backtracer", "backtracer.elf", priority=128, stack_size=0x100000)
 
-    for pd in pds:
-        backtracer.add_child_pd(pd)
+    # for pd in pds:
+    #     backtracer.add_child_pd(pd)
     sdf.add_pd(backtracer)
 
     with open(f"{output_dir}/{sdf_path}", "w+") as f:
