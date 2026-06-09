@@ -16,15 +16,15 @@ Channel = SystemDescription.Channel
 
 
 def generate(sdf_path: str, output_dir: str):
-    faulter_pd = ProtectionDomain("faulter", "faulter.elf", priority=1)
+    faulter_pd = ProtectionDomain("faulter", "faulter.elf", priority=1, stack_size=0x100000)
 
     pds = [
     	faulter_pd
     ]
     backtracer = ProtectionDomain("backtracer", "backtracer.elf", priority=128, stack_size=0x100000)
 
-    # for pd in pds:
-    #     backtracer.add_child_pd(pd)
+    for pd in pds:
+        backtracer.add_child_pd(pd)
     sdf.add_pd(backtracer)
 
     with open(f"{output_dir}/{sdf_path}", "w+") as f:

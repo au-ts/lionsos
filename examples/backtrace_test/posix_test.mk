@@ -13,7 +13,7 @@ IMAGES := \
 	faulter.elf \
 	backtracer.elf
 
-TOOLCHAIN ?= clang
+TOOLCHAIN ?= $(CC)
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
@@ -49,7 +49,7 @@ CFLAGS += \
 include $(LIONSOS)/lib/libc/libc.mk
 
 LDFLAGS := --eh-frame-hdr -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(POSIX_TEST_DIR)/build
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc -T$(POSIX_TEST_DIR)/unwind.ld -lunwind
+LIBS := --start-group -T$(POSIX_TEST_DIR)/unwind.ld -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc -lunwind --end-group
 
 BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
 BLK_COMPONENTS := $(SDDF)/blk/components
@@ -79,17 +79,20 @@ include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
+unwind_helpers.o: $(POSIX_TEST_DIR)/unwind_helpers.c | $(LIONS_LIBC)/include
+	${CC} ${CFLAGS} -c -o $@ $<
+
 # for libmicrokitco_opts.h and lwipopts.h
 backtracer.o: $(POSIX_TEST_DIR)/backtracer.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
-backtracer.elf: backtracer.o libunwind.a
+backtracer.elf: backtracer.o libunwind.a unwind_helpers.o
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
 faulter.o: $(POSIX_TEST_DIR)/faulter.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
-faulter.elf: faulter.o libunwind.a
+faulter.elf: faulter.o libunwind.a unwind_helpers.o
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
 FORCE:
@@ -117,6 +120,30 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-device virtio-blk-device,drive=hd,bus=virtio-mmio-bus.1 \
 		-device virtio-net-device,netdev=netdev0,bus=virtio-mmio-bus.0 \
 		-netdev user,id=netdev0,hostfwd=tcp::5560-10.0.2.15:5560,hostfwd=tcp::5561-10.0.2.15:5561 \
+#		-S -s
 
-libunwind.a:
-	$(error "Please paste libunwind.a in here!")
+libunwind.a: | $(LIONS_LIBC)/include
+	cmake -B $(BUILD_DIR)/libunwind -S $(LIBUNWIND) \
+		-DCMAKE_SYSTEM_NAME=Generic\
+		-DCMAKE_C_COMPILER_TARGET=${TARGET}\
+		-DCMAKE_CXX_COMPILER_TARGET=${TARGET}\
+		-DCMAKE_ASM_COMPILER_TARGET=${TARGET}\
+		-DLIBUNWIND_IS_BAREMETAL=ON\
+		-DLIBUNWIND_ENABLE_SHARED=OFF\
+		-DLIBUNWIND_ENABLE_THREADS=OFF\
+		-DLIBUNWIND_USE_COMPILER_RT=ON\
+		-DLIBUNWIND_ENABLE_PEDANTIC=OFF\
+		-DLIBUNWIND_ENABLE_ASSERTIONS=OFF\
+		-DCMAKE_BUILD_TYPE=Debug\
+		-DLIBUNWIND_ENABLE_STATIC=ON\
+		-DCMAKE_C_COMPILER=$(CC)\
+		-DCMAKE_CXX_COMPILER=$(CXX)\
+		-DCMAKE_ASM_COMPILER=$(CC)\
+		-DCMAKE_C_FLAGS="-I$(LIONS_LIBC)/include"\
+		-DCMAKE_CXX_FLAGS="-I$(LIONS_LIBC)/include -fno-exceptions"\
+		-DCMAKE_C_COMPILER_WORKS=ON\
+		-DCMAKE_CXX_COMPILER_WORKS=ON\
+		-DCMAKE_ASM_COMPILER_WORKS=ON
+
+	cmake --build $(BUILD_DIR)/libunwind
+	ln -sr $(BUILD_DIR)/libunwind/lib/libunwind.a $@
