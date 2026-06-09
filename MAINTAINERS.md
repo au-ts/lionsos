@@ -26,7 +26,7 @@ The default reviewers of the LionsOS are currently
 * `examples/`
     * `fileio` - UNASSIGNED (`@`)
     * `firewall` - Courtney (`@Courtney3141`)
-    * `kitty` - Courtney (`@Courtney3141`)
+    * `kitty` - Bill (`@dreamliner787-9 `)
     * `posix_test` - Simon (`@dumsum`)
     * `vmm` - Bill (`@dreamliner787-9 `)
     * `wasm_test` - Simon (`@dumsum`)
