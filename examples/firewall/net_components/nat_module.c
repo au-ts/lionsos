@@ -33,7 +33,6 @@ int nat_module_init(nat_module_t *nat,
 
     nat->interface = interface;
     nat->protocol = protocol;
-    nat->nat_enabled = false;
     nat->interface_config = interface_config;
     nat->port_table = port_table;
     nat->src_port_off = src_port_off;
@@ -113,7 +112,7 @@ int nat_module_translate(nat_module_t *nat,
 
     /* DNAT: returning traffic arrives on the external interface addressed to iface_ip:ephemeral_port;
      * reverse-map destination back to the original internal host. */
-    if (do_dnat && nat->nat_enabled)
+    if (do_dnat && nat->port_table->nat_enabled)
     {
         uint32_t iface_ip = nat->interface_config->ip;
 
@@ -152,7 +151,7 @@ int nat_module_translate(nat_module_t *nat,
 
     /* SNAT: outbound traffic leaving the internal network; rewrite source to iface_ip:ephemeral_port
      * and record the mapping so returning traffic can be DNAT-ed back. */
-    if (!dnat_done && nat->nat_enabled && ip_hdr->dst_ip != nat->interface_config->ip)
+    if (!dnat_done && nat->port_table->nat_enabled && ip_hdr->dst_ip != nat->interface_config->ip)
     {
         uint32_t iface_ip = nat->interface_config->ip;
         uint16_t ephemeral_port = fw_nat_find_ephemeral_port(

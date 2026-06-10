@@ -165,11 +165,6 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
         webserver.add_nat_ppc_channel(0x06, iface.index, tcp_tx_ch.pd_a_id, tcp_rx_ch.pd_a_id)
         webserver.add_nat_ppc_channel(0x11, iface.index, udp_tx_ch.pd_a_id, udp_rx_ch.pd_a_id)
 
-    # Enable NAT only on external interface (interface 0)
-    external_iface = fw_interfaces[0]
-    external_iface.rx_virtualiser.enable_nat()
-    external_iface.tx_virtualiser.enable_nat()
-
     # Create timer and serial subsystems
     serial_node = dtb.node(board.serial)
     assert serial_node is not None

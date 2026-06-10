@@ -52,6 +52,8 @@ struct fw_nat_port_mapping
  */
 typedef struct fw_nat_port_table
 {
+    /* Runtime enable flag*/
+    bool nat_enabled;
     /* Number of valid NAT entries */
     uint16_t size;
     /* Largest initialized entry in the NAT table (could be valid or free) */
@@ -89,6 +91,7 @@ typedef struct fw_nat_webserver_state
  * @return The original port mapping if it exists, NULL otherwise
  */
 static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interface_config_t interfaces[],
+                                                                  uint8_t num_interfaces,
                                                                   uint32_t dst_ip,
                                                                   uint16_t dst_port,
                                                                   uint64_t now)
@@ -96,7 +99,7 @@ static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interfa
     /* Since dst_port is used as an index here it must be in host byte order */
     dst_port = htons(dst_port);
 
-    for (uint16_t i = 0; i < FW_NUM_INTERFACES; i++)
+    for (uint16_t i = 0; i < num_interfaces; i++)
     {
         if (dst_ip == interfaces[i].ip)
         {
@@ -240,10 +243,7 @@ typedef struct nat_module
     /* Protocol (IPPROTO_TCP or IPPROTO_UDP) */
     uint8_t protocol;
 
-    /* Whether NAT is currently enabled (toggled via PPC from webserver) */
-    bool nat_enabled;
-
-    /* Port table reference (shared memory) */
+    /* Port table reference (shared memory) — contains nat_enabled flag */
     fw_nat_port_table_t *port_table;
 
     /* Interface configuration (shared memory) */

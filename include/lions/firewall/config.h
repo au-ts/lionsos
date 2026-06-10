@@ -63,7 +63,6 @@ typedef struct fw_net_virt_tx_config {
     uint8_t num_data_regions;
     fw_data_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_free_clients;
-    bool nat_enabled;
     fw_virt_rx_nat_config_t nat_configs[FW_MAX_NAT];
     uint8_t num_nat_configs;
 } fw_net_virt_tx_config_t;
@@ -78,7 +77,6 @@ typedef struct fw_net_virt_rx_config {
     uint16_t active_client_subtypes[SDDF_NET_MAX_CLIENTS];
     fw_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_free_clients;
-    bool nat_enabled;
     device_region_resource_t nat_dma_region;
     fw_virt_rx_nat_config_t nat_configs[FW_MAX_NAT];
     uint8_t num_nat_configs;

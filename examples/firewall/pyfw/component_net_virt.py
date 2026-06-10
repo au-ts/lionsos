@@ -48,7 +48,6 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
             active_client_ethtypes=[],
             active_client_subtypes=[],
             free_clients=[],
-            nat_enabled=False,
             nat_dma_region=None,
             nat_configs=[],
         )
@@ -145,10 +144,6 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
         """Map RX DMA region with write permissions for NAT packet modification"""
         self.nat_dma_region = dma_region.map_device(self.pd, "rw")
 
-    def enable_nat(self) -> None:
-        """Enable NAT processing"""
-        self.nat_enabled = True
-
     def finalise_config(self) -> None:
         assert self.active_client_ethtypes is not None
         assert self.active_client_subtypes is not None
@@ -181,7 +176,6 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
             active_clients=[],
             data_regions=[],
             free_clients=[],
-            nat_enabled=False,
             nat_configs=[],
         )
 
@@ -276,10 +270,6 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
 
         assert self.nat_configs is not None
         self.nat_configs.append(nat_config)
-
-    def enable_nat(self) -> None:
-        """Enable NAT processing"""
-        self.nat_enabled = True
 
     def finalise_config(self) -> None:
         assert self.data_regions is not None and len(self.data_regions) == 0

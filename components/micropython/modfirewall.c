@@ -517,7 +517,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(rule_get_nth_obj, rule_get_nth);
 static mp_obj_t nat_set_enabled(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp_obj_t enabled_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
         mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
         return mp_const_none;
@@ -550,7 +550,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(nat_set_enabled_obj, nat_set_enabled);
 static mp_obj_t nat_get_enabled(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= FW_NUM_INTERFACES) {
+    if (interface_idx >= fw_config.num_interfaces) {
         return mp_const_false;
     }
 

@@ -82,7 +82,7 @@ static void tx_provide(void)
                 uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.clients[client].data.region.vaddr;
 
                 /* Apply SNAT if enabled */
-                if (fw_config.nat_enabled) {
+                if (fw_config.num_nat_configs > 0) {
                     uint16_t ethtype = htons(((eth_hdr_t *)buffer_vaddr)->ethtype);
                     if (ethtype == ETH_TYPE_IP) {
                         ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(buffer_vaddr + IPV4_HDR_OFFSET);
@@ -138,7 +138,7 @@ static void tx_provide(void)
             uintptr_t buffer_vaddr = buffer.offset + (uintptr_t)fw_config.data_regions[buffer.interface].region.vaddr;
 
             /* Apply SNAT if enabled */
-            if (fw_config.nat_enabled) {
+            if (fw_config.num_nat_configs > 0) {
                 uint16_t ethtype = htons(((eth_hdr_t *)buffer_vaddr)->ethtype);
                 if (ethtype == ETH_TYPE_IP) {
                     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(buffer_vaddr + IPV4_HDR_OFFSET);
@@ -235,7 +235,7 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
                 nat_module_t *mod = (fw_config.nat_configs[i].protocol == IPV4_PROTO_TCP)
                                         ? &nat_tcp_module
                                         : &nat_udp_module;
-                mod->nat_enabled = enabled;
+                mod->port_table->nat_enabled = enabled;
                 microkit_mr_set(NAT_RET_ERR, NAT_ERR_OKAY);
                 return microkit_msginfo_new(0, 1);
             }
@@ -244,18 +244,13 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         return microkit_msginfo_new(0, 1);
     }
     case NAT_GET_ENABLED: {
-        if (!fw_config.nat_enabled) {
-            microkit_mr_set(NAT_RET_ERR, NAT_ERR_OKAY);
-            microkit_mr_set(NAT_RET_ENABLED, 0);
-            return microkit_msginfo_new(0, 2);
-        }
         for (int i = 0; i < fw_config.num_nat_configs; i++) {
             if (fw_config.nat_configs[i].webserver_ch == ch) {
                 nat_module_t *mod = (fw_config.nat_configs[i].protocol == IPV4_PROTO_TCP)
                                         ? &nat_tcp_module
                                         : &nat_udp_module;
                 microkit_mr_set(NAT_RET_ERR, NAT_ERR_OKAY);
-                microkit_mr_set(NAT_RET_ENABLED, (seL4_Word)mod->nat_enabled);
+                microkit_mr_set(NAT_RET_ENABLED, (seL4_Word)mod->port_table->nat_enabled);
                 return microkit_msginfo_new(0, 2);
             }
         }
@@ -301,7 +296,7 @@ void init(void)
     }
 
     /* Initialize NAT modules if enabled */
-    if (fw_config.nat_enabled) {
+    if (fw_config.num_nat_configs > 0) {
         for (int i = 0; i < fw_config.num_nat_configs; i++) {
             fw_virt_rx_nat_config_t *nat_cfg = &fw_config.nat_configs[i];
 
