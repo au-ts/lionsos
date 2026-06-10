@@ -428,10 +428,12 @@ def getPing(request, interfaceInt):
 
 ###### NAT configuration methods ######
 
-@app.route('/api/nat/<string:protocolStr>/<string:interfaceStr>/enabled', methods=['GET', 'PUT'])
-def nat_enabled_handler(request, protocolStr, interfaceStr):
+@app.route('/api/nat/<string:protocolStr>/<int:interfaceInt>/enabled', methods=['GET', 'PUT'])
+def nat_enabled_handler(request, protocolStr, interfaceInt):
     try:
-        interface = interfaceStringToInt("nat", interfaceStr)
+        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
+            raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
+        interface = interfaceInt
 
         if protocolStr not in protocolNums.keys():
             print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
@@ -1000,24 +1002,24 @@ def nat_settings(request):
         <p>NAT translates outbound traffic from the internal network using the external interface IP.</p>
         <h3>TCP</h3>
         <div>
-            <input type="checkbox" id="external-tcp-enabled" />
-            <label for="external-tcp-enabled">NAT enabled</label>
-            <button onclick="updateNat('tcp', 'external')">Apply</button>
+            <input type="checkbox" id="iface0-tcp-enabled" />
+            <label for="iface0-tcp-enabled">NAT enabled</label>
+            <button onclick="updateNat('tcp', 0)">Apply</button>
         </div>
         <h3>UDP</h3>
         <div>
-            <input type="checkbox" id="external-udp-enabled" />
-            <label for="external-udp-enabled">NAT enabled</label>
-            <button onclick="updateNat('udp', 'external')">Apply</button>
+            <input type="checkbox" id="iface0-udp-enabled" />
+            <label for="iface0-udp-enabled">NAT enabled</label>
+            <button onclick="updateNat('udp', 0)">Apply</button>
         </div>
         <script>
         const getNat = async (protocol, iface) => {
             const data = await fetch(`/api/nat/${protocol}/${iface}/enabled`).then(r => r.json());
-            document.querySelector(`#${iface}-${protocol}-enabled`).checked = !!data?.enabled;
+            document.querySelector(`#iface${iface}-${protocol}-enabled`).checked = !!data?.enabled;
         };
 
         const updateNat = async (protocol, iface) => {
-            const enabled = document.querySelector(`#${iface}-${protocol}-enabled`).checked;
+            const enabled = document.querySelector(`#iface${iface}-${protocol}-enabled`).checked;
             await fetch(`/api/nat/${protocol}/${iface}/enabled`, {
                 method: "PUT",
                 headers: {"Content-Type": "application/json"},
@@ -1026,8 +1028,8 @@ def nat_settings(request):
         };
 
         window.onload = () => {
-            getNat("tcp", "external");
-            getNat("udp", "external");
+            getNat("tcp", 0);
+            getNat("udp", 0);
         };
         </script>
     </body>
