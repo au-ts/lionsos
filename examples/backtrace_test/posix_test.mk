@@ -19,7 +19,8 @@ BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
-LIBUNWIND := $(LIONSOS)/dep/llvm-project/libunwind
+LLVM := $(LIONSOS)/dep/llvm-project/
+LIBUNWIND := $(LLVM)/libunwind
 SYSTEM_FILE := posix_test.system
 IMAGE_FILE := posix_test.img
 REPORT_FILE := report.txt
@@ -82,9 +83,9 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 unwind_helpers.o: $(POSIX_TEST_DIR)/unwind_helpers.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
-# for libmicrokitco_opts.h and lwipopts.h
-backtracer.o: $(POSIX_TEST_DIR)/backtracer.c | $(LIONS_LIBC)/include
-	${CC} ${CFLAGS} -c -o $@ $<
+# Seems a bit fragile...
+backtracer.o: $(POSIX_TEST_DIR)/backtracer.c faulter.elf | $(LIONS_LIBC)/include
+	${CC} ${CFLAGS} -c -o $@ $< -DSHOW_BACKTRACE_FUNC_ADDR='0x$(shell nm faulter.elf | grep "show_backtrace" | cut --delimiter=" " -f 1)'
 
 backtracer.elf: backtracer.o libunwind.a unwind_helpers.o
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
@@ -123,7 +124,8 @@ qemu: ${IMAGE_FILE} qemu_disk
 #		-S -s
 
 libunwind.a: | $(LIONS_LIBC)/include
-	cmake -B $(BUILD_DIR)/libunwind -S $(LIBUNWIND) \
+	cmake -B $(BUILD_DIR)/libunwind -S $(LLVM)/runtimes \
+		-DLLVM_ENABLE_RUNTIMES=libunwind\
 		-DCMAKE_SYSTEM_NAME=Generic\
 		-DCMAKE_C_COMPILER_TARGET=${TARGET}\
 		-DCMAKE_CXX_COMPILER_TARGET=${TARGET}\

@@ -13,22 +13,14 @@
  // X(seL4_Fault_VGICMaintenence)
  // X(seL4_Fault_DebugException)
 
+
 #define BASE_PD_TCB_CAP 202
-#define TEST_FUNC_ADDR 0x20001c
-
-static void aarch64_print_vm_fault()
-{
-    seL4_Word ip = seL4_GetMR(seL4_VMFault_IP);
-    seL4_Word fault_addr = seL4_GetMR(seL4_VMFault_Addr);
-    seL4_Word is_instruction = seL4_GetMR(seL4_VMFault_PrefetchFault);
-    seL4_Word fsr = seL4_GetMR(seL4_VMFault_FSR);
-    sddf_printf("MON|ERROR: VMFault: ip=%0llx  fault_addr=%0llx  fsr=%0llx, %s\n", ip, fault_addr, fsr, is_instruction ? "(instruction fault)" : "(data fault)");
-}
-
+#ifndef SHOW_BACKTRACE_FUNC_ADDR
+#error "Please define SHOW_BACKTRACE_FUNC_ADDR to be the address of the show_backtrace function"
+#endif
 
 void init() {
-    LOG("Backtracer initialised!\n");
-    LOG("Printf test! %d\n", 100);
+    LOG("Initialised!");
 }
 
 void printFaultType(seL4_Word label)
@@ -40,15 +32,11 @@ void printFaultType(seL4_Word label)
         FAULTS
         #undef X
     }
-
-    if (label == seL4_Fault_VMFault)
-    {
-        aarch64_print_vm_fault();
-    }
 }
 
+#if defined(__aarch64__)
 // modifies ctxt
-void aarch64_callConvention_prologue(seL4_UserContext* ctxt, uintptr_t funcAddr)
+void callConvention_prologue(seL4_UserContext* ctxt, uintptr_t funcAddr)
 {
     // Store x29, x30 to address sp-16, sp-8 respectively
     // stp x29, x30, [sp, #-16]!
@@ -60,18 +48,33 @@ void aarch64_callConvention_prologue(seL4_UserContext* ctxt, uintptr_t funcAddr)
     ctxt->pc = funcAddr;
     LOG("Post jump PC: %p\n", (void*) ctxt->pc);
 }
+#elif defined(__riscv)
+#error "Unimplemented backtracer for riscv"
+#elif defined(__x86_64__)
+#error "Unimplemented backtracer for x86_64"
+#else
+#error "Unsupported architecture for backtracing"
+#endif
 
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo,
                 microkit_msginfo *reply_msginfo) {
-	LOG("BEGIN Fault received!\n");
+	LOG("Fault received! Setting up backtrace...\n");
 	uint64_t label = microkit_msginfo_get_label(msginfo);
-	uint64_t count = microkit_msginfo_get_count(msginfo);
 	printFaultType(label);
     seL4_UserContext ctxt = {0};
-	LOG("read registers return: %d\n", seL4_TCB_ReadRegisters(BASE_PD_TCB_CAP + child, seL4_True, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt)); 
-	aarch64_callConvention_prologue(&ctxt, TEST_FUNC_ADDR);
-	LOG("write registers return: %d\n", seL4_TCB_WriteRegisters(BASE_PD_TCB_CAP + child, seL4_True, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt));
-	LOG("END Fault received!\n");
+    int readRegResult = seL4_TCB_ReadRegisters(BASE_PD_TCB_CAP + child, seL4_True, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt);
+    if (readRegResult != 0)
+    {
+        LOG("Failed to read registers for setting up backtrace jump! Got %d, expected %d\n", readRegResult, 0);
+        return seL4_False;
+    }
+	callConvention_prologue(&ctxt, SHOW_BACKTRACE_FUNC_ADDR);
+	int writeRegResult = seL4_TCB_WriteRegisters(BASE_PD_TCB_CAP + child, seL4_True, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt);
+    if (writeRegResult != 0)
+    {
+        LOG("Failed to write registers for setting up backtrace jump! Got %d, expected %d\n", writeRegResult, 0);
+        return seL4_False;
+    }
     return seL4_True;
 }
 

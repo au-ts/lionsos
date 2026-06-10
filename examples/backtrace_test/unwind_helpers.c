@@ -11,17 +11,11 @@ void show_backtrace (void) {
 
   unw_getcontext(&uc);
   unw_init_local(&cursor, &uc);
+  // TODO: print the backtrace depth, and possibly find the culprit function address?
   while (unw_step(&cursor) > 0) {
     unw_get_reg(&cursor, UNW_REG_IP, &ip);
     unw_get_reg(&cursor, UNW_REG_SP, &sp);
     sddf_printf("ip = %lx, sp = %lx\n", (long) ip, (long) sp);
   }
   microkit_dbg_puts("SHOW_BACKTRACE | END_SHOW_BACKTRACE\n");
-}
-
-void increase_stackdepth(int size)
-{
-    if (size > 0)
-        increase_stackdepth(size - 1);
-    else show_backtrace();
 }

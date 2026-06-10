@@ -3,17 +3,6 @@
 #include <stddef.h>
 #include <sddf/util/printf.h>
 #define LOG(...) sddf_printf("FAULTER | " __VA_ARGS__)
-extern void show_backtrace();
-void anotherFunc () {
-    volatile int a = 1;
-}
-
-void testFunc() {
-    LOG("Test\n");
-    anotherFunc();
-    show_backtrace();
-    while (1);
-}
 
 void init() {
     LOG("Faulter initialised!\n");
