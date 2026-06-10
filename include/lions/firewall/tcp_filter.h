@@ -32,10 +32,11 @@ typedef struct fw_tcp_instance {
     uint16_t src_port;
     /* destination port of traffic */
     uint16_t dst_port;
-    /* Last recorded state, in case a resend occurs and the prev->curr transition needs to be repeated */
-    fw_tcp_interface_state_t prev;
     /* What state it is currently expected to be in currently */
-    fw_tcp_interface_state_t curr;
+    fw_tcp_interface_state_t state;
+    /* Byte numbers expected from both sides */
+    uint32_t local_next_seq;  
+    uint32_t extern_next_seq;
     /* tick of last packet received */
     uint64_t timestamp;
     /* ID of the rule this instance was created from. Allows instances
@@ -266,12 +267,12 @@ static fw_filter_err_t fw_tcp_extract_state(fw_filter_state_t *filter_state,
     /* Check if instance is local or external */
     if (instance >= (fw_tcp_instance_t *)filter_state->local_instances_table &&
         instance < (fw_tcp_instance_t *)filter_state->local_instances_table
-                   + filter_state->instances_capacity * sizeof(fw_tcp_instance_t)) {
+                   + filter_state->instances_capacity) {
         *local_state = &instance->local;
         *extern_state = &instance->external;
     } else if (instance >= (fw_tcp_instance_t *)filter_state->extern_instances_table &&
         instance < (fw_tcp_instance_t *)filter_state->extern_instances_table
-                   + filter_state->instances_capacity * sizeof(fw_tcp_instance_t)) {
+                   + filter_state->instances_capacity) {
         *local_state = &instance->external;
         *extern_state = &instance->local;
     } else {
