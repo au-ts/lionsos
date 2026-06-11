@@ -18,4 +18,6 @@ void show_backtrace (void) {
     sddf_printf("ip = %lx, sp = %lx\n", (long) ip, (long) sp);
   }
   microkit_dbg_puts("SHOW_BACKTRACE | END_SHOW_BACKTRACE\n");
+  // while (1)
+  //     seL4_Yield();
 }

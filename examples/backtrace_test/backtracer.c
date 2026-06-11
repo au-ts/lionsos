@@ -14,15 +14,13 @@
  // X(seL4_Fault_DebugException)
 
 
-void (*backtraceFunctions[])() = {NULL};
+void (**backtraceFunctions)() = NULL;
 
 #define BASE_PD_TCB_CAP 202
-#ifndef SHOW_BACKTRACE_FUNC_ADDR
-#error "Please define SHOW_BACKTRACE_FUNC_ADDR to be the address of the show_backtrace function"
-#endif
 
 void init() {
-    LOG("Initialised!");
+    LOG("Initialised!\n");
+    LOG("Backtracer table pointer value: %p\n", backtraceFunctions);
 }
 
 void printFaultType(seL4_Word label)
@@ -66,7 +64,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo,
         LOG("Failed to read registers for setting up backtrace jump! Got %d, expected %d\n", readRegResult, 0);
         return seL4_False;
     }
-	callConvention_prologue(&ctxt, SHOW_BACKTRACE_FUNC_ADDR);
+	callConvention_prologue(&ctxt, (uintptr_t)(backtraceFunctions[child]));
 	int writeRegResult = seL4_TCB_WriteRegisters(BASE_PD_TCB_CAP + child, seL4_True, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt);
     if (writeRegResult != 0)
     {
