@@ -16,8 +16,6 @@
 
 void (**backtraceFunctions)() = NULL;
 
-#define BASE_PD_TCB_CAP 202
-
 void init() {
     LOG("Initialised!\n");
     LOG("Backtracer table pointer value: %p\n", backtraceFunctions);
@@ -58,14 +56,15 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo,
 	uint64_t label = microkit_msginfo_get_label(msginfo);
 	printFaultType(label);
     seL4_UserContext ctxt = {0};
-    int readRegResult = seL4_TCB_ReadRegisters(BASE_PD_TCB_CAP + child, seL4_True, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt);
+    // BASE_TCB_CAP is from microkit.h. Not sure if completely portable?
+    int readRegResult = seL4_TCB_ReadRegisters(BASE_TCB_CAP + child, seL4_True, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt);
     if (readRegResult != 0)
     {
         LOG("Failed to read registers for setting up backtrace jump! Got %d, expected %d\n", readRegResult, 0);
         return seL4_False;
     }
 	callConvention_prologue(&ctxt, (uintptr_t)(backtraceFunctions[child]));
-	int writeRegResult = seL4_TCB_WriteRegisters(BASE_PD_TCB_CAP + child, seL4_True, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt);
+	int writeRegResult = seL4_TCB_WriteRegisters(BASE_TCB_CAP + child, seL4_True, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt);
     if (writeRegResult != 0)
     {
         LOG("Failed to write registers for setting up backtrace jump! Got %d, expected %d\n", writeRegResult, 0);
@@ -75,4 +74,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo,
 }
 
 void notified(microkit_channel ch) {}
-microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo) {}
+microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo) {
+    microkit_pd_stop(ch);
+    return msginfo;
+}

@@ -35,13 +35,22 @@ def enableBacktracing(array_of_pds_or_single_pd, show_backtrace_func_list_addr =
     """
     backtracer = ProtectionDomain("backtracer", "backtracer.elf", priority=ProtectionDomain.PRIORITY_MAX, stack_size=0x10000);
     pd_elf_paths = [];
-    if isinstance(array_of_pds_or_single_pd, list):
-        for child_pd in array_of_pds_or_single_pd:
-            backtracer.add_child_pd(child_pd)
-            pd_elf_paths.append(child_pd.program_image)
-    else:
-        backtracer.add_child_pd(array_of_pds_or_single_pd)
-        pd_elf_paths.append(array_of_pds_or_single_pd.program_image)
+    if not isinstance(array_of_pds_or_single_pd, list):
+        array_of_pds_or_single_pd = [array_of_pds_or_single_pd]
+
+    for i, child_pd in enumerate(array_of_pds_or_single_pd):
+        # Also add a channel for allowing a thread to pause completely
+        newChannel = Channel(
+            child_pd,
+            backtracer,
+            a_id = 10 + i,
+            b_id = i,
+            pp_a = True,
+            pd_a_setvar_id="channel_to_backtrace"
+        )
+        sdf.add_channel(newChannel)
+        backtracer.add_child_pd(child_pd)
+        pd_elf_paths.append(child_pd.program_image)
 
     # Create a memory region at the predefined address, as an array
     # Extract each of the addresses of the children's show_backtrace function
@@ -76,7 +85,7 @@ def enableBacktracing(array_of_pds_or_single_pd, show_backtrace_func_list_addr =
 def generate(sdf_path: str, output_dir: str):
     domains =  [
             ProtectionDomain(f"faulter{i}", "faulter.elf", priority=i, stack_size=0x100000) for i in range(5)
-        ]
+    ]
     backtracer = enableBacktracing(domains)
     sdf.add_pd(backtracer)
 
