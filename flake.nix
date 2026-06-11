@@ -14,14 +14,15 @@
 
   outputs = { nixpkgs, zig-overlay, sdfgen, ... }:
     let
-      microkit-version = "2.1.0-dev.12+2d5a1a6";
-      microkit-url = "https://trustworthy.systems/Downloads/microkit/";
+      microkit-version = "2.2.0";
+      microkit-url = "https://github.com/seL4/microkit/releases/download/2.2.0/";
       microkit-platforms = {
         aarch64-darwin = "macos-aarch64";
         x86_64-darwin = "macos-x86-64";
         x86_64-linux = "linux-x86-64";
         aarch64-linux = "linux-aarch64";
       };
+
       wasi-platforms = {
         aarch64-darwin = "arm64-macos";
         x86_64-darwin = "x86_64-macos";
@@ -62,13 +63,14 @@
                 url = "${microkit-url}/microkit-sdk-${microkit-version}-${microkit-platform}.tar.gz";
                 hash =
                   {
-                    aarch64-darwin = "sha256-MKtQyECOHpLQ/SQ6OTkZyRFY4ajFJsq9e0Zy/M8u9BY=";
-                    x86_64-darwin = "sha256-rFL2S5UB14j8eSRyTWisYDeab5MClkxPUPUGmkdoWgQ=";
-                    x86_64-linux = "sha256-C21EpS95KQ1Yw5KYumXqhSY4B9KOPiRY1Mt4k7n8shA=";
-                    aarch64-linux = "sha256-S2oRumOiFO9NPkOOGA1Gj8MIPlzITblrMiehJccdwoM=";
+                    aarch64-darwin = "sha256-UZBEwS3vAQqJe6Xj+13smJRS0RYfoc0uCK7hB8ujbvA=";
+                    x86_64-darwin = "sha256-aE2mYToK2ne9vzw6d3YQDzJvhpnI8IHOR9+VqZxwlfY=";
+                    aarch64-linux = "sha256-U1hA7Vk/TlSWgV7KiEeG7AkA7t5IR/x89mSE0YHBRNA=";
+                    x86_64-linux = "sha256-dxPu2Q01qjKhME6Z6kgG4ASDUe12ytZmh5tCtFva/L0=";
                   }
                   .${system} or (throw "Unsupported system: ${system}");
               };
+
 
               env.WASI_SDK = pkgs.fetchzip {
                 url = "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-27/wasi-sdk-27.0-${wasi-platform}.tar.gz";
