@@ -14,6 +14,8 @@
  // X(seL4_Fault_DebugException)
 
 
+void (*backtraceFunctions[])() = {NULL};
+
 #define BASE_PD_TCB_CAP 202
 #ifndef SHOW_BACKTRACE_FUNC_ADDR
 #error "Please define SHOW_BACKTRACE_FUNC_ADDR to be the address of the show_backtrace function"
@@ -35,12 +37,8 @@ void printFaultType(seL4_Word label)
 }
 
 #if defined(__aarch64__)
-// modifies ctxt
 void callConvention_prologue(seL4_UserContext* ctxt, uintptr_t funcAddr)
 {
-    // Store x29, x30 to address sp-16, sp-8 respectively
-    // stp x29, x30, [sp, #-16]!
-    // mov x29, sp
     LOG("Pre jump PC: %p\n", (void*) ctxt->pc);
     // Set the link register to old PC
     ctxt->x30 = ctxt->pc;

@@ -25,6 +25,3 @@
 [submodule "dep/wasm-micro-runtime"]
 	path = dep/wasm-micro-runtime
 	url = https://github.com/au-ts/wasm-micro-runtime
-[submodule "dep/libunwind"]
-	path = dep/libunwind
-	url = https://github.com/libunwind/libunwind.git

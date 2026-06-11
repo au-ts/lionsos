@@ -7,7 +7,7 @@ from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 from importlib.metadata import version
 from board import BOARDS
 
-assert version("sdfgen").split(".")[1] == "28", "Unexpected sdfgen version"
+# assert version("sdfgen").split(".")[1] == "28", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 ProtectionDomain.PRIORITY_MAX = 254
@@ -30,7 +30,10 @@ def enableBacktracing(array_of_pds_or_single_pd, show_backtrace_func_list_addr =
         backtracer.add_child_pd(array_of_pds_or_single_pd)
 
     # Create a memory region at the predefined address, as an array
-    # func_list_mr = MemoryRegion("backtracer_
+    func_list_mr = MemoryRegion(sdf, "backtracerFunctions", prefill_path="test.txt")
+    sdf.add_mr(func_list_mr)
+    func_list_map = Map(func_list_mr, vaddr=0x20000, perms="r", setvar_vaddr="backtraceFunctions")
+    backtracer.add_map(func_list_map)
     return backtracer
 
 def generate(sdf_path: str, output_dir: str):
