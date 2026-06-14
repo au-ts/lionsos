@@ -23,7 +23,7 @@ def getArchitecturePointerAlignment(arch: SystemDescription.Arch):
         case SystemDescription.Arch.AARCH64 | SystemDescription.Arch.RISCV64 | SystemDescription.Arch.X86_64:
             return 8
         case SystemDescription.Arch.AARCH32 | SystemDescription.Arch.RISCV32 | SystemDescription.Arch.X86:
-            return 8
+            return 4
         case _:
             raise Exception(f"Archicture '{arch}' is not supported")
 
@@ -43,7 +43,7 @@ def enableBacktracing(array_of_pds_or_single_pd, show_backtrace_func_list_addr =
         newChannel = Channel(
             child_pd,
             backtracer,
-            a_id = 10 + i,
+            a_id = 61,
             b_id = i,
             pp_a = True,
             pd_a_setvar_id="channel_to_backtrace"
