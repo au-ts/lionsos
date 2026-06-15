@@ -10,12 +10,12 @@ endif
 override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
 export LIONSOS ?= $(abspath ../..)
-export POSIX_TEST_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+export BACKTRACE_TEST_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD ?= qemu_virt_aarch64
 
-IMAGE_FILE := $(BUILD_DIR)/posix_test.img
+IMAGE_FILE := $(BUILD_DIR)/backtrace_test.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
 all: ${IMAGE_FILE}
@@ -23,16 +23,16 @@ all: ${IMAGE_FILE}
 qemu qemu-gdb ${IMAGE_FILE} ${REPORT_FILE} clean clobber libunwind.a: ${BUILD_DIR}/Makefile FORCE
 	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} $(notdir $@)
 
-${BUILD_DIR}/Makefile: posix_test.mk Makefile
+${BUILD_DIR}/Makefile: backtrace_test.mk Makefile
 	mkdir -p ${BUILD_DIR}
-	cp posix_test.mk $@
+	cp backtrace_test.mk $@
 	echo "export LIONSOS ?= ${LIONSOS}" > $@
-	echo "export POSIX_TEST_DIR ?= ${POSIX_TEST_DIR}" >> $@
+	echo "export BACKTRACE_TEST_DIR ?= ${BACKTRACE_TEST_DIR}" >> $@
 	echo "export BUILD_DIR := ${BUILD_DIR}" >> $@
 	echo "export MICROKIT_BOARD ?= ${MICROKIT_BOARD}" >> $@
 	echo "export MICROKIT_SDK ?= ${MICROKIT_SDK}" >> $@
 	echo "export MICROKIT_CONFIG ?= ${MICROKIT_CONFIG}" >> $@
-	cat posix_test.mk >> $@
+	cat backtrace_test.mk >> $@
 
 submodules:
 	git submodule update --init $(LIONSOS)/dep/sddf
