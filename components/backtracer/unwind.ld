@@ -25,16 +25,4 @@ SECTIONS
     __eh_frame_hdr_start = SIZEOF(.eh_frame_hdr) > 0 ? ADDR(.eh_frame_hdr) : 0;
     __eh_frame_hdr_end = SIZEOF(.eh_frame_hdr) > 0 ? . : 0;
 }
-
-/* OLD
-    .eh_frame :
-    {
-        PROVIDE (__eh_frame_start = .);
-        KEEP (*(.eh_frame)) *(.eh_frame.*)
-        PROVIDE (__eh_frame_end = .);
-        PROVIDE (__eh_frame_hdr_start = .);
-        KEEP (*(.eh_frame_hdr)) *(.eh_frame_hdr.*)
-        PROVIDE (__eh_frame_hdr_end = .);
-    }
-*/
 INSERT AFTER .text;

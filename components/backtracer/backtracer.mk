@@ -8,13 +8,10 @@ CFLAGS_backtracer := \
 	-I$(SDDF)/include/microkit \
 	-I$(LIBUNWIND)/include \
 	-I$(BOARD_DIR)/include \
-	-I$(LIONS_LIBC)/include \
-	-funwind-tables -O0 \
-	-DARCH_aarch64
+	-I$(LIONS_LIBC)/include -O0 -ggdb -funwind-tables
 
 LDFLAGS_backtracer := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS_backtracer := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
-
 
 LLVM_CMAKE_FLAGS := \
 		-DLLVM_ENABLE_RUNTIMES=libunwind\
@@ -58,6 +55,10 @@ libunwind.a: | $(LIONS_LIBC)/include backtracer
 	cmake --build $(BUILD_DIR)/libunwind
 	cp $(BUILD_DIR)/libunwind/lib/libunwind.a $@
 
+clean::
+	${RM} -rf backtracer backtracer.elf unwind_helpers.o libunwind.a libunwind
 export PYTHONPATH := "$(BACKTRACER_DIR):$$PYTHONPATH:$(PYTHONPATH)"
 
 LDFLAGS += -L$(BACKTRACER_DIR)
+
+# TODO: add dep files.

@@ -17,6 +17,7 @@ static void callConvention_prologue(seL4_UserContext* ctxt, uintptr_t funcAddr)
     ctxt->x30 = ctxt->pc;
     // Set the PC to the next function
     ctxt->pc = funcAddr;
+    LOG("Old PC: %p, New PC: %p\n", (void*)ctxt->x30, (void*)funcAddr);
 }
 #elif defined(__riscv__)
 #error "Unimplemented backtracer for riscv"

@@ -16,7 +16,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <sel4/sel4.h>
-
 #include "util.h"
 
 #define MAX_VMS 64
@@ -40,14 +39,14 @@ seL4_Word vm_names_len;
 seL4_Word pd_stack_bottom_addrs[MAX_PDS];
 
 /* Sanity check that the architecture specific macro have been set. */
-#if defined(ARCH_aarch64)
-#elif defined(ARCH_x86_64)
-#elif defined(ARCH_riscv64)
+#if defined(__aarch64__)
+#elif defined(__x86_64__)
+#elif defined(__riscv64__)
 #else
-#error "No architecture flag was defined, double check your CC flags"
+#error "Unknown or unsupported architecture for backtracing"
 #endif
 
-#ifdef ARCH_riscv64
+#ifdef __riscv64__
 /*
  * Convert the fault status register given by the kernel into a string describing
  * what fault happened. The FSR is the 'scause' register.
@@ -91,7 +90,7 @@ static char *riscv_fsr_to_string(seL4_Word fsr)
 }
 #endif
 
-#ifdef ARCH_aarch64
+#ifdef __aarch64__
 static char *ec_to_string(uintptr_t ec)
 {
     switch (ec) {
@@ -225,7 +224,7 @@ static char *data_abort_dfsc_to_string(uintptr_t dfsc)
 }
 #endif
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 static char *page_fault_to_string(seL4_Word fsr)
 {
     // https://wiki.osdev.org/Exceptions#Page_Fault
@@ -348,7 +347,7 @@ static char *usban_code_to_string(seL4_Word code)
 
 static void print_tcb_registers(seL4_UserContext *regs)
 {
-#if defined(ARCH_riscv64)
+#if defined(__riscv64__)
     puts("BACKTRACER | Registers: \n");
     puts("BACKTRACER | pc : ");
     puthex64(regs->pc);
@@ -437,7 +436,7 @@ static void print_tcb_registers(seL4_UserContext *regs)
     puts("BACKTRACER | tp : ");
     puthex64(regs->tp);
     puts("\n");
-#elif defined(ARCH_aarch64)
+#elif defined(__aarch64__)
     puts("BACKTRACER | Registers: \n");
     puts("BACKTRACER | pc : ");
     puthex64(regs->pc);
@@ -547,7 +546,7 @@ static void print_tcb_registers(seL4_UserContext *regs)
     puts("BACKTRACER | tpidrro_el0 : ");
     puthex64(regs->tpidrro_el0);
     puts("\n");
-#elif ARCH_x86_64
+#elif defined(__x86_64__)
     puts("BACKTRACER | Registers: \n");
     puts("BACKTRACER | rip : ");
     puthex64(regs->rip);
@@ -612,7 +611,7 @@ static void print_tcb_registers(seL4_UserContext *regs)
 #endif
 }
 
-#ifdef ARCH_riscv64
+#ifdef __riscv64__
 static void riscv_print_vm_fault()
 {
     seL4_Word ip = seL4_GetMR(seL4_VMFault_IP);
@@ -634,7 +633,7 @@ static void riscv_print_vm_fault()
 }
 #endif
 
-#if ARCH_x86_64
+#ifdef __x86_64__
 static void x86_64_print_vm_fault()
 {
     seL4_Word ip = seL4_GetMR(seL4_VMFault_IP);
@@ -657,7 +656,7 @@ static void x86_64_print_vm_fault()
 }
 #endif
 
-#ifdef ARCH_aarch64
+#ifdef __aarch64__
 static void aarch64_print_vm_fault()
 {
     seL4_Word ip = seL4_GetMR(seL4_VMFault_IP);
@@ -810,11 +809,11 @@ static void print_fault_error(microkit_child child, microkit_msginfo msginfo)
             break;
         }
         case seL4_Fault_VMFault: {
-#if defined(ARCH_aarch64)
+#if defined(__aarch64__)
             aarch64_print_vm_fault();
-#elif defined(ARCH_riscv64)
+#elif defined(__riscv64__)
             riscv_print_vm_fault();
-#elif defined(ARCH_x86_64)
+#elif defined(__x86_64__)
             x86_64_print_vm_fault();
 #else
 #error "Unknown architecture to print a VM fault for"
