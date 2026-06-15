@@ -45,7 +45,8 @@ CFLAGS += \
 	-I$(LWIP)/include \
 	-I$(LIBUNWIND)/include \
 	-DMAX_FDS=8 \
-	-funwind-tables -O0
+	-funwind-tables -O0 \
+	-DARCH_aarch64
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -85,7 +86,7 @@ unwind_helpers.o: $(POSIX_TEST_DIR)/unwind_helpers.c | $(LIONS_LIBC)/include
 
 # Seems a bit fragile...
 backtracer.o: $(POSIX_TEST_DIR)/backtracer.c faulter.elf | $(LIONS_LIBC)/include
-	${CC} ${CFLAGS} -c -o $@ $< -DSHOW_BACKTRACE_FUNC_ADDR='0x$(shell nm faulter.elf | grep "show_backtrace" | cut --delimiter=" " -f 1)'
+	${CC} ${CFLAGS} -c -o $@ $<
 
 backtracer.elf: backtracer.o libunwind.a unwind_helpers.o
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}

@@ -15,11 +15,12 @@ void show_backtrace (void) {
 
   unw_getcontext(&uc);
   unw_init_local(&cursor, &uc);
-  // TODO: print the backtrace depth, and possibly find the culprit function address?
+
+  seL4_Word depth = 0;
   while (unw_step(&cursor) > 0) {
     unw_get_reg(&cursor, UNW_REG_IP, &ip);
     unw_get_reg(&cursor, UNW_REG_SP, &sp);
-    sddf_printf("ip = %lx, sp = %lx\n", (long) ip, (long) sp);
+    sddf_printf("SHOW_BACKTRACE | #%d: ip = %p, sp = %p\n", (int)depth++, (void*) ip, (void*) sp);
   }
   microkit_dbg_puts("SHOW_BACKTRACE | END_SHOW_BACKTRACE\n");
   microkit_ppcall(channel_to_backtrace, empty_msg);

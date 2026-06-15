@@ -1,48 +1,24 @@
 #include <microkit.h>
 #include <sddf/util/printf.h>
+#include "monitor.h"
 #define LOG(...) sddf_printf("BACKTRACER | " __VA_ARGS__)
-#define FAULTS \
- X(seL4_Fault_CapFault) \
- X(seL4_Fault_VMFault) \
- X(seL4_Fault_UnknownSyscall) \
- X(seL4_Fault_UserException) \
- X(seL4_Fault_NullFault) \
- X(seL4_Fault_VPPIEvent) \
- X(seL4_Fault_VCPUFault)
- // X(seL4_Fault_TimeoutFault) 
- // X(seL4_Fault_VGICMaintenence)
- // X(seL4_Fault_DebugException)
-
 
 void (**backtraceFunctions)() = NULL;
 
 void init() {
-    LOG("Initialised!\n");
-    LOG("Backtracer table pointer value: %p\n", backtraceFunctions);
-}
-
-void printFaultType(seL4_Word label)
-{
-    LOG("Fault type: ");
-    switch (label)
-    {
-        #define X(value) case value: sddf_printf(#value "\n"); break;
-        FAULTS
-        #undef X
-    }
+    LOG("Backtracer initialised!\n");
+    LOG("Backtracer table starting address: %p\n", backtraceFunctions);
 }
 
 #if defined(__aarch64__)
-void callConvention_prologue(seL4_UserContext* ctxt, uintptr_t funcAddr)
+static void callConvention_prologue(seL4_UserContext* ctxt, uintptr_t funcAddr)
 {
-    LOG("Pre jump PC: %p\n", (void*) ctxt->pc);
     // Set the link register to old PC
     ctxt->x30 = ctxt->pc;
     // Set the PC to the next function
     ctxt->pc = funcAddr;
-    LOG("Post jump PC: %p\n", (void*) ctxt->pc);
 }
-#elif defined(__riscv)
+#elif defined(__riscv__)
 #error "Unimplemented backtracer for riscv"
 #elif defined(__x86_64__)
 #error "Unimplemented backtracer for x86_64"
@@ -52,9 +28,8 @@ void callConvention_prologue(seL4_UserContext* ctxt, uintptr_t funcAddr)
 
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo,
                 microkit_msginfo *reply_msginfo) {
-	LOG("Fault received! Setting up backtrace...\n");
-	uint64_t label = microkit_msginfo_get_label(msginfo);
-	printFaultType(label);
+	LOG("Child '%d' Faulted!\n", child);
+	print_fault_error(child, msginfo);
     seL4_UserContext ctxt = {0};
     // BASE_TCB_CAP is from microkit.h. Not sure if completely portable?
     int readRegResult = seL4_TCB_ReadRegisters(BASE_TCB_CAP + child, seL4_True, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt);
@@ -63,6 +38,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo,
         LOG("Failed to read registers for setting up backtrace jump! Got %d, expected %d\n", readRegResult, 0);
         return seL4_False;
     }
+	print_tcb_registers(&ctxt);
 	callConvention_prologue(&ctxt, (uintptr_t)(backtraceFunctions[child]));
 	int writeRegResult = seL4_TCB_WriteRegisters(BASE_TCB_CAP + child, seL4_True, 0, sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt);
     if (writeRegResult != 0)
