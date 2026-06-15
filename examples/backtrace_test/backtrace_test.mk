@@ -46,7 +46,7 @@ CFLAGS += \
 
 include $(LIONSOS)/lib/libc/libc.mk
 
-LDFLAGS := --eh-frame-hdr -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(BACKTRACE_TEST_DIR)/build
+LDFLAGS := --eh-frame-hdr -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(BACKTRACE_TEST_DIR)/build -L$(BACKTRACER)
 LIBS := --start-group -Tunwind.ld -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc -lunwind --end-group
 
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include

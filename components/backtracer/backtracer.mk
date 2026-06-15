@@ -59,6 +59,4 @@ clean::
 	${RM} -rf backtracer backtracer.elf unwind_helpers.o libunwind.a libunwind
 export PYTHONPATH := "$(BACKTRACER_DIR):$$PYTHONPATH:$(PYTHONPATH)"
 
-LDFLAGS += -L$(BACKTRACER_DIR)
-
 # TODO: add dep files.

@@ -56,7 +56,8 @@ def enable_backtracing(sdf, arch, array_of_pds_or_single_pd, show_backtrace_func
     # Extract each of the addresses of the children's show_backtrace function
     pd_show_backtrace_addrs = []
     for elf_path in pd_elf_paths:
-        shell_output = run("set -o pipefail && nm faulter.elf | grep \"show_backtrace\" | cut --delimiter=\" \" -f 1",
+        # Not very stable but good enough for now.
+        shell_output = run(f"set -o pipefail && nm {elf_path} | grep \"show_backtrace\" | cut --delimiter=\" \" -f 1",
             capture_output=True, shell=True, text=True)
         if shell_output.returncode != 0:
             raise Exception(f"Failed to get addresses of 'show_backtrace' for file {elf_path}\n" +
