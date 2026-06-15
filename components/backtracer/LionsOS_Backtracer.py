@@ -27,7 +27,7 @@ def get_architecture_pointer_alignment(arch: SystemDescription.Arch):
         case _:
             raise Exception(f"Alignment of architecture {arch} is unknown.")
 
-def enable_backtracing(array_of_pds_or_single_pd, show_backtrace_func_list_addr = 0xb00000):
+def enable_backtracing(sdf, arch, array_of_pds_or_single_pd, show_backtrace_func_list_addr = 0xb00000):
     """
     Wrap an array or single pd as children into a backtracer parent,
     capable of catching faults and then forcing prints of the backtrace
@@ -68,8 +68,8 @@ def enable_backtracing(array_of_pds_or_single_pd, show_backtrace_func_list_addr 
         pd_show_backtrace_addrs.append(show_backtrace_addr)
 
     # now write a .data file containing the files spaced out by architectures pointer size.
-    alignment = getArchitecturePointerAlignment(board.arch)
-    print(f"Alignment for architecture {board.arch.name}: {alignment}")
+    alignment = get_architecture_pointer_alignment(arch)
+    print(f"Alignment for architecture {arch.name}: {alignment}")
     frame = b""
     for backtrace_addr in pd_show_backtrace_addrs:
         frame += bytes(backtrace_addr.to_bytes(alignment, "little"))
@@ -81,5 +81,3 @@ def enable_backtracing(array_of_pds_or_single_pd, show_backtrace_func_list_addr 
     func_list_map = Map(func_list_mr, vaddr=0x20000, perms="r", setvar_vaddr="backtraceFunctions")
     backtracer.add_map(func_list_map)
     return backtracer
-
-
