@@ -513,40 +513,38 @@ static MP_DEFINE_CONST_FUN_OBJ_3(rule_get_nth_obj, rule_get_nth);
 
 /* NAT API functions */
 
-/* nat_set_enabled(interface, protocol, enabled) — PPC call to TX and RX virtualizers */
+/* nat_set_enabled(interface, protocol, enabled) — PPC call to TX virtualizer only */
 static mp_obj_t nat_set_enabled(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp_obj_t enabled_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
-    if (interface_idx >= fw_config.num_interfaces) {
-        sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_INTERFACE]);
-        mp_raise_OSError(OS_ERR_INVALID_INTERFACE);
+    if (!check_interface_index(interface_idx)) {
         return mp_const_none;
     }
 
     uint8_t protocol = mp_obj_get_int(protocol_in);
     bool enabled = mp_obj_is_true(enabled_in);
 
-    for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
-        if (fw_config.nat_state[i].protocol == protocol &&
-            fw_config.nat_state[i].interface == interface_idx) {
+    for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_nat_configs; i++) {
+        if (fw_config.interfaces[interface_idx].nat_configs[i].protocol == protocol) {
             microkit_mr_set(NAT_SET_ENABLED_ARG_ENABLED, (seL4_Word)enabled);
-            (void)microkit_ppcall(fw_config.nat_state[i].tx_ch,
+            (void)microkit_ppcall(fw_config.interfaces[interface_idx].nat_configs[i].webserver_ch,
                                   microkit_msginfo_new(NAT_SET_ENABLED, NAT_SET_ENABLED_NUM_ARGS));
-            microkit_mr_set(NAT_SET_ENABLED_ARG_ENABLED, (seL4_Word)enabled);
-            (void)microkit_ppcall(fw_config.nat_state[i].rx_ch,
-                                  microkit_msginfo_new(NAT_SET_ENABLED, NAT_SET_ENABLED_NUM_ARGS));
+            fw_nat_err_t err = (fw_nat_err_t)microkit_mr_get(NAT_RET_ERR);
+            if (err != NAT_ERR_OKAY) {
+                raise_error(OS_ERR_INTERNAL_ERROR);
+                return mp_const_none;
+            }
             return mp_const_none;
         }
     }
 
-    sddf_dprintf("WEBSERVER|LOG: %s\n", fw_os_err_str[OS_ERR_INVALID_PROTOCOL]);
-    mp_raise_OSError(OS_ERR_INVALID_PROTOCOL);
+    raise_error(OS_ERR_INVALID_PROTOCOL);
     return mp_const_none;
 }
 
 static MP_DEFINE_CONST_FUN_OBJ_3(nat_set_enabled_obj, nat_set_enabled);
 
-/* nat_get_enabled(interface, protocol) — PPC call to TX virtualizer, returns False if not configured */
+/* nat_get_enabled(interface, protocol) — direct read from port table shared memory */
 static mp_obj_t nat_get_enabled(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
 {
     uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
@@ -556,17 +554,11 @@ static mp_obj_t nat_get_enabled(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
 
     uint8_t protocol = mp_obj_get_int(protocol_in);
 
-    for (uint8_t i = 0; i < fw_config.num_nat_state; i++) {
-        if (fw_config.nat_state[i].protocol == protocol &&
-            fw_config.nat_state[i].interface == interface_idx) {
-            microkit_msginfo reply = microkit_ppcall(fw_config.nat_state[i].tx_ch,
-                                                     microkit_msginfo_new(NAT_GET_ENABLED, 0));
-            fw_nat_err_t err = (fw_nat_err_t)microkit_mr_get(NAT_RET_ERR);
-            (void)reply;
-            if (err != NAT_ERR_OKAY) {
-                return mp_const_false;
-            }
-            return mp_obj_new_bool((bool)microkit_mr_get(NAT_RET_ENABLED));
+    for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_nat_configs; i++) {
+        if (fw_config.interfaces[interface_idx].nat_configs[i].protocol == protocol) {
+            fw_nat_port_table_t *table = (fw_nat_port_table_t *)
+                fw_config.interfaces[interface_idx].nat_configs[i].port_table.vaddr;
+            return mp_obj_new_bool(table->nat_enabled);
         }
     }
 

@@ -114,28 +114,21 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
     # then wire them into the NAT configs so the webserver can enable/disable NAT via PPC.
     for iface in fw_interfaces:
         tcp_tx_ch = SDF_Channel(webserver.pd, iface.tx_virtualiser.pd, pp_a=True)
-        tcp_rx_ch = SDF_Channel(webserver.pd, iface.rx_virtualiser.pd, pp_a=True)
         udp_tx_ch = SDF_Channel(webserver.pd, iface.tx_virtualiser.pd, pp_a=True)
-        udp_rx_ch = SDF_Channel(webserver.pd, iface.rx_virtualiser.pd, pp_a=True)
         BuildConstants.sdf().add_channel(tcp_tx_ch)
-        BuildConstants.sdf().add_channel(tcp_rx_ch)
         BuildConstants.sdf().add_channel(udp_tx_ch)
-        BuildConstants.sdf().add_channel(udp_rx_ch)
 
         # Configure TCP NAT - RX and TX share the same port table
         iface.rx_virtualiser.add_nat_config_with_port_table(
             protocol=0x06,
             base_port=49152,
             capacity=512,
-            interface_ip=iface.ip,
             port_table_mr=tcp_port_tables[iface.index],
-            webserver_ch=tcp_rx_ch.pd_b_id,
         )
         iface.tx_virtualiser.add_nat_config_with_port_table(
             protocol=0x06,
             base_port=49152,
             capacity=512,
-            interface_ip=iface.ip,
             port_table_mr=tcp_port_tables[iface.index],
             webserver_ch=tcp_tx_ch.pd_b_id,
         )
@@ -145,15 +138,12 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
             protocol=0x11,
             base_port=49152,
             capacity=512,
-            interface_ip=iface.ip,
             port_table_mr=udp_port_tables[iface.index],
-            webserver_ch=udp_rx_ch.pd_b_id,
         )
         iface.tx_virtualiser.add_nat_config_with_port_table(
             protocol=0x11,
             base_port=49152,
             capacity=512,
-            interface_ip=iface.ip,
             port_table_mr=udp_port_tables[iface.index],
             webserver_ch=udp_tx_ch.pd_b_id,
         )
@@ -162,8 +152,8 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
         iface.rx_virtualiser.set_nat_dma_region(iface.rx_dma_region)
 
         # Register PPC channels in the webserver config for this interface/protocol
-        webserver.add_nat_ppc_channel(0x06, iface.index, tcp_tx_ch.pd_a_id, tcp_rx_ch.pd_a_id)
-        webserver.add_nat_ppc_channel(0x11, iface.index, udp_tx_ch.pd_a_id, udp_rx_ch.pd_a_id)
+        webserver.add_nat_ppc_channel(0x06, iface.index, tcp_tx_ch.pd_a_id, tcp_port_tables[iface.index])
+        webserver.add_nat_ppc_channel(0x11, iface.index, udp_tx_ch.pd_a_id, udp_port_tables[iface.index])
 
     # Create timer and serial subsystems
     serial_node = dtb.node(board.serial)

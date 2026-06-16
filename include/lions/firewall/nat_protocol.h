@@ -5,10 +5,9 @@
 
 #pragma once
 
-/* PP call parameters for webserver to enable/disable/query NAT on a virtualizer */
+/* PP call parameters for webserver to enable/disable NAT on a TX virtualizer */
 typedef enum fw_nat_pp_type {
     NAT_SET_ENABLED = 0,
-    NAT_GET_ENABLED,
 } fw_nat_pp_type_t;
 
 /* Argument indices for NAT_SET_ENABLED */
@@ -20,7 +19,6 @@ typedef enum {
 /* Return value indices */
 typedef enum {
     NAT_RET_ERR = 0,
-    NAT_RET_ENABLED = 1, /* used by NAT_GET_ENABLED */
 } fw_nat_ret_args_t;
 
 /* Error codes */

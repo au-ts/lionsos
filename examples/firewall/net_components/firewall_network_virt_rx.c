@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <os/sddf.h>
@@ -22,7 +21,6 @@
 #include <lions/firewall/udp.h>
 #include <lions/firewall/queue.h>
 #include <lions/firewall/nat_module.h>
-#include <lions/firewall/nat_protocol.h>
 
 __attribute__((__section__(".net_virt_rx_config"))) net_virt_rx_config_t config;
 __attribute__((__section__(".fw_net_virt_rx_config"))) fw_net_virt_rx_config_t fw_config;
@@ -32,9 +30,8 @@ net_queue_handle_t rx_queue_clients[SDDF_NET_MAX_CLIENTS];
 
 fw_queue_t fw_free_clients[FW_MAX_FW_CLIENTS];
 
-/* NAT modules for TCP and UDP */
-static nat_module_t nat_tcp_module;
-static nat_module_t nat_udp_module;
+nat_module_t nat_modules[FW_MAX_FILTERS];
+uint8_t num_nat_modules;
 
 /* Boolean to indicate whether a packet has been enqueued into the driver's free queue during notification handling */
 static bool notify_drv;
@@ -44,22 +41,29 @@ found. ARP requests and responses are handled as a special case. */
 static int get_protocol_match(uintptr_t pkt)
 {
     uint16_t ethtype = htons(((eth_hdr_t *)pkt)->ethtype);
-    for (uint8_t client = 0; client < config.num_clients; client++) {
+    for (uint8_t client = 0; client < config.num_clients; client++)
+    {
         /* First check for ethtype match */
-        if (fw_config.active_client_ethtypes[client] != ethtype) {
+        if (fw_config.active_client_ethtypes[client] != ethtype)
+        {
             continue;
         }
 
-        if (ethtype == ETH_TYPE_ARP) {
+        if (ethtype == ETH_TYPE_ARP)
+        {
             /* If ARP traffic, check for opcode match */
             arp_pkt_t *arp = (arp_pkt_t *)(pkt + ARP_PKT_OFFSET);
-            if (fw_config.active_client_subtypes[client] == htons(arp->opcode)) {
+            if (fw_config.active_client_subtypes[client] == htons(arp->opcode))
+            {
                 return client;
             }
-        } else if (ethtype == ETH_TYPE_IP) {
+        }
+        else if (ethtype == ETH_TYPE_IP)
+        {
             /* If IPv4 traffic, check for IPv4 protocol match */
             ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt + IPV4_HDR_OFFSET);
-            if (fw_config.active_client_subtypes[client] == ip_hdr->protocol) {
+            if (fw_config.active_client_subtypes[client] == ip_hdr->protocol)
+            {
                 return client;
             }
         }
@@ -71,9 +75,11 @@ static int get_protocol_match(uintptr_t pkt)
 static void rx_return(void)
 {
     bool reprocess = true;
-    bool notify_clients[SDDF_NET_MAX_CLIENTS] = { false };
-    while (reprocess) {
-        while (!net_queue_empty_active(&rx_queue_drv)) {
+    bool notify_clients[SDDF_NET_MAX_CLIENTS] = {false};
+    while (reprocess)
+    {
+        while (!net_queue_empty_active(&rx_queue_drv))
+        {
             net_buff_desc_t buffer;
             int err = net_dequeue_active(&rx_queue_drv, &buffer);
             assert(!err);
@@ -110,23 +116,21 @@ static void rx_return(void)
             // [1]: https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Instructions/DC-IVAC--Data-or-unified-Cache-line-Invalidate-by-VA-to-PoC
             cache_clean_and_invalidate(buffer_vaddr, buffer_vaddr + buffer.len);
 
-            /* Apply NAT translation if enabled */
+            /* Apply DNAT translation if enabled */
             if (fw_config.num_nat_configs > 0)
             {
                 uint16_t ethtype = htons(((eth_hdr_t *)buffer_vaddr)->ethtype);
                 if (ethtype == ETH_TYPE_IP)
                 {
                     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(buffer_vaddr + IPV4_HDR_OFFSET);
-                    bool do_dnat = true;
-
                     int nat_result = NAT_SUCCESS;
-                    if (ip_hdr->protocol == IPV4_PROTO_TCP)
+                    for (int j = 0; j < num_nat_modules; j++)
                     {
-                        nat_result = nat_module_translate(&nat_tcp_module, buffer_vaddr, &buffer, do_dnat);
-                    }
-                    else if (ip_hdr->protocol == IPV4_PROTO_UDP)
-                    {
-                        nat_result = nat_module_translate(&nat_udp_module, buffer_vaddr, &buffer, do_dnat);
+                        if (nat_modules[j].protocol == ip_hdr->protocol)
+                        {
+                            nat_result = nat_module_translate(&nat_modules[j], buffer_vaddr, &buffer, true);
+                            break;
+                        }
                     }
 
                     /* Drop packet if NAT translation fails */
@@ -144,11 +148,14 @@ static void rx_return(void)
             }
 
             int client = get_protocol_match(buffer_vaddr);
-            if (client >= 0) {
+            if (client >= 0)
+            {
                 err = net_enqueue_active(&rx_queue_clients[client], buffer);
                 assert(!err);
                 notify_clients[client] = true;
-            } else {
+            }
+            else
+            {
                 buffer.io_or_offset = buffer.io_or_offset + config.data.io_addr;
                 err = net_enqueue_free(&rx_queue_drv, buffer);
                 assert(!err);
@@ -159,14 +166,17 @@ static void rx_return(void)
         net_request_signal_active(&rx_queue_drv);
         reprocess = false;
 
-        if (!net_queue_empty_active(&rx_queue_drv)) {
+        if (!net_queue_empty_active(&rx_queue_drv))
+        {
             net_cancel_signal_active(&rx_queue_drv);
             reprocess = true;
         }
     }
 
-    for (int client = 0; client < config.num_clients; client++) {
-        if (notify_clients[client] && net_require_signal_active(&rx_queue_clients[client])) {
+    for (int client = 0; client < config.num_clients; client++)
+    {
+        if (notify_clients[client] && net_require_signal_active(&rx_queue_clients[client]))
+        {
             net_cancel_signal_active(&rx_queue_clients[client]);
             microkit_notify(config.clients[client].conn.id);
         }
@@ -175,15 +185,17 @@ static void rx_return(void)
 
 static void rx_provide(void)
 {
-    for (int client = 0; client < config.num_clients; client++) {
+    for (int client = 0; client < config.num_clients; client++)
+    {
         bool reprocess = true;
-        while (reprocess) {
-            while (!net_queue_empty_free(&rx_queue_clients[client])) {
+        while (reprocess)
+        {
+            while (!net_queue_empty_free(&rx_queue_clients[client]))
+            {
                 net_buff_desc_t buffer;
                 int err = net_dequeue_free(&rx_queue_clients[client], &buffer);
                 assert(!err);
-                assert(!(buffer.io_or_offset % NET_BUFFER_SIZE)
-                       && (buffer.io_or_offset < NET_BUFFER_SIZE * rx_queue_clients[client].capacity));
+                assert(!(buffer.io_or_offset % NET_BUFFER_SIZE) && (buffer.io_or_offset < NET_BUFFER_SIZE * rx_queue_clients[client].capacity));
 
                 // To avoid having to perform a cache clean here we ensure that
                 // the DMA region is only mapped in read only. This avoids the
@@ -198,20 +210,22 @@ static void rx_provide(void)
             net_request_signal_free(&rx_queue_clients[client]);
             reprocess = false;
 
-            if (!net_queue_empty_free(&rx_queue_clients[client])) {
+            if (!net_queue_empty_free(&rx_queue_clients[client]))
+            {
                 net_cancel_signal_free(&rx_queue_clients[client]);
                 reprocess = true;
             }
         }
     }
 
-    for (int client = 0; client < fw_config.num_free_clients; client++) {
-        while (!fw_queue_empty(&fw_free_clients[client])) {
+    for (int client = 0; client < fw_config.num_free_clients; client++)
+    {
+        while (!fw_queue_empty(&fw_free_clients[client]))
+        {
             net_buff_desc_t buffer;
             int err = fw_dequeue(&fw_free_clients[client], &buffer);
             assert(!err);
-            assert(!(buffer.io_or_offset % NET_BUFFER_SIZE)
-                   && (buffer.io_or_offset < NET_BUFFER_SIZE * fw_free_clients[client].capacity));
+            assert(!(buffer.io_or_offset % NET_BUFFER_SIZE) && (buffer.io_or_offset < NET_BUFFER_SIZE * fw_free_clients[client].capacity));
 
             // To avoid having to perform a cache clean here we ensure that
             // the DMA region is only mapped in read only. This avoids the
@@ -224,51 +238,12 @@ static void rx_provide(void)
         }
     }
 
-    if (notify_drv && net_require_signal_free(&rx_queue_drv)) {
+    if (notify_drv && net_require_signal_free(&rx_queue_drv))
+    {
         net_cancel_signal_free(&rx_queue_drv);
         microkit_deferred_notify(config.driver.id);
         notify_drv = false;
     }
-}
-
-microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
-{
-    switch (microkit_msginfo_get_label(msginfo)) {
-    case NAT_SET_ENABLED: {
-        bool enabled = (bool)microkit_mr_get(NAT_SET_ENABLED_ARG_ENABLED);
-        for (int i = 0; i < fw_config.num_nat_configs; i++) {
-            if (fw_config.nat_configs[i].webserver_ch == ch) {
-                nat_module_t *mod = (fw_config.nat_configs[i].protocol == IPV4_PROTO_TCP)
-                                        ? &nat_tcp_module
-                                        : &nat_udp_module;
-                mod->port_table->nat_enabled = enabled;
-                microkit_mr_set(NAT_RET_ERR, NAT_ERR_OKAY);
-                return microkit_msginfo_new(0, 1);
-            }
-        }
-        microkit_mr_set(NAT_RET_ERR, NAT_ERR_FAILURE);
-        return microkit_msginfo_new(0, 1);
-    }
-    case NAT_GET_ENABLED: {
-        for (int i = 0; i < fw_config.num_nat_configs; i++) {
-            if (fw_config.nat_configs[i].webserver_ch == ch) {
-                nat_module_t *mod = (fw_config.nat_configs[i].protocol == IPV4_PROTO_TCP)
-                                        ? &nat_tcp_module
-                                        : &nat_udp_module;
-                microkit_mr_set(NAT_RET_ERR, NAT_ERR_OKAY);
-                microkit_mr_set(NAT_RET_ENABLED, (seL4_Word)mod->port_table->nat_enabled);
-                return microkit_msginfo_new(0, 2);
-            }
-        }
-        microkit_mr_set(NAT_RET_ERR, NAT_ERR_FAILURE);
-        return microkit_msginfo_new(0, 1);
-    }
-    default:
-        sddf_dprintf("RX VIRT %u: unknown PPC label %lu on channel %u\n",
-                     fw_config.interface, microkit_msginfo_get_label(msginfo), ch);
-        break;
-    }
-    return microkit_msginfo_new(0, 0);
 }
 
 void notified(microkit_channel ch)
@@ -287,72 +262,64 @@ void init(void)
     net_buffers_init(&rx_queue_drv, config.data.io_addr);
 
     /* Set up net client queues */
-    for (int i = 0; i < config.num_clients; i++) {
+    for (int i = 0; i < config.num_clients; i++)
+    {
         net_queue_init(&rx_queue_clients[i], config.clients[i].conn.free_queue.vaddr,
                        config.clients[i].conn.active_queue.vaddr, config.clients[i].conn.num_buffers);
     }
 
     /* Set up firewall queues */
-    for (int i = 0; i < fw_config.num_free_clients; i++) {
+    for (int i = 0; i < fw_config.num_free_clients; i++)
+    {
         fw_queue_init(&fw_free_clients[i], fw_config.free_clients[i].queue.vaddr, sizeof(net_buff_desc_t),
                       fw_config.free_clients[i].capacity);
     }
 
-    /* Initialise NAT modules if enabled */
-    if (fw_config.num_nat_configs > 0)
+    /* Initialise NAT modules */
+    num_nat_modules = 0;
+    for (int i = 0; i < fw_config.num_nat_configs; i++)
     {
-        for (int i = 0; i < fw_config.num_nat_configs; i++)
+        fw_nat_port_table_config_t *nat_cfg = &fw_config.nat_configs[i];
+        fw_nat_port_table_t *port_table = (fw_nat_port_table_t *)nat_cfg->port_table.vaddr;
+
+        size_t src_port_off, dst_port_off, check_off;
+        bool check_enabled;
+
+        if (nat_cfg->protocol == IPV4_PROTO_TCP)
         {
-            fw_virt_rx_nat_config_t *nat_cfg = &fw_config.nat_configs[i];
-
-            if (!nat_cfg->enabled) {
-                continue;
-            }
-
-            fw_nat_interface_config_t *interface_config = &nat_cfg->interface_config;
-            fw_nat_port_table_t *port_table = (fw_nat_port_table_t *)interface_config->port_table.vaddr;
-
-            size_t src_port_off, dst_port_off, check_off;
-            bool check_enabled;
-
-            if (nat_cfg->protocol == IPV4_PROTO_TCP) {
-                src_port_off = offsetof(tcp_hdr_t, src_port);
-                dst_port_off = offsetof(tcp_hdr_t, dst_port);
-                check_off = offsetof(tcp_hdr_t, check);
-                check_enabled = true;
-
-                int result = nat_module_init(&nat_tcp_module,
-                                             fw_config.interface,
-                                             IPV4_PROTO_TCP,
-                                             interface_config,
-                                             port_table,
-                                             src_port_off,
-                                             dst_port_off,
-                                             check_off,
-                                             check_enabled);
-                assert(result == NAT_SUCCESS);
-            }
-            else if (nat_cfg->protocol == IPV4_PROTO_UDP) {
-                src_port_off = offsetof(udp_hdr_t, src_port);
-                dst_port_off = offsetof(udp_hdr_t, dst_port);
-                check_off = offsetof(udp_hdr_t, check);
-                check_enabled = true;
-
-                int result = nat_module_init(&nat_udp_module,
-                                             fw_config.interface,
-                                             IPV4_PROTO_UDP,
-                                             interface_config,
-                                             port_table,
-                                             src_port_off,
-                                             dst_port_off,
-                                             check_off,
-                                             check_enabled);
-                assert(result == NAT_SUCCESS);
-            }
+            src_port_off = offsetof(tcp_hdr_t, src_port);
+            dst_port_off = offsetof(tcp_hdr_t, dst_port);
+            check_off = offsetof(tcp_hdr_t, check);
+            check_enabled = true;
         }
+        else if (nat_cfg->protocol == IPV4_PROTO_UDP)
+        {
+            src_port_off = offsetof(udp_hdr_t, src_port);
+            dst_port_off = offsetof(udp_hdr_t, dst_port);
+            check_off = offsetof(udp_hdr_t, check);
+            check_enabled = true;
+        }
+        else
+        {
+            continue;
+        }
+
+        int result = nat_module_init(&nat_modules[num_nat_modules],
+                                     fw_config.interface,
+                                     nat_cfg->protocol,
+                                     nat_cfg,
+                                     port_table,
+                                     fw_config.interface_ip,
+                                     src_port_off,
+                                     dst_port_off,
+                                     check_off,
+                                     check_enabled);
+        assert(result == NAT_SUCCESS);
+        num_nat_modules++;
     }
 
-    if (net_require_signal_free(&rx_queue_drv)) {
+    if (net_require_signal_free(&rx_queue_drv))
+    {
         net_cancel_signal_free(&rx_queue_drv);
         microkit_deferred_notify(config.driver.id);
     }

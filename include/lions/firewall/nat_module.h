@@ -90,7 +90,8 @@ typedef struct fw_nat_webserver_state
  *
  * @return The original port mapping if it exists, NULL otherwise
  */
-static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interface_config_t interfaces[],
+static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_port_table_config_t interfaces[],
+                                                                  uint32_t interface_ips[],
                                                                   uint8_t num_interfaces,
                                                                   uint32_t dst_ip,
                                                                   uint16_t dst_port,
@@ -101,7 +102,7 @@ static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interfa
 
     for (uint16_t i = 0; i < num_interfaces; i++)
     {
-        if (dst_ip == interfaces[i].ip)
+        if (dst_ip == interface_ips[i])
         {
             fw_nat_port_table_t *port_table = (fw_nat_port_table_t *)interfaces[i].port_table.vaddr;
 
@@ -128,7 +129,7 @@ static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_interfa
  *
  * @return Ephemeral port in network byte order, or 0 if no port available
  */
-static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_interface_config_t config,
+static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_port_table_config_t config,
                                                   fw_nat_port_table_t *ports,
                                                   uint32_t src_ip,
                                                   uint16_t src_port,
@@ -182,7 +183,7 @@ static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_interface_config_t conf
  * @param ports Ephemeral port table for this interface
  * @param port Ephemeral port to be freed in host byte order
  */
-static inline void fw_nat_free_ephemeral_port(fw_nat_interface_config_t config,
+static inline void fw_nat_free_ephemeral_port(fw_nat_port_table_config_t config,
                                               fw_nat_port_table_t *ports,
                                               uint16_t port)
 {
@@ -208,7 +209,7 @@ static inline void fw_nat_free_ephemeral_port(fw_nat_interface_config_t config,
  * @param timeout Duration in nanoseconds for which entries older than it will be freed
  * @param now The time now as an SDDF timestamp
  */
-static inline void fw_nat_free_expired_mappings(fw_nat_interface_config_t config,
+static inline void fw_nat_free_expired_mappings(fw_nat_port_table_config_t config,
                                                 fw_nat_port_table_t *ports,
                                                 uint64_t timeout,
                                                 uint64_t now)
@@ -246,8 +247,11 @@ typedef struct nat_module
     /* Port table reference (shared memory) — contains nat_enabled flag */
     fw_nat_port_table_t *port_table;
 
-    /* Interface configuration (shared memory) */
-    fw_nat_interface_config_t *interface_config;
+    /* Port table configuration (base port, capacity) */
+    fw_nat_port_table_config_t *config;
+
+    /* IP address of the firewall's outbound interface */
+    uint32_t interface_ip;
 
     /* Byte offsets for protocol-specific header parsing */
     size_t src_port_off; /* Offset to source port in transport header */
@@ -282,8 +286,9 @@ typedef struct nat_module
 int nat_module_init(nat_module_t *nat,
                     uint8_t interface,
                     uint8_t protocol,
-                    fw_nat_interface_config_t *interface_config,
+                    fw_nat_port_table_config_t *config,
                     fw_nat_port_table_t *port_table,
+                    uint32_t interface_ip,
                     size_t src_port_off,
                     size_t dst_port_off,
                     size_t check_off,

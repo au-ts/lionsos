@@ -19,22 +19,24 @@
 int nat_module_init(nat_module_t *nat,
                     uint8_t interface,
                     uint8_t protocol,
-                    fw_nat_interface_config_t *interface_config,
+                    fw_nat_port_table_config_t *config,
                     fw_nat_port_table_t *port_table,
+                    uint32_t interface_ip,
                     size_t src_port_off,
                     size_t dst_port_off,
                     size_t check_off,
                     bool check_enabled)
 {
-    if (!nat || !interface_config || !port_table)
+    if (!nat || !config || !port_table)
     {
         return NAT_FAILURE;
     }
 
     nat->interface = interface;
     nat->protocol = protocol;
-    nat->interface_config = interface_config;
+    nat->config = config;
     nat->port_table = port_table;
+    nat->interface_ip = interface_ip;
     nat->src_port_off = src_port_off;
     nat->dst_port_off = dst_port_off;
     nat->check_off = check_off;
@@ -51,8 +53,8 @@ int nat_module_init(nat_module_t *nat,
         sddf_printf("%s%s NAT Module: initialized, base port = %u, capacity = %u\n",
                     "iface",
                     "protocol",
-                    interface_config->base_port,
-                    interface_config->ports_capacity);
+                    config->base_port,
+                    config->ports_capacity);
     }
 
     return NAT_SUCCESS;
@@ -114,16 +116,14 @@ int nat_module_translate(nat_module_t *nat,
      * reverse-map destination back to the original internal host. */
     if (do_dnat && nat->port_table->nat_enabled)
     {
-        uint32_t iface_ip = nat->interface_config->ip;
-
-        if (ip_hdr->dst_ip == iface_ip)
+        if (ip_hdr->dst_ip == nat->interface_ip)
         {
             uint16_t dst_port_host = htons(*dst_port);
 
-            if (dst_port_host >= nat->interface_config->base_port &&
-                dst_port_host < nat->interface_config->base_port + nat->port_table->largest_index)
+            if (dst_port_host >= nat->config->base_port &&
+                dst_port_host < nat->config->base_port + nat->port_table->largest_index)
             {
-                uint16_t table_index = dst_port_host - nat->interface_config->base_port;
+                uint16_t table_index = dst_port_host - nat->config->base_port;
                 fw_nat_port_mapping_t *mapping = &nat->port_table->mappings[table_index];
 
                 if (mapping->is_valid)
@@ -151,11 +151,10 @@ int nat_module_translate(nat_module_t *nat,
 
     /* SNAT: outbound traffic leaving the internal network; rewrite source to iface_ip:ephemeral_port
      * and record the mapping so returning traffic can be DNAT-ed back. */
-    if (!dnat_done && nat->port_table->nat_enabled && ip_hdr->dst_ip != nat->interface_config->ip)
+    if (!dnat_done && nat->port_table->nat_enabled && ip_hdr->dst_ip != nat->interface_ip)
     {
-        uint32_t iface_ip = nat->interface_config->ip;
         uint16_t ephemeral_port = fw_nat_find_ephemeral_port(
-            *nat->interface_config,
+            *nat->config,
             nat->port_table,
             ip_hdr->src_ip,
             *src_port,
@@ -163,7 +162,7 @@ int nat_module_translate(nat_module_t *nat,
 
         if (ephemeral_port)
         {
-            ip_hdr->src_ip = iface_ip;
+            ip_hdr->src_ip = nat->interface_ip;
             *src_port = ephemeral_port;
             ip_hdr->check = 0;
 
@@ -175,7 +174,7 @@ int nat_module_translate(nat_module_t *nat,
                 sddf_printf("%s%s NAT Module: SNAT translated to %s:%u\n",
                             "iface",
                             "protocol",
-                            ipaddr_to_string(iface_ip, ip_addr_buf0),
+                            ipaddr_to_string(nat->interface_ip, ip_addr_buf0),
                             htons(*src_port));
             }
         }
@@ -232,7 +231,7 @@ int nat_module_translate(nat_module_t *nat,
  */
 int nat_module_cleanup_expired(nat_module_t *nat, uint64_t now)
 {
-    if (!nat || !nat->port_table || !nat->interface_config)
+    if (!nat || !nat->port_table || !nat->config)
     {
         return NAT_FAILURE;
     }
@@ -243,7 +242,7 @@ int nat_module_cleanup_expired(nat_module_t *nat, uint64_t now)
     if (FW_DEBUG_OUTPUT)
     {
         uint16_t before = nat->port_table->size;
-        fw_nat_free_expired_mappings(*nat->interface_config, nat->port_table, timeout, now);
+        fw_nat_free_expired_mappings(*nat->config, nat->port_table, timeout, now);
         uint16_t after = nat->port_table->size;
         sddf_printf("%s%s NAT Module: cleanup completed, freed %u entries\n",
                     "iface",
@@ -252,7 +251,7 @@ int nat_module_cleanup_expired(nat_module_t *nat, uint64_t now)
     }
     else
     {
-        fw_nat_free_expired_mappings(*nat->interface_config, nat->port_table, timeout, now);
+        fw_nat_free_expired_mappings(*nat->config, nat->port_table, timeout, now);
     }
 
     return NAT_SUCCESS;

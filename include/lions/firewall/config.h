@@ -23,7 +23,6 @@
 #define FW_MAX_INITIAL_FILTER_RULES 16
 #define FW_MAX_INITIAL_ROUTES 16
 #define FW_MAX_ARP_REQUESTER_CLIENTS 2
-#define FW_MAX_NAT 16
 
 #define FW_FILTER_NUM_ACTIONS 4
 
@@ -40,35 +39,32 @@ typedef struct fw_data_connection_resource {
     device_region_resource_t data;
 } fw_data_connection_resource_t;
 
-/* NAT interface configuration (used by both RX and TX virtualizers) */
-typedef struct fw_nat_interface_config {
+/* NAT port table configuration (one per protocol per interface, used by both RX and TX virtualizers) */
+typedef struct fw_nat_port_table_config {
     uint16_t base_port;
     uint16_t ports_capacity;
     region_resource_t port_table;
-    uint32_t ip;
-} fw_nat_interface_config_t;
-
-typedef struct fw_virt_rx_nat_config {
-    fw_nat_interface_config_t interface_config;
     uint8_t protocol;
-    bool enabled;
-    uint8_t webserver_ch; /* PPC channel from webserver for NAT enable/disable */
-} fw_virt_rx_nat_config_t;
+    bool enabled;             /* build-time initial state */
+    uint16_t webserver_ch;   /* PPC channel from webserver for NAT enable/disable */
+} fw_nat_port_table_config_t;
 
 typedef struct fw_net_virt_tx_config {
     uint8_t interface;
+    uint32_t interface_ip;
     fw_connection_resource_t active_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_active_clients;
     device_region_resource_t data_regions[FW_MAX_INTERFACES];
     uint8_t num_data_regions;
     fw_data_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_free_clients;
-    fw_virt_rx_nat_config_t nat_configs[FW_MAX_NAT];
+    fw_nat_port_table_config_t nat_configs[FW_MAX_FILTERS];
     uint8_t num_nat_configs;
 } fw_net_virt_tx_config_t;
 
 typedef struct fw_net_virt_rx_config {
     uint8_t interface;
+    uint32_t interface_ip;
     /* Eth-type of traffic to be routed to each client */
     uint16_t active_client_ethtypes[SDDF_NET_MAX_CLIENTS];
     /* Sub-type of traffic to be routed to each client. If ethtype == IPv4, this
@@ -77,8 +73,9 @@ typedef struct fw_net_virt_rx_config {
     uint16_t active_client_subtypes[SDDF_NET_MAX_CLIENTS];
     fw_connection_resource_t free_clients[FW_MAX_FW_CLIENTS];
     uint8_t num_free_clients;
+    /* RX DMA region mapped rw so NAT can modify packet headers */
     device_region_resource_t nat_dma_region;
-    fw_virt_rx_nat_config_t nat_configs[FW_MAX_NAT];
+    fw_nat_port_table_config_t nat_configs[FW_MAX_FILTERS];
     uint8_t num_nat_configs;
 } fw_net_virt_rx_config_t;
 
@@ -182,14 +179,9 @@ typedef struct fw_webserver_interface_config {
     uint8_t num_filters;
     region_resource_t data;
     fw_connection_resource_t rx_free;
+    fw_nat_port_table_config_t nat_configs[FW_MAX_FILTERS];
+    uint8_t num_nat_configs;
 } fw_webserver_interface_config_t;
-
-typedef struct fw_webserver_nat_protocol_config {
-    uint8_t protocol;
-    uint8_t interface;
-    uint8_t tx_ch; /* PPC channel to TX virtualizer for this protocol/interface */
-    uint8_t rx_ch; /* PPC channel to RX virtualizer for this protocol/interface */
-} fw_webserver_nat_protocol_config_t;
 
 typedef struct fw_webserver_config {
     fw_webserver_interface_config_t interfaces[FW_MAX_INTERFACES];
@@ -198,6 +190,4 @@ typedef struct fw_webserver_config {
     fw_arp_connection_t arp_queue;
     // TODO: Temporary work around until webserver transmits via router.
     uint8_t tx_interface;
-    fw_webserver_nat_protocol_config_t nat_state[FW_MAX_NAT];
-    uint8_t num_nat_state;
 } fw_webserver_config_t;

@@ -17,8 +17,7 @@ from config_structs import (
     FwDataConnectionResource,
     FwNetVirtRxConfig,
     FwNetVirtTxConfig,
-    FwNatInterfaceConfig,
-    FwVirtRxNatConfig,
+    FwNatPortTableConfig,
     RegionResource,
 )
 
@@ -45,6 +44,7 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
         FwNetVirtRxConfig.__init__(
             self,
             interface=net_interface.index,
+            interface_ip=net_interface.ip_int,
             active_client_ethtypes=[],
             active_client_subtypes=[],
             free_clients=[],
@@ -95,43 +95,12 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
             ch=ch.pd_b_id,
         )
 
-    def add_nat_config(self, protocol: int, base_port: int, capacity: int, interface_ip: str, snat_ip: str = None) -> None:
-        """Configure NAT for a specific protocol (TCP or UDP)"""
-        # Create port table memory region for this protocol
-        port_table_mr = FirewallMemoryRegion(
-            f"nat_port_table_rx{self._net_interface.index}_proto{protocol}",
-            nat_port_table_region.region_size
-        )
-
-        # Create NAT interface config
-        interface_config = FwNatInterfaceConfig(
-            base_port=base_port,
-            ports_capacity=capacity,
-            port_table=port_table_mr.map(self.pd, "rw"),
-            ip=self._net_interface.ip_int
-        )
-
-        # Create NAT config for this protocol
-        nat_config = FwVirtRxNatConfig(
-            interface_config=interface_config,
-            protocol=protocol,
-            enabled=True
-        )
-
-        assert self.nat_configs is not None
-        self.nat_configs.append(nat_config)
-
-    def add_nat_config_with_port_table(self, protocol: int, base_port: int, capacity: int, interface_ip: str, port_table_mr: FirewallMemoryRegion, webserver_ch: int = 0) -> None:
+    def add_nat_config_with_port_table(self, protocol: int, base_port: int, capacity: int, port_table_mr: FirewallMemoryRegion, webserver_ch: int = 0) -> None:
         """Configure NAT with a shared port table (for RX/TX sharing)"""
-        interface_config = FwNatInterfaceConfig(
+        nat_config = FwNatPortTableConfig(
             base_port=base_port,
             ports_capacity=capacity,
             port_table=port_table_mr.map(self.pd, "rw"),
-            ip=self._net_interface.ip_int
-        )
-
-        nat_config = FwVirtRxNatConfig(
-            interface_config=interface_config,
             protocol=protocol,
             enabled=True,
             webserver_ch=webserver_ch,
@@ -173,6 +142,7 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
         FwNetVirtTxConfig.__init__(
             self,
             interface=net_interface.index,
+            interface_ip=net_interface.ip_int,
             active_clients=[],
             data_regions=[],
             free_clients=[],
@@ -226,43 +196,12 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
             )
         )
 
-    def add_nat_config(self, protocol: int, base_port: int, capacity: int, interface_ip: str, snat_ip: str = None) -> None:
-        """Configure NAT for a specific protocol (TCP or UDP)"""
-        # Create port table memory region for this protocol
-        port_table_mr = FirewallMemoryRegion(
-            f"nat_port_table_tx{self._net_interface.index}_proto{protocol}",
-            nat_port_table_region.region_size
-        )
-
-        # Create NAT interface config
-        interface_config = FwNatInterfaceConfig(
-            base_port=base_port,
-            ports_capacity=capacity,
-            port_table=port_table_mr.map(self.pd, "rw"),
-            ip=self._net_interface.ip_int
-        )
-
-        # Create NAT config for this protocol
-        nat_config = FwVirtRxNatConfig(
-            interface_config=interface_config,
-            protocol=protocol,
-            enabled=True
-        )
-
-        assert self.nat_configs is not None
-        self.nat_configs.append(nat_config)
-
-    def add_nat_config_with_port_table(self, protocol: int, base_port: int, capacity: int, interface_ip: str, port_table_mr: FirewallMemoryRegion, webserver_ch: int = 0) -> None:
+    def add_nat_config_with_port_table(self, protocol: int, base_port: int, capacity: int, port_table_mr: FirewallMemoryRegion, webserver_ch: int = 0) -> None:
         """Configure NAT with a shared port table (for RX/TX sharing)"""
-        interface_config = FwNatInterfaceConfig(
+        nat_config = FwNatPortTableConfig(
             base_port=base_port,
             ports_capacity=capacity,
             port_table=port_table_mr.map(self.pd, "rw"),
-            ip=self._net_interface.ip_int
-        )
-
-        nat_config = FwVirtRxNatConfig(
-            interface_config=interface_config,
             protocol=protocol,
             enabled=True,
             webserver_ch=webserver_ch,
