@@ -42,12 +42,6 @@ int nat_module_init(nat_module_t *nat,
     nat->check_off = check_off;
     nat->check_enabled = check_enabled;
 
-    /* Initialise statistics */
-    nat->translations_performed = 0;
-    nat->translations_failed = 0;
-    nat->dnat_hits = 0;
-    nat->snat_hits = 0;
-
     if (FW_DEBUG_OUTPUT)
     {
         sddf_printf("%s%s NAT Module: initialized, base port = %u, capacity = %u\n",
@@ -142,7 +136,6 @@ int nat_module_translate(nat_module_t *nat,
                     ip_hdr->check = 0;
 
                     checksum_dirty = true;
-                    nat->dnat_hits++;
                     dnat_done = true;
                 }
             }
@@ -167,7 +160,6 @@ int nat_module_translate(nat_module_t *nat,
             ip_hdr->check = 0;
 
             checksum_dirty = true;
-            nat->snat_hits++;
 
             if (FW_DEBUG_OUTPUT)
             {
@@ -183,7 +175,6 @@ int nat_module_translate(nat_module_t *nat,
             sddf_printf("%s%s NAT Module: ERROR: ephemeral ports exhausted!\n",
                         "iface",
                         "protocol");
-            nat->translations_failed++;
             return NAT_PORT_EXHAUSTED;
         }
     }
@@ -222,69 +213,5 @@ int nat_module_translate(nat_module_t *nat,
                     htons(*dst_port));
     }
 
-    nat->translations_performed++;
     return NAT_SUCCESS;
-}
-
-/**
- * Cleanup expired NAT mappings
- */
-int nat_module_cleanup_expired(nat_module_t *nat, uint64_t now)
-{
-    if (!nat || !nat->port_table || !nat->config)
-    {
-        return NAT_FAILURE;
-    }
-
-    /* Use default timeout since it's no longer in webserver_state */
-    uint64_t timeout = NAT_TIMEOUT_INTERVAL_NS;
-
-    if (FW_DEBUG_OUTPUT)
-    {
-        uint16_t before = nat->port_table->size;
-        fw_nat_free_expired_mappings(*nat->config, nat->port_table, timeout, now);
-        uint16_t after = nat->port_table->size;
-        sddf_printf("%s%s NAT Module: cleanup completed, freed %u entries\n",
-                    "iface",
-                    "protocol",
-                    before - after);
-    }
-    else
-    {
-        fw_nat_free_expired_mappings(*nat->config, nat->port_table, timeout, now);
-    }
-
-    return NAT_SUCCESS;
-}
-
-/**
- * Get NAT module statistics
- */
-void nat_module_get_stats(nat_module_t *nat,
-                          uint64_t *translations_performed,
-                          uint64_t *translations_failed,
-                          uint64_t *dnat_hits,
-                          uint64_t *snat_hits)
-{
-    if (!nat)
-    {
-        return;
-    }
-
-    if (translations_performed)
-    {
-        *translations_performed = nat->translations_performed;
-    }
-    if (translations_failed)
-    {
-        *translations_failed = nat->translations_failed;
-    }
-    if (dnat_hits)
-    {
-        *dnat_hits = nat->dnat_hits;
-    }
-    if (snat_hits)
-    {
-        *snat_hits = nat->snat_hits;
-    }
 }

@@ -261,11 +261,6 @@ typedef struct nat_module
     /* Whether to recalculate checksum */
     bool check_enabled;
 
-    /* Statistics */
-    uint64_t translations_performed;
-    uint64_t translations_failed;
-    uint64_t dnat_hits;
-    uint64_t snat_hits;
 } nat_module_t;
 
 /**
@@ -315,30 +310,3 @@ int nat_module_translate(nat_module_t *nat,
                          net_buff_desc_t *buffer,
                          bool do_dnat);
 
-/**
- * Cleanup expired NAT mappings
- *
- * This function removes NAT entries that haven't been used within the timeout period.
- * Should be called periodically (e.g., every 5 seconds).
- *
- * @param nat Pointer to initialized NAT module
- * @param now Current timestamp in nanoseconds
- *
- * @return NAT_SUCCESS on success
- */
-int nat_module_cleanup_expired(nat_module_t *nat, uint64_t now);
-
-/**
- * Get NAT module statistics
- *
- * @param nat Pointer to initialized NAT module
- * @param translations_performed Output: total translations performed
- * @param translations_failed Output: total translations failed
- * @param dnat_hits Output: DNAT translations performed
- * @param snat_hits Output: SNAT translations performed
- */
-void nat_module_get_stats(nat_module_t *nat,
-                          uint64_t *translations_performed,
-                          uint64_t *translations_failed,
-                          uint64_t *dnat_hits,
-                          uint64_t *snat_hits);
