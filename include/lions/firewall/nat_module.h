@@ -80,44 +80,6 @@ typedef struct fw_nat_webserver_state
     uint64_t timeout;
 } fw_nat_webserver_state_t;
 
-/**
- * Find the destination IP address and port for an incoming packet.
- * If the destination IP address matches the static IP of an interface's NAT config,
- * the packet corresponds to returning traffic and the port mapping for that ephemeral
- * port will be returned.
- *
- * @param interfaces Configuration of NAT for each interface
- * @param dst_ip Destination IP address on the packet
- * @param dst_port Destination port in network byte order
- * @param now Current timestamp in nanoseconds
- *
- * @return The original port mapping if it exists, NULL otherwise
- */
-static inline fw_nat_port_mapping_t *fw_nat_translate_destination(fw_nat_port_table_config_t interfaces[],
-                                                                  uint32_t interface_ips[],
-                                                                  uint8_t num_interfaces,
-                                                                  uint32_t dst_ip,
-                                                                  uint16_t dst_port,
-                                                                  uint64_t now)
-{
-    /* Since dst_port is used as an index here it must be in host byte order */
-    dst_port = htons(dst_port);
-
-    for (uint16_t i = 0; i < num_interfaces; i++)
-    {
-        if (dst_ip == interface_ips[i])
-        {
-            fw_nat_port_table_t *port_table = (fw_nat_port_table_t *)interfaces[i].port_table.vaddr;
-
-            if ((dst_port >= interfaces[i].base_port) && (dst_port < interfaces[i].base_port + port_table->largest_index) && port_table->mappings[dst_port - interfaces[i].base_port].is_valid)
-            {
-                return &port_table->mappings[dst_port - interfaces[i].base_port];
-            }
-        }
-    }
-
-    return NULL;
-}
 
 /**
  * Find the ephemeral port to use for a source IP and port.
