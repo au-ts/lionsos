@@ -14,13 +14,16 @@
 #include <lions/firewall/config.h>
 #include <lions/firewall/common.h>
 
-/**
- * NAT module success/error codes
- */
-#define NAT_SUCCESS 0
-#define NAT_FAILURE -1
-#define NAT_PORT_EXHAUSTED -2
-#define NAT_INVALID_PACKET -3
+typedef enum {
+    /* no error */
+    NAT_ERR_OKAY = 0,
+    /* null pointer passed or port table not initialised */
+    NAT_ERR_FAILURE,
+    /* all ephemeral ports in the table are in use */
+    NAT_ERR_PORT_EXHAUSTED,
+    /* packet is too short or has an invalid IP header */
+    NAT_ERR_INVALID_PACKET,
+} fw_nat_err_t;
 
 /* NAT timeout interval in nanoseconds */
 #define NAT_TIMEOUT_INTERVAL_NS (5 * NS_IN_S)
@@ -276,9 +279,9 @@ typedef struct nat_module
  * @param check_off Byte offset to checksum in transport header
  * @param check_enabled Whether to recalculate checksums
  *
- * @return NAT_SUCCESS on success, NAT_FAILURE on error
+ * @return NAT_ERR_OKAY on success, NAT_ERR_FAILURE on error
  */
-int nat_module_init(nat_module_t *nat,
+fw_nat_err_t nat_module_init(nat_module_t *nat,
                     uint8_t interface,
                     uint8_t protocol,
                     fw_nat_port_table_config_t *config,
@@ -301,11 +304,10 @@ int nat_module_init(nat_module_t *nat,
  * @param do_dnat True on the inbound (external→internal) path: attempt DNAT before SNAT.
  *                False on the outbound (internal→external) path: only SNAT applies.
  *
- * @return NAT_SUCCESS on success
- *         NAT_PORT_EXHAUSTED if no ephemeral ports available
- *         NAT_INVALID_PACKET if packet is malformed
+ * @return NAT_ERR_OKAY on success, NAT_ERR_PORT_EXHAUSTED if no ephemeral ports available,
+ *         NAT_ERR_INVALID_PACKET if packet is malformed.
  */
-int nat_module_translate(nat_module_t *nat,
+fw_nat_err_t nat_module_translate(nat_module_t *nat,
                          uintptr_t pkt_vaddr,
                          net_buff_desc_t *buffer,
                          bool do_dnat);

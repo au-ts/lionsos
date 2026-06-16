@@ -91,7 +91,7 @@ static void tx_provide(void)
                     if (ethtype == ETH_TYPE_IP)
                     {
                         ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(buffer_vaddr + IPV4_HDR_OFFSET);
-                        int nat_result = NAT_SUCCESS;
+                        fw_nat_err_t nat_result = NAT_ERR_OKAY;
                         for (int j = 0; j < num_nat_modules; j++)
                         {
                             if (nat_modules[j].protocol == ip_hdr->protocol)
@@ -102,7 +102,7 @@ static void tx_provide(void)
                         }
 
                         /* Drop packet if NAT translation fails */
-                        if (nat_result != NAT_SUCCESS)
+                        if (nat_result != NAT_ERR_OKAY)
                         {
                             sddf_dprintf("VIRT TX LOG, Interface %u: SNAT translation failed for protocol %u, dropping packet\n",
                                          fw_config.interface, ip_hdr->protocol);
@@ -152,7 +152,7 @@ static void tx_provide(void)
                 if (ethtype == ETH_TYPE_IP)
                 {
                     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(buffer_vaddr + IPV4_HDR_OFFSET);
-                    int nat_result = NAT_SUCCESS;
+                    fw_nat_err_t nat_result = NAT_ERR_OKAY;
                     for (int j = 0; j < num_nat_modules; j++)
                     {
                         if (nat_modules[j].protocol == ip_hdr->protocol)
@@ -163,7 +163,7 @@ static void tx_provide(void)
                     }
 
                     /* Drop packet if NAT translation fails */
-                    if (nat_result != NAT_SUCCESS)
+                    if (nat_result != NAT_ERR_OKAY)
                     {
                         sddf_dprintf("VIRT TX LOG, Interface %u: SNAT translation failed for protocol %u, dropping packet\n",
                                      fw_config.interface, ip_hdr->protocol);
@@ -352,7 +352,7 @@ void init(void)
                                      dst_port_off,
                                      check_off,
                                      check_enabled);
-        assert(result == NAT_SUCCESS);
+        assert(result == NAT_ERR_OKAY);
 
         port_table->nat_enabled = nat_cfg->enabled;
         num_nat_modules++;

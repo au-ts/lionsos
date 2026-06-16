@@ -16,7 +16,7 @@
 /**
  * Initialise the NAT module
  */
-int nat_module_init(nat_module_t *nat,
+fw_nat_err_t nat_module_init(nat_module_t *nat,
                     uint8_t interface,
                     uint8_t protocol,
                     fw_nat_port_table_config_t *config,
@@ -29,7 +29,7 @@ int nat_module_init(nat_module_t *nat,
 {
     if (!nat || !config || !port_table)
     {
-        return NAT_FAILURE;
+        return NAT_ERR_FAILURE;
     }
 
     nat->interface = interface;
@@ -51,27 +51,27 @@ int nat_module_init(nat_module_t *nat,
                     config->ports_capacity);
     }
 
-    return NAT_SUCCESS;
+    return NAT_ERR_OKAY;
 }
 
 /**
  * Translate a packet using NAT
  */
-int nat_module_translate(nat_module_t *nat,
+fw_nat_err_t nat_module_translate(nat_module_t *nat,
                          uintptr_t pkt_vaddr,
                          net_buff_desc_t *buffer,
                          bool do_dnat)
 {
     if (!nat || !pkt_vaddr)
     {
-        return NAT_INVALID_PACKET;
+        return NAT_ERR_INVALID_PACKET;
     }
 
     /* Extract IP header */
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
     if (!ip_hdr)
     {
-        return NAT_INVALID_PACKET;
+        return NAT_ERR_INVALID_PACKET;
     }
 
     /* Extract transport header */
@@ -175,7 +175,7 @@ int nat_module_translate(nat_module_t *nat,
             sddf_printf("%s%s NAT Module: ERROR: ephemeral ports exhausted!\n",
                         "iface",
                         "protocol");
-            return NAT_PORT_EXHAUSTED;
+            return NAT_ERR_PORT_EXHAUSTED;
         }
     }
 
@@ -213,5 +213,5 @@ int nat_module_translate(nat_module_t *nat,
                     htons(*dst_port));
     }
 
-    return NAT_SUCCESS;
+    return NAT_ERR_OKAY;
 }
