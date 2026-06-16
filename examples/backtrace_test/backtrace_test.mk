@@ -69,7 +69,7 @@ faulter.elf: faulter.o libunwind.a unwind_helpers.o
 FORCE:
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) backtracer.elf
-	PYTHONPATH="${SDDF}/tools/meta:$$PYTHONPATH:$(PYTHONPATH)" $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --output . --sdf $(SYSTEM_FILE)
+	PYTHONPATH="${SDDF}/tools/meta:${BACKTRACER}:$$PYTHONPATH:$(PYTHONPATH)" $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --output . --sdf $(SYSTEM_FILE)
 	# Add the unwind table to the memory region specified.
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)

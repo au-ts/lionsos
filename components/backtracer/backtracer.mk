@@ -48,7 +48,7 @@ backtracer/backtracer.o: $(BACKTRACER_DIR)/backtracer.c | $(LIONS_LIBC)/include 
 backtracer.elf: backtracer/backtracer.o libunwind.a | backtracer
 	${LD} ${LDFLAGS_backtracer} -o $@ $^ ${LIBS_backtracer}
 
-libunwind.a: | $(LIONS_LIBC)/include backtracer
+libunwind.a: | $(LIONS_LIBC)/include backtracer $(LLVM)
 	cmake -B $(BUILD_DIR)/libunwind -S $(LLVM)/runtimes \
 		$(LLVM_CMAKE_FLAGS)
 
@@ -57,6 +57,6 @@ libunwind.a: | $(LIONS_LIBC)/include backtracer
 
 clean::
 	${RM} -rf backtracer backtracer.elf unwind_helpers.o libunwind.a libunwind
-export PYTHONPATH := "$(BACKTRACER_DIR):$$PYTHONPATH:$(PYTHONPATH)"
+# export PYTHONPATH := "$(BACKTRACER_DIR):$$PYTHONPATH:$(PYTHONPATH)"
 
 # TODO: add dep files.

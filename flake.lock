@@ -134,15 +134,16 @@
       "locked": {
         "lastModified": 1781144170,
         "narHash": "sha256-KcJ9hHnpG5Ho6gCxmhoU5iVonjLdB/OaA+L6CfYQeIQ=",
-        "ref": "refs/heads/mr_prefill_support",
+        "owner": "au-ts",
+        "repo": "microkit_sdf_gen",
         "rev": "32e356aeaecbcd819c9b944fb55e37fad834c76c",
-        "revCount": 822,
-        "type": "git",
-        "url": "file:///home/aids/git/ToR/microkit_sdf_gen"
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "file:///home/aids/git/ToR/microkit_sdf_gen"
+        "owner": "au-ts",
+        "ref": "mr_prefill_support",
+        "repo": "microkit_sdf_gen",
+        "type": "github"
       }
     },
     "systems": {
