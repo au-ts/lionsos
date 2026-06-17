@@ -13,10 +13,10 @@
  *   Acting as the fault handler for protection domains.
  */
 
+#include "util.h"
+#include <sel4/sel4.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <sel4/sel4.h>
-#include "util.h"
 
 #define MAX_VMS 64
 #define MAX_PDS 64
@@ -35,7 +35,8 @@ seL4_Word pd_names_len;
 char vm_names[MAX_VMS][MAX_NAME_LEN] __attribute__((unused));
 seL4_Word vm_names_len;
 
-/* For reporting potential stack overflows, keep track of the stack regions for each PD. */
+/* For reporting potential stack overflows, keep track of the stack regions for
+ * each PD. */
 seL4_Word pd_stack_bottom_addrs[MAX_PDS];
 
 /* Sanity check that the architecture specific macro have been set. */
@@ -48,8 +49,8 @@ seL4_Word pd_stack_bottom_addrs[MAX_PDS];
 
 #ifdef __riscv64__
 /*
- * Convert the fault status register given by the kernel into a string describing
- * what fault happened. The FSR is the 'scause' register.
+ * Convert the fault status register given by the kernel into a string
+ * describing what fault happened. The FSR is the 'scause' register.
  */
 static char *riscv_fsr_to_string(seL4_Word fsr)
 {
@@ -99,15 +100,18 @@ static char *ec_to_string(uintptr_t ec)
     case 1:
         return "Trapped WFI or WFE instruction execution";
     case 3:
-        return "Trapped MCR or MRC access with (coproc==0b1111) this is not reported using EC 0b000000";
+        return "Trapped MCR or MRC access with (coproc==0b1111) this is not "
+               "reported using EC 0b000000";
     case 4:
-        return "Trapped MCRR or MRRC access with (coproc==0b1111) this is not reported using EC 0b000000";
+        return "Trapped MCRR or MRRC access with (coproc==0b1111) this is not "
+               "reported using EC 0b000000";
     case 5:
         return "Trapped MCR or MRC access with (coproc==0b1110)";
     case 6:
         return "Trapped LDC or STC access";
     case 7:
-        return "Access to SVC, Advanced SIMD or floating-point functionality trapped";
+        return "Access to SVC, Advanced SIMD or floating-point functionality "
+               "trapped";
     case 12:
         return "Trapped MRRC access with (coproc==0b1110)";
     case 13:
@@ -117,11 +121,13 @@ static char *ec_to_string(uintptr_t ec)
     case 21:
         return "SVC instruction execution in AArch64 state";
     case 24:
-        return "Trapped MSR, MRS or System instruction exuection in AArch64 state, this is not reported using EC 0xb000000, 0b000001 or 0b000111";
+        return "Trapped MSR, MRS or System instruction exuection in AArch64 state, "
+               "this is not reported using EC 0xb000000, 0b000001 or 0b000111";
     case 25:
         return "Access to SVE functionality trapped";
     case 28:
-        return "Exception from a Pointer Authentication instruction authentication failure";
+        return "Exception from a Pointer Authentication instruction authentication "
+               "failure";
     case 32:
         return "Instruction Abort from a lower Exception level";
     case 33:
@@ -227,7 +233,7 @@ static char *data_abort_dfsc_to_string(uintptr_t dfsc)
 #ifdef __x86_64__
 static char *page_fault_to_string(seL4_Word fsr)
 {
-    // https://wiki.osdev.org/Exceptions#Page_Fault
+  // https://wiki.osdev.org/Exceptions#Page_Fault
     switch (fsr) {
     case 0 | 4:
         return "read to a non-present page at ring 3";
@@ -238,8 +244,8 @@ static char *page_fault_to_string(seL4_Word fsr)
     case 3 | 4:
         return "page-protection violation from write at ring 3";
     case 16:
-        // Note that seL4 currently does not implement the NX/XD bit
-        // to mark a page as non-executable so we will never see the below message.
+    // Note that seL4 currently does not implement the NX/XD bit
+    // to mark a page as non-executable so we will never see the below message.
         return "instruction fetch from non-executable page";
     default:
         return "invalid FSR or unimplemented decoding";
@@ -686,9 +692,9 @@ static void aarch64_print_vm_fault()
     puts("\n");
 
     if (ec == 0x24) {
-        /* FIXME: Note, this is not a complete decoding of the fault! Just some of the more
-           common fields!
-        */
+    /* FIXME: Note, this is not a complete decoding of the fault! Just some of
+       the more common fields!
+    */
         seL4_Word dfsc = iss & 0x3f;
         bool ea = (iss >> 9) & 1;
         bool cm = (iss >> 8) & 1;
@@ -718,141 +724,141 @@ static void aarch64_print_vm_fault()
 
 static void print_fault_error(microkit_child child, microkit_msginfo msginfo)
 {
-        seL4_Word tcb_cap = BASE_PD_TCB_CAP + child;
-        seL4_Word label = microkit_msginfo_get_label(msginfo);
-        seL4_Word err = {0}; 
-        seL4_Word badge = child + 1;
+    seL4_Word tcb_cap = BASE_PD_TCB_CAP + child;
+    seL4_Word label = microkit_msginfo_get_label(msginfo);
+    seL4_Word err = { 0 };
+    seL4_Word badge = child + 1;
 
-        if (label == seL4_Fault_NullFault && child < MAX_PDS) {
-            /* This is a request from our PD to become passive */
-            err = seL4_SchedContext_Bind(BASE_SCHED_CONTEXT_CAP + child, BASE_NOTIFICATION_CAP + child);
-            if (err != seL4_NoError) {
-                puts("BACKTRACER | could not bind scheduling context to notification object\n");
-            } else {
-                puts("MON|INFO: PD '");
-                puts(pd_names[child]);
-                puts("' is now passive!\n");
-            }
-
-            return;
+    if (label == seL4_Fault_NullFault && child < MAX_PDS) {
+    /* This is a request from our PD to become passive */
+        err = seL4_SchedContext_Bind(BASE_SCHED_CONTEXT_CAP + child, BASE_NOTIFICATION_CAP + child);
+        if (err != seL4_NoError) {
+            puts("BACKTRACER | could not bind scheduling context to notification "
+                 "object\n");
+        } else {
+            puts("MON|INFO: PD '");
+            puts(pd_names[child]);
+            puts("' is now passive!\n");
         }
 
-        puts("BACKTRACER | received message ");
-        puthex32(label);
-        puts("  badge: ");
-        puthex64(badge);
-        puts("  tcb cap: ");
-        puthex64(tcb_cap);
+        return;
+    }
+
+    puts("BACKTRACER | received message ");
+    puthex32(label);
+    puts("  badge: ");
+    puthex64(badge);
+    puts("  tcb cap: ");
+    puthex64(tcb_cap);
+    puts("\n");
+
+    switch (label) {
+    case seL4_Fault_CapFault: {
+        seL4_Word ip = seL4_GetMR(seL4_CapFault_IP);
+        seL4_Word fault_addr = seL4_GetMR(seL4_CapFault_Addr);
+        seL4_Word in_recv_phase = seL4_GetMR(seL4_CapFault_InRecvPhase);
+        seL4_Word lookup_failure_type = seL4_GetMR(seL4_CapFault_LookupFailureType);
+        seL4_Word bits_left = seL4_GetMR(seL4_CapFault_BitsLeft);
+        seL4_Word depth_bits_found = seL4_GetMR(seL4_CapFault_DepthMismatch_BitsFound);
+        seL4_Word guard_found = seL4_GetMR(seL4_CapFault_GuardMismatch_GuardFound);
+        seL4_Word guard_bits_found = seL4_GetMR(seL4_CapFault_GuardMismatch_BitsFound);
+
+        puts("BACKTRACER | CapFault: ip=");
+        puthex64(ip);
+        puts("  fault_addr=");
+        puthex64(fault_addr);
+        puts("  in_recv_phase=");
+        puts(in_recv_phase == 0 ? "false" : "true");
+        puts("  lookup_failure_type=");
+
+        switch (lookup_failure_type) {
+        case seL4_NoFailure:
+            puts("seL4_NoFailure");
+            break;
+        case seL4_InvalidRoot:
+            puts("seL4_InvalidRoot");
+            break;
+        case seL4_MissingCapability:
+            puts("seL4_MissingCapability");
+            break;
+        case seL4_DepthMismatch:
+            puts("seL4_DepthMismatch");
+            break;
+        case seL4_GuardMismatch:
+            puts("seL4_GuardMismatch");
+            break;
+        default:
+            puthex64(lookup_failure_type);
+        }
+
+        if (lookup_failure_type == seL4_MissingCapability || lookup_failure_type == seL4_DepthMismatch
+            || lookup_failure_type == seL4_GuardMismatch) {
+            puts("  bits_left=");
+            puthex64(bits_left);
+        }
+        if (lookup_failure_type == seL4_DepthMismatch) {
+            puts("  depth_bits_found=");
+            puthex64(depth_bits_found);
+        }
+        if (lookup_failure_type == seL4_GuardMismatch) {
+            puts("  guard_found=");
+            puthex64(guard_found);
+            puts("  guard_bits_found=");
+            puthex64(guard_bits_found);
+        }
         puts("\n");
-
-        switch (label) {
-        case seL4_Fault_CapFault: {
-            seL4_Word ip = seL4_GetMR(seL4_CapFault_IP);
-            seL4_Word fault_addr = seL4_GetMR(seL4_CapFault_Addr);
-            seL4_Word in_recv_phase = seL4_GetMR(seL4_CapFault_InRecvPhase);
-            seL4_Word lookup_failure_type = seL4_GetMR(seL4_CapFault_LookupFailureType);
-            seL4_Word bits_left = seL4_GetMR(seL4_CapFault_BitsLeft);
-            seL4_Word depth_bits_found = seL4_GetMR(seL4_CapFault_DepthMismatch_BitsFound);
-            seL4_Word guard_found = seL4_GetMR(seL4_CapFault_GuardMismatch_GuardFound);
-            seL4_Word guard_bits_found = seL4_GetMR(seL4_CapFault_GuardMismatch_BitsFound);
-
-            puts("BACKTRACER | CapFault: ip=");
-            puthex64(ip);
-            puts("  fault_addr=");
-            puthex64(fault_addr);
-            puts("  in_recv_phase=");
-            puts(in_recv_phase == 0 ? "false" : "true");
-            puts("  lookup_failure_type=");
-
-            switch (lookup_failure_type) {
-            case seL4_NoFailure:
-                puts("seL4_NoFailure");
-                break;
-            case seL4_InvalidRoot:
-                puts("seL4_InvalidRoot");
-                break;
-            case seL4_MissingCapability:
-                puts("seL4_MissingCapability");
-                break;
-            case seL4_DepthMismatch:
-                puts("seL4_DepthMismatch");
-                break;
-            case seL4_GuardMismatch:
-                puts("seL4_GuardMismatch");
-                break;
-            default:
-                puthex64(lookup_failure_type);
-            }
-
-            if (
-                lookup_failure_type == seL4_MissingCapability ||
-                lookup_failure_type == seL4_DepthMismatch ||
-                lookup_failure_type == seL4_GuardMismatch) {
-                puts("  bits_left=");
-                puthex64(bits_left);
-            }
-            if (lookup_failure_type == seL4_DepthMismatch) {
-                puts("  depth_bits_found=");
-                puthex64(depth_bits_found);
-            }
-            if (lookup_failure_type == seL4_GuardMismatch) {
-                puts("  guard_found=");
-                puthex64(guard_found);
-                puts("  guard_bits_found=");
-                puthex64(guard_bits_found);
-            }
-            puts("\n");
-            break;
-        }
-        case seL4_Fault_UserException: {
-            puts("BACKTRACER | UserException\n");
-            break;
-        }
-        case seL4_Fault_VMFault: {
+        break;
+    }
+    case seL4_Fault_UserException: {
+        puts("BACKTRACER | UserException\n");
+        break;
+    }
+    case seL4_Fault_VMFault: {
 #if defined(__aarch64__)
-            aarch64_print_vm_fault();
+        aarch64_print_vm_fault();
 #elif defined(__riscv64__)
-            riscv_print_vm_fault();
+        riscv_print_vm_fault();
 #elif defined(__x86_64__)
-            x86_64_print_vm_fault();
+        x86_64_print_vm_fault();
 #else
 #error "Unknown architecture to print a VM fault for"
 #endif
 
-            seL4_Word fault_addr = seL4_GetMR(seL4_VMFault_Addr);
-            seL4_Word stack_addr = pd_stack_bottom_addrs[child];
-            if (fault_addr < stack_addr && fault_addr >= stack_addr - 0x1000) {
-                puts("BACKTRACER | potential stack overflow, fault address within one page outside of stack region\n");
-            }
-
-            break;
+        seL4_Word fault_addr = seL4_GetMR(seL4_VMFault_Addr);
+        seL4_Word stack_addr = pd_stack_bottom_addrs[child];
+        if (fault_addr < stack_addr && fault_addr >= stack_addr - 0x1000) {
+            puts("BACKTRACER | potential stack overflow, fault address within one "
+                 "page outside of stack region\n");
         }
+
+        break;
+    }
 #ifdef CONFIG_ARM_HYPERVISOR_SUPPORT
-        case seL4_Fault_VCPUFault: {
-            seL4_Word esr = seL4_GetMR(seL4_VCPUFault_HSR);
-            seL4_Word ec = esr >> 26;
+    case seL4_Fault_VCPUFault: {
+        seL4_Word esr = seL4_GetMR(seL4_VCPUFault_HSR);
+        seL4_Word ec = esr >> 26;
 
-            puts("BACKTRACER | received vCPU fault with ESR: ");
-            puthex64(esr);
-            puts("\n");
+        puts("BACKTRACER | received vCPU fault with ESR: ");
+        puthex64(esr);
+        puts("\n");
 
-            seL4_Word esr_comment = esr & ESR_COMMENT_MASK;
-            if (ec == ARM64_BRK_EC && ((esr_comment & ~UBSAN_ARM64_BRK_MASK) == UBSAN_ARM64_BRK_IMM)) {
-                /* We likely have a UBSAN check going off from a brk instruction */
-                seL4_Word ubsan_code = esr_comment & UBSAN_ARM64_BRK_MASK;
-                puts("BACKTRACER | potential undefined behaviour detected by UBSAN for: '");
-                puts(usban_code_to_string(ubsan_code));
-                puts("'\n");
-            } else {
-                puts("BACKTRACER | Unknown vCPU fault\n");
-            }
-            break;
+        seL4_Word esr_comment = esr & ESR_COMMENT_MASK;
+        if (ec == ARM64_BRK_EC && ((esr_comment & ~UBSAN_ARM64_BRK_MASK) == UBSAN_ARM64_BRK_IMM)) {
+      /* We likely have a UBSAN check going off from a brk instruction */
+            seL4_Word ubsan_code = esr_comment & UBSAN_ARM64_BRK_MASK;
+            puts("BACKTRACER | potential undefined behaviour detected by UBSAN for: "
+                 "'");
+            puts(usban_code_to_string(ubsan_code));
+            puts("'\n");
+        } else {
+            puts("BACKTRACER | Unknown vCPU fault\n");
         }
+        break;
+    }
 #endif
-        default:
-            puts("BACKTRACER | Unknown fault\n");
-            puthex64(label);
-            break;
-        }
+    default:
+        puts("BACKTRACER | Unknown fault\n");
+        puthex64(label);
+        break;
+    }
 }
-

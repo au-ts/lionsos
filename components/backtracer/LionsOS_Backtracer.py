@@ -18,23 +18,40 @@ MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Channel = SystemDescription.Channel
 
+
 def get_architecture_pointer_alignment(arch: SystemDescription.Arch):
     match arch:
-        case SystemDescription.Arch.AARCH64 | SystemDescription.Arch.RISCV64 | SystemDescription.Arch.X86_64:
+        case (
+            SystemDescription.Arch.AARCH64
+            | SystemDescription.Arch.RISCV64
+            | SystemDescription.Arch.X86_64
+        ):
             return 8
-        case SystemDescription.Arch.AARCH32 | SystemDescription.Arch.RISCV32 | SystemDescription.Arch.X86:
+        case (
+            SystemDescription.Arch.AARCH32
+            | SystemDescription.Arch.RISCV32
+            | SystemDescription.Arch.X86
+        ):
             return 4
         case _:
             raise Exception(f"Alignment of architecture {arch} is unknown.")
 
-def enable_backtracing(sdf, arch, array_of_pds_or_single_pd, show_backtrace_func_list_addr = 0xb00000):
+
+def enable_backtracing(
+    sdf, arch, array_of_pds_or_single_pd, show_backtrace_func_list_addr=0xB00000
+):
     """
     Wrap an array or single pd as children into a backtracer parent,
     capable of catching faults and then forcing prints of the backtrace
     Remember to compile each of the children with "backtrace.o"
     """
-    backtracer = ProtectionDomain("backtracer", "backtracer.elf", priority=ProtectionDomain.PRIORITY_MAX, stack_size=0x10000);
-    pd_elf_paths = [];
+    backtracer = ProtectionDomain(
+        "backtracer",
+        "backtracer.elf",
+        priority=ProtectionDomain.PRIORITY_MAX,
+        stack_size=0x10000,
+    )
+    pd_elf_paths = []
     if not isinstance(array_of_pds_or_single_pd, list):
         array_of_pds_or_single_pd = [array_of_pds_or_single_pd]
 
@@ -43,10 +60,10 @@ def enable_backtracing(sdf, arch, array_of_pds_or_single_pd, show_backtrace_func
         newChannel = Channel(
             child_pd,
             backtracer,
-            a_id = 61,
-            b_id = i,
-            pp_a = True,
-            pd_a_setvar_id="channel_to_backtrace"
+            a_id=61,
+            b_id=i,
+            pp_a=True,
+            pd_a_setvar_id="channel_to_backtrace",
         )
         sdf.add_channel(newChannel)
         backtracer.add_child_pd(child_pd)
@@ -57,14 +74,20 @@ def enable_backtracing(sdf, arch, array_of_pds_or_single_pd, show_backtrace_func
     pd_show_backtrace_addrs = []
     for elf_path in pd_elf_paths:
         # Not very stable but good enough for now.
-        shell_output = run(f"set -o pipefail && nm {elf_path} | grep \"show_backtrace\" | cut --delimiter=\" \" -f 1",
-            capture_output=True, shell=True, text=True)
+        shell_output = run(
+            f'set -o pipefail && nm {elf_path} | grep "show_backtrace" | cut --delimiter=" " -f 1',
+            capture_output=True,
+            shell=True,
+            text=True,
+        )
         if shell_output.returncode != 0:
-            raise Exception(f"Failed to get addresses of 'show_backtrace' for file {elf_path}\n" +
-                f"stderr: {shell_output.stderr}\n" +
-                f"stdout: {shell_output.stdout}\n" +
-                f"exit code: {shell_output.returncode}\n")
-        show_backtrace_addr = int(shell_output.stdout.strip(), 16);
+            raise Exception(
+                f"Failed to get addresses of 'show_backtrace' for file {elf_path}\n"
+                + f"stderr: {shell_output.stderr}\n"
+                + f"stdout: {shell_output.stdout}\n"
+                + f"exit code: {shell_output.returncode}\n"
+            )
+        show_backtrace_addr = int(shell_output.stdout.strip(), 16)
         print(f"'{elf_path}':show_backtrace @ {hex(show_backtrace_addr)}")
         pd_show_backtrace_addrs.append(show_backtrace_addr)
 
@@ -77,8 +100,12 @@ def enable_backtracing(sdf, arch, array_of_pds_or_single_pd, show_backtrace_func
     BACKTRACER_FUNCTION_DATA_PATH = "backtrace_functions.data"
     with open(BACKTRACER_FUNCTION_DATA_PATH, "wb") as dataFile:
         dataFile.write(frame)
-    func_list_mr = MemoryRegion(sdf, "backtracerFunctions", prefill_path=BACKTRACER_FUNCTION_DATA_PATH)
+    func_list_mr = MemoryRegion(
+        sdf, "backtracerFunctions", prefill_path=BACKTRACER_FUNCTION_DATA_PATH
+    )
     sdf.add_mr(func_list_mr)
-    func_list_map = Map(func_list_mr, vaddr=0x20000, perms="r", setvar_vaddr="backtraceFunctions")
+    func_list_map = Map(
+        func_list_mr, vaddr=0x20000, perms="r", setvar_vaddr="backtraceFunctions"
+    )
     backtracer.add_map(func_list_map)
     return backtracer

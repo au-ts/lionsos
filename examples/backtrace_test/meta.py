@@ -22,8 +22,9 @@ sdf = 0
 
 
 def generate(sdf_path: str, output_dir: str):
-    domains =  [
-            ProtectionDomain(f"faulter{i}", "faulter.elf", priority=i, stack_size=0x100000) for i in range(5)
+    domains = [
+        ProtectionDomain(f"faulter{i}", "faulter.elf", priority=i, stack_size=0x100000)
+        for i in range(5)
     ]
     backtracer = LionsOS_Backtracer.enable_backtracing(sdf, board.arch, domains)
     sdf.add_pd(backtracer)
