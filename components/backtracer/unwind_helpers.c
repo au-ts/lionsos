@@ -3,7 +3,6 @@
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 
-#define INPUT_CAP 1
 static seL4_MessageInfo_t empty_msg = { 0 };
 uintptr_t unwind_helper_channel_to_backtracer = 0;
 

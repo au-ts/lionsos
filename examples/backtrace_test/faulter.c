@@ -4,14 +4,12 @@
 #include <stdint.h>
 #define LOG(...) sddf_printf("FAULTER | " __VA_ARGS__)
 
-const char *timestamp = __TIMESTAMP__;
-// Get a random-ish pointer to low-ish memory
-uintptr_t happy = 0;
+uintptr_t faulty_ptr = 0;
 
 void recurseFault(int depth)
 {
     if (depth == 0) {
-        *(volatile int *)happy;
+        *(volatile int *)faulty_ptr;
         return;
     }
     recurseFault(--depth);
