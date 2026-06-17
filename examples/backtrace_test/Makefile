@@ -34,9 +34,4 @@ ${BUILD_DIR}/Makefile: backtrace_test.mk Makefile
 	echo "export MICROKIT_CONFIG ?= ${MICROKIT_CONFIG}" >> $@
 	cat backtrace_test.mk >> $@
 
-submodules:
-	git submodule update --init $(LIONSOS)/dep/sddf
-	git submodule update --init $(LIONSOS)/dep/libmicrokitco
-	git submodule update --init $(LIONSOS)/dep/libunwind
-
 FORCE:

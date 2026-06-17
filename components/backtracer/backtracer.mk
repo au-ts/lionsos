@@ -5,15 +5,16 @@ LLVM := llvm-project-22.1.8.src
 LLVM_TAR := llvm-project-22.1.8.src.tar.xz
 LLVM_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/llvm-project-22.1.8.src.tar.xz
 LIBUNWIND := $(LLVM)/libunwind
+LIBUNWIND_BUILD_DIR := ./libunwind
 
 CFLAGS_backtracer := \
-	-target $(TARGET) \
+	$(CFLAGS)\
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
 	-I$(LIBUNWIND)/include \
 	-I$(BOARD_DIR)/include \
-	-I$(LIONS_LIBC)/include -O0 -ggdb -funwind-tables
+	-I$(LIONS_LIBC)/include  -funwind-tables
 
 LDFLAGS_backtracer := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS_backtracer := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
@@ -57,17 +58,17 @@ $(LLVM_TAR):
 	wget $(LLVM_URL)
 
 $(LLVM): $(LLVM_TAR)
-	tar xvf $< $@/{libunwind,runtimes,cmake,utils,third-party} $@/llvm/{cmake,utils}
+	${TAR} xvf $< $@/{libunwind,runtimes,cmake,utils,third-party} $@/llvm/{cmake,utils}
 
-libunwind.a: | $(LIONS_LIBC)/include backtracer $(LLVM)
-	cmake -B $(BUILD_DIR)/libunwind -S $(LLVM)/runtimes \
+$(LIBUNWIND_BUILD_DIR): | $(LLVM) $(LIONS_LIBC)/include
+	cmake -B $(LIBUNWIND_BUILD_DIR) -S $(LLVM)/runtimes \
 		$(LLVM_CMAKE_FLAGS)
 
-	cmake --build $(BUILD_DIR)/libunwind
-	cp $(BUILD_DIR)/libunwind/lib/libunwind.a $@
+libunwind.a: | $(LIONS_LIBC)/include $(LIBUNWIND_BUILD_DIR)
+	${MAKE} -C $(LIBUNWIND_BUILD_DIR)
+	cp $(LIBUNWIND_BUILD_DIR)/lib/libunwind.a $@
 
 clean::
 	${RM} -rf backtracer backtracer.elf unwind_helpers.o libunwind.a libunwind
-# export PYTHONPATH := "$(BACKTRACER_DIR):$$PYTHONPATH:$(PYTHONPATH)"
 
-# TODO: add dep files.
+-include unwind_helpers.d backtrace/backtracer.d

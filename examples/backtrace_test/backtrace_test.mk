@@ -3,7 +3,6 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
-TOOLCHAIN ?= clang
 SUPPORTED_BOARDS := \
 	qemu_virt_aarch64 \
 	maaxboard
@@ -11,7 +10,7 @@ SUPPORTED_BOARDS := \
 IMAGES := \
 	faulter.elf
 
-TOOLCHAIN ?= $(CC)
+TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
