@@ -17,8 +17,6 @@ ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Channel = SystemDescription.Channel
-board = 0
-sdf = 0
 
 
 def generate(sdf_path: str, output_dir: str):

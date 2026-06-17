@@ -38,7 +38,8 @@ def get_architecture_pointer_alignment(arch: SystemDescription.Arch):
 
 
 def enable_backtracing(
-    sdf, arch, array_of_pds_or_single_pd, show_backtrace_func_list_addr=0xB00000
+    sdf, arch, array_of_pds_or_single_pd, *, show_backtrace_func_list_addr=0xB00000, backtracer_stack_size=0x10000,
+    pd_callback_channel_id=61, endianness="little"
 ):
     """
     Wrap an array or single pd as children into a backtracer parent,
@@ -49,8 +50,9 @@ def enable_backtracing(
         "backtracer",
         "backtracer.elf",
         priority=ProtectionDomain.PRIORITY_MAX,
-        stack_size=0x10000,
+        stack_size=backtracer_stack_size,
     )
+
     pd_elf_paths = []
     if not isinstance(array_of_pds_or_single_pd, list):
         array_of_pds_or_single_pd = [array_of_pds_or_single_pd]
@@ -60,10 +62,10 @@ def enable_backtracing(
         newChannel = Channel(
             child_pd,
             backtracer,
-            a_id=61,
+            a_id=pd_callback_channel_id,
             b_id=i,
             pp_a=True,
-            pd_a_setvar_id="channel_to_backtrace",
+            pd_a_setvar_id="unwind_helper_channel_to_backtracer",
         )
         sdf.add_channel(newChannel)
         backtracer.add_child_pd(child_pd)
@@ -96,7 +98,7 @@ def enable_backtracing(
     print(f"Alignment for architecture {arch.name}: {alignment}")
     frame = b""
     for backtrace_addr in pd_show_backtrace_addrs:
-        frame += bytes(backtrace_addr.to_bytes(alignment, "little"))
+        frame += bytes(backtrace_addr.to_bytes(alignment, endianness))
     BACKTRACER_FUNCTION_DATA_PATH = "backtrace_functions.data"
     with open(BACKTRACER_FUNCTION_DATA_PATH, "wb") as dataFile:
         dataFile.write(frame)

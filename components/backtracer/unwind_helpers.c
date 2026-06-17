@@ -5,7 +5,7 @@
 
 #define INPUT_CAP 1
 static seL4_MessageInfo_t empty_msg = { 0 };
-uintptr_t channel_to_backtrace = 0;
+uintptr_t unwind_helper_channel_to_backtracer = 0;
 
 void show_backtrace(void)
 {
@@ -24,6 +24,6 @@ void show_backtrace(void)
         sddf_printf("SHOW_BACKTRACE | #%d: ip = %p, sp = %p\n", (int)depth++, (void *)ip, (void *)sp);
     }
     microkit_dbg_puts("SHOW_BACKTRACE | END_SHOW_BACKTRACE\n");
-    microkit_ppcall(channel_to_backtrace, empty_msg);
+    microkit_ppcall(unwind_helper_channel_to_backtracer, empty_msg);
     microkit_dbg_puts("You're not supposed to see this\n");
 }
