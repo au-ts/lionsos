@@ -25,6 +25,3 @@
 [submodule "dep/wasm-micro-runtime"]
 	path = dep/wasm-micro-runtime
 	url = https://github.com/au-ts/wasm-micro-runtime
-[submodule "dep/llvm-project"]
-	path = dep/llvm-project
-	url = https://github.com/llvm/llvm-project.git

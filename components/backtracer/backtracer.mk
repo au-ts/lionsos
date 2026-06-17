@@ -1,5 +1,10 @@
+TAR ?= tar
+
 BACKTRACER_DIR := $(LIONSOS)/components/backtracer
-LLVM := $(LIONSOS)/dep/llvm-project
+LLVM := llvm-project-22.1.8.src
+LLVM_TAR := llvm-project-22.1.8.src.tar.xz
+LLVM_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/llvm-project-22.1.8.src.tar.xz
+LIBUNWIND := $(LLVM)/libunwind
 
 CFLAGS_backtracer := \
 	-target $(TARGET) \
@@ -39,7 +44,7 @@ LLVM_CMAKE_FLAGS := \
 backtracer:
 	mkdir -p $@
 
-unwind_helpers.o: $(BACKTRACER_DIR)/unwind_helpers.c | $(LIONS_LIBC)/include backtracer
+unwind_helpers.o: $(BACKTRACER_DIR)/unwind_helpers.c | $(LIONS_LIBC)/include backtracer $(LLVM)
 	${CC} ${CFLAGS_backtracer} -c -o $@ $<
 
 backtracer/backtracer.o: $(BACKTRACER_DIR)/backtracer.c | $(LIONS_LIBC)/include backtracer
@@ -47,6 +52,12 @@ backtracer/backtracer.o: $(BACKTRACER_DIR)/backtracer.c | $(LIONS_LIBC)/include 
 
 backtracer.elf: backtracer/backtracer.o libunwind.a | backtracer
 	${LD} ${LDFLAGS_backtracer} -o $@ $^ ${LIBS_backtracer}
+
+$(LLVM_TAR):
+	wget $(LLVM_URL)
+
+$(LLVM): $(LLVM_TAR)
+	tar xvf $< $@/{libunwind,runtimes,cmake,utils,third-party} $@/llvm/{cmake,utils}
 
 libunwind.a: | $(LIONS_LIBC)/include backtracer $(LLVM)
 	cmake -B $(BUILD_DIR)/libunwind -S $(LLVM)/runtimes \

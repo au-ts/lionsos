@@ -12,3 +12,7 @@
 - `libc` for ...
 - llvm-project's `libunwind`
 - `sddf` or some implementation of `printf`
+
+# Pros
+- Larger binary sizes
+- Depending on `llvm-project` (sorry)
