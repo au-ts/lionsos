@@ -13,6 +13,7 @@
  *   Acting as the fault handler for protection domains.
  */
 
+#include <microkit.h>
 #include "util.h"
 #include <sel4/sel4.h>
 #include <stdbool.h>
