@@ -33,7 +33,6 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     LOG("Child '%d' Faulted!\n", child);
     print_fault_error(child, msginfo);
     seL4_UserContext ctxt = { 0 };
-  // BASE_TCB_CAP is from microkit.h. Not sure if completely portable?
     int readRegResult = seL4_TCB_ReadRegisters(BASE_TCB_CAP + child, seL4_True, 0,
                                                sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt);
     if (readRegResult != 0) {
@@ -47,7 +46,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     int writeRegResult = seL4_TCB_WriteRegisters(BASE_TCB_CAP + child, seL4_True, 0,
                                                  sizeof(seL4_UserContext) / sizeof(seL4_Word), &ctxt);
     if (writeRegResult != 0) {
-        LOG("Failed to write registers for setting up backtrace jump! Got %d, "
+        LOG("Failed to write registers for setting up backtrace jump! Got error value %d, "
             "expected %d\n",
             writeRegResult, 0);
         return seL4_False;
