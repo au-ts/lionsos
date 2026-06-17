@@ -5,7 +5,6 @@
 #include "monitor.h"
 #include <microkit.h>
 #include <sddf/util/printf.h>
-#define LOG(...) sddf_printf("BACKTRACER | " __VA_ARGS__)
 
 void (**backtraceFunctions)() = NULL;
 

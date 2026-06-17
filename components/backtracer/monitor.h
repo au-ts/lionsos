@@ -4,41 +4,20 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
-/*
- * The Microkit Monitor.
- *
- * The monitor is the highest priority Protection Domain
- * exclusively in a Microkit system. It fulfills one purpose:
- *
- *   Acting as the fault handler for protection domains.
- */
-
 #include <microkit.h>
-#include "util.h"
 #include <sel4/sel4.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <sddf/util/printf.h>
+#include <inttypes.h>
 
-#define MAX_VMS 64
+#define LOG(...) sddf_printf("BACKTRACER | " __VA_ARGS__)
+
 #define MAX_PDS 64
-#define MAX_NAME_LEN 64
 
-#define FAULT_EP_CAP 1
-#define REPLY_CAP 2
 #define BASE_PD_TCB_CAP 10
 #define BASE_SCHED_CONTEXT_CAP 138
 #define BASE_NOTIFICATION_CAP 202
-
-extern seL4_IPCBuffer __sel4_ipc_buffer_obj;
-
-char pd_names[MAX_PDS][MAX_NAME_LEN];
-seL4_Word pd_names_len;
-char vm_names[MAX_VMS][MAX_NAME_LEN] __attribute__((unused));
-seL4_Word vm_names_len;
-
-/* For reporting potential stack overflows, keep track of the stack regions for
- * each PD. */
-seL4_Word pd_stack_bottom_addrs[MAX_PDS];
 
 /* Sanity check that the architecture specific macro have been set. */
 #if defined(__aarch64__)
@@ -355,266 +334,96 @@ static char *usban_code_to_string(seL4_Word code)
 static void print_tcb_registers(seL4_UserContext *regs)
 {
 #if defined(__riscv64__)
-    puts("BACKTRACER | Registers: \n");
-    puts("BACKTRACER | pc : ");
-    puthex64(regs->pc);
-    puts("\n");
-    puts("BACKTRACER | ra : ");
-    puthex64(regs->ra);
-    puts("\n");
-    puts("BACKTRACER | s0 : ");
-    puthex64(regs->s0);
-    puts("\n");
-    puts("BACKTRACER | s1 : ");
-    puthex64(regs->s1);
-    puts("\n");
-    puts("BACKTRACER | s2 : ");
-    puthex64(regs->s2);
-    puts("\n");
-    puts("BACKTRACER | s3 : ");
-    puthex64(regs->s3);
-    puts("\n");
-    puts("BACKTRACER | s4 : ");
-    puthex64(regs->s4);
-    puts("\n");
-    puts("BACKTRACER | s5 : ");
-    puthex64(regs->s5);
-    puts("\n");
-    puts("BACKTRACER | s6 : ");
-    puthex64(regs->s6);
-    puts("\n");
-    puts("BACKTRACER | s7 : ");
-    puthex64(regs->s7);
-    puts("\n");
-    puts("BACKTRACER | s8 : ");
-    puthex64(regs->s8);
-    puts("\n");
-    puts("BACKTRACER | s9 : ");
-    puthex64(regs->s9);
-    puts("\n");
-    puts("BACKTRACER | s10 : ");
-    puthex64(regs->s10);
-    puts("\n");
-    puts("BACKTRACER | s11 : ");
-    puthex64(regs->s11);
-    puts("\n");
-    puts("BACKTRACER | a0 : ");
-    puthex64(regs->a0);
-    puts("\n");
-    puts("BACKTRACER | a1 : ");
-    puthex64(regs->a1);
-    puts("\n");
-    puts("BACKTRACER | a2 : ");
-    puthex64(regs->a2);
-    puts("\n");
-    puts("BACKTRACER | a3 : ");
-    puthex64(regs->a3);
-    puts("\n");
-    puts("BACKTRACER | a4 : ");
-    puthex64(regs->a4);
-    puts("\n");
-    puts("BACKTRACER | a5 : ");
-    puthex64(regs->a5);
-    puts("\n");
-    puts("BACKTRACER | a6 : ");
-    puthex64(regs->a6);
-    puts("\n");
-    puts("BACKTRACER | t0 : ");
-    puthex64(regs->t0);
-    puts("\n");
-    puts("BACKTRACER | t1 : ");
-    puthex64(regs->t1);
-    puts("\n");
-    puts("BACKTRACER | t2 : ");
-    puthex64(regs->t2);
-    puts("\n");
-    puts("BACKTRACER | t3 : ");
-    puthex64(regs->t3);
-    puts("\n");
-    puts("BACKTRACER | t4 : ");
-    puthex64(regs->t4);
-    puts("\n");
-    puts("BACKTRACER | t5 : ");
-    puthex64(regs->t5);
-    puts("\n");
-    puts("BACKTRACER | t6 : ");
-    puthex64(regs->t6);
-    puts("\n");
-    puts("BACKTRACER | tp : ");
-    puthex64(regs->tp);
-    puts("\n");
+    LOG("BACKTRACER | Registers: \n");
+    LOG("BACKTRACER | pc : %#016lx\n", regs->pc);
+    LOG("ra : %#016lx\n", regs->ra);
+    LOG("s0 : %#016lx\n", regs->s0);
+    LOG("s1 : %#016lx\n", regs->s1);
+    LOG("s2 : %#016lx\n", regs->s2);
+    LOG("s3 : %#016lx\n", regs->s3);
+    LOG("s4 : %#016lx\n", regs->s4);
+    LOG("s5 : %#016lx\n", regs->s5);
+    LOG("s6 : %#016lx\n", regs->s6);
+    LOG("s7 : %#016lx\n", regs->s7);
+    LOG("s8 : %#016lx\n", regs->s8);
+    LOG("s9 : %#016lx\n", regs->s9);
+    LOG("s10 : %#016lx\n", regs->s10);
+    LOG("s11 : %#016lx\n", regs->s11);
+    LOG("a0 : %#016lx\n", regs->a0);
+    LOG("a1 : %#016lx\n", regs->a1);
+    LOG("a2 : %#016lx\n", regs->a2);
+    LOG("a3 : %#016lx\n", regs->a3);
+    LOG("a4 : %#016lx\n", regs->a4);
+    LOG("a5 : %#016lx\n", regs->a5);
+    LOG("a6 : %#016lx\n", regs->a6);
+    LOG("t0 : %#016lx\n", regs->t0);
+    LOG("t1 : %#016lx\n", regs->t1);
+    LOG("t2 : %#016lx\n", regs->t2);
+    LOG("t3 : %#016lx\n", regs->t3);
+    LOG("t4 : %#016lx\n", regs->t4);
+    LOG("t5 : %#016lx\n", regs->t5);
+    LOG("t6 : %#016lx\n", regs->t6);
+    LOG("tp : %#016lx\n", regs->tp);
 #elif defined(__aarch64__)
-    puts("BACKTRACER | Registers: \n");
-    puts("BACKTRACER | pc : ");
-    puthex64(regs->pc);
-    puts("\n");
-    puts("BACKTRACER | sp: ");
-    puthex64(regs->sp);
-    puts("\n");
-    puts("BACKTRACER | spsr : ");
-    puthex64(regs->spsr);
-    puts("\n");
-    puts("BACKTRACER | x0 : ");
-    puthex64(regs->x0);
-    puts("\n");
-    puts("BACKTRACER | x1 : ");
-    puthex64(regs->x1);
-    puts("\n");
-    puts("BACKTRACER | x2 : ");
-    puthex64(regs->x2);
-    puts("\n");
-    puts("BACKTRACER | x3 : ");
-    puthex64(regs->x3);
-    puts("\n");
-    puts("BACKTRACER | x4 : ");
-    puthex64(regs->x4);
-    puts("\n");
-    puts("BACKTRACER | x5 : ");
-    puthex64(regs->x5);
-    puts("\n");
-    puts("BACKTRACER | x6 : ");
-    puthex64(regs->x6);
-    puts("\n");
-    puts("BACKTRACER | x7 : ");
-    puthex64(regs->x7);
-    puts("\n");
-    puts("BACKTRACER | x8 : ");
-    puthex64(regs->x8);
-    puts("\n");
-    puts("BACKTRACER | x16 : ");
-    puthex64(regs->x16);
-    puts("\n");
-    puts("BACKTRACER | x17 : ");
-    puthex64(regs->x17);
-    puts("\n");
-    puts("BACKTRACER | x18 : ");
-    puthex64(regs->x18);
-    puts("\n");
-    puts("BACKTRACER | x29 : ");
-    puthex64(regs->x29);
-    puts("\n");
-    puts("BACKTRACER | x30 : ");
-    puthex64(regs->x30);
-    puts("\n");
-    puts("BACKTRACER | x9 : ");
-    puthex64(regs->x9);
-    puts("\n");
-    puts("BACKTRACER | x10 : ");
-    puthex64(regs->x10);
-    puts("\n");
-    puts("BACKTRACER | x11 : ");
-    puthex64(regs->x11);
-    puts("\n");
-    puts("BACKTRACER | x12 : ");
-    puthex64(regs->x12);
-    puts("\n");
-    puts("BACKTRACER | x13 : ");
-    puthex64(regs->x13);
-    puts("\n");
-    puts("BACKTRACER | x14 : ");
-    puthex64(regs->x14);
-    puts("\n");
-    puts("BACKTRACER | x15 : ");
-    puthex64(regs->x15);
-    puts("\n");
-    puts("BACKTRACER | x19 : ");
-    puthex64(regs->x19);
-    puts("\n");
-    puts("BACKTRACER | x20 : ");
-    puthex64(regs->x20);
-    puts("\n");
-    puts("BACKTRACER | x21 : ");
-    puthex64(regs->x21);
-    puts("\n");
-    puts("BACKTRACER | x22 : ");
-    puthex64(regs->x22);
-    puts("\n");
-    puts("BACKTRACER | x23 : ");
-    puthex64(regs->x23);
-    puts("\n");
-    puts("BACKTRACER | x24 : ");
-    puthex64(regs->x24);
-    puts("\n");
-    puts("BACKTRACER | x25 : ");
-    puthex64(regs->x25);
-    puts("\n");
-    puts("BACKTRACER | x26 : ");
-    puthex64(regs->x26);
-    puts("\n");
-    puts("BACKTRACER | x27 : ");
-    puthex64(regs->x27);
-    puts("\n");
-    puts("BACKTRACER | x28 : ");
-    puthex64(regs->x28);
-    puts("\n");
-    puts("BACKTRACER | tpidr_el0 : ");
-    puthex64(regs->tpidr_el0);
-    puts("\n");
-    puts("BACKTRACER | tpidrro_el0 : ");
-    puthex64(regs->tpidrro_el0);
-    puts("\n");
+    LOG("Registers: \n");
+    LOG("pc : %#016lx\n", regs->pc);
+    LOG("sp: %#016lx\n", regs->sp);
+    LOG("spsr : %#016lx\n", regs->spsr);
+    LOG("x0 : %#016lx\n", regs->x0);
+    LOG("x1 : %#016lx\n", regs->x1);
+    LOG("x2 : %#016lx\n", regs->x2);
+    LOG("x3 : %#016lx\n", regs->x3);
+    LOG("x4 : %#016lx\n", regs->x4);
+    LOG("x5 : %#016lx\n", regs->x5);
+    LOG("x6 : %#016lx\n", regs->x6);
+    LOG("x7 : %#016lx\n", regs->x7);
+    LOG("x8 : %#016lx\n", regs->x8);
+    LOG("x16 : %#016lx\n", regs->x16);
+    LOG("x17 : %#016lx\n", regs->x17);
+    LOG("x18 : %#016lx\n", regs->x18);
+    LOG("x29 : %#016lx\n", regs->x29);
+    LOG("x30 : %#016lx\n", regs->x30);
+    LOG("x9 : %#016lx\n", regs->x9);
+    LOG("x10 : %#016lx\n", regs->x10);
+    LOG("x11 : %#016lx\n", regs->x11);
+    LOG("x12 : %#016lx\n", regs->x12);
+    LOG("x13 : %#016lx\n", regs->x13);
+    LOG("x14 : %#016lx\n", regs->x14);
+    LOG("x15 : %#016lx\n", regs->x15);
+    LOG("x19 : %#016lx\n", regs->x19);
+    LOG("x20 : %#016lx\n", regs->x20);
+    LOG("x21 : %#016lx\n", regs->x21);
+    LOG("x22 : %#016lx\n", regs->x22);
+    LOG("x23 : %#016lx\n", regs->x23);
+    LOG("x24 : %#016lx\n", regs->x24);
+    LOG("x25 : %#016lx\n", regs->x25);
+    LOG("x26 : %#016lx\n", regs->x26);
+    LOG("x27 : %#016lx\n", regs->x27);
+    LOG("x28 : %#016lx\n", regs->x28);
+    LOG("tpidr_el0 : %#016lx\n", regs->tpidr_el0);
+    LOG("tpidrro_el0 : %#016lx\n", regs->tpidrro_el0);
 #elif defined(__x86_64__)
-    puts("BACKTRACER | Registers: \n");
-    puts("BACKTRACER | rip : ");
-    puthex64(regs->rip);
-    puts("\n");
-    puts("BACKTRACER | rsp : ");
-    puthex64(regs->rsp);
-    puts("\n");
-    puts("BACKTRACER | rflags : ");
-    puthex64(regs->rflags);
-    puts("\n");
-    puts("BACKTRACER | rax : ");
-    puthex64(regs->rax);
-    puts("\n");
-    puts("BACKTRACER | rbx : ");
-    puthex64(regs->rbx);
-    puts("\n");
-    puts("BACKTRACER | rcx : ");
-    puthex64(regs->rcx);
-    puts("\n");
-    puts("BACKTRACER | rdx : ");
-    puthex64(regs->rdx);
-    puts("\n");
-    puts("BACKTRACER | rsi : ");
-    puthex64(regs->rsi);
-    puts("\n");
-    puts("BACKTRACER | rdi : ");
-    puthex64(regs->rdi);
-    puts("\n");
-    puts("BACKTRACER | rbp : ");
-    puthex64(regs->rbp);
-    puts("\n");
-    puts("BACKTRACER | r8 : ");
-    puthex64(regs->r8);
-    puts("\n");
-    puts("BACKTRACER | r9 : ");
-    puthex64(regs->r9);
-    puts("\n");
-    puts("BACKTRACER | r10 : ");
-    puthex64(regs->r10);
-    puts("\n");
-    puts("BACKTRACER | r11 : ");
-    puthex64(regs->r11);
-    puts("\n");
-    puts("BACKTRACER | r12 : ");
-    puthex64(regs->r12);
-    puts("\n");
-    puts("BACKTRACER | r13 : ");
-    puthex64(regs->r13);
-    puts("\n");
-    puts("BACKTRACER | r14 : ");
-    puthex64(regs->r14);
-    puts("\n");
-    puts("BACKTRACER | r15 : ");
-    puthex64(regs->r15);
-    puts("\n");
-    puts("BACKTRACER | fs_base : ");
-    puthex64(regs->fs_base);
-    puts("\n");
-    puts("BACKTRACER | gs_base : ");
-    puthex64(regs->gs_base);
-    puts("\n");
+    LOG("Registers: \n");
+    LOG("rip : %#016lx\n", regs->rip);
+    LOG("rsp : %#016lx\n", regs->rsp);
+    LOG("rflags : %#016lx\n", regs->rflags);
+    LOG("rax : %#016lx\n", regs->rax);
+    LOG("rbx : %#016lx\n", regs->rbx);
+    LOG("rcx : %#016lx\n", regs->rcx);
+    LOG("rdx : %#016lx\n", regs->rdx);
+    LOG("rsi : %#016lx\n", regs->rsi);
+    LOG("rdi : %#016lx\n", regs->rdi);
+    LOG("rbp : %#016lx\n", regs->rbp);
+    LOG("r8 : %#016lx\n", regs->r8);
+    LOG("r9 : %#016lx\n", regs->r9);
+    LOG("r10 : %#016lx\n", regs->r10);
+    LOG("r11 : %#016lx\n", regs->r11);
+    LOG("r12 : %#016lx\n", regs->r12);
+    LOG("r13 : %#016lx\n", regs->r13);
+    LOG("r14 : %#016lx\n", regs->r14);
+    LOG("r15 : %#016lx\n", regs->r15);
+    LOG("fs_base : %#016lx\n", regs->fs_base);
+    LOG("gs_base : %#016lx\n", regs->gs_base);
 #endif
 }
 
@@ -625,13 +434,9 @@ static void riscv_print_vm_fault()
     seL4_Word fault_addr = seL4_GetMR(seL4_VMFault_Addr);
     seL4_Word is_instruction = seL4_GetMR(seL4_VMFault_PrefetchFault);
     seL4_Word fsr = seL4_GetMR(seL4_VMFault_FSR);
-    puts("BACKTRACER | VMFault: ip=");
-    puthex64(ip);
-    puts("  fault_addr=");
+    LOG("BACKTRACER | VMFault: ip=%#016lx\n", ip);
     puthex64(fault_addr);
-    puts("  fsr=");
-    puthex64(fsr);
-    puts("  ");
+    puts("  fsr=%#016lx\n", fsr);
     puts(is_instruction ? "(instruction fault)" : "(data fault)");
     puts("\n");
     puts("BACKTRACER | description of fault: ");
@@ -673,24 +478,10 @@ static void aarch64_print_vm_fault()
     seL4_Word ec = fsr >> 26;
     seL4_Word il = fsr >> 25 & 1;
     seL4_Word iss = fsr & 0x1ffffffUL;
-    puts("BACKTRACER | VMFault: ip=");
-    puthex64(ip);
-    puts("  fault_addr=");
-    puthex64(fault_addr);
-    puts("  fsr=");
-    puthex64(fsr);
-    puts("  ");
-    puts(is_instruction ? "(instruction fault)" : "(data fault)");
-    puts("\n");
-    puts("BACKTRACER |   ec: ");
-    puthex32(ec);
-    puts("  ");
-    puts(ec_to_string(ec));
-    puts("   il: ");
-    puts(il ? "1" : "0");
-    puts("   iss: ");
-    puthex32(iss);
-    puts("\n");
+    LOG("VMFault: ip=%#016lx  fault_addr=%#016lx\n", ip, fault_addr);
+    LOG("    fsr=%#016lx  %s\n",  fsr, is_instruction ? "(instruction fault)" : "(data fault)");
+    LOG("    ec: %#08lx  %s\n", ec, ec_to_string(ec));
+    LOG("    il: %s    iss: %#08lx\n", il ? "1" : "0", iss);
 
     if (ec == 0x24) {
     /* FIXME: Note, this is not a complete decoding of the fault! Just some of
@@ -701,24 +492,20 @@ static void aarch64_print_vm_fault()
         bool cm = (iss >> 8) & 1;
         bool s1ptw = (iss >> 7) & 1;
         bool wnr = (iss >> 6) & 1;
-        puts("BACKTRACER |   dfsc = ");
-        puts(data_abort_dfsc_to_string(dfsc));
-        puts(" (");
-        puthex32(dfsc);
-        puts(")");
+        LOG("    dfsc = %s  (%#08lx)", data_abort_dfsc_to_string(dfsc), dfsc);
         if (ea) {
-            puts(" -- external abort");
+            sddf_printf(" -- external abort");
         }
         if (cm) {
-            puts(" -- cache maint");
+            sddf_printf(" -- cache maint");
         }
         if (s1ptw) {
-            puts(" -- stage 2 fault for stage 1 page table walk");
+            sddf_printf(" -- stage 2 fault for stage 1 page table walk");
         }
         if (wnr) {
-            puts(" -- write not read");
+            sddf_printf(" -- write not read");
         }
-        puts("\n");
+        sddf_printf("\n");
     }
 }
 #endif
@@ -734,24 +521,15 @@ static void print_fault_error(microkit_child child, microkit_msginfo msginfo)
     /* This is a request from our PD to become passive */
         err = seL4_SchedContext_Bind(BASE_SCHED_CONTEXT_CAP + child, BASE_NOTIFICATION_CAP + child);
         if (err != seL4_NoError) {
-            puts("BACKTRACER | could not bind scheduling context to notification "
+            LOG("could not bind scheduling context to notification "
                  "object\n");
         } else {
-            puts("MON|INFO: PD '");
-            puts(pd_names[child]);
-            puts("' is now passive!\n");
+            LOG("PD id: '%d' is now passive!\n", child);
         }
-
         return;
     }
 
-    puts("BACKTRACER | received message ");
-    puthex32(label);
-    puts("  badge: ");
-    puthex64(badge);
-    puts("  tcb cap: ");
-    puthex64(tcb_cap);
-    puts("\n");
+    LOG("received message %#08lx  badge: %#016lx  tcb cap: %#016lx\n", label, badge, tcb_cap);
 
     switch (label) {
     case seL4_Fault_CapFault: {
@@ -764,54 +542,45 @@ static void print_fault_error(microkit_child child, microkit_msginfo msginfo)
         seL4_Word guard_found = seL4_GetMR(seL4_CapFault_GuardMismatch_GuardFound);
         seL4_Word guard_bits_found = seL4_GetMR(seL4_CapFault_GuardMismatch_BitsFound);
 
-        puts("BACKTRACER | CapFault: ip=");
-        puthex64(ip);
-        puts("  fault_addr=");
-        puthex64(fault_addr);
-        puts("  in_recv_phase=");
-        puts(in_recv_phase == 0 ? "false" : "true");
-        puts("  lookup_failure_type=");
+        LOG("CapFault: ip=%#016lx  fault_addr=%#016lx  in_recv_phase=%s", ip, fault_addr, in_recv_phase == 0 ? "false" : "true");
+        sddf_printf("  lookup_failure_type=");
 
         switch (lookup_failure_type) {
         case seL4_NoFailure:
-            puts("seL4_NoFailure");
+            sddf_printf("seL4_NoFailure");
             break;
         case seL4_InvalidRoot:
-            puts("seL4_InvalidRoot");
+            sddf_printf("seL4_InvalidRoot");
             break;
         case seL4_MissingCapability:
-            puts("seL4_MissingCapability");
+            sddf_printf("seL4_MissingCapability");
             break;
         case seL4_DepthMismatch:
-            puts("seL4_DepthMismatch");
+            sddf_printf("seL4_DepthMismatch");
             break;
         case seL4_GuardMismatch:
-            puts("seL4_GuardMismatch");
+            sddf_printf("seL4_GuardMismatch");
             break;
         default:
-            puthex64(lookup_failure_type);
+            sddf_printf("%#016lx", lookup_failure_type);
         }
 
         if (lookup_failure_type == seL4_MissingCapability || lookup_failure_type == seL4_DepthMismatch
             || lookup_failure_type == seL4_GuardMismatch) {
-            puts("  bits_left=");
-            puthex64(bits_left);
+            sddf_printf("  bits_left=%#016lx", bits_left);
         }
         if (lookup_failure_type == seL4_DepthMismatch) {
-            puts("  depth_bits_found=");
-            puthex64(depth_bits_found);
+            sddf_printf("  depth_bits_found=%#016lx", depth_bits_found);
         }
         if (lookup_failure_type == seL4_GuardMismatch) {
-            puts("  guard_found=");
-            puthex64(guard_found);
-            puts("  guard_bits_found=");
-            puthex64(guard_bits_found);
+            sddf_printf("  guard_found=%#016lx", guard_found);
+            sddf_printf("  guard_bits_found=%#016lx", guard_bits_found);
         }
-        puts("\n");
+        sddf_printf("\n");
         break;
     }
     case seL4_Fault_UserException: {
-        puts("BACKTRACER | UserException\n");
+        LOG("UserException\n");
         break;
     }
     case seL4_Fault_VMFault: {
@@ -824,14 +593,6 @@ static void print_fault_error(microkit_child child, microkit_msginfo msginfo)
 #else
 #error "Unknown architecture to print a VM fault for"
 #endif
-
-        seL4_Word fault_addr = seL4_GetMR(seL4_VMFault_Addr);
-        seL4_Word stack_addr = pd_stack_bottom_addrs[child];
-        if (fault_addr < stack_addr && fault_addr >= stack_addr - 0x1000) {
-            puts("BACKTRACER | potential stack overflow, fault address within one "
-                 "page outside of stack region\n");
-        }
-
         break;
     }
 #ifdef CONFIG_ARM_HYPERVISOR_SUPPORT
@@ -839,27 +600,22 @@ static void print_fault_error(microkit_child child, microkit_msginfo msginfo)
         seL4_Word esr = seL4_GetMR(seL4_VCPUFault_HSR);
         seL4_Word ec = esr >> 26;
 
-        puts("BACKTRACER | received vCPU fault with ESR: ");
-        puthex64(esr);
-        puts("\n");
+        LOG("received vCPU fault with ESR: %#016lx\n", esr);
 
         seL4_Word esr_comment = esr & ESR_COMMENT_MASK;
         if (ec == ARM64_BRK_EC && ((esr_comment & ~UBSAN_ARM64_BRK_MASK) == UBSAN_ARM64_BRK_IMM)) {
       /* We likely have a UBSAN check going off from a brk instruction */
             seL4_Word ubsan_code = esr_comment & UBSAN_ARM64_BRK_MASK;
-            puts("BACKTRACER | potential undefined behaviour detected by UBSAN for: "
-                 "'");
-            puts(usban_code_to_string(ubsan_code));
-            puts("'\n");
+            LOG("potential undefined behaviour detected by UBSAN for: "
+                 "'%s'\n", usban_code_to_string(ubsan_code));
         } else {
-            puts("BACKTRACER | Unknown vCPU fault\n");
+            LOG("Unknown vCPU fault\n");
         }
         break;
     }
 #endif
     default:
-        puts("BACKTRACER | Unknown fault\n");
-        puthex64(label);
+        LOG("Unknown fault: %#016lx\n", label);
         break;
     }
 }
