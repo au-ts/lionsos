@@ -1,3 +1,8 @@
+#
+# Copyright 2026, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
 TAR ?= tar
 
 BACKTRACER_DIR := $(LIONSOS)/components/backtracer

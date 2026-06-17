@@ -1,3 +1,7 @@
+/*
+ * Copyright 2025, UNSW
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 #include "monitor.h"
 #include <microkit.h>
 #include <sddf/util/printf.h>

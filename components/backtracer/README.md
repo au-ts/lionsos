@@ -1,3 +1,7 @@
+<!--
+     Copyright 2024, UNSW
+     SPDX-License-Identifier: CC-BY-SA-4.0
+-->
 # Usage
 1. Include `backtracer.mk` file.
 2. For all targets to be backtraced:
