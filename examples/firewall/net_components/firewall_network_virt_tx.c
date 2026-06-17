@@ -28,7 +28,7 @@ net_queue_handle_t tx_queue_clients[SDDF_NET_MAX_CLIENTS];
 
 fw_queue_t fw_free_clients[FW_MAX_FW_CLIENTS];
 fw_queue_t fw_active_clients[FW_MAX_FW_CLIENTS];
-
+bool nat_enabled;
 nat_module_t nat_modules[FW_MAX_FILTERS];
 uint8_t num_nat_modules;
 
@@ -85,15 +85,14 @@ static void tx_provide(void)
                 uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.clients[client].data.region.vaddr;
 
                 /* Apply SNAT if enabled */
-                if (fw_config.num_nat_configs > 0)
+                if (nat_enabled)
                 {
                     uint16_t ethtype = htons(((eth_hdr_t *)buffer_vaddr)->ethtype);
                     if (ethtype == ETH_TYPE_IP)
                     {
                         ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(buffer_vaddr + IPV4_HDR_OFFSET);
-                        fw_nat_err_t nat_result = NAT_ERR_OKAY;
-                        for (int j = 0; j < num_nat_modules; j++)
-                        {
+                        fw_nat_err_t nat_result = NAT_ERR_UNSUPPORTED;
+                        for (int j = 0; j < num_nat_modules; j++) {
                             if (nat_modules[j].protocol == ip_hdr->protocol)
                             {
                                 nat_result = nat_module_translate(&nat_modules[j], buffer_vaddr, &buffer, false);

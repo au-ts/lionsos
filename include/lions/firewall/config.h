@@ -45,8 +45,6 @@ typedef struct fw_nat_port_table_config {
     uint16_t ports_capacity;
     region_resource_t port_table;
     uint8_t protocol;
-    bool enabled;             /* build-time initial state */
-    uint16_t webserver_ch;   /* PPC channel from webserver for NAT enable/disable */
 } fw_nat_port_table_config_t;
 
 typedef struct fw_net_virt_tx_config {
@@ -60,6 +58,9 @@ typedef struct fw_net_virt_tx_config {
     uint8_t num_free_clients;
     fw_nat_port_table_config_t nat_configs[FW_MAX_FILTERS];
     uint8_t num_nat_configs;
+    bool possible_to_enable_nat;
+    bool enabled;             /* build-time initial state */
+    uint16_t webserver_ch;   /* PPC channel from webserver for NAT enable/disable */
 } fw_net_virt_tx_config_t;
 
 typedef struct fw_net_virt_rx_config {
@@ -77,6 +78,8 @@ typedef struct fw_net_virt_rx_config {
     device_region_resource_t nat_dma_region;
     fw_nat_port_table_config_t nat_configs[FW_MAX_FILTERS];
     uint8_t num_nat_configs;
+    bool enabled;             /* build-time initial state */
+    uint16_t webserver_ch;   /* PPC channel from webserver for NAT enable/disable */
 } fw_net_virt_rx_config_t;
 
 typedef struct fw_arp_connection {
@@ -181,6 +184,7 @@ typedef struct fw_webserver_interface_config {
     fw_connection_resource_t rx_free;
     fw_nat_port_table_config_t nat_configs[FW_MAX_FILTERS];
     uint8_t num_nat_configs;
+    bool possible_to_enable_nat;
 } fw_webserver_interface_config_t;
 
 typedef struct fw_webserver_config {

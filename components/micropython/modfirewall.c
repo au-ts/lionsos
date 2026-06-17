@@ -524,6 +524,8 @@ static mp_obj_t nat_set_enabled(mp_obj_t interface_idx_in, mp_obj_t protocol_in,
     uint8_t protocol = mp_obj_get_int(protocol_in);
     bool enabled = mp_obj_is_true(enabled_in);
 
+    // PPC to the Rx virtualiser, who then PPCs to the Tx virtualiser, all three components update their local copy.
+
     for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_nat_configs; i++) {
         if (fw_config.interfaces[interface_idx].nat_configs[i].protocol == protocol) {
             microkit_mr_set(NAT_SET_ENABLED_ARG_ENABLED, (seL4_Word)enabled);

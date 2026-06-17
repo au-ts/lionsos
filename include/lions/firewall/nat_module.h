@@ -39,6 +39,8 @@ typedef enum {
 typedef struct fw_nat_port_mapping fw_nat_port_mapping_t;
 struct fw_nat_port_mapping
 {
+    /* timeout per protocol*/
+    uint32_t timeout;
     /* Original source IP of traffic */
     uint32_t src_ip;
     /* Original source port of traffic (network byte order) */
@@ -55,12 +57,14 @@ struct fw_nat_port_mapping
  */
 typedef struct fw_nat_port_table
 {
-    /* Runtime enable flag*/
-    bool nat_enabled;
+    // /* Runtime enable flag*/
+    // bool nat_enabled;
     /* Number of valid NAT entries */
     uint16_t size;
     /* Largest initialized entry in the NAT table (could be valid or free) */
     uint16_t largest_index;
+    uint32_t base_port;
+    uint16_t capacity;
     /* Head of free nodes */
     fw_nat_port_mapping_t *free_head;
     fw_nat_port_mapping_t mappings[];
@@ -73,12 +77,12 @@ typedef struct fw_nat_port_table
  * Structure shared with webserver to configure NAT for all interfaces with this protocol.
  * The SNAT IP is static (from build-time config); only enable/disable and timeout are runtime.
  */
-typedef struct fw_nat_webserver_state
-{
-    uint32_t magic; /* Magic number for initialization check */
-    /* Timeout in nanoseconds */
-    uint64_t timeout;
-} fw_nat_webserver_state_t;
+// typedef struct fw_nat_webserver_state
+// {
+//     uint32_t magic; /* Magic number for initialization check */
+//     /* Timeout in nanoseconds */
+//     uint64_t timeout;
+// } fw_nat_webserver_state_t; -- Just initialise in one virtualiser, handle timeout later
 
 
 /**
@@ -125,20 +129,9 @@ static inline uint16_t fw_nat_find_ephemeral_port(fw_nat_port_table_config_t con
         mapping->is_valid = true;
         return htons(config.base_port + (mapping - ports->mappings));
     }
+    // Don't forget to initialise in port table init function
 
-    if (ports->size >= config.ports_capacity)
-    {
-        return 0; /* Ephemeral ports pool is full */
-    }
-
-    /* Initialize a new entry in the NAT table and assign its ephemeral port */
-    ports->size++;
-    ports->mappings[ports->largest_index].src_port = src_port;
-    ports->mappings[ports->largest_index].src_ip = src_ip;
-    ports->mappings[ports->largest_index].is_valid = true;
-    ports->mappings[ports->largest_index].last_used_ts = now;
-
-    return htons(config.base_port + ports->largest_index++);
+    return FULL;
 }
 
 /**
@@ -203,17 +196,11 @@ static inline void fw_nat_free_expired_mappings(fw_nat_port_table_config_t confi
  */
 typedef struct nat_module
 {
-    /* Interface identifier */
-    uint8_t interface;
-
     /* Protocol (IPPROTO_TCP or IPPROTO_UDP) */
     uint8_t protocol;
 
     /* Port table reference (shared memory) — contains nat_enabled flag */
     fw_nat_port_table_t *port_table;
-
-    /* Port table configuration (base port, capacity) */
-    fw_nat_port_table_config_t *config;
 
     /* IP address of the firewall's outbound interface */
     uint32_t interface_ip;

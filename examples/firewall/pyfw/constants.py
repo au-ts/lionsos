@@ -91,7 +91,7 @@ webserver_tx_interface_idx = 1
 ### ----------------------------------------------------------------------- ###
 ### Filtering ###
 ### ----------------------------------------------------------------------- ###
-supported_protocols = {0x01: "icmp", 0x06: "tcp", 0x11: "udp"}
+supported_protocols = {0x01: "icmp", 0x06: "tcp", 0x11: "udp", 0x17: "tpp"}
 
 FILTER_ACTION_ALLOW = 1
 FILTER_ACTION_DROP = 2
@@ -102,7 +102,8 @@ FILTER_ACTION_CONNECT = 4
 supported_filter_actions = {
     0x01: [1, 1, 1, 1],
     0x06: [1, 1, 0, 1],
-    0x11: [1, 1, 1, 1]
+    0x11: [1, 1, 1, 1],
+    0x17:  [1, 1, 1, 1],
 }
 
 def construct_rule(action: int, src_ip: int, src_subnet: int, src_port: int, src_port_any: bool,
@@ -138,6 +139,21 @@ initial_rules = [
         0x06: [default_action_rule(FILTER_ACTION_ALLOW)],
         0x11: [default_action_rule(FILTER_ACTION_ALLOW)],
     },
+]
+
+### ----------------------------------------------------------------------- ###
+### NAT ###
+### ----------------------------------------------------------------------- ###
+
+nat_state = [
+    {
+        enabled: true,
+        init_enabled: true,
+        protocols: [0x11: {src_port: 0x5, dst_port: 0x6}, 0x06, 0x11]
+    },
+    {
+        enabled: false,
+    }
 ]
 
 ### ----------------------------------------------------------------------- ###

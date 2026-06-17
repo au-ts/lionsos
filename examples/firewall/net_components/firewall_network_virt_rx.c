@@ -29,7 +29,7 @@ net_queue_handle_t rx_queue_drv;
 net_queue_handle_t rx_queue_clients[SDDF_NET_MAX_CLIENTS];
 
 fw_queue_t fw_free_clients[FW_MAX_FW_CLIENTS];
-
+bool nat_enabled;
 nat_module_t nat_modules[FW_MAX_FILTERS];
 uint8_t num_nat_modules;
 

@@ -32,13 +32,11 @@ fw_nat_err_t nat_module_init(nat_module_t *nat,
         return NAT_ERR_FAILURE;
     }
 
-    nat->interface = interface;
     nat->protocol = protocol;
-    nat->config = config;
     nat->port_table = port_table;
     nat->interface_ip = interface_ip;
-    nat->src_port_off = src_port_off;
-    nat->dst_port_off = dst_port_off;
+    nat->src_port_off = src_port_off; // maybe build time in the future.
+    nat->dst_port_off = dst_port_off; // maybe build time in the future.
     nat->check_off = check_off;
     nat->check_enabled = check_enabled;
 
