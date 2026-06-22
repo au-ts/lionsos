@@ -132,11 +132,11 @@
         "zig-overlay": "zig-overlay"
       },
       "locked": {
-        "lastModified": 1773884521,
-        "narHash": "sha256-tk+6hLIHq9gmy5qUmGWg7Wv1SPytj5tT1e+1UsQQFSo=",
-        "ref": "refs/heads/page_table_copies",
-        "rev": "0b81a796989518ae5d059acbb1604dd353d2c20c",
-        "revCount": 781,
+        "lastModified": 1782102773,
+        "narHash": "sha256-rqP4dViSXfPGcvAdB3g4cIrifWlbzy3s8LNX3QXC4/Y=",
+        "ref": "refs/heads/page_tables_copies_fixed",
+        "rev": "339b914adbf235fb4f9ad66c2f43505bd28e86c4",
+        "revCount": 825,
         "type": "git",
         "url": "file:/home/aids/git/ToR/gdb-rr-stuff/microkit_sdf_gen"
       },

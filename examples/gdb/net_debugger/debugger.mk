@@ -14,6 +14,6 @@ DEBUGGER_OBJS := debugger.o tcp.o
 
 export DEPS := $(DEBUGGER_OBJS:.o=.d)
 
-${DEBUGGER_OBJS}: ${CHECKfFLAGS_BOARD_MD5}
+${DEBUGGER_OBJS}: ${CHECK_FLAGS_BOARD_MD5}
 debugger.elf: $(DEBUGGER_OBJS) libsddf_util.a libvspace.a lib_sddf_lwip.a libgdb.a libco.a libvspace.a
 	$(LD) $(LDFLAGS) $(DEBUGGER_OBJS) libsddf_util.a lib_sddf_lwip.a libgdb.a libvspace.a libco.a $(LIBS) -o $@

@@ -19,12 +19,26 @@ Channel = SystemDescription.Channel
 
 
 def generate(sdf_path: str, output_dir: str):
-    domains = [
+    debug_pds = [
         ProtectionDomain(f"faulter{i}", "faulter.elf", priority=i, stack_size=0x100000)
         for i in range(5)
     ]
-    for domain in domains:
-        sdf.add_pd(domain)
+    debugger = ProtectionDomain("debugger", "debugger.elf", priority=97, budget=20000, stack_size=0x20000)
+
+    large_mapping_region = MemoryRegion(sdf, "large_region", 0x200000)
+    sdf.add_mr(large_mapping_region)
+    large_map = Map(large_mapping_region, 0xa00000, "rw", setvar_vaddr="large_mapping_mr")
+    debugger.add_map(large_map)
+
+    debuggee_pts = SystemDescription.PageTables(setvar="table_metadata")
+    for i, pd in enumerate(debug_pds):
+        temp = debuggee_pts.add_entry(pd.name, i)
+    debugger.set_page_tables(debuggee_pts)
+
+    for pd in debug_pds:
+        debugger.add_child_pd(pd)
+
+    sdf.add_pd(debugger)
 
     with open(f"{output_dir}/{sdf_path}", "w+") as f:
         f.write(sdf.render())

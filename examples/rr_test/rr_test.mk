@@ -8,44 +8,66 @@ SUPPORTED_BOARDS := \
 	maaxboard
 
 IMAGES := \
+	debugger.elf \
 	faulter.elf
 
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
+export BOARD := $(MICROKIT_BOARD)
 SDDF := $(LIONSOS)/dep/sddf
 SYSTEM_FILE := rr_test.system
 IMAGE_FILE := rr_test.img
 REPORT_FILE := report.txt
+SERIAL_DRIV_DIR := virtio
+SERIAL_COMPONENTS := $(SDDF)/serial/components
+SERIAL_DRIVER := $(SDDF)/drivers/serial/$(SERIAL_DRIV_DIR)
+
+LIBGDB_DIR=$(LIONSOS)/dep/libgdb
+LIBVSPACE_DIR=$(LIBGDB_DIR)/libvspace
+
 
 all: ${IMAGE_FILE}
 
 include ${SDDF}/tools/make/board/common.mk
 
 METAPROGRAM := $(RR_TEST_DIR)/meta.py
+DEBUGGER_DIR := $(RR_TEST_DIR)/debugger
 
 CFLAGS += \
+	-DMICROKIT \
 	-Wno-bitwise-op-parentheses \
 	-Wno-shift-op-parentheses \
 	-Wno-unused-function \
 	-Wno-tautological-constant-out-of-range-compare \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
+	-I$(SDDF)/libco \
 	-I$(SDDF)/include/microkit \
 	-I$(LWIP)/include \
-	-I$(LIBUNWIND)/include \
 	-DMAX_FDS=8 \
+	-I$(LIBGDB_DIR)/include \
+	-I$(LIBGDB_DIR)/arch_include \
+	-I$(LIBVSPACE_DIR) \
+	-I${DEBUGGER_INCLUDE}/lwip \
 	-funwind-tables -O0 -ggdb
 
 include $(LIONSOS)/lib/libc/libc.mk
 
 LDFLAGS := --eh-frame-hdr -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(RR_TEST_DIR)/build
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
+LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc libvspace.a
 
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include ${SDDF}/util/util.mk
 
-${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
+include ${SDDF}/util/util.mk
+include ${SDDF}/libco/libco.mk
+include ${SERIAL_DRIVER}/serial_driver.mk
+include ${SERIAL_COMPONENTS}/serial_components.mk
+include $(LIBGDB_DIR)/libgdb.mk
+include $(LIBVSPACE_DIR)/libvspace.mk
+include $(DEBUGGER_DIR)/debugger.mk
+
+${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a libvspace.a
 
 faulter.o: $(RR_TEST_DIR)/faulter.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
