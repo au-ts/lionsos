@@ -16,8 +16,6 @@
 #include <sddf/serial/config.h>
 #include <vspace.h>
 
-const char* large_mapping_mr;
-
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t config;
 
 typedef enum event_state {
@@ -212,6 +210,7 @@ static void event_loop() {
 }
 
 void init() {
+    microkit_dbg_puts("Initialising debugger...\n");
     assert(serial_config_check_magic(&config));
 
     /* Register all of the inferiors  */
@@ -235,6 +234,7 @@ void init() {
     t_event = co_active();
     t_main = co_derive((void *) t_main_stack, STACK_SIZE, event_loop);
 
+    microkit_dbg_puts("Debugger initialiser complete\n");
     co_switch(t_main);
 }
 

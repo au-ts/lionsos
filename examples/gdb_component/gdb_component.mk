@@ -9,20 +9,27 @@ SUPPORTED_BOARDS := \
 
 IMAGES := \
 	debugger.elf \
-	faulter.elf
+	faulter.elf \
+	serial_driver.elf \
+	serial_virt_tx.elf \
+	serial_virt_rx.elf
 
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 export BOARD := $(MICROKIT_BOARD)
+DTB := $(MICROKIT_BOARD).dtb
+DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
 
 SDDF := $(LIONSOS)/dep/sddf
 SYSTEM_FILE := gdb_component.system
 IMAGE_FILE := gdb_component.img
 REPORT_FILE := report.txt
-SERIAL_DRIV_DIR := virtio
+
+include ${SDDF}/tools/make/board/common.mk
+
 SERIAL_COMPONENTS := $(SDDF)/serial/components
-SERIAL_DRIVER := $(SDDF)/drivers/serial/$(SERIAL_DRIV_DIR)
+SERIAL_DRIVER := $(SDDF)/drivers/serial/$(UART_DRIV_DIR)
 
 LIBGDB_DIR=$(LIONSOS)/dep/libgdb
 LIBVSPACE_DIR=$(LIBGDB_DIR)/libvspace
@@ -30,7 +37,6 @@ LIBVSPACE_DIR=$(LIBGDB_DIR)/libvspace
 
 all: ${IMAGE_FILE}
 
-include ${SDDF}/tools/make/board/common.mk
 
 METAPROGRAM := $(GDB_COMPONENT_DIR)/meta.py
 DEBUGGER_DIR := $(GDB_COMPONENT_DIR)/debugger
@@ -78,9 +84,18 @@ faulter.elf: faulter.o
 
 FORCE:
 
+$(DTB): $(DTS)
+	dtc -q -I dts -O dtb $(DTS) > $(DTB)
+
+
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	PYTHONPATH="${SDDF}/tools/meta:$$PYTHONPATH:$(PYTHONPATH)" $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --output . --sdf $(SYSTEM_FILE)
-	# Add the unwind table to the memory region specified.
+	PYTHONPATH="${SDDF}/tools/meta:$$PYTHONPATH:$(PYTHONPATH)" $(PYTHON) $(METAPROGRAM) \
+		--sddf $(SDDF) --board $(MICROKIT_BOARD) --output . --sdf $(SYSTEM_FILE) --dtb $(DTB)
+	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
+	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_debugger.data debugger.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
