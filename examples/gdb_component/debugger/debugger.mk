@@ -7,7 +7,7 @@
 CFILES := debugger.c
 OFILES := $(CFILES:.c=.o)
 
-debugger.o: $(GDB_COMPONENT_DIR)/debugger/debugger.c
+debugger.o: $(GDB_COMPONENT_DIR)/debugger/debugger.c | $(LIONS_LIBC)/lib/libc.a
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 debugger.elf: debugger.o libgdb.a libsddf_util.a libco.a

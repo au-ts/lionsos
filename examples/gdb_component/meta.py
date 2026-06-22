@@ -17,16 +17,6 @@ MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Channel = SystemDescription.Channel
 
-qemu_board = Board(
-    name="qemu_virt_aarch64",
-    arch=SystemDescription.Arch.AARCH64,
-    paddr_top=0x6_0000_000,
-    serial="pl011@9000000",
-    timer="timer",
-    ethernet="virtio_mmio@a003e00"
-)
-
-
 def generate(sdf_path: str, output_dir: str):
     debug_pds = [
         ProtectionDomain(f"faulter{i}", "faulter.elf", priority=i, stack_size=0x100000)

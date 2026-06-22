@@ -15,6 +15,7 @@ TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 export BOARD := $(MICROKIT_BOARD)
+
 SDDF := $(LIONSOS)/dep/sddf
 SYSTEM_FILE := gdb_component.system
 IMAGE_FILE := gdb_component.img
