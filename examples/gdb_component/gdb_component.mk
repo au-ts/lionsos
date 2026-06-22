@@ -16,8 +16,8 @@ MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 export BOARD := $(MICROKIT_BOARD)
 SDDF := $(LIONSOS)/dep/sddf
-SYSTEM_FILE := rr_test.system
-IMAGE_FILE := rr_test.img
+SYSTEM_FILE := gdb_component.system
+IMAGE_FILE := gdb_component.img
 REPORT_FILE := report.txt
 SERIAL_DRIV_DIR := virtio
 SERIAL_COMPONENTS := $(SDDF)/serial/components
@@ -31,8 +31,8 @@ all: ${IMAGE_FILE}
 
 include ${SDDF}/tools/make/board/common.mk
 
-METAPROGRAM := $(RR_TEST_DIR)/meta.py
-DEBUGGER_DIR := $(RR_TEST_DIR)/debugger
+METAPROGRAM := $(GDB_COMPONENT_DIR)/meta.py
+DEBUGGER_DIR := $(GDB_COMPONENT_DIR)/debugger
 
 CFLAGS += \
 	-DMICROKIT \
@@ -54,7 +54,7 @@ CFLAGS += \
 
 include $(LIONSOS)/lib/libc/libc.mk
 
-LDFLAGS := --eh-frame-hdr -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(RR_TEST_DIR)/build
+LDFLAGS := --eh-frame-hdr -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(GDB_COMPONENT_DIR)/build
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc libvspace.a
 
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
@@ -69,7 +69,7 @@ include $(DEBUGGER_DIR)/debugger.mk
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a libvspace.a
 
-faulter.o: $(RR_TEST_DIR)/faulter.c | $(LIONS_LIBC)/include
+faulter.o: $(GDB_COMPONENT_DIR)/faulter.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
 faulter.elf: faulter.o
