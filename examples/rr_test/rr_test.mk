@@ -14,15 +14,15 @@ TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
-SYSTEM_FILE := backtrace_test.system
-IMAGE_FILE := backtrace_test.img
+SYSTEM_FILE := rr_test.system
+IMAGE_FILE := rr_test.img
 REPORT_FILE := report.txt
 
 all: ${IMAGE_FILE}
 
 include ${SDDF}/tools/make/board/common.mk
 
-METAPROGRAM := $(BACKTRACE_TEST_DIR)/meta.py
+METAPROGRAM := $(RR_TEST_DIR)/meta.py
 
 CFLAGS += \
 	-Wno-bitwise-op-parentheses \
@@ -39,7 +39,7 @@ CFLAGS += \
 
 include $(LIONSOS)/lib/libc/libc.mk
 
-LDFLAGS := --eh-frame-hdr -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(BACKTRACE_TEST_DIR)/build
+LDFLAGS := --eh-frame-hdr -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(RR_TEST_DIR)/build
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
 
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
@@ -47,7 +47,7 @@ include ${SDDF}/util/util.mk
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
-faulter.o: $(BACKTRACE_TEST_DIR)/faulter.c | $(LIONS_LIBC)/include
+faulter.o: $(RR_TEST_DIR)/faulter.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
 faulter.elf: faulter.o
