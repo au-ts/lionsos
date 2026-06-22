@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
+MICROKIT_BOARD := qemu_virt_aarch64
 BUILD_DIR ?= build
 export MICROKIT_CONFIG ?= debug
 

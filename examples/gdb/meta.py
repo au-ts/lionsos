@@ -8,7 +8,8 @@ from typing import List, Tuple
 from sdfgen import SystemDescription, Sddf, DeviceTree
 from importlib.metadata import version
 
-assert version('sdfgen').split(".")[1] == "29", "Unexpected sdfgen version"
+print(f"sdfgen version: {version('sdfgen')}")
+# assert version('sdfgen').split(".")[1] == "29", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion

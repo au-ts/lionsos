@@ -132,18 +132,17 @@
         "zig-overlay": "zig-overlay"
       },
       "locked": {
-        "lastModified": 1764823094,
-        "narHash": "sha256-Eeef5J0y31NH/F5Z0fayJ+4mroYfb8JPadu3cw6cNhc=",
-        "owner": "au-ts",
-        "repo": "microkit_sdf_gen",
-        "rev": "13686a373b9189c7b1d778cd749d7d8bbd8a63f6",
-        "type": "github"
+        "lastModified": 1773884521,
+        "narHash": "sha256-tk+6hLIHq9gmy5qUmGWg7Wv1SPytj5tT1e+1UsQQFSo=",
+        "ref": "refs/heads/page_table_copies",
+        "rev": "0b81a796989518ae5d059acbb1604dd353d2c20c",
+        "revCount": 781,
+        "type": "git",
+        "url": "file:/home/aids/git/ToR/gdb-rr-stuff/microkit_sdf_gen"
       },
       "original": {
-        "owner": "au-ts",
-        "ref": "0.28.1",
-        "repo": "microkit_sdf_gen",
-        "type": "github"
+        "type": "git",
+        "url": "file:/home/aids/git/ToR/gdb-rr-stuff/microkit_sdf_gen"
       }
     },
     "systems": {
@@ -216,11 +215,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1739707935,
-        "narHash": "sha256-YE+Zn03AWqDBmgxNrM50s7tpH+7fQYu1n9ZvXUWhznE=",
+        "lastModified": 1756037521,
+        "narHash": "sha256-nLOxILJqZtVCPCWppiDcEodTyguC6/EWvOprRuVoH4Q=",
         "owner": "mitchellh",
         "repo": "zig-overlay",
-        "rev": "18c6ec3d906c8f7e611687ca71705d6130e754c4",
+        "rev": "25d6cdf56abecb2b6a8e59905948ef41892aa371",
         "type": "github"
       },
       "original": {

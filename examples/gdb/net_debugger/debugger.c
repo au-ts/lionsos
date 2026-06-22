@@ -355,6 +355,7 @@ void init(void)
 
     // Setup the mapping regions for libvspace to use.
     libvspace_init_mapping_regions(small_mapping_mr, large_mapping_mr);
+	microkit_dbg_puts("Finished setting up debugger!\n");
 }
 
 void fault_message() {
