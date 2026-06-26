@@ -21,8 +21,7 @@ RUN apt-get update \
   && apt-get install -y netcat-openbsd \
   && apt-get install -y shunit2 \
   && apt-get install -y curl \
-  && apt-get install -y jq \
-  && apt-get install -y netcat-openbsd jq
+  && apt-get install -y jq
 
 # Update CA certificates
 RUN apt-get install -y ca-certificates \
