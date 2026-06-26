@@ -69,6 +69,8 @@ FIREWALL_INTERNAL_INTERFACE=1
 FIREWALL_ACTION_DROP=2
 FIREWALL_ACTION_REJECT=3
 
+BROADCAST_IP_ADDR='255.255.255.255'
+
 #
 # Setup and teardown
 #
@@ -753,6 +755,110 @@ test_udp_external_to_internal() {
     # Verify that the data was transmitted correctly
     if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
         fail "${ERROR_DATA_INCORRECT}"
+        print_log
+    fi
+}
+
+test_udp_external_broadcast() {
+    # Listen for traffic on the internal host
+    ip netns exec int \
+        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+    listener=$!
+
+    # Send broadcast traffic, from the external host, to the internal host expected to be dropped later
+    ip netns exec ext \
+        nc -u -b -q "${TIMEOUT}" "${BROADCAST_IP_ADDR}" "${UDP_PORT}" < "${SENT}"
+    exit_code=$?
+
+    sleep "${TIMEOUT}"
+    kill "${listener}" > /dev/null 2>&1
+
+    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
+        fail "${ERROR_TRANSMIT_FAILED}"
+        print_log
+        return
+    fi
+
+    if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
+        fail "${ERROR_DATA_WAS_NOT_DROPPED}"
+        print_log
+    fi
+}
+
+test_udp_internal_broadcast() {
+    # Listen for traffic on the internal host
+    ip netns exec ext \
+        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+    listener=$!
+
+    # Send broadcast traffic, from the external host, to the internal host expected to be dropped later
+    ip netns exec int \
+        nc -u -b -q "${TIMEOUT}" "${BROADCAST_IP_ADDR}" "${UDP_PORT}" < "${SENT}"
+    exit_code=$?
+
+    sleep "${TIMEOUT}"
+    kill "${listener}" > /dev/null 2>&1
+
+    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
+        fail "${ERROR_TRANSMIT_FAILED}"
+        print_log
+        return
+    fi
+
+    if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
+        fail "${ERROR_DATA_WAS_NOT_DROPPED}"
+        print_log
+    fi
+}
+
+test_udp_external_subnet_broadcast() {
+    # Listen for traffic on the internal host
+    ip netns exec int \
+        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+    listener=$!
+
+    # Send broadcast traffic, from the external host, to the internal host expected to be dropped later
+    ip netns exec ext \
+        nc -u -b -q "${TIMEOUT}" "${FW_INT_BROADCAST}" "${UDP_PORT}" < "${SENT}"
+    exit_code=$?
+
+    sleep "${TIMEOUT}"
+    kill "${listener}" > /dev/null 2>&1
+
+    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
+        fail "${ERROR_TRANSMIT_FAILED}"
+        print_log
+        return
+    fi
+
+    if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
+        fail "${ERROR_DATA_WAS_NOT_DROPPED}"
+        print_log
+    fi
+}
+
+test_udp_internal_subnet_broadcast() {
+    # Listen for traffic on the internal host
+    ip netns exec ext \
+        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+    listener=$!
+
+    # Send broadcast traffic, from the external host, to the internal host expected to be dropped later
+    ip netns exec int \
+        nc -u -b -q "${TIMEOUT}" "${FW_EXT_BROADCAST}" "${UDP_PORT}" < "${SENT}"
+    exit_code=$?
+
+    sleep "${TIMEOUT}"
+    kill "${listener}" > /dev/null 2>&1
+
+    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
+        fail "${ERROR_TRANSMIT_FAILED}"
+        print_log
+        return
+    fi
+
+    if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
+        fail "${ERROR_DATA_WAS_NOT_DROPPED}"
         print_log
     fi
 }

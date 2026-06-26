@@ -19,7 +19,7 @@ const char *fw_routing_err_str[] = { "Ok.",
                                      "Invalid route ID.",
                                      "Invalid route values." };
 
-fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, uint8_t *interface)
+fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, uint8_t *subnet, uint8_t *interface)
 {
     uint8_t num_lookups = 0;
     while (num_lookups < FW_ROUTING_MAX_RECURSION) {
@@ -46,6 +46,7 @@ fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, 
         }
 
         if (match->next_hop == FW_ROUTING_NONEXTHOP) {
+            *subnet = match->subnet;
             *interface = match->interface;
             return ROUTING_ERR_OKAY;
         }
