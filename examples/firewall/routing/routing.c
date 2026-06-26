@@ -244,7 +244,17 @@ static void route(void)
                 fw_routing_err_t fw_err = fw_routing_find_route(routing_table, &next_hop, &out_interface);
                 assert(fw_err == ROUTING_ERR_OKAY);
 
-                if (next_hop == FW_ROUTING_NONEXTHOP || next_hop == router_config.interfaces[out_interface].ip) {
+                if ((~subnet_mask(match->subnet) | next_hop) == ip_hdr->dst_ip) {
+                    /* Checks if destination IP address is a subnet broadcast, we do not transmit broadcast traffic across subnets */
+                    if (FW_DEBUG_OUTPUT) {
+                        sddf_printf("ROUTING_LOG: dropping a subnet broadcast IP packet with destination %s\n",
+                                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0));
+                    }
+                    err = fw_enqueue(&rx_free[interface], &buffer);
+                    assert(!err);
+                    returned[interface] = true;
+                    continue;
+                } else if (next_hop == FW_ROUTING_NONEXTHOP || next_hop == router_config.interfaces[out_interface].ip) {
                     /* No route or destined for the firewall but received on the wrong interface, drop packet  */
                     if (FW_DEBUG_OUTPUT) {
                         sddf_printf("ROUTING_LOG: found no route for ip %s or received on the wrong interface, "
