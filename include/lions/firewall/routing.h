@@ -195,7 +195,7 @@ fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_wait
  *
  * @return error status of operation.
  */
-fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, uint8_t *interface);
+fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, uint8_t *subnet, uint8_t *interface);
 
 /**
  * Add a route to the routing table.
