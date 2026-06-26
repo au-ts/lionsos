@@ -49,7 +49,7 @@ export FW_INT_IP=192.168.1.1
 # Firewall internal subnet network bits
 export FW_INT_SUBNET=24
 
-# External subnet broadcast address
+# Internal subnet broadcast address
 export FW_INT_BROADCAST=192.168.1.255
 
 # Internal root IP address
