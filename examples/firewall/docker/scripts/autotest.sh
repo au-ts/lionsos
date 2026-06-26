@@ -757,7 +757,7 @@ test_udp_external_to_internal() {
     fi
 }
 
-test_udp_broadcast() {
+test_udp_external_broadcast() {
     # Listen for traffic on the internal host
     ip netns exec int \
         nc -ul "${UDP_PORT}" > "${RECEIVED}" &
@@ -769,7 +769,33 @@ test_udp_broadcast() {
     exit_code=$?
 
     sleep "${TIMEOUT}"
-    kill "${listener_pid}" > /dev/null 2>&1
+    kill "${listener}" > /dev/null 2>&1
+
+    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
+        fail "${ERROR_TRANSMIT_FAILED}"
+        print_log
+        return
+    fi
+
+    if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
+        fail "${ERROR_DATA_WAS_NOT_DROPPED}"
+        print_log
+    fi
+}
+
+test_udp_internal_broadcast() {
+    # Listen for traffic on the internal host
+    ip netns exec ext \
+        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+    listener=$!
+
+    # Send broadcast traffic, from the external host, to the internal host expected to be dropped later
+    echo "Hello" | ip netns exec int \
+        socat - UDP-DATAGRAM:255.255.255.255:"${UDP_PORT}",broadcast > /dev/null 2>&1
+    exit_code=$?
+
+    sleep "${TIMEOUT}"
+    kill "${listener}" > /dev/null 2>&1
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
         fail "${ERROR_TRANSMIT_FAILED}"
