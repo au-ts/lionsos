@@ -228,7 +228,7 @@ void init() {
 
     serial_putchar_init(config.tx.id, &tx_queue_handle);
 
-    microkit_dbg_puts("Awaiting GDB connection...");
+    microkit_dbg_puts("Awaiting GDB connection...\n");
 
     /* Make a coroutine for the rest of the initialization */
     t_event = co_active();

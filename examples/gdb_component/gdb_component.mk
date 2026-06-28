@@ -25,6 +25,7 @@ SDDF := $(LIONSOS)/dep/sddf
 SYSTEM_FILE := gdb_component.system
 IMAGE_FILE := gdb_component.img
 REPORT_FILE := report.txt
+UART_DRIV_DIR := virtio
 
 include ${SDDF}/tools/make/board/common.mk
 
@@ -57,7 +58,7 @@ CFLAGS += \
 	-I$(LIBGDB_DIR)/arch_include \
 	-I$(LIBVSPACE_DIR) \
 	-I${DEBUGGER_INCLUDE}/lwip \
-	-funwind-tables -O0 -ggdb
+	-funwind-tables -ggdb
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -77,10 +78,10 @@ include $(DEBUGGER_DIR)/debugger.mk
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a libvspace.a
 
 faulter.o: $(GDB_COMPONENT_DIR)/faulter.c | $(LIONS_LIBC)/include
-	${CC} ${CFLAGS} -c -o $@ $<
+	${CC} ${CFLAGS} -O0 -c -o $@ $<
 
 faulter.elf: faulter.o
-	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
+	${LD} ${LDFLAGS} -O0 -o $@ $^ ${LIBS}
 
 FORCE:
 
@@ -110,12 +111,12 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
 		-m size=2G \
 		-nographic \
+		-device virtio-serial-device \
+		-chardev pty,id=virtcon \
+		-device virtconsole,chardev=virtcon \
 		-global virtio-mmio.force-legacy=false \
-		-d guest_errors \
-		-drive file=qemu_disk,if=none,format=raw,id=hd \
-		-device virtio-blk-device,drive=hd,bus=virtio-mmio-bus.1 \
-		-device virtio-net-device,netdev=netdev0,bus=virtio-mmio-bus.0 \
-		-netdev user,id=netdev0,hostfwd=tcp::5560-10.0.2.15:5560,hostfwd=tcp::5561-10.0.2.15:5561
+		-d guest_errors
+
 
 clean::
 	${RM} -rf ${IMAGES} faulter.o faulter.elf

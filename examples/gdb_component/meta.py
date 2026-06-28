@@ -5,13 +5,21 @@ from dataclasses import dataclass
 from typing import List
 from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 from importlib.metadata import version
-from board import BOARDS
+from board import Board
 from subprocess import run
 from copy import deepcopy
 
 # assert version("sdfgen").split(".")[1] == "28", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
+BOARDS = [
+    Board(
+        name="qemu_virt_aarch64",
+        arch=SystemDescription.Arch.AARCH64,
+        paddr_top=0x6_0000_000,
+        serial="virtio_mmio@a003e00"
+    ),
+]
 
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
@@ -32,7 +40,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     serial_system = Sddf.Serial(sdf, uart_node, uart_driver, serial_virt_tx, virt_rx=serial_virt_rx)
 
 
-    debugger = ProtectionDomain("debugger", "debugger.elf", priority=254, budget=20000, stack_size=0x20000)
+    debugger = ProtectionDomain("debugger", "debugger.elf", priority=98, budget=20000, stack_size=0x100000)
 
     serial_system.add_client(debugger)
 

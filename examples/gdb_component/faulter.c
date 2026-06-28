@@ -10,7 +10,7 @@
 
 uintptr_t faulty_ptr = 0;
 
-void recurseFault(int depth)
+volatile void recurseFault(int depth)
 {
     if (depth == 0) {
         *(volatile int *)faulty_ptr;
