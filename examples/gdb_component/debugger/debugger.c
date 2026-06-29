@@ -14,6 +14,8 @@
 #include <sddf/util/printf.h>
 #include <sddf/serial/config.h>
 #include <vspace.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t config;
 
@@ -22,6 +24,14 @@ typedef enum event_state {
     eventState_waitingForInputEventLoop,
     eventState_waitingForInputFault
 } event_state_t;
+
+typedef struct {
+    bool valid;
+    char* data;
+    seL4_Word size;
+    uint8_t cksum; // calculated checksum
+    uint8_t tcksum; // transmitted checksum
+} gdb_packet_t;
 
 // TODO - DO NOT DEFINE THIS IN MULTIPLE PLACES
 #define NUM_DEBUGEES 2
@@ -74,6 +84,13 @@ void put_char(char c) {
 }
 
 
+void put_str(const char* chars, size_t len) {
+	uint32_t tail = tx_queue_handle.queue->tail;
+    serial_enqueue_batch(&tx_queue_handle, len, chars);
+    serial_update_shared_tail(&tx_queue_handle, tail + len);
+    sddf_notify(config.tx.id);
+}
+
 char get_char()
 {
     while (serial_queue_empty(&rx_queue_handle, rx_queue_handle.queue->head)) {
@@ -86,14 +103,23 @@ char get_char()
     return c;
 }
 
+bool get_char_yield_timeout(int numYields, char c[1])
+{
+    int attempts = 0;
+    while (serial_dequeue(&rx_queue_handle, c) != 0 && attempts < numYields)
+        seL4_Yield();
+    if (attempts >= numYields) return false;
+    return true;
+}
 
 char* get_transmission() {
-    // TODO: consider timeouts for transmission?
+    static const int TIMEOUT = 100;
 
     // $packet-data#checksum
     // checksum is 2 digits hex.
     char* in = input;
     int count = 0;
+    bool charRes = false;
     // state 1: waiting for $
     do {
         in[0] = get_char();
@@ -103,15 +129,16 @@ char* get_transmission() {
 	// state 2: getting packet data
     int i = 1;
     do {
-        in[i] = get_char();
-        count++;
-    } while (in[i++] != '#');
+        charRes = get_char_yield_timeout(TIMEOUT, &in[i]);
+        if (charRes) count++;
+    } while (charRes && in[i++] != '#');
 
     // state 3: getting checksum
     for (size_t j = i; j < i + 2; j++)
     {
-        in[j] = get_char();
-        count++;
+        charRes = get_char_yield_timeout(TIMEOUT, &in[j]);
+        if (charRes) count++;
+        else break;
     }
     // null terminate
     in[count] = '\0';
@@ -140,22 +167,82 @@ char* retry_get_transmission()
     return get_transmission();
 }
 
-bool verify_transmission(const char* transmission) {
-    return true;
+#define MAX_PACKET_SIZE 800
+
+gdb_packet_t verify_transmission(char* transmission) {
+    char* head = transmission;
+    gdb_packet_t packet = {
+        .valid = false,
+        .data = NULL,
+        .size = 0,
+        .cksum = 0,
+        .tcksum = 0,
+    };
+    // Check that the begin packet part exists.
+    if (*head != '$') goto verify_transmission_ret;
+    head++;
+    // Do not support sequence-id from gdb version 5.0 or less.
+    while (head[packet.size] != '#' && packet.size < MAX_PACKET_SIZE)
+    {
+        packet.cksum += head[packet.size];
+        packet.size++;
+    };
+    if (packet.size == MAX_PACKET_SIZE) goto verify_transmission_ret;
+    packet.data = head;
+    head += packet.size;
+
+	// Move past the # to the 2 digit checksum
+	*(head++) = '\0';
+	packet.tcksum += hexchar_to_int(head[0]) << 4;
+	packet.tcksum += hexchar_to_int(head[1]);
+	packet.valid = (packet.tcksum == packet.cksum);
+
+verify_transmission_ret:
+
+    microkit_dbg_puts("Valid packet: ");
+    microkit_dbg_puts(packet.valid ? "true\n" : "false\n");
+	return packet;
 }
 
 void put_transmission(const char* transmission)
 {
+    char outputbuf[1024] = {};
+    size_t i = 0;
     const char* cstar = transmission;
-    while (*cstar != '\0')
-        put_char(*cstar++);
+    uint8_t cksum = 0;
+    // Signal beginning of packet
+    outputbuf[i++] = '$';
+
+    // dump packet contents
+    while (*cstar != '\0' && i < 1023)
+    {
+        outputbuf[i++] = *cstar;
+        cksum += *cstar;
+        cstar++;
+    }
+    if (i >= 1023) 
+    {
+        microkit_dbg_puts("Packet size is too large!\n");
+        return;
+    }
+    // Signal beginning of cksum
+    outputbuf[i++] = '#';
+    outputbuf[i++] = int_to_hexchar((cksum >> 4) & 0x0f);
+    outputbuf[i++] = int_to_hexchar(cksum & 0x0f);
+    outputbuf[i] = 0;
+    microkit_dbg_puts("Transmitting: '");
+    microkit_dbg_puts(outputbuf);
+    microkit_dbg_puts("'\n");
+    put_str(outputbuf, i);
 }
 
+#define TIMEOUT_YIELDS 100
 bool check_transmission() {
     // Yield to quickly process stuff.
-    seL4_Yield();
-    seL4_Yield();
-    char c = get_char();
+    for (size_t i = 0; i < TIMEOUT_YIELDS; i++)
+        seL4_Yield();
+    char c = 0;
+    serial_dequeue(&rx_queue_handle, &c);
     return c == '+';
 }
 
@@ -164,6 +251,30 @@ static void event_loop() {
     /* The event loop runs perpetually if we are in the standard event loop phase */
     while (true) {
         char* transmission = get_transmission();
+        gdb_packet_t res = verify_transmission(transmission);
+
+        if (res.valid) ack_transmission();
+        else {
+            nack_transmission(); 
+            continue;
+        }
+
+        resume = gdb_handle_packet(res.data, output, &detached);
+        int attempts = 0;
+        do {
+            put_transmission(output);
+            seL4_Yield();
+            attempts++;
+            // Give up after 5 attempts
+        } while (!check_transmission() && attempts < 5);
+        if (attempts == 5)
+        {
+            microkit_dbg_puts("Transmission not accepted after 5 attempts!\n");
+            continue;
+        }
+        else
+            microkit_dbg_puts("Transmission accepted!\n");
+
         if (!resume || detached) {
             // put_packet(output, eventState_waitingForInputEventLoop);
         }

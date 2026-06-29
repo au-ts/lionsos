@@ -115,7 +115,7 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-chardev pty,id=virtcon \
 		-device virtconsole,chardev=virtcon \
 		-global virtio-mmio.force-legacy=false \
-		-d guest_errors -S -s
+		-d guest_errors # -S -s
 
 
 clean::
