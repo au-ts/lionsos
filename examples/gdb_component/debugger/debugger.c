@@ -8,7 +8,6 @@
 #include <sel4/sel4_arch/types.h>
 #include <gdb.h>
 #include <util.h>
-#include <libco.h>
 #include <stddef.h>
 #include <sddf/serial/config.h>
 #include <sddf/serial/queue.h>
@@ -24,14 +23,8 @@ typedef enum event_state {
     eventState_waitingForInputFault
 } event_state_t;
 
-cothread_t t_event, t_main, t_fault;
-
 // TODO - DO NOT DEFINE THIS IN MULTIPLE PLACES
 #define NUM_DEBUGEES 2
-
-#define STACK_SIZE 4096
-static char t_main_stack[STACK_SIZE];
-static char t_fault_stack[STACK_SIZE];
 
 /* Input buffer */
 static char input[BUFSIZE];
@@ -76,16 +69,15 @@ void _putchar(char character) {
     microkit_dbg_putc(character);
 }
 
-/* @alwin: surely there is a less disgusting way of doing this */
-void gdb_put_char(char c) {
+void put_char(char c) {
     sddf_putchar_unbuffered(c);
 }
 
-char gdb_get_char(event_state_t new_state) {
+
+char get_char()
+{
     while (serial_queue_empty(&rx_queue_handle, rx_queue_handle.queue->head)) {
-        // Wait for the virt to tell us some input has come through
-        state = new_state;
-        co_switch(t_event);
+        seL4_Yield();
     }
 
     char c;
@@ -94,113 +86,86 @@ char gdb_get_char(event_state_t new_state) {
     return c;
 }
 
-char *get_packet(event_state_t new_state) {
-    char c;
-    int count;
-    /* Checksum and expected checksum */
-    unsigned char cksum, xcksum;
-    char *buf = input;
-    (void) buf;
 
-    while (1) {
-        /* Wait for the start character - ignoring all other characters */
-        c = gdb_get_char(new_state);
-        while (c != '$') {
-            /* Ctrl-C character - should result in an interrupt */
-            if (c == 3) {
-                buf[0] = c;
-                buf[1] = 0;
-                return buf;
-            }
-            c = gdb_get_char(new_state);
-        }
-        retry:
-        /* Initialize cksum variables */
-        cksum = 0;
-        xcksum = -1;
-        count = 0;
+char* get_transmission() {
+    // TODO: consider timeouts for transmission?
 
-        /* Read until we see a # or the buffer is full */
-        while (count < BUFSIZE - 1) {
-            c = gdb_get_char(new_state);
-            if (c == '$') {
-                goto retry;
-            } else if (c == '#') {
-                break;
-            }
-            cksum += c;
-            buf[count++] = c;
-        }
+    // $packet-data#checksum
+    // checksum is 2 digits hex.
+    char* in = input;
+    int count = 0;
+    // state 1: waiting for $
+    do {
+        in[0] = get_char();
+    } while (in[0] != '$');
+    count += 1;
 
-        /* Null terminate the string */
-        buf[count] = 0;
+	// state 2: getting packet data
+    int i = 1;
+    do {
+        in[i] = get_char();
+        count++;
+    } while (in[i++] != '#');
 
-        if (c == '#') {
-            c = gdb_get_char(new_state);
-            xcksum = hexchar_to_int(c) << 4;
-            c = gdb_get_char(new_state);
-            xcksum += hexchar_to_int(c);
-
-            if (cksum != xcksum) {
-                gdb_put_char('-');   /* checksum failed */
-            } else {
-                gdb_put_char('+');   /* checksum success, ack*/
-
-                if (buf[2] == ':') {
-                    gdb_put_char(buf[0]);
-                    gdb_put_char(buf[1]);
-
-                    return &buf[3];
-                }
-
-                return buf;
-            }
-        }
+    // state 3: getting checksum
+    for (size_t j = i; j < i + 2; j++)
+    {
+        in[j] = get_char();
+        count++;
     }
-
-    return NULL;
+    // null terminate
+    in[count] = '\0';
+    microkit_dbg_puts("Got transmission: ");
+    microkit_dbg_puts(in);
+    microkit_dbg_puts("\n");
+    return in;
 }
 
-/*
- * Send a packet, computing it's checksum, waiting for it's acknoledge.
- * If there is not ack, packet will be resent.
- */
-static void put_packet(char *buf, event_state_t new_state)
+char* try_get_packet()
 {
-    uint8_t cksum;
-    for (;;) {
-        gdb_put_char('$');
-        char *buf2 = buf;
-        for (cksum = 0; *buf2; buf2++) {
-            cksum += *buf2;
-            gdb_put_char(*buf2);
-        }
-        gdb_put_char('#');
-        gdb_put_char(int_to_hexchar(cksum >> 4));
-        gdb_put_char(int_to_hexchar(cksum % 16));
-        char c = gdb_get_char(new_state);
-        if (c == '+') break;
-    }
+    return get_transmission();
 }
 
-static void event_loop();
-static void init_phase2();
+void ack_transmission() {
+    put_char('+');
+}
+
+void nack_transmission() {
+    put_char('-');
+}
+
+char* retry_get_transmission()
+{
+    nack_transmission();
+    return get_transmission();
+}
+
+bool verify_transmission(const char* transmission) {
+    return true;
+}
+
+void put_transmission(const char* transmission)
+{
+    const char* cstar = transmission;
+    while (*cstar != '\0')
+        put_char(*cstar++);
+}
+
+bool check_transmission() {
+    // Yield to quickly process stuff.
+    seL4_Yield();
+    seL4_Yield();
+    char c = get_char();
+    return c == '+';
+}
 
 static void event_loop() {
     bool resume = false;
     /* The event loop runs perpetually if we are in the standard event loop phase */
     while (true) {
-        char *input = get_packet(eventState_waitingForInputEventLoop);
-        if (detached || input[0] == 3) {
-            /* If we got a ctrl-c packet, we should suspend the whole system */
-            suspend_system();
-            detached = false;
-        }
-
-        resume = gdb_handle_packet(input, output, &detached);
-
+        char* transmission = get_transmission();
         if (!resume || detached) {
-            put_packet(output, eventState_waitingForInputEventLoop);
+            // put_packet(output, eventState_waitingForInputEventLoop);
         }
 
         if (resume) {
@@ -230,20 +195,15 @@ void init() {
 
     microkit_dbg_puts("Awaiting GDB connection...\n");
 
-    /* Make a coroutine for the rest of the initialization */
-    t_event = co_active();
-    t_main = co_derive((void *) t_main_stack, STACK_SIZE, event_loop);
-
     microkit_dbg_puts("Debugger initialiser complete\n");
-    co_switch(t_main);
+    event_loop();
 }
 
 
 void fault_message() {
-    put_packet(output, eventState_waitingForInputFault);
+    // put_packet(output, eventState_waitingForInputFault);
     // Go back to waiting for normal input after we send the fault packet to the host
     state = eventState_waitingForInputEventLoop;
-    co_switch(t_event);
 }
 
 seL4_Bool fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
@@ -258,10 +218,7 @@ seL4_Bool fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *r
         microkit_dbg_puts("GDB: Internal assertion failed. Could not find faulting thread");
     }
 
-    // Start a coroutine for dealing with the fault and transmitting a message to the host
-    t_event = co_active();
-    t_fault = co_derive((void *) t_fault_stack, STACK_SIZE, fault_message);
-    co_switch(t_fault);
+    fault_message();
 
     if (have_reply) {
         *reply_msginfo = microkit_msginfo_new(0, 0);
@@ -274,7 +231,6 @@ seL4_Bool fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *r
 void notified(microkit_channel ch) {
     if (state == eventState_waitingForInputFault) {
         state = eventState_none;
-        co_switch(t_fault);
     }
 
 
@@ -282,6 +238,5 @@ void notified(microkit_channel ch) {
        handling the fault message. We could probably do this unconditionally?  */
     if (state == eventState_waitingForInputEventLoop) {
         state = eventState_none;
-        co_switch(t_main);
     }
 }
