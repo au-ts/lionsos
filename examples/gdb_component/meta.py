@@ -26,10 +26,6 @@ Map = SystemDescription.Map
 Channel = SystemDescription.Channel
 
 def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
-    debug_pds = [
-        ProtectionDomain(f"faulter{i}", "faulter.elf", priority=i, stack_size=0x100000)
-        for i in range(2)
-    ]
     uart_node = dtb.node(board.serial)
 
     assert uart_node is not None
@@ -54,9 +50,14 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
     serial_system.add_client(debugger)
 
+    debug_pds = [
+        ProtectionDomain(f"faulter{i}", f"faulter{i}.elf", priority=1)
+        for i in range(2)
+    ]
+
     debuggee_pts = SystemDescription.PageTables(setvar="table_metadata")
     for i, pd in enumerate(debug_pds):
-        temp = debuggee_pts.add_entry(pd.name, i)
+        temp = debuggee_pts.add_entry(pd.name, index=i)
     debugger.set_page_tables(debuggee_pts)
 
     for pd in debug_pds:
