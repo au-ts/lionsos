@@ -59,7 +59,7 @@ CFLAGS += \
 	-I$(LIBVSPACE_DIR) \
 	-I${DEBUGGER_INCLUDE}/lwip \
 	-O0 \
-	-funwind-tables -ggdb
+	-ggdb
 
 include $(LIONSOS)/lib/libc/libc.mk
 

@@ -14,6 +14,7 @@
 #include <vspace.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <libco.h>
 
 // The user provides the following mapping regions.
 // The small mapping region must be of page_size 0x1000
@@ -21,15 +22,7 @@
 uintptr_t small_mapping_mr;
 uintptr_t large_mapping_mr;
 
-
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t config;
-
-typedef enum event_state {
-    eventState_none = 0,
-    eventState_waitingForInputEventLoop,
-    eventState_waitingForInputFault
-} event_state_t;
-
 
 typedef struct {
     bool valid;
@@ -57,8 +50,12 @@ char *tx_data;
 serial_queue_handle_t rx_queue_handle;
 serial_queue_handle_t tx_queue_handle;
 
+#define STACK_SIZE 4096
+static char t_main_stack[STACK_SIZE];
+
+cothread_t t_suspended, t_main;
+
 /* The current event state and phase */
-event_state_t state = eventState_none;
 static bool detached = false;
 
 uint32_t gdb_read_word(uint16_t client, uintptr_t addr, char *val)
@@ -102,7 +99,8 @@ void flush()
 char get_char()
 {
     while (serial_queue_empty(&rx_queue_handle, rx_queue_handle.queue->head)) {
-        seL4_Yield();
+        // Switch to a suspended state
+        co_switch(t_suspended);
     }
 
     char c;
@@ -323,18 +321,15 @@ void init() {
 
     microkit_dbg_puts("Debugger initialiser complete\n");
     microkit_dbg_puts("Awaiting GDB connection...\n");
-    event_loop();
+    t_suspended = co_active();
+    t_main = co_derive((void *) t_main_stack, STACK_SIZE, event_loop);
+
+    co_switch(t_main);
 }
 
-
-void fault_message() {
-    put_str(output, strlen(output));
-    flush();
-    // Go back to waiting for normal input after we send the fault packet to the host
-    state = eventState_waitingForInputEventLoop;
-}
 
 seL4_Bool fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
+    microkit_dbg_puts("Faulted!\n");
     seL4_Word reply_mr = 0;
 
     suspend_system();
@@ -346,7 +341,14 @@ seL4_Bool fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *r
         microkit_dbg_puts("GDB: Internal assertion failed. Could not find faulting thread");
     }
 
-    fault_message();
+    int attempts = 0;
+    do {
+        put_transmission(output);
+        flush();
+        seL4_Yield();
+        attempts++;
+        // Give up after 5 attempts
+    } while (!check_transmission() && attempts < 5);
 
     if (have_reply) {
         *reply_msginfo = microkit_msginfo_new(0, 0);
@@ -357,13 +359,5 @@ seL4_Bool fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *r
 }
 
 void notified(microkit_channel ch) {
-    if (state == eventState_waitingForInputFault) {
-        state = eventState_none;
-    }
-
-    /* This is not an else if because we want to switch to the event loop after
-       handling the fault message. We could probably do this unconditionally?  */
-    if (state == eventState_waitingForInputEventLoop) {
-        state = eventState_none;
-    }
+    co_switch(t_main);
 }

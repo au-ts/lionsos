@@ -8,8 +8,8 @@ CFILES := debugger.c
 OFILES := $(CFILES:.c=.o)
 
 debugger.o: $(GDB_COMPONENT_DIR)/debugger/debugger.c | $(LIONS_LIBC)/lib/libc.a
-	$(CC) $(CFLAGS) -O0 -c -o $@ $^
+	$(CC) $(CFLAGS) -c -o $@ $^
 
-debugger.elf: debugger.o libgdb.a
-	${LD} ${LDFLAGS} -O0 -o $@ $^ ${LIBS}
+debugger.elf: debugger.o libgdb.a libco.a libvspace.a | $(LIONS_LIBC)/lib/libc.a
+	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
