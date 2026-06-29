@@ -39,8 +39,18 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     serial_virt_rx = ProtectionDomain("serial_virt_rx", "serial_virt_rx.elf", priority=99)
     serial_system = Sddf.Serial(sdf, uart_node, uart_driver, serial_virt_tx, virt_rx=serial_virt_rx)
 
-
     debugger = ProtectionDomain("debugger", "debugger.elf", priority=98, budget=20000, stack_size=0x100000)
+
+    small_mapping_region = MemoryRegion(sdf, "small_region", 0x1000)
+    sdf.add_mr(small_mapping_region)
+    small_map = Map(small_mapping_region, 0x900000, "rw", setvar_vaddr="small_mapping_mr")
+    debugger.add_map(small_map)
+
+    # large_mapping_region = MemoryRegion(sdf, "large_region", 0x200000, page_size=MemoryRegion.PageSize.LargePage)
+    large_mapping_region = MemoryRegion(sdf, "large_region", 0x200000)
+    sdf.add_mr(large_mapping_region)
+    large_map = Map(large_mapping_region, 0xa00000, "rw", setvar_vaddr="large_mapping_mr")
+    debugger.add_map(large_map)
 
     serial_system.add_client(debugger)
 

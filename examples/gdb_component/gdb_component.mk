@@ -58,6 +58,7 @@ CFLAGS += \
 	-I$(LIBGDB_DIR)/arch_include \
 	-I$(LIBVSPACE_DIR) \
 	-I${DEBUGGER_INCLUDE}/lwip \
+	-O0 \
 	-funwind-tables -ggdb
 
 include $(LIONSOS)/lib/libc/libc.mk
@@ -78,10 +79,10 @@ include $(DEBUGGER_DIR)/debugger.mk
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a libvspace.a
 
 faulter.o: $(GDB_COMPONENT_DIR)/faulter.c | $(LIONS_LIBC)/include
-	${CC} ${CFLAGS} -O0 -c -o $@ $<
+	${CC} ${CFLAGS} -c -o $@ $<
 
 faulter.elf: faulter.o
-	${LD} ${LDFLAGS} -O0 -o $@ $^ ${LIBS}
+	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
 FORCE:
 
@@ -115,7 +116,7 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-chardev pty,id=virtcon \
 		-device virtconsole,chardev=virtcon \
 		-global virtio-mmio.force-legacy=false \
-		-d guest_errors # -S -s
+		-d guest_errors -S -s
 
 
 clean::

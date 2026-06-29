@@ -11,11 +11,16 @@
 #include <stddef.h>
 #include <sddf/serial/config.h>
 #include <sddf/serial/queue.h>
-#include <sddf/util/printf.h>
-#include <sddf/serial/config.h>
 #include <vspace.h>
 #include <stdbool.h>
 #include <stdint.h>
+
+// The user provides the following mapping regions.
+// The small mapping region must be of page_size 0x1000
+// THe large mapping region must be of page_size 0x200000
+uintptr_t small_mapping_mr;
+uintptr_t large_mapping_mr;
+
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t config;
 
@@ -24,6 +29,7 @@ typedef enum event_state {
     eventState_waitingForInputEventLoop,
     eventState_waitingForInputFault
 } event_state_t;
+
 
 typedef struct {
     bool valid;
@@ -80,14 +86,16 @@ void _putchar(char character) {
 }
 
 void put_char(char c) {
-    sddf_putchar_unbuffered(c);
+    serial_enqueue_batch(&tx_queue_handle, 1, &c);
 }
 
 
 void put_str(const char* chars, size_t len) {
-	uint32_t tail = tx_queue_handle.queue->tail;
     serial_enqueue_batch(&tx_queue_handle, len, chars);
-    serial_update_shared_tail(&tx_queue_handle, tail + len);
+}
+
+void flush()
+{
     sddf_notify(config.tx.id);
 }
 
@@ -155,10 +163,12 @@ char* try_get_packet()
 
 void ack_transmission() {
     put_char('+');
+    flush();
 }
 
 void nack_transmission() {
     put_char('-');
+    flush();
 }
 
 char* retry_get_transmission()
@@ -259,24 +269,31 @@ static void event_loop() {
             continue;
         }
 
-        resume = gdb_handle_packet(res.data, output, &detached);
-        int attempts = 0;
-        do {
-            put_transmission(output);
-            seL4_Yield();
-            attempts++;
-            // Give up after 5 attempts
-        } while (!check_transmission() && attempts < 5);
-        if (attempts == 5)
+        if (detached || res.data[0] == 3)
         {
-            microkit_dbg_puts("Transmission not accepted after 5 attempts!\n");
-            continue;
+            suspend_system();
+            detached = false;
         }
-        else
-            microkit_dbg_puts("Transmission accepted!\n");
 
-        if (!resume || detached) {
-            // put_packet(output, eventState_waitingForInputEventLoop);
+        resume = gdb_handle_packet(res.data, output, &detached);
+        if (!resume || detached)
+        {
+            int attempts = 0;
+            do {
+                put_transmission(output);
+                flush();
+                seL4_Yield();
+                attempts++;
+                // Give up after 5 attempts
+            } while (!check_transmission() && attempts < 5);
+
+            if (attempts == 5)
+            {
+                microkit_dbg_puts("Transmission not accepted after 5 attempts!\n");
+                continue;
+            }
+            else
+                microkit_dbg_puts("Transmission accepted!\n");
         }
 
         if (resume) {
@@ -302,17 +319,17 @@ void init() {
     serial_queue_init(&rx_queue_handle, config.rx.queue.vaddr, config.rx.data.size, config.rx.data.vaddr);
     serial_queue_init(&tx_queue_handle, config.tx.queue.vaddr, config.tx.data.size, config.tx.data.vaddr);
 
-    serial_putchar_init(config.tx.id, &tx_queue_handle);
-
-    microkit_dbg_puts("Awaiting GDB connection...\n");
+    libvspace_init_mapping_regions(small_mapping_mr, large_mapping_mr);
 
     microkit_dbg_puts("Debugger initialiser complete\n");
+    microkit_dbg_puts("Awaiting GDB connection...\n");
     event_loop();
 }
 
 
 void fault_message() {
-    // put_packet(output, eventState_waitingForInputFault);
+    put_str(output, strlen(output));
+    flush();
     // Go back to waiting for normal input after we send the fault packet to the host
     state = eventState_waitingForInputEventLoop;
 }
@@ -343,7 +360,6 @@ void notified(microkit_channel ch) {
     if (state == eventState_waitingForInputFault) {
         state = eventState_none;
     }
-
 
     /* This is not an else if because we want to switch to the event loop after
        handling the fault message. We could probably do this unconditionally?  */
