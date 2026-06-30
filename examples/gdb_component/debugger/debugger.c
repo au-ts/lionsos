@@ -33,7 +33,7 @@ typedef struct {
 } gdb_packet_t;
 
 // TODO - DO NOT DEFINE THIS IN MULTIPLE PLACES
-#define NUM_DEBUGEES 2
+#define NUM_DEBUGEES 1
 
 /* Input buffer */
 static char input[BUFSIZE];
@@ -60,22 +60,22 @@ static bool detached = false;
 
 uint32_t gdb_read_word(uint16_t client, uintptr_t addr, char *val)
 {
-    libvspace_read_word(client, addr, val);
+    return libvspace_read_word(client, addr, val);
 }
 
 uint32_t gdb_write_word(uint16_t client, uintptr_t addr, seL4_Word val)
 {
-    libvspace_write_word(client, addr, val);
+    return libvspace_write_word(client, addr, val);
 }
 
 uint32_t gdb_read_bytes(uint16_t client, uintptr_t start_addr, char *buff, uint64_t nbytes)
 {
-    libvspace_read_bytes(client, start_addr, buff, nbytes);
+    return libvspace_read_bytes(client, start_addr, buff, nbytes);
 }
 
 uint32_t gdb_write_bytes(uint16_t client, uintptr_t start_addr, char *buff, uint64_t nbytes)
 {
-    libvspace_write_bytes(client, start_addr, buff, nbytes);
+    return libvspace_write_bytes(client, start_addr, buff, nbytes);
 }
 
 void _putchar(char character) {

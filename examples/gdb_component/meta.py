@@ -52,7 +52,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
     debug_pds = [
         ProtectionDomain(f"faulter{i}", f"faulter{i}.elf", priority=1)
-        for i in range(2)
+        for i in range(1)
     ]
 
     debuggee_pts = SystemDescription.PageTables(setvar="table_metadata")
