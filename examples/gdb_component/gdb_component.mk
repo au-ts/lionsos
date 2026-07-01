@@ -10,8 +10,6 @@ SUPPORTED_BOARDS := \
 IMAGES := \
 	debugger.elf \
 	faulter.elf \
-	faulter0.elf \
-	faulter1.elf \
 	serial_driver.elf \
 	serial_virt_tx.elf \
 	serial_virt_rx.elf
@@ -85,12 +83,6 @@ faulter.o: $(GDB_COMPONENT_DIR)/faulter.c | $(LIONS_LIBC)/include
 
 faulter.elf: faulter.o
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
-
-faulter0.elf: faulter.elf
-	cp faulter.elf faulter0.elf
-
-faulter1.elf: faulter.elf
-	cp faulter.elf faulter1.elf
 
 FORCE:
 

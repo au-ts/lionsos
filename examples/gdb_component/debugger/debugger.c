@@ -33,7 +33,7 @@ typedef struct {
 } gdb_packet_t;
 
 // TODO - DO NOT DEFINE THIS IN MULTIPLE PLACES
-#define NUM_DEBUGEES 1
+#define NUM_DEBUGEES 3
 
 /* Input buffer */
 static char input[BUFSIZE];
