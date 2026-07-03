@@ -28,6 +28,7 @@
 #define MAX_PACKET_SIZE 1024
 #define TIMEOUT_YIELDS 100
 #define MAX_RETRANSMIT_ATTEMPTS 5
+#define INTERRUPT ((char)0x03)
 
 // Requires:
 // a push char function (does not flush)
@@ -143,12 +144,19 @@ char* gdb_retry_get_transmission()
 char* gdb_get_transmission() {
     // $[DATA]#XX
     //         [2 Digit hex checksum]
+    // Also have to consider interrupts.
     char* in = input;
     int count = 0;
     bool charRes = false;
     // state 1: waiting for $
     do {
         in[0] = get_char_or_suspend();
+        // check interrupt
+        if (in[0] == INTERRUPT)
+        {
+            in[1] = 0;
+            return in;
+        }
     } while (in[0] != '$');
     count += 1;
 
@@ -181,6 +189,14 @@ gdb_packet_t gdb_verify_transmission(char* transmission) {
         .cksum = 0,
         .tcksum = 0,
     };
+    // check for interrupt
+    if (*head == INTERRUPT)
+    {
+        packet.valid = true;
+        packet.size = 1;
+        packet.data = transmission;
+        goto gdb_verify_transmission_ret;
+    }
     // Check that the begin packet part exists.
     if (*head != '$') goto gdb_verify_transmission_ret;
     head++;
@@ -201,8 +217,10 @@ gdb_packet_t gdb_verify_transmission(char* transmission) {
 	packet.valid = (packet.tcksum == packet.cksum);
 
 gdb_verify_transmission_ret:
-
-    GDB_LOG("Valid packet: %s", packet.valid ? "true\n" : "false\n");
+    GDB_LOG("Valid packet: %s, interrupt: %s\n", 
+        packet.valid ? "true" : "false", 
+        (*packet.data == INTERRUPT)? "true" : "false"
+    );
 	return packet;
 }
 
@@ -248,6 +266,11 @@ void gdb_event_loop() {
     /* The event loop runs perpetually if we are in the standard event loop phase */
     while (true) {
         char* transmission = gdb_get_transmission();
+        if (transmission == INTERRUPT)
+        {
+            suspend_system();
+            detached = false;
+        }
         gdb_packet_t res = gdb_verify_transmission(transmission);
 
         if (res.valid) gdb_ack_transmission();
