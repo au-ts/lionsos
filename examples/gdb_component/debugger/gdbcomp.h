@@ -1,0 +1,17 @@
+#include <microkit.h>
+#include <sel4/sel4_arch/types.h>
+#define GDB_LOG(...) \ 
+	    printf("GDB | " __VA_ARGS__)
+
+typedef struct {
+    bool valid;
+    char* data;
+    seL4_Word size;
+    uint8_t cksum; // calculated checksum
+    uint8_t tcksum; // transmitted checksum
+} gdb_packet_t;
+
+void gdb_init();
+void gdb_start();
+void gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo);
+void gdb_notified();
