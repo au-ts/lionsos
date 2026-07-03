@@ -42,7 +42,6 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     small_map = Map(small_mapping_region, 0x900000, "rw", setvar_vaddr="small_mapping_mr")
     debugger.add_map(small_map)
 
-    # large_mapping_region = MemoryRegion(sdf, "large_region", 0x200000, page_size=MemoryRegion.PageSize.LargePage)
     large_mapping_region = MemoryRegion(sdf, "large_region", 0x200000)
     sdf.add_mr(large_mapping_region)
     large_map = Map(large_mapping_region, 0xa00000, "rw", setvar_vaddr="large_mapping_mr")

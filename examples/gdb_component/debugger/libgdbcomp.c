@@ -22,9 +22,12 @@
 #include <sddf/util/printf.h>
 #include <printf.h>
 
+// TODO: move num debuggees out of here.
+#define NUM_DEBUGEES 3
+
 #define MAX_PACKET_SIZE 1024
 #define TIMEOUT_YIELDS 100
-#define NUM_DEBUGEES 3
+#define MAX_RETRANSMIT_ATTEMPTS 5
 
 // Requires:
 // a push char function (does not flush)
@@ -38,18 +41,18 @@ extern int gdb_get_char(char* c);
 // The user provides the following mapping regions.
 // The small mapping region must be of page_size 0x1000
 // THe large mapping region must be of page_size 0x200000
-uintptr_t small_mapping_mr;
-uintptr_t large_mapping_mr;
+uintptr_t small_mapping_mr = 0;
+uintptr_t large_mapping_mr = 0;
 
-void gdb_ack_transmission() ;
-void gdb_nack_transmission() ;
+void gdb_ack_transmission();
+void gdb_nack_transmission();
 void gdb_put_transmission(const char* transmission);
-void gdb_event_loop() ;
-void gdb_init() ;
-void gdb_start() ;
-void gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo);
-void gdb_notified() ;
-void gdb_ack_transmission() ;
+void gdb_event_loop();
+void gdb_init();
+void gdb_start();
+seL4_Bool gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo);
+void gdb_notified();
+void gdb_ack_transmission();
 char* gdb_try_get_packet();
 char* gdb_retry_get_transmission();
 char* gdb_get_transmission();
@@ -58,12 +61,12 @@ static bool initialised = false;
 static bool detached = false;
 
 /* Input buffer */
-static char input[BUFSIZE];
+static char input[MAX_PACKET_SIZE];
 
 /* Output buffer */
-static char output[BUFSIZE];
+static char output[MAX_PACKET_SIZE];
 
-#define STACK_SIZE 4096
+#define STACK_SIZE 8192
 static char t_main_stack[STACK_SIZE];
 
 cothread_t t_suspended, t_main;
@@ -138,10 +141,8 @@ char* gdb_retry_get_transmission()
 }
 
 char* gdb_get_transmission() {
-    static const int TIMEOUT = 100;
-
-    // $packet-data#checksum
-    // checksum is 2 digits hex.
+    // $[DATA]#XX
+    //         [2 Digit hex checksum]
     char* in = input;
     int count = 0;
     bool charRes = false;
@@ -154,14 +155,14 @@ char* gdb_get_transmission() {
 	// state 2: getting packet data
     int i = 1;
     do {
-        charRes = get_char_or_yield(TIMEOUT, &in[i]);
+        charRes = get_char_or_yield(TIMEOUT_YIELDS, &in[i]);
         if (charRes) count++;
     } while (charRes && in[i++] != '#');
 
     // state 3: getting checksum
     for (size_t j = i; j < i + 2; j++)
     {
-        charRes = get_char_or_yield(TIMEOUT, &in[j]);
+        charRes = get_char_or_yield(TIMEOUT_YIELDS, &in[j]);
         if (charRes) count++;
         else break;
     }
@@ -212,19 +213,19 @@ bool gdb_check_transmission_success() {
     return c == '+';
 }
 
+static char output_buf[MAX_PACKET_SIZE] = {};
 void gdb_put_transmission(const char* transmission)
 {
-    char outputbuf[1024] = {};
     size_t i = 0;
     const char* cstar = transmission;
     uint8_t cksum = 0;
     // Signal beginning of packet
-    outputbuf[i++] = '$';
+    output_buf[i++] = '$';
 
     // dump packet contents
     while (*cstar != '\0' && i < 1023)
     {
-        outputbuf[i++] = *cstar;
+        output_buf[i++] = *cstar;
         cksum += *cstar;
         cstar++;
     }
@@ -234,12 +235,12 @@ void gdb_put_transmission(const char* transmission)
         return;
     }
     // Signal beginning of cksum
-    outputbuf[i++] = '#';
-    outputbuf[i++] = int_to_hexchar((cksum >> 4) & 0x0f);
-    outputbuf[i++] = int_to_hexchar(cksum & 0x0f);
-    outputbuf[i] = 0;
-    GDB_LOG("Transmitting: '%s'\n", outputbuf);
-    put_str(outputbuf);
+    output_buf[i++] = '#';
+    output_buf[i++] = int_to_hexchar((cksum >> 4) & 0x0f);
+    output_buf[i++] = int_to_hexchar(cksum & 0x0f);
+    output_buf[i] = 0;
+    GDB_LOG("Transmitting: '%s'\n", output_buf);
+    put_str(output_buf);
 }
 
 void gdb_event_loop() {
@@ -291,6 +292,12 @@ void gdb_event_loop() {
 // Should return a gdb_handle_t or something like that?
 void gdb_init() {
     GDB_LOG("Initialising debugger...\n");
+
+    if ((void*)small_mapping_mr == NULL)
+        GDB_ERR("small_mapping_mr has not been given a memory region! small_mapping_mr : %p\n", (void*)small_mapping_mr);
+    if ((void*)large_mapping_mr == NULL)
+        GDB_ERR("large_mapping_mr has not been given a memory region! large_mapping_mr : %p\n", (void*)large_mapping_mr);
+
     /* Register all of the inferiors  */
     for (int i = 0; i < NUM_DEBUGEES; i++) {
         gdb_register_inferior(i, BASE_VSPACE_CAP + i);
@@ -307,13 +314,12 @@ void gdb_init() {
 void gdb_start() {
     if (!initialised)
     {
-        GDB_LOG("Initialisation not complete!\n");
-        *((volatile int*)(NULL));
+        GDB_ERR("gdb_start() called without gdb_init()!\n");
     }
     co_switch(t_main);
 }
 
-void gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
+seL4_Bool gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
     GDB_LOG("Faulted!\n");
     suspend_system();
@@ -334,12 +340,12 @@ void gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *re
         attempts++;
         // Give up after 5 attempts
     } while (!gdb_check_transmission_success() && attempts < 5);
-    // if (have_reply) {
-    //     *reply_msginfo = microkit_msginfo_new(0, 0);
-    //     return true;
-    // }
-
-    // return false;
+    if (have_reply)
+    {
+        *reply_msginfo = microkit_msginfo_new(0, 0);
+        return true;
+    }
+    return false;
 }
 
 void gdb_notified() {

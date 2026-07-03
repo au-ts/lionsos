@@ -48,10 +48,8 @@ void init() {
     gdb_start();
 }
 
-
 seL4_Bool fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
-    gdb_fault(ch, msginfo, reply_msginfo);
-    return false;
+    return gdb_fault(ch, msginfo, reply_msginfo);
 }
 
 void notified(microkit_channel ch) {

@@ -2,6 +2,11 @@
 #include <sel4/sel4_arch/types.h>
 #define GDB_LOG(...) \ 
 	    printf("GDB | " __VA_ARGS__)
+#define GDB_ERR(...) \
+	do { \
+    	printf("GDB_ERR | " __VA_ARGS__); \
+    	*(volatile int*)NULL; \
+	} while (0) 
 
 typedef struct {
     bool valid;
@@ -13,5 +18,5 @@ typedef struct {
 
 void gdb_init();
 void gdb_start();
-void gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo);
+seL4_Bool gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo);
 void gdb_notified();
