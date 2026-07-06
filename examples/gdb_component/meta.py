@@ -63,7 +63,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         assert ethernet_node is not None
         timer_node = dtb.node(board.timer)
         assert uart_node is not None
-        timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=101)
+        timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=102)
         timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
         ethernet_driver = ProtectionDomain(
             "ethernet_driver", "eth_driver.elf", priority=101, budget=100, period=400
@@ -75,8 +75,8 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
             "debugger_net_copier", "network_copy.elf", priority=98, budget=20000
         )
 
-        uart_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
-        serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
+        uart_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=97)
+        serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=96)
         serial_system = Sddf.Serial(sdf, uart_node, uart_driver, serial_virt_tx)
 
         backend = LionsOS_debugger.Debugger.NetBackend(sdf,
@@ -86,7 +86,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
             [serial_system]
         )
 
-        debugger = LionsOS_debugger.Debugger(sdf, backend, priority=98, budget=20000)
+        debugger = LionsOS_debugger.Debugger(sdf, backend, priority=95, budget=20000)
         debugger.add_debuggees(debug_pds)
 
         debuggerPd, lwip_system = debugger.finalise()

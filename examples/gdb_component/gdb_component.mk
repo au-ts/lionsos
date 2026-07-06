@@ -30,7 +30,12 @@ SDDF := $(LIONSOS)/dep/sddf
 SYSTEM_FILE := gdb_component.system
 IMAGE_FILE := gdb_component.img
 REPORT_FILE := report.txt
-UART_DRIV_DIR := virtio
+DEBUGGER_BACKEND ?= serial
+ifeq ($(DEBUGGER_BACKEND),net)
+    UART_DRIV_DIR := arm
+else
+    UART_DRIV_DIR := virtio
+endif
 
 include ${SDDF}/tools/make/board/common.mk
 
@@ -51,7 +56,6 @@ all: ${IMAGE_FILE}
 
 METAPROGRAM := $(GDB_COMPONENT_DIR)/meta.py
 DEBUGGER_DIR := $(LIONSOS)/components/debugger
-DEBUGGER_BACKEND ?= serial
 
 CFLAGS += \
 	-DMICROKIT \
@@ -71,6 +75,27 @@ CFLAGS += \
 	-I$(LWIP)/include/ipv4 \
 	-O0 \
 	-ggdb
+
+QEMU_ARGS := -machine virt,virtualization=on \
+		-cpu cortex-a53 \
+		-serial mon:stdio \
+		-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
+		-m size=2G \
+		-nographic \
+		-global virtio-mmio.force-legacy=false \
+		-d guest_errors \
+		# -S \
+		# -chardev pty,id=gdb0 \
+		# -gdb chardev:gdb0
+
+ifeq ($(DEBUGGER_BACKEND),net)
+QEMU_ARGS += -device virtio-net-device,netdev=netdev0 \
+    -netdev user,id=netdev0,hostfwd=tcp::1234-:1234
+else
+QEMU_ARGS += -device virtio-serial-device \
+        -chardev pty,id=virtcon \
+        -device virtconsole,chardev=virtcon
+endif
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -111,7 +136,6 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
-	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_debugger.data debugger.elf
 ifeq ($(DEBUGGER_BACKEND),net)
 	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf
@@ -123,6 +147,8 @@ ifeq ($(DEBUGGER_BACKEND),net)
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_debugger.data debugger.elf
 	$(OBJCOPY) --update-section .net_client_config=net_client_debugger.data debugger.elf
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_debugger.data debugger.elf
+else
+	$(OBJCOPY) --update-section .serial_virt_rx_config=serial_virt_rx.data serial_virt_rx.elf
 endif
 
 
@@ -133,17 +159,7 @@ qemu_disk:
 	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 GPT
 
 qemu: ${IMAGE_FILE} qemu_disk
-	$(QEMU) -machine virt,virtualization=on \
-		-cpu cortex-a53 \
-		-serial mon:stdio \
-		-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
-		-m size=2G \
-		-nographic \
-		-device virtio-serial-device \
-		-chardev pty,id=virtcon \
-		-device virtconsole,chardev=virtcon \
-		-global virtio-mmio.force-legacy=false \
-		-d guest_errors #-S -s
+	$(QEMU) $(QEMU_ARGS)
 
 
 clean::
