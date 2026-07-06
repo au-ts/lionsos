@@ -40,7 +40,7 @@ all: ${IMAGE_FILE}
 
 
 METAPROGRAM := $(GDB_COMPONENT_DIR)/meta.py
-DEBUGGER_DIR := $(GDB_COMPONENT_DIR)/debugger
+DEBUGGER_DIR := $(LIONSOS)/components/debugger
 
 CFLAGS += \
 	-DMICROKIT \
@@ -91,7 +91,7 @@ $(DTB): $(DTS)
 
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	PYTHONPATH="${SDDF}/tools/meta:$$PYTHONPATH:$(PYTHONPATH)" $(PYTHON) $(METAPROGRAM) \
+	PYTHONPATH="${DEBUGGER_DIR}:${SDDF}/tools/meta:$$PYTHONPATH:$(PYTHONPATH)" $(PYTHON) $(METAPROGRAM) \
 		--sddf $(SDDF) --board $(MICROKIT_BOARD) --output . --sdf $(SYSTEM_FILE) --dtb $(DTB)
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
