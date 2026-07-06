@@ -16,16 +16,16 @@ ifeq ($(findstring $(strip ${DEBUGGER_BACKEND}), ${DEBUGGER_SUPPORTED_BACKENDS})
 endif
 
 
-DEBUGGER_DIR := $(LIONSOS)/components/debugger
+export DEBUGGER_DIR := $(LIONSOS)/components/debugger
 
 # This include adds the target for debugger.o
 include $(DEBUGGER_DIR)/backends/$(DEBUGGER_BACKEND)/debugger.mk
 DEBUGGER_INTEROP := libgdbcomp
 
-$(DEBUGGER_INTEROP).o: $(DEBUGGER_DIR)/$(DEBUGGER_INTEROP).c | $(LIONS_LIBC)/lib/libc.a
+$(DEBUGGER_INTEROP).o: $(DEBUGGER_DIR)/$(DEBUGGER_INTEROP).c libgdb.a libvspace.a
 	$(CC) $(CFLAGS) -I $(DEBUGGER_DIR) -c -o $@ $^
 
-debugger.elf: $(DEBUGGER_OBJS) $(DEBUGGER_LIBS) | $(LIONS_LIBC)/lib/libc.a
+debugger.elf: $(DEBUGGER_OBJS) $(DEBUGGER_LIBS) $(DEBUGGER_INTEROP).o libgdb.a libco.a
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
 -include $(DEBUGGER_INTEROP_O:.o=.d) $(DEPS)

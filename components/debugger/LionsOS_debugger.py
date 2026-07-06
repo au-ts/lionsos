@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 import argparse
 from dataclasses import dataclass
-from typing import List, Union
+from typing import List, Union, Optional
 from sdfgen import SystemDescription as SD, Sddf
 from importlib.metadata import version
 from board import BOARDS
@@ -11,11 +11,36 @@ from enum import Enum, auto
 import itertools
 
 class Debugger():
-    ValidBackends = Sddf.Serial | Sddf.Net
-
     class Backend(Enum):
         SDDF_SERIAL = auto()
         SDDF_NET = auto()
+
+    @dataclass
+    class SerialBackend:
+        serial_system: Sddf.Serial
+        other_systems: Optional[List]=None
+
+        def add_client(self, debugger: SD.ProtectionDomain):
+            serial_system.add_client(debugger)
+            for sys in other_systems:
+                sys.add_client(debugger)
+
+    @dataclass
+    class NetBackend:
+        sdf: SD
+        net_system: Sddf.Net
+        copier: SD.ProtectionDomain
+        timer_system: Sddf.Timer
+        other_systems: Optional[List]=None
+
+        def add_client(self, debugger: SD.ProtectionDomain):
+            self.net_system.add_client_with_copier(debugger, self.copier)
+            self.timer_system.add_client(debugger)
+            for sys in self.other_systems:
+                sys.add_client(debugger)
+            return Sddf.Lwip(self.sdf, self.net_system, debugger)
+
+    ValidBackends = SerialBackend | NetBackend;
 
     def __init__(
             self,
@@ -42,16 +67,17 @@ class Debugger():
         self._stack_size=stack_size
         self._cpu=cpu
         self._sdf = sdf
-        self._backend_system    = backend
+        self._backend = backend
         self._debuggees = []
 
         match type(backend):
-            case Sddf.Serial:
+            case self.SerialBackend:
                 self.backend_type = self.Backend.SDDF_SERIAL
-            case Sddf.Net:
+            case self.NetBackend:
                 self.backend_type = self.Backend.SDDF_NET
             case _:
                 raise TypeError(f"Invalid backend type of {type(backend)}, expected {ValidBackends}")
+
         self._small_mapping_region =    SD.MemoryRegion(sdf,    "small_region", 0x1000)
         self._sdf.add_mr(self._small_mapping_region)
         self._small_map =   SD.Map(self._small_mapping_region, 0x900000,    "rw", setvar_vaddr="small_mapping_mr")
@@ -86,5 +112,5 @@ class Debugger():
         debuggerPd.set_page_tables(self._pts)
         debuggerPd.add_map(self._large_map)
         debuggerPd.add_map(self._small_map)
-        self._backend_system.add_client(debuggerPd)
-        return debuggerPd
+        res = self._backend.add_client(debuggerPd)
+        return (debuggerPd, res)

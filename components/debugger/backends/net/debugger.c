@@ -27,12 +27,7 @@
 #include <vspace.h>
 #include "tcp.h"
 #include "char_queue.h"
-
-// The user provides the following mapping regions.
-// The small mapping region must be of page_size 0x1000
-// THe large mapping region must be of page_size 0x200000
-uintptr_t small_mapping_mr;
-uintptr_t large_mapping_mr;
+#include "gdbcomp.h"
 
 serial_queue_handle_t serial_tx_queue_handle;
 
@@ -46,23 +41,10 @@ __attribute__((__section__(".lib_sddf_lwip_config"))) lib_sddf_lwip_config_t lib
 
 
 int setup_tcp_socket(void);
-
-typedef enum event_state {
-    eventState_none = 0,
-    eventState_waitingForInputEventLoop,
-    eventState_waitingForInputFault
-} event_state_t;
-event_state_t state = eventState_none;
 static bool detached = false;
-
-cothread_t t_event, t_main, t_fault;
 
 // TODO - DO NOT DEFINE THIS IN MULTIPLE PLACES
 #define NUM_DEBUGEES 2
-
-#define STACK_SIZE 4096
-static char t_main_stack[STACK_SIZE];
-static char t_fault_stack[STACK_SIZE];
 
 char_queue_t tcp_input_queue = {
     .tail = 0,
@@ -86,29 +68,6 @@ struct pbuf *tail;
 static int socket_fd;
 static int socket_fd;
 bool tcp_initialized = false;
-static bool debugger_initialized = false;
-
-uint32_t gdb_read_word(uint16_t client, uintptr_t addr, char *val)
-{
-    libvspace_read_word(client, addr, val);
-}
-
-uint32_t gdb_write_word(uint16_t client, uintptr_t addr, seL4_Word val)
-{
-    libvspace_write_word(client, addr, val);
-}
-
-uint32_t gdb_read_bytes(uint16_t client, uintptr_t start_addr, char *buff, uint64_t nbytes)
-{
-    libvspace_read_bytes(client, start_addr, buff, nbytes);
-}
-
-uint32_t gdb_write_bytes(uint16_t client, uintptr_t start_addr, char *buff, uint64_t nbytes)
-{
-    libvspace_write_bytes(client, start_addr, buff, nbytes);
-}
-
-
 
 void _putchar(char character) {
     microkit_dbg_putc(character);
@@ -192,137 +151,21 @@ void transmit(void)
     }
 }
 
-char gdb_get_char(event_state_t new_state) {
-    while (char_queue_empty(&tcp_input_queue, tcp_input_queue.head)) {
-        // Wait for the virt to tell us some input has come through
-        state = new_state;
-        co_switch(t_event);
-    }
-
-    char c;
-    char_dequeue(&tcp_input_queue, &c);
-    return c;
+static size_t output_buf_ind = 0;
+void gdb_put_char(char c) {
+    tcp_output_buf[output_buf_ind++] = c;
 }
 
-char *get_packet(event_state_t new_state) {
-    char c;
-    int count;
-    /* Checksum and expected checksum */
-    unsigned char cksum, xcksum;
-    char *buf = input;
-    (void) buf;
-
-    while (1) {
-        /* Wait for the start character - ignoring all other characters */
-        c = gdb_get_char(new_state);
-        while (c != '$') {
-            /* Ctrl-C character - should result in an interrupt */
-            if (c == 3) {
-                buf[0] = c;
-                buf[1] = 0;
-                return buf;
-            }
-            c = gdb_get_char(new_state);
-        }
-        retry:
-        /* Initialize cksum variables */
-        cksum = 0;
-        xcksum = -1;
-        count = 0;
-
-        /* Read until we see a # or the buffer is full */
-        while (count < BUFSIZE - 1) {
-            c = gdb_get_char(new_state);
-
-            if (c == '$') {
-                goto retry;
-            } else if (c == '#') {
-                break;
-            }
-            cksum += c;
-            buf[count++] = c;
-        }
-
-        /* Null terminate the string */
-        buf[count] = 0;
-
-        if (c == '#') {
-            c = gdb_get_char(new_state);
-            xcksum = hexchar_to_int(c) << 4;
-            c = gdb_get_char(new_state);
-            xcksum += hexchar_to_int(c);
-
-            if (cksum != xcksum) {
-                tcp_send("-", 1);
-            } else {
-                tcp_send("+", 1);
-
-                if (buf[2] == ':') {
-                    tcp_send(&input[1], 1);
-                    tcp_send(&input[2], 1);
-
-                    return &buf[3];
-                }
-
-                return buf;
-            }
-        }
-    }
-
-    return NULL;
+void gdb_flush() {
+    tcp_output_buf[output_buf_ind] = '\0';
+    tcp_send(tcp_output_buf, output_buf_ind);
+    output_buf_ind = 0;
 }
 
-int put_packet(char *output, event_state_t new_state) {
-    uint8_t cksum;
-    char *tcp_output_tmp = tcp_output_buf;
-    for (;;) {
-        *(tcp_output_tmp++) = '$';
-        for (cksum = 0; *output; tcp_output_tmp++, output++) {
-            cksum += *output;
-            *tcp_output_tmp = *output;
-        }
-        *(tcp_output_tmp++) = '#';
-        *(tcp_output_tmp++) = int_to_hexchar(cksum >> 4);
-        *(tcp_output_tmp++) = int_to_hexchar(cksum % 16);
-        *(tcp_output_tmp++) = 0;
-        tcp_send(tcp_output_buf, strnlen(tcp_output_buf, BUFSIZE));
-        char c = gdb_get_char(new_state);
-        if (c == '+') break;
-    }
+int gdb_get_char(char* c) {
+    return char_dequeue(&tcp_input_queue, &c);
 }
 
-void event_loop(){
-    bool resume = false;
-    while (1) {
-        char *input = get_packet(eventState_waitingForInputEventLoop);
-        if (detached || input[0] == 3) {
-            /* If we got a ctrl-c packet, we should suspend the whole system */
-            suspend_system();
-            detached = false;
-        }
-
-        resume = gdb_handle_packet(input, output, &detached);
-
-        if (!resume || detached) {
-            put_packet(output, eventState_waitingForInputEventLoop);
-        }
-
-        if (resume) {
-            resume_system();
-        }
-    }
-}
-
-
-err_t gdb_connected() {
-    /* Set up the coroutines */
-    t_event = co_active();
-    t_main = co_derive((void *) t_main_stack, STACK_SIZE, event_loop);
-
-    /* We have accepted a connection, so we are ready */
-    debugger_initialized = true;
-    co_switch(t_main);
-}
 
 void init(void)
 {
@@ -354,57 +197,18 @@ void init(void)
     sddf_lwip_maybe_notify();
 
     // Setup the mapping regions for libvspace to use.
-    libvspace_init_mapping_regions(small_mapping_mr, large_mapping_mr);
 	microkit_dbg_puts("Finished setting up debugger!\n");
-}
-
-void fault_message() {
-    put_packet(output, eventState_waitingForInputFault);
-    // Go back to waiting for normal input after we send the fault packet to the host
-    state = eventState_waitingForInputEventLoop;
-    co_switch(t_event);
+	gdb_init();
+	gdb_start();
 }
 
 seL4_Bool fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
-    seL4_Word reply_mr = 0;
-
-    suspend_system();
-
-    bool have_reply;
-    DebuggerError err = gdb_handle_fault(ch, 0, microkit_msginfo_get_label(msginfo), &reply_mr, output, &have_reply);
-    if (err) {
-        microkit_dbg_puts("GDB: Internal assertion failed. Could not find faulting thread");
-    }
-
-    // Start a coroutine for dealing with the fault and transmitting a message to the host
-    t_event = co_active();
-    t_fault = co_derive((void *) t_fault_stack, STACK_SIZE, fault_message);
-    co_switch(t_fault);
-
-    if (have_reply) {
-        *reply_msginfo = microkit_msginfo_new(0, 0);
-        return true;
-    }
-
-    return false;
+    return gdb_fault(ch, msginfo, reply_msginfo);
 }
 
 void notified(microkit_channel ch) {
     if (ch == net_config.rx.id) {
         sddf_lwip_process_rx();
-        if (debugger_initialized) {
-            if (state == eventState_waitingForInputFault) {
-                state = eventState_none;
-                co_switch(t_fault);
-            }
-
-            /* This is not an else if because we want to switch to the event loop after
-               handling the fault message. We could probably do this unconditionally?  */
-            if (state == eventState_waitingForInputEventLoop) {
-                state = eventState_none;
-                co_switch(t_main);
-            }
-        }
     } else if (ch == net_config.tx.id) {
         transmit();
     } else if (ch == timer_config.driver_id) {
@@ -416,9 +220,6 @@ void notified(microkit_channel ch) {
         sddf_dprintf("LWIP|LOG: received notification on unexpected channel: %u\n", ch);
     }
 
-    if (tcp_initialized && !debugger_initialized) {
-        gdb_connected();
-    }
-
     sddf_lwip_maybe_notify();
+    gdb_notified();
 }
