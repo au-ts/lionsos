@@ -41,6 +41,7 @@ all: ${IMAGE_FILE}
 
 METAPROGRAM := $(GDB_COMPONENT_DIR)/meta.py
 DEBUGGER_DIR := $(LIONSOS)/components/debugger
+DEBUGGER_BACKEND := serial
 
 CFLAGS += \
 	-DMICROKIT \

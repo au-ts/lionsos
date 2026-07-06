@@ -34,7 +34,6 @@
 // a push char function (does not flush)
 // flushing
 // a get char function (which returns 0 on success and -1 on failure, non-blocking)
-
 extern void gdb_put_char(char c);
 extern void gdb_flush();
 extern int gdb_get_char(char* c);
