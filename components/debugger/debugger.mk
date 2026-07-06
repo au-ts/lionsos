@@ -17,17 +17,15 @@ endif
 
 
 DEBUGGER_DIR := $(LIONSOS)/components/debugger
-_DEBUGGER_BACKEND_FILE := $(DEBUGGER_DIR)/backends/$(DEBUGGER_BACKEND).c
-_DEBUGGER_CFILES := $(_DEBUGGER_BACKEND_FILE) $(DEBUGGER_DIR)/libgdbcomp.c
-_DEBUGGER_OFILES := $(DEBUGGER_CFILES:.c=.o)
 
-libgdbcomp.o: $(DEBUGGER_DIR)/libgdbcomp.c | $(LIONS_LIBC)/lib/libc.a
+# This include adds the target for debugger.o
+include $(DEBUGGER_DIR)/backends/$(DEBUGGER_BACKEND)/debugger.mk
+DEBUGGER_INTEROP := libgdbcomp
+
+$(DEBUGGER_INTEROP).o: $(DEBUGGER_DIR)/$(DEBUGGER_INTEROP).c | $(LIONS_LIBC)/lib/libc.a
 	$(CC) $(CFLAGS) -I $(DEBUGGER_DIR) -c -o $@ $^
 
-debugger.o: $(_DEBUGGER_BACKEND_FILE) | $(LIONS_LIBC)/lib/libc.a
-	$(CC) $(CFLAGS) -I $(DEBUGGER_DIR) -c -o $@ $^
-
-debugger.elf: debugger.o libgdb.a libco.a libvspace.a libgdbcomp.o | $(LIONS_LIBC)/lib/libc.a
+debugger.elf: $(DEBUGGER_OBJS) $(DEBUGGER_LIBS) | $(LIONS_LIBC)/lib/libc.a
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
--include $(DEBUGGER_OFILES:.o=.d)
+-include $(DEBUGGER_INTEROP_O:.o=.d) $(DEPS)
