@@ -355,17 +355,20 @@ void handle_stat(void) {
 
     file_stat->size = fileinfo.fsize;
 
-// Now we have only one fat volume, so we can hard code it here
+    // Now we have only one fat volume, so we can hard code it here
     file_stat->blksize = fatfs.ssize;
 
-// Study how is the structure of the mode, just leave it for now
-    file_stat->mode = 0;
+    // Everyone will have read, write and execute permissions by default
+    // since this driver does not implement client checks and FAT itself
+    // only stores a read-only bit with no concept of user/group/world
+    file_stat->mode = 0777;
+
     if (fileinfo.fattrib & AM_DIR) {
-        file_stat->mode |= S_IFDIR | 0755; // Directory with rwx for owner, rx for group and others
+        file_stat->mode |= S_IFDIR; // Assume regular directory
     } else {
-        // Assume regular file, apply read-only attribute
-        file_stat->mode |= S_IFREG | 0444; // Readable by everyone
+        file_stat->mode |= S_IFREG; // Assume regular file
     }
+
     // Adjust for AM_RDO, if applicable
     if (fileinfo.fattrib & AM_RDO) {
         // If read-only and it's not a directory, remove write permissions.
