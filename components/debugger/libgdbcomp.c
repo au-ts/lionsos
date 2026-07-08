@@ -26,7 +26,7 @@
 #define NUM_DEBUGEES 3
 
 #define MAX_PACKET_SIZE 1024
-#define TIMEOUT_YIELDS 100
+#define TIMEOUT_YIELDS 1000
 #define MAX_RETRANSMIT_ATTEMPTS 5
 #define INTERRUPT ((char)0x03)
 
@@ -264,8 +264,9 @@ void gdb_event_loop() {
     bool resume = false;
     /* The event loop runs perpetually if we are in the standard event loop phase */
     while (true) {
+        GDB_LOG("Awaiting transmission\n");
         char* transmission = gdb_get_transmission();
-        if (transmission == INTERRUPT)
+        if (*transmission == INTERRUPT)
         {
             suspend_system();
             detached = false;

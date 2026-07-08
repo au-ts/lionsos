@@ -21,8 +21,10 @@ class Debugger():
         other_systems: Optional[List]=None
 
         def add_client(self, debugger: SD.ProtectionDomain):
-            serial_system.add_client(debugger)
-            for sys in other_systems:
+            self.serial_system.add_client(debugger)
+            if self.other_systems is None:
+                return
+            for sys in self.other_systems:
                 sys.add_client(debugger)
 
     @dataclass
@@ -36,6 +38,8 @@ class Debugger():
         def add_client(self, debugger: SD.ProtectionDomain):
             self.net_system.add_client_with_copier(debugger, self.copier)
             self.timer_system.add_client(debugger)
+            if self.other_systems is None:
+                return
             for sys in self.other_systems:
                 sys.add_client(debugger)
             return Sddf.Lwip(self.sdf, self.net_system, debugger)

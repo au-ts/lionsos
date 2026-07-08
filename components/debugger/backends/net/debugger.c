@@ -163,7 +163,7 @@ void gdb_flush() {
 }
 
 int gdb_get_char(char* c) {
-    return char_dequeue(&tcp_input_queue, &c);
+    return char_dequeue(&tcp_input_queue, c);
 }
 
 
@@ -207,6 +207,9 @@ seL4_Bool fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *r
 }
 
 void notified(microkit_channel ch) {
+    gdb_notified();
+    // Probably need a better way for yielding, as there is a chance this PD might context switch before being able to run
+    // rx and tx processing.
     if (ch == net_config.rx.id) {
         sddf_lwip_process_rx();
     } else if (ch == net_config.tx.id) {
@@ -221,5 +224,4 @@ void notified(microkit_channel ch) {
     }
 
     sddf_lwip_maybe_notify();
-    gdb_notified();
 }
