@@ -1,0 +1,117 @@
+# Initial Task (CapDL Initialiser) Details
+
+# IRQ Details
+	- IRQ: 'irq_79_unified_graphics_manager'
+		* Number: 79
+		* Trigger: level
+		* CPU: 0
+
+
+# TCB Details
+	- TCB: 'tcb_monitor'
+		* IP: 0x200000
+		* SP: 0x10000000000
+		* IPC Buffer: 0x206000
+		* Priority: 255
+		* CPU Affinity: 0
+		* Bound Objects:
+			-> VSpace: 'pud_monitor'
+			-> IPC Buffer: 'frame_ipcbuf_monitor'
+			-> CSpace: 'cnode_monitor'
+			-> Scheduling Context: 'sched_context_monitor'
+
+	- TCB: 'tcb_unified_graphics_manager'
+		* IP: 0x200000
+		* SP: 0x10000000000
+		* IPC Buffer: 0x202000
+		* Priority: 200
+		* CPU Affinity: 0
+		* Bound Objects:
+			-> CSpace: 'cnode_unified_graphics_manager'
+			-> VSpace: 'pud_unified_graphics_manager'
+			-> IPC Buffer: 'frame_ipcbuf_unified_graphics_manager'
+			-> Fault Endpoint: 'ep_fault_monitor'
+			-> Scheduling Context: 'sched_context_unified_graphics_manager'
+			-> Notification: 'ntfn_unified_graphics_manager'
+
+
+# CNode Details
+	- CNode: 'cnode_monitor'
+		* Slot: 1
+			-> Object: 'ep_fault_monitor'
+			-> Rights: Read, Write, Grant
+			-> Badge: 0x0
+		* Slot: 2
+			-> Object: 'reply_monitor'
+		* Slot: 10
+			-> Object: 'tcb_unified_graphics_manager'
+
+	- CNode: 'cnode_unified_graphics_manager'
+		* Slot: 1
+			-> Object: 'ntfn_unified_graphics_manager'
+			-> Rights: Read, Write
+			-> Badge: 0x0
+		* Slot: 2
+			-> Object: 'ep_fault_monitor'
+			-> Rights: Read, Write, Grant
+			-> Badge: 0x1
+		* Slot: 3
+			-> Object: 'pud_unified_graphics_manager'
+		* Slot: 4
+			-> Object: 'reply_unified_graphics_manager'
+		* Slot: 139
+			-> Object: 'irq_79_unified_graphics_manager'
+
+
+# Architecture Specific Details
+
+# Kernel Objects Details: ID, Type, Name, Physical Address
+	0 - Page(4 KiB): 'frame_mr_virtio_regs_000000000' @ 0x00000a001000
+	1 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000000' @ 0x000080000000
+	2 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000001' @ 0x000080200000
+	3 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000002' @ 0x000080400000
+	4 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000003' @ 0x000080600000
+	5 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000004' @ 0x000080800000
+	6 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000005' @ 0x000080a00000
+	7 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000006' @ 0x000080c00000
+	8 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000007' @ 0x000080e00000
+	9 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000008' @ 0x000081000000
+	10 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000009' @ 0x000081200000
+	11 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000010' @ 0x000081400000
+	12 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000011' @ 0x000081600000
+	13 - Page(2 MiB): 'frame_mr_graphics_arena_client0_000000012' @ 0x000081800000
+	14 - CNode: 'cnode_monitor' @ 0x000060000000
+	15 - CNode: 'cnode_unified_graphics_manager' @ 0x000060004000
+	16 - PageTable: 'pud_monitor' @ 0x000060008000
+	17 - PageTable: 'pud_unified_graphics_manager' @ 0x00006000a000
+	18 - Page(4 KiB): 'frame_elf_monitor_000000000' @ 0x00006000c000
+	19 - Page(4 KiB): 'frame_elf_monitor_000000001' @ 0x00006000d000
+	20 - Page(4 KiB): 'frame_elf_monitor_000000002' @ 0x00006000e000
+	21 - Page(4 KiB): 'frame_elf_monitor_000000003' @ 0x00006000f000
+	22 - Page(4 KiB): 'frame_elf_monitor_000000004' @ 0x00006029e000
+	23 - Page(4 KiB): 'frame_elf_monitor_000000005' @ 0x00006029f000
+	24 - Page(4 KiB): 'frame_elf_unified_graphics_manager_000000000' @ 0x0000602a0000
+	25 - Page(4 KiB): 'frame_elf_unified_graphics_manager_000000001' @ 0x0000602a1000
+	26 - Page(4 KiB): 'frame_ipcbuf_monitor' @ 0x0000602a2000
+	27 - Page(4 KiB): 'frame_ipcbuf_unified_graphics_manager' @ 0x0000602a3000
+	28 - Page(4 KiB): 'frame_monitor_stack' @ 0x0000602a4000
+	29 - Page(4 KiB): 'frame_unified_graphics_manager_stack_000000000' @ 0x0000602a5000
+	30 - Page(4 KiB): 'frame_unified_graphics_manager_stack_000000001' @ 0x0000602a6000
+	31 - PageTable: 'pd_monitor_vaddr_0x0' @ 0x0000602a7000
+	32 - PageTable: 'pd_monitor_vaddr_0xffc0000000' @ 0x0000602a8000
+	33 - PageTable: 'pd_unified_graphics_manager_vaddr_0x0' @ 0x0000602a9000
+	34 - PageTable: 'pd_unified_graphics_manager_vaddr_0x40000000' @ 0x0000602aa000
+	35 - PageTable: 'pd_unified_graphics_manager_vaddr_0xffc0000000' @ 0x0000602ab000
+	36 - PageTable: 'pt_monitor_vaddr_0x200000' @ 0x0000602ac000
+	37 - PageTable: 'pt_monitor_vaddr_0xffffe00000' @ 0x0000602ad000
+	38 - PageTable: 'pt_unified_graphics_manager_vaddr_0x200000' @ 0x0000602ae000
+	39 - PageTable: 'pt_unified_graphics_manager_vaddr_0xa000000' @ 0x0000602af000
+	40 - PageTable: 'pt_unified_graphics_manager_vaddr_0xffffe00000' @ 0x0000602b0000
+	41 - TCB: 'tcb_monitor' @ 0x0000602b1000
+	42 - TCB: 'tcb_unified_graphics_manager' @ 0x0000602b1800
+	43 - SchedContext: 'sched_context_monitor' @ 0x0000602b2000
+	44 - SchedContext: 'sched_context_unified_graphics_manager' @ 0x0000602b2100
+	45 - Notification: 'ntfn_unified_graphics_manager' @ 0x0000602b2200
+	46 - Reply: 'reply_monitor' @ 0x0000602b2240
+	47 - Reply: 'reply_unified_graphics_manager' @ 0x0000602b2260
+	48 - Endpoint: 'ep_fault_monitor' @ 0x0000602b2280
