@@ -42,14 +42,15 @@ IMAGES := timer_driver.elf \
     vmm.elf \
     serial_driver.elf \
     serial_virt_rx.elf \
-    serial_virt_tx.elf
+    serial_virt_tx.elf \
+		display_manager.elf
 
 CFLAGS += \
   -Wno-bitwise-op-parentheses \
   -Wno-shift-op-parentheses \
   -I$(LIONSOS)/include \
   -I$(SDDF)/include \
-  -I$(SDDF)/include/microkit
+  -I$(SDDF)/include/microkit 
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -93,6 +94,20 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
 %.o: %.c ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<
+
+
+DISPLAY_MANAGER_CFLAGS := -I$(LIONSOS)/dep/libvmm/dep/sddf/include \
+  -I$(LIONSOS)/dep/libvmm/dep/sddf/examples/gpu/include \
+  -I$(LIONSOS)/dep/sddf/drivers/gpu/virtio 
+
+
+# Compile the Display Manager C code into an object file
+display_manager.o: ../src/display_manager/display_manager.c
+	$(CC) -c $(CFLAGS) $(DISPLAY_MANAGER_CFLAGS) $< -o $@
+
+# Link the object file into a Microkit ELF executable
+display_manager.elf: display_manager.o
+	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) \

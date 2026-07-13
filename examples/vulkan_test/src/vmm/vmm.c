@@ -23,6 +23,9 @@ __attribute__((__section__(".vmm_config"))) vmm_config_t config;
  * IRQs delivered by the VMM into the guest.
  */
 #define UIO_GPU_IRQ 50
+
+#define VIRTIO_GPU_MMIO_BASE 0xa001000
+#define VIRTIO_GPU_MMIO_SIZE 0x1000
 /* For when we get notified from MicroPython */
 
 /* Data for the guest's kernel image. */
@@ -43,6 +46,22 @@ bool uio_init_handler(size_t vcpu_id, uintptr_t addr, size_t fsr,
                       seL4_UserContext* regs, void* data) {
   // microkit_notify(MICROPYTHON_CH);
   return true;
+}
+
+bool virtio_gpu_handler(size_t vcpu_id, uintptr_t addr, size_t fsr,
+                        seL4_UserContext* regs, void* data) {
+    /* 
+     * Phase 4: The VMM Bridge.
+     * We have successfully intercepted Linux trying to talk to the GPU!
+     */
+    LOG_VMM("GPU PROXY: Intercepted guest MMIO access at 0x%lx\n", addr);
+
+    /* 
+     * For now, we return true to emulate a "silent drop". This tells libvmm 
+     * to advance the guest instruction pointer past the faulting read/write 
+     * so Linux can continue booting without panicking.
+     */
+    return true;
 }
 
 void init(void) {
@@ -78,6 +97,8 @@ void init(void) {
   virq_register(GUEST_VCPU_ID, UIO_GPU_IRQ, &uio_gpu_ack, NULL);
   fault_register_vm_exception_handler(FB_UIO_INIT_ADDRESS, sizeof(size_t),
                                       &uio_init_handler, NULL);
+  fault_register_vm_exception_handler(VIRTIO_GPU_MMIO_BASE, VIRTIO_GPU_MMIO_SIZE,
+                                    &virtio_gpu_handler, NULL);
 
   /* Finally start the guest */
   guest_start(GUEST_VCPU_ID, kernel_pc, config.dtb, config.initrd);

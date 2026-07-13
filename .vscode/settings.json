@@ -1,0 +1,6 @@
+{
+  "cmake.sourceDirectory": "/Users/personal/Documents/University/lionsos/dep/libnfs/examples",
+  "python.analysis.extraPaths": [
+    "/Users/personal/Documents/University/lionsos/dep/sddf/tools/meta"
+  ]
+}
