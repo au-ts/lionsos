@@ -34,6 +34,9 @@ export FW_EXT_IP=172.16.2.1
 # Firewall external subnet network bits
 export FW_EXT_SUBNET=12
 
+# External subnet broadcast address
+export FW_EXT_BROADCAST=172.31.255.255
+
 # External root IP address
 export EXT_ROOT_IP=172.16.2.2
 
@@ -45,6 +48,9 @@ export FW_INT_IP=192.168.1.1
 
 # Firewall internal subnet network bits
 export FW_INT_SUBNET=24
+
+# Internal subnet broadcast address
+export FW_INT_BROADCAST=192.168.1.255
 
 # Internal root IP address
 export INT_ROOT_IP=192.168.1.2

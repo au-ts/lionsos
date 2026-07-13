@@ -240,8 +240,8 @@ static void route(void)
                 ip_hdr->ttl -= 1;
 
                 uint32_t next_hop = ip_hdr->dst_ip;
-                uint8_t out_interface;
-                fw_routing_err_t fw_err = fw_routing_find_route(routing_table, &next_hop, &out_interface);
+                uint8_t subnet, out_interface;
+                fw_routing_err_t fw_err = fw_routing_find_route(routing_table, &next_hop, &subnet, &out_interface);
                 assert(fw_err == ROUTING_ERR_OKAY);
 
                 if (next_hop == FW_ROUTING_NONEXTHOP || next_hop == router_config.interfaces[out_interface].ip) {
@@ -255,6 +255,16 @@ static void route(void)
                                                  .len = buffer.len,
                                                  .interface = interface };
                     enqueue_icmp_unreachable(fw_buffer, next_hop);
+                    err = fw_enqueue(&rx_free[interface], &buffer);
+                    assert(!err);
+                    returned[interface] = true;
+                    continue;
+                } else if ((~subnet_mask(subnet) | next_hop) == ip_hdr->dst_ip) {
+                    /* Checks if destination IP address is a subnet broadcast, we do not transmit broadcast traffic across subnets */
+                    if (FW_DEBUG_OUTPUT) {
+                        sddf_printf("ROUTING_LOG: dropping a subnet broadcast IP packet with destination %s\n",
+                                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0));
+                    }
                     err = fw_enqueue(&rx_free[interface], &buffer);
                     assert(!err);
                     returned[interface] = true;
