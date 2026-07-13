@@ -1,0 +1,6 @@
+build/
+microkit-sdk-2.2.0/
+.vscode
+board/
+*.txt
+*.sdf
