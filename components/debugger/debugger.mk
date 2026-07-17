@@ -20,12 +20,12 @@ export DEBUGGER_DIR := $(LIONSOS)/components/debugger
 
 # This include adds the target for debugger.o
 include $(DEBUGGER_DIR)/backends/$(DEBUGGER_BACKEND)/debugger.mk
-DEBUGGER_INTEROP := libgdbcomp
+# adds DEBUGGER_OBJS
 
-$(DEBUGGER_INTEROP).o: $(DEBUGGER_DIR)/$(DEBUGGER_INTEROP).c libgdb.a libvspace.a
+gdb_interop.o: $(DEBUGGER_DIR)/gdb_interop.c libgdb.a libvspace.a
 	$(CC) $(CFLAGS) -I $(DEBUGGER_DIR) -c -o $@ $^
 
-debugger.elf: $(DEBUGGER_OBJS) $(DEBUGGER_LIBS) $(DEBUGGER_INTEROP).o libgdb.a libco.a
+debugger.elf: $(DEBUGGER_OBJS) $(DEBUGGER_LIBS) gdb_interop.o libgdb.a libco.a
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
 -include $(DEBUGGER_INTEROP_O:.o=.d) $(DEPS)

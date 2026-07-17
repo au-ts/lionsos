@@ -23,8 +23,8 @@ TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 export BOARD := $(MICROKIT_BOARD)
-# DTB := $(MICROKIT_BOARD).dtb
-# DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
+DTB := $(MICROKIT_BOARD).dtb
+DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
 
 SDDF := $(LIONSOS)/dep/sddf
 SYSTEM_FILE := gdb_component.system
@@ -51,9 +51,6 @@ TIMER_DRIVER:=$(SDDF)/drivers/timer/$(TIMER_DRIV_DIR)
 LWIP:=$(SDDF)/network/ipstacks/lwip/src
 
 
-all: ${IMAGE_FILE}
-
-
 METAPROGRAM := $(GDB_COMPONENT_DIR)/meta.py
 DEBUGGER_DIR := $(LIONSOS)/components/debugger
 
@@ -73,7 +70,6 @@ CFLAGS += \
 	-I$(LIBVSPACE_DIR) \
 	-I$(LWIP)/include \
 	-I$(LWIP)/include/ipv4 \
-	-O0 \
 	-ggdb
 
 QEMU_ARGS := -machine virt,virtualization=on \
@@ -83,10 +79,7 @@ QEMU_ARGS := -machine virt,virtualization=on \
 		-m size=2G \
 		-nographic \
 		-global virtio-mmio.force-legacy=false \
-		-d guest_errors \
-		# -S \
-		# -chardev pty,id=gdb0 \
-		# -gdb chardev:gdb0
+		-d guest_errors
 
 ifeq ($(DEBUGGER_BACKEND),net)
 QEMU_ARGS += -device virtio-net-device,netdev=netdev0 \
@@ -99,11 +92,11 @@ endif
 
 include $(LIONSOS)/lib/libc/libc.mk
 
-LDFLAGS := --eh-frame-hdr -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(GDB_COMPONENT_DIR)/build
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(GDB_COMPONENT_DIR)/build
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc libvspace.a
 
-SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 
+SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include ${SDDF}/util/util.mk
 include ${SDDF}/libco/libco.mk
 include ${SERIAL_DRIVER}/serial_driver.mk
@@ -115,6 +108,9 @@ include ${SDDF}/network/components/network_components.mk
 include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
 include ${TIMER_DRIVER}/timer_driver.mk
 include ${ETHERNET_DRIVER}/eth_driver.mk
+
+
+all: ${IMAGE_FILE}
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a libvspace.a
 

@@ -27,7 +27,7 @@
 #include <vspace.h>
 #include "tcp.h"
 #include "char_queue.h"
-#include "gdbcomp.h"
+#include "gdb_interop.h"
 
 serial_queue_handle_t serial_tx_queue_handle;
 
@@ -152,17 +152,17 @@ void transmit(void)
 }
 
 static size_t output_buf_ind = 0;
-void gdb_put_char(char c) {
+void debugger_put_char(char c) {
     tcp_output_buf[output_buf_ind++] = c;
 }
 
-void gdb_flush() {
+void debugger_flush() {
     tcp_output_buf[output_buf_ind] = '\0';
     tcp_send(tcp_output_buf, output_buf_ind);
     output_buf_ind = 0;
 }
 
-int gdb_get_char(char* c) {
+int debugger_get_char(char* c) {
     return char_dequeue(&tcp_input_queue, c);
 }
 
@@ -195,16 +195,16 @@ void init(void)
 
     // Setup the mapping regions for libvspace to use.
 	microkit_dbg_puts("Finished setting up debugger!\n");
-	gdb_init();
-	gdb_start();
+	debugger_init();
+	debugger_start();
 }
 
 seL4_Bool fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
-    return gdb_fault(ch, msginfo, reply_msginfo);
+    return debugger_fault(ch, msginfo, reply_msginfo);
 }
 
 void notified(microkit_channel ch) {
-    gdb_notified();
+    debugger_notified();
     // Probably need a better way for yielding, as there is a chance this PD might context switch before being able to run
     // rx and tx processing.
     if (ch == net_config.rx.id) {

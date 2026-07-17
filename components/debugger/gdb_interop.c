@@ -18,7 +18,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <libco.h>
-#include "gdbcomp.h"
+#include "gdb_interop.h"
 #include <sddf/util/printf.h>
 #include <printf.h>
 
@@ -34,9 +34,9 @@
 // a push char function (does not flush)
 // flushing
 // a get char function (which returns 0 on success and -1 on failure, non-blocking)
-extern void gdb_put_char(char c);
-extern void gdb_flush();
-extern int gdb_get_char(char* c);
+extern void debugger_put_char(char c);
+extern void debugger_flush();
+extern int debugger_get_char(char* c);
 
 // The user provides the following mapping regions.
 // The small mapping region must be of page_size 0x1000
@@ -44,20 +44,20 @@ extern int gdb_get_char(char* c);
 uintptr_t small_mapping_mr = 0;
 uintptr_t large_mapping_mr = 0;
 
-void gdb_ack_transmission();
-void gdb_nack_transmission();
-void gdb_put_transmission(const char* transmission);
-void gdb_event_loop();
-void gdb_init();
-void gdb_start();
-seL4_Bool gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo);
-void gdb_notified();
-void gdb_ack_transmission();
-char* gdb_try_get_packet();
-char* gdb_retry_get_transmission();
-char* gdb_get_transmission();
+void debugger_ack_transmission();
+void debugger_nack_transmission();
+void debugger_put_transmission(const char* transmission);
+void debugger_event_loop();
+void debugger_init();
+void debugger_start();
+seL4_Bool debugger_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo);
+void debugger_notified();
+void debugger_ack_transmission();
+char* debugger_try_get_packet();
+char* debugger_retry_get_transmission();
+char* debugger_get_transmission();
 
-static void gdb_suspend();
+static void debugger_suspend();
 
 static bool initialised = false;
 static bool detached = false;
@@ -75,41 +75,41 @@ cothread_t t_suspended = NULL;
 cothread_t t_main = NULL;
 cothread_t t_notified = NULL;
 
-static bool gdb_fromNotification = false;
+static bool debugger_fromNotification = false;
 
 static void put_str(char* c)
 {
     while (*c != '\0')
     {
-        gdb_put_char(*(c++));
+        debugger_put_char(*(c++));
     }
 }
 
 static char get_char_or_suspend()
 {
     char c;
-    while (gdb_get_char(&c) != 0)
+    while (debugger_get_char(&c) != 0)
     {
-        gdb_suspend();
+        debugger_suspend();
     }
     return c;
 }
 
 static bool try_get_char(char* c, size_t maxAttempts) {
     size_t curAttempt = 0;
-    while (gdb_get_char(c) != 0 && curAttempt < maxAttempts)
+    while (debugger_get_char(c) != 0 && curAttempt < maxAttempts)
     {
         curAttempt++;
-        gdb_suspend();
+        debugger_suspend();
     }
 
     return curAttempt <= maxAttempts;
 }
 
-static void gdb_suspend() {
-    if (gdb_fromNotification)
+static void debugger_suspend() {
+    if (debugger_fromNotification)
     {
-        gdb_fromNotification = false;
+        debugger_fromNotification = false;
         co_switch(t_notified);
     } else {
         co_switch(t_suspended);
@@ -136,28 +136,28 @@ uint32_t gdb_write_bytes(uint16_t client, uintptr_t start_addr, char *buff, uint
     return libvspace_write_bytes(client, start_addr, buff, nbytes);
 }
 
-char* gdb_try_get_packet()
+char* debugger_try_get_packet()
 {
-    return gdb_get_transmission();
+    return debugger_get_transmission();
 }
 
-void gdb_ack_transmission() {
-    gdb_put_char('+');
-    gdb_flush();
+void debugger_ack_transmission() {
+    debugger_put_char('+');
+    debugger_flush();
 }
 
-void gdb_nack_transmission() {
-    gdb_put_char('-');
-    gdb_flush();
+void debugger_nack_transmission() {
+    debugger_put_char('-');
+    debugger_flush();
 }
 
-char* gdb_retry_get_transmission()
+char* debugger_retry_get_transmission()
 {
-    gdb_nack_transmission();
-    return gdb_get_transmission();
+    debugger_nack_transmission();
+    return debugger_get_transmission();
 }
 
-char* gdb_get_transmission() {
+char* debugger_get_transmission() {
     // $[DATA]#XX
     //         [2 Digit hex checksum]
     // Also have to consider interrupts.
@@ -192,13 +192,13 @@ char* gdb_get_transmission() {
     }
     // null terminate
     in[count] = '\0';
-    GDB_LOG("Got transmission: '%s' of length %d\n", in, count);
+    DEBUGGER_LOG("Got transmission: '%s' of length %d\n", in, count);
     return in;
 }
 
-gdb_packet_t gdb_verify_transmission(char* transmission) {
+debugger_packet_t debugger_verify_transmission(char* transmission) {
     char* head = transmission;
-    gdb_packet_t packet = {
+    debugger_packet_t packet = {
         .valid = false,
         .data = "INVALID!",
         .size = 0,
@@ -211,10 +211,10 @@ gdb_packet_t gdb_verify_transmission(char* transmission) {
         packet.valid = true;
         packet.size = 1;
         packet.data = transmission;
-        goto gdb_verify_transmission_ret;
+        goto debugger_verify_transmission_ret;
     }
     // Check that the begin packet part exists.
-    if (*head != '$') goto gdb_verify_transmission_ret;
+    if (*head != '$') goto debugger_verify_transmission_ret;
     head++;
     // Do not support sequence-id from gdb version 5.0 or less.
     while (head[packet.size] != '#' && packet.size < MAX_PACKET_SIZE)
@@ -222,7 +222,7 @@ gdb_packet_t gdb_verify_transmission(char* transmission) {
         packet.cksum += head[packet.size];
         packet.size++;
     };
-    if (packet.size == MAX_PACKET_SIZE) goto gdb_verify_transmission_ret;
+    if (packet.size == MAX_PACKET_SIZE) goto debugger_verify_transmission_ret;
     packet.data = head;
     head += packet.size;
 
@@ -232,15 +232,15 @@ gdb_packet_t gdb_verify_transmission(char* transmission) {
 	packet.tcksum += hexchar_to_int(head[1]);
 	packet.valid = (packet.tcksum == packet.cksum);
 
-gdb_verify_transmission_ret:
-    GDB_LOG("Valid packet: %s, interrupt: %s\n", 
+debugger_verify_transmission_ret:
+    DEBUGGER_LOG("Valid packet: %s, interrupt: %s\n", 
         packet.valid ? "true" : "false", 
         (*packet.data == INTERRUPT)? "true" : "false"
     );
 	return packet;
 }
 
-bool gdb_check_transmission_success() {
+bool debugger_check_transmission_success() {
     // Yield to quickly process stuff.
     char c;
     if (!try_get_char(&c, TIMEOUT_YIELDS)) return false;
@@ -248,7 +248,7 @@ bool gdb_check_transmission_success() {
 }
 
 static char output_buf[MAX_PACKET_SIZE] = {};
-void gdb_put_transmission(const char* transmission)
+void debugger_put_transmission(const char* transmission)
 {
     size_t i = 0;
     const char* cstar = transmission;
@@ -265,7 +265,7 @@ void gdb_put_transmission(const char* transmission)
     }
     if (i >= 1023) 
     {
-        GDB_LOG("Packet size is too large!\n");
+        DEBUGGER_LOG("Packet size is too large!\n");
         return;
     }
     // Signal beginning of cksum
@@ -273,26 +273,26 @@ void gdb_put_transmission(const char* transmission)
     output_buf[i++] = int_to_hexchar((cksum >> 4) & 0x0f);
     output_buf[i++] = int_to_hexchar(cksum & 0x0f);
     output_buf[i] = 0;
-    GDB_LOG("Transmitting: '%s'\n", output_buf);
+    DEBUGGER_LOG("Transmitting: '%s'\n", output_buf);
     put_str(output_buf);
 }
 
-void gdb_event_loop() {
+void debugger_event_loop() {
     bool resume = false;
     /* The event loop runs perpetually if we are in the standard event loop phase */
     while (true) {
-        GDB_LOG("Awaiting transmission\n");
-        char* transmission = gdb_get_transmission();
+        DEBUGGER_LOG("Awaiting transmission\n");
+        char* transmission = debugger_get_transmission();
         if (*transmission == INTERRUPT)
         {
             suspend_system();
             detached = false;
         }
-        gdb_packet_t res = gdb_verify_transmission(transmission);
+        debugger_packet_t res = debugger_verify_transmission(transmission);
 
-        if (res.valid) gdb_ack_transmission();
+        if (res.valid) debugger_ack_transmission();
         else {
-            gdb_nack_transmission(); 
+            debugger_nack_transmission(); 
             continue;
         }
 
@@ -307,20 +307,20 @@ void gdb_event_loop() {
         {
             int attempts = 0;
             do {
-                gdb_put_transmission(output);
-                gdb_flush();
+                debugger_put_transmission(output);
+                debugger_flush();
                 seL4_Yield();
                 attempts++;
                 // Give up after 5 attempts
-            } while (!gdb_check_transmission_success() && attempts < 5);
+            } while (!debugger_check_transmission_success() && attempts < 5);
 
             if (attempts == 5)
             {
-                GDB_LOG("Transmission not accepted after 5 attempts!\n");
+                DEBUGGER_LOG("Transmission not accepted after 5 attempts!\n");
                 continue;
             }
             else
-                GDB_LOG("Transmission accepted!\n");
+                DEBUGGER_LOG("Transmission accepted!\n");
         }
 
         if (resume) {
@@ -329,13 +329,13 @@ void gdb_event_loop() {
     }
 }
 
-void gdb_init() {
-    GDB_LOG("Initialising debugger...\n");
+void debugger_init() {
+    DEBUGGER_LOG("Initialising debugger...\n");
 
     if ((void*)small_mapping_mr == NULL)
-        GDB_ERR("small_mapping_mr has not been given a memory region! small_mapping_mr : %p\n", (void*)small_mapping_mr);
+        DEBUGGER_ERR("small_mapping_mr has not been given a memory region! small_mapping_mr : %p\n", (void*)small_mapping_mr);
     if ((void*)large_mapping_mr == NULL)
-        GDB_ERR("large_mapping_mr has not been given a memory region! large_mapping_mr : %p\n", (void*)large_mapping_mr);
+        DEBUGGER_ERR("large_mapping_mr has not been given a memory region! large_mapping_mr : %p\n", (void*)large_mapping_mr);
 
     /* Register all of the inferiors  */
     for (int i = 0; i < NUM_DEBUGEES; i++) {
@@ -347,23 +347,23 @@ void gdb_init() {
     // use mapping regions to be able to perform page mapping accesses as the parent.
     libvspace_init_mapping_regions(small_mapping_mr, large_mapping_mr);
     t_suspended = co_active();
-    t_main = co_derive((void *) t_main_stack, STACK_SIZE, gdb_event_loop);
+    t_main = co_derive((void *) t_main_stack, STACK_SIZE, debugger_event_loop);
     t_notified = 0;
-    GDB_LOG("Initialisation complete!\n");
+    DEBUGGER_LOG("Initialisation complete!\n");
     initialised = true;
 }
 
-void gdb_start() {
+void debugger_start() {
     if (!initialised)
     {
-        GDB_ERR("gdb_start() called without gdb_init()!\n");
+        DEBUGGER_ERR("debugger_start() called without debugger_init()!\n");
     }
     co_switch(t_main);
 }
 
-seL4_Bool gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
+seL4_Bool debugger_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
-    GDB_LOG("Faulted!\n");
+    DEBUGGER_LOG("Faulted!\n");
     suspend_system();
     seL4_Word reply_mr = 0;
 
@@ -371,17 +371,17 @@ seL4_Bool gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginf
     bool have_reply = false;
     DebuggerError err = gdb_handle_fault(ch, 0, microkit_msginfo_get_label(msginfo), &reply_mr, output, &have_reply);
     if (err) {
-        GDB_LOG("GDB: Internal assertion failed. Could not find faulting thread");
+        DEBUGGER_LOG("Internal assertion failed. Could not find faulting thread");
     }
 
     int attempts = 0;
     do {
-        gdb_put_transmission(output);
-        gdb_flush();
+        debugger_put_transmission(output);
+        debugger_flush();
         seL4_Yield();
         attempts++;
         // Give up after 5 attempts
-    } while (!gdb_check_transmission_success() && attempts < 5);
+    } while (!debugger_check_transmission_success() && attempts < 5);
     if (have_reply)
     {
         *reply_msginfo = microkit_msginfo_new(0, 0);
@@ -390,8 +390,8 @@ seL4_Bool gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginf
     return false;
 }
 
-void gdb_notified() {
-    gdb_fromNotification = true;
+void debugger_notified() {
+    debugger_fromNotification = true;
 
     // If we are switching to the main event loop from a notification, when
     // we are waiting for more input we need to switch back out, hence jumping to

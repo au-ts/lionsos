@@ -7,7 +7,7 @@
 #include <microkit.h>
 #include <sel4/sel4_arch/types.h>
 #include <gdb.h>
-#include "gdbcomp.h"
+#include "gdb_interop.h"
 #include <util.h>
 #include <stddef.h>
 #include <sddf/serial/config.h>
@@ -26,15 +26,15 @@ void _putchar(char character) {
     microkit_dbg_putc(character);
 }
 
-void gdb_put_char(char c) {
+void debugger_put_char(char c) {
     serial_enqueue(&tx_queue_handle, c);
 }
 
-void gdb_flush() {
+void debugger_flush() {
     sddf_notify(config.tx.id);
 }
 
-int gdb_get_char(char* c) {
+int debugger_get_char(char* c) {
     return serial_dequeue(&rx_queue_handle, c);
 }
 
@@ -44,14 +44,14 @@ void init() {
     /* Set up sDDF ring buffers */
     serial_queue_init(&rx_queue_handle, config.rx.queue.vaddr, config.rx.data.size, config.rx.data.vaddr);
     serial_queue_init(&tx_queue_handle, config.tx.queue.vaddr, config.tx.data.size, config.tx.data.vaddr);
-    gdb_init();
-    gdb_start();
+    debugger_init();
+    debugger_start();
 }
 
 seL4_Bool fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
-    return gdb_fault(ch, msginfo, reply_msginfo);
+    return debugger_fault(ch, msginfo, reply_msginfo);
 }
 
 void notified(microkit_channel ch) {
-    gdb_notified();
+    debugger_notified();
 }

@@ -7,6 +7,14 @@
 ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
+
+ifeq ($(DEBUGGER_BACKEND),net)
+    UART_DRIV_DIR := arm
+else ifeq ($(DEBUGGER_BACKEND),serial)
+    UART_DRIV_DIR := virtio
+else
+$(error Specifiy "DEBUGGER_BACKEND" to either be "net" or "serial")
+endif
 override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
 export LIONSOS ?= $(abspath ../..)
