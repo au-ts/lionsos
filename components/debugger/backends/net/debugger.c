@@ -175,9 +175,6 @@ void init(void)
         gdb_register_thread(i, 0, BASE_TCB_CAP + i, output);
     }
 
-    /* Suspend all the debugee PDs */
-    suspend_system();
-
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size,
                   serial_config.tx.data.vaddr);
     serial_putchar_init(serial_config.tx.id, &serial_tx_queue_handle);

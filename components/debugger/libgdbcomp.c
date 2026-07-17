@@ -26,7 +26,7 @@
 #define NUM_DEBUGEES 3
 
 #define MAX_PACKET_SIZE 1024
-#define TIMEOUT_YIELDS 1000
+#define TIMEOUT_YIELDS 10
 #define MAX_RETRANSMIT_ATTEMPTS 5
 #define INTERRUPT ((char)0x03)
 
@@ -57,6 +57,8 @@ char* gdb_try_get_packet();
 char* gdb_retry_get_transmission();
 char* gdb_get_transmission();
 
+static void gdb_suspend();
+
 static bool initialised = false;
 static bool detached = false;
 
@@ -69,7 +71,11 @@ static char output[MAX_PACKET_SIZE];
 #define STACK_SIZE 8192
 static char t_main_stack[STACK_SIZE];
 
-cothread_t t_suspended, t_main;
+cothread_t t_suspended = NULL;
+cothread_t t_main = NULL;
+cothread_t t_notified = NULL;
+
+static bool gdb_fromNotification = false;
 
 static void put_str(char* c)
 {
@@ -84,19 +90,30 @@ static char get_char_or_suspend()
     char c;
     while (gdb_get_char(&c) != 0)
     {
-        co_switch(t_suspended);
+        gdb_suspend();
     }
     return c;
 }
 
-static bool get_char_or_yield(int num_yields, char *c)
-{
-    int i = 0;
-    while (gdb_get_char(c) != 0 && i++ < num_yields)
+static bool try_get_char(char* c, size_t maxAttempts) {
+    size_t curAttempt = 0;
+    while (gdb_get_char(c) != 0 && curAttempt < maxAttempts)
     {
-        seL4_Yield();
+        curAttempt++;
+        gdb_suspend();
     }
-    return num_yields != i;
+
+    return curAttempt <= maxAttempts;
+}
+
+static void gdb_suspend() {
+    if (gdb_fromNotification)
+    {
+        gdb_fromNotification = false;
+        co_switch(t_notified);
+    } else {
+        co_switch(t_suspended);
+    }
 }
 
 uint32_t gdb_read_word(uint16_t client, uintptr_t addr, char *val)
@@ -162,14 +179,14 @@ char* gdb_get_transmission() {
 	// state 2: getting packet data
     int i = 1;
     do {
-        charRes = get_char_or_yield(TIMEOUT_YIELDS, &in[i]);
+        charRes = try_get_char(&in[i], TIMEOUT_YIELDS);
         if (charRes) count++;
     } while (charRes && in[i++] != '#');
 
     // state 3: getting checksum
     for (size_t j = i; j < i + 2; j++)
     {
-        charRes = get_char_or_yield(TIMEOUT_YIELDS, &in[j]);
+        charRes = try_get_char(&in[j], TIMEOUT_YIELDS);
         if (charRes) count++;
         else break;
     }
@@ -183,7 +200,7 @@ gdb_packet_t gdb_verify_transmission(char* transmission) {
     char* head = transmission;
     gdb_packet_t packet = {
         .valid = false,
-        .data = NULL,
+        .data = "INVALID!",
         .size = 0,
         .cksum = 0,
         .tcksum = 0,
@@ -226,7 +243,7 @@ gdb_verify_transmission_ret:
 bool gdb_check_transmission_success() {
     // Yield to quickly process stuff.
     char c;
-    if (!get_char_or_yield(TIMEOUT_YIELDS, &c)) return false;
+    if (!try_get_char(&c, TIMEOUT_YIELDS)) return false;
     return c == '+';
 }
 
@@ -312,7 +329,6 @@ void gdb_event_loop() {
     }
 }
 
-// Should return a gdb_handle_t or something like that?
 void gdb_init() {
     GDB_LOG("Initialising debugger...\n");
 
@@ -326,10 +342,13 @@ void gdb_init() {
         gdb_register_inferior(i, BASE_VSPACE_CAP + i);
         gdb_register_thread(i, 0, BASE_TCB_CAP + i, output);
     }
+    // Suspends all children.
     suspend_system();
+    // use mapping regions to be able to perform page mapping accesses as the parent.
     libvspace_init_mapping_regions(small_mapping_mr, large_mapping_mr);
     t_suspended = co_active();
     t_main = co_derive((void *) t_main_stack, STACK_SIZE, gdb_event_loop);
+    t_notified = 0;
     GDB_LOG("Initialisation complete!\n");
     initialised = true;
 }
@@ -372,5 +391,11 @@ seL4_Bool gdb_fault(microkit_child ch, microkit_msginfo msginfo, microkit_msginf
 }
 
 void gdb_notified() {
+    gdb_fromNotification = true;
+
+    // If we are switching to the main event loop from a notification, when
+    // we are waiting for more input we need to switch back out, hence jumping to
+    // the notification thread.
+    t_notified = co_active();
     co_switch(t_main);
 }
