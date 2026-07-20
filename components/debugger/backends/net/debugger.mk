@@ -13,13 +13,10 @@ export debugger_CFLAGS += $(DEBUGGER_NET_IFLAGS)
 # export CFLAGS +=
 
 debugger.o: $(DEBUGGER_DIR)/backends/net/debugger.c
-	@echo "cflags: $(debugger_CFLAGS)"
-	@echo "carat: $^"
-	@echo "at: $@"
-	$(CC) $(debugger_CFLAGS) -c $^ -o $@
+	$(CC) $(debugger_CFLAGS) -c $< -o $@
 
 tcp.o: $(DEBUGGER_DIR)/backends/net/tcp.c
-	$(CC) $(debugger_CFLAGS) -c $^ -o $@
+	$(CC) $(debugger_CFLAGS) -c $< -o $@
 
 debugger.elf: $(DEBUGGER_OBJS) $(DEBUGGER_LIBS)
 	$(LD) $(debugger_LDFLAGS) $^ -o $@

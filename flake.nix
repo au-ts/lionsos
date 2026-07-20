@@ -16,6 +16,7 @@
     let
       microkit-version = "2.2.0";
       microkit-url = "https://github.com/seL4/microkit/releases/download/2.2.0/";
+      # TODO: Change to use capdl branch and build.
       microkit-platforms = {
         aarch64-darwin = "macos-aarch64";
         x86_64-darwin = "macos-x86-64";
