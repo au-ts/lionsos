@@ -23,7 +23,9 @@
 #include <printf.h>
 
 // TODO: move num debuggees out of here.
-#define NUM_DEBUGEES 3
+#ifndef NUM_DEBUGEES
+#error Please specify NUM_DEBUGEES.
+#endif
 
 #define MAX_PACKET_SIZE 1024
 #define TIMEOUT_YIELDS 10

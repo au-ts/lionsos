@@ -44,7 +44,9 @@ int setup_tcp_socket(void);
 static bool detached = false;
 
 // TODO - DO NOT DEFINE THIS IN MULTIPLE PLACES
-#define NUM_DEBUGEES 2
+#ifndef NUM_DEBUGEES
+#error Please specify NUM_DEBUGEES.
+#endif
 
 char_queue_t tcp_input_queue = {
     .tail = 0,
@@ -169,12 +171,6 @@ int debugger_get_char(char* c) {
 
 void init(void)
 {
-    /* Register all the debugee PDs */
-    for (int i = 0; i < NUM_DEBUGEES; i++) {
-        gdb_register_inferior(i, BASE_VSPACE_CAP + i);
-        gdb_register_thread(i, 0, BASE_TCB_CAP + i, output);
-    }
-
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size,
                   serial_config.tx.data.vaddr);
     serial_putchar_init(serial_config.tx.id, &serial_tx_queue_handle);

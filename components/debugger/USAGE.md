@@ -59,6 +59,7 @@ debugger.add_debuggees([
 	# PDs to debug.
 ])
 # second one only applies for network.
+# This finalise method is temporary due to limitations of sdfgenpy (waiting for acacia).
 debuggerPd, lwipIfNetwork = debugger.finalise()
 sdf.add_pd(debuggerPd)
 
