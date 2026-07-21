@@ -12,10 +12,11 @@ void init()
 
 uintptr_t pingch = 9999;
 
+static size_t i = 0;
 void notified(microkit_channel ch)
 {
     LOG("Notified! %d\n", ch);
-    if (ch == pingch)
+    if (ch == pingch && i++ < 10)
         microkit_notify(ch);
 }
 

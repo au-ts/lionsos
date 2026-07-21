@@ -9,6 +9,8 @@ import xml.etree.ElementTree as et
 def generate(sdf_path: str, output_dir: str):
     ping = ProtectionDomain(sdf, "ping", "ping.elf", priority=1)
     pong = ProtectionDomain(sdf, "pong", "pong.elf", priority=1)
+    rrer = ProtectionDomain(sdf, "rrer", "rrer.elf", priority=254)
+
     ch = Channel(sdf,
         Channel.End(pd=ping, can_notify=True, can_pp=False, ch_id=0, setvar_id="pongch"),
         Channel.End(pd=pong, can_notify=True, can_pp=False, ch_id=1, setvar_id="pingch")

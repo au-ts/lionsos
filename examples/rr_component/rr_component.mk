@@ -9,7 +9,8 @@ SUPPORTED_BOARDS := \
 
 IMAGES := \
 	ping.elf \
-	pong.elf
+	pong.elf \
+	rrer.elf
 
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
@@ -72,6 +73,8 @@ include ${SDDF}/util/util.mk
 include ${SDDF}/libco/libco.mk
 include $(LIBGDB_DIR)/libgdb.mk
 include $(LIBVSPACE_DIR)/libvspace.mk
+
+include $(RR_COMPONENT_DIR)/rrer/rrer.mk
 
 
 all: ${IMAGE_FILE}
