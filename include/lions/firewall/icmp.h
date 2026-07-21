@@ -88,20 +88,16 @@ typedef struct __attribute__((__packed__)) icmp_dest {
     /* optional MTU of the next-hop network if source packet was too large, or 0 */
     uint16_t nexthop_mtu;
     /* IP header (up to 60 bytes) followed by data (up to 8 bytes) */
-    uint8_t ip_data[60 + FW_ICMP_SRC_DATA_LEN];
+    uint8_t ip_data[IPV4_HDR_LEN_MAX + FW_ICMP_SRC_DATA_LEN];
 } icmp_dest_t;
-
-#define ICMP_DEST_LEN (ICMP_COMMON_HDR_LEN + 4 + 60 + FW_ICMP_SRC_DATA_LEN)
 
 /* ----------------- 5 - ICMP REDIRECT MSG ---------------------------*/
 typedef struct __attribute__((__packed__)) icmp_redirect {
     /* IP Address of the new path */
     uint32_t gateway_ip;
     /* IP header (up to 60 bytes) followed by data (up to 8 bytes) */
-    uint8_t ip_data[60 + FW_ICMP_SRC_DATA_LEN];
+    uint8_t ip_data[IPV4_HDR_LEN_MAX + FW_ICMP_SRC_DATA_LEN];
 } icmp_redirect_t;
-
-#define ICMP_REDIRECT_LEN (ICMP_COMMON_HDR_LEN + 4 + 60 + FW_ICMP_SRC_DATA_LEN)
 
 /* ----------------- 8 - Echo Request / 0 - Echo Reply ---------------------------*/
 typedef struct __attribute__((__packed__)) icmp_echo {
@@ -121,10 +117,17 @@ typedef struct __attribute__((__packed__)) icmp_time_exceeded {
     /* unused, must be set to 0 */
     uint32_t unused;
     /* IP header (up to 60 bytes) followed by data (up to 8 bytes)*/
-    uint8_t ip_data[60 + FW_ICMP_SRC_DATA_LEN];
+    uint8_t ip_data[IPV4_HDR_LEN_MAX + FW_ICMP_SRC_DATA_LEN];
 } icmp_time_exceeded_t;
 
-#define ICMP_TIME_EXCEEDED_LEN (ICMP_COMMON_HDR_LEN + 4 + 60 + FW_ICMP_SRC_DATA_LEN)
+/* Length of icmp_dest_t fields preceding the IP header and data */
+#define ICMP_DEST_LEN_NO_IP (sizeof(icmp_dest_t) - (IPV4_HDR_LEN_MAX + FW_ICMP_SRC_DATA_LEN))
+
+/* Length of icmp_time_exceeded_t fields preceding the IP header and data */
+#define ICMP_TIME_EXCEEDED_LEN_NO_IP (sizeof(icmp_time_exceeded_t) - (IPV4_HDR_LEN_MAX + FW_ICMP_SRC_DATA_LEN))
+
+/* Length of icmp_redirect_t fields preceding the IP header and data */
+#define ICMP_REDIRECT_LEN_NO_IP (sizeof(icmp_redirect_t) - (IPV4_HDR_LEN_MAX + FW_ICMP_SRC_DATA_LEN))
 
 /* ----------------- Firewall Data Types (Internal Use) --------------------------- */
 
@@ -172,7 +175,7 @@ typedef struct icmp_req {
     eth_hdr_t eth_hdr;
     /* header of source IP packet */
     ipv4_hdr_t ip_hdr;
-    uint32_t ip_hdr_extra[31];
+    uint8_t ip_hdr_extra[IPV4_HDR_LEN_MAX - IPV4_HDR_LEN_MIN];
     /* Type-specific data */
     union {
         icmp_req_dest_t dest;
@@ -220,15 +223,16 @@ static inline bool icmp_enqueue_error(fw_queue_t *icmp_queue, uint8_t type, uint
 
     /* Copy IP header into ICMP request */
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
+    uint8_t ip_hdr_len = ipv4_header_length(ip_hdr);
+
     memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
-    if (ipv4_header_length(ip_hdr) > IPV4_HDR_LEN_MIN) {
-        memcpy(&req.ip_hdr_extra, (void *)ip_hdr + IPV4_HDR_LEN_MIN, ipv4_header_length(ip_hdr) - IPV4_HDR_LEN_MIN);
+    if (ip_hdr_len > IPV4_HDR_LEN_MIN) {
+        memcpy(&req.ip_hdr_extra, (void *)ip_hdr + IPV4_HDR_LEN_MIN, ip_hdr_len - IPV4_HDR_LEN_MIN);
     }
 
     /* Copy first bytes of data if applicable */
-    uint8_t ip_hdr_len = ipv4_header_length(ip_hdr);
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - ip_hdr_len);
-    memcpy(req.dest.data, (void *)(pkt_vaddr + transport_layer_offset(ip_hdr)), to_copy);
+    uint16_t data_to_copy = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(ip_hdr->tot_len) - ip_hdr_len);
+    memcpy(req.dest.data, (void *)(pkt_vaddr + transport_layer_offset(ip_hdr)), data_to_copy);
 
     return fw_enqueue(icmp_queue, &req) == 0;
 }
@@ -252,7 +256,7 @@ static inline bool icmp_enqueue_echo_reply(fw_queue_t *icmp_queue, uintptr_t pkt
     uint16_t echo_seq = ntohs(echo_hdr->seq);
 
     /* Calculate payload length */
-    uint16_t icmp_total_len = htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr);
+    uint16_t icmp_total_len = ntohs(ip_hdr->tot_len) - ipv4_header_length(ip_hdr);
     uint16_t payload_len = icmp_total_len - ICMP_COMMON_HDR_LEN - offsetof(icmp_echo_t, data);
     if (payload_len > FW_ICMP_ECHO_PAYLOAD_LEN) {
         payload_len = FW_ICMP_ECHO_PAYLOAD_LEN;
@@ -301,16 +305,18 @@ static inline int icmp_enqueue_redirect(fw_queue_t *icmp_queue, uint8_t code, ui
 
     /* Copy IP header into ICMP request */
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
+    uint8_t ip_hdr_len = ipv4_header_length(ip_hdr);
+
     memcpy(&req.ip_hdr, (void *)ip_hdr, IPV4_HDR_LEN_MIN);
-    if (ipv4_header_length(ip_hdr) > IPV4_HDR_LEN_MIN) {
+    if (ip_hdr_len > IPV4_HDR_LEN_MIN) {
         memcpy(&req.ip_hdr_extra, (void *)ip_hdr + IPV4_HDR_LEN_MIN,
-               ipv4_header_length(ip_hdr) - IPV4_HDR_LEN_MIN);
+            ip_hdr_len - IPV4_HDR_LEN_MIN);
     }
 
     /* Set gateway IP and copy first bytes of data */
     req.redirect.gateway_ip = gateway_ip;
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, htons(ip_hdr->tot_len) - ipv4_header_length(ip_hdr));
-    memcpy(req.redirect.data, (void *)(pkt_vaddr + transport_layer_offset(ip_hdr)), to_copy);
+    uint16_t data_to_copy = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(ip_hdr->tot_len) - ip_hdr_len);
+    memcpy(req.redirect.data, (void *)(pkt_vaddr + transport_layer_offset(ip_hdr)), data_to_copy);
 
     return fw_enqueue(icmp_queue, &req);
 }
