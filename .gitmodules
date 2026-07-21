@@ -28,3 +28,6 @@
 [submodule "libgdb"]
 	path = dep/libgdb
 	url = git@github.com:au-ts/libgdb.git
+[submodule "dep/microkit_acacia"]
+	path = dep/microkit_acacia
+	url = git@github.com:au-ts/microkit_acacia.git
