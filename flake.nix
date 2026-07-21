@@ -8,7 +8,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     zig-overlay.url = "github:mitchellh/zig-overlay";
-    sdfgen.url = "git+file:/home/aids/git/ToR/gdb-rr-stuff/microkit_sdf_gen";
+    sdfgen.url = "github:au-ts/microkit_sdf_gen/page_tables_copies_fixed";
     sdfgen.inputs.nixpkgs.follows = "nixpkgs";
   };
 
@@ -16,7 +16,6 @@
     let
       microkit-version = "2.2.0";
       microkit-url = "https://github.com/seL4/microkit/releases/download/2.2.0/";
-      # TODO: Change to use capdl branch and build.
       microkit-platforms = {
         aarch64-darwin = "macos-aarch64";
         x86_64-darwin = "macos-x86-64";

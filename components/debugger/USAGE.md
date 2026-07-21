@@ -75,9 +75,6 @@ There is an interop layer, which is just "gdbcomp.c". All it needs are:
 2. `debugger_flush`, a function to flush the output buffer
 3. `debugger_get_char`, a non-blocking char get function, which returns false or true if a character was gotten.
 
-# TODO
-Move defining the number of children PDs outside of comptime.
-
 # Behind the scenes
 1. `libgdb` makes use of `libvspace` as a backend to allow accessing memory of children PDs.
   However, `libgdb` does not provide easily integratable "frontends", which stitch together

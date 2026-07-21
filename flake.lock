@@ -132,17 +132,18 @@
         "zig-overlay": "zig-overlay"
       },
       "locked": {
-        "lastModified": 1782102773,
-        "narHash": "sha256-rqP4dViSXfPGcvAdB3g4cIrifWlbzy3s8LNX3QXC4/Y=",
-        "ref": "refs/heads/page_tables_copies_fixed",
-        "rev": "339b914adbf235fb4f9ad66c2f43505bd28e86c4",
-        "revCount": 825,
-        "type": "git",
-        "url": "file:/home/aids/git/ToR/gdb-rr-stuff/microkit_sdf_gen"
+        "lastModified": 1782102933,
+        "narHash": "sha256-9eza42QqM4vYC18JYIXV7hYm+7bo6QyT88x3lPYyiIQ=",
+        "owner": "au-ts",
+        "repo": "microkit_sdf_gen",
+        "rev": "3f2ecad650ff2180cd2ab1780a235cdbfe4adffe",
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "file:/home/aids/git/ToR/gdb-rr-stuff/microkit_sdf_gen"
+        "owner": "au-ts",
+        "ref": "page_tables_copies_fixed",
+        "repo": "microkit_sdf_gen",
+        "type": "github"
       }
     },
     "systems": {
