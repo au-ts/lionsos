@@ -65,8 +65,7 @@ QEMU_ARGS := -machine virt,virtualization=on \
 
 
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(RR_COMPONENT_DIR)/build
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc libvspace.a
-
+LIBS := -lmicrokit -Tmicrokit.ld -lc
 
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include ${SDDF}/util/util.mk
