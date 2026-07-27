@@ -49,10 +49,10 @@ def generate(sdf_path: str, output_dir: str):
     # becomes 4 channels.
     ch = Channel(sdf,
         Channel.End(pd=ping, can_notify=True, can_pp=False, ch_id=0, setvar_id="pongch"),
-        Channel.End(pd=rrer, can_notify=True, can_pp=False, ch_id=1, setvar_id="pingch")
+        Channel.End(pd=rrer, can_notify=True, can_pp=False, ch_id=0, setvar_id="pingch")
     )
     ch = Channel(sdf,
-        Channel.End(pd=rrer, can_notify=True, can_pp=False, ch_id=0, setvar_id="pongch"),
+        Channel.End(pd=rrer, can_notify=True, can_pp=False, ch_id=1, setvar_id="pongch"),
         Channel.End(pd=pong, can_notify=True, can_pp=False, ch_id=1, setvar_id="pingch")
     )
     sdf.write_xml_file(f"{output_dir}/{sdf_path}")
