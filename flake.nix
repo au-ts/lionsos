@@ -14,8 +14,6 @@
 
   outputs = { nixpkgs, zig-overlay, sdfgen, ... }:
     let
-      microkit-version = "2.2.0";
-      microkit-url = "https://github.com/seL4/microkit/releases/download/2.2.0/";
       microkit-platforms = {
         aarch64-darwin = "macos-aarch64";
         x86_64-darwin = "macos-x86-64";
@@ -59,7 +57,7 @@
               microkit-platform = microkit-platforms.${system} or (throw "Unsupported system: ${system}");
               wasi-platform = wasi-platforms.${system} or (throw "Unsupported system: ${system}");
 
-              env.MICROKIT_SDK = "/home/aids/git/ToR/gdb-rr-stuff/microkit/release/microkit-sdk-2.2.0-dev";
+              env.MICROKIT_SDK = "/home/aids/git/ToR/gdb-rr-stuff/lionsos/dep/microkit/release/microkit-sdk-2.2.0-dev";
 
 
               env.WASI_SDK = pkgs.fetchzip {

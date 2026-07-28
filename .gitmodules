@@ -31,3 +31,9 @@
 [submodule "dep/microkit_acacia"]
 	path = dep/microkit_acacia
 	url = git@github.com:au-ts/microkit_acacia.git
+[submodule "dep/microkit"]
+	path = dep/microkit
+	url = git@github.com:au-ts/microkit.git
+[submodule "dep/seL4"]
+	path = dep/seL4
+	url = git@github.com:au-ts/seL4.git
