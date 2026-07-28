@@ -46,7 +46,7 @@ def generate(sdf_path: str, output_dir: str):
     #     Channel.End(pd=ping, can_notify=True, can_pp=False, ch_id=0, setvar_id="pongch"),
     #     Channel.End(pd=pong, can_notify=True, can_pp=False, ch_id=1, setvar_id="pingch")
     # )
-    # becomes 4 channels.
+    # becomes 2 channels
     ch = Channel(sdf,
         Channel.End(pd=ping, can_notify=True, can_pp=False, ch_id=0, setvar_id="pongch"),
         Channel.End(pd=rrer, can_notify=True, can_pp=False, ch_id=0, setvar_id="pingch")
