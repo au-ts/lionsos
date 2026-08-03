@@ -82,7 +82,11 @@ static bool process_icmp_request(icmp_req_t *req, bool *transmitted)
     icmp_hdr->type = req->type;
     icmp_hdr->code = req->code;
 
-    uint16_t to_copy = MIN(FW_ICMP_SRC_DATA_LEN, ntohs(req->ip_hdr.tot_len) - ipv4_header_length(&req->ip_hdr));
+    /* Calculate the actual length of the original IP header*/
+    uint8_t orig_ip_hdr_len = ipv4_header_length(&req->ip_hdr);
+    /* Calculate how many bytes of the original packet's data to include  */
+    uint16_t orig_pkt_data_len = ntohs(req->ip_hdr.tot_len) - orig_ip_hdr_len;
+    uint16_t data_to_copy = MIN(FW_ICMP_SRC_DATA_LEN, orig_pkt_data_len);
 
     /* Handle each ICMP type separately */
     switch (req->type) {
@@ -110,8 +114,12 @@ static bool process_icmp_request(icmp_req_t *req, bool *transmitted)
         /* Destination is original packet's source */
         ip_hdr->dst_ip = req->ip_hdr.src_ip;
 
-        /* Total length of ICMP destination unreachable IP packet */
-        ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_DEST_LEN);
+        /* Calculate the ICMP Destination Unreachable packet length,
+        * including the unused field, length field, next-hop MTU field,
+        * the original IPv4 header, and the accompanying payload.
+        */
+        uint16_t icmp_dest_payload_len = ICMP_DEST_LEN_NO_IP + orig_ip_hdr_len + data_to_copy;
+        ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_COMMON_HDR_LEN + icmp_dest_payload_len);
 
         /* Construct ICMP destination unreachable packet */
         icmp_dest_t *icmp_dest = (icmp_dest_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET);
@@ -121,18 +129,25 @@ static bool process_icmp_request(icmp_req_t *req, bool *transmitted)
         icmp_dest->len = 0;
         icmp_dest->nexthop_mtu = 0;
 
-        /* Copy IP header */
-        memcpy(&icmp_dest->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
+        /* Copy entire IP header (minimum + extended options too) */
+        memcpy(&icmp_dest->ip_data, &req->ip_hdr, IPV4_HDR_LEN_MIN);
+        if (orig_ip_hdr_len > IPV4_HDR_LEN_MIN) {
+                 memcpy(&icmp_dest->ip_data[IPV4_HDR_LEN_MIN], &req->ip_hdr_extra,
+                   orig_ip_hdr_len - IPV4_HDR_LEN_MIN);
+        }
 
         /* Copy first bytes of data if applicable */
-        memcpy(&icmp_dest->data, req->dest.data, to_copy);
+        memcpy(&icmp_dest->ip_data[orig_ip_hdr_len], req->dest.data, data_to_copy);
         break;
     case ICMP_TTL_EXCEED:
         /* Destination is original packet's source */
         ip_hdr->dst_ip = req->ip_hdr.src_ip;
 
-        /* Total length of ICMP time exceeded IP packet */
-        ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_TIME_EXCEEDED_LEN);
+        /* Calculate the ICMP Time Exceeded packet length,
+        * including the unused field, original IPv4 header, and payload.
+        */
+        uint16_t icmp_time_exceeded_payload_len = ICMP_TIME_EXCEEDED_LEN_NO_IP + orig_ip_hdr_len + data_to_copy;
+        ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_COMMON_HDR_LEN + icmp_time_exceeded_payload_len);
 
         /* Construct ICMP time exceeded packet */
         icmp_time_exceeded_t *icmp_time_exceeded = (icmp_time_exceeded_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET);
@@ -140,18 +155,25 @@ static bool process_icmp_request(icmp_req_t *req, bool *transmitted)
         /* Unused must be set to 0 */
         icmp_time_exceeded->unused = 0;
 
-        /* Copy IP header */
-        memcpy(&icmp_time_exceeded->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
+        /* Copy entire IP header (minimum + extended options too)*/
+        memcpy(&icmp_time_exceeded->ip_data, &req->ip_hdr, IPV4_HDR_LEN_MIN);
+        if (orig_ip_hdr_len > IPV4_HDR_LEN_MIN) {
+            memcpy(&icmp_time_exceeded->ip_data[IPV4_HDR_LEN_MIN], &req->ip_hdr_extra,
+                   orig_ip_hdr_len - IPV4_HDR_LEN_MIN);
+        }
 
         /* Copy first bytes of data if applicable */
-        memcpy(&icmp_time_exceeded->data, req->time_exceeded.data, to_copy);
+        memcpy(&icmp_time_exceeded->ip_data[orig_ip_hdr_len], req->time_exceeded.data, data_to_copy);
         break;
     case ICMP_REDIRECT_MSG:
         /* Destination is original packet's source */
         ip_hdr->dst_ip = req->ip_hdr.src_ip;
 
-        /* Total length of ICMP redicrt IP packet */
-        ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_REDIRECT_LEN);
+        /* Calculate the ICMP redirect packet length,
+        * including the gateway IP address, original IPv4 header, and payload.
+        */
+        uint16_t icmp_redirect_payload_len = ICMP_REDIRECT_LEN_NO_IP + orig_ip_hdr_len + data_to_copy;
+        ip_hdr->tot_len = htons(IPV4_HDR_LEN_MIN + ICMP_COMMON_HDR_LEN + icmp_redirect_payload_len);
 
         /* Construct ICMP redirect packet */
         icmp_redirect_t *icmp_redirect = (icmp_redirect_t *)(pkt_vaddr + ICMP_PAYLOAD_OFFSET);
@@ -159,10 +181,15 @@ static bool process_icmp_request(icmp_req_t *req, bool *transmitted)
         /* Set the gateway IP address*/
         icmp_redirect->gateway_ip = req->redirect.gateway_ip;
 
-        /* Copy IP header */
-        memcpy(&icmp_redirect->ip_hdr, &req->ip_hdr, IPV4_HDR_LEN_MIN);
+        /* Copy entire IP header (minimum + extended options) */
+        memcpy(&icmp_redirect->ip_data, &req->ip_hdr, IPV4_HDR_LEN_MIN);
+        if (orig_ip_hdr_len > IPV4_HDR_LEN_MIN) {
+            memcpy(&icmp_redirect->ip_data[IPV4_HDR_LEN_MIN], &req->ip_hdr_extra,
+                   orig_ip_hdr_len - IPV4_HDR_LEN_MIN);
+        }
+
         /* Copy first bytes of data if applicable */
-        memcpy(&icmp_redirect->data, req->redirect.data, to_copy);
+        memcpy(&icmp_redirect->ip_data[orig_ip_hdr_len], req->redirect.data, data_to_copy);
         break;
     default:
         return false;

@@ -58,6 +58,9 @@ typedef struct __attribute__((__packed__)) ipv4_hdr {
 /* Length of IPv4 header with no optional fields */
 #define IPV4_HDR_LEN_MIN sizeof(ipv4_hdr_t)
 
+/* Maximum length of an IPv4 header including options */
+#define IPV4_HDR_LEN_MAX 60
+
 /* IPv4 differentiated services code point values */
 #define IPV4_DSCP_NET_CTRL 48 /* Network control */
 
