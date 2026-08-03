@@ -12,6 +12,8 @@
 #include <lions/firewall/filter.h>
 #include <lions/firewall/ip.h>
 #include <lions/firewall/routing.h>
+#include <lions/firewall/nat_module.h>
+#include <lions/firewall/nat_protocol.h>
 
 #include "mpfirewallport.h"
 
@@ -509,6 +511,65 @@ static mp_obj_t rule_get_nth(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp
 
 static MP_DEFINE_CONST_FUN_OBJ_3(rule_get_nth_obj, rule_get_nth);
 
+/* NAT API functions */
+
+/* nat_set_enabled(interface, protocol, enabled) — PPC call to TX virtualizer only */
+static mp_obj_t nat_set_enabled(mp_obj_t interface_idx_in, mp_obj_t protocol_in, mp_obj_t enabled_in)
+{
+    uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
+    if (!check_interface_index(interface_idx)) {
+        return mp_const_none;
+    }
+
+    uint8_t protocol = mp_obj_get_int(protocol_in);
+    bool enabled = mp_obj_is_true(enabled_in);
+
+    // PPC to the Rx virtualiser, who then PPCs to the Tx virtualiser, all three components update their local copy.
+
+    for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_nat_configs; i++) {
+        if (fw_config.interfaces[interface_idx].nat_configs[i].protocol == protocol) {
+            microkit_mr_set(NAT_SET_ENABLED_ARG_ENABLED, (seL4_Word)enabled);
+            (void)microkit_ppcall(fw_config.interfaces[interface_idx].nat_configs[i].webserver_ch,
+                                  microkit_msginfo_new(NAT_SET_ENABLED, NAT_SET_ENABLED_NUM_ARGS));
+            fw_nat_err_t err = (fw_nat_err_t)microkit_mr_get(NAT_RET_ERR);
+            if (err != NAT_ERR_OKAY) {
+                raise_error(OS_ERR_INTERNAL_ERROR);
+                return mp_const_none;
+            }
+            return mp_const_none;
+        }
+    }
+
+    raise_error(OS_ERR_INVALID_PROTOCOL);
+    return mp_const_none;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_3(nat_set_enabled_obj, nat_set_enabled);
+
+/* nat_get_enabled(interface, protocol) — direct read from port table shared memory */
+static mp_obj_t nat_get_enabled(mp_obj_t interface_idx_in, mp_obj_t protocol_in)
+{
+    uint8_t interface_idx = mp_obj_get_int(interface_idx_in);
+    if (interface_idx >= fw_config.num_interfaces) {
+        return mp_const_false;
+    }
+
+    uint8_t protocol = mp_obj_get_int(protocol_in);
+
+    for (uint8_t i = 0; i < fw_config.interfaces[interface_idx].num_nat_configs; i++) {
+        if (fw_config.interfaces[interface_idx].nat_configs[i].protocol == protocol) {
+            fw_nat_port_table_t *table = (fw_nat_port_table_t *)
+                fw_config.interfaces[interface_idx].nat_configs[i].port_table.vaddr;
+            return mp_obj_new_bool(table->nat_enabled);
+        }
+    }
+
+    /* NAT not configured for this interface/protocol — not an error, just disabled */
+    return mp_const_false;
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_2(nat_get_enabled_obj, nat_get_enabled);
+
 static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lions_firewall) },
     { MP_ROM_QSTR(MP_QSTR_interface_ip_get), MP_ROM_PTR(&interface_get_ip_obj) },
@@ -527,6 +588,8 @@ static const mp_rom_map_elem_t lions_firewall_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_rule_count), MP_ROM_PTR(&rule_count_obj) },
     { MP_ROM_QSTR(MP_QSTR_filter_get_default_action), MP_ROM_PTR(&filter_get_default_action_obj) },
     { MP_ROM_QSTR(MP_QSTR_filter_set_default_action), MP_ROM_PTR(&filter_set_default_action_obj) },
+    { MP_ROM_QSTR(MP_QSTR_nat_set_enabled), MP_ROM_PTR(&nat_set_enabled_obj) },
+    { MP_ROM_QSTR(MP_QSTR_nat_get_enabled), MP_ROM_PTR(&nat_get_enabled_obj) },
 };
 
 static MP_DEFINE_CONST_DICT(lions_firewall_module_globals, lions_firewall_module_globals_table);

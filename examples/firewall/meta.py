@@ -33,6 +33,7 @@ from pyfw.constants import (
     arp_eth_opcode_request,
     arp_eth_opcode_response,
     eththype_ip,
+    nat_port_table_region,
 )
 from pyfw.component_fw_interface import FirewallInterface
 
@@ -90,9 +91,69 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
         if not path.isdir(iface.out_dir):
             assert subprocess.run(["mkdir", iface.out_dir]).returncode == 0
 
+    # Create shared port tables for each interface (shared between RX and TX)
+    # so DNAT (RX) can find mappings created by SNAT (TX)
+    tcp_port_tables = {}
+    udp_port_tables = {}
+
+    for iface in fw_interfaces:
+        tcp_port_tables[iface.index] = FirewallMemoryRegion(
+            f"nat_port_table_iface{iface.index}_tcp",
+            nat_port_table_region.region_size
+        )
+        udp_port_tables[iface.index] = FirewallMemoryRegion(
+            f"nat_port_table_iface{iface.index}_udp",
+            nat_port_table_region.region_size
+        )
+
     router = Router()
     webserver = Webserver()
     icmp_module = IcmpModule()
+
+    # Create PPC channels from webserver to each virtualizer per protocol/interface,
+    # then wire them into the NAT configs so the webserver can enable/disable NAT via PPC.
+    for iface in fw_interfaces:
+        tcp_tx_ch = SDF_Channel(webserver.pd, iface.tx_virtualiser.pd, pp_a=True)
+        udp_tx_ch = SDF_Channel(webserver.pd, iface.tx_virtualiser.pd, pp_a=True)
+        BuildConstants.sdf().add_channel(tcp_tx_ch)
+        BuildConstants.sdf().add_channel(udp_tx_ch)
+
+        # Configure TCP NAT - RX and TX share the same port table
+        iface.rx_virtualiser.add_nat_config_with_port_table(
+            protocol=0x06,
+            base_port=49152,
+            capacity=512,
+            port_table_mr=tcp_port_tables[iface.index],
+        )
+        iface.tx_virtualiser.add_nat_config_with_port_table(
+            protocol=0x06,
+            base_port=49152,
+            capacity=512,
+            port_table_mr=tcp_port_tables[iface.index],
+            webserver_ch=tcp_tx_ch.pd_b_id,
+        )
+
+        # Configure UDP NAT - RX and TX share the same port table
+        iface.rx_virtualiser.add_nat_config_with_port_table(
+            protocol=0x11,
+            base_port=49152,
+            capacity=512,
+            port_table_mr=udp_port_tables[iface.index],
+        )
+        iface.tx_virtualiser.add_nat_config_with_port_table(
+            protocol=0x11,
+            base_port=49152,
+            capacity=512,
+            port_table_mr=udp_port_tables[iface.index],
+            webserver_ch=udp_tx_ch.pd_b_id,
+        )
+
+        # Map RX DMA region for NAT packet modification (DNAT needs write access)
+        iface.rx_virtualiser.set_nat_dma_region(iface.rx_dma_region)
+
+        # Register PPC channels in the webserver config for this interface/protocol
+        webserver.add_nat_ppc_channel(0x06, iface.index, tcp_tx_ch.pd_a_id, tcp_port_tables[iface.index])
+        webserver.add_nat_ppc_channel(0x11, iface.index, udp_tx_ch.pd_a_id, udp_port_tables[iface.index])
 
     # Create timer and serial subsystems
     serial_node = dtb.node(board.serial)

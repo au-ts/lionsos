@@ -9,6 +9,7 @@ from pyfw.constants import (
 )
 from config_structs import (
     EthHwaddrLen,
+    FwNatPortTableConfig,
     FwWebserverConfig,
     FwWebserverInterfaceConfig,
 )
@@ -42,6 +43,7 @@ class Webserver(Component, FwWebserverConfig):
                     filters=[],
                     data=None,
                     rx_free=None,
+                    nat_configs=[],
                 )
             )
 
@@ -53,6 +55,18 @@ class Webserver(Component, FwWebserverConfig):
             arp_queue=None,
             tx_interface=webserver_tx_interface_idx,
         )
+
+    def add_nat_ppc_channel(self, protocol, interface, tx_ch, port_table_mr):
+        """Register PPC channel to TX virtualizer and port table region for NAT enable/disable"""
+        nat_config = FwNatPortTableConfig(
+            base_port=0,
+            ports_capacity=0,
+            port_table=port_table_mr.map(self.pd, "ro"),
+            protocol=protocol,
+            enabled=True,
+            webserver_ch=tx_ch,
+        )
+        self._interfaces[interface].nat_configs.append(nat_config)
 
     def finalise_config(self) -> None:
         assert self.interfaces is not None and len(self.interfaces) == len(interfaces)

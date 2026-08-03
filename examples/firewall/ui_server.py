@@ -426,6 +426,38 @@ def getPing(request, interfaceInt):
         print(f"UI SERVER|ERR: Unknown Error: getRules: {exception}.")
         return {"error": UnknownErrStr}, 404
 
+###### NAT configuration methods ######
+
+@app.route('/api/nat/<string:protocolStr>/<int:interfaceInt>/enabled', methods=['GET', 'PUT'])
+def nat_enabled_handler(request, protocolStr, interfaceInt):
+    try:
+        if interfaceInt < 0 or interfaceInt >= lions_firewall.interface_count_get():
+            raise OSError(OSErrInvalidInterface, OSErrStrings[OSErrInvalidInterface])
+        interface = interfaceInt
+
+        if protocolStr not in protocolNums.keys():
+            print(f"UI SERVER|ERR: Supplied protocol string {protocolStr} does not match any protocols.")
+            raise OSError(OSErrInvalidInput, OSErrStrings[OSErrInvalidInput])
+        protocol = protocolNums[protocolStr]
+
+        if request.method == 'GET':
+            enabled = lions_firewall.nat_get_enabled(interface, protocol)
+            print(f"UI SERVER|NAT GET: iface={interface} proto={hex(protocol)} enabled={enabled}")
+            return {"enabled": bool(enabled)}
+        else:
+            body = request.json
+            if body is None or "enabled" not in body:
+                return {"error": "missing 'enabled' field"}, 400
+            enabled = bool(body["enabled"])
+            print(f"UI SERVER|NAT SET: iface={interface} proto={hex(protocol)} enabled={enabled}")
+            lions_firewall.nat_set_enabled(interface, protocol, enabled)
+            return {"status": "ok"}
+    except OSError as OSErr:
+        print(f"UI SERVER|ERR: OS Error: nat_enabled_handler: {OSErrStrings[OSErr.errno]}")
+        return {"error": OSErrStrings[OSErr.errno]}, 404
+    except Exception as exception:
+        print(f"UI SERVER|ERR: Unknown Error: nat_enabled_handler: {exception}.")
+        return {"error": UnknownErrStr}, 404
 
 ############ Web UI routes ############
 
@@ -442,7 +474,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat_settings">NAT</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
   </body>
 </html>
@@ -462,7 +494,7 @@ def index(request):
   <body>
     <h1>Firewall Configuration</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat_settings">NAT</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
     <div id="interfaces-container">
       <table border="1">
@@ -524,7 +556,7 @@ def config(request):
   <body>
     <h1>Routing Configuration Page</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat_settings">NAT</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
 
     <h2>Routing Table</h2>
@@ -684,7 +716,7 @@ def rules(request, protocol):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat_settings">NAT</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
     <div style="display: flex; flex-direction: column; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>
@@ -920,7 +952,7 @@ def rules(request):
   <body>
     <h1>Firewall Rules</h1>
     <nav>
-      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/ping_settings">Ping Settings</a>
+      <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat_settings">NAT</a> | <a href="/ping_settings">Ping Settings</a>
     </nav>
     <div style="display: inline-block; margin-top: 1rem">
       <a href="/rules/udp">UDP</a>
@@ -950,6 +982,61 @@ body {
 }
 """
     return Response(body=css, headers={'Content-Type': 'text/css'})
+
+@app.route("/nat_settings")
+def nat_settings(request):
+    html = r"""
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>Firewall Network Address Translation</title>
+        <link rel="stylesheet" href="/main.css" />
+    </head>
+    <body>
+        <h1>Firewall Network Address Translation</h1>
+        <nav>
+            <a href="/">Home</a> | <a href="/routing_config">Routing Config</a> | <a href="/rules">Rules</a> | <a href="/interface">Interface</a> | <a href="/nat_settings">NAT</a> | <a href="/ping_settings">Ping Settings</a>
+        </nav>
+        <h2>External Interface NAT</h2>
+        <p>NAT translates outbound traffic from the internal network using the external interface IP.</p>
+        <h3>TCP</h3>
+        <div>
+            <input type="checkbox" id="iface0-tcp-enabled" />
+            <label for="iface0-tcp-enabled">NAT enabled</label>
+            <button onclick="updateNat('tcp', 0)">Apply</button>
+        </div>
+        <h3>UDP</h3>
+        <div>
+            <input type="checkbox" id="iface0-udp-enabled" />
+            <label for="iface0-udp-enabled">NAT enabled</label>
+            <button onclick="updateNat('udp', 0)">Apply</button>
+        </div>
+        <script>
+        const getNat = async (protocol, iface) => {
+            const data = await fetch(`/api/nat/${protocol}/${iface}/enabled`).then(r => r.json());
+            document.querySelector(`#iface${iface}-${protocol}-enabled`).checked = !!data?.enabled;
+        };
+
+        const updateNat = async (protocol, iface) => {
+            const enabled = document.querySelector(`#iface${iface}-${protocol}-enabled`).checked;
+            await fetch(`/api/nat/${protocol}/${iface}/enabled`, {
+                method: "PUT",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({enabled})
+            });
+        };
+
+        window.onload = () => {
+            getNat("tcp", 0);
+            getNat("udp", 0);
+        };
+        </script>
+    </body>
+</html>
+"""
+    return Response(body=html, headers={'Content-Type': 'text/html'})
+
 @app.route('/ping_settings')
 def ping_settings(request):
     html = """

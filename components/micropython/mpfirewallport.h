@@ -26,6 +26,7 @@ extern fw_webserver_config_t fw_config;
 typedef struct fw_webserver_interface_state {
     fw_filter_state_t filter_states[FW_MAX_FILTERS];
     bool ping_enabled;
+    bool nat_enabled;
 } fw_webserver_interface_state_t;
 
 extern fw_webserver_interface_state_t fw_interface_state[FW_MAX_INTERFACES];

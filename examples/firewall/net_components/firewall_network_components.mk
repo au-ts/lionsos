@@ -16,7 +16,7 @@ FIREWALL_NETWORK_IMAGES:= firewall_network_virt_rx.elf firewall_network_virt_tx.
 firewall_network/net_components/%.o: ${FIREWALL_COMPONENTS}/%.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-FIREWALL_NETWORK_COMPONENT_OBJ := $(addprefix firewall_network/net_components/, network_virt_tx.o network_virt_rx.o)
+FIREWALL_NETWORK_COMPONENT_OBJ := $(addprefix firewall_network/net_components/, network_virt_tx.o network_virt_rx.o nat_module.o)
 
 CHECK_FIREWALL_NETWORK_FLAGS_MD5:=.firewall_network_cflags-$(shell echo -- ${CFLAGS} ${CFLAGS_network} | shasum | sed 's/ *-//')
 
@@ -33,11 +33,16 @@ ${FIREWALL_NETWORK_COMPONENT_OBJ}: |firewall_network/net_components $(SDDF_LIBC_
 ${FIREWALL_NETWORK_COMPONENT_OBJ}: ${CHECK_FIREWALL_NETWORK_FLAGS_MD5}
 ${FIREWALL_NETWORK_COMPONENT_OBJ}: CFLAGS+=${CFLAGS_FIREWALL_NETWORK}
 
-firewall_network/net_components/firewall_network_virt_%.o: ${SDDF}/firewall_network/net_components/virt_%.c |firewall_network/net_components
+firewall_network/net_components/firewall_network_virt_%.o: ${FIREWALL_NETWORK_COMPONENTS_DIR}/firewall_network_virt_%.c |firewall_network/net_components
 	${CC} ${CFLAGS} -c -o $@ $<
 
-%.elf: firewall_network/net_components/%.o |firewall_network/net_components
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
+firewall_network/net_components/nat_module.o: ${FIREWALL_NETWORK_COMPONENTS_DIR}/nat_module.c |firewall_network/net_components
+	${CC} ${CFLAGS} -c -o $@ $<
+
+firewall_network_virt_%.elf: firewall_network/net_components/firewall_network_virt_%.o \
+                             firewall_network/net_components/nat_module.o \
+                             | firewall_network/net_components
+	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
 clean::
 	${RM} -f firewall_network_virt_[rt]x.[od]

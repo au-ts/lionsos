@@ -7,6 +7,8 @@ from pyfw.constants import (
     BuildConstants,
     dma_buffer_queue,
     dma_buffer_queue_region,
+    nat_port_table_region,
+    supported_protocols,
 )
 from pyfw.specs import FirewallMemoryRegion, TrackedNet
 from config_structs import (
@@ -15,6 +17,8 @@ from config_structs import (
     FwDataConnectionResource,
     FwNetVirtRxConfig,
     FwNetVirtTxConfig,
+    FwNatPortTableConfig,
+    RegionResource,
 )
 
 SDF_Channel = SystemDescription.Channel
@@ -34,14 +38,18 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
 
         # Store the network interface so sDDF net clients can be added
         self._sddf_net: TrackedNet = sddf_net
+        self._net_interface = net_interface
 
         # Initialise Rx virtualiser config class
         FwNetVirtRxConfig.__init__(
             self,
             interface=net_interface.index,
+            interface_ip=net_interface.ip_int,
             active_client_ethtypes=[],
             active_client_subtypes=[],
             free_clients=[],
+            nat_dma_region=None,
+            nat_configs=[],
         )
 
     def add_active_net_client(self,
@@ -87,6 +95,24 @@ class NetVirtRx(Component, FwNetVirtRxConfig):
             ch=ch.pd_b_id,
         )
 
+    def add_nat_config_with_port_table(self, protocol: int, base_port: int, capacity: int, port_table_mr: FirewallMemoryRegion, webserver_ch: int = 0) -> None:
+        """Configure NAT with a shared port table (for RX/TX sharing)"""
+        nat_config = FwNatPortTableConfig(
+            base_port=base_port,
+            ports_capacity=capacity,
+            port_table=port_table_mr.map(self.pd, "rw"),
+            protocol=protocol,
+            enabled=True,
+            webserver_ch=webserver_ch,
+        )
+
+        assert self.nat_configs is not None
+        self.nat_configs.append(nat_config)
+
+    def set_nat_dma_region(self, dma_region) -> None:
+        """Map RX DMA region with write permissions for NAT packet modification"""
+        self.nat_dma_region = dma_region.map_device(self.pd, "rw")
+
     def finalise_config(self) -> None:
         assert self.active_client_ethtypes is not None
         assert self.active_client_subtypes is not None
@@ -110,14 +136,17 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
 
         # Store data region as a dictionary to be sorted into list upon finalisation
         self._data_regions: dict[int, DeviceRegionResource] = {}
+        self._net_interface = net_interface
 
         # Initialise Tx virtualiser config class
         FwNetVirtTxConfig.__init__(
             self,
             interface=net_interface.index,
+            interface_ip=net_interface.ip_int,
             active_clients=[],
             data_regions=[],
             free_clients=[],
+            nat_configs=[],
         )
 
     def add_active_fw_client(self, client: Component) -> FwConnectionResource:
@@ -156,7 +185,8 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
         assert data.mr.paddr not in (data_map.io_addr for data_map in self._data_regions.values())
         # Add data region to list
         assert interface_idx not in self._data_regions.keys()
-        self._data_regions[interface_idx] = data.map_device(self.pd, "r")
+        # Map as read-write so NAT can modify packet headers
+        self._data_regions[interface_idx] = data.map_device(self.pd, "rw")
 
         assert self.free_clients is not None
         self.free_clients.append(
@@ -165,6 +195,20 @@ class NetVirtTx(Component, FwNetVirtTxConfig):
                 data=self._data_regions[interface_idx],
             )
         )
+
+    def add_nat_config_with_port_table(self, protocol: int, base_port: int, capacity: int, port_table_mr: FirewallMemoryRegion, webserver_ch: int = 0) -> None:
+        """Configure NAT with a shared port table (for RX/TX sharing)"""
+        nat_config = FwNatPortTableConfig(
+            base_port=base_port,
+            ports_capacity=capacity,
+            port_table=port_table_mr.map(self.pd, "rw"),
+            protocol=protocol,
+            enabled=True,
+            webserver_ch=webserver_ch,
+        )
+
+        assert self.nat_configs is not None
+        self.nat_configs.append(nat_config)
 
     def finalise_config(self) -> None:
         assert self.data_regions is not None and len(self.data_regions) == 0
