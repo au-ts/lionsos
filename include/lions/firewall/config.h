@@ -26,8 +26,6 @@
 
 #define FW_FILTER_NUM_ACTIONS 4
 
-#define FW_DEBUG_OUTPUT 1
-
 typedef struct fw_connection_resource {
     region_resource_t queue;
     uint16_t capacity;

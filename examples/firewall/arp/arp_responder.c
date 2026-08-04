@@ -35,7 +35,7 @@ static int arp_reply(const uint8_t ethsrc_addr[ETH_HWADDR_LEN], const uint8_t et
                      const uint8_t hwdst_addr[ETH_HWADDR_LEN], const uint32_t ipdst_addr)
 {
     if (net_queue_empty_free(&tx_queue)) {
-        sddf_dprintf("ARP_RESPONDER LOG: Interface %u. Transmit free queue empty. Dropping reply\n",
+        LOG_FIREWALL("ARP RESPONDER", "Interface %u. Transmit free queue empty. Dropping reply\n",
                      arp_config.interface);
         return -1;
     }
@@ -92,10 +92,8 @@ static void receive(void)
                     /* Check the destination IP address */
                     if (arp_pkt->ipdst_addr == arp_config.ip) {
 
-                        if (FW_DEBUG_OUTPUT) {
-                            sddf_printf("ARP RESPONDER LOG: replying for ip %s on interface %u\n",
-                                        ipaddr_to_string(arp_pkt->ipdst_addr, ip_addr_buf0), arp_config.interface);
-                        }
+                        LOG_FIREWALL("ARP RESPONDER", "replying for ip %s on interface %u\n",
+                                     ipaddr_to_string(arp_pkt->ipdst_addr, ip_addr_buf0), arp_config.interface);
 
                         /* Reply with the MAC of the firewall */
                         if (!arp_reply(arp_config.mac_addr, eth_hdr->ethsrc_addr, arp_config.mac_addr, arp_config.ip,
