@@ -13,9 +13,9 @@
 
 typedef struct __attribute__((__packed__)) eth_hdr {
     /* destination MAC address */
-    uint8_t ethdst_addr[ETH_HWADDR_LEN];
+    uint8_t ethdst_addr[MAC802_BYTES];
     /* source MAC address */
-    uint8_t ethsrc_addr[ETH_HWADDR_LEN];
+    uint8_t ethsrc_addr[MAC802_BYTES];
     /* if ethtype <= 1500 it holds the length of the frame. Otherwise, it holds
     the protocol of payload encapsulated in the frame */
     uint16_t ethtype;

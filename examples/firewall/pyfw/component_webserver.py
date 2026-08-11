@@ -8,7 +8,7 @@ from pyfw.constants import (
     webserver_tx_interface_idx,
 )
 from config_structs import (
-    EthHwaddrLen,
+    Mac802Bytes,
     FwWebserverConfig,
     FwWebserverInterfaceConfig,
 )
@@ -57,7 +57,7 @@ class Webserver(Component, FwWebserverConfig):
     def finalise_config(self) -> None:
         assert self.interfaces is not None and len(self.interfaces) == len(interfaces)
         for iface in self.interfaces:
-            assert iface.mac_addr is not None and len(iface.mac_addr) == EthHwaddrLen
+            assert iface.mac_addr is not None and len(iface.mac_addr) == Mac802Bytes
             assert iface.ip is not None and iface.ip != 0
             assert iface.name is not None and iface.name != ""
             assert iface.filters is not None and len(iface.filters) == len(supported_protocols)

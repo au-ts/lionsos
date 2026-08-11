@@ -85,8 +85,8 @@ static void transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t ou
     eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
 
-    memcpy(&eth_hdr->ethdst_addr, mac_addr, ETH_HWADDR_LEN);
-    memcpy(&eth_hdr->ethsrc_addr, router_config.interfaces[out_interface].mac_addr, ETH_HWADDR_LEN);
+    memcpy(&eth_hdr->ethdst_addr, mac_addr, MAC802_BYTES);
+    memcpy(&eth_hdr->ethsrc_addr, router_config.interfaces[out_interface].mac_addr, MAC802_BYTES);
 
     /* Transmit packet out the NIC */
     LOG_FIREWALL("ROUTING", "sending packet received on interface %u out of interface %u for ip %s with buffer "
@@ -176,7 +176,7 @@ static void route(void)
                  * is not currently handled by the firewall.
                  */
                 if (ip_hdr->dst_ip == BROADCAST_IP_ADDR
-                    || !memcmp(eth_hdr->ethdst_addr, broadcast_mac_addr, ETH_HWADDR_LEN)
+                    || !memcmp(eth_hdr->ethdst_addr, broadcast_mac_addr, MAC802_BYTES)
                     || (ip_hdr->dst_ip & MULTICAST_IP_MASK) == MULTICAST_IP_ADDR) {
                     err = fw_enqueue(&rx_free[interface], &buffer);
                     assert(!err);

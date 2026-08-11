@@ -51,7 +51,7 @@ class TrackedNet:
         interface_index: int,
     ):
         self._net = Sddf.Net(
-            BuildConstants.sdf(), ethernet_node, driver, virt_tx, virt_rx, rx_dma_region
+            BuildConstants.sdf(), ethernet_node, driver, virt_tx, virt_rx, rx_dma_mr=rx_dma_region
         )
         self._driver = driver
         self._virt_tx = virt_tx

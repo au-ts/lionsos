@@ -17,7 +17,7 @@ from pyfw.constants import (
 )
 from pyfw.specs import FirewallMemoryRegion
 from config_structs import (
-    EthHwaddrLen,
+    Mac802Bytes,
     FwConnectionResource,
     FwRouterConfig,
     FwRouterInterface,
@@ -151,7 +151,7 @@ class Router(Component, FwRouterConfig):
         assert self.initial_routes is not None and len(self.initial_routes) >= len(interfaces)
         assert self.interfaces is not None and len(self.interfaces) == len(interfaces)
         for iface in self.interfaces:
-            assert iface.mac_addr is not None and len(iface.mac_addr) == EthHwaddrLen
+            assert iface.mac_addr is not None and len(iface.mac_addr) == Mac802Bytes
             assert iface.ip is not None and iface.ip != 0
             assert iface.subnet is not None and iface.subnet > 0
             assert iface.filters is not None and len(iface.filters) == len(supported_protocols)
