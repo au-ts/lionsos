@@ -11,6 +11,19 @@
 
 #define FW_MAX_INTERFACES 4
 
+#define LOG_FIREWALL_ERR(name, ...) do{ sddf_printf(name); sddf_printf("|ERROR: "); sddf_printf(__VA_ARGS__); }while(0)
+
+/**
+ * Uncomment for debug output.
+ */
+#define DEBUG_FIREWALL
+
+#ifdef DEBUG_FIREWALL
+#define LOG_FIREWALL(name, ...) do{ sddf_printf(name); sddf_printf("|LOG: "); sddf_printf(__VA_ARGS__); }while(0)
+#else
+#define LOG_FIREWALL(...) do{}while(0)
+#endif
+
 /**
  * Firewall buffer descriptor. An extension of a network buffer description
  * allowing the buffer's region to be tracked. Used in queues which hold buffers
