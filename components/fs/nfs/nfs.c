@@ -98,7 +98,7 @@ void notified(microkit_channel ch) {
     } else if (ch == fs_config.client.id) {
         /* Handled outside of this if statement */
     } else {
-        dlog("got notification from unknown channel %llu", ch);
+        dlog("got notification from unknown channel %u", ch);
     }
 
     // If we leave any commands in the queue, we can't rely on another client
