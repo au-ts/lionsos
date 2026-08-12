@@ -38,7 +38,7 @@ libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt | $(LIONS_LIBC)/include
 	LIBNFS_LIBC=$(LIONS_LIBC) CC=$(CC) CPU=$(CPU) TARGET=$(TARGET) \
 		cmake -S $(LIBNFS) -B libnfs \
 		-DCMAKE_TOOLCHAIN_FILE=$(NFS_DIR)/toolchain.cmake \
-		-DBUILD_SHARED_LIBS=OFF
+		-DBUILD_SHARED_LIBS=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 	cmake --build libnfs
 
 LIB_FS_SERVER_LIBC_INCLUDE := $(LIONS_LIBC)/include
