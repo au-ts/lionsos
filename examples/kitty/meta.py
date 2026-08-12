@@ -104,7 +104,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         # buses 9-15 or they will be guest-accessible.
         vmm_system.add_passthrough_device(dtb.node("virtio_mmio@a001000"))
     elif board.name == "odroidc4":
-        passthrough_irqs = [Irq(5)]
+        passthrough_irqs = []
         devices = []
 
         # This is quite a lot of passthrough devices, which we can cleanup with
