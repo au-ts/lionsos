@@ -90,7 +90,7 @@ class PN532:
             try:
                 data = self.i2c_bus.readfrom(_PN532_I2C_BUS_ADDRESS, _PN532_ACK_FRAME_SIZE)
             except OSError as e:
-                if e.errno is errno.EIO:
+                if e.errno == errno.EIO:
                     continue    # NACK probably, retry
                 raise e
             if len(data) and data[0] & 1:
@@ -117,7 +117,7 @@ class PN532:
             try:
                 data = self.i2c_bus.readfrom(_PN532_I2C_BUS_ADDRESS, 6)
             except OSError as e:
-                if e.errno is errno.EIO:
+                if e.errno == errno.EIO:
                     continue    # NACK probably, retry
                 raise e
             if (data[0] & 1):
