@@ -8,14 +8,14 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     zig-overlay.url = "github:mitchellh/zig-overlay";
-    sdfgen.url = "github:au-ts/microkit_sdf_gen/0.28.1";
+    sdfgen.url = "github:au-ts/microkit_sdf_gen/0.33.0";
     sdfgen.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { nixpkgs, zig-overlay, sdfgen, ... }:
     let
-      microkit-version = "2.2.0";
-      microkit-url = "https://github.com/seL4/microkit/releases/download/2.2.0/";
+      microkit-version = "2.3.0";
+      microkit-url = "https://github.com/seL4/microkit/releases/download/2.3.0/";
       microkit-platforms = {
         aarch64-darwin = "macos-aarch64";
         x86_64-darwin = "macos-x86-64";
@@ -63,10 +63,10 @@
                 url = "${microkit-url}/microkit-sdk-${microkit-version}-${microkit-platform}.tar.gz";
                 hash =
                   {
-                    aarch64-darwin = "sha256-UZBEwS3vAQqJe6Xj+13smJRS0RYfoc0uCK7hB8ujbvA=";
-                    x86_64-darwin = "sha256-aE2mYToK2ne9vzw6d3YQDzJvhpnI8IHOR9+VqZxwlfY=";
-                    aarch64-linux = "sha256-U1hA7Vk/TlSWgV7KiEeG7AkA7t5IR/x89mSE0YHBRNA=";
-                    x86_64-linux = "sha256-dxPu2Q01qjKhME6Z6kgG4ASDUe12ytZmh5tCtFva/L0=";
+                    aarch64-darwin = "sha256-7WtFeEf/BbcpNLCKtsJDWcypYXHxAAEMElL+p4KsVXc=";
+                    x86_64-darwin = "sha256-ob07JxvpiG9DqCB5rdEeDlUYPK2X2wqj1MFJjFbge6k=";
+                    aarch64-linux = "sha256-Chv1S0xxaf2ROQ4OcATLorQ9iaNaiXrCresl+AW0iBI=";
+                    x86_64-linux = "sha256-95nmS3e2Y0Mu3SC5Yy7lMDabyhEw7vjgwGMJpXAz4Hs=";
                   }
                   .${system} or (throw "Unsupported system: ${system}");
               };
