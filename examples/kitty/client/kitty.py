@@ -115,7 +115,7 @@ async def on_tap(card_id):
         try:
             info(f'card id: {card_id}')
             writer_stream.write(
-                bytes(f'100 {token} {''.join('{: 02x}'.format(x) for x in card_id)} 1.0' + '\n', 'utf-8')
+                bytes(f'100 {token} {''.join('{:02x}'.format(x) for x in card_id)} 1.0' + '\n', 'utf-8')
             )
             await writer_stream.drain()
             break
