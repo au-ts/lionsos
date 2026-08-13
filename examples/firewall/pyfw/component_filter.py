@@ -3,11 +3,9 @@
 from sdfgen import SystemDescription
 from pyfw.component_base import Component
 from pyfw.constants import (
-    interfaces,
     BuildConstants,
     supported_protocols,
     supported_filter_actions,
-    initial_rules,
     filter_instances_buffer,
     filter_instances_region,
     filter_rules_buffer,
@@ -93,7 +91,7 @@ class Filter(Component, FwFilterConfig):
             ),
             rule_id_bitmap=rule_id_bitmap_mr.map(self.pd, "rw"),
             icmp_module=None,
-            initial_rules=initial_rules[iface_index][protocol],
+            initial_rules=BuildConstants.initial_rules()[iface_index][protocol],
         )
 
     def connect_webserver(self, webserver: Component) -> FwWebserverFilterConfig:
@@ -152,4 +150,4 @@ class Filter(Component, FwFilterConfig):
         self.external_instances = [
             instance_mr.map(self.pd, "r") for instance_mr in external_mrs if instance_mr != self._local_instance_mr
         ]
-        assert len(self.external_instances) == len(interfaces) - 1
+        assert len(self.external_instances) == len(BuildConstants.interfaces()) - 1

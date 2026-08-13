@@ -5,7 +5,6 @@ from pyfw.component_base import Component
 from pyfw.constants import (
     BuildConstants,
     initial_routes,
-    interfaces,
     supported_protocols,
     arp_packet_queue_buffer,
     arp_packet_queue_region,
@@ -50,7 +49,7 @@ class Router(Component, FwRouterConfig):
         # Create per-interface resources
         self._interfaces: list[FwRouterInterface] = []
         self._initial_routes: list[FwRoutingEntry] = []
-        for iface in interfaces:
+        for iface in BuildConstants.interfaces():
             # Create packet waiting memory pools
             packet_waiting_mr = FirewallMemoryRegion(
                 "arp_packet_queue_" + self.name + f"{iface.index}",
@@ -148,8 +147,8 @@ class Router(Component, FwRouterConfig):
 
 
     def finalise_config(self) -> None:
-        assert self.initial_routes is not None and len(self.initial_routes) >= len(interfaces)
-        assert self.interfaces is not None and len(self.interfaces) == len(interfaces)
+        assert self.initial_routes is not None and len(self.initial_routes) >= len(BuildConstants.interfaces())
+        assert self.interfaces is not None and len(self.interfaces) == len(BuildConstants.interfaces())
         for iface in self.interfaces:
             assert iface.mac_addr is not None and len(iface.mac_addr) == Mac802Bytes
             assert iface.ip is not None and iface.ip != 0

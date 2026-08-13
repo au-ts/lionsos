@@ -3,9 +3,8 @@
 from sdfgen import SystemDescription
 from pyfw.component_base import Component
 from pyfw.constants import (
-    interfaces,
+    BuildConstants,
     supported_protocols,
-    webserver_tx_interface_idx,
 )
 from config_structs import (
     Mac802Bytes,
@@ -33,7 +32,7 @@ class Webserver(Component, FwWebserverConfig):
 
         # Create per-interface resources
         self._interfaces: list[FwWebserverInterfaceConfig] = []
-        for iface in interfaces:
+        for iface in BuildConstants.interfaces():
             self._interfaces.append(
                 FwWebserverInterfaceConfig(
                     mac_addr=iface.mac_list,
@@ -51,11 +50,11 @@ class Webserver(Component, FwWebserverConfig):
             interfaces=self._interfaces,
             router=None,
             arp_queue=None,
-            tx_interface=webserver_tx_interface_idx,
+            tx_interface=BuildConstants.webserver_tx_interface_idx(),
         )
 
     def finalise_config(self) -> None:
-        assert self.interfaces is not None and len(self.interfaces) == len(interfaces)
+        assert self.interfaces is not None and len(self.interfaces) == len(BuildConstants.interfaces())
         for iface in self.interfaces:
             assert iface.mac_addr is not None and len(iface.mac_addr) == Mac802Bytes
             assert iface.ip is not None and iface.ip != 0
