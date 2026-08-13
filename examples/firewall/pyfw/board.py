@@ -1,6 +1,6 @@
 # Copyright 2026, UNSW SPDX-License-Identifier: BSD-2-Clause
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from sdfgen import SystemDescription
 
 @dataclass(frozen=True)
@@ -10,9 +10,8 @@ class Board:
     paddr_top: int
     serial: str
     timer: str
-    ethernet0: str
-    ethernet1: str
+    ethernet: tuple[str, ...]
 
-    def ethernet_node_path(self, slot: str) -> str:
-        assert slot in ("ethernet0", "ethernet1")
-        return getattr(self, slot)
+    def ethernet_node_path(self, idx: int) -> str:
+        assert 0 <= idx < len(self.ethernet)
+        return self.ethernet[idx]

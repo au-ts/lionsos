@@ -22,8 +22,7 @@ BOARDS = [
         paddr_top=0x6_0000_000,
         serial="pl011@9000000",
         timer="timer",
-        ethernet0="virtio_mmio@a003e00",
-        ethernet1="virtio_mmio@a003c00",
+        ethernet=("virtio_mmio@a003e00", "virtio_mmio@a003c00", "virtio_mmio@a003a00")
     ),
     Board(
         name="imx8mp_iotgate",
@@ -31,8 +30,7 @@ BOARDS = [
         paddr_top=0x70_000_000,
         serial="soc@0/bus@30800000/serial@30890000",
         timer="soc@0/bus@30000000/timer@302d0000",
-        ethernet0="soc@0/bus@30800000/ethernet@30bf0000",  # DWMAC
-        ethernet1="soc@0/bus@30800000/ethernet@30be0000",  # IMX
+        ethernet=("soc@0/bus@30800000/ethernet@30bf0000", "soc@0/bus@30800000/ethernet@30be0000")
     ),
 ]
 
@@ -70,7 +68,7 @@ interfaces = [
     NetworkInterface(
         index=0,
         name="external",
-        board_ethernet="ethernet0",
+        board_ethernet_idx=0,
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x18),
         ip="172.16.2.1",
         subnet_bits=16,
@@ -78,7 +76,7 @@ interfaces = [
     NetworkInterface(
         index=1,
         name="internal",
-        board_ethernet="ethernet1",
+        board_ethernet_idx=1,
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x10),
         ip="192.168.1.1",
         subnet_bits=24,
@@ -126,7 +124,7 @@ def default_action_rule(action: int) -> FwRule:
     return construct_rule(action, 0, 0, 0, True, 0, 0, 0, True)
 
 # Initial rules - protocol->rule dictionary for each interface
-# The first rule must always be the default action
+# The first rule for each protocol is the default action
 initial_rules = [
     {
         0x01: [default_action_rule(FILTER_ACTION_ALLOW)],

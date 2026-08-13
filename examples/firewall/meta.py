@@ -70,7 +70,7 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
             f"rx_dma_region{iface.index}", dma_buffer_region.region_size, physical=True,
         )
 
-        ethernet_node_path = board.ethernet_node_path(iface.board_ethernet)
+        ethernet_node_path = board.ethernet_node_path(iface.board_ethernet_idx)
         ethernet_node = dtb.node(ethernet_node_path)
         assert ethernet_node is not None, (
             f"Could not find device tree node: {ethernet_node_path}"
