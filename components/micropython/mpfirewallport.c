@@ -62,21 +62,21 @@ static void firewall_interface_free_buffer(struct pbuf *buf)
     SYS_ARCH_UNPROTECT(old_level);
 }
 
-static void fill_arp(uint32_t ip, uint8_t mac[ETH_HWADDR_LEN])
+static void fill_arp(uint32_t ip, uint8_t mac[MAC802_BYTES])
 {
     /* Fill ethernet header */
-    memcpy(arp_response_pkt.eth_hdr.ethdst_addr, fw_config.interfaces[fw_config.tx_interface].mac_addr, ETH_HWADDR_LEN);
-    memcpy(arp_response_pkt.eth_hdr.ethsrc_addr, mac, ETH_HWADDR_LEN);
+    memcpy(arp_response_pkt.eth_hdr.ethdst_addr, fw_config.interfaces[fw_config.tx_interface].mac_addr, MAC802_BYTES);
+    memcpy(arp_response_pkt.eth_hdr.ethsrc_addr, mac, MAC802_BYTES);
     arp_response_pkt.eth_hdr.ethtype = HTONS(ETH_TYPE_ARP);
     /* Fill ARP Packet */
     arp_response_pkt.arp_pkt.hwtype = HTONS(ARP_HWTYPE_ETH);
     arp_response_pkt.arp_pkt.protocol = HTONS(ETH_TYPE_IP);
-    arp_response_pkt.arp_pkt.hwlen = ETH_HWADDR_LEN;
+    arp_response_pkt.arp_pkt.hwlen = MAC802_BYTES;
     arp_response_pkt.arp_pkt.protolen = ARP_PROTO_LEN_IPV4;
     arp_response_pkt.arp_pkt.opcode = HTONS(ARP_ETH_OPCODE_REPLY);
-    memcpy(arp_response_pkt.arp_pkt.hwsrc_addr, mac, ETH_HWADDR_LEN);
+    memcpy(arp_response_pkt.arp_pkt.hwsrc_addr, mac, MAC802_BYTES);
     arp_response_pkt.arp_pkt.ipsrc_addr = ip;
-    memcpy(arp_response_pkt.arp_pkt.hwdst_addr, fw_config.interfaces[fw_config.tx_interface].mac_addr, ETH_HWADDR_LEN);
+    memcpy(arp_response_pkt.arp_pkt.hwdst_addr, fw_config.interfaces[fw_config.tx_interface].mac_addr, MAC802_BYTES);
     arp_response_pkt.arp_pkt.ipdst_addr = fw_config.interfaces[fw_config.tx_interface].ip;
 }
 

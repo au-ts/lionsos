@@ -65,14 +65,12 @@ IMAGES := timer_driver.elf \
 	  i2c_virt.elf \
 	  i2c_driver.elf
 
-CFLAGS += \
-	-Wno-bitwise-op-parentheses \
-	-Wno-shift-op-parentheses \
-	-I$(LIONSOS)/include \
-	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit \
-	-I$(LIBMICROKITCO_PATH) \
-	-I$(LWIP)/include
+CFLAGS += -I$(LIONSOS)/include \
+	      -I$(SDDF)/include \
+	      -I$(SDDF)/include/microkit \
+	      -I$(LIBMICROKITCO_PATH) \
+	      -I$(LWIP)/include \
+		  -I$(LIBVMM_DIR)/include
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -101,6 +99,10 @@ include ${SDDF_MAKEFILES}
 LIBVMM_LIBC_INCLUDE := $(LIONS_LIBC)/include
 
 include ${LIBVMM_DIR}/vmm.mk
+
+CFLAGS += \
+	-Wno-bitwise-op-parentheses \
+	-Wno-shift-op-parentheses
 
 include ${NFS}/nfs.mk
 

@@ -50,8 +50,8 @@ static bool process_icmp_request(icmp_req_t *req, bool *transmitted)
 
     /* Construct ethernet header */
     eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
-    memcpy(&eth_hdr->ethdst_addr, &req->eth_hdr.ethsrc_addr, ETH_HWADDR_LEN);
-    memcpy(&eth_hdr->ethsrc_addr, &icmp_config.interfaces[out_int].mac_addr, ETH_HWADDR_LEN);
+    memcpy(&eth_hdr->ethdst_addr, &req->eth_hdr.ethsrc_addr, MAC802_BYTES);
+    memcpy(&eth_hdr->ethsrc_addr, &icmp_config.interfaces[out_int].mac_addr, MAC802_BYTES);
     eth_hdr->ethtype = htons(ETH_TYPE_IP);
 
     /* Construct IP packet */

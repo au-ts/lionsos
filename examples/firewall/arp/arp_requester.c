@@ -60,22 +60,22 @@ static void generate_arp(net_buff_desc_t *buffer, uint32_t ip)
     eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
 
     /* Set the destination MAC address as the broadcast MAC address */
-    memset(&eth_hdr->ethdst_addr, 0xFF, ETH_HWADDR_LEN);
-    memcpy(&eth_hdr->ethsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
+    memset(&eth_hdr->ethdst_addr, 0xFF, MAC802_BYTES);
+    memcpy(&eth_hdr->ethsrc_addr, arp_config.mac_addr, MAC802_BYTES);
     eth_hdr->ethtype = htons(ETH_TYPE_ARP);
 
     arp_pkt_t *request = (arp_pkt_t *)(pkt_vaddr + ARP_PKT_OFFSET);
     request->hwtype = htons(ARP_HWTYPE_ETH);
     request->protocol = htons(ETH_TYPE_IP);
-    request->hwlen = ETH_HWADDR_LEN;
+    request->hwlen = MAC802_BYTES;
     request->protolen = ARP_PROTO_LEN_IPV4;
     request->opcode = htons(ARP_ETH_OPCODE_REQUEST);
 
-    memcpy(&request->hwsrc_addr, arp_config.mac_addr, ETH_HWADDR_LEN);
+    memcpy(&request->hwsrc_addr, arp_config.mac_addr, MAC802_BYTES);
     request->ipsrc_addr = arp_config.ip;
 
     /* Memset the hardware src addr to 0 for ARP requests */
-    memset(&request->hwdst_addr, 0, ETH_HWADDR_LEN);
+    memset(&request->hwdst_addr, 0, MAC802_BYTES);
     request->ipdst_addr = ip;
 
     buffer->len = ARP_PKT_LEN;
@@ -150,7 +150,7 @@ static void process_responses()
                     if (entry != NULL) {
                         /* This was a response to a request we sent, update entry */
                         entry->state = ARP_STATE_REACHABLE;
-                        memcpy(&entry->mac_addr, &arp_resp->hwsrc_addr, ETH_HWADDR_LEN);
+                        memcpy(&entry->mac_addr, &arp_resp->hwsrc_addr, MAC802_BYTES);
 
                         /* Send to clients */
                         for (uint8_t client = 0; entry->client && client < arp_config.num_arp_clients; client++) {

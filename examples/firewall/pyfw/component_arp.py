@@ -12,7 +12,7 @@ from pyfw.constants import (
 from pyfw.component_net_interface import NetworkInterface
 from pyfw.specs import FirewallMemoryRegion
 from config_structs import (
-    EthHwaddrLen,
+    Mac802Bytes,
     FwArpConnection,
     FwArpRequesterConfig,
     FwArpResponderConfig,
@@ -95,7 +95,7 @@ class ArpRequester(Component, FwArpRequesterConfig):
         return client_cache_region
 
     def finalise_config(self) -> None:
-        assert self.mac_addr is not None and len(self.mac_addr) == EthHwaddrLen
+        assert self.mac_addr is not None and len(self.mac_addr) == Mac802Bytes
         assert self.ip is not None and self.ip != 0
 
 class ArpResponder(Component, FwArpResponderConfig):
@@ -122,5 +122,5 @@ class ArpResponder(Component, FwArpResponderConfig):
         )
 
     def finalise_config(self) -> None:
-        assert self.mac_addr is not None and len(self.mac_addr) == EthHwaddrLen
+        assert self.mac_addr is not None and len(self.mac_addr) == Mac802Bytes
         assert self.ip is not None and self.ip != 0

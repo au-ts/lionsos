@@ -150,7 +150,7 @@ static void initialise_cb(int status, struct nfs_context *nfs, void *data, void 
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
 
     if (status != 0) {
-        dlog("failed to connect to nfs server (%d): %s", status, data);
+        dlog("failed to connect to nfs server (%d): %s", status, (char *)data);
         cmpl.status = FS_STATUS_ERROR;
         goto fail;
     }
@@ -211,7 +211,7 @@ static void stat_cb(int status, struct nfs_context *nfs, void *data, void *priva
     if (status == 0) {
         memcpy(buf, data, sizeof (fs_stat_t));
     } else {
-        dlogp(status != -ENOENT, "failed to stat file (%d): %s", status, data);
+        dlogp(status != -ENOENT, "failed to stat file (%d): %s", status, (char *)data);
         cmpl.status = FS_STATUS_ERROR;
     }
     continuation_free(cont);
@@ -262,7 +262,7 @@ void file_size_cb(int status, struct nfs_context *nfs, void *data, void *private
     fd_t fd = cont->data[0];
 
     if (status != 0) {
-        dlog("failed to fstat file (fd=%lu) (%d): %s", fd, status, data);
+        dlog("failed to fstat file (fd=%lu) (%d): %s", fd, status, (char *)data);
         cmpl.status = FS_STATUS_ERROR;
         goto fail;
     }
@@ -282,7 +282,7 @@ void handle_file_size(fs_cmd_t cmd) {
     struct nfsfh *file_handle = NULL;
     int err = fd_begin_op_file(params.fd, (void **)&file_handle);
     if (err) {
-        dlog("invalid fd: %d", params.fd);
+        dlog("invalid fd: %lu", params.fd);
         status = FS_STATUS_INVALID_FD;
         goto fail_begin;
     }
@@ -317,7 +317,7 @@ void file_open_cb(int status, struct nfs_context *nfs, void *data, void *private
         fd_set_file(fd, file);
         cmpl.data.file_open.fd = fd;
     } else {
-        dlog("failed to open file (%d): %s\n", status, data);
+        dlog("failed to open file (%d): %s\n", status, (char *)data);
         fd_free(fd);
         cmpl.status = FS_STATUS_ERROR;
     }
@@ -404,7 +404,7 @@ void handle_file_close(fs_cmd_t cmd) {
     struct nfsfh *file_handle = NULL;
     int err = fd_begin_op_file(params.fd, (void **)&file_handle);
     if (err) {
-        dlog("invalid fd: %d", params.fd);
+        dlog("invalid fd: %lu", params.fd);
         status = FS_STATUS_INVALID_FD;
         goto fail_begin;
     }
@@ -447,7 +447,7 @@ void file_read_cb(int status, struct nfs_context *nfs, void *data, void *private
     if (status >= 0) {
         cmpl.data.file_read.len_read = status;
     } else {
-        dlog("failed to read file: %d (%s)", status, data);
+        dlog("failed to read file: %d (%s)", status, (char *)data);
         cmpl.status = FS_STATUS_ERROR;
     }
 
@@ -470,7 +470,7 @@ void handle_file_read(fs_cmd_t cmd) {
     struct nfsfh *file_handle = NULL;
     int err = fd_begin_op_file(params.fd, (void **)&file_handle);
     if (err) {
-        dlog("invalid fd: %d", params.fd);
+        dlog("invalid fd: %lu", params.fd);
         status = FS_STATUS_INVALID_FD;
         goto fail_begin;
     }
@@ -505,7 +505,7 @@ void file_write_cb(int status, struct nfs_context *nfs, void *data, void *privat
     if (status >= 0) {
         cmpl.data.file_write.len_written = status;
     } else {
-        dlog("failed to write to file: %d (%s)", status, data);
+        dlog("failed to write to file: %d (%s)", status, (char *)data);
         cmpl.status = FS_STATUS_ERROR;
     }
 
@@ -528,7 +528,7 @@ void handle_file_write(fs_cmd_t cmd) {
     struct nfsfh *file_handle = NULL;
     int err = fd_begin_op_file(params.fd, (void **)&file_handle);
     if (err) {
-        dlog("invalid fd: %d", params.fd);
+        dlog("invalid fd: %lu", params.fd);
         status = FS_STATUS_INVALID_FD;
         goto fail_begin;
     }
@@ -558,7 +558,7 @@ void rename_cb(int status, struct nfs_context *nfs, void *data, void *private_da
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     if (status != 0) {
-        dlog("failed to write to file: %d (%s)", status, data);
+        dlog("failed to write to file: %d (%s)", status, (char *)data);
         cmpl.status = FS_STATUS_ERROR;
     }
     continuation_free(cont);
@@ -646,7 +646,7 @@ void file_sync_cb(int status, struct nfs_context *nfs, void *data, void *private
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
     if (status != 0) {
-        dlog("fsync failed: %d (%s)", status, data);
+        dlog("fsync failed: %d (%s)", status, (char *)data);
         cmpl.status = FS_STATUS_ERROR;
     }
     fd_end_op(fd);
@@ -661,7 +661,7 @@ void handle_file_sync(fs_cmd_t cmd) {
     struct nfsfh *file_handle = NULL;
     int err = fd_begin_op_file(params.fd, (void **)&file_handle);
     if (err) {
-        dlog("invalid fd (%d)", params.fd);
+        dlog("invalid fd (%lu)", params.fd);
         status = FS_STATUS_INVALID_FD;
         goto fail_begin;
     }
@@ -691,7 +691,7 @@ void file_truncate_cb(int status, struct nfs_context *nfs, void *data, void *pri
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     fd_t fd = cont->data[0];
     if (status != 0) {
-        dlog("ftruncate failed: %d (%s)", status, data);
+        dlog("ftruncate failed: %d (%s)", status, (char *)data);
         cmpl.status = FS_STATUS_ERROR;
     }
     fd_end_op(fd);
@@ -735,7 +735,7 @@ void dir_create_cb(int status, struct nfs_context *nfs, void *data, void *privat
     struct continuation *cont = private_data;
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     if (status != 0) {
-        dlog("failed to write to file: %d (%s)", status, data);
+        dlog("failed to write to file: %d (%s)", status, (char *)data);
         cmpl.status = FS_STATUS_ERROR;
     }
     continuation_free(cont);
@@ -776,7 +776,7 @@ void dir_remove_cb(int status, struct nfs_context *nfs, void *data, void *privat
     struct continuation *cont = continuation_alloc();
     fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
     if (status != 0) {
-        dlog("failed to write to file: %d (%s)", status, data);
+        dlog("failed to write to file: %d (%s)", status, (char *)data);
         cmpl.status = FS_STATUS_ERROR;
     }
     continuation_free(cont);
@@ -824,7 +824,7 @@ void dir_open_cb(int status, struct nfs_context *nfs, void *data, void *private_
         fd_set_dir(fd, dir);
         cmpl.data.dir_open.fd = fd;
     } else {
-        dlog("failed to open directory: %d (%s)", status, data);
+        dlog("failed to open directory: %d (%s)", status, (char *)data);
         cmpl.status = FS_STATUS_ERROR;
         fd_free(fd);
     }
@@ -882,7 +882,7 @@ void handle_dir_close(fs_cmd_t cmd) {
     struct nfsdir *dir_handle = NULL;
     int err = fd_begin_op_dir(params.fd, (void **)&dir_handle);
     if (err) {
-        dlog("invalid fd (%d)", params.fd);
+        dlog("invalid fd (%lu)", params.fd);
         cmpl.status = FS_STATUS_INVALID_FD;
         goto fail;
     }
@@ -915,7 +915,7 @@ void handle_dir_read(fs_cmd_t cmd) {
     struct nfsdir *dir_handle = NULL;
     int status = fd_begin_op_dir(params.fd, (void **)&dir_handle);
     if (status) {
-        dlog("invalid fd (%d)", params.fd);
+        dlog("invalid fd (%lu)", params.fd);
         cmpl.status = FS_STATUS_INVALID_FD;
         goto fail_begin;
     }
@@ -945,7 +945,7 @@ void handle_dir_seek(fs_cmd_t cmd) {
     struct nfsdir *dir_handle = NULL;
     int err = fd_begin_op_dir(params.fd, (void **)&dir_handle);
     if (err) {
-        dlog("invalid fd (%d)", params.fd);
+        dlog("invalid fd (%lu)", params.fd);
         cmpl.status = FS_STATUS_INVALID_FD;
         goto fail;
     }
@@ -963,7 +963,7 @@ void handle_dir_tell(fs_cmd_t cmd) {
     struct nfsdir *dir_handle = NULL;
     int err = fd_begin_op_dir(params.fd, (void **)&dir_handle);
     if (err) {
-        dlog("invalid fd (%d)", params.fd);
+        dlog("invalid fd (%lu)", params.fd);
         cmpl.status = FS_STATUS_INVALID_FD;
         goto fail;
     }
@@ -981,7 +981,7 @@ void handle_dir_rewind(fs_cmd_t cmd) {
     struct nfsdir *dir_handle = NULL;
     int err = fd_begin_op_dir(params.fd, (void **)&dir_handle);
     if (err) {
-        dlog("invalid fd (%d)", params.fd);
+        dlog("invalid fd (%lu)", params.fd);
         cmpl.status = FS_STATUS_INVALID_FD;
         goto fail;
     }

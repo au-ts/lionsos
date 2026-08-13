@@ -9,7 +9,7 @@ from sdfgen import SystemDescription, Sddf, Vmm, DeviceTree, LionsOs
 from importlib.metadata import version
 from board import BOARDS
 
-assert version('sdfgen').split(".")[1] == "28", "Unexpected sdfgen version"
+assert version('sdfgen').split(".")[1] == "33", "Unexpected sdfgen version"
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 VirtualMachine = SystemDescription.VirtualMachine
@@ -104,7 +104,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         # buses 9-15 or they will be guest-accessible.
         vmm_system.add_passthrough_device(dtb.node("virtio_mmio@a001000"))
     elif board.name == "odroidc4":
-        passthrough_irqs = [Irq(5)]
+        passthrough_irqs = []
         devices = []
 
         # This is quite a lot of passthrough devices, which we can cleanup with
