@@ -39,6 +39,7 @@ all: ${IMAGE_FILE}
 qemu ${IMAGE_FILE}: ${BUILD_DIR}/Makefile FORCE
 	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} $(notdir $@)
 
+# we now build the libunwind inside te
 ${BUILD_DIR}/Makefile: webserver.mk
 	mkdir -p ${BUILD_DIR}
 	echo "MICROKIT_SDK ?= ${MICROKIT_SDK}" > $@
@@ -50,7 +51,7 @@ ${BUILD_DIR}/Makefile: webserver.mk
 	echo "NFS_SERVER := ${NFS_SERVER}" >> $@
 	echo "NFS_DIRECTORY := ${NFS_DIRECTORY}" >> $@
 	echo "WEBSITE_DIR := ${WEBSITE_DIR}" >> $@
+# 	echo "LIBUNWIND := ${LIBUNWIND}" >> $@
 	cat webserver.mk >> $@
-
 
 FORCE:

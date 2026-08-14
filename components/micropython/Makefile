@@ -95,6 +95,10 @@ endif
 SRC_C += modmachine.c machine_i2c.c extmod/machine_i2c.c
 SRC_QSTR += modmachine.c machine_i2c.c
 
+# we also now compile the shared elf module:
+SRC_C += modshared_elf.c
+SRC_QSTR += modshared_elf.c
+
 ifdef ENABLE_FRAMEBUFFER
 SRC_C += modfb.c extmod/modframebuf.c
 SRC_QSTR += modfb.c

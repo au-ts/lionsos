@@ -16,6 +16,9 @@
 #define FRAMEBUFFER_VMM_CH 0
 #endif
 
+// probably have an enabled macro etc etc
+#define SHARED_ELF_VMM_CH 0 // just takes the place of the old framebuffer channel
+
 extern serial_queue_handle_t serial_rx_queue_handle;
 extern serial_queue_handle_t serial_tx_queue_handle;
 

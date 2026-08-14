@@ -38,29 +38,8 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     net_virt_rx = ProtectionDomain("net_virt_rx", "network_virt_rx.elf", priority=99)
     net_system = Sddf.Net(sdf, ethernet_node, ethernet_driver, net_virt_tx, net_virt_rx)
 
-    # give this a higher priority than the reloader, so it does not start until I have returned
-    micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, budget=20000, stack_size=0x10000)
-    micropython_net_copier = ProtectionDomain("micropython_net_copier", "network_copy_micropython.elf", priority=97, budget=20000)
-
-    serial_system.add_client(micropython)
-    timer_system.add_client(micropython)
-    net_system.add_client_with_copier(micropython, micropython_net_copier)
-    micropython_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, micropython)
-
-    nfs_net_copier = ProtectionDomain("nfs_net_copier", "network_copy_nfs.elf", priority=97, budget=20000)
     nfs = ProtectionDomain("nfs", "nfs.elf", priority=96, stack_size=0x10000)
 
-    fs = LionsOs.FileSystem.Nfs(
-        sdf,
-        nfs,
-        micropython,
-        net=net_system,
-        net_copier=nfs_net_copier,
-        serial=serial_system,
-        timer=timer_system,
-        server=args.nfs_server,
-        export_path=args.nfs_dir,
-    )
     nfs_lib_sddf_lwip = Sddf.Lwip(sdf, net_system, nfs)
 
     small_mapping_region = MemoryRegion(sdf, "small_region", 0x1000)
@@ -77,58 +56,43 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     sdf.add_mr(stack_region)
     stack_map = Map(stack_region, 0x29000000, "rw")
     reloader.add_map(stack_map)
-
-    elfbuffer = MemoryRegion(sdf, "elfbuffer", 0x2000000)
-    sdf.add_mr(elfbuffer)
-    elfbuffer_map = Map(elfbuffer, 0x30000000, "rw")
-    reloader.add_map(elfbuffer_map)
-    micropython.add_map(elfbuffer_map)
-
     reloader.add_map(small_map)
     reloader.add_map(large_map)
 
+    faulting_pd = ProtectionDomain("faulting_pd", "faulting_pd.elf", priority=100, stack_size=0x10000)
+
     pt = SystemDescription.PageTables(setvar="table_metadata")
     reloader.set_page_tables(pt)
-
-    sdf.add_channel(Channel(micropython, reloader, pp_a=0, b_id=0))
 
     sdf.add_pd(reloader)
     pds = [
         ethernet_driver,
         net_virt_tx,
         net_virt_rx,
-        micropython_net_copier,
-        nfs_net_copier,
         serial_driver,
         serial_virt_tx,
-        micropython,
-        timer_driver, # I believe that many stuff rely on this, but when we reload we just need to have a way of blocking all connections
+        timer_driver,
         nfs,
+        faulting_pd
     ]
 
-    # they are too heavy atm, so might just not add them as children
-    sdf.add_pd(micropython)
     sdf.add_pd(nfs)
 
     counter = 1
     for pd in pds:
-        if pd != micropython and pd != nfs:
+        if pd != nfs:
             print("We have that ", pd, "has counter", counter)
             reloader.add_child_pd(pd, counter)
             pt.add_entry(pd.name, counter)
-            sdf.add_channel(Channel(reloader, pd, a_id=counter, b_id=reloader_queue_channel)) # these can then call it at the start to just hand in their queue to the reloader
+            sdf.add_channel(Channel(reloader, pd, a_id=counter, b_id=reloader_queue_channel))
             counter += 1
 
-    assert fs.connect()
-    assert fs.serialise_config(output_dir)
     assert serial_system.connect()
     assert serial_system.serialise_config(output_dir)
     assert net_system.connect()
     assert net_system.serialise_config(output_dir)
     assert timer_system.connect()
     assert timer_system.serialise_config(output_dir)
-    assert micropython_lib_sddf_lwip.connect()
-    assert micropython_lib_sddf_lwip.serialise_config(output_dir)
     assert nfs_lib_sddf_lwip.connect()
     assert nfs_lib_sddf_lwip.serialise_config(output_dir)
 

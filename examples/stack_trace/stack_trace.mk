@@ -1,4 +1,4 @@
-# Makefile for webserver.
+# Makefile for stack_trace.
 #
 # Copyright 2023, UNSW
 #
@@ -17,7 +17,7 @@ SUPPORTED_BOARDS := \
 
 TOOLCHAIN ?= clang
 
-IMAGE_FILE := webserver.img
+IMAGE_FILE := stack_trace.img
 REPORT_FILE := report.txt
 
 all: $(IMAGE_FILE)
@@ -27,13 +27,14 @@ include ${SDDF}/tools/make/board/common.mk
 NFS=$(LIONSOS)/components/fs/nfs
 MICRODOT := ${LIONSOS}/dep/microdot/src
 
-METAPROGRAM := $(WEBSERVER_SRC_DIR)/meta.py
+METAPROGRAM := $(STACK_TRACE_SRC_DIR)/meta.py
 
-IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
-	  network_copy.elf network_virt_rx.elf network_virt_tx.elf \
+# we add our new 
+IMAGES := timer_driver.elf eth_driver.elf nfs.elf faulting_pd.elf \
+	  network_virt_rx.elf network_virt_tx.elf \
 	  serial_driver.elf serial_virt_tx.elf reloader.elf serial_virt_rx.elf
 
-SYSTEM_FILE := webserver.system
+SYSTEM_FILE := stack_trace.system
 
 CFLAGS += \
 	-I$(LIONSOS)/include \
@@ -45,19 +46,10 @@ LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS := -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
-
-MICROPYTHON_LIBMATH := $(LIBMATH)
-MICROPYTHON_EXEC_MODULE := webserver.py
-MICROPYTHON_FROZEN_MANIFEST := manifest.py
-include $(LIONSOS)/components/micropython/micropython.mk
-
-manifest.py: webserver.py config.py
-webserver.py: $(MICRODOT) config.py
-
 config.py: ${CHECK_FLAGS_BOARD_MD5}
 	echo "base_dir='$(WEBSITE_DIR)'" > config.py
 
-%.py: ${WEBSERVER_SRC_DIR}/%.py
+%.py: ${STACK_TRACE_SRC_DIR}/%.py
 	cp $< $@
 
 include $(NFS)/nfs.mk
@@ -91,30 +83,12 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver.elf
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_virt_rx.data network_virt_rx.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
-	$(OBJCOPY) --update-section .net_copy_config=net_copy_micropython_net_copier.data network_copy.elf network_copy_micropython.elf
-	$(OBJCOPY) --update-section .net_copy_config=net_copy_nfs_net_copier.data network_copy.elf network_copy_nfs.elf
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
-	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
-	$(OBJCOPY) --update-section .net_client_config=net_client_micropython.data micropython.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
-	$(OBJCOPY) --update-section .net_client_config=net_client_nfs.data nfs.elf
-	$(OBJCOPY) --update-section .timer_client_config=timer_client_nfs.data nfs.elf
-	$(OBJCOPY) --update-section .serial_client_config=serial_client_nfs.data nfs.elf
-	$(OBJCOPY) --update-section .fs_server_config=fs_server_nfs.data nfs.elf
-	$(OBJCOPY) --update-section .fs_client_config=fs_client_micropython.data micropython.elf
-	$(OBJCOPY) --update-section .nfs_config=nfs_config.data nfs.elf
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_nfs.data nfs.elf
-	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_micropython.data micropython.elf
-	$(PYTHON) ../reload_crate/depends_for_reload.py
-	$(OBJCOPY) --update-section .reloading_dependencies=reloading_dependencies.data reloader.elf
 	touch $@
 
 # from https://www.gnu.org/software/make/manual/make.html#File-Name-Functions, I have just added some variable catching in the report generating, since done by then
-$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE) $(WEBSERVER_SRC_DIR)/reload_driver.mk
-	$(info reworking expanded.mk)
-	$(file >expanded.mk, )
-	$(foreach v,$(.VARIABLES),$(file >>expanded.mk,$(v) := $($(v))))
-	$(file >>expanded.mk,$(file < $(WEBSERVER_SRC_DIR)/reload_driver.mk))
+$(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu: ${IMAGE_FILE}
@@ -129,10 +103,6 @@ qemu: ${IMAGE_FILE}
 			-global virtio-mmio.force-legacy=false
 
 FORCE: ;
-
-$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross &:
-	cd ${LIONSOS}; git submodule update --init dep/micropython
-	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
 
 ${LIONSOS}/dep/libmicrokitco/libmicrokitco.mk:
 	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco

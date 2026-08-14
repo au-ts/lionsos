@@ -1,0 +1,15 @@
+[package]
+name = "reload_crate"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "python_abi"
+crate-type = ["cdylib"]
+
+[dependencies]
+roxmltree = "0.19.0"
+serde = { version = "1.0.203", features = ["derive"] }
+serde_json = "1.0.117"
+zerocopy = {version="0.8.25",features=["derive"]}
+pyo3 = { version = "0.21", features = ["extension-module"] } # for the python elf abi

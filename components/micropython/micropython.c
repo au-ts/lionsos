@@ -85,6 +85,8 @@ libi2c_conf_t libi2c_config;
 uintptr_t framebuffer_data_region = 0x30000000;
 #endif
 
+uintptr_t Shared_Elf_Arena = 0x30000000; // will not be used with kitty anyway
+
 static void blocking_wait(microkit_channel ch) {
     mp_cothread_wait(ch, MP_WAIT_NO_INTERRUPT);
 }
@@ -152,12 +154,14 @@ start_repl:
         init_firewall_webserver();
     }
 
+    // this is where our shared memory buffers start now
     if (net_enabled) {
         if (net_config.rx.num_buffers) {
             net_queue_init(&net_rx_handle, net_config.rx.free_queue.vaddr,
                 net_config.rx.active_queue.vaddr, net_config.rx.num_buffers);
         }
         if (net_config.tx.num_buffers) {
+            // sddf_dprintf("init the free and active queue from micropython!\n");
             net_queue_init(&net_tx_handle, net_config.tx.free_queue.vaddr,
                 net_config.tx.active_queue.vaddr, net_config.tx.num_buffers);
             net_buffers_init(&net_tx_handle, 0);
@@ -200,6 +204,8 @@ start_repl:
 }
 
 void init(void) {
+    sddf_dprintf("yo, what protection domain are we using, is it micropython?\n");
+
     // TODO: problem, if one of these asserts fails it crashes micropython since it tries to output
     // to real serial instead of microkit_dbg_puts
     assert(serial_config_check_magic(&serial_config));
@@ -234,7 +240,7 @@ void init(void) {
 
     libc_init();
 
-    if (microkit_cothread_spawn(t_mp_entrypoint, NULL) == LIBMICROKITCO_NULL_HANDLE) {
+    if (microkit_cothread_spawn(t_mp_entrypoint, NULL) == LIBMICROKITCO_NULL_HANDLE) { // this spawns a seperate thread that runs everything?
         printf("MP|ERROR: Cannot initialise Micropython cothread\n");
         assert(false);
     }

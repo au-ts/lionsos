@@ -96,6 +96,7 @@ void notified(microkit_channel ch) {
 
 void init(void)
 {
+    microkit_dbg_puts("in the nfs startup!\n");
     assert(fs_config_check_magic(&fs_config));
     assert(nfs_config_check_magic(&nfs_config));
 
@@ -103,10 +104,16 @@ void init(void)
     fs_completion_queue = fs_config.client.completion_queue.vaddr;
     fs_share = fs_config.client.share.vaddr;
 
+    microkit_dbg_puts("waking up the timer now!0\n");
+
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
 
     libc_init();
     continuation_pool_init();
     tcp_init_0();
+
+    microkit_dbg_puts("waking up the timer now!2\n");
+
+    seL4_DebugDumpScheduler();
     sddf_timer_set_timeout(timer_config.driver_id, TIMEOUT);
 }

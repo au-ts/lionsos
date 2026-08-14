@@ -1,0 +1,8 @@
+We have:
+
+Timer: 
+Serial: timer needs to be up and running
+
+Micropython Net Copy: Expects that the empty queue is full
+
+We will often have clients that are holding buffers to the rx queue, 

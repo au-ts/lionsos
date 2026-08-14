@@ -77,10 +77,15 @@ void tcp_init_0(void) {
                    net_config.tx.num_buffers);
     net_buffers_init(&tx_handle, 0);
 
+    microkit_dbg_puts("waking up the timer now!1\n");
+
     sddf_lwip_init(&lib_sddf_lwip_config, &net_config, &timer_config, rx_handle, tx_handle, NULL, printf,
                    netif_status_callback, NULL, NULL, NULL);
 
+    microkit_dbg_puts("waking up the timer now!6\n");
+
     sddf_lwip_maybe_notify();
+    microkit_dbg_puts("waking up the timer now!7\n");
 }
 
 int socket_id(socket_t *socket) { return (int)(socket - sockets); }

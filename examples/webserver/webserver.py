@@ -1,12 +1,24 @@
 # Copyright 2024, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 
+# import interrupt
+
 import os
 import asyncio
 import fs_async
 import time
 from microdot import Microdot, Response
 from config import base_dir
+import io
+import errno
+
+import json
+
+# this is used so that I can reload something that uses the network
+import asyncio
+
+# Import the module so that we can actually do shared memory
+import shared_elf # need to have the early _ for now.
 
 content_types_map = Response.types_map | {
     'pdf': 'application/pdf',
@@ -182,7 +194,6 @@ async def send_file(relative_path, request_headers):
 
     return Response(body=FileStream(path), headers=response_headers)
 
-
 app = Microdot()
 
 @app.route('/')
@@ -193,4 +204,57 @@ async def index(request):
 async def static(request, path):
     return await send_file(path, request.headers)
 
+OP_FINALIZE_RELOAD = -1
+
+@app.post("/dynamic_loading")
+async def dynamic_load(request):
+    target_vaddr = int(request.headers["vaddr"])
+    size = int(request.headers["seg_size"])
+    to_read = size
+    buf = bytearray()
+
+    while True:
+        chunk = await request.stream.read(min(1400, to_read)) # I think that streams are notified when their thing is ready
+        if not chunk:
+            break
+        to_read -= len(chunk)
+        buf.extend(chunk)
+        if to_read == 0:
+            break
+
+    segment_bytes = bytes(buf)
+    shared_elf.machine_shared_elf_send(
+        memoryview(segment_bytes),
+        len(segment_bytes),
+        target_vaddr,
+    )
+
+    return "", 204
+
+@app.post("/update_pd")
+def reload_handler(request):
+    target_pd = int(request.headers["pd_id"])
+    elf_entry = int(request.headers["entry"])
+    passive_vaddr = int(request.headers["passive_vaddr"])
+
+    async def delayed_reload():
+        await asyncio.sleep(0.6)
+
+        print("We are finishing up with reloading")
+
+        # we make our pd negative to signal
+        shared_elf.machine_shared_elf_send(
+            target_pd,
+            passive_vaddr,
+            -1 * elf_entry, # signal that this is a reload
+        )
+        print("reloaded the driver")
+
+    asyncio.create_task(delayed_reload())
+
+    print("return!")
+
+    return "", 204
+
+shared_elf.wait()
 app.run(debug=True, port=80)
