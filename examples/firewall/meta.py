@@ -25,9 +25,7 @@ from pyfw.constants import (
     BuildConstants,
     BOARDS,
     FILTER_ACTION_REJECT,
-    interfaces,
     supported_protocols,
-    webserver_tx_interface_idx,
     dma_buffer_region,
     ethtype_arp,
     arp_eth_opcode_request,
@@ -43,7 +41,8 @@ fw_interfaces: List[FirewallInterface] = []
 
 def generate(sdf_file: str, dtb: DeviceTree) -> None:
     # Create interfaces and component classes
-    for net_iface in interfaces:
+    for net_iface in BuildConstants.interfaces():
+        print(len(BuildConstants.interfaces()))
         iface = FirewallInterface(net_iface)
         fw_interfaces.append(iface)
 
@@ -70,7 +69,7 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
             f"rx_dma_region{iface.index}", dma_buffer_region.region_size, physical=True,
         )
 
-        ethernet_node_path = board.ethernet_node_path(iface.board_ethernet)
+        ethernet_node_path = board.ethernet_node_path(iface.board_ethernet_idx)
         ethernet_node = dtb.node(ethernet_node_path)
         assert ethernet_node is not None, (
             f"Could not find device tree node: {ethernet_node_path}"
@@ -263,7 +262,7 @@ def wire_webserver_connections(
     router: Router,
 ) -> Sddf.Lwip:
 
-    tx_interface = fw_interfaces[webserver_tx_interface_idx]
+    tx_interface = fw_interfaces[BuildConstants.webserver_tx_interface_idx()]
 
     # Webserver is a transmit net client
     tx_interface.net_system.add_client_with_copier(webserver.pd, rx=False)
@@ -342,6 +341,8 @@ if __name__ == "__main__":
 
     BuildConstants.set_output_dir(args.output)
     BuildConstants.set_sdf(SystemDescription(board.arch, board.paddr_top))
+    BuildConstants.set_num_interfaces(len(board.ethernet))
+
     sddf = Sddf(args.sddf)
 
     global obj_copy

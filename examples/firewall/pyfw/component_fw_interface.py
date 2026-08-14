@@ -16,7 +16,7 @@ class FirewallInterface(NetworkInterface):
     ) -> None:
         super().__init__(index=network_interface.index,
                          name=network_interface.name,
-                         board_ethernet=network_interface.board_ethernet,
+                         board_ethernet_idx=network_interface.board_ethernet_idx,
                          mac=network_interface.mac,
                          ip=network_interface.ip,
                          subnet_bits=network_interface.subnet_bits,
@@ -61,6 +61,14 @@ class FirewallInterface(NetworkInterface):
     def tx_virtualiser(self, tx_virtualiser: NetVirtTx):
         assert tx_virtualiser is not None
         self._tx_virtualiser = tx_virtualiser
+
+    @property
+    def filters(self) -> Dict[int, Filter]:
+        return self._filters
+
+    @filters.setter
+    def filters(self, filters: Dict[int, Filter]):
+        self._filters = filters
 
     @property
     def arp_requester(self) -> ArpRequester:
