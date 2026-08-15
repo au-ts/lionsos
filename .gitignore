@@ -5,3 +5,4 @@ docs/book/
 \#*#
 .#*
 __pycache__
+examples/pager/benchmarks

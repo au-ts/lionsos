@@ -1,0 +1,12 @@
+{
+    "timer_driver": 0,
+    "serial_driver": 0,
+    "serial_virt_tx": 0,
+    "ethernet_driver": 1,
+    "net_virt_tx": 1,
+    "net_virt_rx": 0,
+    "client0": 0,
+    "client0_net_copier": 0,
+    "client1": 0,
+    "client1_net_copier": 0
+}
