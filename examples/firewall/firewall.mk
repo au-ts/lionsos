@@ -36,6 +36,7 @@ PYFW_GENERATED_CONFIG := config_structs.py
 # Headers containing config structs and dependencies
 FIREWALL_CONFIG_HEADERS := \
 	$(SDDF)/include/sddf/resources/common.h \
+	$(SDDF)/include/sddf/network/mac802.h \
 	$(SDDF)/include/sddf/resources/device.h \
 	$(SDDF)/include/sddf/network/constants.h \
 	$(SDDF)/include/sddf/network/config.h \

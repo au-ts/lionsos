@@ -26,9 +26,9 @@ fw_queue_t fw_active_clients[FW_MAX_FW_CLIENTS];
 static int extract_offset_net_client(uintptr_t *phys)
 {
     for (int client = 0; client < config.num_clients; client++) {
-        if (*phys >= config.clients[client].data.io_addr
-            && *phys < config.clients[client].data.io_addr + tx_queue_clients[client].capacity * NET_BUFFER_SIZE) {
-            *phys = *phys - config.clients[client].data.io_addr;
+        if (*phys >= config.clients[client].regions[0].data.io_addr
+            && *phys < config.clients[client].regions[0].data.io_addr + tx_queue_clients[client].capacity * NET_BUFFER_SIZE) {
+            *phys = *phys - config.clients[client].regions[0].data.io_addr;
             return client;
         }
     }
@@ -69,9 +69,9 @@ static void tx_provide(void)
                     continue;
                 }
 
-                uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.clients[client].data.region.vaddr;
+                uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.clients[client].regions[0].data.region.vaddr;
                 cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
-                buffer.io_or_offset = buffer.io_or_offset + config.clients[client].data.io_addr;
+                buffer.io_or_offset = buffer.io_or_offset + config.clients[client].regions[0].data.io_addr;
 
                 err = net_enqueue_active(&tx_queue_drv, buffer);
                 assert(!err);

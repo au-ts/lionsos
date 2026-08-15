@@ -26,8 +26,6 @@
 
 #define FW_FILTER_NUM_ACTIONS 4
 
-#define FW_DEBUG_OUTPUT 1
-
 typedef struct fw_connection_resource {
     region_resource_t queue;
     uint16_t capacity;
@@ -70,7 +68,7 @@ typedef struct fw_arp_connection {
 
 typedef struct fw_arp_requester_config {
     uint8_t interface;
-    uint8_t mac_addr[ETH_HWADDR_LEN];
+    uint8_t mac_addr[MAC802_BYTES];
     uint32_t ip;
     fw_arp_connection_t arp_clients[FW_MAX_ARP_REQUESTER_CLIENTS];
     uint8_t num_arp_clients;
@@ -80,7 +78,7 @@ typedef struct fw_arp_requester_config {
 
 typedef struct fw_arp_responder_config {
     uint8_t interface;
-    uint8_t mac_addr[ETH_HWADDR_LEN];
+    uint8_t mac_addr[MAC802_BYTES];
     uint32_t ip;
 } fw_arp_responder_config_t;
 
@@ -92,7 +90,7 @@ typedef struct fw_webserver_router_config {
 } fw_webserver_router_config_t;
 
 typedef struct fw_router_interface {
-    uint8_t mac_addr[ETH_HWADDR_LEN];
+    uint8_t mac_addr[MAC802_BYTES];
     uint32_t ip;
     uint32_t subnet;
     fw_connection_resource_t rx_free;
@@ -118,7 +116,7 @@ typedef struct fw_router_config {
 
 typedef struct fw_icmp_module_interface_config {
     /* MAC address of interface */
-    uint8_t mac_addr[ETH_HWADDR_LEN];
+    uint8_t mac_addr[MAC802_BYTES];
     /* IP address of interface */
     uint32_t ip;
     fw_connection_resource_t filters[FW_MAX_FILTERS];
@@ -154,7 +152,7 @@ typedef struct fw_filter_config {
 } fw_filter_config_t;
 
 typedef struct fw_webserver_interface_config {
-    uint8_t mac_addr[ETH_HWADDR_LEN];
+    uint8_t mac_addr[MAC802_BYTES];
     uint32_t ip;
     char name[FW_MAX_INTERFACE_NAME_LEN + 1];
     fw_webserver_filter_config_t filters[FW_MAX_FILTERS];

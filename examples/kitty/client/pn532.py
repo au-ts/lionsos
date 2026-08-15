@@ -4,6 +4,7 @@
 # We must ignore these imports since they are not available in a normal Python
 # environment where we do the type checking
 from machine import I2C # type: ignore
+import errno
 from time import sleep_ms # type: ignore
 import sys
 
@@ -86,7 +87,12 @@ class PN532:
     def _pn532_read_ack_frame(self, retries: int) -> bool:
         attempts = 0
         while (attempts < retries):
-            data = self.i2c_bus.readfrom(_PN532_I2C_BUS_ADDRESS, _PN532_ACK_FRAME_SIZE)
+            try:
+                data = self.i2c_bus.readfrom(_PN532_I2C_BUS_ADDRESS, _PN532_ACK_FRAME_SIZE)
+            except OSError as e:
+                if e.errno == errno.EIO:
+                    continue    # NACK probably, retry
+                raise e
             if len(data) and data[0] & 1:
                 for i in range(0, _PN532_ACK_FRAME_SIZE - 1):
                     value = data[i + 1]
@@ -108,8 +114,12 @@ class PN532:
         attempts = 0
 
         while True:
-            data = self.i2c_bus.readfrom(_PN532_I2C_BUS_ADDRESS, 6)
-
+            try:
+                data = self.i2c_bus.readfrom(_PN532_I2C_BUS_ADDRESS, 6)
+            except OSError as e:
+                if e.errno == errno.EIO:
+                    continue    # NACK probably, retry
+                raise e
             if (data[0] & 1):
                 length = data[4]
                 break

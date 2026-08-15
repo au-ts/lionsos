@@ -156,12 +156,12 @@ static mp_obj_t interface_get_mac(mp_obj_t interface_idx_in)
         return mp_const_none;
     }
 
-    mp_obj_t tuple[ETH_HWADDR_LEN];
-    for (uint8_t i = 0; i < ETH_HWADDR_LEN; i++) {
+    mp_obj_t tuple[MAC802_BYTES];
+    for (uint8_t i = 0; i < MAC802_BYTES; i++) {
         tuple[i] = mp_obj_new_int_from_uint(fw_config.interfaces[interface_idx].mac_addr[i]);
     }
 
-    return mp_obj_new_tuple(ETH_HWADDR_LEN, tuple);
+    return mp_obj_new_tuple(MAC802_BYTES, tuple);
 }
 
 static MP_DEFINE_CONST_FUN_OBJ_1(interface_get_mac_obj, interface_get_mac);

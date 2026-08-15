@@ -23,8 +23,9 @@
 __attribute__((__section__(".fw_icmp_module_config"))) fw_icmp_module_config_t icmp_config;
 __attribute__((__section__(".net_config_0"))) net_client_config_t net_config_0;
 __attribute__((__section__(".net_config_1"))) net_client_config_t net_config_1;
+__attribute__((__section__(".net_config_2"))) net_client_config_t net_config_2;
 
-net_client_config_t *net_configs[FW_MAX_INTERFACES] = { &net_config_0, &net_config_1 };
+net_client_config_t *net_configs[FW_MAX_INTERFACES] = { &net_config_0, &net_config_1, &net_config_2 };
 
 net_queue_handle_t net_queue[FW_MAX_INTERFACES];
 fw_queue_t router_icmp_queue;
@@ -33,7 +34,7 @@ fw_queue_t filter_icmp_queue[FW_MAX_INTERFACES][FW_MAX_FILTERS];
 static bool process_icmp_request(icmp_req_t *req, bool *transmitted)
 {
     if (req->type != ICMP_DEST_UNREACHABLE && req->type != ICMP_ECHO_REPLY && req->type != ICMP_TTL_EXCEED) {
-        sddf_printf("ICMP MODULE LOG: unsupported ICMP type %u!\n", req->type);
+        LOG_FIREWALL_ERR("ICMP MODULE", "unsupported ICMP type %u!\n", req->type);
         return false;
     }
 
@@ -50,8 +51,8 @@ static bool process_icmp_request(icmp_req_t *req, bool *transmitted)
 
     /* Construct ethernet header */
     eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
-    memcpy(&eth_hdr->ethdst_addr, &req->eth_hdr.ethsrc_addr, ETH_HWADDR_LEN);
-    memcpy(&eth_hdr->ethsrc_addr, &icmp_config.interfaces[out_int].mac_addr, ETH_HWADDR_LEN);
+    memcpy(&eth_hdr->ethdst_addr, &req->eth_hdr.ethsrc_addr, MAC802_BYTES);
+    memcpy(&eth_hdr->ethsrc_addr, &icmp_config.interfaces[out_int].mac_addr, MAC802_BYTES);
     eth_hdr->ethtype = htons(ETH_TYPE_IP);
 
     /* Construct IP packet */
@@ -213,10 +214,8 @@ static bool process_icmp_request(icmp_req_t *req, bool *transmitted)
     transmitted[out_int] = true;
     assert(!err);
 
-    if (FW_DEBUG_OUTPUT) {
-        sddf_printf("ICMP MODULE LOG: sending packet for ip %s with type %u, code %u\n",
-                    ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0), icmp_hdr->type, icmp_hdr->code);
-    }
+    LOG_FIREWALL("ICMP MODULE", "sending packet for ip %s with type %u, code %u\n",
+                 ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf0), icmp_hdr->type, icmp_hdr->code);
 
     return true;
 }
@@ -239,11 +238,8 @@ static void generate_icmp(void)
                 int err = fw_dequeue(&filter_icmp_queue[iface][filter_idx], &req);
                 assert(!err);
 
-                if (FW_DEBUG_OUTPUT) {
-                    sddf_printf("ICMP MODULE LOG: processing filter %u ICMP request type %u code %u on interface %u\n",
-                                filter_idx, req.type, req.code, req.out_interface);
-                }
-
+                LOG_FIREWALL("ICMP MODULE", "processing filter %u ICMP request type %u code %u on interface %u\n",
+                             filter_idx, req.type, req.code, req.out_interface);
                 process_icmp_request(&req, transmitted);
             }
         }
@@ -255,11 +251,8 @@ static void generate_icmp(void)
         int err = fw_dequeue(&router_icmp_queue, &req);
         assert(!err);
 
-        if (FW_DEBUG_OUTPUT) {
-            sddf_printf("ICMP MODULE LOG: processing router ICMP request type %u code %u using interface %u\n",
-                        req.type, req.code, req.out_interface);
-        }
-
+        LOG_FIREWALL("ICMP MODULE", "processing router ICMP request type %u code %u using interface %u\n",
+                     req.type, req.code, req.out_interface);
         process_icmp_request(&req, transmitted);
     }
 

@@ -193,22 +193,20 @@ static int machine_i2c_transfer_single(mp_obj_base_t *obj, uint16_t addr, size_t
     if (err != I2C_ERR_OK) {
         switch (err) {
         case I2C_ERR_QUEUE:
-            return -MP_EFAULT;
-
         case I2C_ERR_MALFORMED_TRANSACTION:
         case I2C_ERR_MALFORMED_HEADER:
-            // Internal error.
-            return -MP_EIO;
+            // Misusing I2C protocol, fatal.
+            return -MP_EFAULT;
 
         case I2C_ERR_UNPERMITTED_ADDR:
             return -MP_EACCES;
         case I2C_ERR_TIMEOUT:
-        case I2C_ERR_NACK:
             return -MP_ETIMEDOUT;
 
         case I2C_ERR_NOREAD:
         case I2C_ERR_BADSEQ:
         case I2C_ERR_OTHER:
+        case I2C_ERR_NACK:
         default:
             return -MP_EIO;
         }

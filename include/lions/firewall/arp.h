@@ -28,12 +28,12 @@ typedef struct __attribute__((__packed__)) arp_pkt {
     /* sender hardware address. In requests this is the address of the host
     sending the request. In a replies this is the address of the host the
     request was looking for */
-    uint8_t hwsrc_addr[ETH_HWADDR_LEN];
+    uint8_t hwsrc_addr[MAC802_BYTES];
     /* sender protocol address */
     uint32_t ipsrc_addr;
     /* target hardware address. In requests this is ignored. In replies this is
     the address of the host that originated the request */
-    uint8_t hwdst_addr[ETH_HWADDR_LEN];
+    uint8_t hwdst_addr[MAC802_BYTES];
     /* target protocol address */
     uint32_t ipdst_addr;
     /* padding to reach the ethernet frame minimum payload */
@@ -84,7 +84,7 @@ typedef struct fw_arp_entry {
     /* IP address */
     uint32_t ip;
     /* MAC of IP if IP is reachable */
-    uint8_t mac_addr[ETH_HWADDR_LEN];
+    uint8_t mac_addr[MAC802_BYTES];
     /* bitmap of clients that initiated the request */
     uint8_t client;
     /* number of arp requests sent for this IP address */
@@ -102,7 +102,7 @@ typedef struct fw_arp_request {
     /* IP address */
     uint32_t ip;
     /* MAC address for IP if response and state is valid */
-    uint8_t mac_addr[ETH_HWADDR_LEN];
+    uint8_t mac_addr[MAC802_BYTES];
     /* state of arp response */
     uint8_t state;
 } fw_arp_request_t;
@@ -161,7 +161,7 @@ static inline fw_arp_request_t fw_arp_response_from_entry(fw_arp_entry_t *entry)
     response.ip = entry->ip;
     response.state = entry->state;
     if (entry->state == ARP_STATE_REACHABLE) {
-        memcpy(&response.mac_addr, &entry->mac_addr, ETH_HWADDR_LEN);
+        memcpy(&response.mac_addr, &entry->mac_addr, MAC802_BYTES);
     }
 
     return response;
@@ -210,7 +210,7 @@ static inline fw_arp_error_t fw_arp_table_add_entry(fw_arp_table_t *table, fw_ar
     slot->state = state;
     slot->ip = ip;
     if (state == ARP_STATE_REACHABLE) {
-        memcpy(&slot->mac_addr, mac_addr, ETH_HWADDR_LEN);
+        memcpy(&slot->mac_addr, mac_addr, MAC802_BYTES);
     }
     slot->client = BIT(client);
     slot->num_retries = 0;

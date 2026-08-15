@@ -30,12 +30,12 @@ net_queue_handle_t tx_queue;
 
 serial_queue_handle_t serial_tx_queue_handle;
 
-static int arp_reply(const uint8_t ethsrc_addr[ETH_HWADDR_LEN], const uint8_t ethdst_addr[ETH_HWADDR_LEN],
-                     const uint8_t hwsrc_addr[ETH_HWADDR_LEN], const uint32_t ipsrc_addr,
-                     const uint8_t hwdst_addr[ETH_HWADDR_LEN], const uint32_t ipdst_addr)
+static int arp_reply(const uint8_t ethsrc_addr[MAC802_BYTES], const uint8_t ethdst_addr[MAC802_BYTES],
+                     const uint8_t hwsrc_addr[MAC802_BYTES], const uint32_t ipsrc_addr,
+                     const uint8_t hwdst_addr[MAC802_BYTES], const uint32_t ipdst_addr)
 {
     if (net_queue_empty_free(&tx_queue)) {
-        sddf_dprintf("ARP_RESPONDER LOG: Interface %u. Transmit free queue empty. Dropping reply\n",
+        LOG_FIREWALL("ARP RESPONDER", "Interface %u. Transmit free queue empty. Dropping reply\n",
                      arp_config.interface);
         return -1;
     }
@@ -47,20 +47,20 @@ static int arp_reply(const uint8_t ethsrc_addr[ETH_HWADDR_LEN], const uint8_t et
     uintptr_t pkt_vaddr = (uintptr_t)(net_config.tx_data.vaddr + buffer.io_or_offset);
 
     eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
-    memcpy(&eth_hdr->ethdst_addr, ethdst_addr, ETH_HWADDR_LEN);
-    memcpy(&eth_hdr->ethsrc_addr, ethsrc_addr, ETH_HWADDR_LEN);
+    memcpy(&eth_hdr->ethdst_addr, ethdst_addr, MAC802_BYTES);
+    memcpy(&eth_hdr->ethsrc_addr, ethsrc_addr, MAC802_BYTES);
     eth_hdr->ethtype = htons(ETH_TYPE_ARP);
 
     arp_pkt_t *reply = (arp_pkt_t *)(pkt_vaddr + ARP_PKT_OFFSET);
     reply->hwtype = htons(ARP_HWTYPE_ETH);
     reply->protocol = htons(ETH_TYPE_IP);
-    reply->hwlen = ETH_HWADDR_LEN;
+    reply->hwlen = MAC802_BYTES;
     reply->protolen = ARP_PROTO_LEN_IPV4;
     reply->opcode = htons(ARP_ETH_OPCODE_REPLY);
 
-    memcpy(&reply->hwsrc_addr, hwsrc_addr, ETH_HWADDR_LEN);
+    memcpy(&reply->hwsrc_addr, hwsrc_addr, MAC802_BYTES);
     reply->ipsrc_addr = ipsrc_addr;
-    memcpy(&reply->hwdst_addr, hwdst_addr, ETH_HWADDR_LEN);
+    memcpy(&reply->hwdst_addr, hwdst_addr, MAC802_BYTES);
     reply->ipdst_addr = ipdst_addr;
 
     buffer.len = ARP_PKT_LEN;
@@ -92,10 +92,8 @@ static void receive(void)
                     /* Check the destination IP address */
                     if (arp_pkt->ipdst_addr == arp_config.ip) {
 
-                        if (FW_DEBUG_OUTPUT) {
-                            sddf_printf("ARP RESPONDER LOG: replying for ip %s on interface %u\n",
-                                        ipaddr_to_string(arp_pkt->ipdst_addr, ip_addr_buf0), arp_config.interface);
-                        }
+                        LOG_FIREWALL("ARP RESPONDER", "replying for ip %s on interface %u\n",
+                                     ipaddr_to_string(arp_pkt->ipdst_addr, ip_addr_buf0), arp_config.interface);
 
                         /* Reply with the MAC of the firewall */
                         if (!arp_reply(arp_config.mac_addr, eth_hdr->ethsrc_addr, arp_config.mac_addr, arp_config.ip,

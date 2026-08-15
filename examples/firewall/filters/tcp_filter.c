@@ -54,21 +54,17 @@ static void filter(void)
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port,
                                                                 ip_hdr->dst_ip, tcp_hdr->dst_port, rule_id);
 
-                if ((fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) && FW_DEBUG_OUTPUT) {
-                    sddf_printf(
-                        "TCP FILTER LOG: on interface %u establishing connection via rule %u: (ip %s, port %u) -> "
-                        "(ip %s, port %u)\n",
-                        filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                        htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                        htons(tcp_hdr->dst_port));
+                if (fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) {
+                    LOG_FIREWALL("TCP FILTER", "on interface %u establishing connection via rule %u: (ip %s, port %u) -> "
+                                 "(ip %s, port %u)\n", filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                 htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                 }
 
                 if (fw_err == FILTER_ERR_FULL) {
-                    sddf_printf("TCP FILTER LOG: on interface %u could not establish connection for rule %u: (ip %s, "
-                                "port %u) -> (ip %s, port %u): %s\n",
-                                filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                                htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                                htons(tcp_hdr->dst_port), fw_filter_err_str[fw_err]);
+                    LOG_FIREWALL_ERR("TCP FILTER", "on interface %u could not establish connection for rule %u: (ip %s, "
+                                     "port %u) -> (ip %s, port %u): %s\n", filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                     htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
+                                     htons(tcp_hdr->dst_port), fw_filter_err_str[fw_err]);
                 }
             }
             case FILTER_ACT_ESTABLISHED:
@@ -83,22 +79,14 @@ static void filter(void)
                 assert(!err);
                 transmitted = true;
 
-                if (FW_DEBUG_OUTPUT) {
-                    if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
-                        sddf_printf(
-                            "TCP FILTER LOG: on interface %u transmitting via rule %u: (ip %s, port %u) -> (ip %s, "
-                            "port %u)\n",
-                            filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                            htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                            htons(tcp_hdr->dst_port));
-                    } else if (action == FILTER_ACT_ESTABLISHED) {
-                        sddf_printf(
-                            "TCP FILTER LOG: on interface %u transmitting via external rule %u: (ip %s, port %u) -> "
-                            "(ip %s, port %u)\n",
-                            filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                            htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                            htons(tcp_hdr->dst_port));
-                    }
+                if (action == FILTER_ACT_ALLOW || action == FILTER_ACT_CONNECT) {
+                    LOG_FIREWALL("TCP FILTER", "on interface %u transmitting via rule %u: (ip %s, port %u) -> (ip %s, "
+                                 "port %u)\n", filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                 htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
+                } else if (action == FILTER_ACT_ESTABLISHED) {
+                    LOG_FIREWALL("TCP FILTER", "on interface %u transmitting via external rule %u: (ip %s, port %u) "
+                                 "-> (ip %s, port %u)\n", filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                                 htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                 }
                 break;
             }
@@ -109,13 +97,9 @@ static void filter(void)
                 assert(!err);
                 returned = true;
 
-                if (FW_DEBUG_OUTPUT) {
-                    sddf_printf(
-                        "TCP FILTER LOG: on interface %u dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
-                        filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
-                        htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
-                        htons(tcp_hdr->dst_port));
-                }
+                LOG_FIREWALL("TCP FILTER", "on interface %u dropping via rule %u: (ip %s, port %u) -> (ip %s, port %u)\n",
+                             filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
+                             htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1), htons(tcp_hdr->dst_port));
                 break;
             }
             }
@@ -145,10 +129,8 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
     case FILTER_SET_DEFAULT_ACTION: {
         fw_action_t action = microkit_mr_get(FILTER_SET_DEFAULT_ARG_ACTION);
 
-        if (FW_DEBUG_OUTPUT) {
-            sddf_printf("TCP FILTER LOG: on interface %u changing default action from %u to %u\n",
-                        filter_config.interface, filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
-        }
+        LOG_FIREWALL("TCP FILTER", "on interface %u changing default action from %u to %u\n",
+                     filter_config.interface, filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
 
         fw_filter_err_t err = fw_filter_update_default_action(&filter_state, action);
         assert(err == FILTER_ERR_OKAY);
@@ -177,14 +159,10 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         fw_filter_err_t err = fw_filter_add_rule(&filter_state, src_ip, src_port, dst_ip, dst_port, src_subnet,
                                                  dst_subnet, src_port_any, dst_port_any, action, &rule_id);
 
-        if (FW_DEBUG_OUTPUT) {
-            sddf_printf(
-                "TCP FILTER LOG: on interface %u create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> "
-                "(ip %s, mask %u, port %u, any_port %u): %s\n",
-                filter_config.interface, rule_id, ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet, htons(src_port),
-                src_port_any, fw_filter_action_str[action], ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet,
-                htons(dst_port), dst_port_any, fw_filter_err_str[err]);
-        }
+        LOG_FIREWALL("TCP FILTER", "on interface %u create rule %u: (ip %s, mask %u, port %u, any_port %u) - (%s) -> "
+                     "(ip %s, mask %u, port %u, any_port %u): %s\n", filter_config.interface, rule_id,
+                     ipaddr_to_string(src_ip, ip_addr_buf0), src_subnet, htons(src_port), src_port_any, fw_filter_action_str[action],
+                     ipaddr_to_string(dst_ip, ip_addr_buf1), dst_subnet, htons(dst_port), dst_port_any, fw_filter_err_str[err]);
 
         microkit_mr_set(FILTER_RET_ERR, err);
         microkit_mr_set(FILTER_RET_RULE_ID, rule_id);
@@ -194,17 +172,15 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
         uint16_t rule_id = microkit_mr_get(FILTER_DELETE_ARG_RULE_ID);
         fw_filter_err_t err = fw_filter_remove_rule(&filter_state, rule_id);
 
-        if (FW_DEBUG_OUTPUT) {
-            sddf_printf("TCP FILTER LOG: on interface %u remove rule id %u: %s\n", filter_config.interface, rule_id,
-                        fw_filter_err_str[err]);
-        }
+        LOG_FIREWALL("TCP FILTER", "on interface %u remove rule id %u: %s\n", filter_config.interface, rule_id,
+                     fw_filter_err_str[err]);
 
         microkit_mr_set(FILTER_RET_ERR, err);
         return microkit_msginfo_new(0, 1);
     }
     default:
-        sddf_printf("TCP FILTER LOG: on interface %u unknown request %lu on channel %u\n", filter_config.interface,
-                    microkit_msginfo_get_label(msginfo), ch);
+        LOG_FIREWALL_ERR("TCP FILTER", "on interface %u, unknown request %lu on channel %u\n", filter_config.interface,
+                         microkit_msginfo_get_label(msginfo), ch);
         break;
     }
 
@@ -216,8 +192,8 @@ void notified(microkit_channel ch)
     if (ch == net_config.rx.id) {
         filter();
     } else {
-        sddf_dprintf("TCP FILTER LOG: on interface %u, received notification on unknown channel: %d!\n",
-                     filter_config.interface, ch);
+        LOG_FIREWALL_ERR("TCP FILTER", "on interface %u, received notification on unknown channel: %d!\n",
+                         filter_config.interface, ch);
     }
 }
 

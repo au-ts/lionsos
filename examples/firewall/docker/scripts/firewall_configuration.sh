@@ -1,7 +1,7 @@
+#!/usr/bin/env bash
+
 # Copyright 2025, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
-
-#!/bin/bash
 
 # -- Variables for configuring docker and the firewall -- #
 
@@ -28,44 +28,23 @@ export HOST_HTTP_PORT=8080
 
 # -------------- Firewall Network Config -------------- #
 
-# Firewall internal IP address
-export FW_EXT_IP=172.16.2.1
+# IP addresses of the firewall's interfaces
+export FW_IP=(172.16.2.1 192.168.1.1)
 
-# Firewall external subnet network bits
-export FW_EXT_SUBNET=12
+# Network bits of the firewall's subnets
+export FW_SUBNET=(12 24)
 
-# External subnet broadcast address
-export FW_EXT_BROADCAST=172.31.255.255
+# Firewall subnet broadcast addresses
+export BROADCAST_IP=(172.31.255.255 192.168.1.255)
 
-# External root IP address
-export EXT_ROOT_IP=172.16.2.2
+# IP addresses of the root task in each subnet
+export ROOT_IP=(172.16.2.2 192.168.1.2)
 
-# External forwarding host IP address
-export EXT_HOST_IP=172.16.2.200
+# IP addresses of the testing hosts in each subnet
+export HOST_IP=(172.16.2.200 192.168.1.100)
 
-# Firewall internal IP address
-export FW_INT_IP=192.168.1.1
+# Non-existent host IP addresses
+export BAD_HOST_IP=(172.16.2.201 192.168.1.101)
 
-# Firewall internal subnet network bits
-export FW_INT_SUBNET=24
-
-# Internal subnet broadcast address
-export FW_INT_BROADCAST=192.168.1.255
-
-# Internal root IP address
-export INT_ROOT_IP=192.168.1.2
-
-# Internal forwarding host IP address
-export INT_HOST_IP=192.168.1.100
-
-# External non-existant host IP address
-export EXT_BAD_HOST_IP=172.16.2.201
-
-# Internal non-existant host IP address
-export INT_BAD_HOST_IP=192.168.1.101
-
-# External unknown network host IP address
-export EXT_BAD_NET_IP=173.16.2.201
-
-# Internal unknown network host IP address
-export INT_BAD_NET_IP=193.168.1.101
+# Non-existent net IP addresses
+export BAD_NET_IP=(173.16.2.201 193.168.1.101)

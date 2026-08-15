@@ -22,8 +22,7 @@ BOARDS = [
         paddr_top=0x6_0000_000,
         serial="pl011@9000000",
         timer="timer",
-        ethernet0="virtio_mmio@a003e00",
-        ethernet1="virtio_mmio@a003c00",
+        ethernet=("virtio_mmio@a003e00", "virtio_mmio@a003c00")
     ),
     Board(
         name="imx8mp_iotgate",
@@ -31,8 +30,7 @@ BOARDS = [
         paddr_top=0x70_000_000,
         serial="soc@0/bus@30800000/serial@30890000",
         timer="soc@0/bus@30000000/timer@302d0000",
-        ethernet0="soc@0/bus@30800000/ethernet@30bf0000",  # DWMAC
-        ethernet1="soc@0/bus@30800000/ethernet@30be0000",  # IMX
+        ethernet=("soc@0/bus@30800000/ethernet@30bf0000", "soc@0/bus@30800000/ethernet@30be0000")
     ),
 ]
 
@@ -42,6 +40,9 @@ class BuildConstants:
 
     # Root output directory
     _output_dir: Optional[str] = None
+
+    # Number of network interfaces
+    _num_interfaces: int = None
 
     @classmethod
     def set_sdf(cls, sdf: SystemDescription) -> None:
@@ -65,22 +66,56 @@ class BuildConstants:
         assert cls._output_dir is not None
         return cls._output_dir
 
+    @classmethod
+    def set_num_interfaces(cls, num_interfaces: int) -> None:
+        assert cls._num_interfaces is None
+        assert num_interfaces is not None
+        cls._num_interfaces = num_interfaces
+
+    @classmethod
+    def num_interfaces(cls) -> SystemDescription:
+        assert cls._num_interfaces is not None
+        return cls._num_interfaces
+
+    @classmethod
+    def interfaces(cls) -> list:
+        assert cls.num_interfaces() <= len(interfaces)
+        return interfaces[:cls.num_interfaces()]
+
+    @classmethod
+    def initial_rules(cls) -> list[dict[int, list[FwRule]]]:
+        assert cls.num_interfaces() <= len(initial_rules)
+        return initial_rules[:cls.num_interfaces()]
+
+    @classmethod
+    def webserver_tx_interface_idx(cls) -> int:
+        assert webserver_tx_interface_idx < cls.num_interfaces()
+        return webserver_tx_interface_idx
+
 # Network interface configuration
 interfaces = [
     NetworkInterface(
         index=0,
         name="external",
-        board_ethernet="ethernet0",
+        board_ethernet_idx=0,
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x18),
         ip="172.16.2.1",
         subnet_bits=16,
     ),
     NetworkInterface(
         index=1,
-        name="internal",
-        board_ethernet="ethernet1",
+        name="internal0",
+        board_ethernet_idx=1,
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x10),
         ip="192.168.1.1",
+        subnet_bits=24,
+    ),
+    NetworkInterface(
+        index=2,
+        name="internal1",
+        board_ethernet_idx=2,
+        mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x12),
+        ip="10.0.2.1",
         subnet_bits=24,
     ),
 ]
@@ -126,8 +161,13 @@ def default_action_rule(action: int) -> FwRule:
     return construct_rule(action, 0, 0, 0, True, 0, 0, 0, True)
 
 # Initial rules - protocol->rule dictionary for each interface
-# The first rule must always be the default action
+# The first rule for each protocol is the default action
 initial_rules = [
+    {
+        0x01: [default_action_rule(FILTER_ACTION_ALLOW)],
+        0x06: [default_action_rule(FILTER_ACTION_ALLOW)],
+        0x11: [default_action_rule(FILTER_ACTION_ALLOW)],
+    },
     {
         0x01: [default_action_rule(FILTER_ACTION_ALLOW)],
         0x06: [default_action_rule(FILTER_ACTION_ALLOW)],
