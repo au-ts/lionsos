@@ -250,10 +250,13 @@ def generate(
         fatfs,
         client,
         blk=blk_system,
-        partition=1 # change this if necessary
+        # partition=1 # change this if necessary
+        partition=partition
     )
 
     if board.name == "maaxboard":
+        timer_system.add_client(blk_driver)
+    if board.name == "rpi4b_1gb":
         timer_system.add_client(blk_driver)
 
     child_pds = [

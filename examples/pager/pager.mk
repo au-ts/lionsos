@@ -16,7 +16,8 @@ serial_driver.elf \
 benchmark.elf
 SUPPORTED_BOARDS := \
 	qemu_virt_aarch64 \
-	maaxboard
+	maaxboard \
+	rpi4b_1gb
 
 
 
@@ -40,8 +41,13 @@ ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
 	SERIAL_DRIV_DIR := imx
 	TIMER_DRIV_DIR := imx
 	CPU := cortex-a53
+else ifeq ($(strip $(MICROKIT_BOARD)), rpi4b_1gb)
+	BLK_DRIV_DIR := virtio/mmio
+	SERIAL_DRIV_DIR := ns16550a
+	TIMER_DRIV_DIR := bcm2835
+	CPU := cortex-a72
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
-# 	BLK_DRIV_DIR := virtio/mmio
+	BLK_DRIV_DIR := virtio/mmio
 	SERIAL_DRIV_DIR := arm
 	TIMER_DRIV_DIR := arm
 	IMAGES += blk_driver.elf
@@ -166,6 +172,7 @@ include ${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
 include ${SDDF}/libco/libco.mk
+# i don't need the blk driver yet...
 include ${BLK_DRIVER}/blk_driver.mk
 include ${BLK_COMPONENTS}/blk_components.mk
 include $(SDDF)/drivers/network/$(NET_DRIV_DIR)/eth_driver.mk

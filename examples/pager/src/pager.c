@@ -84,6 +84,8 @@ void init(void)
     global_zero_page = frame_idx;
     do_untyped_retype(&post_boot_cnode, seL4_ARM_SmallPageObject, seL4_PageBits, &frame_idx, frame_cnode_cptr);
     get_frame_from_idx(global_zero_page)->frame_page = global_zero_page;
+    // refill unused at the start
+    refill_unused();
 }
 
 void notified(microkit_channel ch)
@@ -111,7 +113,9 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     frame_t *frame;
     uint64_t *page_entry;
 
-    sddf_printf("fault occured!\n");
+    // sddf_printf("fault occured!\n");
+    // debug the fault 
+    // sddf_printf("The fault occurred at %p,  fsc is %lx, is write is %d, ip is %p\n", fault_addr, fsc, is_write, ip);
 
     // TODO: implement access flag faults.
     if (fsc >= 0x08 && fsc <= 0x0B) {
@@ -122,9 +126,10 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         // if it is a read fault, map global zero page.
         if (!is_write) {
             // map global zero page
-
+            // sddf_printf("global page unmap\n");
             // unmap zero page in case it is already mapped.
-            seL4_ARM_Page_Unmap(global_zero_page);
+            int err = seL4_ARM_Page_Unmap(frame_cnode_cptr + global_zero_page);
+            // sddf_printf("global page unmap after %d\n", err);
             frame = get_frame_from_idx(global_zero_page);
         } else {
             frame = get_unused_frame();
@@ -144,6 +149,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         }
     }
 
+    // sddf_printf("before map\n");
     // do mapping
     seL4_Error err = map_frame(frame_cnode_cptr + frame->frame_page, vspaces[child], fault_addr, create_cap_rights(fsr), 0x03);
     if (err) {
@@ -155,6 +161,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
      * This is not required yet
      * TODO: for freeing.
      */
+    // sddf_printf("returning\n");
     microkit_pd_restart(child, ip);
     return seL4_True;
 }

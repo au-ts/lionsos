@@ -73,6 +73,7 @@ void bench_main(void) {
     printf("elapsed ns: %llu\n", (unsigned long long)elapsed_ns);
     printf("elapsed us: %llu\n", (unsigned long long)(elapsed_ns / 1000));
     printf("elapsed ms: %llu\n", (unsigned long long)(elapsed_ns / 1000000));
+    printf("benchmark done\n");
 }
 
 void init(void)
