@@ -51,6 +51,17 @@ pt_t page_tables[10][512];
 uint32_t frame_idx = 1;
 uint32_t ips_idx = 1;
 
+
+seL4_Error copy_global_zero_frame_cap(uint32_t *slot) {
+    *slot = frame_idx;
+    ++frame_idx;
+    return seL4_CNode_Copy(frame_cnode_cptr + *slot, 0, 0, frame_cnode_cptr + 1, 0, 0, create_cap_rights(false));
+}
+
+seL4_Error delete_global_zero_frame_cap(uint32_t cap) {
+    return seL4_CNode_Delete(cap + frame_cnode_cptr, 0, 0);
+} 
+
 void init(void)
 {
     // initialise the frame lists
@@ -111,47 +122,52 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     uint64_t fsc = fsr & 0x3F;
     bool is_write = (fsr >> 6) & 1;
     frame_t *frame;
-    uint64_t *page_entry;
-
-    // sddf_printf("fault occured!\n");
-    // debug the fault 
-    // sddf_printf("The fault occurred at %p,  fsc is %lx, is write is %d, ip is %p\n", fault_addr, fsc, is_write, ip);
+    uint64_t *page_entry = get_page_table_entry(fault_addr, page_tables[child]);
 
     // TODO: implement access flag faults.
     if (fsc >= 0x08 && fsc <= 0x0B) {
         // Access flag fault (level 0–3)
+        // unset access flag
     }
     // Translation fault (level 0–3)
     if (fsc >= 0x04 && fsc <= 0x07) {
         // if it is a read fault, map global zero page.
         if (!is_write) {
-            // map global zero page
-            // sddf_printf("global page unmap\n");
-            // unmap zero page in case it is already mapped.
-            int err = seL4_ARM_Page_Unmap(frame_cnode_cptr + global_zero_page);
-            // sddf_printf("global page unmap after %d\n", err);
-            frame = get_frame_from_idx(global_zero_page);
+            // map global zero page then return early.
+
+            // create cap copy of global zero page.
+            uint32_t slot;
+            copy_global_zero_frame_cap(&slot);
+            insert_frame_to_page(slot, page_entry);
+            seL4_Error err = map_frame(frame_cnode_cptr + slot, vspaces[child], fault_addr, create_cap_rights(is_write), 0x03);
+            if (err) {
+                sddf_printf("error occured on map frame zero %d\n", err);
+            }
+            microkit_pd_restart(child, ip);
+            return seL4_True;
         } else {
             frame = get_unused_frame();
+            *page_entry |= DESC_NG;
         }
-        page_entry = get_page_table_entry(fault_addr, page_tables[child]);
         insert_frame_to_page(frame->frame_page, page_entry);
     }
     // Permission fault (level 1–3)
     if (fsc >= 0x0D && fsc <= 0x0F) {
-        page_entry = get_page_table_entry(fault_addr, page_tables[child]);
         frame = get_frame_from_idx(get_frame_from_page(*page_entry));
 
         // if global zero page get new frame
-        if (frame == global_zero_page) {
+        if (!(*page_entry & DESC_NG)) {
+            // delete copied frame cap
+            uint32_t frame_cap = get_frame_from_page(*page_entry);
+            delete_global_zero_frame_cap(frame_cap);
+
             frame = get_unused_frame();
             insert_frame_to_page(frame->frame_page, page_entry);
         }
     }
 
-    // sddf_printf("before map\n");
     // do mapping
-    seL4_Error err = map_frame(frame_cnode_cptr + frame->frame_page, vspaces[child], fault_addr, create_cap_rights(fsr), 0x03);
+    seL4_Error err = map_frame(frame_cnode_cptr + frame->frame_page, vspaces[child], fault_addr, create_cap_rights(is_write), 0x03);
     if (err) {
         sddf_printf("error occured on map frame %d\n", err);
     }
@@ -173,7 +189,6 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
     //     sddf_notify(benchmark_config.start_ch);
     // } else if (cmd == STOP) {
     //     sddf_notify(benchmark_config.stop_ch);
-    //     // sddf_printf("minor_faults = %d\nmajor_faults = %d\n", minor_faults, major_faults);
     // }
     return microkit_msginfo_new(0, 0);
 }
@@ -181,8 +196,8 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 /**
  * TODO: do the actual implementation
  */
-seL4_CapRights_t create_cap_rights(uint64_t fsr) {
-    return seL4_CapRights_new(1, 1, 1, 1);
+seL4_CapRights_t create_cap_rights(bool is_write) {
+    return seL4_CapRights_new(1, is_write, 1, 1);
 }
 
 static seL4_Error map_frame(uint64_t frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
@@ -231,7 +246,7 @@ void refill_unused() {
     // untyped_idx is the frame cap essentially.
     // get 10 frame_t's from the pager memory.
     
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 20000; ++i) {
         // create frame_t and move to end of list.
         frame_t *new_folio = get_frame_from_idx(frame_idx);
         new_folio->next = NULL;

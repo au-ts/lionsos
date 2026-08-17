@@ -16,7 +16,7 @@
 /**
  * TODO: do the actual implementation
  */
-seL4_CapRights_t create_cap_rights(uint64_t fsr);
+seL4_CapRights_t create_cap_rights(bool is_write);
 
 static seL4_Error map_frame(uint64_t frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
                                  seL4_CapRights_t rights, seL4_ARM_VMAttributes attr);

@@ -71,4 +71,14 @@ void insert_frame_to_page(uint32_t const frame, uint64_t* page);
 // get bits 12:47
 uint32_t get_frame_from_page(uint64_t const page);
 
+// void set_nG(uint64_t *page) {
+//     *page |= (1ULL << 11);
+// }
+
+// void clear_nG(uint64_t *page) {
+//     *page &= ~(1ULL << 11);
+// }
+
+#define DESC_NG (1ULL << 11)
+
 #endif

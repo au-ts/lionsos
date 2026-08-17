@@ -118,10 +118,9 @@ SPEC = $(BUILD_DIR)/capdl_spec.json
 
 FAT := $(LIONSOS)/components/fs/fat
 
-include $(SDDF)/tools/make/board/common.mk
+
 
 CFLAGS := \
-	-mtune=$(CPU) \
 	-mstrict-align \
 	-ffreestanding \
 	-O3 \
@@ -142,7 +141,7 @@ CFLAGS := \
 	-I$(TOP)/benchmarks/minor_page_fault_latency \
 	-I$(TOP)/include
 include $(LIONSOS)/lib/libc/libc.mk
-
+include $(SDDF)/tools/make/board/common.mk
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(TOP)/benchmarks/519.lbm_r/src -L$(TOP)/benchmarks/minor_page_fault_latency
 # LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a 519.a -lc
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a 519.a minor_pf.a
