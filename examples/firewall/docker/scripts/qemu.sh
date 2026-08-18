@@ -6,14 +6,17 @@
 IMAGE_FILE=${1}
 QEMU=${2}
 
+source /mnt/lionsOS/examples/firewall/docker/scripts/firewall_configuration.sh
+
+for ((idx = 0; idx < "${FW_INTERFACE_COUNT}"; idx++)); do
+    device_args+="-netdev tap,id=net${idx},ifname=tap${idx},script=no,downscript=no -device virtio-net-device,netdev=net${idx},mac=${FW_MAC[${idx}]} "
+done
+
 ${QEMU:-qemu-system-aarch64} -machine virt,virtualization=on \
-        -cpu cortex-a53 \
-        -serial mon:stdio \
-        -device loader,file=${IMAGE_FILE:-/mnt/lionsOS/examples/firewall/build/firewall.img},addr=0x70000000,cpu-num=0 \
-        -m size=2G \
-        -nographic \
-        -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
-        -device virtio-net-device,netdev=net0,mac=00:01:c0:39:d5:18 \
-        -netdev tap,id=net1,ifname=tap1,script=no,downscript=no \
-        -device virtio-net-device,netdev=net1,mac=00:01:c0:39:d5:10 \
-        -global virtio-mmio.force-legacy=false
+    -cpu cortex-a53 \
+    -serial mon:stdio \
+    -device loader,file=${IMAGE_FILE:-/mnt/lionsOS/examples/firewall/build/firewall.img},addr=0x70000000,cpu-num=0 \
+    -m size=2G \
+    -nographic \
+    ${device_args} \
+    -global virtio-mmio.force-legacy=false

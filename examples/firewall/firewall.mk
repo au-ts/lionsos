@@ -22,6 +22,13 @@ include ${SDDF}/tools/make/board/common.mk
 ETH_DRIV0 := ${ETH_DRIV}
 ETH_DRIV1 := ${ETH_DRIV_1}
 
+FIREWALL_INTERFACE_COUNT := 2
+ifeq ($(MICROKIT_BOARD),qemu_virt_aarch64)
+FIREWALL_INTERFACE_COUNT := 3
+ETH_DRIV2 := ${ETH_DRIV}
+IMAGES := eth_driver2.elf
+endif
+
 MICRODOT := $(LIONSOS)/dep/microdot/src
 FIREWALL_NET_COMPONENTS := $(FIREWALL_SRC_DIR)/net_components
 FIREWALL_FILTERS := $(FIREWALL_SRC_DIR)/filters
@@ -47,7 +54,7 @@ FIREWALL_CONFIG_HEADERS := \
 
 PYFW_CLASS_FILES := $(wildcard $(FIREWALL_SRC_DIR)/pyfw/*)
 
-IMAGES := arp_requester.elf arp_responder.elf routing.elf micropython.elf \
+IMAGES += arp_requester.elf arp_responder.elf routing.elf micropython.elf \
 		  firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
 		  timer_driver.elf serial_driver.elf serial_virt_tx.elf \
 		  icmp_filter.elf udp_filter.elf tcp_filter.elf icmp_module.elf \
@@ -92,6 +99,9 @@ eth_driver0.elf: $(ETH_DRIV0)
 	cp $< $@
 
 eth_driver1.elf: $(ETH_DRIV1)
+	cp $< $@
+
+eth_driver2.elf: $(ETH_DRIV2)
 	cp $< $@
 
 %.o: %.c | $(LIONS_LIBC)/include
@@ -149,6 +159,11 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5) $(PYFW_
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder1.data arp_responder1.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester1.data arp_requester1.elf
 
+ifeq ($(FIREWALL_INTERFACE_COUNT),3)
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_responder2.data arp_responder2.elf
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_arp_requester2.data arp_requester2.elf
+endif
+
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_routing.data routing.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_micropython.data micropython.elf
 
@@ -158,6 +173,10 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5) $(PYFW_
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester0.data arp_requester0.elf
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester1.data arp_requester1.elf
+
+ifeq ($(FIREWALL_INTERFACE_COUNT),3)
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester2.data arp_requester2.elf
+endif
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
 
@@ -192,6 +211,23 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5) $(PYFW_
 	$(OBJCOPY) --update-section .net_config_1=net_data1/net_client_icmp_module.data icmp_module.elf
 	$(OBJCOPY) --update-section .net_client_config=net_data1/net_client_micropython.data micropython.elf
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_micropython.data micropython.elf
+
+ifeq ($(FIREWALL_INTERFACE_COUNT),3)
+# Interface 2 components
+	$(OBJCOPY) --update-section .device_resources=net_data2/ethernet_driver2_device_resources.data eth_driver2.elf
+	$(OBJCOPY) --update-section .net_driver_config=net_data2/net_driver.data eth_driver2.elf
+
+	$(OBJCOPY) --update-section .net_virt_rx_config=net_data2/net_virt_rx.data firewall_network_virt_rx2.elf
+	$(OBJCOPY) --update-section .net_virt_tx_config=net_data2/net_virt_tx.data firewall_network_virt_tx2.elf
+
+	$(OBJCOPY) --update-section .net_client_config=net_data2/net_client_arp_requester2.data arp_requester2.elf
+	$(OBJCOPY) --update-section .net_client_config=net_data2/net_client_arp_responder2.data arp_responder2.elf
+	$(OBJCOPY) --update-section .net_client_config=net_data2/net_client_icmp_filter2.data icmp_filter2.elf
+	$(OBJCOPY) --update-section .net_client_config=net_data2/net_client_udp_filter2.data udp_filter2.elf
+	$(OBJCOPY) --update-section .net_client_config=net_data2/net_client_tcp_filter2.data tcp_filter2.elf
+
+	$(OBJCOPY) --update-section .net_config_2=net_data2/net_client_icmp_module.data icmp_module.elf
+endif
 
 	touch $@
 

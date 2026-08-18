@@ -5,6 +5,10 @@
 
 source /mnt/lionsOS/examples/firewall/docker/scripts/firewall_configuration.sh
 
+# The following tests run within the Docker container and assume that the
+# firewall is running and is configured per the `firewall_configuration.sh`
+# script.
+
 # The tests expect interface 0 and 1 to exist, and test the flow of traffic
 # between these two interfaces. Additionally, the tests expect that allow rules
 # exist for traffic on `UDP_PORT` and `TCP_PORT` for interfaces 0 and 1
@@ -49,6 +53,7 @@ TEMPLATE_INTERFACE='$interface'
 TEMPLATE_ACTION='$action'
 TEMPLATE_RULE_JSON="{ ${TEMPLATE_SRC}, ${TEMPLATE_DEST}, ${TEMPLATE_INTERFACE}, ${TEMPLATE_ACTION} }"
 
+WEBSERVER_INTERFACE=1
 FIREWALL_ACTION_DROP=2
 FIREWALL_ACTION_REJECT=3
 
@@ -93,7 +98,7 @@ oneTimeSetUp() {
     USE_RANDOM_DATA=true
     SIZE_BYTES=4096
 
-    if [ "$USE_RANDOM_DATA" = true ]; then
+    if [ "${USE_RANDOM_DATA}" = true ]; then
         generate_test_data "${SIZE_BYTES}" "${SENT}"
     elif [ ! -f "${TEST_DATA}" ]; then
         print_warning 'Warning: The file specified in TEST_DATA does not exist'
@@ -113,22 +118,20 @@ oneTimeSetUp() {
         print_header 'Container network interfaces'
         ifconfig
 
-        print_header 'Interface0 network interfaces'
-        ip netns exec namespace0 ifconfig
-
-        print_header 'Interface1 network interfaces'
-        ip netns exec namespace1 ifconfig
+        for ((iface=0; iface<"${FW_INTERFACE_COUNT}"; iface++)); do
+            print_header "Interface${iface} network interfaces"
+            ip netns exec "namespace${iface}" ifconfig
+        done
     fi
 
     if [ "${SHOW_ROUTES}" = true ]; then
         print_header 'Container routes'
         ip route
 
-        print_header 'Interface0 network routes'
-        ip netns exec namespace0 ip route
-
-        print_header 'Interface1 network routes'
-        ip netns exec namespace1 ip route
+        for ((iface=0; iface<"${FW_INTERFACE_COUNT}"; iface++)); do
+            print_header "Interface${iface} network routes"
+            ip netns exec "namespace${iface}" ip route
+        done
     fi
 
     # If firewall debug messages are enabled and the messages are redirected to
@@ -156,7 +159,7 @@ oneTimeSetUp() {
             printf '\n%s %s\n' 'Session log will be saved to' "'${SESSION_LOG}'"
         fi
 
-        if [ "$CLOBBER_SESSION_LOG" = true ]; then
+        if [ "${CLOBBER_SESSION_LOG}" = true ]; then
             cp /dev/null "${SESSION_LOG}"
         fi
     else
@@ -168,7 +171,7 @@ oneTimeSetUp() {
     # be displayed on the console.
     TEST_DEBUG=false
 
-    print_header 'Running firewall tests...'
+    print_header "Running firewall tests across ${FW_INTERFACE_COUNT} interfaces..."
 }
 
 # Executed before each test
@@ -221,7 +224,7 @@ print_file() {
     header=$1
     data_file=$2
 
-    print_header "$1"
+    print_header "${header}"
     cat "${data_file}"
     printf '\n'
 }
@@ -232,730 +235,504 @@ print_log() {
     fi
 }
 
+log_interface_err() {
+    message=$1
+    iface=$2
+    dst_iface=$3
+
+    if [ "$#" -gt 2 ]; then
+        fail "${message}. Interfaces: src=${iface},dst=${dst_iface}"
+    else
+        fail "${message}. Interface: ${iface}"
+    fi
+
+    print_log
+}
+
 generate_test_data() {
     block_size=$1
     output=$2
     dd if=/dev/urandom bs="${block_size}" count=1 > "${output}" 2> /dev/null
 }
 
+stop_listener_if_running() {
+    listener_pid=$1
+
+    if kill -0 "${listener_pid}" > /dev/null 2>&1; then
+        kill "${listener_pid}" > /dev/null 2>&1
+    fi
+}
+
+api_request() {
+    method=$1
+    path=$2
+    data=$3
+
+    if [ "$#" -gt 2 ]; then
+        curl --silent --show-error --header 'Content-Type: application/json' \
+        --request ${method} \
+        --data "${data}" \
+        "http://${FW_IP[${WEBSERVER_INTERFACE}]}${path}"
+    else
+        curl --silent --show-error --header 'Content-Type: application/json' \
+        --request ${method} \
+        "http://${FW_IP[${WEBSERVER_INTERFACE}]}${path}"
+    fi
+}
+
 #
 # Internet Control Message Protocol (ICMP) tests
 #
+icmp_ping_host() {
+    src_iface=$1
+    dst_iface=$2
 
-test_icmp_ping_host_1_to_0() {
-    ip netns exec namespace1 \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${HOST_IP[0]}" > "${RECEIVED}" 2>&1
+    ip netns exec "namespace${src_iface}" \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${HOST_IP[${dst_iface}]}" > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_NO_ECHO_RESPONSE}"
-        print_log
+        log_interface_err "${ERROR_NO_ECHO_RESPONSE}" ${src_iface} ${dst_iface}
     fi
 }
 
-test_icmp_ping_host_0_to_1() {
-    ip netns exec namespace0 \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${HOST_IP[1]}" > "${RECEIVED}" 2>&1
+icmp_ping_unreachable_host() {
+    src_iface=$1
+    dst_iface=$2
 
-    if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_NO_ECHO_RESPONSE}"
-        print_log
-    fi
-}
-
-test_icmp_ping_unreachable_host_1_to_0() {
     print_info "This may take up to ${LONG_TIMEOUT} seconds..."
 
-    ip netns exec namespace1 \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${BAD_HOST_IP[0]}" \
+    ip netns exec "namespace${src_iface}" \
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${BAD_HOST_IP[${dst_iface}]}" \
         > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_HOST_UNREACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_HOST_UNREACHABLE}"
-        print_log
+        log_interface_err "${ERROR_HOST_UNREACHABLE}" ${src_iface} ${dst_iface}
     fi
 }
 
-test_icmp_ping_unreachable_host_0_to_1() {
-    print_info "This may take up to ${LONG_TIMEOUT} seconds..."
+icmp_ping_unreachable_net() {
+    src_iface=$1
+    dst_iface=$2
 
-    ip netns exec namespace0 \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${BAD_HOST_IP[1]}" \
-        > "${RECEIVED}" 2>&1
-
-    if ! grep -Eq --ignore-case "${REGEX_HOST_UNREACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_HOST_UNREACHABLE}"
-        print_log
-    fi
-}
-
-test_icmp_ping_unreachable_net_1_to_0() {
-    ip netns exec namespace1 \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${BAD_NET_IP[0]}" \
+    ip netns exec "namespace${src_iface}" \
+        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${BAD_NET_IP[${dst_iface}]}" \
         > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_NET_UNREACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_NET_UNREACHABLE}"
-        print_log
+        log_interface_err "${ERROR_NET_UNREACHABLE}" ${src_iface} ${dst_iface}
     fi
 }
 
-test_icmp_ping_unreachable_net_0_to_1() {
-    ip netns exec namespace0 \
-        ping -c "${COUNT}" -w "${LONG_TIMEOUT}" "${BAD_NET_IP[1]}" \
-        > "${RECEIVED}" 2>&1
+icmp_ping_firewall_interface() {
+    iface=$1
 
-    if ! grep -Eq --ignore-case "${REGEX_NET_UNREACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_NET_UNREACHABLE}"
-        print_log
-    fi
-}
-
-test_icmp_ping_firewall_interface_1() {
-    original_status=$(curl --silent "http://${FW_IP[1]}/api/ping/1" | sed -E 's/.*enabled": (true|false).*/\1/')
+    original_status=$(curl --silent "http://${FW_IP[${WEBSERVER_INTERFACE}]}/api/ping/${iface}" | sed -E 's/.*enabled": (true|false).*/\1/')
 
     if [ "${original_status}" = "true" ]; then
         # Disable ping
-        curl --silent \
-            --output /dev/null \
-            --header 'Content-Type: application/json' \
-            --request 'POST' \
-            "http://${FW_IP[1]}/api/ping/1/0"
+        response=$(api_request 'POST' "/api/ping/${iface}/0")
+        if echo "${response}" | grep -q '"error"'; then
+            log_interface_err "${ERROR_FAILED_DISABLE_PING}" ${iface}
+            return
+        fi
     fi
 
-    ip netns exec namespace1 \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_IP[1]}" > "${RECEIVED}" 2>&1
+    ip netns exec "namespace${iface}" \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_IP[${iface}]}" > "${RECEIVED}" 2>&1
 
     if grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_UNEXPECTED_ECHO_RESPONSE}"
-        print_log
+        log_interface_err "${ERROR_UNEXPECTED_ECHO_RESPONSE}" ${iface}
+        return
     fi
 
     # Turn ping on and check for a response.
-    curl --silent \
-        --output /dev/null \
-        --header 'Content-Type: application/json' \
-        --request 'POST' \
-        "http://${FW_IP[1]}/api/ping/1/1"
-
-    # Check if the response contains an error
-    error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
-
-    if [ ! -z "${error}" ]; then
-        fail "${ERROR_FAILED_ENABLE_PING}"
-        print_log
+    response=$(api_request 'POST' "/api/ping/${iface}/1")
+    if echo "${response}" | grep -q '"error"'; then
+        log_interface_err "${ERROR_FAILED_ENABLE_PING}" ${iface}
         return
     fi
 
-    ip netns exec namespace1 \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_IP[1]}" > "${RECEIVED}" 2>&1
+    ip netns exec "namespace${iface}" \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_IP[${iface}]}" > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_NO_ECHO_RESPONSE}"
-        print_log
-    fi
-
-    # Restore original status if it was off.
-    if [ "${original_status}" = "false" ]; then
-        curl --silent \
-            --output /dev/null \
-            --header 'Content-Type: application/json' \
-            --request 'POST' \
-            "http://${FW_IP[1]}/api/ping/1/0"
-    fi
-}
-
-test_icmp_ping_firewall_interface_0() {
-    original_status=$(curl --silent "http://${FW_IP[1]}/api/ping/0" | sed -E 's/.*enabled": (true|false).*/\1/')
-
-    if [ "${original_status}" = "true" ]; then
-        # Disable ping
-        curl --silent \
-            --output /dev/null \
-            --header 'Content-Type: application/json' \
-            --request 'POST' \
-            "http://${FW_IP[1]}/api/ping/0/0"
-    fi
-
-    ip netns exec namespace0 \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_IP[0]}" > "${RECEIVED}" 2>&1
-
-    if grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_UNEXPECTED_ECHO_RESPONSE}"
-        print_log
-    fi
-
-    curl --silent \
-        --output /dev/null \
-        --header 'Content-Type: application/json' \
-        --request 'POST' \
-        "http://${FW_IP[1]}/api/ping/0/1"
-
-    # Check if the response contains an error
-    error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
-
-    if [ ! -z "${error}" ]; then
-        fail "${ERROR_FAILED_ENABLE_PING}"
-        print_log
+        log_interface_err "${ERROR_NO_ECHO_RESPONSE}" ${iface}
         return
     fi
 
-    ip netns exec namespace0 \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${FW_IP[0]}" > "${RECEIVED}" 2>&1
-
-    if ! grep -Eq --ignore-case "${REGEX_REACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_NO_ECHO_RESPONSE}"
-        print_log
-    fi
-
     if [ "${original_status}" = "false" ]; then
-        curl --silent \
-            --output /dev/null \
-            --header 'Content-Type: application/json' \
-            --request 'POST' \
-            "http://${FW_IP[1]}/api/ping/0/0"
+        response=$(api_request 'POST' "/api/ping/${iface}/0")
+        if echo "${response}" | grep -q '"error"'; then
+            log_interface_err "${ERROR_FAILED_DISABLE_PING}" ${iface}
+            return
+        fi
     fi
 }
 
+icmp_ping_timeout() {
+    src_iface=$1
+    dst_iface=$2
 
-
-test_icmp_ping_timeout_host_1_to_0() {
-    ip netns exec namespace1 \
-        ping -c "${COUNT}" -t "${TIMEOUT_TTL}" "${HOST_IP[0]}" \
+    ip netns exec "namespace${src_iface}" \
+        ping -c "${COUNT}" -t "${TIMEOUT_TTL}" "${HOST_IP[${dst_iface}]}" \
         > "${RECEIVED}" 2>&1
 
     if ! grep -Eq --ignore-case "${REGEX_TIMEOUT}" "${RECEIVED}"; then
         print_file 'Ping output' "${RECEIVED}"
-        fail "${ERROR_TIMEOUT}"
-        print_log
+        log_interface_err "${ERROR_TIMEOUT}" ${src_iface} ${dst_iface}
     fi
 }
 
-test_icmp_ping_timeout_host_0_to_1() {
-    ip netns exec namespace0 \
-        ping -c "${COUNT}" -t "${TIMEOUT_TTL}" "${HOST_IP[1]}" \
-        > "${RECEIVED}" 2>&1
+icmp_reject_icmp() {
+    src_iface=$1
+    dst_iface=$2
 
-    if ! grep -Eq --ignore-case "${REGEX_TIMEOUT}" "${RECEIVED}"; then
-        fail "${ERROR_TIMEOUT}"
-        print_log
-    fi
-}
-
-test_icmp_reject_1_to_0() {
     # Craft a JSON request with the rule's parameters.
     json=$(jq \
         --null-input \
-        --argjson interface 1 \
+        --argjson interface "${src_iface}" \
         --argjson action "${FIREWALL_ACTION_REJECT}" \
-        --arg src_ip "${HOST_IP[1]}" \
+        --arg src_ip "${HOST_IP[${src_iface}]}" \
         --arg src_port "" \
-        --argjson src_subnet "${FW_SUBNET[1]}" \
-        --arg dest_ip "${HOST_IP[0]}" \
+        --argjson src_subnet "${FW_SUBNET[${src_iface}]}" \
+        --arg dest_ip "${HOST_IP[${dst_iface}]}" \
         --arg dest_port "" \
-        --argjson dest_subnet "${FW_SUBNET[0]}" \
+        --argjson dest_subnet "${FW_SUBNET[${dst_iface}]}" \
         "${TEMPLATE_RULE_JSON}")
 
     # Apply the rule.
-    response=$(curl --silent \
-        --header 'Content-Type: application/json' \
-        --request 'POST' \
-        --data "$json" "http://${FW_IP[1]}/api/rules/icmp")
+    response=$(api_request 'POST' "/api/rules/icmp" "${json}")
 
     # Extract the rule's ID.
     rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
 
     if [ -z "${rule_id}" ]; then
-        fail "${ERROR_FAILED_TO_APPLY_RULE}"
+        log_interface_err "${ERROR_FAILED_TO_APPLY_RULE}" ${src_iface} ${dst_iface}
         return
     fi
 
     # Attempt ICMP echo while reject rule is active.
-    ip netns exec namespace1 \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${HOST_IP[0]}" > "${RECEIVED}" 2>&1
+    ip netns exec "namespace${src_iface}" \
+        ping -c "${COUNT}" -w "${TIMEOUT}" "${HOST_IP[${dst_iface}]}" > "${RECEIVED}" 2>&1
 
     # Ping should not succeed while the reject rule is active.
     if ! grep -Eq --ignore-case "${REGEX_DESTINATION_PORT_UNREACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_ICMP_REJECT_NOT_APPLIED}"
         print_file 'Ping output' "${RECEIVED}"
-        print_log
+        log_interface_err "${ERROR_ICMP_REJECT_NOT_APPLIED}" ${src_iface} ${dst_iface}
     fi
 
     # Remove the reject rule after the attempt.
-    response=$(curl --silent \
-        --header 'Content-Type: application/json' \
-        --request 'DELETE' \
-        "http://${FW_IP[1]}/api/rules/icmp/${rule_id}/1")
-
+    response=$(api_request 'DELETE' "/api/rules/icmp/${rule_id}/${src_iface}")
     if echo "${response}" | grep -q '"error"'; then
-        fail "${ERROR_FAILED_TO_REMOVE_RULE}"
-        print_log
-        return
+        log_interface_err "${ERROR_FAILED_TO_REMOVE_RULE}" ${src_iface} ${dst_iface}
     fi
 }
 
-test_icmp_reject_0_to_1() {
+icmp_reject_udp() {
+    src_iface=$1
+    dst_iface=$2
+
     # Craft a JSON request with the rule's parameters.
     json=$(jq \
         --null-input \
-        --argjson interface 0 \
+        --argjson interface "${src_iface}" \
         --argjson action "${FIREWALL_ACTION_REJECT}" \
-        --arg src_ip "${HOST_IP[0]}" \
+        --arg src_ip "${HOST_IP[${src_iface}]}" \
         --arg src_port "" \
-        --argjson src_subnet "${FW_SUBNET[0]}" \
-        --arg dest_ip "${HOST_IP[1]}" \
+        --argjson src_subnet "${FW_SUBNET[${src_iface}]}" \
+        --arg dest_ip "${HOST_IP[${dst_iface}]}" \
         --arg dest_port "" \
-        --argjson dest_subnet "${FW_SUBNET[1]}" \
-        "${TEMPLATE_RULE_JSON}")
-
-    # Apply the rule.
-    response=$(curl --silent \
-        --header 'Content-Type: application/json' \
-        --request 'POST' \
-        --data "$json" "http://${FW_IP[1]}/api/rules/icmp")
-
-    # Extract the rule's ID.
-    rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
-
-    if [ -z "${rule_id}" ]; then
-        fail "${ERROR_FAILED_TO_APPLY_RULE}"
-        return
-    fi
-
-    # Attempt ICMP echo while reject rule is active.
-    ip netns exec namespace0 \
-        ping -c "${COUNT}" -w "${TIMEOUT}" "${HOST_IP[1]}" > "${RECEIVED}" 2>&1
-
-    # Ping should not succeed while the reject rule is active.
-    if ! grep -Eq --ignore-case "${REGEX_DESTINATION_PORT_UNREACHABLE}" "${RECEIVED}"; then
-        fail "${ERROR_ICMP_REJECT_NOT_APPLIED}"
-        print_file 'Ping output' "${RECEIVED}"
-        print_log
-    fi
-
-    # Remove the reject rule after the attempt.
-    response=$(curl --silent \
-        --header 'Content-Type: application/json' \
-        --request 'DELETE' \
-        "http://${FW_IP[1]}/api/rules/icmp/${rule_id}/0")
-
-    if echo "${response}" | grep -q '"error"'; then
-        fail "${ERROR_FAILED_TO_REMOVE_RULE}"
-        print_log
-        return
-    fi
-}
-
-test_icmp_udp_reject_ext_to_int() {
-    # Craft a JSON request with the rule's parameters
-    json=$(jq \
-        --null-input \
-        --argjson interface 0 \
-        --argjson action "${FIREWALL_ACTION_REJECT}" \
-        --arg src_ip "${HOST_IP[0]}" \
-        --arg src_port "" \
-        --argjson src_subnet "${FW_SUBNET[0]}" \
-        --arg dest_ip "${HOST_IP[1]}" \
-        --arg dest_port "${UDP_PORT}" \
-        --argjson dest_subnet "${FW_SUBNET[1]}" \
+        --argjson dest_subnet "${FW_SUBNET[${dst_iface}]}" \
         "${TEMPLATE_RULE_JSON}")
 
     # Apply the rule
-    response=$(curl --silent \
-        --header 'Content-Type: application/json' \
-        --request 'POST' \
-        --data "$json" "http://${FW_IP[1]}/api/rules/udp")
+    response=$(api_request 'POST' "/api/rules/udp" "${json}")
 
     # Extract the rule's ID
     rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
 
     if [ -z "${rule_id}" ]; then
-        fail "${ERROR_FAILED_TO_APPLY_RULE}"
+        log_interface_err "${ERROR_FAILED_TO_APPLY_RULE}" ${src_iface} ${dst_iface}
         return
     fi
 
     # Send UDP traffic and capture sender-side output where ICMP reject details
     # are reported.
-    ip netns exec namespace0 \
-        nc -u -z -w "${LONG_TIMEOUT}" "${HOST_IP[1]}" "${UDP_PORT}" \
+    ip netns exec "namespace${src_iface}" \
+        nc -u -z -w "${LONG_TIMEOUT}" "${HOST_IP[${dst_iface}]}" "${UDP_PORT}" \
         < "${SENT}" > /dev/null 2> "${RECEIVED}"
     exit_code=$?
 
     if [ "${exit_code}" -eq "${EXIT_SUCCESS}" ]; then
-        fail "${ERROR_UDP_REJECT_UNEXPECTED_OUTPUT}"
-        print_log
+        log_interface_err "${ERROR_UDP_REJECT_UNEXPECTED_OUTPUT}" ${src_iface} ${dst_iface}
     fi
 
-    # Remove the reject rule now that traffic was attempted.
-    response=$(curl --silent \
-        --header 'Content-Type: application/json' \
-        --request 'DELETE' \
-        "http://${FW_IP[1]}/api/rules/udp/${rule_id}/0")
-
+    # Remove the reject rule now that traffic was attempted
+    response=$(api_request 'DELETE' "/api/rules/udp/${rule_id}/${src_iface}" "${json}")
     if echo "${response}" | grep -q '"error"'; then
-        fail "${ERROR_FAILED_TO_REMOVE_RULE}"
-        print_log
-        return
-    fi
-}
-
-test_icmp_udp_reject_int_to_ext() {
-    # Craft a JSON request with the rule's parameters
-    json=$(jq \
-        --null-input \
-        --argjson interface 1 \
-        --argjson action "${FIREWALL_ACTION_REJECT}" \
-        --arg src_ip "${HOST_IP[1]}" \
-        --arg src_port "" \
-        --argjson src_subnet "${FW_SUBNET[1]}" \
-        --arg dest_ip "${HOST_IP[0]}" \
-        --arg dest_port "${UDP_PORT}" \
-        --argjson dest_subnet "${FW_SUBNET[0]}" \
-        "${TEMPLATE_RULE_JSON}")
-
-    # Apply the rule
-    response=$(curl --silent \
-        --header 'Content-Type: application/json' \
-        --request 'POST' \
-        --data "$json" "http://${FW_IP[1]}/api/rules/udp")
-
-    # Extract the rule's ID
-    rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
-
-    if [ -z "${rule_id}" ]; then
-        fail "${ERROR_FAILED_TO_APPLY_RULE}"
-        return
-    fi
-
-    # Send UDP traffic and capture sender-side output.
-    ip netns exec namespace1 \
-        nc -u -z -w "${LONG_TIMEOUT}" "${HOST_IP[0]}" "${UDP_PORT}" \
-        < "${SENT}" > /dev/null 2> "${RECEIVED}"
-    exit_code=$?
-
-    if [ "${exit_code}" -eq "${EXIT_SUCCESS}" ]; then
-        fail "${ERROR_UDP_REJECT_UNEXPECTED_OUTPUT}"
-        print_log
-    fi
-
-    # Remove the reject rule now that traffic was attempted.
-    response=$(curl --silent \
-        --header 'Content-Type: application/json' \
-        --request 'DELETE' \
-        "http://${FW_IP[1]}/api/rules/udp/${rule_id}/1")
-
-    if echo "${response}" | grep -q '"error"'; then
-        fail "${ERROR_FAILED_TO_REMOVE_RULE}"
-        print_log
-        return
+        log_interface_err "${ERROR_FAILED_TO_REMOVE_RULE}" ${src_iface} ${dst_iface}
     fi
 }
 
 #
 # Transmission Control Protocol (TCP) tests
 #
+tcp_connect_host() {
+    src_iface=$1
+    dst_iface=$2
 
-test_tcp_1_to_0() {
-    # Listen for traffic on the interface 0 host
-    ip netns exec namespace0 \
-        nc -l "${TCP_PORT}" > "${RECEIVED}" &
+    # Listen for traffic on dst host
+    ip netns exec "namespace${dst_iface}" nc -l "${TCP_PORT}" > "${RECEIVED}" &
+    listener=$!
 
-    # Send traffic, from the interface 1 host, to the interface 0 host
-    ip netns exec namespace1 \
-        nc -w "${TIMEOUT}" -N "${HOST_IP[0]}" "${TCP_PORT}" < "${SENT}"
+    # Send traffic, from the src host, to the dst host
+    ip netns exec "namespace${src_iface}" \
+        nc -w "${TIMEOUT}" -N "${HOST_IP[${dst_iface}]}" "${TCP_PORT}" < "${SENT}"
     exit_code=$?
 
+    stop_listener_if_running "${listener}"
+
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
-        listener=$!
-        kill "${listener}" > /dev/null 2>&1
-        fail "${ERROR_TRANSMIT_FAILED}"
-        print_log
+        log_interface_err "${ERROR_TRANSMIT_FAILED}" ${src_iface} ${dst_iface}
         return
     fi
 
     # Verify that the data was transmitted correctly
     if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_DATA_INCORRECT}"
-        print_log
-    fi
-}
-
-test_tcp_0_to_1() {
-    # Listen for traffic on the interface 1 host
-    ip netns exec namespace1 \
-        nc -l "${TCP_PORT}" > "${RECEIVED}" &
-
-    # Send traffic, from the interface 0 host, to the interface 1 host
-    ip netns exec namespace0 \
-        nc -w "${TIMEOUT}" -N "${HOST_IP[1]}" "${TCP_PORT}" < "${SENT}"
-    exit_code=$?
-
-    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
-        listener=$!
-        kill "${listener}" > /dev/null 2>&1
-        fail "${ERROR_TRANSMIT_FAILED}"
-        print_log
-        return
-    fi
-
-    # Verify that the data was transmitted correctly
-    if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_DATA_INCORRECT}"
-        print_log
+        log_interface_err "${ERROR_DATA_INCORRECT}" ${src_iface} ${dst_iface}
     fi
 }
 
 #
 # User Datagram Protocol (UDP) tests
 #
+udp_connect_host() {
+    src_iface=$1
+    dst_iface=$2
 
-test_udp_1_to_0() {
-    # Listen for traffic on the interface 0 host
-    ip netns exec namespace0 \
-        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+    # Listen for traffic on the dst host
+    ip netns exec "namespace${dst_iface}" nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+    listener=$!
 
-    # Send traffic, from the interface 1 host, to the interface 0 host
-    ip netns exec namespace1 \
-        nc -u -q "${TIMEOUT}" "${HOST_IP[0]}" "${UDP_PORT}" < "${SENT}"
+    # Send traffic, from the src host, to the dst host
+    ip netns exec "namespace${src_iface}" \
+        nc -u -q "${TIMEOUT}" "${HOST_IP[${dst_iface}]}" "${UDP_PORT}" < "${SENT}"
     exit_code=$?
 
-    listener=$!
-    kill "${listener}" > /dev/null 2>&1
+    stop_listener_if_running "${listener}"
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
-        fail "${ERROR_TRANSMIT_FAILED}"
-        print_log
+        log_interface_err "${ERROR_TRANSMIT_FAILED}" ${src_iface} ${dst_iface}
         return
     fi
 
     # Verify that the data was transmitted correctly
     if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_DATA_INCORRECT}"
-        print_log
+        log_interface_err "${ERROR_DATA_INCORRECT}" ${src_iface} ${dst_iface}
     fi
 }
 
-test_udp_0_to_1() {
-    # Listen for traffic on the interface 1 host
-    ip netns exec namespace1 \
-        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
+udp_broadcast() {
+    src_iface=$1
+    dst_iface=$2
 
-    # Send traffic, from the interface 0 host, to the interface 1 host
-    ip netns exec namespace0 \
-        nc -u -q "${TIMEOUT}" "${HOST_IP[1]}" "${UDP_PORT}" < "${SENT}"
-    exit_code=$?
-
-    listener=$!
-    kill "${listener}" > /dev/null 2>&1
-
-    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
-        fail "${ERROR_TRANSMIT_FAILED}"
-        print_log
-        return
-    fi
-
-    # Verify that the data was transmitted correctly
-    if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_DATA_INCORRECT}"
-        print_log
-    fi
-}
-
-test_udp_broadcast_interface_0() {
     # Listen for traffic on interface 1
-    ip netns exec namespace1 \
+    ip netns exec "namespace${dst_iface}" \
         nc -ul "${UDP_PORT}" > "${RECEIVED}" &
     listener=$!
 
     # Send broadcast traffic from the interface 0 host
-    ip netns exec namespace0 \
+    ip netns exec "namespace${src_iface}" \
         nc -u -b -q "${TIMEOUT}" "${BROADCAST_IP_ADDR}" "${UDP_PORT}" < "${SENT}"
     exit_code=$?
 
     sleep "${TIMEOUT}"
-    kill "${listener}" > /dev/null 2>&1
+
+    stop_listener_if_running "${listener}"
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
-        fail "${ERROR_TRANSMIT_FAILED}"
-        print_log
+        log_interface_err "${ERROR_TRANSMIT_FAILED}" ${src_iface} ${dst_iface}
         return
     fi
 
     if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_DATA_WAS_NOT_DROPPED}"
-        print_log
+        log_interface_err "${ERROR_DATA_WAS_NOT_DROPPED}" ${src_iface} ${dst_iface}
     fi
 }
 
-test_udp_broadcast_interface_1() {
-    # Listen for traffic on interface 0
-    ip netns exec namespace0 \
-        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
-    listener=$!
+udp_subnet_broadcast() {
+    src_iface=$1
+    dst_iface=$2
 
-    # Send broadcast traffic from the interface 1 host
-    ip netns exec namespace1 \
-        nc -u -b -q "${TIMEOUT}" "${BROADCAST_IP_ADDR}" "${UDP_PORT}" < "${SENT}"
-    exit_code=$?
-
-    sleep "${TIMEOUT}"
-    kill "${listener}" > /dev/null 2>&1
-
-    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
-        fail "${ERROR_TRANSMIT_FAILED}"
-        print_log
-        return
-    fi
-
-    if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_DATA_WAS_NOT_DROPPED}"
-        print_log
-    fi
-}
-
-test_udp_subnet_broadcast_interface_0() {
     # Listen for traffic on interface 1
-    ip netns exec namespace1 \
+    ip netns exec "namespace${dst_iface}" \
         nc -ul "${UDP_PORT}" > "${RECEIVED}" &
     listener=$!
 
     # Send broadcast traffic from interface 0
-    ip netns exec namespace0 \
-        nc -u -b -q "${TIMEOUT}" "${BROADCAST_IP[1]}" "${UDP_PORT}" < "${SENT}"
+    ip netns exec "namespace${src_iface}" \
+        nc -u -b -q "${TIMEOUT}" "${BROADCAST_IP[${dst_iface}]}" "${UDP_PORT}" < "${SENT}"
     exit_code=$?
 
     sleep "${TIMEOUT}"
-    kill "${listener}" > /dev/null 2>&1
+
+    stop_listener_if_running "${listener}"
 
     if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
-        fail "${ERROR_TRANSMIT_FAILED}"
-        print_log
+        log_interface_err "${ERROR_TRANSMIT_FAILED}" ${src_iface} ${dst_iface}
         return
     fi
 
     if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_DATA_WAS_NOT_DROPPED}"
-        print_log
-    fi
-}
-
-test_udp_subnet_broadcast_interface_1() {
-    # Listen for traffic on interface 0
-    ip netns exec namespace0 \
-        nc -ul "${UDP_PORT}" > "${RECEIVED}" &
-    listener=$!
-
-    # Send broadcast traffic from interface 1
-    ip netns exec namespace1 \
-        nc -u -b -q "${TIMEOUT}" "${BROADCAST_IP[0]}" "${UDP_PORT}" < "${SENT}"
-    exit_code=$?
-
-    sleep "${TIMEOUT}"
-    kill "${listener}" > /dev/null 2>&1
-
-    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
-        fail "${ERROR_TRANSMIT_FAILED}"
-        print_log
-        return
-    fi
-
-    if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_DATA_WAS_NOT_DROPPED}"
-        print_log
+        log_interface_err "${ERROR_DATA_WAS_NOT_DROPPED}" ${src_iface} ${dst_iface}
     fi
 }
 
 #
 # Rule tests
 #
+run_rule_application_and_removal() {
+    src_iface=$1
+    dst_iface=$2
 
-test_rule_application_and_removal() {
     # The default rule for traffic on each interface is to allow it, so we setup
     # a drop traffic rule and verify that we receive no traffic.
 
     # Craft a JSON request with the rule's parameters
     json=$(jq \
         --null-input \
-        --argjson interface 0 \
+        --argjson interface "${src_iface}" \
         --argjson action "${FIREWALL_ACTION_DROP}" \
-        --arg src_ip "${HOST_IP[0]}" \
+        --arg src_ip "${HOST_IP[${src_iface}]}" \
         --arg src_port "" \
-        --argjson src_subnet "${FW_SUBNET[0]}" \
-        --arg dest_ip "${HOST_IP[1]}" \
+        --argjson src_subnet "${FW_SUBNET[${src_iface}]}" \
+        --arg dest_ip "${HOST_IP[${dst_iface}]}" \
         --arg dest_port "${TCP_PORT}" \
-        --argjson dest_subnet "${FW_SUBNET[1]}" \
+        --argjson dest_subnet "${FW_SUBNET[${dst_iface}]}" \
         "${TEMPLATE_RULE_JSON}")
 
     # Apply the rule
-    response=$(curl --silent \
-        --header 'Content-Type: application/json' \
-        --request 'POST' \
-        --data "$json" "http://${FW_IP[1]}/api/rules/tcp")
+    response=$(api_request POST '/api/rules/tcp' "${json}")
 
     # Extract the rule's ID
-    rule_id=$(echo "$response" | sed -E 's/.*"id": ([0-9]+).*/\1/')
-
+    rule_id=$(printf '%s' "${response}" | jq -r '.rule.id // empty')
     if [ -z "${rule_id}" ]; then
-        fail "${ERROR_FAILED_TO_APPLY_RULE}"
+        log_interface_err "${ERROR_FAILED_TO_APPLY_RULE}" ${src_iface} ${dst_iface}
         return
     fi
 
-    # Listen for traffic on the interface 1 host
-    ip netns exec namespace1 \
-        nc -l "${TCP_PORT}" > "${RECEIVED}" &
-
-    # Attempt to send traffic, from the interface 0 host, to the interface 1 host
-    ip netns exec namespace0 \
-        nc -w "${TIMEOUT}" -N "${HOST_IP[1]}" "${TCP_PORT}" < "${SENT}"
-
+    # Listen for traffic on the dst host
+    ip netns exec "namespace${dst_iface}" nc -l "${TCP_PORT}" > "${RECEIVED}" &
     listener=$!
-    kill "${listener}" > /dev/null 2>&1
+
+    # Attempt to send traffic, from the src host, to the dst host
+    ip netns exec "namespace${src_iface}" \
+        nc -w "${TIMEOUT}" -N "${HOST_IP[${dst_iface}]}" "${TCP_PORT}" < "${SENT}"
+
+    stop_listener_if_running "${listener}"
 
     # Verify that no data was received
     if ! diff /dev/null "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_DATA_WAS_NOT_DROPPED}"
-        print_log
+        log_interface_err "${ERROR_DATA_WAS_NOT_DROPPED}" ${src_iface} ${dst_iface}
     fi
 
     # Remove the rule
-    response=$(curl --silent \
-        --output /dev/null \
-        --header 'Content-Type: application/json' \
-        --request 'DELETE' \
-        "http://${FW_IP[1]}/api/rules/tcp/${rule_id}/0")
-
-    # Check if the response contains an error
-    error=$(echo "$response" | sed -E 's/.*("error":).*/\1/')
-
-    if [ ! -z "${error}" ]; then
-        fail "${ERROR_FAILED_TO_REMOVE_RULE}"
-        print_log
+    response=$(api_request DELETE "/api/rules/tcp/${rule_id}/${src_iface}")
+    if echo "${response}" | grep -q '"error"'; then
+        log_interface_err "${ERROR_FAILED_TO_REMOVE_RULE}" ${src_iface} ${dst_iface}
         return
     fi
 
     # Verify that the rule was removed; in other words, data transmission should
     # now succeed
 
-    # Listen for traffic on the interface 1 host
-    ip netns exec namespace1 \
-        nc -l "${TCP_PORT}" > "${RECEIVED}" &
-
-    # Send traffic, from the interface 0 host, to the interface 1 host
-    ip netns exec namespace0 \
-        nc -w "${TIMEOUT}" -N "${HOST_IP[1]}" "${TCP_PORT}" < "${SENT}"
-
+    # Listen for traffic on the dst host
+    ip netns exec "namespace${dst_iface}" nc -l "${TCP_PORT}" > "${RECEIVED}" &
     listener=$!
-    kill "${listener}" > /dev/null 2>&1
+
+    # Send traffic, from the src host, to the dst host
+    ip netns exec "namespace${src_iface}" \
+        nc -w "${TIMEOUT}" -N "${HOST_IP[${dst_iface}]}" "${TCP_PORT}" < "${SENT}"
+
+    stop_listener_if_running "${listener}"
 
     # Verify that the data was transmitted correctly
     if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
-        fail "${ERROR_RULE_STILL_APPLIED}"
-        print_log
+        log_interface_err "${ERROR_RULE_STILL_APPLIED}" ${src_iface} ${dst_iface}
     fi
 }
 
 #
 # shUnit
 #
+
+call_all_interfaces() {
+    test=$1
+    for ((iface=0; iface<"${FW_INTERFACE_COUNT}"; iface++)); do
+        "${test}" "${iface}"
+    done
+}
+
+call_all_interface_pairs() {
+    test=$1
+    for ((src_iface=0; src_iface<"${FW_INTERFACE_COUNT}"; src_iface++)); do
+        for ((dst_iface=0; dst_iface<"${FW_INTERFACE_COUNT}"; dst_iface++)); do
+            if [ "${src_iface}" -eq "${dst_iface}" ]; then
+                continue
+            fi
+
+            "${test}" "${src_iface}" "${dst_iface}"
+        done
+    done
+}
+
+test_icmp_ping_host() {
+    call_all_interface_pairs icmp_ping_host
+}
+
+test_icmp_ping_unreachable_host() {
+    call_all_interface_pairs icmp_ping_unreachable_host
+}
+
+test_icmp_ping_unreachable_net() {
+    call_all_interface_pairs icmp_ping_unreachable_net
+}
+
+test_icmp_ping_firewall_interface() {
+    call_all_interfaces icmp_ping_firewall_interface
+}
+
+test_icmp_icmp_ping_timeout() {
+    call_all_interface_pairs icmp_ping_timeout
+}
+
+test_icmp_reject_icmp() {
+    call_all_interface_pairs icmp_reject_icmp
+}
+
+test_icmp_reject_udp() {
+    call_all_interface_pairs icmp_reject_udp
+}
+
+test_tcp_connect_host () {
+    call_all_interface_pairs tcp_connect_host
+}
+
+test_udp_connect_host() {
+    call_all_interface_pairs udp_connect_host
+}
+
+test_udp_broadcast() {
+    call_all_interface_pairs udp_broadcast
+}
+
+test_udp_subnet_broadcast() {
+    call_all_interface_pairs udp_subnet_broadcast
+}
+
+test_run_rule_application_and_removal() {
+    call_all_interface_pairs run_rule_application_and_removal
+}
 
 # Once shUnit2 has been sourced, it will find all functions that begin with the
 # name `test` and add them to a list to be executed. The source statement should
