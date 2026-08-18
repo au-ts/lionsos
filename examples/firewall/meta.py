@@ -8,7 +8,7 @@ from sdfgen_helper import copy_elf, update_elf_section
 
 from sdfgen import SystemDescription, Sddf, DeviceTree
 
-assert version("sdfgen").split(".")[1] == "33", "Unexpected sdfgen version"
+assert version("sdfgen").split(".")[1] == "35", "Unexpected sdfgen version"
 
 from typing import List
 from pyfw.memory_layout import (
