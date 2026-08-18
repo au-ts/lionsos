@@ -42,7 +42,6 @@ fw_interfaces: List[FirewallInterface] = []
 def generate(sdf_file: str, dtb: DeviceTree) -> None:
     # Create interfaces and component classes
     for net_iface in BuildConstants.interfaces():
-        print(len(BuildConstants.interfaces()))
         iface = FirewallInterface(net_iface)
         fw_interfaces.append(iface)
 
