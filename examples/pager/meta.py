@@ -215,6 +215,10 @@ def generate(
     remaining_untypeds = SystemDescription.CNode("remaining_untypeds", True, 9)
     pagers_empty_cnode = SystemDescription.CNode("pagerspace", False, 20)
     pagers_empty_cnode_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, pagers_empty_cnode, 2)
+    pager_gzp_cnode = SystemDescription.CNode("gzp", False, 20)
+    pager_gzp_cnode_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, pager_gzp_cnode, 4)
+    pager.add_cap_map(pager_gzp_cnode_map)
+    sdf.add_cnode(pager_gzp_cnode)
     pager_ips_cnode = SystemDescription.CNode("ips_cnode", False, 20)
     pager_ips_cnode_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, pager_ips_cnode, 3)
     pager.add_cap_map(pager_ips_cnode_map)
@@ -250,8 +254,8 @@ def generate(
         fatfs,
         client,
         blk=blk_system,
-        # partition=1 # change this if necessary
-        partition=partition
+        partition=1 # change this if necessary
+        # partition=partition
     )
 
     if board.name == "maaxboard":

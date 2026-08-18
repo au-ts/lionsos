@@ -61,8 +61,8 @@ void bench_main(void) {
     struct timespec end_ts;
     sddf_notify(benchmark_config.start_ch);
     clock_gettime(CLOCK_MONOTONIC, &start_ts);
-    // int rc = fiveonenine(6, argv);
-    int rc = minor_pf();
+    int rc = fiveonenine(6, argv);
+    // int rc = minor_pf();
     clock_gettime(CLOCK_MONOTONIC, &end_ts);
     sddf_notify(benchmark_config.stop_ch);
 
@@ -95,6 +95,7 @@ void init(void)
 
     libc_init(NULL, (void *) 0x8000000000, 0x20000000);
 
+    // bench_main();
     if (microkit_cothread_spawn(bench_main, NULL) == LIBMICROKITCO_NULL_HANDLE) {
         sddf_printf("init(): ERROR: cannot spawn the doom worker coroutine.\n");
         return;

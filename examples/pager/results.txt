@@ -10,6 +10,38 @@ Running READ benchmark...
 Anonymous READ page faults
 -----------------------------
 samples : 16374
+min     : 5520 ns
+median  : 5880 ns
+mean    : 7689 ns
+max     : 1025640 ns
+
+Running WRITE benchmark...
+
+Anonymous WRITE page faults
+-----------------------------
+samples : 16374
+min     : 5760 ns
+median  : 6120 ns
+mean    : 8096 ns
+max     : 1025760 ns
+BENCH|SPEC CPU finished rc=0
+elapsed ns: 2038016583
+elapsed us: 2038016
+elapsed ms: 2038
+benchmark done
+
+Anonymous page-fault latency benchmark
+========================================
+CNTFRQ_EL0 : 8333333 Hz
+page size  : 4096 bytes
+pages      : 16384
+size       : 64 MiB
+
+Running READ benchmark...
+
+Anonymous READ page faults
+-----------------------------
+samples : 16374
 min     : 8583 ns
 median  : 9083 ns
 mean    : 16128 ns

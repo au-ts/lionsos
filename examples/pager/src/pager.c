@@ -17,6 +17,7 @@
 #define UNTYPED_SLOT 1 // this is the cptr thing basically.
 #define FRAME_CNODE 2
 #define IPS_CNODE 3
+#define GZP_CNODE 4
 
 #include <sddf/benchmark/config.h>
 #include <sddf/benchmark/bench.h>
@@ -42,6 +43,7 @@ frame_list_t used_frame_list;
 
 seL4_CPtr frame_cnode_cptr;
 seL4_CPtr ips_cnode_cptr;
+seL4_CPtr gzp_cnode_cptr;
 
 uint32_t global_zero_page;
 
@@ -51,16 +53,31 @@ pt_t page_tables[10][512];
 uint32_t frame_idx = 1;
 uint32_t ips_idx = 1;
 
+// TODO proper allocation of GZP pointers
+uint32_t gzp_idx = 0;
+uint32_t gzp_offset = 1;
 
-seL4_Error copy_global_zero_frame_cap(uint32_t *slot) {
-    *slot = frame_idx;
-    ++frame_idx;
-    return seL4_CNode_Copy(frame_cnode_cptr + *slot, 0, 0, frame_cnode_cptr + 1, 0, 0, create_cap_rights(false));
-}
+
+// seL4_Error copy_global_zero_frame_cap(uint32_t *slot) {
+//     *slot = frame_idx;
+//     ++frame_idx;
+//     return seL4_CNode_Copy(frame_cnode_cptr + *slot, 0, 0, frame_cnode_cptr + 1, 0, 0, create_cap_rights(false));
+// }
 
 seL4_Error delete_global_zero_frame_cap(uint32_t cap) {
     return seL4_CNode_Delete(cap + frame_cnode_cptr, 0, 0);
 } 
+
+void create_zero_caps(int num) {
+    for (int i = 0; i < num; ++i) {
+        ++gzp_idx;
+        int err = seL4_CNode_Copy(gzp_cnode_cptr, gzp_idx, 58, frame_cnode_cptr, global_zero_page, 58, create_cap_rights(false));
+        if (err != seL4_NoError) {
+            sddf_printf("copy fail %d iteration %d,,,, destination %lx source %lx\n", err, i, gzp_cnode_cptr + gzp_idx, frame_cnode_cptr + global_zero_page);
+            while(1);
+        }
+    }
+}
 
 void init(void)
 {
@@ -77,6 +94,7 @@ void init(void)
     capDLBootInfo = (capDLBootInfo_t*) remaining_untypeds_vaddr;
     ips_cnode_cptr = microkit_cspace_root_slot_to_cptr(3);
     frame_cnode_cptr = microkit_cspace_root_slot_to_cptr(2);
+    gzp_cnode_cptr = microkit_cspace_root_slot_to_cptr(4);
     post_boot_cnode.cptr = microkit_cspace_root_slot_to_cptr(1);
     post_boot_cnode.start = capDLBootInfo->untypeds.start;
     // // TODO: is end empty?
@@ -97,6 +115,9 @@ void init(void)
     get_frame_from_idx(global_zero_page)->frame_page = global_zero_page;
     // refill unused at the start
     refill_unused();
+    sddf_printf("global zero page is %d\n", global_zero_page);
+    // copy a bunch of zero pages to the zero page thing
+    create_zero_caps(20000);
 }
 
 void notified(microkit_channel ch)
@@ -136,10 +157,9 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
             // map global zero page then return early.
 
             // create cap copy of global zero page.
-            uint32_t slot;
-            copy_global_zero_frame_cap(&slot);
-            insert_frame_to_page(slot, page_entry);
-            seL4_Error err = map_frame(frame_cnode_cptr + slot, vspaces[child], fault_addr, create_cap_rights(is_write), 0x03);
+            // insert_frame_to_page(slot, page_entry);
+            seL4_Error err = map_frame(gzp_cnode_cptr + gzp_offset, vspaces[child], fault_addr, create_cap_rights(is_write), 0x03);
+            ++gzp_offset;
             if (err) {
                 sddf_printf("error occured on map frame zero %d\n", err);
             }
@@ -153,16 +173,16 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     }
     // Permission fault (level 1–3)
     if (fsc >= 0x0D && fsc <= 0x0F) {
-        frame = get_frame_from_idx(get_frame_from_page(*page_entry));
-
-        // if global zero page get new frame
-        if (!(*page_entry & DESC_NG)) {
+        // if global zero page get new frame ||| the second case is for now.
+        if (!(*page_entry & DESC_NG) || !*page_entry) {
             // delete copied frame cap
-            uint32_t frame_cap = get_frame_from_page(*page_entry);
-            delete_global_zero_frame_cap(frame_cap);
+            // uint32_t frame_cap = get_frame_from_page(*page_entry);
+            // delete_global_zero_frame_cap(frame_cap);
 
             frame = get_unused_frame();
             insert_frame_to_page(frame->frame_page, page_entry);
+        } else {
+            frame = get_frame_from_idx(get_frame_from_page(*page_entry));
         }
     }
 
