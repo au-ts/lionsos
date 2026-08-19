@@ -22,10 +22,15 @@ include ${SDDF}/tools/make/board/common.mk
 ETH_DRIV0 := ${ETH_DRIV}
 ETH_DRIV1 := ${ETH_DRIV_1}
 
+# Set the number of interfaces used by the firewall here. This must be <= the
+# actual number of interfaces
 FIREWALL_INTERFACE_COUNT := 2
 ifeq ($(MICROKIT_BOARD),qemu_virt_aarch64)
 FIREWALL_INTERFACE_COUNT := 3
 ETH_DRIV2 := ${ETH_DRIV}
+endif
+
+ifeq (${FIREWALL_INTERFACE_COUNT},3)
 IMAGES := eth_driver2.elf
 endif
 
@@ -146,7 +151,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(CHECK_FLAGS_BOARD_MD5) $(PYFW_
 	PYTHONPATH=$(BUILD_DIR):$(FIREWALL_SRC_DIR):${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) \
 		--sddf $(SDDF) --board $(MICROKIT_BOARD) \
 		--dtb $(DTB) --output . --sdf $(SYSTEM_FILE) \
-		--objcopy $(OBJCOPY) --objdump $(OBJDUMP)
+		--objcopy $(OBJCOPY) --objdump $(OBJDUMP) \
+		--num_interfaces $(FIREWALL_INTERFACE_COUNT)
 
 # Serial configs
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
