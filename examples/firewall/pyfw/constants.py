@@ -22,7 +22,7 @@ BOARDS = [
         paddr_top=0x6_0000_000,
         serial="pl011@9000000",
         timer="timer",
-        ethernet=("virtio_mmio@a003e00", "virtio_mmio@a003c00")
+        ethernet=("virtio_mmio@a003e00", "virtio_mmio@a003c00", "virtio_mmio@a003a00")
     ),
     Board(
         name="imx8mp_iotgate",
