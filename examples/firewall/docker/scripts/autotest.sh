@@ -53,7 +53,6 @@ TEMPLATE_INTERFACE='$interface'
 TEMPLATE_ACTION='$action'
 TEMPLATE_RULE_JSON="{ ${TEMPLATE_SRC}, ${TEMPLATE_DEST}, ${TEMPLATE_INTERFACE}, ${TEMPLATE_ACTION} }"
 
-WEBSERVER_INTERFACE=1
 FIREWALL_ACTION_DROP=2
 FIREWALL_ACTION_REJECT=3
 
@@ -272,11 +271,11 @@ api_request() {
         curl --silent --show-error --header 'Content-Type: application/json' \
         --request ${method} \
         --data "${data}" \
-        "http://${FW_IP[${WEBSERVER_INTERFACE}]}${path}"
+        "http://${FW_WEBSERVER_IP}${path}"
     else
         curl --silent --show-error --header 'Content-Type: application/json' \
         --request ${method} \
-        "http://${FW_IP[${WEBSERVER_INTERFACE}]}${path}"
+        "http://${FW_WEBSERVER_IP}${path}"
     fi
 }
 
@@ -326,7 +325,7 @@ icmp_ping_unreachable_net() {
 icmp_ping_firewall_interface() {
     iface=$1
 
-    original_status=$(curl --silent "http://${FW_IP[${WEBSERVER_INTERFACE}]}/api/ping/${iface}" | sed -E 's/.*enabled": (true|false).*/\1/')
+    original_status=$(curl --silent "http://${FW_WEBSERVER_IP}/api/ping/${iface}" | sed -E 's/.*enabled": (true|false).*/\1/')
 
     if [ "${original_status}" = "true" ]; then
         # Disable ping

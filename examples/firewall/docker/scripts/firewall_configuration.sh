@@ -34,6 +34,9 @@ export FW_MAC=("00:01:c0:39:d5:18" "00:01:c0:39:d5:10" "00:01:c0:39:d5:12")
 # IP addresses of the firewall's interfaces
 export FW_IP=(172.16.2.1 192.168.1.1 10.0.2.1)
 
+# IP address of firewall interface to reach the webserver
+export FW_WEBSERVER_IP=192.168.1.1
+
 # Network bits of the firewall's subnets
 export FW_SUBNET=(12 24 24)
 
