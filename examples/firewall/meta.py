@@ -8,7 +8,7 @@ from sdfgen_helper import copy_elf, update_elf_section
 
 from sdfgen import SystemDescription, Sddf, DeviceTree
 
-assert version("sdfgen").split(".")[1] == "33", "Unexpected sdfgen version"
+assert version("sdfgen").split(".")[1] == "35", "Unexpected sdfgen version"
 
 from typing import List
 from pyfw.memory_layout import (
@@ -42,7 +42,6 @@ fw_interfaces: List[FirewallInterface] = []
 def generate(sdf_file: str, dtb: DeviceTree) -> None:
     # Create interfaces and component classes
     for net_iface in BuildConstants.interfaces():
-        print(len(BuildConstants.interfaces()))
         iface = FirewallInterface(net_iface)
         fw_interfaces.append(iface)
 
@@ -335,13 +334,14 @@ if __name__ == "__main__":
     parser.add_argument("--sdf", required=True)
     parser.add_argument("--objcopy", required=True)
     parser.add_argument("--objdump", required=True)
+    parser.add_argument("--num_interfaces", required=True)
     args = parser.parse_args()
 
     board = next(filter(lambda b: b.name == args.board, BOARDS))
 
     BuildConstants.set_output_dir(args.output)
     BuildConstants.set_sdf(SystemDescription(board.arch, board.paddr_top))
-    BuildConstants.set_num_interfaces(len(board.ethernet))
+    BuildConstants.set_num_interfaces(int(args.num_interfaces))
 
     sddf = Sddf(args.sddf)
 

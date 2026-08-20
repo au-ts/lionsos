@@ -32,6 +32,6 @@ ssh -o StrictHostKeyChecking=no \
 # at http://localhost:${HOST_HTTP_PORT}/
 ssh -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
-    -L "${HOST_HTTP_PORT}:${FW_IP[1]}:80" \
+    -L "${HOST_HTTP_PORT}:${FW_WEBSERVER_IP}:80" \
     -i "${HOST_KEY_PATH}" \
     root@localhost -p "${HOST_SSH_PORT}"
