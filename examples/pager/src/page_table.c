@@ -4,10 +4,10 @@
 uint64_t *get_page_table_entry(uintptr_t vaddr, pt_t pud) {
     pt_t pd = (pt_t) pud[PUD_INDEX(vaddr)];
     if (!pd) {
-        // allocate pd;
+        // allocate pd; & pt
         pd = (pt_t) allocate_pager_memory(sizeof(pt_t) * 512);
         pud[PUD_INDEX(vaddr)] = (uint64_t) pd;
-    } 
+    }
     pt_t pt = (pt_t) pd[PD_INDEX(vaddr)];
     if (!pt) {
         // allocat pt;

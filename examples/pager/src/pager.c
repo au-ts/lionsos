@@ -24,45 +24,37 @@
 #include <sddf/util/printf.h>
 
 __attribute__((__section__(".benchmark_client_config"))) benchmark_client_config_t benchmark_config;
-benchmark_client_config_t *bench;
 
 uintptr_t remaining_untypeds_vaddr;
 
-cnode_specs_t post_boot_cnode;
+static cnode_specs_t post_boot_cnode;
 capDLBootInfo_t *capDLBootInfo;
 // uint64_t untyped_idx;
 uint32_t vspaces[10]; // child_idx to vspace_idx
 
 /** pager_memory static allocation for pager to use. */
 uintptr_t pager_memory;
-uintptr_t pager_memory_idx;
+static uintptr_t pager_memory_idx;
 uintptr_t frame_buffer;
 
-frame_list_t unused_frame_list;
-frame_list_t used_frame_list;
+static frame_list_t unused_frame_list;
 
-seL4_CPtr frame_cnode_cptr;
-seL4_CPtr ips_cnode_cptr;
-seL4_CPtr gzp_cnode_cptr;
+static seL4_CPtr frame_cnode_cptr;
+static seL4_CPtr ips_cnode_cptr;
+static seL4_CPtr gzp_cnode_cptr;
 
-uint32_t global_zero_page;
+static uint32_t global_zero_page;
 
 // a four level page table for each child.
-pt_t page_tables[10][512];
+static pt_t page_tables[10][512];
 
-uint32_t frame_idx = 1;
-uint32_t ips_idx = 1;
+static uint32_t frame_idx = 1;
+static uint32_t ips_idx = 1;
 
 // TODO proper allocation of GZP pointers
-uint32_t gzp_idx = 0;
-uint32_t gzp_offset = 1;
+static uint32_t gzp_idx = 0;
+static uint32_t gzp_offset = 1;
 
-
-// seL4_Error copy_global_zero_frame_cap(uint32_t *slot) {
-//     *slot = frame_idx;
-//     ++frame_idx;
-//     return seL4_CNode_Copy(frame_cnode_cptr + *slot, 0, 0, frame_cnode_cptr + 1, 0, 0, create_cap_rights(false));
-// }
 
 seL4_Error delete_global_zero_frame_cap(uint32_t cap) {
     return seL4_CNode_Delete(cap + frame_cnode_cptr, 0, 0);
@@ -85,9 +77,6 @@ void init(void)
     unused_frame_list.first = NULL;
     unused_frame_list.last = NULL;
     unused_frame_list.length = 0;
-    used_frame_list.first = NULL;
-    used_frame_list.last = NULL;
-    used_frame_list.length = 0;
     pager_memory_idx = 0;
 
     // // intialise untypeds.
@@ -135,7 +124,7 @@ void notified(microkit_channel ch)
  */
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
-    microkit_pd_stop(child);
+    // microkit_pd_stop(child);
     // get fault info
     uintptr_t fault_addr = ROUND_DOWN_TO_4K(microkit_mr_get(1));
     uint64_t fsr = microkit_mr_get(3);
@@ -163,7 +152,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
             if (err) {
                 sddf_printf("error occured on map frame zero %d\n", err);
             }
-            microkit_pd_restart(child, ip);
+            // microkit_pd_restart(child, ip);
             return seL4_True;
         } else {
             frame = get_unused_frame();
@@ -198,18 +187,18 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
      * TODO: for freeing.
      */
     // sddf_printf("returning\n");
-    microkit_pd_restart(child, ip);
+    // microkit_pd_restart(child, ip);
     return seL4_True;
 }
 
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
-    // enum benchmark_trigger cmd = microkit_mr_get(0);
-    // if (cmd == START) {
-    //     sddf_notify(benchmark_config.start_ch);
-    // } else if (cmd == STOP) {
-    //     sddf_notify(benchmark_config.stop_ch);
-    // }
+    bool cmd = microkit_mr_get(0);
+    if (cmd == 1) {
+        sddf_notify(benchmark_config.start_ch);
+    } else if (cmd == 0) {
+        sddf_notify(benchmark_config.stop_ch);
+    }
     return microkit_msginfo_new(0, 0);
 }
 
@@ -270,7 +259,6 @@ void refill_unused() {
         // create frame_t and move to end of list.
         frame_t *new_folio = get_frame_from_idx(frame_idx);
         new_folio->next = NULL;
-        new_folio->prev = unused_frame_list.last;
         new_folio->frame_page = frame_idx;
         int err = do_untyped_retype(&post_boot_cnode, seL4_ARM_SmallPageObject, seL4_PageBits, &frame_idx, frame_cnode_cptr);
         if (unused_frame_list.length) {
@@ -291,24 +279,16 @@ frame_t *get_unused_frame() {
     if (!unused_frame_list.length) {
         refill_unused();
     } 
-
     // get the last element and remove it
-    frame_t *ret = unused_frame_list.last;
+    frame_t *ret = unused_frame_list.first;
     if (unused_frame_list.length == 1) {
         unused_frame_list.last = NULL;
         unused_frame_list.first = NULL;
     } else {
-        unused_frame_list.last = ret->prev;
-        ret->prev->next = NULL;
+        unused_frame_list.first = ret->next;
     }
     --unused_frame_list.length;
     
-    // place ret into front of used list
-    if (used_frame_list.length) used_frame_list.first->prev = ret;
-    ret->next = used_frame_list.first;
-    used_frame_list.first = ret;
-    ret->prev = NULL;
-    ++used_frame_list.length;
     return ret;
 }
 

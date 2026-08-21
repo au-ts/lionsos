@@ -112,3 +112,8 @@ max     : 18446744073709547365 ns
 	Signals delivered: 0
 	Page size (bytes): 16384
 	Exit status: 0
+
+	8286743
+	8282287
+	10138383
+	10161146

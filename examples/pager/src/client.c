@@ -23,7 +23,6 @@
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
-__attribute__((__section__(".benchmark_client_config"))) benchmark_client_config_t benchmark_config;
 #define WORKER_STACK_SIZE (64 * 1024)
 
 static char worker_stack[WORKER_STACK_SIZE];
@@ -59,12 +58,16 @@ void bench_main(void) {
     };
     struct timespec start_ts;
     struct timespec end_ts;
-    sddf_notify(benchmark_config.start_ch);
-    clock_gettime(CLOCK_MONOTONIC, &start_ts);
-    int rc = fiveonenine(6, argv);
-    // int rc = minor_pf();
-    clock_gettime(CLOCK_MONOTONIC, &end_ts);
-    sddf_notify(benchmark_config.stop_ch);
+
+    microkit_msginfo start_message = microkit_msginfo_new(0, 1);
+    microkit_mr_set(0, 1);
+    microkit_ppcall(0, start_message);
+    // int rc = fiveonenine(6, argv);
+    int rc = minor_pf();
+    microkit_msginfo stop_message = microkit_msginfo_new(0, 1);
+    microkit_mr_set(0, 0);
+    microkit_ppcall(0, stop_message);
+
 
     printf("BENCH|SPEC CPU finished rc=%d\n", rc);
     uint64_t start_ns = timespec_to_ns(start_ts);
@@ -110,6 +113,10 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     // this is not used
     seL4_MessageInfo_t ret;
+    // print the stats for the pager
+    // mr0 is min of mapping
+    // mr1 is mean of mapping
+    // mr2 is 
     return ret;
 }
 

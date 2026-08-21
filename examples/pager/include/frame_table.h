@@ -9,7 +9,6 @@
  */
 typedef struct folio {
     struct folio *next;
-    struct folio *prev;
     uint32_t frame_page;
 } frame_t;
 

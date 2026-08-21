@@ -186,9 +186,6 @@ include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 $(info libpath is $(LIBMICROKITCO_PATH))
 
 $(info opt dir is $(LIBMICROKITCO_CFLAGS))
-# LIBMICROKITCO_CFLAGS := -O2 -I/path/to/libmicrokitco_opts.h
-# include libmicrokitco.mk
-# my_program.elf: libmicrokitco.a
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a 519.a minor_pf.a
 
