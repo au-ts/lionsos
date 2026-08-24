@@ -6,6 +6,7 @@ Files:
     CHANGES.md
     .gitignore
     .gitmodules
+    .gitattributes
     flake.lock
 Copyright: UNSW
 License: BSD-2-Clause
@@ -35,4 +36,9 @@ Files:
     examples/kitty/board/odroidc4/framebuffer_vmm_images/buildroot_config
     examples/kitty/board/qemu_virt_aarch64/framebuffer_vmm_images/buildroot_config
 Copyright: Buildroot
+License: GPL-2.0-or-later
+
+Files:
+    dep/lwext4/*
+Copyright: lwext4 Authors
 License: GPL-2.0-or-later
