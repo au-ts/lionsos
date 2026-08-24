@@ -19,7 +19,7 @@
 seL4_CapRights_t create_cap_rights(bool is_write);
 
 static seL4_Error map_frame(uint64_t frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
-                                 seL4_CapRights_t rights, seL4_ARM_VMAttributes attr);
+                                 seL4_CapRights_t rights, seL4_ARM_VMAttributes attr, int num);
 
 
 /**
@@ -43,4 +43,6 @@ seL4_Error my_untyped_retype(
 uintptr_t allocate_pager_memory(uint64_t size);
 
 frame_t *get_frame_from_idx(uint32_t frame_idx);
+
+void free(uintptr_t start, uintptr_t end);
 #endif

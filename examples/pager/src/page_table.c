@@ -1,20 +1,31 @@
 #include "page_table.h"
 #include "pager.h"
 
-uint64_t *get_page_table_entry(uintptr_t vaddr, pt_t pud) {
-    pt_t pd = (pt_t) pud[PUD_INDEX(vaddr)];
+uint64_t *get_page_table_entry(uintptr_t vaddr, pt_t vspace, int *num) {
+    pt_t pud = (pt_t) vspace[PUD_INDEX(vaddr)];
+    int count = 0;
+    if (!pud) {
+        // allocate pud; & pt
+        pud = (pt_t) allocate_pager_memory(sizeof(pt_t) * 512);
+        vspace[PUD_INDEX(vaddr)] = (uint64_t) pud;
+        ++count;
+    }
+    pt_t pd = (pt_t) pud[PD_INDEX(vaddr)];
     if (!pd) {
         // allocate pd; & pt
         pd = (pt_t) allocate_pager_memory(sizeof(pt_t) * 512);
-        pud[PUD_INDEX(vaddr)] = (uint64_t) pd;
+        pud[PD_INDEX(vaddr)] = (uint64_t) pd;
+        ++count;
     }
-    pt_t pt = (pt_t) pd[PD_INDEX(vaddr)];
+    pt_t pt = (pt_t) pd[PT_INDEX(vaddr)];
     if (!pt) {
         // allocat pt;
         pt = (pt_t) allocate_pager_memory(sizeof(pt_t) * 512);
-        pd[PD_INDEX(vaddr)] = (uint64_t) pt;
+        pd[PT_INDEX(vaddr)] = (uint64_t) pt;
+        ++count;
     }
-    return &pt[PT_INDEX(vaddr)];
+    *num = count;
+    return &pt[PAGE_INDEX(vaddr)];
 }
 
 // 

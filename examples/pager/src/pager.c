@@ -18,6 +18,7 @@
 #define FRAME_CNODE 2
 #define IPS_CNODE 3
 #define GZP_CNODE 4
+#define BUFFERS_SIZE 20000
 
 #include <sddf/benchmark/config.h>
 #include <sddf/benchmark/bench.h>
@@ -32,10 +33,36 @@ capDLBootInfo_t *capDLBootInfo;
 // uint64_t untyped_idx;
 uint32_t vspaces[10]; // child_idx to vspace_idx
 
+
+
+
+
 /** pager_memory static allocation for pager to use. */
 uintptr_t pager_memory;
 static uintptr_t pager_memory_idx;
+
+uintptr_t freed_pager_memory[BUFFERS_SIZE];
+uint32_t freed_pager_memory_idx = 0;
+
+uint32_t unused_frames[BUFFERS_SIZE];
+uint32_t unused_frames_idx = 0;
+
+uint32_t frame_list[BUFFERS_SIZE];
+uint32_t frame_list_idx = 0;
+
+uint32_t unused_paging_structures[BUFFERS_SIZE];
+uint32_t unused_paging_structures_idx = 0;
+
+uint32_t paging_structure_list[BUFFERS_SIZE];
+uint32_t paging_structure_list_idx = 0;
+
+
 uintptr_t frame_buffer;
+
+
+
+
+
 
 static frame_list_t unused_frame_list;
 
@@ -132,7 +159,8 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     uint64_t fsc = fsr & 0x3F;
     bool is_write = (fsr >> 6) & 1;
     frame_t *frame;
-    uint64_t *page_entry = get_page_table_entry(fault_addr, page_tables[child]);
+    int num;
+    uint64_t *page_entry = get_page_table_entry(fault_addr, page_tables[child], &num);
 
     // TODO: implement access flag faults.
     if (fsc >= 0x08 && fsc <= 0x0B) {
@@ -143,16 +171,11 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     if (fsc >= 0x04 && fsc <= 0x07) {
         // if it is a read fault, map global zero page.
         if (!is_write) {
-            // map global zero page then return early.
-
-            // create cap copy of global zero page.
-            // insert_frame_to_page(slot, page_entry);
             seL4_Error err = map_frame(gzp_cnode_cptr + gzp_offset, vspaces[child], fault_addr, create_cap_rights(is_write), 0x03);
             ++gzp_offset;
             if (err) {
                 sddf_printf("error occured on map frame zero %d\n", err);
             }
-            // microkit_pd_restart(child, ip);
             return seL4_True;
         } else {
             frame = get_unused_frame();
@@ -162,12 +185,8 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     }
     // Permission fault (level 1–3)
     if (fsc >= 0x0D && fsc <= 0x0F) {
-        // if global zero page get new frame ||| the second case is for now.
+        // if global zero page get new frame
         if (!(*page_entry & DESC_NG) || !*page_entry) {
-            // delete copied frame cap
-            // uint32_t frame_cap = get_frame_from_page(*page_entry);
-            // delete_global_zero_frame_cap(frame_cap);
-
             frame = get_unused_frame();
             insert_frame_to_page(frame->frame_page, page_entry);
         } else {
@@ -180,14 +199,6 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     if (err) {
         sddf_printf("error occured on map frame %d\n", err);
     }
-
-    // do reverse mapping.
-    /**
-     * This is not required yet
-     * TODO: for freeing.
-     */
-    // sddf_printf("returning\n");
-    // microkit_pd_restart(child, ip);
     return seL4_True;
 }
 
@@ -210,29 +221,14 @@ seL4_CapRights_t create_cap_rights(bool is_write) {
 }
 
 static seL4_Error map_frame(uint64_t frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
-                                 seL4_CapRights_t rights, seL4_ARM_VMAttributes attr) {
+                                 seL4_CapRights_t rights, seL4_ARM_VMAttributes attr, int num) {
     /* Attempt the mapping */
-    seL4_Error err = seL4_ARM_Page_Map(frame_cap, vspace, vaddr, rights, attr);
-    for (size_t i = 0; i < MAPPING_SLOTS && err == seL4_FailedLookup; i++) {
-        /* save this so nothing else trashes the message register value */
-        seL4_Word failed = seL4_MappingFailedLookupLevel();
-        // assume failed due to lack of paging structures
-        switch (failed) {
-        case SEL4_MAPPING_LOOKUP_NO_PT:
-        case SEL4_MAPPING_LOOKUP_NO_PD:
-        case SEL4_MAPPING_LOOKUP_NO_PUD:
-            err = retype_map_pt(vspace, vaddr);
-            break;
-        default:
-            if (err != seL4_NoError) sddf_printf("mapping failed! frame cap is %d, vspace is %d vaddr is %p err is %d\n", frame_cap, vspace, vaddr, err);
-        }
-
-        if (!err) {
-            /* Try the mapping again */
-            err = seL4_ARM_Page_Map(frame_cap, vspace, vaddr, rights, attr);
-        }
+    seL4_Error err;
+    for (int i = 0; i < num; ++i) {
+        seL4_Error err = retype_map_pt(vspace, vaddr);
+        if (err != seL4_NoError) sddf_printf("mapping failed! frame cap is %d, vspace is %d vaddr is %p err is %d\n", frame_cap, vspace, vaddr, err);
     }
-
+    err = seL4_ARM_Page_Map(frame_cap, vspace, vaddr, rights, attr);
     return err;
 }
 
@@ -304,7 +300,21 @@ seL4_Error retype_map_pt(seL4_CPtr vspace, seL4_Word vaddr) {
 
 // TODO: track allocations for frees.
 uintptr_t allocate_pager_memory(uint64_t size) {
+    if (freed_pager_memory_idx) {
+        --freed_frame_memory_idx;
+        return freed_pager_memory[freed_pager_memory_idx];
+    }
     uintptr_t ret = pager_memory + pager_memory_idx;
     pager_memory_idx += size;
     return ret;
+}
+
+/**
+ * TODO: implement.
+ */
+void free(uintptr_t start, uintptr_t end) {
+    // Unmaps the page
+    // Unmap paging structures
+    // return page and paging structures to their free lists.
+    // free shadow page tables.
 }

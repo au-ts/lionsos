@@ -33,10 +33,12 @@
 #define PD_INDEX_SHIFT 30
 #define PUD_INDEX_SHIFT 39
 
+#define PAGE_INDEX_MASK 0x1FFUL
 #define PT_INDEX_MASK  0x1FFUL
 #define PD_INDEX_MASK  0x1FFUL
 #define PUD_INDEX_MASK 0x1FFUL
 
+#define PAGE_INDEX(va) (((va) >> PAGE_SHIFT) & PAGE_INDEX_MASK)
 #define PT_INDEX(va)  (((va) >> PT_INDEX_SHIFT)  & PT_INDEX_MASK)
 #define PD_INDEX(va)  (((va) >> PD_INDEX_SHIFT)  & PD_INDEX_MASK)
 #define PUD_INDEX(va) (((va) >> PUD_INDEX_SHIFT) & PUD_INDEX_MASK)
@@ -62,8 +64,9 @@ typedef uint64_t* pt_t;
 /**
  * Creates a page table entry including intermediary paging structures if necessary.
  * returns a pointer to the created page.
+ * num indicates number of paging structures required.
  */
-uint64_t *get_page_table_entry(uintptr_t vaddr, pt_t pud);
+uint64_t *get_page_table_entry(uintptr_t vaddr, pt_t pud, int *num);
 
 // 
 void insert_frame_to_page(uint32_t const frame, uint64_t* page);
