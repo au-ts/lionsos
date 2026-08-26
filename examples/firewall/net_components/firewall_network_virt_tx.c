@@ -23,7 +23,7 @@ net_queue_handle_t tx_queue_clients[SDDF_NET_MAX_CLIENTS];
 fw_queue_t fw_free_clients[FW_MAX_FW_CLIENTS];
 fw_queue_t fw_active_clients[FW_MAX_FW_CLIENTS];
 
-/* Alternates which of the net/fw client groups tx_provide() will serve first, to 
+/* Alternates which of the net/fw client groups tx_provide() will serve first, to
 prevent starvation on tx_queue_drv. */
 bool fw_clients_priority = false;
 
