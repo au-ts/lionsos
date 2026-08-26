@@ -265,6 +265,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
             insert_frame_to_page(frame, page_entry);
             *page_entry |= DESC_NG;
         } else {
+            frame = get_frame_from_page(*page_entry);
             insert_frame_to_page(frame, page_entry);
         }
     }
