@@ -23,6 +23,10 @@ net_queue_handle_t tx_queue_clients[SDDF_NET_MAX_CLIENTS];
 fw_queue_t fw_free_clients[FW_MAX_FW_CLIENTS];
 fw_queue_t fw_active_clients[FW_MAX_FW_CLIENTS];
 
+/* Alternates which of the net/fw client groups tx_provide() will serve first, to 
+prevent starvation on tx_queue_drv. */
+bool fw_clients_priority = false;
+
 static int extract_offset_net_client(uintptr_t *phys)
 {
     for (int client = 0; client < config.num_clients; client++) {
@@ -48,13 +52,19 @@ static int extract_offset_fw_client(uintptr_t *phys)
     return -1;
 }
 
-static void tx_provide(void)
+/* sdfgen sizes tx_queue_drv for the net clients only, not the firewall
+clients also feeding it, so fullness must be checked before every enqueue. */
+static void tx_provide_net_clients(bool *enqueued, bool *drv_full)
 {
-    bool enqueued = false;
-    for (int client = 0; client < config.num_clients; client++) {
+    for (int client = 0; client < config.num_clients && !*drv_full; client++) {
         bool reprocess = true;
         while (reprocess) {
             while (!net_queue_empty_active(&tx_queue_clients[client])) {
+                if (net_queue_full_active(&tx_queue_drv)) {
+                    *drv_full = true;
+                    break;
+                }
+
                 net_buff_desc_t buffer;
                 int err = net_dequeue_active(&tx_queue_clients[client], &buffer);
                 assert(!err);
@@ -75,7 +85,11 @@ static void tx_provide(void)
 
                 err = net_enqueue_active(&tx_queue_drv, buffer);
                 assert(!err);
-                enqueued = true;
+                *enqueued = true;
+            }
+
+            if (*drv_full) {
+                break;
             }
 
             net_request_signal_active(&tx_queue_clients[client]);
@@ -87,9 +101,19 @@ static void tx_provide(void)
             }
         }
     }
+}
 
-    for (int client = 0; client < fw_config.num_active_clients; client++) {
+static void tx_provide_fw_clients(bool *enqueued, bool *drv_full)
+{
+    for (int client = 0; client < fw_config.num_active_clients && !*drv_full; client++) {
         while (!fw_queue_empty(&fw_active_clients[client])) {
+            if (net_queue_full_active(&tx_queue_drv)) {
+                /* Leave remaining buffers queued rather than dropping them;
+                picked up on the next tx_provide() once tx_return() frees space. */
+                *drv_full = true;
+                break;
+            }
+
             fw_buff_desc_t buffer;
             int err = fw_dequeue(&fw_active_clients[client], &buffer);
             assert(!err);
@@ -105,9 +129,24 @@ static void tx_provide(void)
             net_buff_desc_t net_buffer = { .io_or_offset = io_addr, .len = buffer.len };
             err = net_enqueue_active(&tx_queue_drv, net_buffer);
             assert(!err);
-            enqueued = true;
+            *enqueued = true;
         }
     }
+}
+
+static void tx_provide(void)
+{
+    bool enqueued = false;
+    bool drv_full = false;
+
+    if (fw_clients_priority) {
+        tx_provide_fw_clients(&enqueued, &drv_full);
+        tx_provide_net_clients(&enqueued, &drv_full);
+    } else {
+        tx_provide_net_clients(&enqueued, &drv_full);
+        tx_provide_fw_clients(&enqueued, &drv_full);
+    }
+    fw_clients_priority = !fw_clients_priority;
 
     if (enqueued && net_require_signal_active(&tx_queue_drv)) {
         net_cancel_signal_active(&tx_queue_drv);

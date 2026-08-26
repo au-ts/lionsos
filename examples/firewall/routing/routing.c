@@ -79,8 +79,20 @@ static bool enqueue_icmp_unreachable(fw_buff_desc_t buffer, uint32_t next_hop)
     return enqueued;
 }
 
-static void transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t out_interface)
+static void drop_buffer(fw_buff_desc_t buffer)
 {
+    net_buff_desc_t net_buff = { .io_or_offset = buffer.offset, .len = buffer.len };
+    int err = fw_enqueue(&rx_free[buffer.interface], &net_buff);
+    assert(!err);
+    returned[buffer.interface] = true;
+}
+
+static bool transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t out_interface)
+{
+    if (fw_queue_full(&tx_active[out_interface])) {
+        return false;
+    }
+
     uintptr_t pkt_vaddr = data_vaddr[buffer.interface] + buffer.offset;
     eth_hdr_t *eth_hdr = (eth_hdr_t *)pkt_vaddr;
     ipv4_hdr_t *ip_hdr = (ipv4_hdr_t *)(pkt_vaddr + IPV4_HDR_OFFSET);
@@ -103,6 +115,7 @@ static void transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t ou
     int err = fw_enqueue(&tx_active[out_interface], &buffer);
     assert(!err);
     tx_net[out_interface] = true;
+    return true;
 }
 
 static void process_arp_waiting(uint8_t out_interface)
@@ -143,7 +156,11 @@ static void process_arp_waiting(uint8_t out_interface)
             /* Substitute the MAC address and send packets out of the NIC */
             pkt_waiting_node_t *node = root;
             for (uint16_t i = 0; i < root->num_children + 1; i++) {
-                transmit_packet(node->buffer, response.mac_addr, out_interface);
+                bool sent = transmit_packet(node->buffer, response.mac_addr, out_interface);
+                if (!sent) {
+                    LOG_FIREWALL("ROUTING", "tx queue for interface %u full, dropping packet\n", out_interface);
+                    drop_buffer(node->buffer);
+                }
                 node = pkts_waiting_next_child(&pkt_waiting_queue[out_interface], node);
             }
         }
@@ -196,6 +213,14 @@ static void route(void)
                     /* Check for webserver traffic */
                     tcp_hdr_t *tcp_pkt = (tcp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
                     if (ip_hdr->protocol == IPV4_PROTO_TCP && tcp_pkt->dst_port == htons(WEBSERVER_PORT)) {
+                        if (fw_queue_full(&webserver)) {
+                            /* Webserver queue can receive buffers from any interface */
+                            LOG_FIREWALL("ROUTING", "webserver queue full, dropping packet from interface %u\n",
+                                         interface);
+                            drop_buffer(fw_buffer);
+                            continue;
+                        }
+
                         err = fw_enqueue(&webserver, &fw_buffer);
                         assert(!err);
                         tx_webserver = true;
@@ -303,7 +328,11 @@ static void route(void)
                 }
 
                 /* valid arp entry found, transmit packet */
-                transmit_packet(fw_buffer, arp->mac_addr, out_interface);
+                bool sent = transmit_packet(fw_buffer, arp->mac_addr, out_interface);
+                if (!sent) {
+                    LOG_FIREWALL("ROUTING", "tx queue for interface %u full, dropping packet\n", out_interface);
+                    drop_buffer(fw_buffer);
+                }
             }
         }
     }
