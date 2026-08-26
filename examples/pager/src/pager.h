@@ -42,7 +42,5 @@ seL4_Error my_untyped_retype(
 
 uintptr_t allocate_pager_memory(uint64_t size);
 
-frame_t *get_frame_from_idx(uint32_t frame_idx);
 
-void free(uintptr_t start, uintptr_t end);
 #endif

@@ -209,8 +209,7 @@ def generate(
     # heap1 = SystemDescription.MemoryRegion(sdf, "heap1", 0x7d0000, backed=False)
     # paging off 
     # remaining_untypeds_mr = SystemDescription.MemoryRegion(sdf, "remaining_untypeds", size=0x2000, prefill_bootinfo="remaining_untypeds")
-    pager_memory = SystemDescription.MemoryRegion(sdf, "pager_memory_mr ", 0x2000000)
-    frame_buffer = SystemDescription.MemoryRegion(sdf, "frame_buffer_mr", 0x2000000)
+    pager_memory = SystemDescription.MemoryRegion(sdf, "pager_memory_mr ", 0x20000000)
     pager_bootinfo = SystemDescription.MemoryRegion(sdf, "pager_bootinfo", 0x2000, prefill_bootinfo="post_capdl_untypeds")
     remaining_untypeds = SystemDescription.CNode("remaining_untypeds", True, 9)
     pagers_empty_cnode = SystemDescription.CNode("pagerspace", False, 20)
@@ -224,10 +223,7 @@ def generate(
     pager.add_cap_map(pager_ips_cnode_map)
     sdf.add_cnode(pager_ips_cnode)
     pager_remaining_untypeds = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, remaining_untypeds, 1)
-    pager_bootinfo_map = SystemDescription.Map(pager_bootinfo, 0x8002000000, "rw", setvar_vaddr="remaining_untypeds_vaddr")
-    frame_buffer_map = SystemDescription.Map(frame_buffer, 0x8002002000, "rw", setvar_vaddr="frame_buffer")
-    pager.add_map(frame_buffer_map)
-    sdf.add_mr(frame_buffer)
+    pager_bootinfo_map = SystemDescription.Map(pager_bootinfo, 0x8020000000, "rw", setvar_vaddr="remaining_untypeds_vaddr")
     pager.add_map(pager_bootinfo_map)
     sdf.add_mr(pager_bootinfo_map)
     

@@ -45,6 +45,36 @@
 
 typedef uint64_t pte_t; // seL4_ARM_VSpaceObject 39-47
 
+// struct page_table {
+//     struct page_table **entries;
+//     uint64_t cap;
+// };
+struct pt {
+    pte_t entries[512];
+    uint32_t cap;
+};
+struct pd {
+    struct pt *entries[512];
+    uint32_t cap;
+};
+struct pud {
+    struct pd *entries[512];
+    uint32_t cap;
+};
+// a vspace cap would be good to have for a real GPOS.
+struct pgd {
+    struct pud *entries[512];
+};
+
+typedef struct pud *pud_t;
+typedef struct pd *pd_t;
+typedef struct pt *pt_t;
+typedef struct pgd pgd_t;
+
+
+
+// typedef struct page_table *pt_t;
+
 // // each of the below have 512 entries.
 // typedef struct {
 //     pte_t *pte;
@@ -58,7 +88,6 @@ typedef uint64_t pte_t; // seL4_ARM_VSpaceObject 39-47
 //     pd_t *pt;
 // } pud_t; // PageTable 3, 12-20
 
-typedef uint64_t* pt_t;
 
 
 /**

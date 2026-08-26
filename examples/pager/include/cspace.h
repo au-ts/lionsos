@@ -33,7 +33,7 @@ typedef struct {
 } cnode_specs_t;
 
 seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
-    seL4_Word size_bits, uint32_t *retyped_cap_idx, seL4_CPtr destination_cnode);
+    seL4_Word size_bits, uint32_t retyped_cap_idx, seL4_CPtr destination_cnode);
 
 uint8_t get_object_size_bits(seL4_Word object_type, seL4_Word size_bits);
 

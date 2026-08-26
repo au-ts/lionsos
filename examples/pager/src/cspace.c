@@ -4,7 +4,7 @@
 #include <sddf/util/printf.h>
 
 seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
-    seL4_Word size_bits, uint32_t *retyped_cap_idx, seL4_CPtr destination_cnode) {
+    seL4_Word size_bits, uint32_t retyped_cap_idx, seL4_CPtr destination_cnode) {
 
 
     // seL4_Error error = my_untyped_retype3(cnode_specs, ut_idx, object_type, size_bits, retyped_cap_idx);
@@ -12,7 +12,7 @@ seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
                                 object_type,
                                 size_bits,
                                 destination_cnode, 0, 0,
-                                *retyped_cap_idx, 1);
+                                retyped_cap_idx, 1);
 
     while (error == seL4_NotEnoughMemory) {
         ++cnode_specs->active_ut_idx;
@@ -20,13 +20,12 @@ seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
                                 object_type,
                                 size_bits,
                                 destination_cnode, 0, 0,
-                                *retyped_cap_idx, 1);
+                                retyped_cap_idx, 1);
     }
     if (error != seL4_NoError) {
         sddf_dprintf("Error: failed to retype an object type %lu, cptr: 0x%lx, size_bits: %lu - error: %d - ut idx = %d\n", object_type, cnode_specs->cptr + cnode_specs->active_ut_idx, size_bits, error, cnode_specs->active_ut_idx);
         return error;
     }
-    ++(*retyped_cap_idx);
     return error;
 }
 
