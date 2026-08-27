@@ -6,29 +6,19 @@
 #include <sel4/sel4.h>
 #include <microkit.h>
 #include <sddf/util/printf.h>
+#include "rrer.h"
 
-#define LOG(...) sddf_printf("RRER | " __VA_ARGS__)
 #define microkit_notify(ch) do {LOG("send %d\n", ch); microkit_notify(ch); } while (0)
 
-typedef struct {
-    seL4_Word id;
-    seL4_Word priority;
-} rr_Child_t;
+seL4_Word* prefill_data = NULL;
+seL4_Word prefill_size = 0;
 
-// The index is the id
-rr_Child_t* children_arr = NULL;
-seL4_Word children_num = 0;
-
+// We never exit this.
 void init()
 {
     LOG("INIT\n");
-}
-
-static inline microkit_channel get_target_ch(microkit_channel ch) {
-    // if odd, then - 1, if even then + 1
-    if (ch % 2 == 0)
-        return ch + 1;
-    return ch - 1;
+    rrer_init(prefill_data, prefill_size);
+    rrer_main();
 }
 
 // Store notifications into array.
@@ -36,8 +26,6 @@ static inline microkit_channel get_target_ch(microkit_channel ch) {
 void notified(microkit_channel ch)
 {
     LOG("Notified! %d\n", ch);
-    // find the original target
-    microkit_notify(get_target_ch(ch));
 }
 
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
@@ -47,4 +35,6 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 }
 
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
+    *reply_msginfo = microkit_msginfo_new(0, 0);
+    return false;
 }

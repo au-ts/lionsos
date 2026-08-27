@@ -5,10 +5,39 @@ from typing import List
 from acacia.arch import aarch64
 from acacia import ProtectionDomain, MemoryRegion, Map, System, Channel, Subsystem
 import xml.etree.ElementTree as et
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from abc import ABC
 from copy import deepcopy
 import pathlib
+
+WORD_SIZE = 8
+
+@dataclass
+class RRChild: # Synchronise to rr_Child_t
+    id: int
+    priority: int
+    sched_state: int = 0 # Always 0 to start.
+
+    def to_bytes(self, endian="little"):
+        assert self.sched_state == 0
+        return (
+            self.id.to_bytes(WORD_SIZE, endian)
+            + self.priority.to_bytes(WORD_SIZE, endian)
+            + self.sched_state.to_bytes(WORD_SIZE, endian)
+        )
+
+@dataclass
+class RRData:
+    children: List[RRChild]
+
+    def serialise(self, childrenpath: pathlib.Path) -> int:
+        """returns size of file in bytes."""
+        b = b""
+        with open(childrenpath, "wb") as chd:
+            for ch in self.children:
+                b += ch.to_bytes()
+            chd.write(b)
+        return len(b)
 
 class RRSystem(System):
     """
@@ -55,13 +84,19 @@ class RRSystem(System):
         if not self.system_assembled:
             self.resolve_subsystems()
 
+        child_id = 0
+        children: List[RRChild] = []
         for pd in self.pds:
             pd.sdf = sdf
             sdf._add_pd(pd)
+
             assert pd in sdf.pds
             assert pd in rrer.sdf.pds
-            print(f"{sdf=}")
-            rrer.add_child_pd(pd);
+
+            rrer.add_child_pd(pd, child_id);
+            children.append(RRChild(child_id, pd.priority))
+
+            child_id += 1
 
         # Now we should keep track of endpoints so we know who to forward to.
         ch_ind = 0
@@ -87,10 +122,13 @@ class RRSystem(System):
         for mr in self.mrs:
             sdf._add_memory_region(mr)
 
+        return RRData(children)
+
 
 def generate(sdf_path: str, output_dir: str):
     rr = RRSystem(sdf)
     rrer = ProtectionDomain(sdf, "rrer", "rrer.elf", priority=254)
+    DATAPATH = pathlib.Path(output_dir) / "children.data"
 
     ping = ProtectionDomain(rr, "ping", "ping.elf", priority=1)
     pong = ProtectionDomain(rr, "pong", "pong.elf", priority=1)
@@ -101,7 +139,9 @@ def generate(sdf_path: str, output_dir: str):
         Channel.End(pd=pong, can_notify=True, can_pp=False, ch_id=1, setvar_id="pingch")
     )
 
-    rr.transfer(sdf, rrer)
+    rr.transfer(sdf, rrer).serialise(DATAPATH)
+    rrer_mr = MemoryRegion(sdf, "children_data", prefill_path=DATAPATH)
+    rrer.add_map(Map(rrer_mr, 0x400000, "rw", setvar_vaddr="prefill_data", setvar_prefill_size="prefill_size"))
     sdf.write_xml_file(f"{output_dir}/{sdf_path}")
 
 
