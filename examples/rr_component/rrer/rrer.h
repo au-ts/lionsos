@@ -142,6 +142,8 @@ static inline void rrer_schedule(rr_Child_t* child) {
     NO_ERR(seL4_TCB_BindVPMU(TCB(child->id), VPMU_CAP));
 
     // need to set it's priority to be as high as ours so that it can be scheduled.
+    // has to be the same; if higher then we cannot process non blocking IPC.
+    // (although we could probably never?)
     NO_ERR(seL4_TCB_SetPriority(TCB(child->id), SELF_TCB(), 254));
 
     // Cannot resume here because it might preempt us.
@@ -162,6 +164,17 @@ static inline microkit_channel rrer_ch_to_target_(microkit_channel ch) {
     return ch - 1;
 }
 
+static inline void rrer_reschedule() {
+    rrer_unschedule();
+
+    // try to schedule another thread.
+    rr_Child_t* next = rrer_get_next_scheduled();
+    // if NULL then we are currently completely blocked.
+    assert(next != NULL);
+
+    rrer_schedule(next);
+}
+
 // main
 static inline void rrer_main() {
     for (int i = 0; i < children_num; i++) {
@@ -176,26 +189,37 @@ static inline void rrer_main() {
     while (true) {
         // guaranteed to preempt ourself.
         if (scheduled_next) NO_ERR(seL4_TCB_Resume(TCB(currently_sched->id)));
-        else seL4_Yield();
+        // or just yield a couple times
+        else for (int i = 0; i < 100; i++) seL4_Yield();
 
         scheduled_next = false;
         // process and pass through notifications.
         seL4_Word badge;
+        // LOG("BEGIN processing IPC\n");
         for (seL4_MessageInfo_t result = seL4_NBRecv(INPUT_CAP, &badge, REPLY_CAP); badge != 0; result = seL4_NBRecv(INPUT_CAP, &badge, REPLY_CAP)) {
-            LOG("Received from %lx\n", badge);
+            LOG("Received from 0x%lx\n", badge);
             // the badge for microkit is the index of the 1 bit, which indicates the index.
             seL4_Word idx = 0;
             do {
                 if (badge & 1)
                 {
                     // find target
-                    microkit_channel ch = rrer_ch_to_target_(idx);
+                    seL4_Word ch = rrer_ch_to_target_(idx);
+                    LOG("Forwarding to 0x%lx, %lu\n", ch, idx);
                     seL4_NBSend(ch + BASE_OUTPUT_NOTIFICATION_CAP, result);
+
+                    // we must do a reschedule now.
+                    // and also unblock the target if it was blocked.
+                    if (children_arr[ch].sched_state == rr_ChildState_Blocked) {
+                        children_arr[ch].sched_state = rr_ChildState_Schedulable;
+                    }
+                    rrer_reschedule();
                 }
                 idx++;
                 badge >>= 1;
             } while (badge != 0);
         }
+        // LOG("END processing IPC\n");
 
         switch (sched_state) {
             case rr_SchedState_None: {
@@ -216,14 +240,7 @@ static inline void rrer_main() {
             case rr_SchedState_Blocked: {
                 // It is highly likely that that thread is blocked, so we'll set it to blocked,
                 // and set it's priority back to normal.
-                rrer_unschedule();
-
-                // try to schedule another thread.
-                rr_Child_t* next = rrer_get_next_scheduled();
-                // if NULL then we are currently completely blocked.
-                assert(next != NULL);
-
-                rrer_schedule(next);
+                rrer_reschedule();
             } break;
         }
     }
