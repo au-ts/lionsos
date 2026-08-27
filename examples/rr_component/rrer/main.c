@@ -11,13 +11,12 @@
 #define microkit_notify(ch) do {LOG("send %d\n", ch); microkit_notify(ch); } while (0)
 
 seL4_Word* prefill_data = NULL;
-seL4_Word prefill_size = 0;
 
 // We never exit this.
 void init()
 {
     LOG("INIT\n");
-    rrer_init(prefill_data, prefill_size);
+    rrer_init(prefill_data);
     rrer_main();
 }
 

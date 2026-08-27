@@ -9,6 +9,7 @@
 
 void init()
 {
+    LOG("Init!\n");
 }
 
 uintptr_t pingch = 9999;

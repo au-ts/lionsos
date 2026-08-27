@@ -47,12 +47,12 @@ CFLAGS += \
 	-I$(LIBGDB_DIR)/include \
 	-I$(LIBGDB_DIR)/arch_include \
 	-I$(LIBVSPACE_DIR) \
-	-ggdb
+	-ggdb -O0
 
 include $(LIONSOS)/lib/libc/libc.mk
 
 QEMU_ARGS := -machine virt,virtualization=on \
-		-cpu cortex-a53 \
+		-cpu cortex-a53,pmu=on \
 		-serial mon:stdio \
 		-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
 		-m size=2G \
@@ -60,8 +60,7 @@ QEMU_ARGS := -machine virt,virtualization=on \
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
 		-device virtio-serial-device \
-		-chardev pty,id=virtcon \
-		-device virtconsole,chardev=virtcon #-S -s
+		#-S -s
 
 
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(RR_COMPONENT_DIR)/build
@@ -109,6 +108,9 @@ qemu_disk:
 
 qemu: ${IMAGE_FILE} qemu_disk
 	$(QEMU) $(QEMU_ARGS)
+
+qemud: ${IMAGE_FILE} qemu_disk
+	$(QEMU) $(QEMU_ARGS) -S -s
 
 clean::
 	${RM} -rf ${IMAGES} ping.elf pong.elf

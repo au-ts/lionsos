@@ -1,39 +1,165 @@
+#include "interfaces/sel4_client.h"
+#include "sel4/errors.h"
+#include "sel4/shared_types_gen.h"
+#include "sel4/simple_types.h"
+#include "sel4/syscalls_mcs.h"
 #include <sel4/sel4.h>
 #include <microkit.h>
 #include <sddf/util/printf.h>
 #define LOG(...) sddf_printf("RRER | " __VA_ARGS__)
+#define VPMU_CAP BASE_VPMU_CAPS
+#define NO_ERR(X) assert(X == seL4_NoError)
+#define TCB(X) (X + BASE_TCB_CAP)
+#define SELF_TCB() microkit_cspace_root_slot_to_cptr(1)
+#define INPUT_CAP 1
+#define REPLY_CAP 4
 
 typedef enum {
-    rr_ScheduleState_Schedulable = 0,
-    rr_ScheduleState_Scheduled,
-    rr_ScheduleState_Blocked,
-    _rr_ScheduleState_ = 1 << 63, // force to be seL4_Word size
-} rr_ScheduleState_e;
+    rr_ChildState_Schedulable = 0,
+    rr_ChildState_Scheduled,
+    rr_ChildState_Blocked,
+    _rr_ChildState_ = 1 << 63, // force to be seL4_Word size
+} rr_ChildState_e;
+
+typedef enum {
+    rr_SchedState_None = 0,
+    rr_SchedState_Scheduled,
+    rr_SchedState_Blocked,
+} rr_SchedState_e;
 
 typedef struct {
     seL4_Word id;
     seL4_Word priority;
-    rr_ScheduleState_e sched_state;
+    rr_ChildState_e sched_state;
 } rr_Child_t;
 
 static inline void rrer_main();
-static inline void rrer_init(void* data, size_t data_size_bytes);
+static inline void rrer_init(seL4_Word* data);
+static inline void rrer_init_scheduler_();
+static inline rr_Child_t* rrer_get_next_scheduled();
+static inline void rrer_schedule(rr_Child_t* child);
 
 /* STATE */
 rr_Child_t* children_arr = NULL;
+rr_Child_t** children_sched_queue = NULL;
 seL4_Word children_num = 0;
+rr_Child_t* currently_sched = NULL;
+bool scheduled_next = false;
+rr_SchedState_e sched_state = rr_SchedState_None;
 
 // The index is the id. Points to mr_prefilled data.
-static inline void rrer_init(void* data, size_t data_size_bytes) {
-    assert(data_size_bytes % sizeof(rr_Child_t) == 0);
+static inline void rrer_init(seL4_Word* data) {
     // initialises the children.
-    children_arr = data;
-    children_num = data_size_bytes / sizeof(rr_Child_t);
+    children_num = data[0];
+    children_arr = (rr_Child_t*)&data[1];
+    children_sched_queue = (rr_Child_t**)&children_arr[children_num];
     LOG(
-        "children_arr: %p, children_num: %lu\n", 
+        "children_arr: %p, children_num: %lu, children_sched_queue: %p\n", 
         children_arr,
-        children_num
+        children_num, 
+        children_sched_queue
     );
+    rrer_init_scheduler_();
+
+    // initialise the vpmu to be recording and on.
+    seL4_ARM_VPMU_VPMUNumCounters_t counters = seL4_ARM_VPMU_VPMUNumCounters(VPMU_CAP);
+    NO_ERR(counters.error);
+    assert(counters.num_counters > 0);
+    NO_ERR(seL4_ARM_VPMU_VPMUCounterControl(VPMU_CAP, 1));
+}
+
+static inline void rrer_init_scheduler_() {
+    // We do not unschedule the children, but they can never run because our priority is higher.
+    // This ensures that a send to a "suspended" tcb is always received.
+    // ASSUMPTION: NOT SMP KERNEL!!!
+    for (int i = 0; i < children_num; i++) {
+        children_sched_queue[i] = &children_arr[i];
+        LOG(
+            "id: %lu, priority: %lu, sched_state: %lu\n", 
+            children_sched_queue[i]->id,
+            children_sched_queue[i]->priority,
+            (seL4_Word)children_sched_queue[i]->sched_state
+        );
+    }
+
+    // build the scheduling pq, which is just a sorted array of pointers sorted from largest to smallest priority.
+    // funny bubble sort
+    for (int up = children_num - 1; up >= 0; up--) {
+        for (int i = 0; i < up - 1; i++) {
+            if (children_sched_queue[i]->priority < children_sched_queue[i + 1]->priority)
+            {
+                rr_Child_t* temp = children_sched_queue[i];
+                children_sched_queue[i] = children_sched_queue[i + 1];
+                children_sched_queue[i + 1] = temp;
+            }
+        }
+    }
+}
+
+static inline rr_Child_t* rrer_get_next_scheduled() {
+    // choose the next highest priority, currently schedulable child
+    // and then move it to the end of the queue for that specific priority level.
+    // and sets that child to be scheduled.
+    // Returns NULL if no one can be scheduled.
+    rr_Child_t* child = NULL;
+
+    for (int i = 0; i < children_num; i++) {
+        if (children_sched_queue[i]->sched_state == rr_ChildState_Schedulable) {
+            child = children_sched_queue[i];
+            int j = i + 1;
+            for (; 
+                j < children_num && children_sched_queue[j]->priority == child->priority;
+                j++) 
+            {
+                children_sched_queue[j-1] = children_sched_queue[j];
+            }
+            children_sched_queue[j-1] = child;
+            LOG("Found child to schedule: id %lu\n", child->id);
+            break;
+        }
+    }
+    return child;
+}
+
+static inline seL4_Word rrer_cyclecount_diff_(seL4_Word old_value) {
+    seL4_ARM_VPMU_VPMUReadCycleCounter_t vpmu_count = seL4_ARM_VPMU_VPMUReadCycleCounter(VPMU_CAP);
+    NO_ERR(vpmu_count.error);
+
+    int64_t diff = vpmu_count.cycle_counter_value - old_value;
+    if (diff < 0) diff = -diff;
+
+    // guaranteed to be positive.
+    return (seL4_Word)diff;
+}
+
+static inline void rrer_schedule(rr_Child_t* child) {
+    assert(child != NULL);
+    // Suspend here so that we don't get preempted on priority setting.
+    NO_ERR(seL4_TCB_Suspend(TCB(child->id)));
+    child->sched_state = rr_ChildState_Scheduled;
+
+    // vpmu is guaranteed not to be bound.
+    NO_ERR(seL4_TCB_BindVPMU(TCB(child->id), VPMU_CAP));
+
+    // need to set it's priority to be as high as ours so that it can be scheduled.
+    NO_ERR(seL4_TCB_SetPriority(TCB(child->id), SELF_TCB(), 254));
+
+    // Cannot resume here because it might preempt us.
+    scheduled_next = true;
+    sched_state = rr_SchedState_Scheduled;
+    currently_sched = child;
+}
+static inline void rrer_unschedule() {
+    assert(currently_sched != NULL);
+    NO_ERR(seL4_TCB_SetPriority(TCB(currently_sched->id), SELF_TCB(), currently_sched->priority));
+    currently_sched->sched_state = rr_ChildState_Blocked;
+    NO_ERR(seL4_TCB_UnbindVPMU(TCB(currently_sched->id)));
+    currently_sched = NULL;
+}
+
+static inline microkit_channel rrer_ch_to_target_(microkit_channel ch) {
+    if (ch % 2 == 0) return ch + 1;
+    return ch - 1;
 }
 
 // main
@@ -41,9 +167,64 @@ static inline void rrer_main() {
     for (int i = 0; i < children_num; i++) {
         LOG(
             "id: %lu, priority: %lu, sched_state: %lu\n", 
-            children_arr[i].id,
-            children_arr[i].priority,
-            (seL4_Word)children_arr[i].sched_state
+            children_sched_queue[i]->id,
+            children_sched_queue[i]->priority,
+            (seL4_Word)children_sched_queue[i]->sched_state
         );
+    }
+    seL4_Word counter = 0;
+    while (true) {
+        // guaranteed to preempt ourself.
+        if (scheduled_next) NO_ERR(seL4_TCB_Resume(TCB(currently_sched->id)));
+        else seL4_Yield();
+
+        scheduled_next = false;
+        // process and pass through notifications.
+        seL4_Word badge;
+        for (seL4_MessageInfo_t result = seL4_NBRecv(INPUT_CAP, &badge, REPLY_CAP); badge != 0; result = seL4_NBRecv(INPUT_CAP, &badge, REPLY_CAP)) {
+            LOG("Received from %lx\n", badge);
+            // the badge for microkit is the index of the 1 bit, which indicates the index.
+            seL4_Word idx = 0;
+            do {
+                if (badge & 1)
+                {
+                    // find target
+                    microkit_channel ch = rrer_ch_to_target_(idx);
+                    seL4_NBSend(ch + BASE_OUTPUT_NOTIFICATION_CAP, result);
+                }
+                idx++;
+                badge >>= 1;
+            } while (badge != 0);
+        }
+
+        switch (sched_state) {
+            case rr_SchedState_None: {
+                rr_Child_t* next = rrer_get_next_scheduled();
+                assert(next != NULL);
+				rrer_schedule(next);
+            } break;
+            case rr_SchedState_Scheduled: {
+
+                seL4_Word diff = rrer_cyclecount_diff_(counter);
+
+                // check if the counter has increased since last.
+                if (diff == 0) {
+                    sched_state = rr_SchedState_Blocked;
+                }
+                counter += diff;
+            } break;
+            case rr_SchedState_Blocked: {
+                // It is highly likely that that thread is blocked, so we'll set it to blocked,
+                // and set it's priority back to normal.
+                rrer_unschedule();
+
+                // try to schedule another thread.
+                rr_Child_t* next = rrer_get_next_scheduled();
+                // if NULL then we are currently completely blocked.
+                assert(next != NULL);
+
+                rrer_schedule(next);
+            } break;
+        }
     }
 }

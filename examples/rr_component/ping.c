@@ -10,6 +10,7 @@ uintptr_t pongch = 9999;
 
 void init()
 {
+    LOG("Init!\n");
     microkit_notify((microkit_channel)pongch);
 }
 static size_t i = 0;

@@ -20,7 +20,7 @@ REPORT_FILE := $(BUILD_DIR)/report.txt
 
 all: ${IMAGE_FILE}
 
-qemu qemu-gdb ${IMAGE_FILE} ${REPORT_FILE} clean clobber libunwind.a: ${BUILD_DIR}/Makefile FORCE
+qemu qemud ${IMAGE_FILE} ${REPORT_FILE} clean clobber libunwind.a: ${BUILD_DIR}/Makefile FORCE
 	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} $(notdir $@)
 
 ${BUILD_DIR}/Makefile: rr_component.mk Makefile
