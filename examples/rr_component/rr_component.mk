@@ -61,7 +61,7 @@ QEMU_ARGS := -machine virt,virtualization=on \
 		-d guest_errors \
 		-device virtio-serial-device \
 		-chardev pty,id=virtcon \
-		-device virtconsole,chardev=virtcon
+		-device virtconsole,chardev=virtcon #-S -s
 
 
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(RR_COMPONENT_DIR)/build
@@ -70,15 +70,13 @@ LIBS := -lmicrokit -Tmicrokit.ld -lc
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include ${SDDF}/util/util.mk
 include ${SDDF}/libco/libco.mk
-include $(LIBGDB_DIR)/libgdb.mk
-include $(LIBVSPACE_DIR)/libvspace.mk
 
 include $(RR_COMPONENT_DIR)/rrer/rrer.mk
 
 
 all: ${IMAGE_FILE}
 
-${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a libvspace.a
+${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
 ping.o: $(RR_COMPONENT_DIR)/ping.c | $(LIONS_LIBC)/include
 	@echo "$(CFLAGS)"

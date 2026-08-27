@@ -11,7 +11,7 @@ override MICROKIT_SDK:=$(abspath ${MICROKIT_SDK})
 
 export LIONSOS ?= $(abspath ../..)
 export RR_COMPONENT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-export MICROKIT_CONFIG ?= debug
+export MICROKIT_CONFIG := debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD ?= qemu_virt_aarch64
 
