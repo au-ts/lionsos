@@ -18,7 +18,7 @@
 #define FRAME_CNODE 2 // where frame caps are placed
 #define IPS_CNODE 3 // where intermediary paging structure caps are placed.
 #define GZP_CNODE 4 // where global zero frame caps are placed.
-#define BUFFERS_SIZE 20000
+#define BUFFERS_SIZE 200000
 #define REFILL_SIZE 20000
 
 #include <sddf/benchmark/config.h>
@@ -53,7 +53,7 @@ static uint32_t freed_pager_memory_idx = 0;
 
 
 // Bookkeeping for intermediary paging structures
-static uint32_t unused_ips[BUFFERS_SIZE * 5];
+static uint32_t unused_ips[BUFFERS_SIZE];
 static uint32_t unused_ips_idx = 0;
 
 static uint32_t ips_idx = 1;
@@ -73,7 +73,7 @@ static uint32_t unused_gzp_idx = 0;
 // Slub allocator local functions.
 static void refill_frames() {
     sddf_dprintf("refilling frames\n");
-    for (int i = 0; i < REFILL_SIZE; ++i) {
+    for (int i = 0; i < REFILL_SIZE * 10; ++i) {
         seL4_Error err = do_untyped_retype(&post_boot_cnode, seL4_ARM_SmallPageObject, seL4_PageBits, frame_idx, frame_cnode_cptr);
         if (err) {
             sddf_printf("error occured when refilling frames %d\n", err);
@@ -93,7 +93,7 @@ static uint32_t get_frame() {
 
 static void refill_ips() {
     sddf_dprintf("refilling ips\n");
-    for (int i = 0; i < REFILL_SIZE * 5; ++i) {
+    for (int i = 0; i < REFILL_SIZE; ++i) {
         seL4_Error err = do_untyped_retype(&post_boot_cnode, seL4_ARM_PageTableObject, 12, ips_idx, ips_cnode_cptr);
         if (err) {
             sddf_printf("error occured when creating ips caps %d\n", err);
