@@ -18,7 +18,7 @@
 #define FRAME_CNODE 2 // where frame caps are placed
 #define IPS_CNODE 3 // where intermediary paging structure caps are placed.
 #define GZP_CNODE 4 // where global zero frame caps are placed.
-#define BUFFERS_SIZE 40000
+#define BUFFERS_SIZE 20000
 #define REFILL_SIZE 20000
 
 #include <sddf/benchmark/config.h>
@@ -53,7 +53,7 @@ static uint32_t freed_pager_memory_idx = 0;
 
 
 // Bookkeeping for intermediary paging structures
-static uint32_t unused_ips[BUFFERS_SIZE];
+static uint32_t unused_ips[BUFFERS_SIZE * 5];
 static uint32_t unused_ips_idx = 0;
 
 static uint32_t ips_idx = 1;
@@ -72,6 +72,7 @@ static uint32_t unused_gzp_idx = 0;
 
 // Slub allocator local functions.
 static void refill_frames() {
+    sddf_dprintf("refilling frames\n");
     for (int i = 0; i < REFILL_SIZE; ++i) {
         seL4_Error err = do_untyped_retype(&post_boot_cnode, seL4_ARM_SmallPageObject, seL4_PageBits, frame_idx, frame_cnode_cptr);
         if (err) {
@@ -91,7 +92,8 @@ static uint32_t get_frame() {
 }
 
 static void refill_ips() {
-    for (int i = 0; i < REFILL_SIZE; ++i) {
+    sddf_dprintf("refilling ips\n");
+    for (int i = 0; i < REFILL_SIZE * 5; ++i) {
         seL4_Error err = do_untyped_retype(&post_boot_cnode, seL4_ARM_PageTableObject, 12, ips_idx, ips_cnode_cptr);
         if (err) {
             sddf_printf("error occured when creating ips caps %d\n", err);
@@ -109,6 +111,7 @@ static uint32_t get_ips() {
 }
 
 static void refill_gzp() {
+    sddf_dprintf("refilling gzp\n");
     for (int i = 0; i < REFILL_SIZE; ++i) {
         seL4_Error err = seL4_CNode_Copy(gzp_cnode_cptr, gzp_idx, 58, frame_cnode_cptr, global_zero_page, 58, create_cap_rights(false));
         if (err) {
@@ -127,10 +130,11 @@ static uint32_t get_gzp() {
 }
 
 uintptr_t allocate_page_table() {
-    uint32_t size = sizeof(struct pud); // they are all the same size.
+    
     if (freed_pager_memory_idx) {
         return freed_pager_memory[--freed_pager_memory_idx];
     }
+    uint32_t size = sizeof(struct pud); // they are all the same size.
     uintptr_t ret = pager_memory + pager_memory_idx;
     pager_memory_idx += size;
     return ret;
@@ -141,31 +145,40 @@ uintptr_t allocate_page_table() {
  * creates mappings for intermediary paging structures
  */
 pte_t *make_page_table_entry(uintptr_t vaddr, uint32_t child) {
-    pgd_t vspace = page_tables[child];
+    pgd_t *vspace = &page_tables[child];
     uint32_t vspace_idx = vspaces[child];
-    pud_t pud = vspace.entries[PUD_INDEX(vaddr)];
+    pud_t *pud = vspace->entries[PUD_INDEX(vaddr)];
     if (!pud) {
         // allocate pud; & pt
-        pud = (pud_t) allocate_page_table();
-        vspace.entries[PUD_INDEX(vaddr)] = pud;
+        pud = (pud_t *) allocate_page_table();
+        vspace->entries[PUD_INDEX(vaddr)] = pud;
         pud->cap = get_ips();
         seL4_Error err = seL4_ARM_PageTable_Map(ips_cnode_cptr + pud->cap, vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
+        if (err) {
+            sddf_dprintf("error when mapping page tables pud %d\n", err);
+        }
     }
-    pd_t pd = pud->entries[PD_INDEX(vaddr)];
+    pd_t *pd = pud->entries[PD_INDEX(vaddr)];
     if (!pd) {
         // allocate pd; & pt
-        pd = (pd_t) allocate_page_table();
+        pd = (pd_t *) allocate_page_table();
         pud->entries[PD_INDEX(vaddr)] = pd;
         pd->cap = get_ips();
         seL4_Error err = seL4_ARM_PageTable_Map(ips_cnode_cptr + pd->cap, vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
+        if (err) {
+            sddf_dprintf("error when mapping page tables pd%d\n", err);
+        }
     }
-    pt_t pt = pd->entries[PT_INDEX(vaddr)];
+    pt_t *pt = pd->entries[PT_INDEX(vaddr)];
     if (!pt) {
         // allocat pt;
-        pt = (pt_t) allocate_page_table();
+        pt = (pt_t *) allocate_page_table();
         pd->entries[PT_INDEX(vaddr)] = pt;
         pt->cap = get_ips();
         seL4_Error err = seL4_ARM_PageTable_Map(ips_cnode_cptr + pt->cap, vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
+        if (err) {
+            sddf_dprintf("error when mapping page tables pt %d\n", err);
+        }
     }
     return &pt->entries[PAGE_INDEX(vaddr)];
 }
@@ -206,7 +219,8 @@ void init(void)
     refill_frames();
     refill_gzp();
     refill_ips();
-    refill_ips();
+    // sddf_dprintf("%d\n", sizeof(pgd_t));
+    // while (1);
 }
 
 void notified(microkit_channel ch)
@@ -234,11 +248,11 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     uint32_t frame;
     pte_t *page_entry = make_page_table_entry(fault_addr, child);
 
-    // TODO: implement access flag faults.
-    if (fsc >= 0x08 && fsc <= 0x0B) {
-        // Access flag fault (level 0–3)
-        // unset access flag
-    }
+    // // TODO: implement access flag faults.
+    // if (fsc >= 0x08 && fsc <= 0x0B) {
+    //     // Access flag fault (level 0–3)
+    //     // unset access flag
+    // }
     // Translation fault (level 0–3)
     if (fsc >= 0x04 && fsc <= 0x07) {
         // if it is a read fault, map global zero page.

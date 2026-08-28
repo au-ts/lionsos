@@ -59,14 +59,14 @@ void bench_main(void) {
     struct timespec start_ts;
     struct timespec end_ts;
 
-    microkit_msginfo start_message = microkit_msginfo_new(0, 1);
-    microkit_mr_set(0, 1);
-    microkit_ppcall(0, start_message);
+    // microkit_msginfo start_message = microkit_msginfo_new(0, 1);
+    // microkit_mr_set(0, 1);
+    // microkit_ppcall(0, start_message);
     // int rc = fiveonenine(6, argv);
     int rc = minor_pf();
-    microkit_msginfo stop_message = microkit_msginfo_new(0, 1);
-    microkit_mr_set(0, 0);
-    microkit_ppcall(0, stop_message);
+    // microkit_msginfo stop_message = microkit_msginfo_new(0, 1);
+    // microkit_mr_set(0, 0);
+    // microkit_ppcall(0, stop_message);
 
 
     printf("BENCH|SPEC CPU finished rc=%d\n", rc);

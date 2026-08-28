@@ -66,9 +66,9 @@ struct pgd {
     struct pud *entries[512];
 };
 
-typedef struct pud *pud_t;
-typedef struct pd *pd_t;
-typedef struct pt *pt_t;
+typedef struct pud pud_t;
+typedef struct pd pd_t;
+typedef struct pt pt_t;
 typedef struct pgd pgd_t;
 
 
