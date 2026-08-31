@@ -3,7 +3,7 @@
 import argparse
 from typing import List
 from acacia.arch import aarch64
-from acacia import ProtectionDomain, MemoryRegion, Map, System, Channel, Subsystem, PageTables
+from acacia import ProtectionDomain, MemoryRegion, Map, System, Channel, Subsystem, PageTables, CSpace, Cap
 import xml.etree.ElementTree as et
 from dataclasses import dataclass, field
 from abc import ABC
@@ -97,6 +97,8 @@ class RRSystem(System):
             self.resolve_subsystems()
 
         pts = PageTables(setvar="table_metadata")
+        csp = CSpace()
+        csp.add_cap(Cap.TCB, 1, rrer.name)
         child_id = 0
         children: List[RRChild] = []
         for pd in self.pds:
@@ -112,6 +114,7 @@ class RRSystem(System):
 
             child_id += 1
         rrer.add_pagetables(pts)
+        rrer.add_cspace(csp)
 
         # Now we should keep track of endpoints so we know who to forward to.
         ch_ind = 0
