@@ -10,6 +10,13 @@
 
 #define microkit_notify(ch) do {LOG("send %d\n", ch); microkit_notify(ch); } while (0)
 
+typedef struct table_meta_data {
+    uint64_t table_data_base;
+    uint64_t pgd[64];
+} table_metadata_t;
+
+table_metadata_t table_metadata;
+
 seL4_Word* prefill_data = NULL;
 
 // We never exit this.

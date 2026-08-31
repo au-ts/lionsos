@@ -38,6 +38,9 @@ static inline void rrer_init(seL4_Word* data);
 static inline void rrer_init_scheduler_();
 static inline rr_Child_t* rrer_get_next_scheduled();
 static inline void rrer_schedule(rr_Child_t* child);
+static inline void rrer_unschedule();
+static inline microkit_channel rrer_ch_to_target_(microkit_channel ch);
+static inline void rrer_reschedule();
 
 /* STATE */
 rr_Child_t* children_arr = NULL;
@@ -72,6 +75,7 @@ static inline void rrer_init_scheduler_() {
     // We do not unschedule the children, but they can never run because our priority is higher.
     // This ensures that a send to a "suspended" tcb is always received.
     // ASSUMPTION: NOT SMP KERNEL!!!
+    // Populate the schedule queue (but not sort it)
     for (int i = 0; i < children_num; i++) {
         children_sched_queue[i] = &children_arr[i];
         LOG(
@@ -82,7 +86,7 @@ static inline void rrer_init_scheduler_() {
         );
     }
 
-    // build the scheduling pq, which is just a sorted array of pointers sorted from largest to smallest priority.
+    // Sort the schedule queue.
     // funny bubble sort
     for (int up = children_num - 1; up >= 0; up--) {
         for (int i = 0; i < up - 1; i++) {
@@ -151,6 +155,7 @@ static inline void rrer_schedule(rr_Child_t* child) {
     sched_state = rr_SchedState_Scheduled;
     currently_sched = child;
 }
+
 static inline void rrer_unschedule() {
     assert(currently_sched != NULL);
     NO_ERR(seL4_TCB_SetPriority(TCB(currently_sched->id), SELF_TCB(), currently_sched->priority));
@@ -175,6 +180,52 @@ static inline void rrer_reschedule() {
     rrer_schedule(next);
 }
 
+static inline void rrer_handle_ipc() {
+    // methodology:
+    // 1. Blocking send
+    //    - Emulate blocking by only handling IPC when we realised that the current scheduled thread is blocked.
+    //      And then setting it's priority to be it's original.
+    //    - Emulate sending by having a dedicated sender? We need something that will block on the kernel.
+    //      This ensures that it can be received by a NB recv.
+    // 2. Blocking recv
+    //    - Emulate blocking works by default. We notice that the PD is blocked, and set it as blocked and
+    //      settign the priority to be it's original.
+    //    - Emulating recv is fine, when we handle IPC we just have to reschedule the sender and the receiver.
+    // 3. NB send
+    //    - Emulate nonblocking. No comment.
+    //    - Emulate send - We MUST receive the message so that we can check if it can be actually sent.
+    //      Not sure how to do this. In order to actually receive the message, we must be determined
+    //      as "blocked by recv" by the kernel. And then we just need to perform an NBSend.
+    // 3. NB recv
+    //    - Emulate nonblocking. No comment.
+    //    - Emulate recv - We must be able to have a TCB that is determined as blocked by send, whenever
+    //      a blocking send is.
+    seL4_Word badge;
+    for (seL4_MessageInfo_t result = seL4_NBRecv(INPUT_CAP, &badge, REPLY_CAP); badge != 0; result = seL4_NBRecv(INPUT_CAP, &badge, REPLY_CAP)) {
+        LOG("Received from 0x%lx\n", badge);
+        // the badge for microkit is the index of the 1 bit, which indicates the index.
+        seL4_Word idx = 0;
+        do {
+            if (badge & 1)
+            {
+                // find target
+                seL4_Word ch = rrer_ch_to_target_(idx);
+                LOG("Forwarding to 0x%lx, %lu\n", ch, idx);
+                seL4_NBSend(ch + BASE_OUTPUT_NOTIFICATION_CAP, result);
+
+                // we must do a reschedule now.
+                // and also unblock the target if it was blocked.
+                if (children_arr[ch].sched_state == rr_ChildState_Blocked) {
+                    children_arr[ch].sched_state = rr_ChildState_Schedulable;
+                }
+                rrer_reschedule();
+            }
+            idx++;
+            badge >>= 1;
+        } while (badge != 0);
+    }
+}
+
 // main
 static inline void rrer_main() {
     for (int i = 0; i < children_num; i++) {
@@ -194,38 +245,13 @@ static inline void rrer_main() {
 
         scheduled_next = false;
         // process and pass through notifications.
-        seL4_Word badge;
-        // LOG("BEGIN processing IPC\n");
-        for (seL4_MessageInfo_t result = seL4_NBRecv(INPUT_CAP, &badge, REPLY_CAP); badge != 0; result = seL4_NBRecv(INPUT_CAP, &badge, REPLY_CAP)) {
-            LOG("Received from 0x%lx\n", badge);
-            // the badge for microkit is the index of the 1 bit, which indicates the index.
-            seL4_Word idx = 0;
-            do {
-                if (badge & 1)
-                {
-                    // find target
-                    seL4_Word ch = rrer_ch_to_target_(idx);
-                    LOG("Forwarding to 0x%lx, %lu\n", ch, idx);
-                    seL4_NBSend(ch + BASE_OUTPUT_NOTIFICATION_CAP, result);
-
-                    // we must do a reschedule now.
-                    // and also unblock the target if it was blocked.
-                    if (children_arr[ch].sched_state == rr_ChildState_Blocked) {
-                        children_arr[ch].sched_state = rr_ChildState_Schedulable;
-                    }
-                    rrer_reschedule();
-                }
-                idx++;
-                badge >>= 1;
-            } while (badge != 0);
-        }
-        // LOG("END processing IPC\n");
+        rrer_handle_ipc();
 
         switch (sched_state) {
             case rr_SchedState_None: {
                 rr_Child_t* next = rrer_get_next_scheduled();
                 assert(next != NULL);
-				rrer_schedule(next);
+                rrer_schedule(next);
             } break;
             case rr_SchedState_Scheduled: {
 
@@ -245,3 +271,4 @@ static inline void rrer_main() {
         }
     }
 }
+

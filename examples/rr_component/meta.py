@@ -3,7 +3,7 @@
 import argparse
 from typing import List
 from acacia.arch import aarch64
-from acacia import ProtectionDomain, MemoryRegion, Map, System, Channel, Subsystem
+from acacia import ProtectionDomain, MemoryRegion, Map, System, Channel, Subsystem, PageTables
 import xml.etree.ElementTree as et
 from dataclasses import dataclass, field
 from abc import ABC
@@ -86,6 +86,7 @@ class RRSystem(System):
     def transfer(self, sdf: System, rrer: ProtectionDomain):
         """
         Transfers the rrsystem into the sdf system, making all endpoints get intercepted by rrer.
+        and collects pagetables.
         """
         assert self.arch == sdf.arch
         assert rrer.sdf == sdf
@@ -95,11 +96,13 @@ class RRSystem(System):
         if not self.system_assembled:
             self.resolve_subsystems()
 
+        pts = PageTables(setvar="table_metadata")
         child_id = 0
         children: List[RRChild] = []
         for pd in self.pds:
             pd.sdf = sdf
             sdf._add_pd(pd)
+            pts.add_entry(pd.name, child_id)
 
             assert pd in sdf.pds
             assert pd in rrer.sdf.pds
@@ -108,6 +111,7 @@ class RRSystem(System):
             children.append(RRChild(child_id, pd.priority))
 
             child_id += 1
+        rrer.add_pagetables(pts)
 
         # Now we should keep track of endpoints so we know who to forward to.
         ch_ind = 0

@@ -57,7 +57,7 @@
               microkit-platform = microkit-platforms.${system} or (throw "Unsupported system: ${system}");
               wasi-platform = wasi-platforms.${system} or (throw "Unsupported system: ${system}");
 
-              env.MICROKIT_SDK = "/home/aids/git/ToR/gdb-rr-stuff/lionsos/dep/microkit/release/microkit-sdk-2.3.0-dev";
+              env.MICROKIT_SDK = "/home/aids/org/work/ts/rr/lionsos/dep/microkit/release/microkit-sdk-2.3.0-dev/";
 
 
               env.WASI_SDK = pkgs.fetchzip {
