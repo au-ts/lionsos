@@ -51,7 +51,9 @@ uint8_t* children_data_mem = NULL;
 /* STATE */
 rr_Child_t* rr_children_arr = NULL;
 seL4_Word rr_children_num = 0;
+
 rr_Child_t* rr_currently_sched = NULL;
 bool rr_scheduled_next = false;
+
 rr_SchedState_e rr_sched_state = rr_SchedState_None;
 rr_Child_t** rr_children_sched_queue = NULL;

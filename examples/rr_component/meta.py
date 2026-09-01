@@ -117,7 +117,7 @@ class RRSystem(System):
         per_thread_recv_queue = MemoryRegion(
             sdf,
             "per_thread_recv_queue",
-            # allocate 0x1000 per thread/queue
+            # allocate 0x1000 per thread/queue structure
             size=0x1000 * len(self.pds)
         )
 

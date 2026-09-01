@@ -1,17 +1,16 @@
 #pragma once
 #include "base.h"
 
-static inline void rrer_init_scheduler_();
-static inline rr_Child_t* rrer_sched_q_pop();
-static inline void rrer_schedule(rr_Child_t* child);
-static inline void rrer_unschedule();
-static inline void rrer_reschedule();
+static inline void rr_init_scheduler();
+static inline rr_Child_t* rr_sched_q_pop();
+static inline void rr_schedule(rr_Child_t* child);
+static inline void rr_unschedule();
+static inline void rr_reschedule();
 
-static inline void rrer_init_scheduler_() {
-    // We do not unschedule the children, but they can never run because our priority is higher.
-    // This ensures that a send to a "suspended" tcb is always received.
-    // ASSUMPTION: NOT SMP KERNEL!!!
-    // Populate the schedule queue (but not sort it)
+static inline void rr_init_scheduler() {
+    // We do not suspend the children, but they can never run because our priority is higher.
+    // We could suspend them now, because we are controlling IPC such that they will receive it
+    // automatically when they are scheduled.
     for (int i = 0; i < rr_children_num; i++) {
         rr_children_sched_queue[i] = &rr_children_arr[i];
         LOG(
@@ -36,7 +35,7 @@ static inline void rrer_init_scheduler_() {
     }
 }
 
-static inline rr_Child_t* rrer_sched_q_pop() {
+static inline rr_Child_t* rr_sched_q_pop() {
     // choose the next highest priority, currently schedulable child
     // and then move it to the end of the queue for that specific priority level.
     // and sets that child to be scheduled.
@@ -61,7 +60,7 @@ static inline rr_Child_t* rrer_sched_q_pop() {
     return child;
 }
 
-static inline void rrer_schedule(rr_Child_t* child) {
+static inline void rr_schedule(rr_Child_t* child) {
     assert(child != NULL);
     child->sched_state = rr_ChildState_Scheduled;
 
@@ -71,7 +70,7 @@ static inline void rrer_schedule(rr_Child_t* child) {
     NO_ERR(seL4_TCB_SetPriority(TCB(child->id), SELF_TCB(), 253));
 }
 
-static inline void rrer_unschedule() {
+static inline void rr_unschedule() {
     assert(rr_currently_sched != NULL);
     NO_ERR(seL4_TCB_SetPriority(TCB(rr_currently_sched->id), SELF_TCB(), rr_currently_sched->priority));
     rr_currently_sched->sched_state = rr_ChildState_Blocked;
@@ -79,13 +78,13 @@ static inline void rrer_unschedule() {
     rr_currently_sched = NULL;
 }
 
-static inline void rrer_reschedule() {
-    rrer_unschedule();
+static inline void rr_reschedule() {
+    rr_unschedule();
 
     // try to schedule another thread.
-    rr_Child_t* next = rrer_sched_q_pop();
+    rr_Child_t* next = rr_sched_q_pop();
     // if NULL then we are currently completely blocked.
     assert(next != NULL);
 
-    rrer_schedule(next);
+    rr_schedule(next);
 }
