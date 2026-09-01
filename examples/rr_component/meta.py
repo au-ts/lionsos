@@ -83,45 +83,91 @@ class RRSystem(System):
     def write_xml_file(self, path: pathlib.Path):
         raise RuntimeError("Unsupported action")
 
-    def transfer(self, sdf: System, rrer: ProtectionDomain):
+    def transfer(self, sdf: System, main: ProtectionDomain, block_checker: ProtectionDomain, sender: ProtectionDomain):
         """
         Transfers the rrsystem into the sdf system, making all endpoints get intercepted by rrer.
         and collects pagetables.
+        Sets up the rr_* protection domains.
         """
         assert self.arch == sdf.arch
-        assert rrer.sdf == sdf
-        assert not (rrer in self.pds)
-        assert rrer in sdf.pds
+        assert main.sdf == sdf
+        assert not (main in self.pds)
+        assert main in sdf.pds
 
         if not self.system_assembled:
             self.resolve_subsystems()
 
+        # set up the rr_* protection domains
+        # block checker just needs to be able to notify main
+        block_checker_main_ch = Channel(sdf,
+            Channel.End(pd=main, can_notify=False, can_pp=False, ch_id=60, setvar_id="blocker_ch"),
+            Channel.End(pd=block_checker, can_notify=True, can_pp=False, ch_id=61, setvar_id="main_ch")
+        )
+
+        # The sender thread must be a child of main.
+        main.add_child_pd(sender, child_id=61)
+
+        # We'll just allow everything for now
+        sender_main_ch = Channel(sdf,
+            Channel.End(pd=main, can_notify=True, can_pp=True, ch_id=59, setvar_id="sender_ch"),
+            Channel.End(pd=sender, can_notify=True, can_pp=True, ch_id=61, setvar_id="main_ch")
+        )
+
+        # Setup the per-thread recv queue memory regions.
+        per_thread_recv_queue = MemoryRegion(
+            sdf,
+            "per_thread_recv_queue",
+            # allocate 0x1000 per thread/queue
+            size=0x1000 * len(self.pds)
+        )
+
+        sender_recv_queue_map = Map(
+            per_thread_recv_queue,
+            0x500000,
+            permissions="rw",
+            setvar_vaddr="per_thread_recv_queue_mem",
+            setvar_size="per_thread_recv_queue_size",
+        )
+        sender.add_map(sender_recv_queue_map)
+
+        main_recv_queue_map = Map(
+            per_thread_recv_queue,
+            0x500000,
+            permissions="rw",
+            setvar_vaddr="per_thread_recv_queue_mem",
+            setvar_size="per_thread_recv_queue_size",
+        )
+
+        main.add_map(main_recv_queue_map)
+
         pts = PageTables(setvar="table_metadata")
         csp = CSpace()
-        csp.add_cap(Cap.TCB, 1, rrer.name)
-        child_id = 0
+        # cspace slot 0 is reserved
+        # cspace slot 1 is always self_tcb
+        # cspace slot 2+ is always 2 + child_id is the scheduling context
+        csp.add_cap(Cap.TCB, 1, main.name)
         children: List[RRChild] = []
-        for pd in self.pds:
+        for (child_id, pd) in enumerate(self.pds):
             pd.sdf = sdf
             sdf._add_pd(pd)
             pts.add_entry(pd.name, child_id)
 
             assert pd in sdf.pds
-            assert pd in rrer.sdf.pds
+            assert pd in main.sdf.pds
 
-            rrer.add_child_pd(pd, child_id);
+            main.add_child_pd(pd, child_id);
             children.append(RRChild(child_id, pd.priority))
+            csp.add_cap(Cap.SchedCtxt, child_id + 2, pd.name) 
 
-            child_id += 1
-        rrer.add_pagetables(pts)
-        rrer.add_cspace(csp)
+        main.add_pagetables(pts)
+        main.add_cspace(csp)
 
         # Now we should keep track of endpoints so we know who to forward to.
         ch_ind = 0
         for channel in self.channels:
             # intercept channels.
-            rrer_end_a = Channel.End(pd=rrer, can_notify=True, can_pp=True, ch_id=ch_ind)
-            rrer_end_b = Channel.End(pd=rrer, can_notify=True, can_pp=True, ch_id=ch_ind + 1)
+            rrer_end_a = Channel.End(pd=main, can_notify=True, can_pp=True, ch_id=ch_ind)
+            rrer_end_b = Channel.End(pd=main, can_notify=True, can_pp=True, ch_id=ch_ind + 1)
 
             # end_x are correctly updated because python is funny
             # 100% not stable, but it's the best I can do.
@@ -145,7 +191,9 @@ class RRSystem(System):
 
 def generate(sdf_path: str, output_dir: str):
     rr = RRSystem(sdf)
-    rrer = ProtectionDomain(sdf, "rrer", "rrer.elf", priority=254)
+    rr_main = ProtectionDomain(sdf, "rr_main", "rr_main.elf", priority=253)
+    rr_sender = ProtectionDomain(sdf, "rr_sender", "rr_sender.elf", priority=250)
+    rr_block_checker = ProtectionDomain(sdf, "rr_block_checker", "rr_block_checker.elf", priority=251)
     DATAPATH = pathlib.Path(output_dir) / "children.data"
 
     ping = ProtectionDomain(rr, "ping", "ping.elf", priority=1)
@@ -157,10 +205,12 @@ def generate(sdf_path: str, output_dir: str):
         Channel.End(pd=pong, can_notify=True, can_pp=False, ch_id=1, setvar_id="pingch")
     )
 
-    rr.transfer(sdf, rrer).serialise(DATAPATH)
+    # add the data of the children here.
+    rr.transfer(sdf, rr_main, rr_block_checker, rr_sender).serialise(DATAPATH)
     rrer_mr = MemoryRegion(sdf, "children_data", prefill_path=DATAPATH)
-    rrer.add_map(Map(rrer_mr, 0x400000, "rw", setvar_vaddr="prefill_data"))
-    rrer.add_vpmu(0)
+    rr_main.add_map(Map(rrer_mr, 0x400000, "rw", setvar_vaddr="children_data_mem"))
+
+    rr_main.add_vpmu(0)
     sdf.write_xml_file(f"{output_dir}/{sdf_path}")
 
 

@@ -10,36 +10,26 @@
 
 #define microkit_notify(ch) do {LOG("send %d\n", ch); microkit_notify(ch); } while (0)
 
-typedef struct table_meta_data {
-    uint64_t table_data_base;
-    uint64_t pgd[64];
-} table_metadata_t;
-
-table_metadata_t table_metadata;
-
-seL4_Word* prefill_data = NULL;
-
 // We never exit this.
 void init()
 {
     LOG("INIT\n");
-    rrer_init(prefill_data);
-    rrer_main();
 }
 
-// Store notifications into array.
-// Forward the notification it receives
+// Should not be called
 void notified(microkit_channel ch)
 {
     LOG("Notified! %d\n", ch);
 }
 
+// Should not be called
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     LOG("Protected!\n");
     return msginfo;
 }
 
+// Should not be called.
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
     *reply_msginfo = microkit_msginfo_new(0, 0);
     return false;

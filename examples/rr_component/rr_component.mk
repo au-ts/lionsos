@@ -10,7 +10,9 @@ SUPPORTED_BOARDS := \
 IMAGES := \
 	ping.elf \
 	pong.elf \
-	rrer.elf
+	rr_main.elf \
+	rr_block_checker.elf \
+	rr_sender.elf
 
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
