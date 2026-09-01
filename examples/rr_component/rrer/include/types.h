@@ -7,7 +7,7 @@
 #include <microkit.h>
 #include <stdint.h>
 #include <stdbool.h>
-// Storage in number 
+// Storage in number
 #define IPC_WORD_STORAGE_SIZE (0x800)
 #define IPC_WORD_STORAGE_WORDS (IPC_WORD_STORAGE_SIZE / sizeof(seL4_Word))
 #define QUEUE_MAX_LEN 10
@@ -35,33 +35,37 @@ typedef struct {
     ipc_t data[QUEUE_MAX_LEN];
 } queue_t;
 
-static queue_t* queue_init(uint8_t* memory) {
+static queue_t *queue_init(uint8_t *memory)
+{
     // zero out the data.
     for (int i = 0; i < sizeof(queue_t); i++) {
         memory[i] = 0;
     }
-    return (queue_t*) (memory);
+    return (queue_t *)(memory);
 }
 
-static seL4_Word ipc_handler_len(ipc_handler_t* handler) {
+static seL4_Word ipc_handler_len(ipc_handler_t *handler)
+{
     int64_t len = handler->head - handler->tail;
     // the head is wrapped
     if (len < 0) {
-        len +=  IPC_WORD_STORAGE_WORDS;
+        len += IPC_WORD_STORAGE_WORDS;
     }
     return len;
 }
 
-static seL4_Word queue_len(queue_t* q) {
+static seL4_Word queue_len(queue_t *q)
+{
     int64_t len = q->head - q->tail;
     // the head is wrapped
     if (len < 0) {
-        len +=  IPC_WORD_STORAGE_WORDS;
+        len += IPC_WORD_STORAGE_WORDS;
     }
     return len;
 }
 
-static ipc_t ipc_handler_copy_msg(ipc_handler_t* handler, seL4_MessageInfo_t msg, seL4_Word badge) {
+static ipc_t ipc_handler_copy_msg(ipc_handler_t *handler, seL4_MessageInfo_t msg, seL4_Word badge)
+{
     seL4_Word len = seL4_MessageInfo_get_length(msg);
     // assert that we have some space left.
     assert(len + ipc_handler_len(handler) < IPC_WORD_STORAGE_WORDS - 1);
@@ -72,15 +76,17 @@ static ipc_t ipc_handler_copy_msg(ipc_handler_t* handler, seL4_MessageInfo_t msg
         handler->head += 1;
         handler->head %= IPC_WORD_STORAGE_WORDS;
     }
-    return (ipc_t) { .handler_index = begin, .badge = badge, .msginfo = msg};
+    return (ipc_t) { .handler_index = begin, .badge = badge, .msginfo = msg };
 }
 
-static seL4_Word ipc_handler_get_mr(ipc_handler_t* handler, ipc_t* ipc, seL4_Word i) {
+static seL4_Word ipc_handler_get_mr(ipc_handler_t *handler, ipc_t *ipc, seL4_Word i)
+{
     seL4_Word ind = (ipc->handler_index + i) % IPC_WORD_STORAGE_WORDS;
     return handler->data[ind];
 }
 
-static void ipc_handler_free(ipc_handler_t* handler, ipc_t* ipc) {
+static void ipc_handler_free(ipc_handler_t *handler, ipc_t *ipc)
+{
     seL4_Word len = seL4_MessageInfo_get_length(ipc->msginfo);
     // assert that we are dequeuing more than what we have.
     assert(len <= ipc_handler_len(handler));
@@ -89,7 +95,8 @@ static void ipc_handler_free(ipc_handler_t* handler, ipc_t* ipc) {
     handler->tail %= IPC_WORD_STORAGE_WORDS;
 }
 
-static void queue_push(queue_t* q, seL4_MessageInfo_t msg, seL4_Word badge) {
+static void queue_push(queue_t *q, seL4_MessageInfo_t msg, seL4_Word badge)
+{
     ipc_t val = ipc_handler_copy_msg(&q->handler, msg, badge);
 
     assert(queue_len(q) < QUEUE_MAX_LEN - 1);
@@ -99,7 +106,8 @@ static void queue_push(queue_t* q, seL4_MessageInfo_t msg, seL4_Word badge) {
 }
 
 // Copies the queue contents into the IPC buffer.
-static seL4_MessageInfo_t queue_pop(queue_t* q) {
+static seL4_MessageInfo_t queue_pop(queue_t *q)
+{
     assert(queue_len(q) > 0);
 
     ipc_t val = q->data[q->tail];
@@ -121,3 +129,6 @@ static seL4_MessageInfo_t queue_pop(queue_t* q) {
     q->tail %= QUEUE_MAX_LEN;
     return msg;
 }
+#undef IPC_WORD_STORAGE_SIZE
+#undef IPC_WORD_STORAGE_WORDS
+#undef QUEUE_MAX_LEN

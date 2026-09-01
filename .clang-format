@@ -1,0 +1,38 @@
+# Copyright 2024, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+Language:       Cpp
+ColumnLimit:    120
+IndentWidth:    4
+UseTab:         Never
+
+ReflowComments: false
+SortIncludes: Never
+PointerAlignment: Right
+AlignTrailingComments:
+    Kind: Leave
+# function() \n{} vs function() {}
+BreakBeforeBraces: Linux
+# we prefer expanded
+AllowShortFunctionsOnASingleLine: None
+# while(true);    vs  while(true)\n;
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Empty
+# (struct xxx) {}   vs    (struct xxx){}
+SpaceBeforeCpp11BracedList: true
+# { 1, 2, 3 } (false) vs {1, 2, 3} (true).
+Cpp11BracedListStyle: false
+# don't do anything to macros
+SkipMacroDefinitionBody: true
+# break before + etc
+BreakBeforeBinaryOperators: NonAssignment
+# align operands with the = sign.
+AlignOperands: AlignAfterOperator
+# try not to break around =
+PenaltyBreakAssignment: 50
+
+---
+Language: Json
+IndentWidth:    4
+

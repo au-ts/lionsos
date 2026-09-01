@@ -15,10 +15,17 @@
 #define REPLY_CAP 4
 #define SENDER_ID 61
 
+#define SCHED_PRIO 250
+#define UNSCHED_PRIO 1
+#define SENDER_PRIO 251
+#define SELF_PRIO 253
+#define BLOCK_PRIO SCHED_PRIO
+
 typedef enum {
     rr_ChildState_Schedulable = 0,
     rr_ChildState_Scheduled,
-    rr_ChildState_Blocked,
+    rr_ChildState_BlockedOnSend,
+    rr_ChildState_BlockedOnRecv,
     _rr_ChildState_ = 1ul << 63, // force to be seL4_Word size
 } rr_ChildState_e;
 
@@ -33,6 +40,14 @@ typedef struct {
     seL4_Word priority;
     rr_ChildState_e sched_state;
 } rr_Child_t;
+
+typedef enum {
+    rr_IPCType_BlockChecker,
+    rr_IPCType_Ntfn,
+    rr_IPCType_Irq,
+    rr_IPCType_Msg,
+} rr_IPCType_e;
+
 typedef struct table_meta_data {
     uint64_t table_data_base;
     uint64_t pgd[64];
@@ -42,18 +57,18 @@ typedef struct table_meta_data {
 seL4_Word sender_ch = 0;
 seL4_Word blocker_ch = 0;
 
-uint8_t* per_thread_recv_queue_mem = NULL;
+uint8_t *per_thread_recv_queue_mem = NULL;
 seL4_Word per_thread_recv_queue_size = 0;
 
-table_metadata_t table_metadata = {0};
-uint8_t* children_data_mem = NULL;
+table_metadata_t table_metadata = { 0 };
+uint8_t *children_data_mem = NULL;
 
 /* STATE */
-rr_Child_t* rr_children_arr = NULL;
+rr_Child_t *rr_children_arr = NULL;
 seL4_Word rr_children_num = 0;
 
-rr_Child_t* rr_currently_sched = NULL;
+rr_Child_t *rr_currently_sched = NULL;
 bool rr_scheduled_next = false;
 
 rr_SchedState_e rr_sched_state = rr_SchedState_None;
-rr_Child_t** rr_children_sched_queue = NULL;
+rr_Child_t **rr_children_sched_queue = NULL;

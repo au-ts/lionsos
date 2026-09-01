@@ -21,7 +21,7 @@ void notified(microkit_channel ch)
     if (ch == pingch && i++ < 10)
         microkit_notify(ch);
     else
-        *(volatile int*)NULL; // force a crash to trigger replaying for now.
+        *(volatile int *)NULL; // force a crash to trigger replaying for now.
 }
 
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)

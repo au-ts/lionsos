@@ -2,6 +2,10 @@
 
 seL4_Word main_ch = 0;
 
-void init() {}
+void init()
+{
+}
 
-void notified(microkit_channel ch) {}
+void notified(microkit_channel ch)
+{
+}
