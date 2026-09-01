@@ -21,6 +21,14 @@
 #define SELF_PRIO 253
 #define BLOCK_PRIO SCHED_PRIO
 
+#define PD_MASK 0xff
+#define CHANNEL_MASK 0x3f
+
+#define BADGE_FAULT_BIT 62
+#define BADGE_ENDPOINT_BIT 63
+
+#define DEFAULT_ENTRY_POINT 0x200000
+
 typedef enum {
     rr_ChildState_Schedulable = 0,
     rr_ChildState_Scheduled,

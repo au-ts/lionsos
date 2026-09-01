@@ -1,44 +1,9 @@
-# Implementation details
-The rrer does the following:
-1. Controls all scheduling for determinism and recording.
-2. Intercepts all MCS faults.
-3. Resolves all IPC (bookkeeps and emulates kernel TCB states for schedulable, blocked on recv, blocked on send)
-4. Intercepts all syscalls of children to record details.
-   - Does this by doing the following:
-     1. All syscalls are rewritten with a specific fault.
-     2. Everytime a fault at a syscall point is triggered:
-        1. Write the syscall back.
-        2. Set the TCB to single step only one instruction.
-        3. Invoked the rrer syscall resolver below
-           - Blocking syscall
-             - If send, then check if the target is currently "blocked by recv". (note that the kernel has not marked it as blocked)
-               - If blocked by recv, perform the syscall, mark target and source as schedulable and perform a reschedule.
-                 - Also record the values.
-               - If not blocked, then mark source as "blocked by send", marked target as being sent to by source, and reschedule.
-             - If recv, then check if there is a source currently sending to it (note that the kernel has not marked it as blocked)
-               - If so, perform syscall, mark target and source as schedulable and perform a reschedule.
-               - If not, mark recv tcb as "blocked by recv", and perform a reschedule.
-           - If it's non blocking, we do the following.
-             - All non IPC syscalls don't matter (except for seL4_Yield, in which case we invoke a reschedule and skip it).
-             - For an NBSend, check if the target is blocked by recv
-               - If so:
-                 1. force the receiver to execute it's syscall and get marked as blocked by recv by the KERNEL
-                 2. let the sender execute it's syscall.
-                 3. Set the receiver to be schedulable and perform a reschedule.
-               - If not, continue.
-             - For an NBRecv, check if there is a sender blocked on us
-               - If so:
-                 1. force the target to execute it's syscall and get marked as blocked by send by the KERNEL.
-                 2. Mark the sender as schedulable.
-                 3. Perform reschedule.
-               - If not, continue.
-     3. Everytime singlestep fault happens (syscall completion):
-        1. Write the fault instruction back
-        2. Record the syscall result and time.
-        3. Unset single stepping
-        4. Resume the tcb
-        5. Block on recv.
-     4. Everytime mcs fault happens we must perform a reschedule.
+# TODO
+- [ ] Implement scheduling properly.
+- [ ] Implement ipc buffer transferring
+- [ ] Implement the sender properly.
+- [ ] Implement the block checker properly.
+- [ ] Reorganise caps for the sender and main
 
 # Middle man problems
 The scheduler works by manipulating priorities to ensure that the thread that

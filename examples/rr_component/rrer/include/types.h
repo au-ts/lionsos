@@ -106,7 +106,7 @@ static void queue_push(queue_t *q, seL4_MessageInfo_t msg, seL4_Word badge)
 }
 
 // Copies the queue contents into the IPC buffer.
-static seL4_MessageInfo_t queue_pop(queue_t *q)
+static seL4_MessageInfo_t queue_peek(queue_t *q)
 {
     assert(queue_len(q) > 0);
 
@@ -123,12 +123,17 @@ static seL4_MessageInfo_t queue_pop(queue_t *q)
 
     // they should be the same, if there are no caps being sent?
     assert(msg.words[0] == val.msginfo.words[0]);
+    return msg;
+}
+
+static void queue_pop_ignore(queue_t *q) {
+    assert(queue_len(q) > 0);
     // free the message
+    ipc_t val = q->data[q->tail];
     ipc_handler_free(&q->handler, &val);
     q->tail += 1;
     q->tail %= QUEUE_MAX_LEN;
-    return msg;
-}
+};
 #undef IPC_WORD_STORAGE_SIZE
 #undef IPC_WORD_STORAGE_WORDS
 #undef QUEUE_MAX_LEN

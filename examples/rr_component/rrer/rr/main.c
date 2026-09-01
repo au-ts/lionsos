@@ -14,6 +14,8 @@
 void init()
 {
     LOG("INIT\n");
+    rrer_init();
+    rrer_main();
 }
 
 // Should not be called
