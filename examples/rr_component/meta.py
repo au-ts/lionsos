@@ -106,6 +106,8 @@ class RRSystem(System):
 
         # The sender thread must be a child of main.
         main.add_child_pd(sender, child_id=61)
+        # We also should restart the blocker.
+        main.add_child_pd(block_checker, child_id=60)
 
         # We'll just allow everything for now
         sender_main_ch = Channel(sdf,
@@ -144,7 +146,6 @@ class RRSystem(System):
         csp = CSpace()
         # cspace slot 0 is reserved
         # cspace slot 1 is always self_tcb
-        # cspace slot 2+ is always 2 + child_id is the scheduling context
         csp.add_cap(Cap.TCB, 1, main.name)
         children: List[RRChild] = []
         for (child_id, pd) in enumerate(self.pds):
@@ -157,7 +158,6 @@ class RRSystem(System):
 
             main.add_child_pd(pd, child_id);
             children.append(RRChild(child_id, pd.priority))
-            csp.add_cap(Cap.SchedCtxt, child_id + 2, pd.name) 
 
         main.add_pagetables(pts)
         main.add_cspace(csp)
@@ -166,18 +166,21 @@ class RRSystem(System):
         ch_ind = 0
         for channel in self.channels:
             # intercept channels.
-            rrer_end_a = Channel.End(pd=main, can_notify=True, can_pp=True, ch_id=ch_ind)
-            rrer_end_b = Channel.End(pd=main, can_notify=True, can_pp=True, ch_id=ch_ind + 1)
+            # child_a -> rrer
+            child_a_to_rrer_end = Channel.End(pd=main, can_notify=True, can_pp=True, ch_id=ch_ind)
+            # rrer -> sender (which is done implicitly through shared memory)
+            # sender -> child_b
+            sender_to_child_b = Channel.End(pd=main, can_notify=True, can_pp=True, ch_id=ch_ind + 1)
 
             # end_x are correctly updated because python is funny
             # 100% not stable, but it's the best I can do.
             ch_a = deepcopy(channel)
             ch_a.sdf = sdf
-            ch_a.end_b = rrer_end_a
+            ch_a.end_b = child_a_to_rrer_end
 
             ch_b = deepcopy(channel)
             ch_b.sdf = sdf
-            ch_b.end_a = rrer_end_b
+            ch_b.end_a = sender_to_child_b
 
             sdf._add_channel(ch_a)
             sdf._add_channel(ch_b)
@@ -192,8 +195,8 @@ class RRSystem(System):
 def generate(sdf_path: str, output_dir: str):
     rr = RRSystem(sdf)
     rr_main = ProtectionDomain(sdf, "rr_main", "rr_main.elf", priority=253)
-    rr_sender = ProtectionDomain(sdf, "rr_sender", "rr_sender.elf", priority=250)
-    rr_block_checker = ProtectionDomain(sdf, "rr_block_checker", "rr_block_checker.elf", priority=251)
+    rr_sender = ProtectionDomain(sdf, "rr_sender", "rr_sender.elf", priority=251)
+    rr_block_checker = ProtectionDomain(sdf, "rr_block_checker", "rr_block_checker.elf", priority=250)
     DATAPATH = pathlib.Path(output_dir) / "children.data"
 
     ping = ProtectionDomain(rr, "ping", "ping.elf", priority=1)

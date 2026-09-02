@@ -62,6 +62,7 @@ QEMU_ARGS := -machine virt,virtualization=on \
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
 		-device virtio-serial-device \
+		-icount shift=1 \
 		#-S -s
 
 

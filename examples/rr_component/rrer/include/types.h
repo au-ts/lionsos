@@ -11,6 +11,8 @@
 #define IPC_WORD_STORAGE_SIZE (0x800)
 #define IPC_WORD_STORAGE_WORDS (IPC_WORD_STORAGE_SIZE / sizeof(seL4_Word))
 #define QUEUE_MAX_LEN 10
+#define NO_THREAD_SCHEDULED ((seL4_Word)(-1))
+#define UNSET_VALUE ((seL4_Word)(-1))
 
 typedef struct {
     seL4_Word handler_index;
@@ -124,6 +126,12 @@ static seL4_MessageInfo_t queue_peek(queue_t *q)
     // they should be the same, if there are no caps being sent?
     assert(msg.words[0] == val.msginfo.words[0]);
     return msg;
+}
+
+static seL4_Word queue_peek_badge(queue_t *q)
+{
+    assert(queue_len(q) > 0);
+    return q->data[q->tail].badge;
 }
 
 static void queue_pop_ignore(queue_t *q) {

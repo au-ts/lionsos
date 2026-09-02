@@ -1,5 +1,5 @@
 # TODO
-- [ ] Implement scheduling properly.
+- [-] Implement scheduling properly.
 - [ ] Implement ipc buffer transferring
 - [ ] Implement the sender properly.
 - [ ] Implement the block checker properly.
@@ -114,3 +114,4 @@ And I think that this is now the only caveat?
    - If so, sends a message to the main pd telling it that it's blocked.
 
 
+If th
