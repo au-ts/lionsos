@@ -14,10 +14,16 @@
 #define NO_THREAD_SCHEDULED ((seL4_Word)(-1))
 #define UNSET_VALUE ((seL4_Word)(-1))
 
+#define BADGE_FAULT_BIT 62
+#define BADGE_ENDPOINT_BIT 63
+
 typedef struct {
+    // index to the message registers inside the handler.
+    // The handler holds the message registers in a "queue"
     seL4_Word handler_index;
     seL4_Word badge;
     seL4_MessageInfo_t msginfo;
+    seL4_Word channel; // the target channel.
 } ipc_t;
 
 // holds all the message registers.
@@ -66,7 +72,7 @@ static seL4_Word queue_len(queue_t *q)
     return len;
 }
 
-static ipc_t ipc_handler_copy_msg(ipc_handler_t *handler, seL4_MessageInfo_t msg, seL4_Word badge)
+static ipc_t ipc_handler_copy_msg(ipc_handler_t *handler, seL4_MessageInfo_t msg, seL4_Word badge, seL4_Word target_ch)
 {
     seL4_Word len = seL4_MessageInfo_get_length(msg);
     // assert that we have some space left.
@@ -78,7 +84,7 @@ static ipc_t ipc_handler_copy_msg(ipc_handler_t *handler, seL4_MessageInfo_t msg
         handler->head += 1;
         handler->head %= IPC_WORD_STORAGE_WORDS;
     }
-    return (ipc_t) { .handler_index = begin, .badge = badge, .msginfo = msg };
+    return (ipc_t) { .handler_index = begin, .badge = badge, .msginfo = msg, .channel = target_ch };
 }
 
 static seL4_Word ipc_handler_get_mr(ipc_handler_t *handler, ipc_t *ipc, seL4_Word i)
@@ -97,9 +103,9 @@ static void ipc_handler_free(ipc_handler_t *handler, ipc_t *ipc)
     handler->tail %= IPC_WORD_STORAGE_WORDS;
 }
 
-static void queue_push(queue_t *q, seL4_MessageInfo_t msg, seL4_Word badge)
+static void queue_push(queue_t *q, seL4_MessageInfo_t msg, seL4_Word badge, seL4_Word target_ch)
 {
-    ipc_t val = ipc_handler_copy_msg(&q->handler, msg, badge);
+    ipc_t val = ipc_handler_copy_msg(&q->handler, msg, badge, target_ch);
 
     assert(queue_len(q) < QUEUE_MAX_LEN - 1);
     q->data[q->head] = val;
@@ -108,23 +114,27 @@ static void queue_push(queue_t *q, seL4_MessageInfo_t msg, seL4_Word badge)
 }
 
 // Copies the queue contents into the IPC buffer.
-static seL4_MessageInfo_t queue_peek(queue_t *q)
+static ipc_t queue_peek(queue_t *q)
 {
     assert(queue_len(q) > 0);
 
     ipc_t val = q->data[q->tail];
-    seL4_Word len = seL4_MessageInfo_get_length(val.msginfo);
-    seL4_Word label = seL4_MessageInfo_get_label(val.msginfo);
+    return val;
+}
+
+static seL4_MessageInfo_t ipc_handler_read_msg(ipc_handler_t* handler, ipc_t ipc) {
+    seL4_Word len = seL4_MessageInfo_get_length(ipc.msginfo);
+    seL4_Word label = seL4_MessageInfo_get_label(ipc.msginfo);
 
     seL4_MessageInfo_t msg = seL4_MessageInfo_new(0, 0, 0, len);
     msg = seL4_MessageInfo_set_label(msg, label);
 
     for (int i = 0; i < len; i++) {
-        seL4_SetMR(i, ipc_handler_get_mr(&q->handler, &val, i));
+        seL4_SetMR(i, ipc_handler_get_mr(handler, &ipc, i));
     }
 
     // they should be the same, if there are no caps being sent?
-    assert(msg.words[0] == val.msginfo.words[0]);
+    assert(msg.words[0] == ipc.msginfo.words[0]);
     return msg;
 }
 
@@ -134,7 +144,8 @@ static seL4_Word queue_peek_badge(queue_t *q)
     return q->data[q->tail].badge;
 }
 
-static void queue_pop_ignore(queue_t *q) {
+static void queue_pop_ignore(queue_t *q)
+{
     assert(queue_len(q) > 0);
     // free the message
     ipc_t val = q->data[q->tail];
@@ -142,6 +153,13 @@ static void queue_pop_ignore(queue_t *q) {
     q->tail += 1;
     q->tail %= QUEUE_MAX_LEN;
 };
+
+static bool badge_is_ntfn(seL4_Word badge) {
+    seL4_Word is_endpoint = badge >> BADGE_ENDPOINT_BIT;
+    seL4_Word is_fault = (badge >> BADGE_FAULT_BIT) & 1;
+    if (is_endpoint || is_fault) return false;
+    return true;
+}
 #undef IPC_WORD_STORAGE_SIZE
 #undef IPC_WORD_STORAGE_WORDS
 #undef QUEUE_MAX_LEN

@@ -93,8 +93,11 @@ bool rr_scheduled_next = false;
 rr_SchedState_e rr_sched_state = rr_SchedState_None;
 rr_Child_t **rr_children_sched_queue = NULL;
 
+seL4_Word rr_channels_num = 0;
+seL4_Word* rr_channel_to_target_child_id = NULL;
 
-static inline seL4_Word rr_badge_to_id(seL4_Word badge) {
+
+static inline seL4_Word rr_badge_to_ch_id(seL4_Word badge) {
     unsigned int idx = 0;
     do  {
         if (badge & 1) {

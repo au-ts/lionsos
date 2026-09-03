@@ -12,20 +12,22 @@ static inline void rr_init_scheduler()
     // automatically when they are scheduled.
     for (int i = 0; i < rr_children_num; i++) {
         rr_children_sched_queue[i] = &rr_children_arr[i];
-        LOG("id: %lu, priority: %lu, sched_state: %lu\n", rr_children_sched_queue[i]->id,
-            rr_children_sched_queue[i]->priority, (seL4_Word)rr_children_sched_queue[i]->sched_state);
     }
 
     // Sort the schedule queue.
     // funny bubble sort
     for (int up = rr_children_num - 1; up >= 0; up--) {
-        for (int i = 0; i < up - 1; i++) {
+        for (int i = 0; i < up; i++) {
             if (rr_children_sched_queue[i]->priority < rr_children_sched_queue[i + 1]->priority) {
                 rr_Child_t *temp = rr_children_sched_queue[i];
                 rr_children_sched_queue[i] = rr_children_sched_queue[i + 1];
                 rr_children_sched_queue[i + 1] = temp;
             }
         }
+    }
+    for (int i = 0; i < rr_children_num; i++) {
+        LOG("id: %lu, priority: %lu, sched_state: %lu\n", rr_children_sched_queue[i]->id,
+            rr_children_sched_queue[i]->priority, (seL4_Word)rr_children_sched_queue[i]->sched_state);
     }
 }
 

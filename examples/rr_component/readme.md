@@ -1,3 +1,8 @@
+# Sender initialisation process
+1. main starts and does some init
+2. for each endpoint cap main has it:
+   - Transfers that cap to the sender via `seL4_Send`
+3. Sender now wakes up, does some init stuff.
 # TODO
 - [-] Implement scheduling properly.
 - [ ] Implement ipc buffer transferring
@@ -112,6 +117,3 @@ And I think that this is now the only caveat?
    - Polls the VPMU of the currently scheduled thread.
    - Checks if the current thread is blocked.
    - If so, sends a message to the main pd telling it that it's blocked.
-
-
-If th

@@ -39,7 +39,7 @@ static inline rr_IPCType_e rr_ipc_get_type(seL4_MessageInfo_t msg, seL4_Word bad
     seL4_Word is_endpoint = badge >> BADGE_ENDPOINT_BIT;
     seL4_Word is_fault = (badge >> BADGE_FAULT_BIT) & 1;
     if (is_endpoint || is_fault) return rr_IPCType_Msg;
-    seL4_Word idx = rr_badge_to_id(badge);
+    seL4_Word idx = rr_badge_to_ch_id(badge);
     LOG("idx: %lu\n", idx);
     if (idx == blocker_ch) {
         return rr_IPCType_BlockChecker;
@@ -64,10 +64,10 @@ static inline void rr_ipc_sender_setup(seL4_Word child) {
 
 // store the curretly stored message in the ipc buffer into the recv queue of that
 // child.
-static inline void rr_ipc_store_ipc_msg(seL4_Word target_child, seL4_MessageInfo_t msg, seL4_Word badge) {
+static inline void rr_ipc_store_ipc_msg(seL4_Word target_child, seL4_MessageInfo_t msg, seL4_Word badge, seL4_Word target_ch) {
     LOG("storing message in child queue: %lu\n", target_child);
     assert(target_child < rr_children_num);
-    queue_push(&pt_recv_queue[target_child], msg, badge);
+    queue_push(&pt_recv_queue[target_child], msg, badge, target_ch);
 }
 
 // check the size of the child's ipc queue.

@@ -1,7 +1,7 @@
 # Copyright 2026, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 import argparse
-from typing import List
+from typing import List, Dict
 from acacia.arch import aarch64
 from acacia import ProtectionDomain, MemoryRegion, Map, System, Channel, Subsystem, PageTables, CSpace, Cap
 import xml.etree.ElementTree as et
@@ -13,7 +13,7 @@ import pathlib
 WORD_SIZE = 8
 
 @dataclass
-class RRChild: # Synchronise to rr_Child_t
+class RRChild:
     id: int
     priority: int
     sched_state: int = 0 # Always 0 to start.
@@ -32,17 +32,32 @@ class RRData:
     Word format is the following:
         [0, 1): Number of children N
         [1 .. N*3 + 1): Array of children
-        [N*3 + 1 .. N*4 + 1): Stuff for storing pointers.
+        [+1] Number of channels
+        [..] channel to child_id
+        [N*3 + 1 .. N*4 + 1): Stuff for storing pointers for the scheduler
+        TODO: Why can't i just objcopy this in?
+        We could also embed all children names if we wanted to.
     """
     children: List[RRChild]
+    channel_id_to_target_child_id: List[int]
 
     def serialise(self, childrenpath: pathlib.Path) -> int:
         """returns size of file in bytes."""
+        # Serialise the num children.
         b = len(self.children).to_bytes(WORD_SIZE, "little")
 
+        # Serialise the array of children.
         for ch in self.children:
             b += ch.to_bytes()
 
+        # Serialise the number of channels.
+        b += len(self.channel_id_to_target_child_id).to_bytes(WORD_SIZE, "little")
+
+        # serialise the channels to child id.
+        for id in self.channel_id_to_target_child_id:
+            b += id.to_bytes(WORD_SIZE, "little")
+
+        # Give some memory for the scheduler queue
         for _ in range(len(self.children)):
             b += (0).to_bytes(WORD_SIZE, "little")
 
@@ -148,6 +163,7 @@ class RRSystem(System):
         # cspace slot 1 is always self_tcb
         csp.add_cap(Cap.TCB, 1, main.name)
         children: List[RRChild] = []
+        child_name_to_child_id : Dict[str, int] = dict()
         for (child_id, pd) in enumerate(self.pds):
             pd.sdf = sdf
             sdf._add_pd(pd)
@@ -158,38 +174,68 @@ class RRSystem(System):
 
             main.add_child_pd(pd, child_id);
             children.append(RRChild(child_id, pd.priority))
+            child_name_to_child_id[pd.name] = child_id
 
         main.add_pagetables(pts)
         main.add_cspace(csp)
 
         # Now we should keep track of endpoints so we know who to forward to.
+        # index is channel_id, value is child_id
+        channel_id_to_target_child_id: List[int] = []
+        print(f"Num channels: {len(self.channels)}")
         ch_ind = 0
         for channel in self.channels:
+            # TODO: Add support for checking if channels are uni-directional.
+            # child_a has target child_b, at ch_ind
+            channel_id_to_target_child_id.append(child_name_to_child_id[channel.end_b.pd.name])
+            # child_b has target child_a, at ch_ind + 1
+            channel_id_to_target_child_id.append(child_name_to_child_id[channel.end_a.pd.name])
+
             # intercept channels.
-            # child_a -> rrer
-            child_a_to_rrer_end = Channel.End(pd=main, can_notify=True, can_pp=True, ch_id=ch_ind)
-            # rrer -> sender (which is done implicitly through shared memory)
-            # sender -> child_b
-            sender_to_child_b = Channel.End(pd=main, can_notify=True, can_pp=True, ch_id=ch_ind + 1)
+            # child_a -> main
+            child_a_to_main_end = Channel.End(pd=main, can_notify=False, can_pp=False, ch_id=ch_ind)
+            child_a_to_main_ch = deepcopy(channel)
+            # end_b!
+            child_a_to_main_ch.end_b = child_a_to_main_end
+            child_a_to_main_ch.sdf = sdf
+            sdf._add_channel(child_a_to_main_ch)
 
-            # end_x are correctly updated because python is funny
-            # 100% not stable, but it's the best I can do.
-            ch_a = deepcopy(channel)
-            ch_a.sdf = sdf
-            ch_a.end_b = child_a_to_rrer_end
+            #  child_a <- sender
+            sender_to_child_a_end = Channel.End(pd=sender, can_notify=True, can_pp=True, ch_id=ch_ind)
+            child_a_to_sender_end = Channel.End(
+                pd=channel.end_a.pd,
+                can_notify=False,
+                can_pp=False,
+                ch_id=channel.end_a.ch_id
+            )
+            sender_to_child_a_ch = Channel(sdf, sender_to_child_a_end, child_a_to_sender_end)
 
-            ch_b = deepcopy(channel)
-            ch_b.sdf = sdf
-            ch_b.end_a = sender_to_child_b
 
-            sdf._add_channel(ch_a)
-            sdf._add_channel(ch_b)
+
+            # child_b -> main
+            child_b_to_main_end = Channel.End(pd=main, can_notify=False, can_pp=False, ch_id=ch_ind+1)
+            child_b_to_main_ch = deepcopy(channel)
+            # end_a!
+            child_b_to_main_ch.end_a = child_b_to_main_end
+            child_b_to_main_ch.sdf = sdf
+            sdf._add_channel(child_b_to_main_ch)
+
+            # child_b <- sender
+            sender_to_child_b_end = Channel.End(pd=sender, can_notify=True, can_pp=True, ch_id=ch_ind+1)
+            child_b_to_sender_end = Channel.End(
+                pd=channel.end_b.pd,
+                can_notify=False,
+                can_pp=False,
+                ch_id=channel.end_b.ch_id
+            )
+            sender_to_child_b_ch = Channel(sdf, sender_to_child_b_end, child_b_to_sender_end)
+
             ch_ind += 2
 
         for mr in self.mrs:
             sdf._add_memory_region(mr)
 
-        return RRData(children)
+        return RRData(children, channel_id_to_target_child_id)
 
 
 def generate(sdf_path: str, output_dir: str):
@@ -204,8 +250,8 @@ def generate(sdf_path: str, output_dir: str):
 
     # pseudo intercept channels
     ch = Channel(rr,
-        Channel.End(pd=ping, can_notify=True, can_pp=False, ch_id=0, setvar_id="pongch"),
-        Channel.End(pd=pong, can_notify=True, can_pp=False, ch_id=1, setvar_id="pingch")
+        Channel.End(pd=ping, can_notify=True, can_pp=False, ch_id=33, setvar_id="pongch"),
+        Channel.End(pd=pong, can_notify=True, can_pp=False, ch_id=59, setvar_id="pingch")
     )
 
     # add the data of the children here.
