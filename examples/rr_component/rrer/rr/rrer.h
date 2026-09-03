@@ -145,9 +145,6 @@ static inline void rrer_main()
             // Otherwise set it as schedulable.
             else
                 rr_sched_unschedule_current(rr_ChildState_Schedulable);
-
-            // perform a reschedule.
-            rrer_perform_schedule();
         } break;
         case rr_IPCType_Msg: {
             // if type is msg, mark currently scheduled as blocked by send.
@@ -166,10 +163,10 @@ static inline void rrer_main()
             seL4_Word target_child = rr_channel_to_target_child_id[source_ch];
             rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
 
-            // perform a reschedule.
-            rrer_perform_schedule();
         } break;
         }
+        // perform a reschedule.
+        rrer_perform_schedule();
         last_cycle_count = cycle_count;
     }
 }

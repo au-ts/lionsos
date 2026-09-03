@@ -14,6 +14,11 @@
 // communication flow:
 // 1. The chosen thread
 
+static inline seL4_Word source_ch_to_target_ch(seL4_Word ch) {
+    if (ch % 2 == 1) return ch - 1;
+    return ch + 1;
+}
+
 seL4_Word main_ch = 0;
 uint8_t *per_thread_recv_queue_mem = NULL;
 seL4_Word per_thread_recv_queue_size = 0;
@@ -41,15 +46,15 @@ void init()
     }
     ipc_t ipc = queue_peek(queue);
     if (badge_is_ntfn(ipc.badge)) {
-        LOG("Sending ntfn\n");
-        seL4_Signal(BASE_OUTPUT_NOTIFICATION_CAP + ipc.channel);
+        LOG("Sending ntfn ch %lu\n", ipc.channel);
+        seL4_Signal(BASE_OUTPUT_NOTIFICATION_CAP + source_ch_to_target_ch(ipc.channel));
     }
     else {
-        LOG("Sending msg\n");
+        LOG("Sending msg ch %lu\n", ipc.channel);
         seL4_MessageInfo_t msg = ipc_handler_read_msg(&queues->handler, ipc);
-        seL4_Send(BASE_ENDPOINT_CAP + ipc.channel, msg);
+        seL4_Send(BASE_ENDPOINT_CAP + source_ch_to_target_ch(ipc.channel), msg);
     }
-    queue_pop_ignore(queues);
+    queue_pop_ignore(queue);
     LOG("Message sent!\n");
 }
 
