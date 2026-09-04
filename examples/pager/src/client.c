@@ -18,7 +18,7 @@
 
 #include <dirent.h>
 
-#include <519.h>
+// #include <519.h>
 #include <minor_pf.h>
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
@@ -41,41 +41,25 @@ static uint64_t timespec_to_ns(struct timespec ts)
     return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
 }
 void bench_main(void) {
-    // printf("this is printed bm\n");
     fs_cmpl_t completion;
     int err = fs_command_blocking(&completion, (fs_cmd_t){ .type = FS_CMD_INITIALISE });
     if (err || completion.status != FS_STATUS_SUCCESS) {
-        printf("BENCH|ERROR: Failed to mount, %d, %d\n", err, completion.status);
+        printf("CLIENT|ERROR: Failed to mount, %d, %d\n", err, completion.status);
         return;
     }
-    char *argv[] = {
-        "lbm",
-        "1", 
-        "reference.dat", 
-        "0", 
-        "1", 
-        "100_100_130_cf_a.of"
-    };
-    struct timespec start_ts;
-    struct timespec end_ts;
-
-    // microkit_msginfo start_message = microkit_msginfo_new(0, 1);
-    // microkit_mr_set(0, 1);
-    // microkit_ppcall(0, start_message);
-    int rc = fiveonenine(6, argv);
-    // int rc = minor_pf();
-    // microkit_msginfo stop_message = microkit_msginfo_new(0, 1);
-    // microkit_mr_set(0, 0);
-    // microkit_ppcall(0, stop_message);
+    // char *argv[] = {
+    //     "lbm",
+    //     "1", 
+    //     "reference.dat", 
+    //     "0", 
+    //     "1", 
+    //     "100_100_130_cf_a.of"
+    // };
 
 
-    printf("BENCH|SPEC CPU finished rc=%d\n", rc);
-    uint64_t start_ns = timespec_to_ns(start_ts);
-    uint64_t end_ns = timespec_to_ns(end_ts);
-    uint64_t elapsed_ns = end_ns - start_ns;
-    printf("elapsed ns: %llu\n", (unsigned long long)elapsed_ns);
-    printf("elapsed us: %llu\n", (unsigned long long)(elapsed_ns / 1000));
-    printf("elapsed ms: %llu\n", (unsigned long long)(elapsed_ns / 1000000));
+
+    // int rc = fiveonenine(6, argv);
+    int rc = minor_pf();
     printf("benchmark done\n");
 }
 
