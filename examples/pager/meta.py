@@ -22,7 +22,6 @@ def generate(
     sdf_file: str,
     output_dir: str,
     dtb: Optional[DeviceTree],
-    get_core: Callable[[str], int]
 ):
     serial_node = dtb.node(board.serial)
     assert serial_node is not None
@@ -112,124 +111,6 @@ def generate(
     if board.name == "rpi4b_1gb":
         timer_system.add_client(blk_driver)
 
-    # child_pds = [
-    #     timer_driver,
-    #     serial_driver,
-    #     serial_virt_tx,
-    #     pager,
-    #     blk_driver,
-    #     blk_virt,
-    #     fatfs
-    # ]
-    # pds_per_core = {
-    # }
-
-    # for pd in child_pds:
-    #     try:
-    #         core = get_core(pd.name)
-    #     except:
-    #         raise ValueError(
-    #             f"PD {pd.name} is missing from your core allocation configuration file!"
-    #         )
-    #     if core in pds_per_core:
-    #         pds_per_core[core].append(pd)
-    #     else:
-    #         pds_per_core[core] = [pd]
-    # num_cores = len(pds_per_core)
-
-    # # Allocate benchmarking resources
-    # core_objs = [{} for _ in range(num_cores)]
-    # for i in range(num_cores):
-    #     core = sorted(pds_per_core)[i]
-    #     core_objs[i]["core"] = core
-
-    #     # Create benchmark and idle PDs for each active core
-    #     core_objs[i]["idle_elf"] = copy_elf("idle", "idle", core)
-    #     core_objs[i]["idle_pd"] = ProtectionDomain(
-    #         f"bench_idle{core}", core_objs[i]["idle_elf"], priority=1, cpu=core
-    #     )
-    #     sdf.add_pd(core_objs[i]["idle_pd"])
-
-    #     core_objs[i]["bench_elf"] = copy_elf("benchmark", "benchmark", core)
-    #     core_objs[i]["bench_pd"] = ProtectionDomain(
-    #         f"bench{core}", core_objs[i]["bench_elf"], priority=254, cpu=core
-    #     )
-    #     sdf.add_pd(core_objs[i]["bench_pd"])
-
-    #     # Benchmark PD requires serial output
-    #     serial_system.add_client(core_objs[i]["bench_pd"])
-
-    #     # Create formatted list of children for benchmark PD
-    #     core_objs[i]["children"] = []
-    #     for pd in pds_per_core[core]:
-    #         child_id = core_objs[i]["bench_pd"].add_child_pd(pd)
-    #         core_objs[i]["children"].append((child_id, pd.name))
-
-    #     # Create benchmark to idle init channel
-    #     core_objs[i]["init_ch"] = Channel(
-    #         core_objs[i]["idle_pd"], core_objs[i]["bench_pd"]
-    #     )
-    #     sdf.add_channel(core_objs[i]["init_ch"])
-
-    #     # Create benchmarking start and stop channels
-    #     if i == 0:
-    #         # First active core is notified by benchmarking client
-    #         core_objs[i]["start_ch"] = Channel(pager, core_objs[i]["bench_pd"])
-    #         core_objs[i]["stop_ch"] = Channel(pager, core_objs[i]["bench_pd"])
-    #     else:
-    #         # Other cores are notified by benchmark PD on previous core
-    #         core_objs[i]["start_ch"] = Channel(
-    #             core_objs[i - 1]["bench_pd"], core_objs[i]["bench_pd"]
-    #         )
-    #         core_objs[i]["stop_ch"] = Channel(
-    #             core_objs[i - 1]["bench_pd"], core_objs[i]["bench_pd"]
-    #         )
-
-    #     sdf.add_channel(core_objs[i]["start_ch"])
-    #     sdf.add_channel(core_objs[i]["stop_ch"])
-
-    #     # Add cycle counter memory region for idle to share counts with benchmarking client
-    #     cycle_counters_mr = MemoryRegion(sdf, f"cycle_counters{core}", 0x1000)
-    #     sdf.add_mr(cycle_counters_mr)
-    #     core_objs[i]["idle_pd"].add_map(Map(cycle_counters_mr, 0x5_000_000, perms="rw"))
-    #     client.add_map(Map(cycle_counters_mr, 0x20_000_000 + 0x1000 * i, perms="r"))
-
-    #     # Create configuration structures to be serialised
-    #     core_objs[i]["idle_config"] = BenchmarkIdleConfig(
-    #         0x5_000_000, core_objs[i]["init_ch"].pd_a_id
-    #     )
-    #     if i == 0:
-    #         # We first create a config for the benchmarking client
-    #         bench_client_config = BenchmarkClientConfig(
-    #             core_objs[i]["start_ch"].pd_a_id,
-    #             core_objs[i]["stop_ch"].pd_a_id,
-    #             list(((0x20_000_000 + 0x1000 * i) for i in range(num_cores))),
-    #         )
-    #     else:
-    #         # Then we create the config for the benchmark PD on the previous core
-    #         core_objs[i - 1]["bench_config"] = BenchmarkConfig(
-    #             core_objs[i - 1]["start_ch"].pd_b_id,
-    #             core_objs[i]["start_ch"].pd_a_id,
-    #             core_objs[i - 1]["stop_ch"].pd_b_id,
-    #             core_objs[i]["stop_ch"].pd_a_id,
-    #             core_objs[i - 1]["init_ch"].pd_b_id,
-    #             core_objs[i - 1]["core"],
-    #             False,
-    #             core_objs[i - 1]["children"],
-    #         )
-
-    # # Finally create the last benchmark PD config
-    # core_objs[num_cores - 1]["bench_config"] = BenchmarkConfig(
-    #     core_objs[num_cores - 1]["start_ch"].pd_b_id,
-    #     0,
-    #     core_objs[num_cores - 1]["stop_ch"].pd_b_id,
-    #     0,
-    #     core_objs[num_cores - 1]["init_ch"].pd_b_id,
-    #     core_objs[num_cores - 1]["core"],
-    #     True,
-    #     core_objs[num_cores - 1]["children"],
-    # )
-
     pds = [
         serial_virt_rx,
         timer_driver,
@@ -254,7 +135,6 @@ def generate(
     assert blk_system.connect()
     assert blk_system.serialise_config(output_dir)
 
-
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
             f.write(sdf.render())
 
@@ -267,8 +147,7 @@ if __name__ == "__main__":
                         choices=[b.name for b in BOARDS])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
-    parser.add_argument("--objcopy", required=True)
-    parser.add_argument("--smp", required=True)
+    # parser.add_argument("--smp", required=True)
 
     args = parser.parse_args()
 
@@ -277,16 +156,11 @@ if __name__ == "__main__":
     sdf = SystemDescription(board.arch, board.paddr_top)
     sddf = Sddf(args.sddf)
 
-    global obj_copy
-    obj_copy = args.objcopy
 
-    with open(args.smp, "r") as core_alloc:
-        core_dict = json.load(core_alloc)
-    get_core = lambda name: core_dict[name]
 
     dtb = None
     if board.arch != SystemDescription.Arch.X86_64:
         with open(args.dtb, "rb") as f:
             dtb = DeviceTree(f.read())
 
-    generate(args.sdf, args.output, dtb, get_core)
+    generate(args.sdf, args.output, dtb)

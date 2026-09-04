@@ -42,5 +42,4 @@ seL4_Error my_untyped_retype(
 
 uintptr_t allocate_pager_memory(uint64_t size);
 
-
 #endif

@@ -7,12 +7,12 @@
 # and operated on from there.
 #
 vpath %.c ${SDDF} ${LIONSOS}/examples/pager
-IMAGES := blk_driver.elf blk_virt.elf pager.elf client.elf timer_driver.elf idle.elf \
+IMAGES := blk_driver.elf blk_virt.elf pager.elf client.elf timer_driver.elf \
 eth_driver.elf \
 fat.elf \
 serial_driver.elf \
 	serial_virt_rx.elf \
-	serial_virt_tx.elf 
+	serial_virt_tx.elf
 SUPPORTED_BOARDS := \
 	qemu_virt_aarch64 \
 	maaxboard \
@@ -215,7 +215,7 @@ minor_pf.a:
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH \
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --objcopy $(OBJCOPY) $(PARTITION_ARG) --smp ../core_config/single_core.json
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
 
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
