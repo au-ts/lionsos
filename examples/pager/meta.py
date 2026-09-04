@@ -102,8 +102,8 @@ def generate(
         fatfs,
         client,
         blk=blk_system,
-        partition=1 # change this if necessary
-        # partition=partition
+        # partition=1 # change this if necessary
+        partition=partition
     )
 
     if board.name == "maaxboard":

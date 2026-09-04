@@ -20,6 +20,8 @@
 #define GZP_CNODE 4 // where global zero frame caps are placed.
 #define BUFFERS_SIZE 200000
 #define REFILL_SIZE 20000
+#define FOLIO_COUNT (BUFFERS_SIZE + 1)
+#define FOLIO_MEMORY_SIZE (FOLIO_COUNT * sizeof(struct folio))
 
 #include <sddf/util/printf.h>
 
@@ -71,6 +73,10 @@ static uint32_t unused_gzp[BUFFERS_SIZE];
 static uint32_t unused_gzp_idx = 0;
 
 struct folio *get_folio_from_idx(uint32_t idx) {
+    if (idx == 0 || idx > FOLIO_COUNT) {
+        sddf_printf("folio index out of range: %u\n", idx);
+        return NULL;
+    }
     return (struct folio *)(frame_memory + (idx - 1) * sizeof(struct folio)); 
 }
 
@@ -79,6 +85,10 @@ static void refill_frames() {
     sddf_dprintf("refilling frames\n");
     for (int i = 0; i < REFILL_SIZE * 10; ++i) {
         struct folio *folio = get_folio_from_idx(frame_idx);
+        if (folio == NULL || unused_frames_idx >= BUFFERS_SIZE) {
+            sddf_printf("frame metadata exhausted\n");
+            return;
+        }
         seL4_Error err = do_untyped_retype(&post_boot_cnode, seL4_ARM_SmallPageObject, seL4_PageBits, frame_idx, frame_cnode_cptr);
         if (err) {
             sddf_printf("error occured when refilling frames %d\n", err);
@@ -95,7 +105,9 @@ static struct folio *get_frame() {
     if (!unused_frames_idx) {
         refill_frames();
     }
-    return unused_frames[--unused_frames_idx];
+    struct folio *folio = unused_frames[--unused_frames_idx];
+    folio->refcount = 1;
+    return folio;
 }
 
 static void refill_ips() {
@@ -193,7 +205,8 @@ pte_t *make_page_table_entry(uintptr_t vaddr, uint32_t child) {
 
 void init(void)
 {
-    pager_memory_idx = 0;
+    frame_memory = pager_memory;
+    pager_memory_idx = FOLIO_MEMORY_SIZE;
 
     // // intialise untypeds.
     capDLBootInfo = (capDLBootInfo_t*) remaining_untypeds_vaddr;
