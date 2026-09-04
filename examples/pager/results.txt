@@ -1,119 +1,39 @@
-Anonymous page-fault latency benchmark
-========================================
-CNTFRQ_EL0 : 8333333 Hz
-page size  : 4096 bytes
-pages      : 16384
-size       : 64 MiB
-
 Running READ benchmark...
 
 Anonymous READ page faults
 -----------------------------
 samples : 16374
-min     : 5520 ns
-median  : 5880 ns
-mean    : 7689 ns
-max     : 1025640 ns
+min     : 3960 ns
+median  : 4680 ns
+mean    : 4666 ns
+max     : 24360 ns
 
 Running WRITE benchmark...
 
 Anonymous WRITE page faults
 -----------------------------
 samples : 16374
-min     : 5760 ns
-median  : 6120 ns
-mean    : 8096 ns
-max     : 1025760 ns
-BENCH|SPEC CPU finished rc=0
-elapsed ns: 2038016583
-elapsed us: 2038016
-elapsed ms: 2038
-benchmark done
-
-Anonymous page-fault latency benchmark
-========================================
-CNTFRQ_EL0 : 8333333 Hz
-page size  : 4096 bytes
-pages      : 16384
-size       : 64 MiB
+min     : 4080 ns
+median  : 4560 ns
+mean    : 4732 ns
+max     : 24720 ns
 
 Running READ benchmark...
 
 Anonymous READ page faults
 -----------------------------
 samples : 16374
-min     : 8583 ns
-median  : 9083 ns
-mean    : 16128 ns
-max     : 519916 ns
+min     : 3960 ns
+median  : 4680 ns
+mean    : 4678 ns
+max     : 23520 ns
 
 Running WRITE benchmark...
 
 Anonymous WRITE page faults
 -----------------------------
 samples : 16374
-min     : 6750 ns
-median  : 7250 ns
-mean    : 16610 ns
-max     : 106589667 ns
-BENCH|SPEC CPU finished rc=0
-elapsed ns: 4385093417
-elapsed us: 4385093
-elapsed ms: 4385
-benchmark done
-
-// macbook is
-Anonymous page-fault latency benchmark
-========================================
-CNTFRQ_EL0 : 24000000 Hz
-page size  : 16384 bytes
-pages      : 16384
-size       : 256 MiB
-
-Running READ benchmark...
-
-Anonymous READ page faults
------------------------------
-samples : 16374
-min     : 624 ns
-median  : 1167 ns
-mean    : 1197 ns
-max     : 18446744073709545367 ns
-
-Running WRITE benchmark...
-
-Anonymous WRITE page faults
------------------------------
-samples : 16374
-min     : 2416 ns
-median  : 2791 ns
-mean    : 3191 ns
-max     : 18446744073709547365 ns
-	Command being timed: "./a.out"
-	User time (seconds): 0.39
-	System time (seconds): 0.16
-	Percent of CPU this job got: 39%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.41
-	Average shared text size (kbytes): 0
-	Average unshared data size (kbytes): 0
-	Average stack size (kbytes): 0
-	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 262192
-	Average resident set size (kbytes): 0
-	Major (requiring I/O) page faults: 0
-	Minor (reclaiming a frame) page faults: 32840
-	Voluntary context switches: 32769
-	Involuntary context switches: 42
-	Swaps: 0
-	File system inputs: 0
-	File system outputs: 0
-	Socket messages sent: 0
-	Socket messages received: 0
-	Signals delivered: 0
-	Page size (bytes): 16384
-	Exit status: 0
-
-	8286743
-	8282287
-	10138383
-	10161146
+min     : 4080 ns
+median  : 4560 ns
+mean    : 4733 ns
+max     : 24840 ns

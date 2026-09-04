@@ -50,7 +50,7 @@ void bench_main(void) {
     }
     char *argv[] = {
         "lbm",
-        "1", 
+        "1",
         "reference.dat", 
         "0", 
         "1", 

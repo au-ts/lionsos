@@ -12,8 +12,7 @@ eth_driver.elf \
 fat.elf \
 serial_driver.elf \
 	serial_virt_rx.elf \
-	serial_virt_tx.elf \
-benchmark.elf
+	serial_virt_tx.elf 
 SUPPORTED_BOARDS := \
 	qemu_virt_aarch64 \
 	maaxboard \
@@ -104,7 +103,6 @@ endif
 IMAGE_FILE := loader.img
 REPORT_FILE  := report.txt
 SYSTEM_FILE := pager.system
-BENCHMARK := $(SDDF)/benchmark
 
 
 TOP := ${LIONSOS}/examples/pager
@@ -178,7 +176,6 @@ include $(SDDF)/drivers/network/$(NET_DRIV_DIR)/eth_driver.mk
 FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
 FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIONSOS)/components/fs/fat/fat.mk
-include ${BENCHMARK}/benchmark.mk
 LIBMICROKITCO_CFLAGS_client := -O3 -I$(TOP)
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk

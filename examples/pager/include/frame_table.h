@@ -8,8 +8,8 @@
  * - currently only one page per frame...
  */
 typedef struct folio {
-    struct folio *next;
     uint32_t frame_page;
+    uint32_t refcount;
 } frame_t;
 
 /* Memory-efficient doubly linked list of frames

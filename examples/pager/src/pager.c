@@ -21,11 +21,9 @@
 #define BUFFERS_SIZE 200000
 #define REFILL_SIZE 20000
 
-#include <sddf/benchmark/config.h>
-#include <sddf/benchmark/bench.h>
 #include <sddf/util/printf.h>
 
-__attribute__((__section__(".benchmark_client_config"))) benchmark_client_config_t benchmark_config;
+
 
 
 // capability related global variables:
@@ -47,6 +45,7 @@ pgd_t page_tables[10];
 uintptr_t pager_memory;
 static uintptr_t pager_memory_idx;
 
+
 // Bookkeeping for pager's memory.
 static uintptr_t freed_pager_memory[BUFFERS_SIZE];
 static uint32_t freed_pager_memory_idx = 0;
@@ -59,9 +58,10 @@ static uint32_t unused_ips_idx = 0;
 static uint32_t ips_idx = 1;
 
 // Bookkeeping for frames.
-static uint32_t unused_frames[BUFFERS_SIZE];
+static struct folio *unused_frames[BUFFERS_SIZE];
 static uint32_t unused_frames_idx = 0;
 
+uintptr_t frame_memory;
 static uint32_t frame_idx = 1;
 
 // Bookkeeping for global zero pages.
@@ -70,21 +70,28 @@ static uint32_t gzp_idx = 1;
 static uint32_t unused_gzp[BUFFERS_SIZE];
 static uint32_t unused_gzp_idx = 0;
 
+struct folio *get_folio_from_idx(uint32_t idx) {
+    return frame_memory + (idx - 1) * sizeof(struct folio); 
+}
+
 // Slub allocator local functions.
 static void refill_frames() {
     sddf_dprintf("refilling frames\n");
     for (int i = 0; i < REFILL_SIZE * 10; ++i) {
+        struct folio *folio = get_folio_from_idx(frame_idx);
         seL4_Error err = do_untyped_retype(&post_boot_cnode, seL4_ARM_SmallPageObject, seL4_PageBits, frame_idx, frame_cnode_cptr);
         if (err) {
             sddf_printf("error occured when refilling frames %d\n", err);
         }
-        unused_frames[unused_frames_idx] = frame_idx;
+        folio->frame_page = frame_idx;
+        folio->refcount = 0;
+        unused_frames[unused_frames_idx] = folio;
         ++frame_idx;
         ++unused_frames_idx;
     }
 }
 
-static uint32_t get_frame() {
+static struct folio *get_frame() {
     if (!unused_frames_idx) {
         refill_frames();
     }
@@ -245,6 +252,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     uintptr_t ip = microkit_mr_get(0);
     uint64_t fsc = fsr & 0x3F;
     bool is_write = (fsr >> 6) & 1;
+    struct folio *folio;
     uint32_t frame;
     pte_t *page_entry = make_page_table_entry(fault_addr, child);
 
@@ -266,16 +274,18 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
             insert_frame_to_page(frame, page_entry);
             return seL4_True;
         } else {
-            frame = get_frame();
+            folio = get_frame();
             *page_entry |= DESC_NG;
+            frame = folio->frame_page;
         }
-        insert_frame_to_page(frame, page_entry);
+        insert_frame_to_page(folio->frame_page, page_entry);
     }
     // Permission fault (level 1–3)
     if (fsc >= 0x0D && fsc <= 0x0F) {
         // if global zero page get new frame
         if (!(*page_entry & DESC_NG)) {
-            frame = get_frame();
+            folio = get_frame();
+            frame = folio->frame_page;
             insert_frame_to_page(frame, page_entry);
             *page_entry |= DESC_NG;
         } else {
@@ -294,13 +304,13 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
 
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
-    bool cmd = microkit_mr_get(0);
-    if (cmd == 1) {
-        sddf_notify(benchmark_config.start_ch);
-    } else if (cmd == 0) {
-        sddf_notify(benchmark_config.stop_ch);
-    }
-    return microkit_msginfo_new(0, 0);
+    // bool cmd = microkit_mr_get(0);
+    // if (cmd == 1) {
+    //     sddf_notify(benchmark_config.start_ch);
+    // } else if (cmd == 0) {
+    //     sddf_notify(benchmark_config.stop_ch);
+    // }
+    // return microkit_msginfo_new(0, 0);
 }
 
 /**
@@ -333,4 +343,37 @@ void myfree(uintptr_t start, uintptr_t end) {
     // free shadow page tables.
     // zero out frames.
     // add freed stuff to free lists.
+}
+
+
+void fork(uint32_t parent, uint32_t child) {
+    // mark parent PTEs RO & incrment refcount.
+    for (uint32_t pgdi = 0; pgdi < 512; ++pgdi) {
+        if (page_tables[parent].entries[pgdi]) {
+            pgd_t *pgd = page_tables[parent].entries[pgdi];
+            for (uint32_t pudi = 0; pudi < 512; ++pudi) {
+                if (pgd->entries[pudi]) {
+                    pud_t *pud = pgd->entries[pudi];
+                    for (uint32_t pdi = 0; pdi < 512; ++pdi) {
+                        if (pud->entries[pdi]) {
+                            pd_t *pd = pud->entries[pdi];
+                            for (uint32_t pti = 0; pti < 512; ++pti) {
+                                if (pd->entries[pti]) {
+                                    pt_t *pt = pd->entries[pti];
+                                    for (uint32_t ptei = 0; ptei < 512; ++ptei) {
+                                        pte_t pte = pt->entries[ptei];
+                                        // remap here.
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } 
+            }
+        }
+    }
+
+    // probably best to have semantics where
+    // on write access, create a copy with a reference count of number of children.
+    // need to represent frames as a struct now. (folio with reference count.)
 }
