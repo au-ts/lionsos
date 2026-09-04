@@ -1,7 +1,8 @@
 # Memory Pager for LionsOS
 Minimal demand-paging service (`pager` PD) that backs the `client` PD on seL4/Microkit (AArch64) via fault handling, shadow 4-level page tables, CoW global zero page, and bump/slab allocators for frames and paging structures.
 
-This pager is meant for benchmarking minor page faults of anonymous memory like in Figure 8 of the [HongMeng paper](https://www.usenix.org/system/files/osdi24-chen-haibo.pdf). It can be used for real applications but should only really be used for a *static* system as frame objects and paging objects do not get untyped. 
+This pager is meant for benchmarking minor page faults of anonymous memory like in Figure 8 of the [HongMeng paper](https://www.usenix.org/system/files/osdi24-chen-haibo.pdf). It is also to be used to benchmark the address space copy semantics of `fork()` but this is WIP.
+It can be used for real applications but should only really be used for a *static* system as frame objects and paging objects do not get untyped. 
 <!-- TODO: write a quick description of the pager.
 TODO: big caveats like only for aarch64, supports the maaxboard and qemu. -->
 

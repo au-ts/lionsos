@@ -71,7 +71,7 @@ static uint32_t unused_gzp[BUFFERS_SIZE];
 static uint32_t unused_gzp_idx = 0;
 
 struct folio *get_folio_from_idx(uint32_t idx) {
-    return frame_memory + (idx - 1) * sizeof(struct folio); 
+    return (struct folio *)(frame_memory + (idx - 1) * sizeof(struct folio)); 
 }
 
 // Slub allocator local functions.
