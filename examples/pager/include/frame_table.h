@@ -13,7 +13,7 @@ typedef struct folio {
 } frame_t;
 
 /* Memory-efficient doubly linked list of frames
- *
+ * REDUNDANT
  * As all frame objects will live in effectively an array, we only need
  * to be able to index into that array.
  */

@@ -326,7 +326,7 @@ static seL4_Error map_frame(uint64_t frame_cap, seL4_CPtr vspace, seL4_Word vadd
 /**
  * TODO: implement.
  */
-void myfree(uintptr_t start, uintptr_t end) {
+void myfree(uintptr_t start, uintptr_t end, microkit_child child) {
     // Unmaps the page
     // Unmap paging structures
     // return page and paging structures to their free lists.
