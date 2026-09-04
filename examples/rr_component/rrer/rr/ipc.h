@@ -65,7 +65,7 @@ static inline void rr_ipc_sender_setup(seL4_Word child) {
 // store the curretly stored message in the ipc buffer into the recv queue of that
 // child.
 static inline void rr_ipc_store_ipc_msg(seL4_Word target_child, seL4_MessageInfo_t msg, seL4_Word badge, seL4_Word target_ch) {
-    LOG("storing message in child queue: %lu\n", target_child);
+    LOG("Storing message in child queue: %lu\n", target_child);
     assert(target_child < rr_children_num);
     queue_push(&pt_recv_queue[target_child], msg, badge, target_ch);
 }

@@ -133,8 +133,7 @@ static inline void rrer_main()
         seL4_ARM_VPMU_VPMUReadCycleCounter_t vpmu_res = seL4_ARM_VPMU_VPMUReadCycleCounter(VPMU_CAP);
         NO_ERR(vpmu_res.error);
         seL4_Word cycle_count = vpmu_res.cycle_counter_value;
-        LOG("source_child: %lu, type: %d\n", source_child, type);
-        LOG("last cycle count: %lu, cur cycle count: %lu\n", last_cycle_count, cycle_count);
+        LOG("source_child: %lu, type: %s\n", source_child, rr_ipc_type_to_string(type));
         switch (type) {
         case rr_IPCType_BlockChecker: {
             // if time did not progress, mark currently scheduled as blocked by recv.
@@ -161,6 +160,7 @@ static inline void rrer_main()
             seL4_Word source_ch = rr_badge_to_ch_id(badge);
             assert(source_ch < rr_channels_num);
             seL4_Word target_child = rr_channel_to_target_child_id[source_ch];
+            LOG("Target child: %lu, Source channel: %lu\n", target_child, source_ch);
             rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
 
         } break;

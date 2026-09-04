@@ -8,11 +8,10 @@
 #include "sel4/syscalls_mcs.h"
 #include "types.h"
 #include <sddf/util/printf.h>
+
 #define LOG(...) do {sddf_printf("SENDER [%s]| ", __func__); sddf_printf(__VA_ARGS__);} while (0)
 
 #define ENDPOINT(x) (BASE_ENDPOINT_CAP + x)
-// communication flow:
-// 1. The chosen thread
 
 static inline seL4_Word source_ch_to_target_ch(seL4_Word ch) {
     if (ch % 2 == 1) return ch - 1;
