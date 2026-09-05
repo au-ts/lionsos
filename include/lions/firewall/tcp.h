@@ -11,8 +11,7 @@
 
 /* ----------------- TCP Protocol Definitions ---------------------------*/
 
-typedef struct __attribute__((__packed__)) tcp_hdr
-  {
+typedef struct __attribute__((__packed__)) tcp_hdr {
     /* source port */
     uint16_t src_port;
     /* destination port */
@@ -21,26 +20,39 @@ typedef struct __attribute__((__packed__)) tcp_hdr
     uint32_t seq;
     /* acknowledgement number */
     uint32_t ack_seq;
-    /* reserved, set to 0 */
-    uint16_t reserved:4;
-    /* size of the TCP header in 32 bit words */
-    uint16_t doff:4;
-    /* fin */
-    uint16_t fin:1;
-    /* syn */
-    uint16_t syn:1;
-    /* reset */
-    uint16_t rst:1;
-    /* push */
-    uint16_t psh:1;
-    /* ack */
-    uint16_t ack:1;
-    /* urgent pointer is valid */
-    uint16_t urg:1;
-    /* ECN-Echo*/
-    uint16_t ece:1;
-    /* congestion window reduced */
-    uint16_t cwr:1;
+
+    union {
+        struct __attribute__((__packed__)) {
+            /* reserved, set to 0 */
+            uint16_t reserved:4;
+            /* size of the TCP header in 32 bit words */
+            uint16_t doff:4;
+            /* fin */
+            uint16_t fin:1;
+            /* syn */
+            uint16_t syn:1;
+            /* reset */
+            uint16_t rst:1;
+            /* push */
+            uint16_t psh:1;
+            /* ack */
+            uint16_t ack:1;
+            /* urgent pointer is valid */
+            uint16_t urg:1;
+            /* ECN-Echo*/
+            uint16_t ece:1;
+            /* congestion window reduced */
+            uint16_t cwr:1;
+        };
+        /* alternate view of the same 16 bits: low byte = reserved+doff,
+         * high byte = the 8 flag bits (fin..cwr), for masking with
+         * FW_TCP_*_BIT constants and bulk flag comparisons/tracking. */
+        struct __attribute__((__packed__)) {
+            uint8_t doff_reserved;
+            uint8_t flags;
+        };
+    };
+
     /* size of the receive window*/
     uint16_t window;
     /* checksum over the TCP packet and psuedo-header */
