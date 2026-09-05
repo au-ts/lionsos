@@ -100,6 +100,7 @@ static void filter(void) {
                                 htons(tcp_hdr->dst_port), fw_filter_err_str[fw_err]);
                     goto drop_packet;
                 }
+                /* fall through: a successful FILTER_ACT_CONNECT should also transmit this packet */
             }
             case FILTER_ACT_ESTABLISHED:
             case FILTER_ACT_ALLOW: {
@@ -155,7 +156,7 @@ static void filter(void) {
             }
             }
 
-            // Handle state transitions on packets that matched a tracking instances
+            // Handle state transitions on packets that matched a tracking instance
             if (instance != NULL) {
                 // Determine direction relative to the original connection initiator
                 bool is_forward = (instance->src_ip == ip_hdr->src_ip && instance->src_port == tcp_hdr->src_port);

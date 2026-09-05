@@ -267,14 +267,6 @@ static int file_dup3(int oldfd, int newfd) {
 }
 
 static int fstat_int(const char *path, struct stat *statbuf) {
-    // FatFS rejects "/" with FR_INVALID_NAME, so return a minimal stat for it
-    // here instead of forwarding to the FS server.
-    if (strcmp(path, "/") == 0) {
-        memset(statbuf, 0, sizeof(*statbuf));
-        statbuf->st_mode = S_IFDIR | 0755;
-        return 0;
-    }
-
     ptrdiff_t path_buffer;
     int err = fs_buffer_allocate(&path_buffer);
     if (err) {
@@ -301,6 +293,12 @@ static int fstat_int(const char *path, struct stat *statbuf) {
                                                   } });
 
     fs_buffer_free(path_buffer);
+
+    // FIXME: FS returns this error for "/"
+    if (completion.status == FS_STATUS_INVALID_NAME) {
+        fs_buffer_free(output_buffer);
+        return 0;
+    }
 
     if (completion.status != FS_STATUS_SUCCESS) {
         fs_buffer_free(output_buffer);

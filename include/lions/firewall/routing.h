@@ -195,7 +195,62 @@ fw_routing_err_t pkts_waiting_free_parent(pkts_waiting_t *pkts_waiting, pkt_wait
  *
  * @return error status of operation.
  */
-fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, uint8_t *subnet, uint8_t *interface);
+<<<<<<< HEAD
+static fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table,
+                                      uint32_t ip,
+                                      uint32_t *next_hop,
+                                      fw_routing_interfaces_t *interface,
+                                      uint8_t num_calls, )
+{
+    fw_routing_entry_t *match = NULL;
+    for (uint16_t i = 0; i < table->size; i++) {
+        fw_routing_entry_t *entry = table->entries + i;
+
+        /* ip is part of subnet */
+        if ((subnet_mask(entry->subnet) & ip) == entry->ip) {
+
+            /* Current match is stronger */
+            if (match != NULL && match->subnet > entry->subnet) {
+                continue;
+            }
+            match = entry;
+        }
+    }
+
+    if (match == NULL) {
+        /* No route found */
+        *interface = ROUTING_OUT_NONE;
+    } else if (match->interface == ROUTING_OUT_SELF) {
+        /* Route internally */
+        *interface = ROUTING_OUT_SELF;
+    } else if (match->interface == ROUTING_OUT_EXTERNAL &&
+               match->next_hop == FW_ROUTING_NONEXTHOP) {
+        if (broadcast detection thing here):
+            if calls == 1 and broadcast detection?
+            ip = 255.255.255
+        *next_hop = ip;
+        *interface = ROUTING_OUT_EXTERNAL;
+    } else if (match->interface == ROUTING_OUT_EXTERNAL &&
+               match->next_hop != FW_ROUTING_NONEXTHOP) {
+        num_calls++;
+        if (num_calls == FW_ROUTING_MAX_RECURSION) {
+            /* Find route has hit recursive call limit, ip unreachable. */
+            *interface = ROUTING_OUT_NONE;
+            return ROUTING_ERR_OKAY;
+        }
+        fw_routing_err_t err = fw_routing_find_route(table,
+                                                 match->next_hop,
+                                                    next_hop,
+                                                    interface,
+                                                    num_calls);
+        return err;
+    }
+
+    return ROUTING_ERR_OKAY;
+}
+=======
+fw_routing_err_t fw_routing_find_route(fw_routing_table_t *table, uint32_t *ip, uint8_t *interface);
+>>>>>>> main
 
 /**
  * Add a route to the routing table.
