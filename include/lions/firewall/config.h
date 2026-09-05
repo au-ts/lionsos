@@ -142,22 +142,11 @@ typedef struct fw_webserver_filter_config {
 typedef struct fw_filter_config {
     uint8_t interface;
     fw_connection_resource_t router;
-<<<<<<< HEAD
-    fw_webserver_filter_config_t webserver;
-    // Courtney: Since the TCP filters often had to be clear of which instance
-    // region the connection was written to, I found the names "local" and
-    // "extern(al)" clearer than "internal" and "external". The local region is
-    // where each filter creates connections in, the external region is the
-    // local region of the other filter.
-    region_resource_t local_instances;
-    region_resource_t extern_instances;
-=======
     region_resource_t internal_instances;
     region_resource_t external_instances[FW_MAX_INTERFACES];
     uint8_t num_external_instances;
     uint16_t instances_capacity;
     fw_webserver_filter_config_t webserver;
->>>>>>> main
     region_resource_t rule_id_bitmap;
     fw_connection_resource_t icmp_module;
     fw_rule_t initial_rules[FW_MAX_INITIAL_FILTER_RULES];
