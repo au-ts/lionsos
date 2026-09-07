@@ -1,6 +1,9 @@
 # Variables
 CC = clang
-CFLAGS = -Wall -Wextra -Iinclude -O3 -mcpu=cortex-a53
+CFLAGS = --target=aarch64-none-elf -Wall -Wextra -Iinclude \
+-I${LIONSOS}/lib/libc/include \
+-I$(LIONS_LIBC)/include \
+-O3 -mcpu=cortex-a53 
 LIB_NAME = minor_pf.a
 
 # Directories

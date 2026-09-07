@@ -359,34 +359,34 @@ void myfree(uintptr_t start, uintptr_t end, microkit_child child) {
 }
 
 
-void fork(uint32_t parent, uint32_t child) {
-    // mark parent PTEs RO & incrment refcount.
-    for (uint32_t pgdi = 0; pgdi < 512; ++pgdi) {
-        if (page_tables[parent].entries[pgdi]) {
-            pgd_t *pgd = page_tables[parent].entries[pgdi];
-            for (uint32_t pudi = 0; pudi < 512; ++pudi) {
-                if (pgd->entries[pudi]) {
-                    pud_t *pud = pgd->entries[pudi];
-                    for (uint32_t pdi = 0; pdi < 512; ++pdi) {
-                        if (pud->entries[pdi]) {
-                            pd_t *pd = pud->entries[pdi];
-                            for (uint32_t pti = 0; pti < 512; ++pti) {
-                                if (pd->entries[pti]) {
-                                    pt_t *pt = pd->entries[pti];
-                                    for (uint32_t ptei = 0; ptei < 512; ++ptei) {
-                                        pte_t pte = pt->entries[ptei];
-                                        // remap here.
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } 
-            }
-        }
-    }
+// void fork(uint32_t parent, uint32_t child) {
+//     // mark parent PTEs RO & incrment refcount.
+//     for (uint32_t pgdi = 0; pgdi < 512; ++pgdi) {
+//         if (page_tables[parent].entries[pgdi]) {
+//             pgd_t *pgd = page_tables[parent].entries[pgdi];
+//             for (uint32_t pudi = 0; pudi < 512; ++pudi) {
+//                 if (pgd->entries[pudi]) {
+//                     pud_t *pud = pgd->entries[pudi];
+//                     for (uint32_t pdi = 0; pdi < 512; ++pdi) {
+//                         if (pud->entries[pdi]) {
+//                             pd_t *pd = pud->entries[pdi];
+//                             for (uint32_t pti = 0; pti < 512; ++pti) {
+//                                 if (pd->entries[pti]) {
+//                                     pt_t *pt = pd->entries[pti];
+//                                     for (uint32_t ptei = 0; ptei < 512; ++ptei) {
+//                                         pte_t pte = pt->entries[ptei];
+//                                         // remap here.
+//                                     }
+//                                 }
+//                             }
+//                         }
+//                     }
+//                 } 
+//             }
+//         }
+//     }
 
-    // probably best to have semantics where
-    // on write access, create a copy with a reference count of number of children.
-    // need to represent frames as a struct now. (folio with reference count.)
-}
+//     // probably best to have semantics where
+//     // on write access, create a copy with a reference count of number of children.
+//     // need to represent frames as a struct now. (folio with reference count.)
+// }

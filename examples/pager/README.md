@@ -8,7 +8,8 @@ TODO: big caveats like only for aarch64, supports the maaxboard and qemu. -->
 
 ## 1. How to run
 ### 1.1 Dependencies
-- [seL4](https://github.com/SEL4/sel4): specifically tag **15.0.0**
+- [seL4](https://github.com/SEL4/sel4): specifically tag **16.0.0**
+- [rust](https://github.com/au-ts/rust-sel4): specifically branch *carrells_demo*
 - [Microkit](https://github.com/au-ts/microkit/tree/joshua/mglru3): specifically branch **joshua/mglru3**
 - [microkit_sdf_gen](https://github.com/au-ts/microkit_sdf_gen/tree/joshua/mglru3): specifically branch **joshua/mglru**
 - [LionsOs](https://github.com/au-ts/lionsos/tree/joshua/simple-pager): specifically branch **joshua/simple-pager**
@@ -22,6 +23,7 @@ python3 -m venv venv
 ```
 2. Compile [Microkit](https://github.com/au-ts/microkit/tree/joshua/mglru3) for maaxboard and qemu_virt_aarch64 by running the following:
 ```sh
+    # edit the path pointing to rust-seL4 first.
     python build_sdk.py --sel4=/path/to/seL4 --boards=qemu_virt_aarch64,maaxboard --configs=debug,benchmark --skip-docs --skip-tar
 ```
 3. Download [LionsOs](https://github.com/au-ts/lionsos/tree/joshua/simple-pager) submodule by running the following in the [LionsOs](https://github.com/au-ts/lionsos/tree/joshua/simple-pager) directory:
