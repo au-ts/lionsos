@@ -146,6 +146,9 @@ void free_blocks(void *ptr, size_t num_blocks, void *heap, uint8_t *bitmap)
     }
 }
 
+/**
+ * TODO: implement bookkeeping of allocated memory regions so that pager can validate.
+ */
 
 static long sys_brk(va_list ap, microkit_child child) {
     uintptr_t newbrk = va_arg(ap, uintptr_t);
