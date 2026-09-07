@@ -20,7 +20,7 @@ static inline microkit_channel rr_ch_to_target(microkit_channel ch)
 
 extern uint8_t *per_thread_recv_queue_mem;
 extern seL4_Word per_thread_recv_queue_size;
-queue_t *pt_recv_queue = NULL;
+rrer_queue_t *pt_recv_queue = NULL;
 seL4_Word* rr_ipc_target_child_id = NULL;
 static inline void rr_init_ipc()
 {
@@ -28,9 +28,9 @@ static inline void rr_init_ipc()
     // reserve the first 8 bytes for the currently scheduled child.
     rr_ipc_target_child_id = (seL4_Word *)(per_thread_recv_queue_mem);
     *rr_ipc_target_child_id = NO_THREAD_SCHEDULED;
-    pt_recv_queue = (queue_t *)(per_thread_recv_queue_mem + sizeof(seL4_Word));
-    for (int i = 0; i * sizeof(queue_t) < per_thread_recv_queue_size; i++) {
-        queue_init(per_thread_recv_queue_mem);
+    pt_recv_queue = (rrer_queue_t *)(per_thread_recv_queue_mem + sizeof(seL4_Word));
+    for (int i = 0; i * sizeof(rrer_queue_t) < per_thread_recv_queue_size; i++) {
+        rrer_queue_init(per_thread_recv_queue_mem);
     }
 }
 
@@ -39,7 +39,7 @@ static inline rr_IPCType_e rr_ipc_get_type(seL4_MessageInfo_t msg, seL4_Word bad
     seL4_Word is_endpoint = badge >> BADGE_ENDPOINT_BIT;
     seL4_Word is_fault = (badge >> BADGE_FAULT_BIT) & 1;
     if (is_endpoint || is_fault) return rr_IPCType_Msg;
-    seL4_Word idx = rr_badge_to_ch_id(badge);
+    seL4_Word idx = rr_badge_to_channel_id(badge);
     LOG("idx: %lu\n", idx);
     if (idx == blocker_ch) {
         return rr_IPCType_BlockChecker;
@@ -48,6 +48,7 @@ static inline rr_IPCType_e rr_ipc_get_type(seL4_MessageInfo_t msg, seL4_Word bad
 }
 
 static inline microkit_child rr_ipc_get_child(seL4_Word badge) {
+    // This might only be valid for messages?
     return badge & PD_MASK;
 }
 
@@ -67,17 +68,17 @@ static inline void rr_ipc_sender_setup(seL4_Word child) {
 static inline void rr_ipc_store_ipc_msg(seL4_Word target_child, seL4_MessageInfo_t msg, seL4_Word badge, seL4_Word target_ch) {
     LOG("Storing message in child queue: %lu\n", target_child);
     assert(target_child < rr_children_num);
-    queue_push(&pt_recv_queue[target_child], msg, badge, target_ch);
+    rrer_queue_push(&pt_recv_queue[target_child], msg, badge, target_ch);
 }
 
 // check the size of the child's ipc queue.
 static inline seL4_Word rr_ipc_child_queue_len(seL4_Word target_child) {
     assert(target_child < rr_children_num);
-    return queue_len(&pt_recv_queue[target_child]);
+    return rrer_queue_len(&pt_recv_queue[target_child]);
 }
 
 // Get the badge of the earliest sender.
 static inline seL4_Word rr_ipc_child_queue_peek_badge(seL4_Word target_child) {
     assert(target_child < rr_children_num);
-    return queue_peek_badge(&pt_recv_queue[target_child]);
+    return rrer_queue_peek_badge(&pt_recv_queue[target_child]);
 }

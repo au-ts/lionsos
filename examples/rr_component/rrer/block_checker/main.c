@@ -3,17 +3,16 @@
 #include "types.h"
 #include <sddf/util/printf.h>
 #define LOG(...) do {sddf_printf("BLOCKER [%s]| ", __func__); sddf_printf(__VA_ARGS__);} while (0)
+#define LOG(...)
 
 seL4_Word main_ch = UNSET_VALUE;
 
 void init()
 {
     assert(main_ch != UNSET_VALUE);
-    // hmmm. how do I ensure that we do not accidentally starve the child...
-    // if the block checker gets scheduled first it will always cause a notify before
-    // the child could run, then triggering the target.
-    // What we can do is always yield first, which ensures that the target
-    // will always run for at least one slice, and at most two slices.
+    // We can almost certainly expect the block_checker to always run first because the
+    // block_checker is always schedulable whereas the other child PDs will be scheduled
+    // later.
     LOG("First yield!\n");
     seL4_Yield();
     LOG("Notifying main!\n");

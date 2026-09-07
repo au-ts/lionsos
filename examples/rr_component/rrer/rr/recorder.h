@@ -7,11 +7,15 @@
 #include "sel4/shared_types_gen.h"
 #include "sel4/simple_types.h"
 #include "types.h"
-static inline void rrer_main();
-static inline void rrer_init();
+#define RECORDER_BACKEND_BLK
+#include "record_backend/record.h"
+
+static inline void rec_main();
+static inline void rec_init();
+static inline void rec_perform_schedule();
 
 // The index is the id. Points to mr_prefilled data.
-static inline void rrer_init()
+static inline void rec_init()
 {
     assert(blocker_ch != UNSET_VALUE);
     assert(sender_ch != UNSET_VALUE);
@@ -51,7 +55,7 @@ static inline void rrer_init()
     NO_ERR(seL4_ARM_VPMU_VPMUCounterControl(VPMU_CAP, 1));
 }
 
-static inline void rrer_perform_schedule()
+static inline void rec_perform_schedule(seL4_Word cycle_count)
 {
     LOG("Performing schedule\n");
     // attempt to choose a nice next thread.
@@ -82,19 +86,22 @@ static inline void rrer_perform_schedule()
         } break;
         case rr_ChildState_BlockedOnRecv: {
             // if there is no one sending to this thread we just clear it.
-            if (rr_ipc_child_queue_len(child_arr_ptr[0]->id) == 0)
-            {
+            if (rr_ipc_child_queue_len(child_arr_ptr[0]->id) == 0) {
                 LOG("id: %lu - Ignoring blocked on recv because no msgs queued\n", child_arr_ptr[0]->id);
                 continue;
             }
             LOG("id: %lu - Scheduling blocked on recv because msg was queued\n", child_arr_ptr[0]->id);
+
             rr_Child_t *chosen = rr_sched_choose_child(child_arr_ptr);
+
             LOG("Chosen id: %lu\n", chosen->id);
             seL4_Word badge = rr_ipc_child_queue_peek_badge(chosen->id);
             seL4_Word source = BADGE_GET_PD_ID(badge);
             assert(source < rr_children_num);
+
             // mark the source as no longer blocked.
             rr_children_arr[source].sched_state = rr_ChildState_Schedulable;
+            rr_record_store_scheduler_event(cycle_count, rr_children_arr[source].id, rr_ChildState_Schedulable);
 
             // setup sender thread
             rr_ipc_sender_setup(chosen->id);
@@ -109,14 +116,14 @@ static inline void rrer_perform_schedule()
     }
     // this means no one is schedulable?
     // For now i'll treat this as invalid.
-    assert(false);
+    assert(!"TODO: Think about what to do when no one is schedulable");
 }
 
 // main
-static inline void rrer_main()
+static inline void rec_main()
 {
     // schedule the first thread
-    rrer_perform_schedule();
+    rec_perform_schedule(0);
 
     seL4_Word badge = 0;
     seL4_MessageInfo_t msg = { 0 };
@@ -139,34 +146,41 @@ static inline void rrer_main()
             // if time did not progress, mark currently scheduled as blocked by recv.
             if (cycle_count == last_cycle_count) {
                 LOG("Cycle count did not increase, marking child %lu as \"BlockedOnRecv\"\n", rr_currently_sched->id);
+                rr_record_store_scheduler_event(cycle_count, rr_currently_sched->id, rr_ChildState_BlockedOnRecv);
                 rr_sched_unschedule_current(rr_ChildState_BlockedOnRecv);
             }
             // Otherwise set it as schedulable.
-            else
+            else {
+                rr_record_store_scheduler_event(cycle_count, rr_currently_sched->id, rr_ChildState_Schedulable);
                 rr_sched_unschedule_current(rr_ChildState_Schedulable);
+            }
         } break;
         case rr_IPCType_Msg: {
             // if type is msg, mark currently scheduled as blocked by send.
             // intentional fall-through
+            // Hmm this assertion is sus.
             assert(source_child != NO_CHILD);
-            rr_sched_unschedule_current(RR_CHILDSTATE_SET_VALUE(rr_ChildState_BlockedOnSend, source_child));
+            rr_record_store_scheduler_event(cycle_count, rr_currently_sched->id, rr_ChildState_BlockedOnSend);
+            rr_sched_unschedule_current(rr_ChildState_BlockedOnSend);
         }
         case rr_IPCType_Ntfn: {
             if (type != rr_IPCType_Msg) {
+                rr_record_store_scheduler_event(cycle_count, rr_currently_sched->id, rr_ChildState_Schedulable);
                 rr_sched_unschedule_current(rr_ChildState_Schedulable);
             }
             // store the message in the target's recv queue.
             // Oopsie i need to be able to map a target channel to a child.
-            seL4_Word source_ch = rr_badge_to_ch_id(badge);
+            seL4_Word source_ch = rr_badge_to_channel_id(badge);
             assert(source_ch < rr_channels_num);
             seL4_Word target_child = rr_channel_to_target_child_id[source_ch];
             LOG("Target child: %lu, Source channel: %lu\n", target_child, source_ch);
             rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
-
+            rr_record_store_ipc_msg(cycle_count, badge, msg);
         } break;
         }
         // perform a reschedule.
-        rrer_perform_schedule();
+        rec_perform_schedule(cycle_count);
+        rr_record_store_scheduler_event(cycle_count, rr_currently_sched->id, rr_currently_sched->sched_state);
         last_cycle_count = cycle_count;
     }
 }

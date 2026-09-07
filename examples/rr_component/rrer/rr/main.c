@@ -6,7 +6,7 @@
 #include <sel4/sel4.h>
 #include <microkit.h>
 #include <sddf/util/printf.h>
-#include "rrer.h"
+#include "recorder.h"
 
 #define microkit_notify(ch) do {LOG("send %d\n", ch); microkit_notify(ch); } while (0)
 
@@ -14,8 +14,8 @@
 void init()
 {
     LOG("INIT\n");
-    rrer_init();
-    rrer_main();
+    rec_init();
+    rec_main();
 }
 
 // Should not be called

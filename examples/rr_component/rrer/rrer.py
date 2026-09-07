@@ -74,6 +74,7 @@ class RRSystem(System):
         super().__init__(sdf.arch, paddr_top=sdf.paddr_top, dtb=sdf.dtb)
 
     def _add_pd(self, pd: "ProtectionDomain"):
+        assert pd.priority < 250
         self.pds.add(pd)
 
     def _add_channel(self, channel: "Channel"):
@@ -128,7 +129,6 @@ class RRSystem(System):
 
         # The sender thread must be a child of main.
         main.add_child_pd(sender, child_id=61)
-        # We also should restart the blocker.
         main.add_child_pd(block_checker, child_id=60)
 
         # We'll just allow everything for now
@@ -218,8 +218,6 @@ class RRSystem(System):
                 ch_id=channel.end_a.ch_id
             )
             sender_to_child_a_ch = Channel(sdf, sender_to_child_a_end, child_a_to_sender_end)
-
-
 
             # child_b -> main
             child_b_to_main_end = Channel.End(pd=main, can_notify=False, can_pp=False, ch_id=ch_ind+1)

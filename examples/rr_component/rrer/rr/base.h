@@ -7,7 +7,8 @@
 #include <microkit.h>
 #include <sddf/util/printf.h>
 
-#define LOG(...) do {sddf_printf("RRER [%s]| ", __func__); sddf_printf(__VA_ARGS__);} while (0)
+// #define LOG(...) do {sddf_printf("RRER [%s]| ", __func__); sddf_printf(__VA_ARGS__);} while (0)
+#define LOG(...)
 
 #define VPMU_CAP BASE_VPMU_CAPS
 #define NO_ERR(X) assert(X == seL4_NoError)
@@ -71,10 +72,10 @@ typedef enum {
     // consider stuff about fault handlers.
 } rr_IPCType_e;
 
-typedef struct table_meta_data {
+typedef struct rr_table_meta_data {
     uint64_t table_data_base;
     uint64_t pgd[64];
-} table_metadata_t;
+} rr_table_metadata_t;
 
 /* CHANNELS, MAPS, SETVARS */
 seL4_Word sender_ch = UNSET_VALUE;
@@ -83,7 +84,7 @@ seL4_Word blocker_ch = UNSET_VALUE;
 uint8_t *per_thread_recv_queue_mem = NULL;
 seL4_Word per_thread_recv_queue_size = 0;
 
-table_metadata_t table_metadata = { 0 };
+rr_table_metadata_t table_metadata = { 0 };
 uint8_t *children_data_mem = NULL;
 
 /* STATE */
@@ -99,7 +100,7 @@ rr_Child_t **rr_children_sched_queue = NULL;
 seL4_Word rr_channels_num = 0;
 seL4_Word *rr_channel_to_target_child_id = NULL;
 
-static inline seL4_Word rr_badge_to_ch_id(seL4_Word badge)
+static inline seL4_Word rr_badge_to_channel_id(seL4_Word badge)
 {
     unsigned int idx = 0;
     do {

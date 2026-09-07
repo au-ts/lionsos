@@ -56,6 +56,9 @@ static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
     }
     // sets up the correct priority of the child.
     rr_currently_sched = *cur;
+
+    // set the correct state.
+    rr_currently_sched->sched_state = rr_ChildState_Scheduled;
     seL4_TCB_SetPriority(TCB(cur[0]->id), SELF_TCB(), SCHED_PRIO);
 
     // also assigns the vpmu.
