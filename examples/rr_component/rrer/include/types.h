@@ -153,6 +153,12 @@ static seL4_Word rrer_queue_peek_badge(rrer_queue_t *q)
     return q->data[q->tail].badge;
 }
 
+static seL4_Word rrer_queue_peek_channel(rrer_queue_t *q)
+{
+    assert(rrer_queue_len(q) > 0);
+    return q->data[q->tail].channel;
+}
+
 static void rrer_queue_pop_ignore(rrer_queue_t *q)
 {
     assert(rrer_queue_len(q) > 0);

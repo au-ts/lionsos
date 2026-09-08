@@ -10,7 +10,7 @@
 #include <sddf/util/printf.h>
 
 #define LOG(...) do {sddf_printf("SENDER [%s]| ", __func__); sddf_printf(__VA_ARGS__);} while (0)
-#define LOG(...)
+// #define LOG(...)
 
 #define ENDPOINT(x) (BASE_ENDPOINT_CAP + x)
 
@@ -43,16 +43,26 @@ void init()
     if (rrer_badge_is_ntfn(ipc.badge)) {
         LOG("Sending ntfn ch %lu\n", rrer_source_ch_to_target_ch(ipc.channel));
         seL4_Signal(BASE_OUTPUT_NOTIFICATION_CAP + rrer_source_ch_to_target_ch(ipc.channel));
+        rrer_queue_pop_ignore(queue);
+        LOG("Ntfn sent!\n");
     }
     else {
         LOG("Sending msg ch %lu\n", rrer_source_ch_to_target_ch(ipc.channel));
-        seL4_MessageInfo_t msg = rrer_ipc_handler_read_msg(&queues->handler, ipc);
-        seL4_Send(BASE_ENDPOINT_CAP + rrer_source_ch_to_target_ch(ipc.channel), msg);
+        seL4_MessageInfo_t to_send = rrer_ipc_handler_read_msg(&queues->handler, ipc);
+        seL4_MessageInfo_t replied = seL4_Call(BASE_ENDPOINT_CAP + rrer_source_ch_to_target_ch(ipc.channel), to_send);
+        rrer_queue_pop_ignore(queue);
+        LOG("Call finished!\n");
+        // Send the reply, just through using the current ipc buffer.
+        seL4_Send(BASE_ENDPOINT_CAP + main_ch, replied);
     }
-    rrer_queue_pop_ignore(queue);
-    LOG("Message sent!\n");
 }
 
 void notified(microkit_channel ch)
 {
+    LOG("Notified!\n");
+}
+microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo) 
+{
+    LOG("Protected!\n");
+    return microkit_msginfo_new(0, 0);
 }

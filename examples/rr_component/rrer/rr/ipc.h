@@ -38,7 +38,17 @@ static inline rr_IPCType_e rr_ipc_get_type(seL4_MessageInfo_t msg, seL4_Word bad
 {
     seL4_Word is_endpoint = badge >> BADGE_ENDPOINT_BIT;
     seL4_Word is_fault = (badge >> BADGE_FAULT_BIT) & 1;
-    if (is_endpoint || is_fault) return rr_IPCType_Msg;
+
+    if (is_endpoint) {
+        if ((badge & PD_MASK) == sender_ch) {
+            // We received a reply
+            return rr_IPCType_SenderReply;
+        } else { // or not.
+            return rr_IPCType_Call;
+        }
+    };
+    if (is_fault) return rr_IPCType_Fault;
+
     seL4_Word idx = rr_badge_to_channel_id(badge);
     LOG("idx: %lu\n", idx);
     if (idx == blocker_ch) {
@@ -81,4 +91,10 @@ static inline seL4_Word rr_ipc_child_queue_len(seL4_Word target_child) {
 static inline seL4_Word rr_ipc_child_queue_peek_badge(seL4_Word target_child) {
     assert(target_child < rr_children_num);
     return rrer_queue_peek_badge(&pt_recv_queue[target_child]);
+}
+
+// Get the badge of the channel sender.
+static inline seL4_Word rr_ipc_child_queue_peek_channel(seL4_Word target_child) {
+    assert(target_child < rr_children_num);
+    return rrer_queue_peek_channel(&pt_recv_queue[target_child]);
 }

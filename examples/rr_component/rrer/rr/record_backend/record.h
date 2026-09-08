@@ -23,10 +23,19 @@ static inline void rr_record_store_ipc_msg(seL4_Word cycle_count, seL4_Word sour
     case rr_IPCType_BlockChecker: {
         assert(false);
     } break;
+    case rr_IPCType_SenderReply: {
+        assert(false);
+    } break;
     case rr_IPCType_Msg: {
+        assert(false);
+    } break;
+    case rr_IPCType_Fault: {
+        assert(!"TODO: handle faults");
+    } break;
+    case rr_IPCType_Call: {
         // Format: [cycle_count] msg [source_child] [source_channel] [target_child] [target_channel] [badge] [message]
         REC("0x%lx %s child_%lu channel_%lu child_%lu channel_%lu %lx %lx", cycle_count,
-            rr_ipc_type_to_string(rr_IPCType_Msg), source_child, source_ch, target_child, target_ch, badge,
+            rr_ipc_type_to_string(rr_IPCType_Call), source_child, source_ch, target_child, target_ch, badge,
             msg.words[0]);
         seL4_Word msglen = seL4_MessageInfo_get_length(msg);
         for (seL4_Word i = 0; i < msglen; i++) {

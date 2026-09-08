@@ -181,7 +181,8 @@ class RRSystem(System):
             assert pd in sdf.pds
             assert pd in main.sdf.pds
 
-            main.add_child_pd(pd, child_id);
+            main.add_child_pd(pd, child_id)
+            main.add_reply(child_id)
             children.append(RRChild(child_id, pd.priority))
             child_name_to_child_id[pd.name] = child_id
 

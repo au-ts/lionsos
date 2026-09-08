@@ -1,14 +1,16 @@
 #pragma once
 
 // The base, all includes and main types.
+#include "sel4/arch/syscalls.h"
 #include "sel4/simple_types.h"
+#include "sel4/syscalls_mcs.h"
 #include "types.h"
 #include <sel4/sel4.h>
 #include <microkit.h>
 #include <sddf/util/printf.h>
 
-// #define LOG(...) do {sddf_printf("RRER [%s]| ", __func__); sddf_printf(__VA_ARGS__);} while (0)
-#define LOG(...)
+#define LOG(...) do {sddf_printf("RRER [%s]| ", __func__); sddf_printf(__VA_ARGS__);} while (0)
+// #define LOG(...)
 
 #define VPMU_CAP BASE_VPMU_CAPS
 #define NO_ERR(X) assert(X == seL4_NoError)
@@ -41,15 +43,16 @@
 #endif
 #define NO_CHILD ((seL4_Word)-1)
 
-#define RR_CHILDSTATE_ENUM(x) (0xfffffffful & (x))
-#define RR_CHILDSTATE_VALUE(x) (((0xfffffffful << 32) & (x)) >> 32)
-#define RR_CHILDSTATE_SET_VALUE(state, val) (((val) << 32) | state)
 typedef enum {
     rr_ChildState_Schedulable = 0,
     rr_ChildState_Scheduled,
-    rr_ChildState_BlockedOnSend, // the target is stored in the upper 32 bits.
+    rr_ChildState_BlockedOnSend,
     rr_ChildState_BlockedOnRecv,
-    // We store any data relevant in the top 32 bits.
+
+    rr_ChildState_BlockedOnCall,  // Call -> Reply when the sending part succeeds.
+    rr_ChildState_BlockedOnReply, 
+
+    rr_ChildState_Suspended,
     _rr_ChildState_ = 1ul << 63, // force to be seL4_Word size
 } rr_ChildState_e;
 
@@ -69,6 +72,9 @@ typedef enum {
     rr_IPCType_BlockChecker,
     rr_IPCType_Ntfn, // irqs are ntfns from the perspective of IPC.
     rr_IPCType_Msg,
+    rr_IPCType_Call,
+    rr_IPCType_Fault,
+    rr_IPCType_SenderReply,
     // consider stuff about fault handlers.
 } rr_IPCType_e;
 
@@ -100,6 +106,9 @@ rr_Child_t **rr_children_sched_queue = NULL;
 seL4_Word rr_channels_num = 0;
 seL4_Word *rr_channel_to_target_child_id = NULL;
 
+// The last channel used.
+seL4_Word rr_recv_source_channel = UNSET_VALUE;
+
 static inline seL4_Word rr_badge_to_channel_id(seL4_Word badge)
 {
     unsigned int idx = 0;
@@ -124,6 +133,12 @@ static inline const char *rr_child_state_to_string(rr_ChildState_e state)
         return "BlockedOnSend";
     case rr_ChildState_BlockedOnRecv:
         return "BlockedOnRecv";
+    case rr_ChildState_BlockedOnReply:
+        return "BlockedOnReply";
+    case rr_ChildState_BlockedOnCall:
+        return "BlockedOnCall";
+    case rr_ChildState_Suspended:
+        return "Suspended";
     default:
         return "Unknown child state";
     }
@@ -134,10 +149,16 @@ static inline const char *rr_ipc_type_to_string(rr_IPCType_e type)
     switch (type) {
     case rr_IPCType_BlockChecker:
         return "BlockChecker";
+    case rr_IPCType_SenderReply:
+        return "SenderReply";
     case rr_IPCType_Ntfn:
         return "Ntfn";
     case rr_IPCType_Msg:
         return "Msg";
+    case rr_IPCType_Fault:
+        return "Fault";
+    case rr_IPCType_Call:
+        return "Call";
     default:
         return "Unknown msg type";
     }
