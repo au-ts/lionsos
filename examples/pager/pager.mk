@@ -141,8 +141,8 @@ CFLAGS := \
 include $(LIONSOS)/lib/libc/libc.mk
 include $(SDDF)/tools/make/board/common.mk
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(TOP)/benchmarks/519.lbm_r/src -L$(TOP)/benchmarks/minor_page_fault_latency
-# LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a 519.a -lc
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a 519.a minor_pf.a
+# LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
+LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 all: $(IMAGES)
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 

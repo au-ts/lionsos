@@ -18,7 +18,7 @@
 
 #include <dirent.h>
 
-// #include <519.h>
+#include <519.h>
 #include <minor_pf.h>
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
@@ -47,19 +47,19 @@ void bench_main(void) {
         printf("CLIENT|ERROR: Failed to mount, %d, %d\n", err, completion.status);
         return;
     }
-    // char *argv[] = {
-    //     "lbm",
-    //     "1", 
-    //     "reference.dat", 
-    //     "0", 
-    //     "1", 
-    //     "100_100_130_cf_a.of"
-    // };
+    char *argv[] = {
+        "lbm",
+        "1", 
+        "reference.dat", 
+        "0", 
+        "1", 
+        "100_100_130_cf_a.of"
+    };
 
 
 
-    // int rc = fiveonenine(6, argv);
-    int rc = minor_pf();
+    int rc = fiveonenine(6, argv);
+    // int rc = minor_pf();
     printf("benchmark done\n");
 }
 

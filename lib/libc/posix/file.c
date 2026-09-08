@@ -31,6 +31,14 @@
 static int fs_server_fd_map[MAX_FDS];
 
 static char fd_path[MAX_FDS][PATH_MAX];
+static unsigned char file_read_cache[MAX_FDS][FS_BUFFER_SIZE];
+static size_t file_read_cache_pos[MAX_FDS];
+static size_t file_read_cache_len[MAX_FDS];
+
+static void file_read_cache_clear(int fd) {
+    file_read_cache_pos[fd] = 0;
+    file_read_cache_len[fd] = 0;
+}
 
 static int resolve_path(int dirfd, const char *path, char *out_path, size_t out_size) {
     assert(out_size >= 2); // need at least space for "/" (null-terminated)
@@ -124,6 +132,8 @@ static ssize_t file_write(const void *buf, size_t len, int fd) {
         return -EBADF;
     }
 
+    file_read_cache_clear(fd);
+
     ptrdiff_t write_buffer;
     int err;
 
@@ -184,6 +194,26 @@ static ssize_t file_read(void *buf, size_t len, int fd) {
         return -EBADF;
     }
 
+    size_t total_read = 0;
+    size_t cached = file_read_cache_len[fd] - file_read_cache_pos[fd];
+    if (cached > 0) {
+        size_t copied = MIN(len, cached);
+        memcpy(buf, file_read_cache[fd] + file_read_cache_pos[fd], copied);
+        file_read_cache_pos[fd] += copied;
+        fd_entry->file_ptr += copied;
+        total_read += copied;
+        len -= copied;
+        buf += copied;
+
+        if (file_read_cache_pos[fd] == file_read_cache_len[fd]) {
+            file_read_cache_clear(fd);
+        }
+
+        if (len == 0) {
+            return total_read;
+        }
+    }
+
     ptrdiff_t read_buffer;
     int err;
 
@@ -192,17 +222,23 @@ static ssize_t file_read(void *buf, size_t len, int fd) {
     if (err) {
         return -ENOMEM;
     }
-
-    size_t total_read = 0;
     for (size_t to_read = MIN(len, FS_BUFFER_SIZE); to_read > 0;
          len -= to_read, buf += to_read, to_read = MIN(len, FS_BUFFER_SIZE)) {
+        size_t request_size = to_read;
+        bool cache_read = to_read < FS_BUFFER_SIZE;
+        if (cache_read) {
+            request_size = FS_BUFFER_SIZE;
+        }
+
         fs_cmpl_t completion;
         err = fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_FILE_READ,
                                                             .params.file_read = {
                                                                 .fd = fs_server_fd_map[fd],
-                                                                .offset = fd_entry->file_ptr + total_read,
+                                                                .offset = fd_entry->file_ptr + total_read +
+                                                                          file_read_cache_len[fd] -
+                                                                          file_read_cache_pos[fd],
                                                                 .buf.offset = read_buffer,
-                                                                .buf.size = to_read,
+                                                                .buf.size = request_size,
                                                             } });
 
         if (err) {
@@ -216,10 +252,21 @@ static ssize_t file_read(void *buf, size_t len, int fd) {
         }
 
         size_t curr_read = completion.data.file_read.len_read;
-        memcpy(buf, fs_buffer_ptr(read_buffer), curr_read);
-        total_read += curr_read;
+        if (cache_read) {
+            memcpy(file_read_cache[fd], fs_buffer_ptr(read_buffer), curr_read);
+            file_read_cache_pos[fd] = 0;
+            file_read_cache_len[fd] = curr_read;
 
-        if (curr_read < to_read) {
+            size_t copied = MIN(to_read, curr_read);
+            memcpy(buf, file_read_cache[fd], copied);
+            file_read_cache_pos[fd] = copied;
+            total_read += copied;
+        } else {
+            memcpy(buf, fs_buffer_ptr(read_buffer), curr_read);
+            total_read += curr_read;
+        }
+
+        if (curr_read < request_size) {
             break;
         }
     }
@@ -253,6 +300,7 @@ static int file_close(int fd) {
 
     // Always release the fd even if there is a close error
     fs_server_fd_map[fd] = -1;
+    file_read_cache_clear(fd);
     memset(fd_path[fd], 0, PATH_MAX);
 
     posix_fd_deallocate(fd);
@@ -491,6 +539,7 @@ static long sys_openat(va_list ap) {
     fd_entry_t *fd_entry = posix_fd_entry(fd);
 
     if (fd_entry != NULL) {
+        file_read_cache_clear(fd);
         *fd_entry = (fd_entry_t) { .read = file_read,
                                    .write = file_write,
                                    .close = file_close,
@@ -524,6 +573,8 @@ static long sys_lseek(va_list ap) {
     if (fd_entry == NULL) {
         return -EBADF;
     }
+
+    file_read_cache_clear(fd);
 
     off_t curr_fp = fd_entry->file_ptr;
     off_t new_fp;
