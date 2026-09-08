@@ -32,7 +32,7 @@ include ${SDDF}/tools/make/board/common.mk
 LIBGDB_DIR=$(LIONSOS)/dep/libgdb
 LIBVSPACE_DIR=$(LIBGDB_DIR)/libvspace
 
-METAPROGRAM := $(RR_COMPONENT_DIR)/meta.py
+METAPROGRAM := $(TOP_DIR)/meta.py
 DEBUGGER_DIR := $(LIONSOS)/components/debugger
 
 
@@ -62,11 +62,10 @@ QEMU_ARGS := -machine virt,virtualization=on \
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
 		-device virtio-serial-device \
-		-icount shift=1 \
-		#-S -s
+		-icount shift=1
 
 
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(RR_COMPONENT_DIR)/build
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(BUILD_DIR)
 LIBS := -lmicrokit -Tmicrokit.ld -lc
 
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
@@ -80,11 +79,11 @@ all: ${IMAGE_FILE}
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
-ping.o: $(RR_COMPONENT_DIR)/ping.c | $(LIONS_LIBC)/include
+ping.o: $(TOP_DIR)/ping.c | $(LIONS_LIBC)/include
 	@echo "$(CFLAGS)"
 	${CC} ${CFLAGS} -c -o $@ $<
 
-pong.o: $(RR_COMPONENT_DIR)/pong.c | $(LIONS_LIBC)/include
+pong.o: $(TOP_DIR)/pong.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
 ping.elf: ping.o
@@ -100,7 +99,7 @@ $(DTB): $(DTS)
 
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	$(PYTHON) $(METAPROGRAM) \
+	PYTHONPATH="$(PYTHONPATH):$(RR_COMPONENT_DIR)" $(PYTHON) $(METAPROGRAM) \
 		--output . --sdf $(SYSTEM_FILE)
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
