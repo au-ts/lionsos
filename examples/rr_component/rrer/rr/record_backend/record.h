@@ -13,9 +13,8 @@ static inline void rr_init_record()
 }
 
 // We store ipc messages
-static inline void rr_record_store_ipc_msg(seL4_Word cycle_count, seL4_Word badge, seL4_MessageInfo_t msg)
+static inline void rr_record_store_ipc_msg(seL4_Word cycle_count, seL4_Word source_child, seL4_Word badge, seL4_MessageInfo_t msg)
 {
-    seL4_Word source_child = rr_ipc_get_child(badge);
     seL4_Word source_ch = rr_badge_to_channel_id(badge);
     // not sus
     seL4_Word target_child = rr_channel_to_target_child_id[source_ch];
@@ -25,6 +24,7 @@ static inline void rr_record_store_ipc_msg(seL4_Word cycle_count, seL4_Word badg
         assert(false);
     } break;
     case rr_IPCType_Msg: {
+        // Format: [cycle_count] msg [source_child] [source_channel] [target_child] [target_channel] [badge] [message]
         REC("0x%lx %s child_%lu channel_%lu child_%lu channel_%lu %lx %lx", cycle_count,
             rr_ipc_type_to_string(rr_IPCType_Msg), source_child, source_ch, target_child, target_ch, badge,
             msg.words[0]);
