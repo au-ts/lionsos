@@ -348,6 +348,8 @@ void handle_stat(void) {
         return;
     }
 
+    LOG_FATFS("fat_stat result: size: %lu\n", (unsigned long)fileinfo.fsize);
+
     memset(file_stat, 0, sizeof(fs_stat_t));
     file_stat->atime = fileinfo.ftime;
     file_stat->ctime = fileinfo.ftime;

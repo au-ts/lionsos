@@ -59,6 +59,9 @@ $(MUSL)/lib/libc.a $(LIONS_LIBC)/include &: ${MUSL_SRC}/Makefile | $(MUSL) $(LIB
 		--includedir=$(LIONS_LIBC)/include --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
 	${MAKE} -C $(MUSL) install
 
+$(LIONS_LIBC)/include/%: $(MUSL)/lib/libc.a
+	@test -f $@
+
 ${MUSL_SRC}/Makefile:
 	cd ${LIONSOS}; git submodule update --init dep/musllibc
 
