@@ -8,8 +8,6 @@ static inline void rr_init_scheduler();
 static inline void rr_init_scheduler()
 {
     // We do not suspend the children, but they can never run because our priority is higher.
-    // We could suspend them now, because we are controlling IPC such that they will receive it
-    // automatically when they are scheduled.
     for (int i = 0; i < rr_children_num; i++) {
         rr_children_sched_queue[i] = &rr_children_arr[i];
     }
@@ -69,11 +67,12 @@ static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
 
 
 static inline rr_Child_t* rr_sched_unschedule_current(rr_ChildState_e state) {
-    seL4_TCB_SetPriority(TCB(rr_currently_sched->id), SELF_TCB(), SCHED_PRIO);
+    seL4_TCB_SetPriority(TCB(rr_currently_sched->id), SELF_TCB(), rr_currently_sched->priority);
     NO_ERR(seL4_TCB_UnbindVPMU(TCB(rr_currently_sched->id)));
     rr_currently_sched->sched_state = state;
     rr_Child_t* temp = rr_currently_sched;
     rr_currently_sched = NULL;
+    rr_last_sched_child = temp;
     return temp;
 }
 

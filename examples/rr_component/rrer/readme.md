@@ -9,6 +9,7 @@ A basic recording component which does the following to every PD in it's subsyst
 # What RR cannot do
 1. Inspect and record MMIO shared memory
 2. Accurate representation of how the kernel scheduler works
+3. Nested `microkit_ppcall`s, IE `pd_1 ppcall -> pd_2 protected which ppcalls -> pd_3 protected ...`
 
 # Overhead
 1. TODO! measure this.

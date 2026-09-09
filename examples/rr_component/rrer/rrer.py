@@ -173,7 +173,7 @@ class RRSystem(System):
         csp.add_cap(Cap.TCB, 1, main.name)
         children: List[RRChild] = []
         child_name_to_child_id : Dict[str, int] = dict()
-        for (child_id, pd) in enumerate(self.pds):
+        for (child_id, pd) in enumerate(sorted(self.pds, key=lambda pd: pd.name)):
             pd.sdf = sdf
             sdf._add_pd(pd)
             pts.add_entry(pd.name, child_id)
@@ -194,7 +194,7 @@ class RRSystem(System):
         channel_id_to_target_child_id: List[int] = []
         print(f"Num channels: {len(self.channels)}")
         ch_ind = 0
-        for channel in self.channels:
+        for channel in sorted(self.channels, key=lambda ch: ch.end_a.pd.name):
             # TODO: Add support for checking if channels are uni-directional.
             # child_a has target child_b, at ch_ind
             channel_id_to_target_child_id.append(child_name_to_child_id[channel.end_b.pd.name])
@@ -240,7 +240,7 @@ class RRSystem(System):
 
             ch_ind += 2
 
-        for mr in self.mrs:
+        for mr in sorted(self.mrs, key=lambda mr: mr.name):
             sdf._add_memory_region(mr)
 
         children_data = RRData(children, channel_id_to_target_child_id)

@@ -49,6 +49,11 @@ void init()
     else {
         LOG("Sending msg ch %lu\n", rrer_source_ch_to_target_ch(ipc.channel));
         seL4_MessageInfo_t to_send = rrer_ipc_handler_read_msg(&queues->handler, ipc);
+        // If this get's preempted, what happens?
+        // The reply cap will get invalidated (IPC gets cancelled),
+        // so there are two options (so far that I can think of) here:
+        // 1. per pd sender pds
+        // 2. leave it as unsupported (which is what i'll do for now).
         seL4_MessageInfo_t replied = seL4_Call(BASE_ENDPOINT_CAP + rrer_source_ch_to_target_ch(ipc.channel), to_send);
         rrer_queue_pop_ignore(queue);
         LOG("Call finished!\n");

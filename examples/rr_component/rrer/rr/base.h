@@ -107,7 +107,11 @@ seL4_Word rr_channels_num = 0;
 seL4_Word *rr_channel_to_target_child_id = NULL;
 
 // The last channel used.
+// This is set when a recv which satisfies a blocked by call becomes cleared
 seL4_Word rr_recv_source_channel = UNSET_VALUE;
+
+// the last scheduled thread. Used to determine if we tried to perform a nested ppcall.
+rr_Child_t *rr_last_sched_child = NULL;
 
 static inline seL4_Word rr_badge_to_channel_id(seL4_Word badge)
 {

@@ -122,7 +122,7 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
             assert(source_channel < rr_channels_num);
             LOG("Source channel: %lu\n", source_channel);
             // swap around to get the source channel.
-            seL4_Word source_child = rrer_source_ch_to_target_ch(rr_channel_to_target_child_id[source_channel]);
+            seL4_Word source_child = rr_channel_to_target_child_id[rrer_source_ch_to_target_ch(source_channel)];
             assert(source_child < rr_children_num);
             LOG("Source child: %lu\n", source_child);
 
@@ -139,7 +139,7 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
             };
             // We can peek the ipc queue for this thread?
 
-   // store the event
+            // store the event
             rr_record_store_scheduler_event(cycle_count, rr_children_arr[source_child].id,
                                             rr_children_arr[source_child].sched_state);
 
@@ -201,16 +201,21 @@ static inline void rec_main()
             // We store the recv_source_channel for this reason.
             assert(rr_recv_source_channel != UNSET_VALUE);
 
-            seL4_Word child_id = rr_channel_to_target_child_id[rrer_source_ch_to_target_ch(rr_recv_source_channel)];
-            assert(child_id < rr_children_num);
+            seL4_Word replyee_child_id =
+                rr_channel_to_target_child_id[rrer_source_ch_to_target_ch(rr_recv_source_channel)];
+            assert(replyee_child_id < rr_children_num);
+
+            // store the message
+            rr_record_store_ipc_msg(cycle_count, rr_currently_sched->id, badge, msg);
+
             // We can send the reply as it won't block.
-            seL4_Send(BASE_REPLY_CAPS + child_id, msg);
+            seL4_Send(BASE_REPLY_CAPS + replyee_child_id, msg);
             // and then we should unschedule the current.
             rec_unschedule_current(cycle_count, rr_ChildState_Schedulable);
 
             // and also set the replied to pd as schedulable
-            rr_children_arr[child_id].sched_state = rr_ChildState_Schedulable;
-            rr_record_store_scheduler_event(cycle_count, child_id, rr_ChildState_Schedulable);
+            rr_children_arr[replyee_child_id].sched_state = rr_ChildState_Schedulable;
+            rr_record_store_scheduler_event(cycle_count, replyee_child_id, rr_ChildState_Schedulable);
 
             rr_recv_source_channel = UNSET_VALUE;
         } break;
@@ -246,6 +251,12 @@ static inline void rec_main()
             // if type is call, mark currently scheduled as blocked by call.
             // Messages can only come from calls (in microkit)
             // So we assume that we will receive a reply to this message eventually.
+
+            // check if we did a nested ppcall, and stop (unsupported).
+            if (rr_last_sched_child != NULL && rr_last_sched_child->sched_state == rr_ChildState_BlockedOnReply)
+            {
+                assert(!"Nested ppcalls are not supported through RR");
+            }
             sending_child = rr_currently_sched->id;
             rec_unschedule_current(cycle_count, rr_ChildState_BlockedOnCall);
             assert(sending_child != NO_CHILD);
