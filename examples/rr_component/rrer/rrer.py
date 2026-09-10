@@ -166,7 +166,7 @@ class RRSystem(System):
 
         main.add_map(main_recv_queue_map)
 
-        # pts = PageTables(setvar="table_metadata")
+        pts = PageTables(setvar="table_metadata")
         csp = CSpace()
         # cspace slot 0 is reserved
         # cspace slot 1 is always self_tcb
@@ -176,7 +176,7 @@ class RRSystem(System):
         for (child_id, pd) in enumerate(sorted(self.pds, key=lambda pd: pd.name)):
             pd.sdf = sdf
             sdf._add_pd(pd)
-            # pts.add_entry(pd.name, child_id)
+            pts.add_entry(pd.name, child_id)
 
             assert pd in sdf.pds
             assert pd in main.sdf.pds
@@ -186,7 +186,7 @@ class RRSystem(System):
             children.append(RRChild(child_id, pd.priority))
             child_name_to_child_id[pd.name] = child_id
 
-        # main.add_pagetables(pts)
+        main.add_pagetables(pts)
         main.add_cspace(csp)
 
         # Now we should keep track of endpoints so we know who to forward to.
