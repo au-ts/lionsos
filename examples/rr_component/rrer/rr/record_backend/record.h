@@ -69,4 +69,3 @@ static inline void rr_record_store_scheduler_event(seL4_Word cycle_count, seL4_W
 {
     REC("0x%lx scheduler child_%lu %s\n", cycle_count, child_id, rr_child_state_to_string(new_state));
 }
-

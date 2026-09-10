@@ -23,3 +23,7 @@ A basic recording component which does the following to every PD in it's subsyst
 - During recording, we record all events at a certain pmu cycle count.
 - During replaying, we run through each event step by step, scheduling PDs in the recorded manner,
   and using the VPMU's interrupts to ensure that we orchestrate the sender to send
+
+# To implement
+- [ ] move the tcbs to cspace instead of parenting so that watched systems can
+      have parental-hierarchy.

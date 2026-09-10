@@ -2,6 +2,7 @@
 #include "base.h"
 #include "interfaces/sel4_client.h"
 #include "ipc.h"
+#include "microkit.h"
 
 static inline void rr_init_scheduler();
 
@@ -24,30 +25,31 @@ static inline void rr_init_scheduler()
         }
     }
     for (int i = 0; i < rr_children_num; i++) {
-        LOG("id: %lu, priority: %lu, sched_state: %lu\n", rr_children_sched_queue[i]->id,
-            rr_children_sched_queue[i]->priority, (seL4_Word)rr_children_sched_queue[i]->sched_state);
+        INFO("id: %lu, priority: %lu, sched_state: %lu\n", rr_children_sched_queue[i]->id,
+             rr_children_sched_queue[i]->priority, (seL4_Word)rr_children_sched_queue[i]->sched_state);
     }
 }
 
 // NULL gives the first thread.
 // if NULL is returned then we have run out of threads.
-static inline rr_Child_t** rr_sched_iterate(rr_Child_t** cur) {
+static inline rr_Child_t **rr_sched_iterate(rr_Child_t **cur)
+{
     if (cur == NULL) {
         return rr_children_sched_queue;
-    }
-    else if (cur + 1 >= rr_children_sched_queue + rr_children_num) return NULL;
+    } else if (cur + 1 >= rr_children_sched_queue + rr_children_num)
+        return NULL;
     return cur + 1;
 }
 
-static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
+static inline rr_Child_t *rr_sched_choose_child(rr_Child_t **cur)
+{
     assert(cur != NULL);
     assert(cur >= rr_children_sched_queue);
     assert(cur < rr_children_sched_queue + rr_children_num);
     // swap the position of this value continuously until it encounters
     // a child with less priority or the end of the queue.
-    while (cur + 1 < rr_children_sched_queue + rr_children_num && cur[0]->priority == cur[1]->priority)
-    {
-        rr_Child_t* temp = cur[0];
+    while (cur + 1 < rr_children_sched_queue + rr_children_num && cur[0]->priority == cur[1]->priority) {
+        rr_Child_t *temp = cur[0];
         cur[0] = cur[1];
         cur[1] = temp;
         cur++;
@@ -65,19 +67,18 @@ static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
     return rr_currently_sched;
 }
 
-
-static inline rr_Child_t* rr_sched_unschedule_current(rr_ChildState_e state) {
+static inline rr_Child_t *rr_sched_unschedule_current(rr_ChildState_e state)
+{
     seL4_TCB_SetPriority(TCB(rr_currently_sched->id), SELF_TCB(), rr_currently_sched->priority);
     NO_ERR(seL4_TCB_UnbindVPMU(TCB(rr_currently_sched->id)));
     rr_currently_sched->sched_state = state;
-    rr_Child_t* temp = rr_currently_sched;
+    rr_Child_t *temp = rr_currently_sched;
     rr_currently_sched = NULL;
     rr_last_sched_child = temp;
     return temp;
 }
 
-static inline void rr_sched_setup_block_checker() {
-    NO_ERR(seL4_TCB_Suspend(TCB(BLOCK_CHECKER_ID)));
-    microkit_pd_restart(BLOCK_CHECKER_ID, BLOCK_CHECKER_ENTRY_POINT);
-    NO_ERR(seL4_TCB_Resume(TCB(BLOCK_CHECKER_ID)));
+static inline void rr_sched_setup_block_checker()
+{
+    microkit_notify(blocker_ch);
 }

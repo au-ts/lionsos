@@ -25,11 +25,12 @@ void init()
     seL4_Word length = microkit_msginfo_get_count(recv);
     LOG("Contents: ");
     for (int i = 0; i < length; i++) {
-        sddf_printf("%c", (char) microkit_mr_get(i));
+        sddf_printf("%c", (char)microkit_mr_get(i));
     }
     sddf_printf("\n");
 }
 
-void notified(microkit_channel ch) {
+void notified(microkit_channel ch)
+{
     assert(!"unreachable");
 }

@@ -9,9 +9,6 @@
 #include <microkit.h>
 #include <sddf/util/printf.h>
 
-#define LOG(...) do {sddf_printf("RRER [%s]| ", __func__); sddf_printf(__VA_ARGS__);} while (0)
-// #define LOG(...)
-
 #define VPMU_CAP BASE_VPMU_CAPS
 #define NO_ERR(X) assert(X == seL4_NoError)
 #define TCB(X) (X + BASE_TCB_CAP)
@@ -35,12 +32,6 @@
 #define BADGE_FAULT_BIT 62
 #define BADGE_ENDPOINT_BIT 63
 
-#ifndef SENDER_ENTRY_POINT
-#error define SENDER_ENTRY_POINT
-#endif
-#ifndef BLOCK_CHECKER_ENTRY_POINT
-#error define BLOCK_CHECKER_ENTRY_POINT
-#endif
 #define NO_CHILD ((seL4_Word)-1)
 
 typedef enum {
@@ -50,7 +41,7 @@ typedef enum {
     rr_ChildState_BlockedOnRecv,
 
     rr_ChildState_BlockedOnCall,  // Call -> Reply when the sending part succeeds.
-    rr_ChildState_BlockedOnReply, 
+    rr_ChildState_BlockedOnReply,
 
     rr_ChildState_Suspended,
     _rr_ChildState_ = 1ul << 63, // force to be seL4_Word size

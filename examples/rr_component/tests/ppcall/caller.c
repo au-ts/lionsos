@@ -8,7 +8,7 @@
 #define microkit_notify(ch) do {LOG("send\n"); microkit_notify(ch); } while (0)
 uintptr_t calleech = 9999;
 const char balls[] = "balls";
-char resbuffer[0xff] = {0};
+char resbuffer[0xff] = { 0 };
 
 void init()
 {
@@ -21,11 +21,8 @@ void init()
     LOG("Calling!\n");
     microkit_msginfo result = microkit_ppcall(calleech, msg);
 
-    LOG("RESULT | Channel: %lu, label: %lx, length: %lu\n", 
-        calleech,
-        microkit_msginfo_get_label(result),
-        microkit_msginfo_get_count(result)
-    );
+    LOG("RESULT | Channel: %lu, label: %lx, length: %lu\n", calleech, microkit_msginfo_get_label(result),
+        microkit_msginfo_get_count(result));
 
     for (int i = 0; i < microkit_msginfo_get_count(result); i++) {
         resbuffer[i] = (char)microkit_mr_get(i);

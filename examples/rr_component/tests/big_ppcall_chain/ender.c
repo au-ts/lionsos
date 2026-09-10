@@ -12,7 +12,8 @@ void init()
     assert(prev_caller != UNSET_VALUE);
 }
 
-void notified(microkit_channel ch) {
+void notified(microkit_channel ch)
+{
     assert(!"unreachable");
 }
 
@@ -24,7 +25,7 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
     seL4_Word length = microkit_msginfo_get_count(msginfo);
     LOG("Contents: ");
     for (int i = 0; i < length; i++) {
-        sddf_printf("%c", (char) microkit_mr_get(i));
+        sddf_printf("%c", (char)microkit_mr_get(i));
     }
     sddf_printf("\n");
 

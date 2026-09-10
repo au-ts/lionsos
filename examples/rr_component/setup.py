@@ -48,7 +48,7 @@ MICROKIT_BOARD ?= {MICROKIT_BOARD}
 MICROKIT_SDK ?= {str(MICROKIT_SDK)}
 MICROKIT_CONFIG ?= {MICROKIT_CONFIG}
 TOP_DIR := {str(test_target_dir)}
-CFLAGS += -Werror
+CFLAGS += -Werror -DARCH_aarch64
 {rr_component_mk_path.read_text(encoding="utf-8")}\
         """)
 

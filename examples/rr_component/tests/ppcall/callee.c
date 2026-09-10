@@ -9,7 +9,7 @@
 #define INPUT_CAP 1
 #define REPLY_CAP 4
 const char funny[] = "funny guy";
-char resbuffer[0xff] = {0};
+char resbuffer[0xff] = { 0 };
 
 void init()
 {
@@ -26,11 +26,8 @@ void notified(microkit_channel ch)
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     LOG("Protected!\n");
-    LOG("RECEIVED | Channel: %u, label: %lx, length: %lu\n", 
-        ch, 
-        microkit_msginfo_get_label(msginfo),
-        microkit_msginfo_get_count(msginfo)
-    );
+    LOG("RECEIVED | Channel: %u, label: %lx, length: %lu\n", ch, microkit_msginfo_get_label(msginfo),
+        microkit_msginfo_get_count(msginfo));
 
     for (int i = 0; i < microkit_msginfo_get_count(msginfo); i++) {
         resbuffer[i] = (char)microkit_mr_get(i);

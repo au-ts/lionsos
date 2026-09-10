@@ -8,6 +8,7 @@
 #include "sel4/shared_types_gen.h"
 #include "sel4/simple_types.h"
 #include "types.h"
+#include "fault.h"
 #define RECORDER_BACKEND_BLK
 #include "record_backend/record.h"
 
@@ -20,7 +21,7 @@ static inline void rec_init()
 {
     assert(blocker_ch != UNSET_VALUE);
     assert(sender_ch != UNSET_VALUE);
-    LOG("blocker_ch: %lu, sender_ch: %lu\n", blocker_ch, sender_ch);
+    INFO("blocker_ch: %lu, sender_ch: %lu\n", blocker_ch, sender_ch);
 
     uint8_t *head = children_data_mem;
     assert(head != NULL);
@@ -30,7 +31,7 @@ static inline void rec_init()
 
     rr_children_arr = (rr_Child_t *)head;
     head += sizeof(rr_Child_t) * rr_children_num;
-    LOG("Num children: %lu @ %p\n", rr_children_num, rr_children_arr);
+    INFO("Num children: %lu @ %p\n", rr_children_num, rr_children_arr);
 
     // serialise channels
     rr_channels_num = *head;
@@ -39,14 +40,14 @@ static inline void rec_init()
     // serialise channel to target child
     rr_channel_to_target_child_id = (seL4_Word *)head;
     head += sizeof(seL4_Word) * rr_channels_num;
-    LOG("Channel id map: %lu @ %p\n", rr_channels_num, rr_channel_to_target_child_id);
+    INFO("Channel id map: %lu @ %p\n", rr_channels_num, rr_channel_to_target_child_id);
     for (int i = 0; i < rr_channels_num; i++) {
-        LOG("Channel %d = child %lu\n", i, rr_channel_to_target_child_id[i]);
+        INFO("Channel %d = child %lu\n", i, rr_channel_to_target_child_id[i]);
     }
 
     // initiaise scheduler queue
     rr_children_sched_queue = (rr_Child_t **)head;
-    LOG("Scheduler queue @ %p\n", rr_children_sched_queue);
+    INFO("Scheduler queue @ %p\n", rr_children_sched_queue);
 
     rr_init_scheduler();
     rr_init_ipc();
@@ -54,7 +55,7 @@ static inline void rec_init()
     // initialise the vpmu to be recording and on.
     seL4_ARM_VPMU_VPMUNumCounters_t counters = seL4_ARM_VPMU_VPMUNumCounters(VPMU_CAP);
     NO_ERR(counters.error);
-    LOG("Num pmu counters: %lu\n", counters.num_counters);
+    INFO("Num pmu counters: %lu\n", counters.num_counters);
     assert(counters.num_counters > 0);
     NO_ERR(seL4_ARM_VPMU_VPMUCounterControl(VPMU_CAP, 1));
 }
@@ -130,10 +131,15 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
             if (rr_children_arr[source_child].sched_state == rr_ChildState_BlockedOnSend)
                 rr_children_arr[source_child].sched_state = rr_ChildState_Schedulable;
             // mark a blocked on call as now blocked by reply.
-            else if (rr_children_arr[source_child].sched_state == rr_ChildState_BlockedOnCall)
+            else if (rr_children_arr[source_child].sched_state == rr_ChildState_BlockedOnCall) {
+                // This is so we can determine who to reply to.
+                rr_recv_source_channel = source_channel;
+
                 rr_children_arr[source_child].sched_state = rr_ChildState_BlockedOnReply;
-            else {
-                LOG("Unexpected source child state %s\n",
+            }
+            // the only other case is for notification, in which it's schedulable.
+            else if (rr_children_arr[source_child].sched_state != rr_ChildState_Schedulable) {
+                ERR("Unexpected source child state %s\n",
                     rr_child_state_to_string(rr_children_arr[source_child].sched_state));
                 assert(!"Unreachable");
             };
@@ -142,10 +148,6 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
             // store the event
             rr_record_store_scheduler_event(cycle_count, rr_children_arr[source_child].id,
                                             rr_children_arr[source_child].sched_state);
-
-            // I don't like this but we store the last channel being used
-            // This is so we can determine who to reply to.
-            rr_recv_source_channel = source_channel;
 
             // setup sender thread
             rr_ipc_sender_setup(chosen->id);
@@ -163,6 +165,11 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
     }
     // this means no one is schedulable?
     // For now i'll treat this as invalid.
+    ERR("No one is schedulable\n");
+    for (rr_Child_t **child_arr_ptr = rr_sched_iterate(NULL); child_arr_ptr != NULL;
+         child_arr_ptr = rr_sched_iterate(child_arr_ptr)) {
+        ERR("child_%lu %s\n", child_arr_ptr[0]->id, rr_child_state_to_string(child_arr_ptr[0]->sched_state));
+    }
     assert(!"TODO: Think about what to do when no one is schedulable");
 }
 
@@ -220,7 +227,9 @@ static inline void rec_main()
             rr_recv_source_channel = UNSET_VALUE;
         } break;
         case rr_IPCType_Fault: {
-            assert(!"TODO: Handle faults");
+            WARN("TODO: Handle faults, for now just suspends the thread.\n");
+            fault_print(msg, badge);
+            rec_unschedule_current(cycle_count, rr_ChildState_Suspended);
         } break;
         case rr_IPCType_BlockChecker: {
             // if time did not progress, mark currently scheduled as blocked by recv.
@@ -231,7 +240,7 @@ static inline void rec_main()
                 if (rr_recv_source_channel != UNSET_VALUE) {
                     seL4_Word child_id = rr_channel_to_target_child_id[rr_recv_source_channel];
                     assert(child_id < rr_children_num);
-                    LOG("Warning: Unexecuted reply object for child %lu! Suspending child %lu\n", child_id, child_id);
+                    WARN("Unexecuted reply object for child %lu! Suspending child %lu\n", child_id, child_id);
 
                     rr_children_arr[child_id].sched_state = rr_ChildState_Suspended;
                     rr_record_store_scheduler_event(cycle_count, child_id, rr_ChildState_Suspended);
@@ -253,8 +262,7 @@ static inline void rec_main()
             // So we assume that we will receive a reply to this message eventually.
 
             // check if we did a nested ppcall, and stop (unsupported).
-            if (rr_last_sched_child != NULL && rr_last_sched_child->sched_state == rr_ChildState_BlockedOnReply)
-            {
+            if (rr_last_sched_child != NULL && rr_last_sched_child->sched_state == rr_ChildState_BlockedOnReply) {
                 assert(!"Nested ppcalls are not supported through RR");
             }
             sending_child = rr_currently_sched->id;

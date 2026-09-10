@@ -123,7 +123,7 @@ class RRSystem(System):
         # set up the rr_* protection domains
         # block checker just needs to be able to notify main
         block_checker_main_ch = Channel(sdf,
-            Channel.End(pd=main, can_notify=False, can_pp=False, ch_id=60, setvar_id="blocker_ch"),
+            Channel.End(pd=main, can_notify=True, can_pp=False, ch_id=60, setvar_id="blocker_ch"),
             Channel.End(pd=block_checker, can_notify=True, can_pp=False, ch_id=61, setvar_id="main_ch")
         )
 
@@ -166,7 +166,7 @@ class RRSystem(System):
 
         main.add_map(main_recv_queue_map)
 
-        pts = PageTables(setvar="table_metadata")
+        # pts = PageTables(setvar="table_metadata")
         csp = CSpace()
         # cspace slot 0 is reserved
         # cspace slot 1 is always self_tcb
@@ -176,7 +176,7 @@ class RRSystem(System):
         for (child_id, pd) in enumerate(sorted(self.pds, key=lambda pd: pd.name)):
             pd.sdf = sdf
             sdf._add_pd(pd)
-            pts.add_entry(pd.name, child_id)
+            # pts.add_entry(pd.name, child_id)
 
             assert pd in sdf.pds
             assert pd in main.sdf.pds
@@ -186,7 +186,7 @@ class RRSystem(System):
             children.append(RRChild(child_id, pd.priority))
             child_name_to_child_id[pd.name] = child_id
 
-        main.add_pagetables(pts)
+        # main.add_pagetables(pts)
         main.add_cspace(csp)
 
         # Now we should keep track of endpoints so we know who to forward to.
@@ -204,11 +204,7 @@ class RRSystem(System):
             # intercept channels.
             # child_a -> main
             child_a_to_main_end = Channel.End(pd=main, can_notify=False, can_pp=False, ch_id=ch_ind)
-            child_a_to_main_ch = deepcopy(channel)
-            # end_b!
-            child_a_to_main_ch.end_b = child_a_to_main_end
-            child_a_to_main_ch.sdf = sdf
-            sdf._add_channel(child_a_to_main_ch)
+            child_a_to_main_ch = Channel(sdf, end_a=channel.end_a ,end_b=child_a_to_main_end) 
 
             #  child_a <- sender
             sender_to_child_a_end = Channel.End(pd=sender, can_notify=True, can_pp=True, ch_id=ch_ind)
@@ -222,11 +218,7 @@ class RRSystem(System):
 
             # child_b -> main
             child_b_to_main_end = Channel.End(pd=main, can_notify=False, can_pp=False, ch_id=ch_ind+1)
-            child_b_to_main_ch = deepcopy(channel)
-            # end_a!
-            child_b_to_main_ch.end_a = child_b_to_main_end
-            child_b_to_main_ch.sdf = sdf
-            sdf._add_channel(child_b_to_main_ch)
+            child_b_to_main_ch = Channel(sdf, end_a=child_b_to_main_end, end_b=channel.end_b)
 
             # child_b <- sender
             sender_to_child_b_end = Channel.End(pd=sender, can_notify=True, can_pp=True, ch_id=ch_ind+1)

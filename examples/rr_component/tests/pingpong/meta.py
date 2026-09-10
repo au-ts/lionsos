@@ -10,19 +10,25 @@ from abc import ABC
 from copy import deepcopy
 from rrer.rrer import RRChild, RRData, RRSystem
 import pathlib
+from random import randint, seed
 
+DEFAULT_NUM_PINGPONG_PAIRS = 5
+
+seed(0)
 
 def generate(sdf_path: str, output_dir: str):
     rr = RRSystem(sdf)
 
-    ping = ProtectionDomain(rr, "ping", "ping.elf", priority=1)
-    pong = ProtectionDomain(rr, "pong", "pong.elf", priority=2)
+    for i in range(DEFAULT_NUM_PINGPONG_PAIRS):
+        # ping pong pairs with interesting interwoven priorities.
+        ping = ProtectionDomain(rr, f"ping_{i}", "ping.elf", priority=randint(1, 5))
+        pong = ProtectionDomain(rr, f"pong_{i}", "pong.elf", priority=randint(1, 5))
 
-    # pseudo intercept channels
-    ch = Channel(rr,
-        Channel.End(pd=ping, can_notify=True, can_pp=False, ch_id=33, setvar_id="pongch"),
-        Channel.End(pd=pong, can_notify=True, can_pp=False, ch_id=59, setvar_id="pingch")
-    )
+        # pseudo intercept channels
+        ch = Channel(rr,
+            Channel.End(pd=ping, can_notify=True, can_pp=False, ch_id=33, setvar_id="pongch"),
+            Channel.End(pd=pong, can_notify=True, can_pp=False, ch_id=59, setvar_id="pingch")
+        )
 
     # add the data of the children here.
     rr.transfer(sdf, output_dir)

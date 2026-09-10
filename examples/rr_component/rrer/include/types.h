@@ -17,6 +17,12 @@
 #define BADGE_FAULT_BIT 62
 #define BADGE_ENDPOINT_BIT 63
 
+// #define LOG(...) do {sddf_printf("%s [%s]| ", microkit_name, __func__); sddf_printf(__VA_ARGS__);} while (0)
+#define ERR(...) do {sddf_printf("%s [%s] ERROR| ", microkit_name, __func__); sddf_printf(__VA_ARGS__);} while (0)
+#define WARN(...) do {sddf_printf("%s [%s] WARN| ", microkit_name, __func__); sddf_printf(__VA_ARGS__);} while (0)
+#define INFO(...) do {sddf_printf("%s [%s] INFO| ", microkit_name, __func__); sddf_printf(__VA_ARGS__);} while (0)
+#define LOG(...)
+
 // We store IPC as the following:
 // - Each child get's it's own IPC buffer (array ring/queue), in which we store message registers.
 // - Each child get's it's own IPC queue, in which we store the following:
@@ -32,7 +38,7 @@ typedef struct rrer_ipc {
     seL4_Word handler_index;
     seL4_Word badge;
     seL4_MessageInfo_t msginfo;
-    seL4_Word channel; 
+    seL4_Word channel;
 } rrer_ipc_t;
 
 // holds all the message registers.
@@ -81,7 +87,8 @@ static seL4_Word rrer_queue_len(rrer_queue_t *q)
     return len;
 }
 
-static rrer_ipc_t rrer_ipc_handler_copy_msg(rrer_ipc_handler_t *handler, seL4_MessageInfo_t msg, seL4_Word badge, seL4_Word target_ch)
+static rrer_ipc_t rrer_ipc_handler_copy_msg(rrer_ipc_handler_t *handler, seL4_MessageInfo_t msg, seL4_Word badge,
+                                            seL4_Word target_ch)
 {
     seL4_Word len = seL4_MessageInfo_get_length(msg);
     // assert that we have some space left.
@@ -131,7 +138,8 @@ static rrer_ipc_t rrer_queue_peek(rrer_queue_t *q)
     return val;
 }
 
-static seL4_MessageInfo_t rrer_ipc_handler_read_msg(rrer_ipc_handler_t* handler, rrer_ipc_t ipc) {
+static seL4_MessageInfo_t rrer_ipc_handler_read_msg(rrer_ipc_handler_t *handler, rrer_ipc_t ipc)
+{
     seL4_Word len = seL4_MessageInfo_get_length(ipc.msginfo);
     seL4_Word label = seL4_MessageInfo_get_label(ipc.msginfo);
 
@@ -169,15 +177,19 @@ static void rrer_queue_pop_ignore(rrer_queue_t *q)
     q->tail %= QUEUE_MAX_LEN;
 };
 
-static bool rrer_badge_is_ntfn(seL4_Word badge) {
+static bool rrer_badge_is_ntfn(seL4_Word badge)
+{
     seL4_Word is_endpoint = badge >> BADGE_ENDPOINT_BIT;
     seL4_Word is_fault = (badge >> BADGE_FAULT_BIT) & 1;
-    if (is_endpoint || is_fault) return false;
+    if (is_endpoint || is_fault)
+        return false;
     return true;
 }
 
-static inline seL4_Word rrer_source_ch_to_target_ch(seL4_Word ch) {
-    if (ch % 2 == 1) return ch - 1;
+static inline seL4_Word rrer_source_ch_to_target_ch(seL4_Word ch)
+{
+    if (ch % 2 == 1)
+        return ch - 1;
     return ch + 1;
 }
 #undef IPC_WORD_STORAGE_SIZE
