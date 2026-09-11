@@ -3,7 +3,8 @@
 import argparse
 from typing import List, Dict
 from acacia.arch import aarch64
-from acacia import ProtectionDomain, MemoryRegion, Map, System, Channel, Subsystem, PageTables, CSpace, Cap
+from acacia import ProtectionDomain, MemoryRegion, Map, System, Channel, Subsystem, PageTables, CSpace, Cap, DeviceTreeBlob
+from acacia_sddf import BOARDS
 import xml.etree.ElementTree as et
 from dataclasses import dataclass, field
 from abc import ABC
@@ -12,12 +13,12 @@ from rrer.rrer import RRChild, RRData, RRSystem
 import pathlib
 from random import randint, seed
 
-DEFAULT_NUM_PINGPONG_PAIRS = 5
+DEFAULT_NUM_PINGPONG_PAIRS = 1
 
 seed(0)
 
 def generate(sdf_path: str, output_dir: str):
-    rr = RRSystem(sdf)
+    rr = RRSystem(sdf, board)
 
     for i in range(DEFAULT_NUM_PINGPONG_PAIRS):
         # ping pong pairs with interesting interwoven priorities.
@@ -40,9 +41,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
+    parser.add_argument("--dtb", required=True)
 
     args = parser.parse_args()
-
-    sdf = System(aarch64, paddr_top=0x10000)
+    dtb = DeviceTreeBlob(args.dtb)
+    board = next(filter(lambda b: b.name == "qemu_virt_aarch64", BOARDS))
+    assert board is not None
+    sdf = System(aarch64, paddr_top=board.paddr_top, dtb=dtb)
 
     generate(args.sdf, args.output)

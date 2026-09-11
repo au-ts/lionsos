@@ -18,9 +18,9 @@
 #define BADGE_ENDPOINT_BIT 63
 
 // #define LOG(...) do {sddf_printf("%s [%s]| ", microkit_name, __func__); sddf_printf(__VA_ARGS__);} while (0)
-#define ERR(...) do {sddf_printf("%s [%s] ERROR| ", microkit_name, __func__); sddf_printf(__VA_ARGS__);} while (0)
-#define WARN(...) do {sddf_printf("%s [%s] WARN| ", microkit_name, __func__); sddf_printf(__VA_ARGS__);} while (0)
-#define INFO(...) do {sddf_printf("%s [%s] INFO| ", microkit_name, __func__); sddf_printf(__VA_ARGS__);} while (0)
+#define ERR(...) do {sddf_dprintf("%s [%s] ERROR| ", microkit_name, __func__); sddf_dprintf(__VA_ARGS__);} while (0)
+#define WARN(...) do {sddf_dprintf("%s [%s] WARN| ", microkit_name, __func__); sddf_dprintf(__VA_ARGS__);} while (0)
+#define INFO(...) do {sddf_dprintf("%s [%s] INFO| ", microkit_name, __func__); sddf_dprintf(__VA_ARGS__);} while (0)
 #define LOG(...)
 
 // We store IPC as the following:

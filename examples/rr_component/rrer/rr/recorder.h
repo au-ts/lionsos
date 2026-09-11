@@ -282,12 +282,15 @@ static inline void rec_main()
             rr_record_store_ipc_msg(cycle_count, sending_child, badge, msg);
         } break;
         case rr_IPCType_Ntfn: {
+            seL4_Word source_ch = rr_badge_to_channel_id(badge);
+            // if the source_ch is too large, then we ignore it.
+            // It probably came from the serial virtualiser or smth, but not sure why it's notifying us?
+            if (source_ch >= rr_channels_num) continue;
             sending_child = rr_currently_sched->id;
             rec_unschedule_current(cycle_count, rr_ChildState_Schedulable);
             assert(sending_child != NO_CHILD);
             // store the message in the target's recv queue.
             // Oopsie i need to be able to map a target channel to a child.
-            seL4_Word source_ch = rr_badge_to_channel_id(badge);
             LOG("Source channel: %lu\n", source_ch);
             assert(source_ch < rr_channels_num);
             seL4_Word target_child = rr_channel_to_target_child_id[source_ch];

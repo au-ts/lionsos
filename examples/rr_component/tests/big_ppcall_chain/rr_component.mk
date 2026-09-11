@@ -50,7 +50,7 @@ CFLAGS += \
 	-I$(LIBGDB_DIR)/include \
 	-I$(LIBGDB_DIR)/arch_include \
 	-I$(LIBVSPACE_DIR) \
-	-ggdb -O0
+	-g -O0
 
 include $(LIONSOS)/lib/libc/libc.mk
 

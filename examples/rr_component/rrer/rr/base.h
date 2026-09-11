@@ -19,10 +19,10 @@
 #define SENDER_ID 61
 #define BLOCK_CHECKER_ID 60
 
-#define SCHED_PRIO 250
+#define SCHED_PRIO 210
 #define UNSCHED_PRIO 1
-#define SENDER_PRIO 251
-#define SELF_PRIO 253
+#define SENDER_PRIO 211
+#define SELF_PRIO 212
 #define BLOCK_PRIO SCHED_PRIO
 
 #define PD_MASK 0xff

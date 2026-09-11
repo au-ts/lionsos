@@ -1,11 +1,22 @@
 from typing import List, Dict
 from acacia.arch import aarch64
-from acacia import ProtectionDomain, MemoryRegion, Map, System, Channel, Subsystem, PageTables, CSpace, Cap
+from acacia import (
+    ProtectionDomain,
+    MemoryRegion,
+    Map,
+    System,
+    Channel,
+    Subsystem,
+    PageTables,
+    CSpace,
+    Cap,
+)
 import xml.etree.ElementTree as et
 from dataclasses import dataclass, field
 from abc import ABC
 from copy import deepcopy
 import pathlib
+from acacia_sddf import sDDFSerial, Board
 
 WORD_SIZE = 8
 
@@ -63,18 +74,30 @@ class RRData:
         return len(b)
 
 class RRSystem(System):
+    # priority of the "currently scheduled" client
+    # keep updated with base.h
+    SCHED_PRIO = 210
+    MAIN_PRIO = 212
+    BLOCK_CHECKER_PRIO = SCHED_PRIO
+    SENDER_PRIO = 211
+
+    # smallest priority for the drivers
+    # these have to be higher as they are considered "outside" the system.
+    BASE_SERIAL_DRIV_PRIO = 215
+    BASE_BLK_DRIV_PRIO = 215
     """
     A hooked version of system, which should be techinically used like a subsystem.
     Intercepts all channels, and forces them to pass through a central PD.
     """
-    def __init__(self, sdf: System):
+    def __init__(self, sdf: System, board: Board):
         """
         Takes in a system to copy the architecture and paddr_top and any other relevant information.
         """
         super().__init__(sdf.arch, paddr_top=sdf.paddr_top, dtb=sdf.dtb)
+        self.board = board
 
     def _add_pd(self, pd: "ProtectionDomain"):
-        assert pd.priority < 250
+        assert pd.priority < self.SCHED_PRIO
         self.pds.add(pd)
 
     def _add_channel(self, channel: "Channel"):
@@ -108,10 +131,10 @@ class RRSystem(System):
         if isinstance(output_path, str):
             output_path = pathlib.Path(output_path)
 
-        main = ProtectionDomain(sdf, "rr_main", "rr_main.elf", priority=253)
+        main = ProtectionDomain(sdf, "rr_main", "rr_main.elf", priority=self.MAIN_PRIO, stack_size=0x10000)
         main.add_vpmu(0)
-        sender = ProtectionDomain(sdf, "rr_sender", "rr_sender.elf", priority=251)
-        block_checker = ProtectionDomain(sdf, "rr_block_checker", "rr_block_checker.elf", priority=250)
+        sender = ProtectionDomain(sdf, "rr_sender", "rr_sender.elf", priority=self.SENDER_PRIO)
+        block_checker = ProtectionDomain(sdf, "rr_block_checker", "rr_block_checker.elf", priority=self.BLOCK_CHECKER_PRIO)
         assert self.arch == sdf.arch
         assert main.sdf == sdf
         assert not (main in self.pds)
@@ -242,4 +265,20 @@ class RRSystem(System):
         # This data can and should be objcopied?
         # For now just use mr prefill.
         rr_mr = MemoryRegion(sdf, "rr_children_data", prefill_path=DATAPATH)
-        main.add_map(Map(rr_mr, 0x400000, "rw", setvar_vaddr="children_data_mem"))
+        main.add_map(Map(rr_mr, 0x1000000, "rw", setvar_vaddr="children_data_mem"))
+
+        dtb_path = pathlib.Path("qemu_virt_aarch64.dtb").resolve()
+        assert dtb_path.exists()
+        print(f"DTB path: {str(dtb_path)}")
+
+        # Setup block driver
+        # TODO: don't hardcode this.
+        serial_system = sDDFSerial(
+            sdf,
+            dev_compatible="virtio,mmio",
+            dev_dt_path="virtio_mmio@a003e00",
+            driver_prio=self.BASE_SERIAL_DRIV_PRIO+1,
+            virt_tx_prio=self.BASE_SERIAL_DRIV_PRIO,
+        )
+        serial_system.add_client(main)
+        sdf.make_config_structs()

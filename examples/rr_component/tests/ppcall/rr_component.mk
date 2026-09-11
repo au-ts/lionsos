@@ -9,10 +9,7 @@ SUPPORTED_BOARDS := \
 
 IMAGES := \
 	caller.elf \
-	callee.elf \
-	rr_main.elf \
-	rr_block_checker.elf \
-	rr_sender.elf
+	callee.elf
 
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
@@ -49,7 +46,7 @@ CFLAGS += \
 	-I$(LIBGDB_DIR)/include \
 	-I$(LIBGDB_DIR)/arch_include \
 	-I$(LIBVSPACE_DIR) \
-	-ggdb -O0
+	-g -O0
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -77,7 +74,7 @@ include $(RR_COMPONENT_DIR)/rrer/rrer.mk
 
 all: ${IMAGE_FILE}
 
-${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
+${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a libsddf_util.a
 
 caller.o: $(TOP_DIR)/caller.c | $(LIONS_LIBC)/include
 	@echo "$(CFLAGS)"

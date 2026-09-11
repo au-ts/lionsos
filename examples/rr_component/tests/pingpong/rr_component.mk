@@ -9,10 +9,7 @@ SUPPORTED_BOARDS := \
 
 IMAGES := \
 	ping.elf \
-	pong.elf \
-	rr_main.elf \
-	rr_block_checker.elf \
-	rr_sender.elf
+	pong.elf
 
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
@@ -35,7 +32,6 @@ LIBVSPACE_DIR=$(LIBGDB_DIR)/libvspace
 METAPROGRAM := $(TOP_DIR)/meta.py
 DEBUGGER_DIR := $(LIONSOS)/components/debugger
 
-
 CFLAGS += \
 	-DMICROKIT \
 	-Wno-bitwise-op-parentheses \
@@ -49,7 +45,7 @@ CFLAGS += \
 	-I$(LIBGDB_DIR)/include \
 	-I$(LIBGDB_DIR)/arch_include \
 	-I$(LIBVSPACE_DIR) \
-	-ggdb -O0
+	-g -O0
 
 include $(LIONSOS)/lib/libc/libc.mk
 
@@ -62,6 +58,8 @@ QEMU_ARGS := -machine virt,virtualization=on \
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
 		-device virtio-serial-device \
+        -chardev pty,id=virtcon \
+        -device virtconsole,chardev=virtcon \
 		-icount shift=1
 
 
@@ -99,8 +97,13 @@ $(DTB): $(DTS)
 
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	PYTHONPATH="$(PYTHONPATH):$(RR_COMPONENT_DIR)" $(PYTHON) $(METAPROGRAM) \
-		--output . --sdf $(SYSTEM_FILE)
+	PYTHONPATH="$(PYTHONPATH):$(RR_COMPONENT_DIR):$(SDDF)" $(PYTHON) $(METAPROGRAM) \
+		--output . --sdf $(SYSTEM_FILE) $${NVME:+--nvme} --dtb $(DTB)
+	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_serial_driver_config.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx_serial_virt_tx_config.data serial_virt_tx.elf
+	$(OBJCOPY) --update-section .serial_client_config=rr_main_serial_client_config.data rr_main.elf
+
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
