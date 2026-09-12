@@ -13,6 +13,8 @@
 #include <mapping.h>
 
 #include "cspace.h"
+
+struct folio *get_folio_from_idx(uint32_t idx);
 /**
  * TODO: do the actual implementation
  */
@@ -41,5 +43,10 @@ seL4_Error my_untyped_retype(
                           uint32_t *retyped_cap_idx);
 
 uintptr_t allocate_pager_memory(uint64_t size);
+
+void myfree(uintptr_t start, uintptr_t end, microkit_child child);
+
+long pager_fork(microkit_child parent);
+void fork(uint32_t parent, uint32_t child);
 
 #endif

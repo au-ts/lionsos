@@ -58,8 +58,8 @@ void bench_main(void) {
 
 
 
-    int rc = fiveonenine(6, argv);
-    // int rc = minor_pf();
+    // int rc = fiveonenine(6, argv);
+    int rc = minor_pf();
     printf("benchmark done\n");
 }
 

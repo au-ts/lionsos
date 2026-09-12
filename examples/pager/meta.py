@@ -16,6 +16,7 @@ ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Channel = SystemDescription.Channel
+PAGER_MEM_CH = 4
 
 
 def generate(
@@ -54,6 +55,7 @@ def generate(
     
     partition =  board.partition
     pager.add_child_pd(client)
+    sdf.add_channel(Channel(pager, client, a_id=0, b_id=PAGER_MEM_CH))
     # add my memory regions and other things
     # SystemDescription.CNode()
     #paging on
@@ -78,6 +80,16 @@ def generate(
     pager_bootinfo_map = SystemDescription.Map(pager_bootinfo, 0x8002000000, "rw", setvar_vaddr="remaining_untypeds_vaddr")
     pager.add_map(pager_bootinfo_map)
     sdf.add_mr(pager_bootinfo_map)
+
+    process_cnodes = SystemDescription.CNode("process_cnodes", False, 5)
+    process_cnodes_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, process_cnodes, 5)
+    pager.add_cap_map(process_cnodes_map)
+    sdf.add_cnode(process_cnodes)
+    # where elf caps are placed.
+    elf_caps = SystemDescription.CNode("elf_caps", False, 12)
+    elf_caps_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, elf_caps, 6)
+    pager.add_cap_map(elf_caps_map)
+    sdf.add_cnode(elf_caps)
     
     pager.add_cap_map(pager_remaining_untypeds)
     pager.add_cap_map(pagers_empty_cnode_map)

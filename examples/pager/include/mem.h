@@ -1,10 +1,7 @@
 #pragma once
-#include <stdarg.h>
+#include <microkit.h>
+#include <lions/posix/pager_mem.h>
 
-static long sys_brk(va_list ap, microkit_child child);
+void allocator_init(void);
 
-static long sys_mmap(va_list ap, microkit_child child);
-
-static long sys_munmap(va_list ap, microkit_child child);
-
-static long sys_mprotect(va_list ap, microkit_child child);
+long pager_mem_call(microkit_msginfo msginfo, microkit_child child);

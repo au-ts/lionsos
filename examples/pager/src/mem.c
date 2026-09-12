@@ -1,6 +1,13 @@
 #include "mem.h"
 #include "pager.h"
 
+#include <errno.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <string.h>
+
 #define BLOCK_SIZE 4096
 #define MAX_CHILDREN 10
 #define NUM_BLOCKS 50000
@@ -23,7 +30,7 @@ void *morecore_bases[MAX_CHILDREN];
  *   0 = free
  *   1 = allocated
  */
-static uint8_t *bitmaps[MAX_CHILDREN][(NUM_BLOCKS + 7) / 8];
+static uint8_t bitmaps[MAX_CHILDREN][(NUM_BLOCKS + 7) / 8];
 
 /**
  * Initialise the allocator.
@@ -38,9 +45,9 @@ void allocator_init()
 {
     for (int i = 0; i < MAX_CHILDREN; ++i) {
         memset(bitmaps[i], 0, (NUM_BLOCKS + 7) / 8);
-        heaps[i] = 0x8000000000;
-        brks[i] = 0x7000000000;
-        morecore_bases[i] = 0x7000000000;
+        heaps[i] = (void *)0x8000000000ULL;
+        brks[i] = (void *)0x7000000000ULL;
+        morecore_bases[i] = (void *)0x7000000000ULL;
     }
 }
 
@@ -74,13 +81,13 @@ static inline void block_clear(size_t block, uint8_t *bitmap)
  */
 void *alloc(size_t num_blocks, void *heap, uint8_t *bitmap)
 {
-    if (num_blocks == 0 || num_blocks > num_blocks)
+    if (num_blocks == 0 || num_blocks > NUM_BLOCKS)
         return NULL;
 
     size_t run_start = 0;
     size_t run_length = 0;
 
-    for (size_t i = 0; i < num_blocks; i++) {
+    for (size_t i = 0; i < NUM_BLOCKS; i++) {
 
         if (!block_is_allocated(i, bitmap)) {
             if (run_length == 0)
@@ -135,8 +142,8 @@ void free_blocks(void *ptr, size_t num_blocks, void *heap, uint8_t *bitmap)
 
     size_t block = offset / BLOCK_SIZE;
 
-    if (block >= num_blocks ||
-        num_blocks > num_blocks - block)
+    if (block >= NUM_BLOCKS ||
+        num_blocks > NUM_BLOCKS - block)
         return;
 
     for (size_t i = block;
@@ -154,14 +161,15 @@ static long sys_brk(va_list ap, microkit_child child) {
     uintptr_t newbrk = va_arg(ap, uintptr_t);
 
     if (newbrk <= 0x800000000 && newbrk >= (uintptr_t)morecore_bases[child]) {
-        if (newbrk < brks[child]) {
+        if (newbrk < (uintptr_t)brks[child]) {
             // TODO: free the memory region (if it is taken up).
             // this should free the brks[child] rounded down to newbrk rounded down.
             myfree(ROUND_DOWN_TO_4K(brks[child]), ROUND_DOWN_TO_4K(newbrk), child);
         }
-        return brks[child] = newbrk;
+        brks[child] = (void *)newbrk;
+        return (long)newbrk;
     }
-    return brks[child];
+    return (long)brks[child];
 }
 
 static long sys_mmap(va_list ap, microkit_child child) {
@@ -180,17 +188,18 @@ static long sys_mmap(va_list ap, microkit_child child) {
     if (flags & MAP_ANONYMOUS) {
         // return an address that is n blocks long.
         length = (length + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1);
-        return alloc(length, heaps[child], bitmaps[child]);
+        return (long)alloc(length / PAGE_SIZE, heaps[child], bitmaps[child]);
     }
     return -ENOMEM;
 }
 
-static long sys_munmap(va_list ap, microkit_child microkit_child) {
+static long sys_munmap(va_list ap, microkit_child child) {
     void *addr = va_arg(ap, void *);
     size_t length = va_arg(ap, size_t);
     length = (length + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1);
-    free_blocks(ROUND_DOWN_TO_4K(addr), length, heaps[child], bitmaps[child]);
-    myfree(ROUND_DOWN_TO_4K(addr), ROUND_DOWN_TO_4K(addr) + BLOCK_SIZE * length, child);
+    free_blocks((void *)ROUND_DOWN_TO_4K(addr), length / PAGE_SIZE,
+                heaps[child], bitmaps[child]);
+    myfree(ROUND_DOWN_TO_4K(addr), ROUND_DOWN_TO_4K(addr) + length, child);
     return 0;
 }
 
@@ -201,4 +210,51 @@ static long sys_mprotect(va_list ap, microkit_child microkit_child) {
     (void)addr, (void)size, (void)prot;
     // do nothing.
     return 0;
+}
+
+long pager_mem_call(microkit_msginfo msginfo, microkit_child child)
+{
+    uintptr_t addr;
+    size_t length;
+
+    switch (microkit_msginfo_get_label(msginfo)) {
+    case PAGER_MEM_BRK:
+        addr = microkit_mr_get(0);
+        if (addr <= 0x800000000 && addr >= (uintptr_t)morecore_bases[child]) {
+            if (addr < (uintptr_t)brks[child]) {
+                myfree(ROUND_DOWN_TO_4K(brks[child]), ROUND_DOWN_TO_4K(addr), child);
+            }
+            brks[child] = (void *)addr;
+            return (long)addr;
+        }
+        return (long)brks[child];
+    case PAGER_MEM_MMAP:
+        length = microkit_mr_get(1);
+        if (length == 0 || !(microkit_mr_get(3) & MAP_ANONYMOUS)) {
+            return -ENOMEM;
+        }
+        length = (length + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+        return (long)alloc(length / PAGE_SIZE, heaps[child], bitmaps[child]);
+    case PAGER_MEM_MUNMAP:
+        addr = microkit_mr_get(0);
+        length = (microkit_mr_get(1) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+        if (length == 0) {
+            return -EINVAL;
+        }
+        free_blocks((void *)ROUND_DOWN_TO_4K(addr), length / PAGE_SIZE,
+                    heaps[child], bitmaps[child]);
+        myfree(ROUND_DOWN_TO_4K(addr), ROUND_DOWN_TO_4K(addr) + length, child);
+        return 0;
+    case PAGER_MEM_FORK: {
+        long new_child = pager_fork(child);
+        if (new_child > 0 && new_child < MAX_CHILDREN) {
+            brks[new_child] = brks[child];
+            morecore_bases[new_child] = morecore_bases[child];
+            memcpy(bitmaps[new_child], bitmaps[child], sizeof(bitmaps[child]));
+        }
+        return new_child;
+    }
+    default:
+        return -ENOSYS;
+    }
 }

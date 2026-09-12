@@ -201,8 +201,12 @@ cspace.o: $(TOP)/src/cspace.c $(TOP)/include
 # TODO: maybe add some h files to the .o file right here.
 pager.o: ${TOP}/src/pager.c $(TOP)/include
 	$(CC) -c $(CFLAGS) -I. $< -o pager.o
-pager.elf: pager.o cspace.o page_table.o libsddf_util_debug.a 
+pager.elf: pager.o proc.o cspace.o page_table.o mem.o libsddf_util_debug.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+proc.o: ${TOP}/src/proc.c ${TOP}/include
+	$(CC) -c $(CFLAGS) -I. $< -o $@
+mem.o: ${TOP}/src/mem.c ${TOP}/include
+	$(CC) -c $(CFLAGS) -I. $< -o $@
 
 client.o: ${TOP}/src/client.c | $(LIONS_LIBC)/include
 	$(CC) -c $(CFLAGS) -I. $< -o client.o
