@@ -198,6 +198,7 @@ void libc_init_mem(void *, size_t);
 void libc_init_io();
 void libc_init_file();
 void libc_init_sock(libc_socket_config_t *);
+void libc_init_proc();
 
 void libc_init(libc_socket_config_t *socket_config, void *heap, size_t heap_size) {
     __sysinfo = (size_t)sel4_vsyscall;
@@ -208,6 +209,7 @@ void libc_init(libc_socket_config_t *socket_config, void *heap, size_t heap_size
 
     libc_init_io();
     libc_init_file();
+    libc_init_proc();
 
     if (socket_config != NULL) {
         libc_init_sock(socket_config);

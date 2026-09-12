@@ -11,25 +11,16 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <lions/posix/posix.h>
+#include <lions/posix/pager_mem.h>
+#include <microkit.h>
 
 #define PAGE_SIZE 0x1000
 
-static char *morecore_area;
-static uintptr_t morecore_base;
-static uintptr_t morecore_top;
-
-/* Actual morecore implementation
-   On Linux, the brk syscall returns the current break on failure. We mimic
-   this behaviour here because we are using muslc which expects Linux behaviour.
-*/
 static long sys_brk(va_list ap) {
     uintptr_t newbrk = va_arg(ap, uintptr_t);
-
-    if (newbrk <= morecore_top && newbrk >= (uintptr_t)morecore_area) {
-        return morecore_base = newbrk;
-    }
-
-    return morecore_base;
+    microkit_mr_set(0, newbrk);
+    (void)microkit_ppcall(PAGER_MEM_CH, microkit_msginfo_new(PAGER_MEM_BRK, 1));
+    return microkit_mr_get(0);
 }
 
 static long sys_mmap(va_list ap) {
@@ -39,32 +30,23 @@ static long sys_mmap(va_list ap) {
     int flags = va_arg(ap, int);
     int fd = va_arg(ap, int);
     off_t offset = va_arg(ap, off_t);
-    (void)fd, (void)offset, (void)prot, (void)addr;
-
-    if (length == 0) {
-        return -EINVAL;
-    }
-
-    if (flags & MAP_ANONYMOUS) {
-        /* Align length to page size */
-        length = (length + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1);
-        /* Check that we don't try and allocate more than exists */
-        if (length > morecore_top - morecore_base) {
-            return -ENOMEM;
-        }
-        /* Steal from the top */
-        morecore_top = (morecore_top - length) & ~(PAGE_SIZE - 1);
-        return morecore_top;
-    }
-    return -ENOMEM;
+    microkit_mr_set(0, (uintptr_t)addr);
+    microkit_mr_set(1, length);
+    microkit_mr_set(2, (uintptr_t)prot);
+    microkit_mr_set(3, (uintptr_t)flags);
+    microkit_mr_set(4, (uintptr_t)fd);
+    microkit_mr_set(5, (uintptr_t)offset);
+    (void)microkit_ppcall(PAGER_MEM_CH, microkit_msginfo_new(PAGER_MEM_MMAP, 6));
+    return microkit_mr_get(0);
 }
 
 static long sys_munmap(va_list ap) {
     void *addr = va_arg(ap, void *);
     size_t len = va_arg(ap, size_t);
-    (void)addr, (void)len;
-
-    return 0;
+    microkit_mr_set(0, (uintptr_t)addr);
+    microkit_mr_set(1, len);
+    (void)microkit_ppcall(PAGER_MEM_CH, microkit_msginfo_new(PAGER_MEM_MUNMAP, 2));
+    return microkit_mr_get(0);
 }
 
 static long sys_mprotect(va_list ap) {
@@ -79,9 +61,8 @@ static long sys_mprotect(va_list ap) {
 void libc_init_mem(void *area, size_t size) {
     assert(area != NULL && size != 0);
 
-    morecore_area = area;
-    morecore_base = (uintptr_t)area;
-    morecore_top = morecore_base + size;
+    (void)area;
+    (void)size;
 
     libc_define_syscall(__NR_brk, sys_brk);
     libc_define_syscall(__NR_mmap, sys_mmap);

@@ -41,5 +41,6 @@ typedef struct {
 /* heap and heap_size: memory region to use for malloc/brk/mmap.
    Pass NULL/0 if the component does not need heap allocation. */
 void libc_init(libc_socket_config_t *socket_config, void *heap, size_t heap_size);
+void libc_init_proc(void);
 void libc_define_syscall(int syscall_num, muslcsys_syscall_t syscall_func);
 int socket_index_of_fd(int fd);
