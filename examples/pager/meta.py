@@ -55,7 +55,7 @@ def generate(
     
     partition =  board.partition
     pager.add_child_pd(client)
-    sdf.add_channel(Channel(pager, client, a_id=0, b_id=PAGER_MEM_CH))
+    sdf.add_channel(Channel(client, pager, a_id=PAGER_MEM_CH, b_id=0, pp_a=True))
     # add my memory regions and other things
     # SystemDescription.CNode()
     #paging on
