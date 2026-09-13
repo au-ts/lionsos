@@ -315,7 +315,14 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
             *page_entry |= DESC_NG;
         } else {
             frame = get_frame_from_page(*page_entry);
-            insert_frame_to_page(frame, page_entry);
+            folio = get_folio_from_idx(frame);
+            if (folio->refcount > 1) {
+                // copy on write
+                struct folio *new_folio = get_frame();
+                insert_frame_to_page(new_folio->frame_page, page_entry);
+                --folio->refcount;
+                frame = new_folio->frame_page;
+            }
         }
     }
 
