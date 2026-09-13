@@ -30,8 +30,6 @@
 #include <sddf/util/printf.h>
 
 
-uint32_t elf_caps[MAX_CHILDREN][ELF_SIZE];
-uint32_t elf_sizes[MAX_CHILDREN];
 static struct process processes[MAX_CHILDREN];
 
 
@@ -500,8 +498,8 @@ long pager_fork(microkit_child parent)
     int result = process_fork(processes, parent, child, process_cnodes_cptr,
                               &post_boot_cnode, frame_cnode_cptr,
                               gzp_cnode_cptr, page_tables,
-                              vspaces, elf_caps, elf_sizes,
-                              make_page_table_entry, create_cap_rights);
+                              vspaces, make_page_table_entry,
+                              create_cap_rights);
     if (result != PROCESS_FORK_OK) {
         sddf_printf("fork(%u, %u) failed: %d\n", parent, child, result);
         return -ENOMEM;
@@ -514,8 +512,8 @@ void fork(uint32_t parent, uint32_t child)
     int result = process_fork(processes, parent, child, process_cnodes_cptr,
                               &post_boot_cnode, frame_cnode_cptr,
                               gzp_cnode_cptr, page_tables,
-                              vspaces, elf_caps, elf_sizes,
-                              make_page_table_entry, create_cap_rights);
+                              vspaces, make_page_table_entry,
+                              create_cap_rights);
     if (result != PROCESS_FORK_OK) {
         sddf_printf("fork(%u, %u) failed: %d\n", parent, child, result);
     }

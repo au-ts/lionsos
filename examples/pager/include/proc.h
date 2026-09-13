@@ -6,9 +6,7 @@
 #include "cspace.h"
 #include "page_table.h"
 
-#define PT_LOAD 0x0000000000400000ULL
 #define MAX_CHILDREN 10
-#define ELF_SIZE 1500
 #define PROCESS_CNODE_SIZE_BITS 12
 #define PROCESS_VSPACE_SLOT 1
 
@@ -35,8 +33,7 @@ int process_fork(struct process *processes, uint32_t parent, uint32_t child,
                  seL4_CPtr process_cnodes_cptr, cnode_specs_t *untyped,
                  seL4_CPtr frame_cnode_cptr, seL4_CPtr gzp_cnode_cptr,
                  pgd_t *page_tables,
-                 uint32_t *vspaces, uint32_t elf_caps[][ELF_SIZE],
-                 uint32_t *elf_sizes, process_page_entry_fn make_page_entry,
+                 uint32_t *vspaces, process_page_entry_fn make_page_entry,
                  seL4_CapRights_t (*cap_rights)(bool is_write));
 
 
