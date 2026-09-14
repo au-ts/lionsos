@@ -18,8 +18,6 @@ SUPPORTED_BOARDS := \
 	maaxboard \
 	rpi4b_1gb
 
-
-
 ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
@@ -27,14 +25,10 @@ endif
 ifeq ($(strip $(SDDF)),)
 $(error SDDF must be specified)
 endif
-$(info sddf is $(SDDF))
 ifeq ($(strip $(LIONSOS)),)
 $(error LIONSOS must be specified)
 endif
 
-ifeq ($(strip $(TOOLCHAIN)),)
-	TOOLCHAIN := clang
-endif
 ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
 	BLK_DRIV_DIR := mmc/imx
 	SERIAL_DRIV_DIR := imx
@@ -65,10 +59,12 @@ MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 DTC := dtc
 PYTHON ?= python3
 
-
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-# $(info board dir is $(BOARD_DIR))
-ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(BOARD_DIR)/include/kernel/gen_config.h | cut -d' ' -f4)
+GEN_CONFIG_H := $(BOARD_DIR)/include/kernel/gen_config.h
+ifeq ($(wildcard $(GEN_CONFIG_H)),)
+$(error Could not find $(GEN_CONFIG_H) -- check that MICROKIT_SDK ($(MICROKIT_SDK)) is a valid Microkit SDK containing a build for board $(MICROKIT_BOARD)/$(MICROKIT_CONFIG))
+endif
+ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(GEN_CONFIG_H) | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
@@ -104,19 +100,12 @@ IMAGE_FILE := loader.img
 REPORT_FILE  := report.txt
 SYSTEM_FILE := pager.system
 
-
 TOP := ${LIONSOS}/examples/pager
 CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
 SPEC = $(BUILD_DIR)/capdl_spec.json
 
-# DTS := $(SDDF)/dts/$(MICROKIT_BOARD).dts
-# $(DTB): $(DTS)
-# 	$(DTC) -q -I dts -O dtb $(DTS) > $(DTB)
-
 FAT := $(LIONSOS)/components/fs/fat
-
-
 
 CFLAGS := \
 	-mstrict-align \
@@ -141,24 +130,16 @@ CFLAGS := \
 include $(LIONSOS)/lib/libc/libc.mk
 include $(SDDF)/tools/make/board/common.mk
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(TOP)/benchmarks/519.lbm_r/src -L$(TOP)/benchmarks/minor_page_fault_latency
-# LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
-all: $(IMAGES)
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 
 ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-%.elf: %.o
-	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
-
-
 METAPROGRAM := $(TOP)/meta.py
-$(info blk driver dir is $(BLK_DRIV_DIR))
 BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
 BLK_COMPONENTS := $(SDDF)/blk/components
-# SERIAL_DRIVER := $(SDDF)/drivers/serial/${UART_DRIV_DIR}
 
 all: $(IMAGE_FILE)
 
@@ -169,7 +150,6 @@ include ${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk
 include ${SDDF}/serial/components/serial_components.mk
 include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
 include ${SDDF}/libco/libco.mk
-# i don't need the blk driver yet...
 include ${BLK_DRIVER}/blk_driver.mk
 include ${BLK_COMPONENTS}/blk_components.mk
 include $(SDDF)/drivers/network/$(NET_DRIV_DIR)/eth_driver.mk
@@ -180,36 +160,22 @@ LIBMICROKITCO_CFLAGS_client := -O3 -I$(TOP)
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
-$(info libpath is $(LIBMICROKITCO_PATH))
-
-$(info opt dir is $(LIBMICROKITCO_CFLAGS))
-
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a 519.a minor_pf.a
 
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-FORCE:
-
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
-	
-page_table.o: $(TOP)/src/page_table.c $(TOP)/include
-	$(CC) -c $(CFLAGS) -I. $< -o $@
-cspace.o: $(TOP)/src/cspace.c $(TOP)/include
-	$(CC) -c $(CFLAGS) -I. $< -o $@
-# TODO: maybe add some h files to the .o file right here.
-pager.o: ${TOP}/src/pager.c $(TOP)/include
-	$(CC) -c $(CFLAGS) -I. $< -o pager.o
-pager.elf: pager.o proc.o cspace.o page_table.o mem.o libsddf_util_debug.a
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-proc.o: ${TOP}/src/proc.c ${TOP}/include
-	$(CC) -c $(CFLAGS) -I. $< -o $@
-mem.o: ${TOP}/src/mem.c ${TOP}/include
+
+PAGER_OBJS := page_table.o cspace.o pager.o proc.o mem.o
+
+$(PAGER_OBJS) client.o: %.o: $(TOP)/src/%.c $(TOP)/include | $(LIONS_LIBC)/include
 	$(CC) -c $(CFLAGS) -I. $< -o $@
 
-client.o: ${TOP}/src/client.c | $(LIONS_LIBC)/include
-	$(CC) -c $(CFLAGS) -I. $< -o client.o
+pager.elf: $(PAGER_OBJS) libsddf_util_debug.a
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
 client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a 519.a minor_pf.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 519.a:
@@ -231,7 +197,6 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .blk_virt_config=blk_virt.data blk_virt.elf
 	$(OBJCOPY) --update-section .blk_client_config=blk_client_fatfs.data fat.elf
 	$(OBJCOPY) --update-section .fs_server_config=fs_server_fatfs.data fat.elf
-	
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_client.data client.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_client.data client.elf
 	$(OBJCOPY) --update-section .fs_client_config=fs_client_client.data client.elf
@@ -250,33 +215,4 @@ qemu: ${IMAGE_FILE}
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
 		-drive file=/dev/mmcblk0,if=none,format=raw,id=hd \
-		-device virtio-blk-device,drive=hd,bus=virtio-mmio-bus.1 
-
-# $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-# 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) \
-# 		$(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB)\
-# 		--output . --sdf $(SYSTEM_FILE) $(PARTITION_ARG) 
-# 	$(OBJCOPY) --update-section .device_resources=blk_driver_device_resources.data blk_driver.elf
-# 	$(OBJCOPY) --update-section .blk_driver_config=blk_driver.data blk_driver.elf
-# 	$(OBJCOPY) --update-section .blk_virt_config=blk_virt.data blk_virt.elf
-# 	$(OBJCOPY) --update-section .blk_client_config=blk_client_pager.data pager.elf
-# 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
-# 	touch $@
-
-# $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
-# 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)  --capdl-json $(SPEC)
-
-
-# qemu_disk:
-# 	$(SDDF)/tools/mkvirtdisk disk 1 512 16777216 GPT
-
-# qemu: ${IMAGE_FILE} qemu_disk
-# 	$(QEMU) $(QEMU_ARCH_ARGS) $(QEMU_BLK_ARGS) \
-# 	    -nographic \
-# 	    -d guest_errors
-# 	    -drive file=disk,if=none,format=raw,id=hd
-
-# clean::
-# 	rm -f client.o
-# clobber:: clean
-# 	rm -f client.elf ${IMAGE_FILE} ${REPORT_FILE}
+		-device virtio-blk-device,drive=hd,bus=virtio-mmio-bus.1
