@@ -319,6 +319,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
                 struct folio *new_folio = get_frame();
                 insert_frame_to_page(new_folio->frame_page, page_entry);
                 --folio->refcount;
+                // TODO: copy the frames.
                 frame = new_folio->frame_page;
             }
         }
