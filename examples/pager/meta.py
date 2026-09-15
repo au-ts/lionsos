@@ -1,25 +1,125 @@
 # Copyright 2025, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
-import os, sys
+"""
+Metaprogram for the LionsOS demand-paging example.
+
+Describes a system in which the `pager` PD is the parent -- and therefore the
+fault handler -- of a single `client` PD. The client's stack is left unbacked
+so that it faults in on first touch, and its libc routes brk/mmap/munmap/fork
+to the pager over a protected procedure call.
+
+The pager is given every untyped region left over after system initialisation
+and builds paging structures out of it on demand, so it needs more from the
+system description than an ordinary PD does:
+
+  * a BootInfo memory region describing the leftover untypeds,
+  * scratch memory to hold its shadow page tables and frame metadata,
+  * several CNodes to receive the caps it creates at runtime.
+"""
 import argparse
-from typing import List, Optional, Tuple, Callable
-from dataclasses import dataclass
+from typing import Optional
+
 from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
-from importlib.metadata import version
-import json
-import subprocess
-import shutil
-import struct
+
 from board import BOARDS
 
 ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 Channel = SystemDescription.Channel
+CNode = SystemDescription.CNode
+CapMap = SystemDescription.CapMap
+
+# PPC channel the client's libc uses for brk/mmap/munmap/fork. Must match
+# PAGER_MEM_CH in lionsos/include/lions/posix/pager_mem.h.
 PAGER_MEM_CH = 4
+
+# Scratch memory the pager bump-allocates folio metadata and shadow page
+# tables from. Reachable in the pager as the `pager_memory` symbol.
+PAGER_MEMORY_SIZE = 0x2000000
+PAGER_MEMORY_VADDR = 0x8000000000
+
+# Filled in by the Microkit tool with a capDLBootInfo_t (see include/untyped.h)
+# describing the untypeds that survived system initialisation. Reachable in the
+# pager as the `remaining_untypeds_vaddr` symbol.
+PAGER_BOOTINFO_SIZE = 0x2000
+PAGER_BOOTINFO_VADDR = 0x8002000000
+
+# CNodes mapped into the pager's root CSpace, as
+# (name, slot, size_bits, post_capdl_untypeds).
+#
+# The slots are hard-coded on the other side of this interface and must be kept
+# in sync with them:
+#   * src/pager.c names slots 1-5 (UNTYPED_SLOT, FRAME_CNODE, IPS_CNODE,
+#     GZP_CNODE and the process CNode) and reaches them via
+#     microkit_cspace_root_slot_to_cptr().
+#   * The Microkit tool fills the CNode named "elf_caps" with the child PDs'
+#     ELF frame caps, and places each child's VSpace cap from slot 7 onwards.
+PAGER_CNODES = (
+    # All untyped memory left after initialisation.
+    ("remaining_untypeds", 1, 9, True),
+    # Frames the pager retypes to satisfy faults.
+    ("pagerspace", 2, 20, False),
+    # Intermediate paging structures (PUD/PD/PT).
+    ("ips_cnode", 3, 20, False),
+    # Copies of the global zero page cap, one per read-only mapping.
+    ("gzp", 4, 20, False),
+    # Per-process CSpaces created by fork().
+    ("process_cnodes", 5, 5, False),
+    # Child PDs' ELF frames, populated by the Microkit tool.
+    ("elf_caps", 6, 12, False),
+)
+
+# The example's filesystem lives on partition 1 of the block device. This is a
+# deliberate override of the per-board default in board.partition; change it to
+# match whatever image you boot against.
+FS_PARTITION = 1
+
+
+def add_pager(
+    sdf: SystemDescription,
+    client: ProtectionDomain,
+) -> ProtectionDomain:
+    """
+    Create the pager PD and everything it needs to service `client`'s faults.
+
+    `client` must not have been added to `sdf` by the caller: it becomes a
+    child of the pager, which is what causes its faults to be delivered here.
+    """
+    pager = ProtectionDomain("pager", "pager.elf", priority=198)
+    pager.add_child_pd(client)
+    sdf.add_channel(Channel(client, pager, a_id=PAGER_MEM_CH, b_id=0, pp_a=True))
+
+    bootinfo = MemoryRegion(
+        sdf,
+        "pager_bootinfo",
+        PAGER_BOOTINFO_SIZE,
+        prefill_bootinfo="post_capdl_untypeds",
+    )
+    sdf.add_mr(bootinfo)
+    pager.add_map(
+        Map(bootinfo, PAGER_BOOTINFO_VADDR, "rw",
+            setvar_vaddr="remaining_untypeds_vaddr")
+    )
+
+    memory = MemoryRegion(sdf, "pager_memory", PAGER_MEMORY_SIZE)
+    sdf.add_mr(memory)
+    pager.add_map(
+        Map(memory, PAGER_MEMORY_VADDR, "rw", setvar_vaddr="pager_memory")
+    )
+
+    for name, slot, size_bits, post_capdl_untypeds in PAGER_CNODES:
+        cnode = CNode(name, post_capdl_untypeds, size_bits)
+        sdf.add_cnode(cnode)
+        # pd=None because these CNodes are the pager's alone, not shared.
+        pager.add_cap_map(CapMap(CapMap.CapType.Cnode, None, cnode, slot))
+
+    return pager
 
 
 def generate(
+    sdf: SystemDescription,
+    board,
     sdf_file: str,
     output_dir: str,
     dtb: Optional[DeviceTree],
@@ -30,7 +130,7 @@ def generate(
     assert blk_node is not None
     timer_node = dtb.node(board.timer)
     assert timer_node is not None
-    
+
     timer_driver = ProtectionDomain(
         "timer_driver", "timer_driver.elf", priority=254)
     timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
@@ -49,80 +149,29 @@ def generate(
         "blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000)
     blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
 
+    fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
 
-    client = ProtectionDomain("client", "client.elf", priority=1, backed = False)
-    pager = SystemDescription.ProtectionDomain("pager", "pager.elf", priority=198)
-    
-    partition =  board.partition
-    pager.add_child_pd(client)
-    sdf.add_channel(Channel(client, pager, a_id=PAGER_MEM_CH, b_id=0, pp_a=True))
-    # add my memory regions and other things
-    # SystemDescription.CNode()
-    #paging on
-    # heap1 = SystemDescription.MemoryRegion(sdf, "heap1", 0x271000, backed=False)
-    # heap1 = SystemDescription.MemoryRegion(sdf, "heap1", 0x7d0000, backed=False)
-    # paging off 
-    # remaining_untypeds_mr = SystemDescription.MemoryRegion(sdf, "remaining_untypeds", size=0x2000, prefill_bootinfo="remaining_untypeds")
-    pager_memory = SystemDescription.MemoryRegion(sdf, "pager_memory_mr ", 0x2000000)
-    pager_bootinfo = SystemDescription.MemoryRegion(sdf, "pager_bootinfo", 0x2000, prefill_bootinfo="post_capdl_untypeds")
-    remaining_untypeds = SystemDescription.CNode("remaining_untypeds", True, 9)
-    pagers_empty_cnode = SystemDescription.CNode("pagerspace", False, 20)
-    pagers_empty_cnode_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, pagers_empty_cnode, 2)
-    pager_gzp_cnode = SystemDescription.CNode("gzp", False, 20)
-    pager_gzp_cnode_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, pager_gzp_cnode, 4)
-    pager.add_cap_map(pager_gzp_cnode_map)
-    sdf.add_cnode(pager_gzp_cnode)
-    pager_ips_cnode = SystemDescription.CNode("ips_cnode", False, 20)
-    pager_ips_cnode_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, pager_ips_cnode, 3)
-    pager.add_cap_map(pager_ips_cnode_map)
-    sdf.add_cnode(pager_ips_cnode)
-    pager_remaining_untypeds = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, remaining_untypeds, 1)
-    pager_bootinfo_map = SystemDescription.Map(pager_bootinfo, 0x8002000000, "rw", setvar_vaddr="remaining_untypeds_vaddr")
-    pager.add_map(pager_bootinfo_map)
-    sdf.add_mr(pager_bootinfo_map)
+    # backed=False leaves the client's stack pages unmapped at boot so that
+    # they fault in through the pager.
+    client = ProtectionDomain("client", "client.elf", priority=1, backed=False)
+    pager = add_pager(sdf, client)
 
-    process_cnodes = SystemDescription.CNode("process_cnodes", False, 5)
-    process_cnodes_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, process_cnodes, 5)
-    pager.add_cap_map(process_cnodes_map)
-    sdf.add_cnode(process_cnodes)
-    # where elf caps are placed.
-    elf_caps = SystemDescription.CNode("elf_caps", False, 12)
-    elf_caps_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, elf_caps, 6)
-    pager.add_cap_map(elf_caps_map)
-    sdf.add_cnode(elf_caps)
-    
-    pager.add_cap_map(pager_remaining_untypeds)
-    pager.add_cap_map(pagers_empty_cnode_map)
-    # sdf.add_cnode(remaining_untypeds)
-    sdf.add_cnode(remaining_untypeds)
-    sdf.add_cnode(pagers_empty_cnode)
-
-
-    sdf.add_mr(pager_memory)
-    # sdf.add_mr(remaining_untypeds_mr)
-    pager_memory_map = SystemDescription.Map(pager_memory, 0x8000000000, "rw", setvar_vaddr="pager_memory")
-    # untypeds_map = SystemDescription.Map(remaining_untypeds, 0x20_000_000, "rw", setvar_vaddr="remaining_untypeds_vaddr")
-    pager.add_map(pager_memory_map)
-    # pager.add_map(untypeds_map)
     serial_system.add_client(client)
     timer_system.add_client(client)
-
-    fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
 
     fs = LionsOs.FileSystem.Fat(
         sdf,
         fatfs,
         client,
         blk=blk_system,
-        partition=1 # change this if necessary
-        # partition=partition
+        partition=FS_PARTITION,
     )
 
-    if board.name == "maaxboard":
-        timer_system.add_client(blk_driver)
-    if board.name == "rpi4b_1gb":
+    # These boards' block drivers need a timer to poll their controllers.
+    if board.name in ("maaxboard", "rpi4b_1gb"):
         timer_system.add_client(blk_driver)
 
+    # The client is deliberately absent: it is added as a child of the pager.
     pds = [
         serial_virt_rx,
         timer_driver,
@@ -131,24 +180,17 @@ def generate(
         pager,
         blk_driver,
         blk_virt,
-        fatfs
+        fatfs,
     ]
-
-    
     for pd in pds:
         sdf.add_pd(pd)
 
-    assert fs.connect()
-    assert fs.serialise_config(output_dir)
-    assert serial_system.connect()
-    assert serial_system.serialise_config(output_dir)
-    assert timer_system.connect()
-    assert timer_system.serialise_config(output_dir)
-    assert blk_system.connect()
-    assert blk_system.serialise_config(output_dir)
+    for system in (fs, serial_system, timer_system, blk_system):
+        assert system.connect()
+        assert system.serialise_config(output_dir)
 
     with open(f"{output_dir}/{sdf_file}", "w+") as f:
-            f.write(sdf.render())
+        f.write(sdf.render())
 
 
 if __name__ == "__main__":
@@ -159,20 +201,19 @@ if __name__ == "__main__":
                         choices=[b.name for b in BOARDS])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
-    # parser.add_argument("--smp", required=True)
 
     args = parser.parse_args()
 
     board = next(filter(lambda b: b.name == args.board, BOARDS))
 
     sdf = SystemDescription(board.arch, board.paddr_top)
-    sddf = Sddf(args.sddf)
-
-
+    # Not dead code: constructing this registers the sDDF source tree globally,
+    # which Sddf.Timer/Serial/Blk rely on.
+    Sddf(args.sddf)
 
     dtb = None
     if board.arch != SystemDescription.Arch.X86_64:
         with open(args.dtb, "rb") as f:
             dtb = DeviceTree(f.read())
 
-    generate(args.sdf, args.output, dtb)
+    generate(sdf, board, args.sdf, args.output, dtb)
