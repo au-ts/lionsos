@@ -10,7 +10,8 @@
 
 #define BLOCK_SIZE 4096
 #define MAX_CHILDREN 10
-#define NUM_BLOCKS 50000
+/* Covers the 0x20000000 mmap arena the client hands to libc_init(). */
+#define NUM_BLOCKS 131072
 #define PAGE_SIZE 0x1000
 #define PAGE_MASK 0xFFFFFFFFFFFFF000ULL
 #define ROUND_DOWN_TO_4K(x)      ((uintptr_t)(x) & PAGE_MASK)
@@ -234,7 +235,12 @@ long pager_mem_call(microkit_msginfo msginfo, microkit_child child)
             return -ENOMEM;
         }
         length = (length + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-        return (long)alloc(length / PAGE_SIZE, heaps[child], bitmaps[child]);
+        addr = (uintptr_t)alloc(length / PAGE_SIZE, heaps[child], bitmaps[child]);
+        if (!addr) {
+            // A NULL return would be read back as a successful mapping at 0.
+            return -ENOMEM;
+        }
+        return (long)addr;
     case PAGER_MEM_MUNMAP:
         addr = microkit_mr_get(0);
         length = (microkit_mr_get(1) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);

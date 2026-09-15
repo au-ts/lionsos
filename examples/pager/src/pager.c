@@ -269,6 +269,13 @@ void notified(microkit_channel ch)
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
     // microkit_pd_stop(child);
+    // Only VM faults carry an address and an FSR in the message registers,
+    // every other fault type would be decoded as garbage below.
+    if (microkit_msginfo_get_label(msginfo) != seL4_Fault_VMFault) {
+        sddf_printf("unhandled fault %lu from child %u at ip 0x%lx\n",
+            microkit_msginfo_get_label(msginfo), child, microkit_mr_get(0));
+        return seL4_False;
+    }
     // get fault info
     uintptr_t fault_addr = ROUND_DOWN_TO_4K(microkit_mr_get(1));
     uint64_t fsr = microkit_mr_get(3);
@@ -304,7 +311,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         insert_frame_to_page(folio->frame_page, page_entry);
     }
     // Permission fault (level 1–3)
-    if (fsc >= 0x0D && fsc <= 0x0F) {
+    else if (fsc >= 0x0D && fsc <= 0x0F) {
         // if global zero page get new frame
         if (!(*page_entry & DESC_NG)) {
             folio = get_frame();
@@ -323,6 +330,11 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
                 frame = new_folio->frame_page;
             }
         }
+    } else {
+        // Nothing else is serviceable, leave the child faulted rather than
+        // mapping whatever happens to be in frame.
+        sddf_printf("unhandled fault status code 0x%lx at 0x%lx ip 0x%lx\n", fsc, fault_addr, ip);
+        return seL4_False;
     }
 
     // do mapping
