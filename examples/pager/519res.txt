@@ -1,0 +1,30 @@
+MAIN_printInfo:
+	grid size      : 100 x 100 x 130 = 1.30 * 10^6 Cells
+	nTimeSteps     : 1
+	result file    : reference.dat
+	action         : nothing
+	simulation type: channel flow
+	obstacle file  : 100_100_130_cf_a.of
+
+LBM_allocateGrid: allocated 204.5 MByte
+LBM_allocateGrid: allocated 204.5 MByte
+load took 4371021
+LBM_showGridStatistics:
+	nObstacleCells:  498440 nAccelCells:       0 nFluidCells:  801560
+	minRho: 1.000000 maxRho: 1.000000 Mass: 1.300000e+06
+	minU  : 0.000000 maxU  : 0.000000
+
+LBM_showGridStatistics:
+	nObstacleCells:  498440 nAccelCells:       0 nFluidCells:  801560
+	minRho: 0.999900 maxRho: 1.005048 Mass: 1.300022e+06
+	minU  : 0.000000 maxU  : 0.005022
+
+cl 1167
+ pi 1323
+ ini 5300600
+ zero 5301923
+ one 9648
+ two 1121295
+ three 478782
+ Total duration is 6911649 microseconds
+benchmark done
