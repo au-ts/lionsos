@@ -504,7 +504,7 @@ static void filter(void) {
                     filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
                     htons(tcp_hdr->src_port), ipaddr_to_string(ip_hdr->dst_ip, ip_addr_buf1),
                     htons(tcp_hdr->dst_port));
-                
+
                 break;
             }
             }
@@ -575,7 +575,7 @@ microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo) {
 
         LOG_FIREWALL("TCP FILTER", "on interface %u changing default action from %u to %u\n",
                     filter_config.interface, filter_state.rule_table->rules[DEFAULT_ACTION_IDX].action, action);
-    
+
 
         fw_filter_err_t err = fw_filter_update_default_action(&filter_state, action);
         assert(err == FILTER_ERR_OKAY);
