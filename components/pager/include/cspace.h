@@ -40,10 +40,6 @@ uint8_t get_object_size_bits(seL4_Word object_type, seL4_Word size_bits);
 
 seL4_Word max_size_bits(seL4_Word size);
 
-seL4_Error get_untyped_at_paddr(cnode_specs_t *cnode_specs,
-                                seL4_Word target_paddr,
-                                uint32_t *target_ut_idx);
-
 void clear_cnode_specs_entry(cnode_specs_t *cnode_specs, uint32_t ut_idx);
 
 void update_active_ut_idx(cnode_specs_t *cnode_specs);
