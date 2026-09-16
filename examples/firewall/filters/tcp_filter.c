@@ -395,24 +395,6 @@ fw_filter_state_t filter_state;
 // have access to the timer driver and thus does not receive ticks.
 uint64_t curr_tick = 0;
 
-// Helper fn to allocate the tracking instance slot
-static inline fw_filter_err_t fw_tcp_create_and_bind_instance(fw_filter_state_t *state, ipv4_hdr_t *ip_hdr,
-                                                              tcp_hdr_t *tcp_hdr, uint16_t rule_id,
-                                                              fw_tcp_instance_t **instance) {
-    uint32_t initial_seq = ntohl(tcp_hdr->seq);
-    fw_filter_err_t fw_err = fw_filter_add_instance(state, ip_hdr->src_ip, tcp_hdr->src_port, ip_hdr->dst_ip,
-                                                    tcp_hdr->dst_port, rule_id, initial_seq);
-    // If the slot was successfully created or already existed, link the pointer
-    if (fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) {
-        // Dummy id used,
-        uint16_t dummy_rule_id;
-        fw_tcp_filter_find_action(state, ip_hdr->src_ip, tcp_hdr->src_port, ip_hdr->dst_ip, tcp_hdr->dst_port,
-                                  &dummy_rule_id, instance);
-    }
-
-    return fw_err;
-}
-
 static void filter(void) {
     bool transmitted = false;
     bool returned = false;
@@ -520,7 +502,7 @@ static void filter(void) {
                 // Payload length tracking calculations
                 uint16_t ip_hdr_len = ipv4_header_length(ip_hdr);
                 uint16_t tcp_hdr_len = (tcp_hdr->doff) * 4;
-                uint32_t payload_len = ntohs(ip_hdr->total_len) - ip_hdr_len - tcp_hdr_len;
+                uint32_t payload_len = ntohs(ip_hdr->tot_len) - ip_hdr_len - tcp_hdr_len;
 
                 if (is_forward) {
                     uint32_t control_adjustment = ((flags & FW_TCP_SYN_BIT) || (flags & FW_TCP_FIN_BIT)) ? 1 : 0;
