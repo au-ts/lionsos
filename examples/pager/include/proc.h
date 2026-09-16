@@ -1,12 +1,18 @@
+/*
+ * Copyright 2026, UNSW
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+#ifndef _PROC_H
+#define _PROC_H
+
 #include <sel4/sel4.h>
 #include <microkit.h>
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "cspace.h"
-#include "page_table.h"
+#include "pager.h"
 
-#define MAX_CHILDREN 10
 #define PROCESS_CNODE_SIZE_BITS 12
 #define PROCESS_VSPACE_SLOT 1
 
@@ -15,7 +21,6 @@
 #define PROCESS_FORK_NO_SLOTS -2
 #define PROCESS_FORK_CAP -3
 
-typedef pte_t *(*process_page_entry_fn)(uintptr_t vaddr, uint32_t child);
 struct process {
     seL4_CPtr vspace;
     seL4_CPtr cspace;
@@ -29,13 +34,19 @@ struct process {
     bool allocated;
 };
 
-int process_fork(struct process *processes, uint32_t parent, uint32_t child,
-                 seL4_CPtr process_cnodes_cptr, cnode_specs_t *untyped,
-                 seL4_CPtr frame_cnode_cptr, seL4_CPtr gzp_cnode_cptr,
-                 pgd_t *page_tables,
-                 uint32_t *vspaces, process_page_entry_fn make_page_entry,
-                 seL4_CapRights_t (*cap_rights)(bool is_write));
+/**
+ * Claims the CNode the per-process CSpaces are created in and registers the
+ * child the system booted with as process zero.
+ */
+void process_init(seL4_CPtr process_cnodes_cptr);
 
+int process_fork(uint32_t parent, uint32_t child);
+
+/**
+ * Forks parent into the first free process slot, returning the new child id.
+ */
+long pager_fork(microkit_child parent);
+void fork(uint32_t parent, uint32_t child);
 
 // create vspace, then assign asid pool to vspace
 // create cspace
@@ -43,3 +54,5 @@ int process_fork(struct process *processes, uint32_t parent, uint32_t child,
 // create a TCB and configure it.
 // create scheduling context
 // set scheduling params.
+
+#endif

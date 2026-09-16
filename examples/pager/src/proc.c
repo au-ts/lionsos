@@ -1,23 +1,32 @@
-
-
+/*
+ * Copyright 2026, UNSW
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 #include "proc.h"
+#include "cspace.h"
+#include "frame_table.h"
+#include "page_table.h"
 #include "pager.h"
+#include "untyped.h"
 
-#define PAGE_SIZE 4096ULL
+#include <errno.h>
+#include <sddf/util/printf.h>
+
+static struct process processes[MAX_CHILDREN];
+static seL4_CPtr process_cnodes_cptr;
 static uint32_t next_process_cnode_slot;
 
 static int allocate_process(struct process *process, uint32_t pid,
-							uint32_t parent, seL4_CPtr process_cnodes_cptr,
-							cnode_specs_t *untyped)
+							uint32_t parent)
 {
 	uint32_t cnode_slot = next_process_cnode_slot++;
 	seL4_CPtr cspace;
 	seL4_Error error;
 
 	if (cnode_slot >= 512) return PROCESS_FORK_NO_SLOTS;
-	error = do_untyped_retype(untyped, seL4_CapTableObject,
-							  PROCESS_CNODE_SIZE_BITS, cnode_slot,
-							  process_cnodes_cptr);
+	error = untyped_alloc(seL4_CapTableObject, PROCESS_CNODE_SIZE_BITS,
+						  cnode_slot, process_cnodes_cptr);
 	if (error != seL4_NoError) return PROCESS_FORK_CAP;
 
 	cspace = process_cnodes_cptr + cnode_slot;
@@ -27,8 +36,7 @@ static int allocate_process(struct process *process, uint32_t pid,
 	process->pid = pid;
 	process->allocated = true;
 
-	error = do_untyped_retype(untyped, seL4_ARM_VSpaceObject, 0,
-							  PROCESS_VSPACE_SLOT, cspace);
+	error = untyped_alloc(seL4_ARM_VSpaceObject, 0, PROCESS_VSPACE_SLOT, cspace);
 	if (error != seL4_NoError) {
 		process->allocated = false;
 		return PROCESS_FORK_CAP;
@@ -37,12 +45,9 @@ static int allocate_process(struct process *process, uint32_t pid,
 }
 
 static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
-					  pte_t parent_entry, uint32_t *vspaces,
-					  seL4_CPtr frame_cnode_cptr, seL4_CPtr gzp_cnode_cptr,
-					  process_page_entry_fn make_page_entry,
-					  seL4_CapRights_t (*cap_rights)(bool is_write))
+					  pte_t parent_entry)
 {
-	pte_t *child_entry = make_page_entry(vaddr, child);
+	pte_t *child_entry = make_page_table_entry(vaddr, child);
 	uint32_t frame = get_frame_from_page(parent_entry);
 	seL4_Error error;
 
@@ -56,14 +61,14 @@ static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
 		 * write the shared frame. The resulting permission fault is
 		 * resolved by the pager's CoW path.
 		 */
-		error = seL4_ARM_Page_Map(frame_cnode_cptr + frame, vspaces[parent],
-								  vaddr, cap_rights(false), 0x03);
+		error = seL4_ARM_Page_Map(frame_cptr(frame), vspaces[parent],
+								  vaddr, create_cap_rights(false), 0x03);
 		if (error != seL4_NoError) return PROCESS_FORK_CAP;
 	}
-	seL4_CPtr frame_cptr = (parent_entry & DESC_NG)
-		? frame_cnode_cptr + frame : gzp_cnode_cptr + frame;
-	error = seL4_ARM_Page_Map(frame_cptr, vspaces[child],
-							  vaddr, cap_rights(false), 0x03);
+	seL4_CPtr child_frame_cptr = (parent_entry & DESC_NG)
+		? frame_cptr(frame) : gzp_cptr(frame);
+	error = seL4_ARM_Page_Map(child_frame_cptr, vspaces[child],
+							  vaddr, create_cap_rights(false), 0x03);
 	if (error != seL4_NoError) return PROCESS_FORK_CAP;
 
 	if (parent_entry & DESC_NG) {
@@ -73,32 +78,27 @@ static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
 	return PROCESS_FORK_OK;
 }
 
-static int clone_pages(uint32_t parent, uint32_t child, pgd_t *page_tables,
-					   uint32_t *vspaces, seL4_CPtr frame_cnode_cptr,
-					   seL4_CPtr gzp_cnode_cptr,
-					   process_page_entry_fn make_page_entry,
-					   seL4_CapRights_t (*cap_rights)(bool is_write))
+static int clone_pages(uint32_t parent, uint32_t child)
 {
-	for (uint32_t pgdi = 0; pgdi < 512; ++pgdi) {
-		pud_t *pud = page_tables[parent].entries[pgdi];
+	pgd_t *pgd = page_table_root(parent);
+
+	for (uint32_t pgdi = 0; pgdi < PAGE_TABLE_ENTRIES; ++pgdi) {
+		pud_t *pud = pgd->entries[pgdi];
 		if (!pud) continue;
-		for (uint32_t pudi = 0; pudi < 512; ++pudi) {
+		for (uint32_t pudi = 0; pudi < PAGE_TABLE_ENTRIES; ++pudi) {
 			pd_t *pd = pud->entries[pudi];
 			if (!pd) continue;
-			for (uint32_t pdi = 0; pdi < 512; ++pdi) {
+			for (uint32_t pdi = 0; pdi < PAGE_TABLE_ENTRIES; ++pdi) {
 				pt_t *pt = pd->entries[pdi];
 				if (!pt) continue;
-				for (uint32_t ptei = 0; ptei < 512; ++ptei) {
+				for (uint32_t ptei = 0; ptei < PAGE_TABLE_ENTRIES; ++ptei) {
 					pte_t entry = pt->entries[ptei];
 					if (!entry) continue;
-					uintptr_t vaddr = ((uintptr_t)pgdi << 39) |
-									  ((uintptr_t)pudi << 30) |
-									  ((uintptr_t)pdi << 21) |
-									  ((uintptr_t)ptei << 12);
-					int result = clone_leaf(parent, child, vaddr, entry,
-											vspaces, frame_cnode_cptr,
-											gzp_cnode_cptr,
-											make_page_entry, cap_rights);
+					uintptr_t vaddr = ((uintptr_t)pgdi << PUD_INDEX_SHIFT) |
+									  ((uintptr_t)pudi << PD_INDEX_SHIFT) |
+									  ((uintptr_t)pdi << PT_INDEX_SHIFT) |
+									  ((uintptr_t)ptei << PAGE_SHIFT);
+					int result = clone_leaf(parent, child, vaddr, entry);
 					if (result != PROCESS_FORK_OK) return result;
 				}
 			}
@@ -114,23 +114,56 @@ static int clone_pages(uint32_t parent, uint32_t child, pgd_t *page_tables,
  * - IPC buffer mapping: seL4_TCB_SetIPCBuffer
  * - set up scheduling context: seL4_SchedContext_Configure,
  */
-int process_fork(struct process *processes, uint32_t parent, uint32_t child,
-				 seL4_CPtr process_cnodes_cptr, cnode_specs_t *untyped,
-				 seL4_CPtr frame_cnode_cptr, seL4_CPtr gzp_cnode_cptr,
-				 pgd_t *page_tables,
-				 uint32_t *vspaces, process_page_entry_fn make_page_entry,
-				 seL4_CapRights_t (*cap_rights)(bool is_write))
+int process_fork(uint32_t parent, uint32_t child)
 {
 	if (parent >= MAX_CHILDREN || child >= MAX_CHILDREN || parent == child ||
 		!processes[parent].allocated || processes[child].allocated) {
 		return PROCESS_FORK_INVALID;
 	}
 
-	int result = allocate_process(&processes[child], child, parent,
-								  process_cnodes_cptr, untyped);
+	int result = allocate_process(&processes[child], child, parent);
 	if (result != PROCESS_FORK_OK) return result;
 	vspaces[child] = processes[child].vspace;
-	result = clone_pages(parent, child, page_tables, vspaces, frame_cnode_cptr,
-						 gzp_cnode_cptr, make_page_entry, cap_rights);
-	return result;
+	return clone_pages(parent, child);
+}
+
+long pager_fork(microkit_child parent)
+{
+    if (parent >= MAX_CHILDREN || !processes[parent].allocated) {
+        return -EINVAL;
+    }
+
+    uint32_t child = 0;
+    for (uint32_t i = 1; i < MAX_CHILDREN; i++) {
+        if (!processes[i].allocated) {
+            child = i;
+            break;
+        }
+    }
+    if (child == 0) {
+        sddf_printf("pager_fork: no available process slots\n");
+        return -EAGAIN;
+    }
+
+    int result = process_fork(parent, child);
+    if (result != PROCESS_FORK_OK) {
+        sddf_printf("fork(%u, %u) failed: %d\n", parent, child, result);
+        return -ENOMEM;
+    }
+    return child;
+}
+
+void fork(uint32_t parent, uint32_t child)
+{
+    int result = process_fork(parent, child);
+    if (result != PROCESS_FORK_OK) {
+        sddf_printf("fork(%u, %u) failed: %d\n", parent, child, result);
+    }
+}
+
+void process_init(seL4_CPtr process_cnodes)
+{
+    process_cnodes_cptr = process_cnodes;
+    processes[0].allocated = true;
+    processes[0].pid = 0;
 }

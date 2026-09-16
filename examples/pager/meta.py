@@ -35,7 +35,8 @@ CapMap = SystemDescription.CapMap
 PAGER_MEM_CH = 4
 
 # Scratch memory the pager bump-allocates folio metadata and shadow page
-# tables from. Reachable in the pager as the `pager_memory` symbol.
+# tables from. Reachable in the pager as the `pager_memory` symbol, which
+# src/frame_table.c and src/page_table.c carve up between them.
 PAGER_MEMORY_SIZE = 0x2000000
 PAGER_MEMORY_VADDR = 0x8000000000
 
@@ -50,8 +51,8 @@ PAGER_BOOTINFO_VADDR = 0x8002000000
 #
 # The slots are hard-coded on the other side of this interface and must be kept
 # in sync with them:
-#   * src/pager.c names slots 1-5 (UNTYPED_SLOT, FRAME_CNODE, IPS_CNODE,
-#     GZP_CNODE and the process CNode) and reaches them via
+#   * include/pager.h names every slot (UNTYPED_SLOT, FRAME_CNODE, IPS_CNODE,
+#     GZP_CNODE, PROCESS_CNODES, ELF_CAPS) and src/pager.c reaches them via
 #     microkit_cspace_root_slot_to_cptr().
 #   * The Microkit tool fills the CNode named "elf_caps" with the child PDs'
 #     ELF frame caps, and places each child's VSpace cap from slot 7 onwards.

@@ -62,7 +62,23 @@ A protection domain that receives all remaining untyped memory after system init
 The LionsOS libC is how the client interfaces with the other operating system components like the file system, the serial device and timer (also networking but removed for this example). This is required at this stage as memory allocations (sys_mmap & sys_brk) are implemented as part of the libC, which is a per PD library. It is part of the client protection domain.
 
 ## 3. Implementation details
-### 3.1 System description (metaprogram)
+### 3.1 Source layout
+Each module owns its own state and exposes it through the matching header in `include/`.
+
+| File | Responsibility |
+| --- | --- |
+| `include/pager.h` | The contract with `meta.py` and the Microkit tool: the root CSpace slots, the patched-in symbols (`pager_memory`, `remaining_untypeds_vaddr`, `vspaces`) and the slab sizes. |
+| `src/pager.c` | The Microkit entry points only: `init()`, `notified()`, `fault()` and `protected()`. |
+| `src/untyped.c` | Owns the untypeds left after initialisation; everything that retypes an object goes through `untyped_alloc()`. |
+| `src/cspace.c` | Generic CSpace/untyped bookkeeping (`cnode_specs_t`) and `create_cap_rights()`. |
+| `src/frame_table.c` | Folio metadata, the frame free list and the global zero page cap copies. |
+| `src/page_table.c` | Shadow page tables: the intermediary paging structure free list, `make_page_table_entry()` and `unmap_range()`. |
+| `src/proc.c` | The process table and `fork()`. |
+| `src/mem.c` | The `brk`/`mmap`/`munmap`/`fork` PPCs from the client's libc. |
+| `src/bitmap.c` | The block allocator `mem.c` hands out the client's mmap arena with. |
+| `src/client.c` | The client PD, which selects a benchmark from `benchmarks/`. |
+
+### 3.2 System description (metaprogram)
 - **Pager:**
 ```py
 pager = SystemDescription.ProtectionDomain("pager", "pager.elf", priority=198)
@@ -118,11 +134,11 @@ client = ProtectionDomain("client", "client.elf", priority=1, backed = False)
 pager.add_child_pd(client)
 ```
 
-### 3.2 [Microkit](https://github.com/au-ts/microkit/tree/joshua/mglru3) changes
+### 3.3 [Microkit](https://github.com/au-ts/microkit/tree/joshua/mglru3) changes
 - Gives vspace caps of pager's children to the pager via the elf.
 - Option to have unbacked stack pages for protection domains.
 - Also: https://github.com/au-ts/microkit/blob/carrells_demo/CHANGES.md.
-### 3.3 [sdfgen](https://github.com/au-ts/microkit_sdf_gen/tree/joshua/mglru3) changes
+### 3.4 [sdfgen](https://github.com/au-ts/microkit_sdf_gen/tree/joshua/mglru3) changes
 - Option to have unbacked stack pages for protection domains. `backed=False`
 - Also: https://github.com/au-ts/microkit/blob/carrells_demo/CHANGES.md.
 ## 4. Caveats

@@ -1,6 +1,10 @@
-
-#pragma once
+/*
+ * Copyright 2026, UNSW
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 #include "cspace.h"
+
 #include <sddf/util/printf.h>
 
 seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
@@ -131,6 +135,13 @@ void update_active_ut_idx(cnode_specs_t *cnode_specs)
     } else {
         sddf_dprintf("[Error] failed to find an available untyped for kernel objects allocation\n");
     }
+}
+
+/**
+ * TODO: do the actual implementation
+ */
+seL4_CapRights_t create_cap_rights(bool is_write) {
+    return seL4_CapRights_new(1, is_write, 1, 1);
 }
 
 // deprecated ***

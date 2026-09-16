@@ -37,7 +37,20 @@ seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
 
 uint8_t get_object_size_bits(seL4_Word object_type, seL4_Word size_bits);
 
+seL4_Word max_size_bits(seL4_Word size);
+
+seL4_Error get_untyped_at_paddr(cnode_specs_t *cnode_specs,
+                                seL4_Word target_paddr,
+                                uint32_t *target_ut_idx);
+
+void clear_cnode_specs_entry(cnode_specs_t *cnode_specs, uint32_t ut_idx);
+
 void update_active_ut_idx(cnode_specs_t *cnode_specs);
+
+/**
+ * TODO: do the actual implementation
+ */
+seL4_CapRights_t create_cap_rights(bool is_write);
 
 
 
@@ -49,4 +62,4 @@ seL4_Error untyped_retype(cnode_specs_t *cnode_specs,
                           seL4_Word size_bits,
                           uint32_t *retyped_cap_idx);
 
-#endif                          
+#endif

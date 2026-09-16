@@ -4,253 +4,38 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 #include "cspace.h"
-#include "pager.h"
-#include "page_table.h"
+#include "frame_table.h"
 #include "mem.h"
+#include "page_table.h"
+#include "pager.h"
 #include "proc.h"
-#include <errno.h>
-#include <string.h>
+#include "untyped.h"
 
-#define PAGE_BITS 12ULL
-#define PAGE_SIZE 4096ULL
-#define PAGE_MASK 0xFFFFFFFFFFFFF000ULL
-#define ROUND_DOWN_TO_4K(x)      ((uintptr_t)(x) & PAGE_MASK)
-#define seL4_PageBits           12
-
-#define MAPPING_SLOTS 3u
-#define UNTYPED_SLOT 1 // this is the cptr thing basically.
-#define FRAME_CNODE 2 // where frame caps are placed
-#define IPS_CNODE 3 // where intermediary paging structure caps are placed.
-#define GZP_CNODE 4 // where global zero frame caps are placed.
-#define BUFFERS_SIZE 200000
-#define REFILL_SIZE 20000
-#define FOLIO_COUNT (BUFFERS_SIZE + 1)
-#define FOLIO_MEMORY_SIZE (FOLIO_COUNT * sizeof(struct folio))
-
+#include <microkit.h>
 #include <sddf/util/printf.h>
 
-
-static struct process processes[MAX_CHILDREN];
-
-
-// capability related global variables:
-uintptr_t remaining_untypeds_vaddr;
-cnode_specs_t post_boot_cnode;
-capDLBootInfo_t *capDLBootInfo;
-// uint64_t untyped_idx;
-uint32_t vspaces[10]; // child_idx to vspace_idx
-static seL4_CPtr frame_cnode_cptr;
-static seL4_CPtr ips_cnode_cptr;
-static seL4_CPtr gzp_cnode_cptr;
-static seL4_CPtr process_cnodes_cptr;
-static uint32_t global_zero_page;
-
-
-
-// Below is essentially a slub allocator.
-/** pager_memory static allocation for pager to use. */
-pgd_t page_tables[10];
-uintptr_t pager_memory;
-static uintptr_t pager_memory_idx;
-
-
-// Bookkeeping for pager's memory.
-static uintptr_t freed_pager_memory[BUFFERS_SIZE];
-static uint32_t freed_pager_memory_idx = 0;
-
-
-// Bookkeeping for intermediary paging structures
-static uint32_t unused_ips[BUFFERS_SIZE];
-static uint32_t unused_ips_idx = 0;
-
-static uint32_t ips_idx = 1;
-
-// Bookkeeping for frames.
-static struct folio *unused_frames[BUFFERS_SIZE];
-static uint32_t unused_frames_idx = 0;
-
-uintptr_t frame_memory;
-static uint32_t frame_idx = 1;
-
-// Bookkeeping for global zero pages.
-static uint32_t gzp_idx = 1;
-
-static uint32_t unused_gzp[BUFFERS_SIZE];
-static uint32_t unused_gzp_idx = 0;
-
-struct folio *get_folio_from_idx(uint32_t idx) {
-    if (idx == 0 || idx > FOLIO_COUNT) {
-        sddf_printf("folio index out of range: %u\n", idx);
-        return NULL;
-    }
-    return (struct folio *)(frame_memory + (idx - 1) * sizeof(struct folio)); 
-}
-
-// Slub allocator local functions.
-static void refill_frames() {
-    sddf_dprintf("refilling frames\n");
-    for (int i = 0; i < REFILL_SIZE * 10; ++i) {
-        struct folio *folio = get_folio_from_idx(frame_idx);
-        if (folio == NULL || unused_frames_idx >= BUFFERS_SIZE) {
-            sddf_printf("frame metadata exhausted\n");
-            return;
-        }
-        seL4_Error err = do_untyped_retype(&post_boot_cnode, seL4_ARM_SmallPageObject, seL4_PageBits, frame_idx, frame_cnode_cptr);
-        if (err) {
-            sddf_printf("error occured when refilling frames %d\n", err);
-        }
-        folio->frame_page = frame_idx;
-        folio->refcount = 0;
-        unused_frames[unused_frames_idx] = folio;
-        ++frame_idx;
-        ++unused_frames_idx;
-    }
-}
-
-static struct folio *get_frame() {
-    if (!unused_frames_idx) {
-        refill_frames();
-    }
-    struct folio *folio = unused_frames[--unused_frames_idx];
-    folio->refcount = 1;
-    return folio;
-}
-
-static void refill_ips() {
-    sddf_dprintf("refilling ips\n");
-    for (int i = 0; i < REFILL_SIZE; ++i) {
-        seL4_Error err = do_untyped_retype(&post_boot_cnode, seL4_ARM_PageTableObject, 12, ips_idx, ips_cnode_cptr);
-        if (err) {
-            sddf_printf("error occured when creating ips caps %d\n", err);
-        }
-        unused_ips[unused_ips_idx] = ips_idx;
-        ++ips_idx;
-        ++unused_ips_idx;
-    }
-}
-static uint32_t get_ips() {
-    if (!unused_ips_idx) {
-        refill_ips();
-    }
-    return unused_ips[--unused_ips_idx];
-}
-
-static void refill_gzp() {
-    sddf_dprintf("refilling gzp\n");
-    for (int i = 0; i < REFILL_SIZE; ++i) {
-        seL4_Error err = seL4_CNode_Copy(gzp_cnode_cptr, gzp_idx, 58, frame_cnode_cptr, global_zero_page, 58, create_cap_rights(false));
-        if (err) {
-            sddf_printf("error occured when copying GZP caps %d\n", err);
-        }
-        unused_gzp[unused_gzp_idx] = gzp_idx;
-        ++gzp_idx;
-        ++unused_gzp_idx;
-    }
-}
-static uint32_t get_gzp() {
-    if (!unused_gzp_idx) {
-        refill_gzp();
-    }
-    return unused_gzp[--unused_gzp_idx];
-}
-
-uintptr_t allocate_page_table() {
-    
-    if (freed_pager_memory_idx) {
-        return freed_pager_memory[--freed_pager_memory_idx];
-    }
-    uint32_t size = sizeof(struct pud); // they are all the same size.
-    uintptr_t ret = pager_memory + pager_memory_idx;
-    pager_memory_idx += size;
-    memset((void *)ret, 0, size);
-    return ret;
-}
-
-/**
- * make shadow page table entry
- * creates mappings for intermediary paging structures
+/*
+ * Patched into pager.elf by the Microkit tool, see include/pager.h. vspaces
+ * maps a child id to the VSpace cap the tool placed in our CSpace.
  */
-pte_t *make_page_table_entry(uintptr_t vaddr, uint32_t child) {
-    pgd_t *vspace = &page_tables[child];
-    uint32_t vspace_idx = vspaces[child];
-    pud_t *pud = vspace->entries[PUD_INDEX(vaddr)];
-    if (!pud) {
-        // allocate pud; & pt
-        pud = (pud_t *) allocate_page_table();
-        vspace->entries[PUD_INDEX(vaddr)] = pud;
-        pud->cap = get_ips();
-        seL4_Error err = seL4_ARM_PageTable_Map(ips_cnode_cptr + pud->cap, vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
-        if (err) {
-            sddf_dprintf("error when mapping page tables pud %d\n", err);
-        }
-    }
-    pd_t *pd = pud->entries[PD_INDEX(vaddr)];
-    if (!pd) {
-        // allocate pd; & pt
-        pd = (pd_t *) allocate_page_table();
-        pud->entries[PD_INDEX(vaddr)] = pd;
-        pd->cap = get_ips();
-        seL4_Error err = seL4_ARM_PageTable_Map(ips_cnode_cptr + pd->cap, vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
-        if (err) {
-            sddf_dprintf("error when mapping page tables pd %d\n", err);
-        }
-    }
-    pt_t *pt = pd->entries[PT_INDEX(vaddr)];
-    if (!pt) {
-        // allocat pt;
-        pt = (pt_t *) allocate_page_table();
-        pd->entries[PT_INDEX(vaddr)] = pt;
-        pt->cap = get_ips();
-        seL4_Error err = seL4_ARM_PageTable_Map(ips_cnode_cptr + pt->cap, vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
-        if (err) {
-            sddf_dprintf("error when mapping page tables pt %d\n", err);
-        }
-    }
-    return &pt->entries[PAGE_INDEX(vaddr)];
-}
-
+uintptr_t pager_memory;
+uintptr_t remaining_untypeds_vaddr;
+uint32_t vspaces[MAX_CHILDREN];
 
 void init(void)
 {
     allocator_init();
-    frame_memory = pager_memory;
-    pager_memory_idx = FOLIO_MEMORY_SIZE;
-
-    // // intialise untypeds.
-    capDLBootInfo = (capDLBootInfo_t*) remaining_untypeds_vaddr;
-    ips_cnode_cptr = microkit_cspace_root_slot_to_cptr(3);
-    frame_cnode_cptr = microkit_cspace_root_slot_to_cptr(2);
-    gzp_cnode_cptr = microkit_cspace_root_slot_to_cptr(4);
-    post_boot_cnode.cptr = microkit_cspace_root_slot_to_cptr(1);
-    post_boot_cnode.start = capDLBootInfo->untypeds.start;
-    // // TODO: is end empty?
-    for (uint64_t i = capDLBootInfo->untypeds.start; i < capDLBootInfo->untypeds.end; i++) {
-        post_boot_cnode.caps[i].base_addr = capDLBootInfo->untypedList[i].paddr;
-        post_boot_cnode.caps[i].end_addr = post_boot_cnode.caps[i].base_addr + (1ULL << capDLBootInfo->untypedList[i].sizeBits);
-        post_boot_cnode.caps[i].is_device = capDLBootInfo->untypedList[i].isDevice;
-        post_boot_cnode.caps[i].object_type = seL4_UntypedObject;
-        post_boot_cnode.end = i + 1;
-        sddf_dprintf("i: %lu, 0x%lx-0x%lx: device? %d\n", i, post_boot_cnode.caps[i].base_addr, post_boot_cnode.caps[i].end_addr, post_boot_cnode.caps[i].is_device);
-    }
-    update_active_ut_idx(&post_boot_cnode);
-    sddf_dprintf("cnode start: %d\n", post_boot_cnode.start);
-
-    // create the global zero page.
-    global_zero_page = frame_idx;
-    do_untyped_retype(&post_boot_cnode, seL4_ARM_SmallPageObject, seL4_PageBits, frame_idx, frame_cnode_cptr);
-    ++frame_idx;
-    // refill unused at the start
-    sddf_printf("global zero page is %d\n", global_zero_page);
-    // copy a bunch of zero pages to the zero page thing
-    process_cnodes_cptr = microkit_cspace_root_slot_to_cptr(5);
-    processes[0].allocated = true;
-    processes[0].pid = 0;
-    // refill buffers
-    refill_frames();
-    refill_gzp();
-    refill_ips();
-    // sddf_dprintf("%d\n", sizeof(pgd_t));
-    // while (1);
+    untyped_init(remaining_untypeds_vaddr, microkit_cspace_root_slot_to_cptr(UNTYPED_SLOT));
+    /*
+     * pager_memory holds the folio metadata at its base and is the arena the
+     * shadow page tables are allocated from above that.
+     */
+    frame_table_init(pager_memory,
+                     microkit_cspace_root_slot_to_cptr(FRAME_CNODE),
+                     microkit_cspace_root_slot_to_cptr(GZP_CNODE));
+    page_table_init(pager_memory + FOLIO_MEMORY_SIZE,
+                    microkit_cspace_root_slot_to_cptr(IPS_CNODE));
+    process_init(microkit_cspace_root_slot_to_cptr(PROCESS_CNODES));
 }
 
 void notified(microkit_channel ch)
@@ -296,7 +81,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         // if it is a read fault, map global zero page.
         if (!is_write) {
             frame = get_gzp();
-            seL4_Error err = err = seL4_ARM_Page_Map(gzp_cnode_cptr + frame, vspaces[child], fault_addr, create_cap_rights(is_write), 0x03);
+            seL4_Error err = err = seL4_ARM_Page_Map(gzp_cptr(frame), vspaces[child], fault_addr, create_cap_rights(is_write), 0x03);
             if (err) {
                 sddf_printf("error occured on map frame zero %d\n", err);
             }
@@ -338,7 +123,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     }
 
     // do mapping
-    seL4_Error err = seL4_ARM_Page_Map(frame_cnode_cptr + frame, vspaces[child], fault_addr, create_cap_rights(is_write), 0x03);
+    seL4_Error err = seL4_ARM_Page_Map(frame_cptr(frame), vspaces[child], fault_addr, create_cap_rights(is_write), 0x03);
     if (err) {
         sddf_printf("error occured on map frame %d\n", err);
     }
@@ -351,183 +136,4 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         microkit_mr_set(0, pager_mem_call(msginfo, 0));
     }
     return microkit_msginfo_new(0, 1);
-}
-
-/**
- * TODO: do the actual implementation
- */
-seL4_CapRights_t create_cap_rights(bool is_write) {
-    return seL4_CapRights_new(1, is_write, 1, 1);
-}
-
-static seL4_Error map_frame(uint64_t frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
-                                 seL4_CapRights_t rights, seL4_ARM_VMAttributes attr, int num) {
-    /* Attempt the mapping */
-    seL4_Error err;
-    for (int i = 0; i < num; ++i) {
-        uint32_t page_table_cap = get_ips();
-        seL4_Error err = seL4_ARM_PageTable_Map(ips_cnode_cptr + page_table_cap, vspace, vaddr, seL4_ARM_Default_VMAttributes);
-        if (err != seL4_NoError) sddf_printf("mapping failed! frame cap is %d, vspace is %d vaddr is %p err is %d\n", frame_cap, vspace, vaddr, err);
-    }
-    err = seL4_ARM_Page_Map(frame_cap, vspace, vaddr, rights, attr);
-    return err;
-}
-
-void myfree(uintptr_t start, uintptr_t end, microkit_child child) {
-    if (child >= MAX_CHILDREN || start >= end) {
-        return;
-    }
-
-    start = ROUND_DOWN_TO_4K(start);
-    end = (end + PAGE_SIZE - 1) & PAGE_MASK;
-
-    for (uintptr_t vaddr = start; vaddr < end; vaddr += PAGE_SIZE) {
-        pgd_t *vspace = &page_tables[child];
-        pud_t *pud = vspace->entries[PUD_INDEX(vaddr)];
-        if (!pud) {
-            continue;
-        }
-        pd_t *pd = pud->entries[PD_INDEX(vaddr)];
-        if (!pd) {
-            continue;
-        }
-        pt_t *pt = pd->entries[PT_INDEX(vaddr)];
-        if (!pt) {
-            continue;
-        }
-
-        pte_t *entry = &pt->entries[PAGE_INDEX(vaddr)];
-        if (*entry) {
-            uint32_t frame = get_frame_from_page(*entry);
-            seL4_CPtr frame_cptr = (*entry & DESC_NG)
-                ? frame_cnode_cptr + frame
-                : gzp_cnode_cptr + frame;
-            seL4_Error err = seL4_ARM_Page_Unmap(frame_cptr);
-            if (err != seL4_NoError) {
-                sddf_dprintf("error unmapping frame %u: %d\n", frame, err);
-            }
-
-            if (*entry & DESC_NG) {
-                struct folio *folio = get_folio_from_idx(frame);
-                if (folio && folio->refcount > 0) {
-                    --folio->refcount;
-                }
-                if (folio && unused_frames_idx < BUFFERS_SIZE) {
-                    unused_frames[unused_frames_idx++] = folio;
-                }
-            } else if (unused_gzp_idx < BUFFERS_SIZE) {
-                unused_gzp[unused_gzp_idx++] = frame;
-            }
-            *entry = 0;
-        }
-
-        bool pt_empty = true;
-        for (size_t i = 0; i < 512; ++i) {
-            if (pt->entries[i]) {
-                pt_empty = false;
-                break;
-            }
-        }
-        if (!pt_empty) {
-            continue;
-        }
-        seL4_Error err = seL4_ARM_PageTable_Unmap(ips_cnode_cptr + pt->cap);
-        if (err != seL4_NoError) {
-            sddf_dprintf("error unmapping pt %u: %d\n", pt->cap, err);
-        }
-        if (unused_ips_idx < BUFFERS_SIZE) {
-            unused_ips[unused_ips_idx++] = pt->cap;
-        }
-        if (freed_pager_memory_idx < BUFFERS_SIZE) {
-            freed_pager_memory[freed_pager_memory_idx++] = (uintptr_t)pt;
-        }
-        pd->entries[PT_INDEX(vaddr)] = NULL;
-
-        bool pd_empty = true;
-        for (size_t i = 0; i < 512; ++i) {
-            if (pd->entries[i]) {
-                pd_empty = false;
-                break;
-            }
-        }
-        if (!pd_empty) {
-            continue;
-        }
-        err = seL4_ARM_PageTable_Unmap(ips_cnode_cptr + pd->cap);
-        if (err != seL4_NoError) {
-            sddf_dprintf("error unmapping pd %u: %d\n", pd->cap, err);
-        }
-        if (unused_ips_idx < BUFFERS_SIZE) {
-            unused_ips[unused_ips_idx++] = pd->cap;
-        }
-        if (freed_pager_memory_idx < BUFFERS_SIZE) {
-            freed_pager_memory[freed_pager_memory_idx++] = (uintptr_t)pd;
-        }
-        pud->entries[PD_INDEX(vaddr)] = NULL;
-
-        bool pud_empty = true;
-        for (size_t i = 0; i < 512; ++i) {
-            if (pud->entries[i]) {
-                pud_empty = false;
-                break;
-            }
-        }
-        if (!pud_empty) {
-            continue;
-        }
-        err = seL4_ARM_PageTable_Unmap(ips_cnode_cptr + pud->cap);
-        if (err != seL4_NoError) {
-            sddf_dprintf("error unmapping pud %u: %d\n", pud->cap, err);
-        }
-        if (unused_ips_idx < BUFFERS_SIZE) {
-            unused_ips[unused_ips_idx++] = pud->cap;
-        }
-        if (freed_pager_memory_idx < BUFFERS_SIZE) {
-            freed_pager_memory[freed_pager_memory_idx++] = (uintptr_t)pud;
-        }
-        vspace->entries[PUD_INDEX(vaddr)] = NULL;
-    }
-}
-
-
-long pager_fork(microkit_child parent)
-{
-    if (parent >= MAX_CHILDREN || !processes[parent].allocated) {
-        return -EINVAL;
-    }
-
-    uint32_t child = 0;
-    for (uint32_t i = 1; i < MAX_CHILDREN; i++) {
-        if (!processes[i].allocated) {
-            child = i;
-            break;
-        }
-    }
-    if (child == 0) {
-        sddf_printf("pager_fork: no available process slots\n");
-        return -EAGAIN;
-    }
-
-    int result = process_fork(processes, parent, child, process_cnodes_cptr,
-                              &post_boot_cnode, frame_cnode_cptr,
-                              gzp_cnode_cptr, page_tables,
-                              vspaces, make_page_table_entry,
-                              create_cap_rights);
-    if (result != PROCESS_FORK_OK) {
-        sddf_printf("fork(%u, %u) failed: %d\n", parent, child, result);
-        return -ENOMEM;
-    }
-    return child;
-}
-
-void fork(uint32_t parent, uint32_t child)
-{
-    int result = process_fork(processes, parent, child, process_cnodes_cptr,
-                              &post_boot_cnode, frame_cnode_cptr,
-                              gzp_cnode_cptr, page_tables,
-                              vspaces, make_page_table_entry,
-                              create_cap_rights);
-    if (result != PROCESS_FORK_OK) {
-        sddf_printf("fork(%u, %u) failed: %d\n", parent, child, result);
-    }
 }

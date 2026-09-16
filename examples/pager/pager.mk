@@ -168,7 +168,8 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a 519.a minor_pf.a
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
-PAGER_OBJS := page_table.o cspace.o pager.o proc.o mem.o
+PAGER_OBJS := bitmap.o cspace.o frame_table.o mem.o page_table.o pager.o \
+	proc.o untyped.o
 
 $(PAGER_OBJS) client.o: %.o: $(TOP)/src/%.c $(TOP)/include | $(LIONS_LIBC)/include
 	$(CC) -c $(CFLAGS) -I. $< -o $@

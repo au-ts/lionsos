@@ -26,6 +26,7 @@
 //  bits [63:59]: PBHA          — Page-Based Hardware Attributes (ARMv8.2+)
 
 #include <stdint.h>
+#include <sel4/sel4.h>
 
 
 #define PAGE_SHIFT 12
@@ -43,6 +44,14 @@
 #define PD_INDEX(va)  (((va) >> PD_INDEX_SHIFT)  & PD_INDEX_MASK)
 #define PUD_INDEX(va) (((va) >> PUD_INDEX_SHIFT) & PUD_INDEX_MASK)
 
+/* Entries in every one of the four levels below. */
+#define PAGE_TABLE_ENTRIES 512
+
+#define PAGE_SIZE (1ULL << PAGE_SHIFT)
+#define PAGE_MASK (~(PAGE_SIZE - 1))
+#define ROUND_DOWN_TO_4K(x) ((uintptr_t)(x) & PAGE_MASK)
+#define ROUND_UP_TO_4K(x) (((uintptr_t)(x) + PAGE_SIZE - 1) & PAGE_MASK)
+
 typedef uint64_t pte_t; // seL4_ARM_VSpaceObject 39-47
 
 // struct page_table {
@@ -50,27 +59,26 @@ typedef uint64_t pte_t; // seL4_ARM_VSpaceObject 39-47
 //     uint64_t cap;
 // };
 struct pt {
-    pte_t entries[512];
+    pte_t entries[PAGE_TABLE_ENTRIES];
     uint32_t cap;
 };
 struct pd {
-    struct pt *entries[512];
+    struct pt *entries[PAGE_TABLE_ENTRIES];
     uint32_t cap;
 };
 struct pud {
-    struct pd *entries[512];
+    struct pd *entries[PAGE_TABLE_ENTRIES];
     uint32_t cap;
 };
 // a vspace cap would be good to have for a real GPOS.
 struct pgd {
-    struct pud *entries[512];
+    struct pud *entries[PAGE_TABLE_ENTRIES];
 };
 
 typedef struct pud pud_t;
 typedef struct pd pd_t;
 typedef struct pt pt_t;
 typedef struct pgd pgd_t;
-
 
 
 // typedef struct page_table *pt_t;
@@ -89,13 +97,41 @@ typedef struct pgd pgd_t;
 // } pud_t; // PageTable 3, 12-20
 
 
+/**
+ * Takes over memory as the arena the shadow page tables are bump-allocated
+ * from and fills the intermediary paging structure free list. ips_cnode is
+ * where the paging structure caps are placed.
+ */
+void page_table_init(uintptr_t memory, seL4_CPtr ips_cnode);
 
 /**
- * Creates a page table entry including intermediary paging structures if necessary.
- * returns a pointer to the created page.
- * num indicates number of paging structures required.
+ * The root of a child's shadow page table.
  */
-uint64_t *get_page_table_entry(uintptr_t vaddr, pt_t pud, int *num);
+pgd_t *page_table_root(uint32_t child);
+
+/**
+ * Creates a page table entry including intermediary paging structures if
+ * necessary. Returns a pointer to the created page.
+ */
+pte_t *make_page_table_entry(uintptr_t vaddr, uint32_t child);
+
+/**
+ * Unmaps everything a child has mapped in [start, end) and returns the frames
+ * and the paging structures that fall empty to their free lists.
+ */
+void unmap_range(uintptr_t start, uintptr_t end, uint32_t child);
+
+seL4_Error map_frame(uint64_t frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
+                     seL4_CapRights_t rights, seL4_ARM_VMAttributes attr, int num);
+
+/**
+ * Takes an intermediary paging structure off the unused list.
+ */
+uint32_t get_ips();
+void put_ips(uint32_t ips);
+
+/* CSpace address of an intermediary paging structure. */
+seL4_CPtr ips_cptr(uint32_t ips);
 
 // 
 void insert_frame_to_page(uint32_t const frame, uint64_t* page);
