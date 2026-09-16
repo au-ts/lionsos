@@ -11,15 +11,22 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <lions/posix/posix.h>
-#include <lions/posix/pager_mem.h>
+#include <lions/pager/config.h>
+#include <lions/posix/pager.h>
 #include <microkit.h>
 
 #define PAGE_SIZE 0x1000
 
+/*
+ * Defined by client PD in .pager_client_config.
+ * libc is linked into clients that have no pager. TODO: do something about this.
+ */
+extern pager_client_config_t pager_config;
+
 static long sys_brk(va_list ap) {
     uintptr_t newbrk = va_arg(ap, uintptr_t);
     microkit_mr_set(0, newbrk);
-    (void)microkit_ppcall(PAGER_MEM_CH, microkit_msginfo_new(PAGER_MEM_BRK, 1));
+    (void)microkit_ppcall(pager_config.id, microkit_msginfo_new(PAGER_MEM_BRK, 1));
     return microkit_mr_get(0);
 }
 
@@ -36,7 +43,7 @@ static long sys_mmap(va_list ap) {
     microkit_mr_set(3, (uintptr_t)flags);
     microkit_mr_set(4, (uintptr_t)fd);
     microkit_mr_set(5, (uintptr_t)offset);
-    (void)microkit_ppcall(PAGER_MEM_CH, microkit_msginfo_new(PAGER_MEM_MMAP, 6));
+    (void)microkit_ppcall(pager_config.id, microkit_msginfo_new(PAGER_MEM_MMAP, 6));
     return microkit_mr_get(0);
 }
 
@@ -45,7 +52,7 @@ static long sys_munmap(va_list ap) {
     size_t len = va_arg(ap, size_t);
     microkit_mr_set(0, (uintptr_t)addr);
     microkit_mr_set(1, len);
-    (void)microkit_ppcall(PAGER_MEM_CH, microkit_msginfo_new(PAGER_MEM_MUNMAP, 2));
+    (void)microkit_ppcall(pager_config.id, microkit_msginfo_new(PAGER_MEM_MUNMAP, 2));
     return microkit_mr_get(0);
 }
 
