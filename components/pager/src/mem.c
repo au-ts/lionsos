@@ -16,26 +16,26 @@
 #include <string.h>
 
 /**
- * I need to create an allocator with these memory regions.
+ * The mmap arena and heap each client's libc is handed, one per client. Where they
+ * start comes from the system description, so the pager and the client's libc cannot
+ * disagree about it.
  */
-// set to 0x8000000000
-static void *heaps[MAX_CHILDREN];
-// set to 0x7000000000
-static void *brks[MAX_CHILDREN];
-static void *morecore_bases[MAX_CHILDREN];
+static void *heaps[PAGER_MAX_CLIENTS];
+static void *brks[PAGER_MAX_CLIENTS];
+static void *morecore_bases[PAGER_MAX_CLIENTS];
 
-static uint8_t bitmaps[MAX_CHILDREN][BITMAP_SIZE];
+static uint8_t bitmaps[PAGER_MAX_CLIENTS][BITMAP_SIZE];
 
 /**
  * Initialise the allocator.
  */
-void allocator_init()
+void allocator_init(pager_server_config_t *config)
 {
-    for (int i = 0; i < MAX_CHILDREN; ++i) {
+    for (uint8_t i = 0; i < config->num_clients; ++i) {
         memset(bitmaps[i], 0, BITMAP_SIZE);
-        heaps[i] = (void *)0x8000000000ULL;
-        brks[i] = (void *)0x7000000000ULL;
-        morecore_bases[i] = (void *)0x7000000000ULL;
+        heaps[i] = (void *)config->clients[i].mmap_base;
+        brks[i] = (void *)config->clients[i].brk_base;
+        morecore_bases[i] = (void *)config->clients[i].brk_base;
     }
 }
 
@@ -80,8 +80,7 @@ static long sys_munmap(uintptr_t addr, size_t length, microkit_child child) {
 }
 
 /**
- * The client's libc does not have a PAGER_MEM_MPROTECT to send yet, every
- * mapping the pager makes is already read/write.
+ * every mapping the pager makes is already read/write.
  */
 static long sys_mprotect(uintptr_t addr, size_t size, int prot) {
     (void)addr, (void)size, (void)prot;
@@ -91,7 +90,8 @@ static long sys_mprotect(uintptr_t addr, size_t size, int prot) {
 
 static long sys_fork(microkit_child child) {
     long new_child = pager_fork(child);
-    if (new_child > 0 && new_child < MAX_CHILDREN) {
+    if (new_child > 0 && new_child < PAGER_MAX_CLIENTS) {
+        heaps[new_child] = heaps[child];
         brks[new_child] = brks[child];
         morecore_bases[new_child] = morecore_bases[child];
         memcpy(bitmaps[new_child], bitmaps[child], sizeof(bitmaps[child]));

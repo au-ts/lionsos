@@ -7,30 +7,43 @@
 
 #include <sddf/util/printf.h>
 
+/*
+ * Retype num objects into consecutive slots from retyped_cap_idx. The window is
+ * halved rather than abandoned when the active untyped cannot fit it, so we do
+ * not throw away the tail of every untyped we walk past.
+ */
 seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
-    seL4_Word size_bits, uint32_t retyped_cap_idx, seL4_CPtr destination_cnode) {
+    seL4_Word size_bits, uint32_t retyped_cap_idx, seL4_CPtr destination_cnode,
+    uint32_t num) {
 
+    uint32_t done = 0;
+    while (done < num) {
+        uint32_t want = num - done;
+        seL4_Error error = seL4_Untyped_Retype(cnode_specs->cptr + cnode_specs->active_ut_idx,
+                                    object_type,
+                                    size_bits,
+                                    destination_cnode, 0, 0,
+                                    retyped_cap_idx + done, want);
 
-    // seL4_Error error = my_untyped_retype3(cnode_specs, ut_idx, object_type, size_bits, retyped_cap_idx);
-    seL4_Error error = seL4_Untyped_Retype(cnode_specs->cptr + cnode_specs->active_ut_idx,
-                                object_type,
-                                size_bits,
-                                destination_cnode, 0, 0,
-                                retyped_cap_idx, 1);
-
-    while (error == seL4_NotEnoughMemory) {
-        ++cnode_specs->active_ut_idx;
-        error = seL4_Untyped_Retype(cnode_specs->cptr + cnode_specs->active_ut_idx,
-                                object_type,
-                                size_bits,
-                                destination_cnode, 0, 0,
-                                retyped_cap_idx, 1);
+        while (error == seL4_NotEnoughMemory && cnode_specs->active_ut_idx < cnode_specs->end) {
+            if (want > 1) {
+                want >>= 1;
+            } else {
+                ++cnode_specs->active_ut_idx;
+            }
+            error = seL4_Untyped_Retype(cnode_specs->cptr + cnode_specs->active_ut_idx,
+                                    object_type,
+                                    size_bits,
+                                    destination_cnode, 0, 0,
+                                    retyped_cap_idx + done, want);
+        }
+        if (error != seL4_NoError) {
+            sddf_dprintf("Error: failed to retype %u objects of type %lu, cptr: 0x%lx, size_bits: %lu - error: %d - ut idx = %d\n", want, object_type, cnode_specs->cptr + cnode_specs->active_ut_idx, size_bits, error, cnode_specs->active_ut_idx);
+            return error;
+        }
+        done += want;
     }
-    if (error != seL4_NoError) {
-        sddf_dprintf("Error: failed to retype an object type %lu, cptr: 0x%lx, size_bits: %lu - error: %d - ut idx = %d\n", object_type, cnode_specs->cptr + cnode_specs->active_ut_idx, size_bits, error, cnode_specs->active_ut_idx);
-        return error;
-    }
-    return error;
+    return seL4_NoError;
 }
 
 seL4_Word max_size_bits(seL4_Word size)
@@ -81,8 +94,8 @@ seL4_Error get_untyped_at_paddr(cnode_specs_t *cnode_specs,
         sddf_dprintf("Error: Untyped containing physical address 0x%lx is not found\n", target_paddr);
         return seL4_InvalidArgument;
     }
-    /* sddf_dprintf("Found the untyped containing physical address: 0x%lx\n", target_paddr); */
-    /* sddf_dprintf("ut idx: %u, base_addr: 0x%lx, end_addr: 0x%lx\n", ut_idx, cnode_specs->caps[ut_idx].base_addr, cnode_specs->caps[ut_idx].end_addr); */
+    // sddf_dprintf("Found the untyped containing physical address: 0x%lx\n", target_paddr); 
+    // sddf_dprintf("ut idx: %u, base_addr: 0x%lx, end_addr: 0x%lx\n", ut_idx, cnode_specs->caps[ut_idx].base_addr, cnode_specs->caps[ut_idx].end_addr);
 
     seL4_Error error;
 
@@ -135,13 +148,6 @@ void update_active_ut_idx(cnode_specs_t *cnode_specs)
     } else {
         sddf_dprintf("[Error] failed to find an available untyped for kernel objects allocation\n");
     }
-}
-
-/**
- * TODO: do the actual implementation
- */
-seL4_CapRights_t create_cap_rights(bool is_write) {
-    return seL4_CapRights_new(1, is_write, 1, 1);
 }
 
 // deprecated ***

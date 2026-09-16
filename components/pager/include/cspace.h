@@ -29,11 +29,12 @@ typedef struct {
     uint32_t start;         // start index
     uint32_t end;           // end index
     uint32_t active_ut_idx; // Index of untyped to be allocated for kernel objects
-    seL4_CPtr cptr;         // CNode capability address
+    seL4_CPtr cptr;         // CNode cap addr
 } cnode_specs_t;
 
 seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
-    seL4_Word size_bits, uint32_t retyped_cap_idx, seL4_CPtr destination_cnode);
+    seL4_Word size_bits, uint32_t retyped_cap_idx, seL4_CPtr destination_cnode,
+    uint32_t num);
 
 uint8_t get_object_size_bits(seL4_Word object_type, seL4_Word size_bits);
 
@@ -47,19 +48,9 @@ void clear_cnode_specs_entry(cnode_specs_t *cnode_specs, uint32_t ut_idx);
 
 void update_active_ut_idx(cnode_specs_t *cnode_specs);
 
-/**
- * TODO: do the actual implementation
- */
-seL4_CapRights_t create_cap_rights(bool is_write);
-
-
-
-// deprecated ***
-
-seL4_Error untyped_retype(cnode_specs_t *cnode_specs,
-                          uint32_t ut_idx,
-                          seL4_Word object_type,
-                          seL4_Word size_bits,
-                          uint32_t *retyped_cap_idx);
+/* Grant and grant-reply mean nothing to a frame cap. */
+static inline seL4_CapRights_t create_cap_rights(bool is_write) {
+    return seL4_CapRights_new(0, 0, 1, is_write);
+}
 
 #endif

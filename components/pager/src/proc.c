@@ -13,9 +13,10 @@
 #include <errno.h>
 #include <sddf/util/printf.h>
 
-static struct process processes[MAX_CHILDREN];
+static struct process processes[PAGER_MAX_CLIENTS];
 static seL4_CPtr process_cnode_cptr;
 static uint32_t next_process_cnode_slot;
+static uint8_t num_static_processes;
 
 static int allocate_process(struct process *process, uint32_t pid,
 							uint32_t parent)
@@ -26,7 +27,7 @@ static int allocate_process(struct process *process, uint32_t pid,
 
 	if (cnode_slot >= 512) return PROCESS_FORK_NO_SLOTS;
 	error = untyped_alloc(seL4_CapTableObject, PROCESS_CSPACE_SIZE_BITS,
-						  cnode_slot, process_cnode_cptr);
+						  cnode_slot, process_cnode_cptr, 1);
 	if (error != seL4_NoError) return PROCESS_FORK_CAP;
 
 	cspace = process_cnode_cptr + cnode_slot;
@@ -36,7 +37,7 @@ static int allocate_process(struct process *process, uint32_t pid,
 	process->pid = pid;
 	process->allocated = true;
 
-	error = untyped_alloc(seL4_ARM_VSpaceObject, 0, PROCESS_VSPACE_SLOT, cspace);
+	error = untyped_alloc(seL4_ARM_VSpaceObject, 0, PROCESS_VSPACE_SLOT, cspace, 1);
 	if (error != seL4_NoError) {
 		process->allocated = false;
 		return PROCESS_FORK_CAP;
@@ -116,7 +117,7 @@ static int clone_pages(uint32_t parent, uint32_t child)
  */
 int process_fork(uint32_t parent, uint32_t child)
 {
-	if (parent >= MAX_CHILDREN || child >= MAX_CHILDREN || parent == child ||
+	if (parent >= PAGER_MAX_CLIENTS || child >= PAGER_MAX_CLIENTS || parent == child ||
 		!processes[parent].allocated || processes[child].allocated) {
 		return PROCESS_FORK_INVALID;
 	}
@@ -129,12 +130,12 @@ int process_fork(uint32_t parent, uint32_t child)
 
 long pager_fork(microkit_child parent)
 {
-    if (parent >= MAX_CHILDREN || !processes[parent].allocated) {
+    if (parent >= PAGER_MAX_CLIENTS || !processes[parent].allocated) {
         return -EINVAL;
     }
 
     uint32_t child = 0;
-    for (uint32_t i = 1; i < MAX_CHILDREN; i++) {
+    for (uint32_t i = num_static_processes; i < PAGER_MAX_CLIENTS; i++) {
         if (!processes[i].allocated) {
             child = i;
             break;
@@ -161,9 +162,16 @@ void fork(uint32_t parent, uint32_t child)
     }
 }
 
-void process_init(seL4_CPtr process_cnode)
+void process_init(seL4_CPtr process_cnode, uint8_t num_clients)
 {
     process_cnode_cptr = process_cnode;
-    processes[0].allocated = true;
-    processes[0].pid = 0;
+    /*
+     * The clients the system booted with occupy the first slots: their fault ids are
+     * their indices, so a fork() must not hand one of them out again.
+     */
+    for (uint8_t i = 0; i < num_clients; ++i) {
+        processes[i].allocated = true;
+        processes[i].pid = i;
+    }
+    num_static_processes = num_clients;
 }

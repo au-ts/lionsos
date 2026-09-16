@@ -8,36 +8,32 @@
 
 #include <stdint.h>
 
-/* Maximum number of children the pager can page for. */
-#define MAX_CHILDREN 10
+#include <lions/pager/config.h>
 
-/*
- * Slab tuning, shared by the frame, global zero page and intermediary paging
- * structure free lists: how many objects a free list holds and how many are
- * retyped at a time when one runs dry.
- */
+
+// Slab tuning for frame gzp ips and free list.
+// how many list holds and retyped at a time.
 #define BUFFERS_SIZE 200000
-#define REFILL_SIZE 20000
+#define REFILL_SIZE 64
 
-/*
- * Slots of the CNodes the Microkit tool mapped into the pager's root CSpace.
- * These must match PAGER_CNODES in meta.py.
- */
-#define UNTYPED_CNODE_SLOT 1    // all untyped memory left after initialisation.
-#define FRAME_CNODE_SLOT 2      // where frame caps are placed.
-#define PAGING_CNODE_SLOT 3     // where intermediary paging structure caps are placed.
-#define ZERO_PAGE_CNODE_SLOT 4  // where global zero frame caps are placed.
-#define PROCESS_CNODE_SLOT 5    // where the CSpaces created by fork() are placed.
-#define ELF_CAPS_CNODE_SLOT 6   // the children's ELF frames, filled in by the tool.
-#define FRAME_COPY_CNODE_SLOT 7 // where copies of frame caps are placed.
+// batched untyped retype.
+#define RETYPE_BATCH 256
 
-/*
- * Symbols the Microkit tool patches into pager.elf. pager_memory and
- * remaining_untypeds_vaddr come from the setvar_vaddr maps in meta.py, vspaces
- * is written by the capDL builder and maps a child id to its VSpace cap.
- */
-extern uintptr_t pager_memory;
-extern uintptr_t remaining_untypeds_vaddr;
-extern uint32_t vspaces[MAX_CHILDREN];
+// vspace for pager in root cspace
+#define PAGER_OWN_VSPACE_SLOT 3
+
+#define INIT_FRAMES BUFFERS_SIZE
+#define INIT_IPS 1024
+#define INIT_GZP 20000
+
+
+
+ // below written to pager.elf by microkit
+extern uint32_t vspaces[PAGER_MAX_CLIENTS];
+extern uint32_t elf_caps[PAGER_MAX_CLIENTS][PAGER_MAX_ELF_FRAMES];
+extern uint32_t elf_sizes[PAGER_MAX_CLIENTS];
+
+/* Serialised by sdfgen's LionsOs.Pager into the .pager_server_config section. */
+extern pager_server_config_t pager_config;
 
 #endif

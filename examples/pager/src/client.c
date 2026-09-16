@@ -9,6 +9,7 @@
 #include <sddf/util/cache.h>
 #include <lions/fs/helpers.h>
 #include <lions/fs/config.h>
+#include <lions/pager/config.h>
 #include <lions/fs/protocol.h>
 #include <lions/posix/posix.h>
 #include <libmicrokitco.h>
@@ -23,6 +24,7 @@
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 __attribute__((__section__(".fs_client_config"))) fs_client_config_t fs_config;
+__attribute__((__section__(".pager_client_config"))) pager_client_config_t pager_config;
 #define WORKER_STACK_SIZE (64 * 1024)
 
 static char worker_stack[WORKER_STACK_SIZE];
@@ -58,8 +60,8 @@ void bench_main(void) {
 
 
 
-    int rc = fiveonenine(6, argv);
-    // int rc = minor_pf();
+    // int rc = fiveonenine(6, argv);
+    int rc = minor_pf();
     printf("benchmark done\n");
 }
 
@@ -68,6 +70,7 @@ void init(void)
     assert(serial_config_check_magic(&serial_config));
     assert(timer_config_check_magic(&timer_config));
     assert(fs_config_check_magic(&fs_config));
+    assert(pager_config_check_magic(&pager_config));
 
     serial_queue_init(&serial_rx_queue_handle, serial_config.rx.queue.vaddr, serial_config.rx.data.size, serial_config.rx.data.vaddr);
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size, serial_config.tx.data.vaddr);
@@ -80,7 +83,8 @@ void init(void)
     stack_ptrs_arg_array_t costacks = { (uintptr_t) worker_stack };
     microkit_cothread_init(&co_controller_mem, WORKER_STACK_SIZE, costacks);
 
-    libc_init(NULL, (void *) 0x8000000000, 0x20000000);
+    /* The mmap arena the pager hands out of, so both sides agree on where it is. */
+    libc_init(NULL, (void *)pager_config.mmap_base, 0x20000000);
 
     // bench_main();
     if (microkit_cothread_spawn(bench_main, NULL) == LIBMICROKITCO_NULL_HANDLE) {

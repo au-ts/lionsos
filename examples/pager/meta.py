@@ -3,18 +3,16 @@
 """
 Metaprogram for the LionsOS demand-paging example.
 
-Describes a system in which the `pager` PD is the parent -- and therefore the
-fault handler -- of a single `client` PD. The client's stack is left unbacked
-so that it faults in on first touch, and its libc routes brk/mmap/munmap/fork
-to the pager over a protected procedure call.
+Describes a system in which a `client` PD is paged by the `pager` component. The
+client is an ordinary PD: it is named as the pager's fault client, which is what
+causes the kernel to deliver its VM faults to the pager rather than to the system
+fault handler, and its libc routes brk/mmap/munmap/fork to the pager over a
+protected procedure call.
 
-The pager is given every untyped region left over after system initialisation
-and builds paging structures out of it on demand, so it needs more from the
-system description than an ordinary PD does:
-
-  * a BootInfo memory region describing the leftover untypeds,
-  * scratch memory to hold its shadow page tables and frame metadata,
-  * several CNodes to receive the caps it creates at runtime.
+Everything the pager needs beyond an ordinary PD -- a BootInfo memory region
+describing the untypeds left over after system initialisation, scratch memory for
+its shadow page tables, and the CNodes it receives runtime caps into -- is created
+by LionsOs.Pager.
 """
 import argparse
 from typing import Optional
@@ -24,108 +22,10 @@ from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 from board import BOARDS
 
 ProtectionDomain = SystemDescription.ProtectionDomain
-MemoryRegion = SystemDescription.MemoryRegion
-Map = SystemDescription.Map
-Channel = SystemDescription.Channel
-CNode = SystemDescription.CNode
-CapMap = SystemDescription.CapMap
 
-# PPC channel the client's libc uses for brk/mmap/munmap/fork. Must match
-# PAGER_MEM_CH in lionsos/include/lions/posix/pager_mem.h.
-PAGER_MEM_CH = 4
-
-# Scratch memory the pager bump-allocates folio metadata and shadow page
-# tables from. Reachable in the pager as the `pager_memory` symbol, which
-# src/frame_table.c and src/page_table.c carve up between them.
-PAGER_MEMORY_SIZE = 0x2000000
-PAGER_MEMORY_VADDR = 0x8000000000
-
-# Filled in by the Microkit tool with a capDLBootInfo_t (see include/untyped.h)
-# describing the untypeds that survived system initialisation. Reachable in the
-# pager as the `remaining_untypeds_vaddr` symbol.
-PAGER_BOOTINFO_SIZE = 0x2000
-PAGER_BOOTINFO_VADDR = 0x8002000000
-
-# CNodes mapped into the pager's root CSpace, as
-# (name, slot, size_bits, post_capdl_untypeds).
-#
-# The slots are hard-coded on the other side of this interface and must be kept
-# in sync with them:
-#   * include/pager.h names every slot (UNTYPED_CNODE_SLOT, FRAME_CNODE_SLOT,
-#     PAGING_CNODE_SLOT, ZERO_PAGE_CNODE_SLOT, PROCESS_CNODE_SLOT,
-#     ELF_CAPS_CNODE_SLOT, FRAME_COPY_CNODE_SLOT) and src/pager.c reaches them
-#     via microkit_cspace_root_slot_to_cptr().
-#   * The Microkit tool fills the CNode named "elf_caps" with the child PDs'
-#     ELF frame caps. The name is matched literally, so this one cannot be
-#     renamed without also changing the tool.
-#
-# The tool also hands the pager a VSpace cap per child, but those go into the
-# PD's *nested* Microkit CNode rather than the root CSpace described here, so
-# their slot numbering is independent of this table. The pager never names
-# those slots: it reads the resulting cptrs out of the `vspaces` symbol.
-PAGER_CNODES = (
-    # All untyped memory left after initialisation.
-    ("untypeds", 1, 9, True),
-    # Frames the pager retypes to satisfy faults.
-    ("frames", 2, 20, False),
-    # Intermediate paging structures (PUD/PD/PT).
-    ("paging_structures", 3, 20, False),
-    # Copies of the global zero page cap, one per read-only mapping.
-    ("zero_page_copies", 4, 20, False),
-    # Per-process CSpaces created by fork().
-    ("process_cspaces", 5, 5, False),
-    # Child PDs' ELF frames, populated by the Microkit tool.
-    ("elf_caps", 6, 12, False),
-    # Copies of frame caps. A frame cap carries its own mapping, so a folio
-    # mapped into more than one VSpace needs a cap per mapping.
-    ("frame_copies", 7, 20, False),
-)
-
-# The example's filesystem lives on partition 1 of the block device. This is a
-# deliberate override of the per-board default in board.partition; change it to
-# match whatever image you boot against.
+# The example's filesystem lives on partition 1 of the block device.
+# change if necessary.
 FS_PARTITION = 1
-
-
-def add_pager(
-    sdf: SystemDescription,
-    client: ProtectionDomain,
-) -> ProtectionDomain:
-    """
-    Create the pager PD and everything it needs to service `client`'s faults.
-
-    `client` must not have been added to `sdf` by the caller: it becomes a
-    child of the pager, which is what causes its faults to be delivered here.
-    """
-    pager = ProtectionDomain("pager", "pager.elf", priority=198)
-    pager.add_child_pd(client)
-    sdf.add_channel(Channel(client, pager, a_id=PAGER_MEM_CH, b_id=0, pp_a=True))
-
-    bootinfo = MemoryRegion(
-        sdf,
-        "pager_bootinfo",
-        PAGER_BOOTINFO_SIZE,
-        prefill_bootinfo="post_capdl_untypeds",
-    )
-    sdf.add_mr(bootinfo)
-    pager.add_map(
-        Map(bootinfo, PAGER_BOOTINFO_VADDR, "rw",
-            setvar_vaddr="remaining_untypeds_vaddr")
-    )
-
-    memory = MemoryRegion(sdf, "pager_memory", PAGER_MEMORY_SIZE)
-    sdf.add_mr(memory)
-    pager.add_map(
-        Map(memory, PAGER_MEMORY_VADDR, "rw", setvar_vaddr="pager_memory")
-    )
-
-    for name, slot, size_bits, post_capdl_untypeds in PAGER_CNODES:
-        cnode = CNode(name, post_capdl_untypeds, size_bits)
-        sdf.add_cnode(cnode)
-        # pd=None because these CNodes are the pager's alone, not shared.
-        pager.add_cap_map(CapMap(CapMap.CapType.Cnode, None, cnode, slot))
-
-    return pager
 
 
 def generate(
@@ -162,10 +62,13 @@ def generate(
 
     fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
 
-    # backed=False leaves the client's stack pages unmapped at boot so that
-    # they fault in through the pager.
-    client = ProtectionDomain("client", "client.elf", priority=1, backed=False)
-    pager = add_pager(sdf, client)
+    pager = ProtectionDomain("pager", "pager.elf", priority=198)
+    pager_system = LionsOs.Pager(sdf, pager)
+
+    client = ProtectionDomain("client", "client.elf", priority=1)
+    # Leaves the client's stack pages unmapped at boot so that they fault in
+    # through the pager, and creates the PPC channel its libc allocates over.
+    pager_system.add_client(client)
 
     serial_system.add_client(client)
     timer_system.add_client(client)
@@ -176,19 +79,20 @@ def generate(
         client,
         blk=blk_system,
         partition=FS_PARTITION,
+        # partition=board.partition,
     )
 
     # These boards' block drivers need a timer to poll their controllers.
     if board.name in ("maaxboard", "rpi4b_1gb"):
         timer_system.add_client(blk_driver)
 
-    # The client is deliberately absent: it is added as a child of the pager.
     pds = [
         serial_virt_rx,
         timer_driver,
         serial_driver,
         serial_virt_tx,
         pager,
+        client,
         blk_driver,
         blk_virt,
         fatfs,
@@ -196,7 +100,7 @@ def generate(
     for pd in pds:
         sdf.add_pd(pd)
 
-    for system in (fs, serial_system, timer_system, blk_system):
+    for system in (pager_system, fs, serial_system, timer_system, blk_system):
         assert system.connect()
         assert system.serialise_config(output_dir)
 

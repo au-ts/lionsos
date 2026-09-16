@@ -98,11 +98,11 @@ typedef struct pgd pgd_t;
 
 
 /**
- * Takes over memory as the arena the shadow page tables are bump-allocated
- * from and fills the intermediary paging structure free list. paging_cnode is
- * where the paging structure caps are placed.
+ * Takes over size bytes at memory as the arena the shadow page tables are
+ * bump-allocated from and fills the intermediary paging structure free list.
+ * paging_cnode is where the paging structure caps are placed.
  */
-void page_table_init(uintptr_t memory, seL4_CPtr paging_cnode);
+void page_table_init(uintptr_t memory, uint64_t size, seL4_CPtr paging_cnode);
 
 /**
  * The root of a child's shadow page table.
@@ -130,14 +130,25 @@ seL4_Error map_frame(uint64_t frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
 uint32_t get_ips();
 void put_ips(uint32_t ips);
 
+extern seL4_CPtr paging_cnode_cptr;
+
 /* CSpace address of an intermediary paging structure. */
-seL4_CPtr ips_cptr(uint32_t ips);
+static inline seL4_CPtr ips_cptr(uint32_t ips) {
+    return paging_cnode_cptr + ips;
+}
+
+// bits 12:47, the frame's index within its CNode
+#define DESC_OA (0xFFFFFFFFFULL << 12)
 
 // 
-void insert_frame_to_page(uint32_t const frame, uint64_t* page);
+static inline void insert_frame_to_page(uint32_t const frame, uint64_t* page) {
+    *page = (*page & ~DESC_OA) | (((uint64_t) frame) << 12);
+}
 
 // get bits 12:47
-uint32_t get_frame_from_page(uint64_t const page);
+static inline uint32_t get_frame_from_page(uint64_t const page) {
+    return (page >> 12) & 0xFFFFFFFFFULL;
+}
 
 // void set_nG(uint64_t *page) {
 //     *page |= (1ULL << 11);

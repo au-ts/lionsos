@@ -5,8 +5,9 @@
  */
 #pragma once
 #include <microkit.h>
-#include <lions/posix/pager_mem.h>
+#include <lions/pager/config.h>
+#include <lions/posix/pager.h>
 
-void allocator_init(void);
+void allocator_init(pager_server_config_t *config);
 
 long pager_mem_call(microkit_msginfo msginfo, microkit_child child);

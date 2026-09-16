@@ -39,13 +39,20 @@ typedef struct {
 #define FOLIO_MEMORY_SIZE (FOLIO_COUNT * sizeof(struct folio))
 
 /**
- * Takes over memory (FOLIO_MEMORY_SIZE bytes) for folio metadata, retypes the
+ * Takes (FOLIO_MEMORY_SIZE bytes) for folio metadata, retypes the
  * global zero page and fills the free lists. frame_cnode is where frame caps
  * are placed, zero_page_cnode where the copies of the global zero page cap go
  * and frame_copy_cnode where copies of ordinary frame caps go.
  */
 void frame_table_init(uintptr_t memory, seL4_CPtr frame_cnode,
                       seL4_CPtr zero_page_cnode, seL4_CPtr frame_copy_cnode);
+
+/**
+ * seL4 does not zero what it retypes, so the global zero page has to be mapped
+ * into our own VSpace once and cleared. Needs the paging structure free list,
+ * so call it after page_table_init().
+ */
+void frame_table_zero_gzp(seL4_CPtr vspace);
 
 struct folio *get_folio_from_idx(uint32_t idx);
 
@@ -64,12 +71,29 @@ void put_frame(struct folio *folio);
 uint32_t get_gzp();
 void put_gzp(uint32_t gzp);
 
-/* CSpace addresses of a frame, of a global zero page cap copy, and of a copy
- * of an ordinary frame cap. A frame cap carries its own mapping, so a folio
- * mapped into more than one VSpace needs one copy per extra mapping.
+/**
+ * mapping has been overwritten by a private frame. 
+ * cannot be handed out again until unmapped, which get_gzp() does in batches so
+ * fault that dropped it does not pay for it.
  */
-seL4_CPtr frame_cptr(uint32_t frame);
-seL4_CPtr gzp_cptr(uint32_t gzp);
-seL4_CPtr frame_copy_cptr(uint32_t copy);
+void put_dirty_gzp(uint32_t gzp);
+
+extern seL4_CPtr frame_cnode_cptr;
+extern seL4_CPtr zero_page_cnode_cptr;
+extern seL4_CPtr frame_copy_cnode_cptr;
+
+/* CSpace addrs of caps below. copies required to do double mappings.*/
+
+static inline seL4_CPtr frame_cptr(uint32_t frame) {
+    return frame_cnode_cptr + frame;
+}
+
+static inline seL4_CPtr gzp_cptr(uint32_t gzp) {
+    return zero_page_cnode_cptr + gzp;
+}
+
+static inline seL4_CPtr frame_copy_cptr(uint32_t copy) {
+    return frame_copy_cnode_cptr + copy;
+}
 
 #endif

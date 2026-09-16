@@ -35,10 +35,10 @@ struct process {
 };
 
 /**
- * Claims the CNode the per-process CSpaces are created in and registers the
- * child the system booted with as process zero.
+ * Claims the CNode the per-process CSpaces are created in and registers the clients
+ * the system booted with, one process per client.
  */
-void process_init(seL4_CPtr process_cnode);
+void process_init(seL4_CPtr process_cnode, uint8_t num_clients);
 
 int process_fork(uint32_t parent, uint32_t child);
 

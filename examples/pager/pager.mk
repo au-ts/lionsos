@@ -125,8 +125,7 @@ CFLAGS := \
 	-I$(LIBMICROKITCO_PATH) \
 	-I$(TOP) \
 	-I$(TOP)/benchmarks/519.lbm_r/src \
-	-I$(TOP)/benchmarks/minor_page_fault_latency \
-	-I$(TOP)/include
+	-I$(TOP)/benchmarks/minor_page_fault_latency
 include $(LIONSOS)/lib/libc/libc.mk
 include $(SDDF)/tools/make/board/common.mk
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(TOP)/benchmarks/519.lbm_r/src -L$(TOP)/benchmarks/minor_page_fault_latency
@@ -156,6 +155,7 @@ include $(SDDF)/drivers/network/$(NET_DRIV_DIR)/eth_driver.mk
 FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
 FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIONSOS)/components/fs/fat/fat.mk
+include $(LIONSOS)/components/pager/pager.mk
 LIBMICROKITCO_CFLAGS_client := -O3 -I$(TOP)
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
@@ -168,14 +168,8 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a 519.a minor_pf.a
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
-PAGER_OBJS := bitmap.o cspace.o frame_table.o mem.o page_table.o pager.o \
-	proc.o untyped.o
-
-$(PAGER_OBJS) client.o: %.o: $(TOP)/src/%.c $(TOP)/include | $(LIONS_LIBC)/include
+client.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
 	$(CC) -c $(CFLAGS) -I. $< -o $@
-
-pager.elf: $(PAGER_OBJS) libsddf_util_debug.a
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a 519.a minor_pf.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
@@ -201,6 +195,8 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_client.data client.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_client.data client.elf
 	$(OBJCOPY) --update-section .fs_client_config=fs_client_client.data client.elf
+	$(OBJCOPY) --update-section .pager_server_config=pager_server_pager.data pager.elf
+	$(OBJCOPY) --update-section .pager_client_config=pager_client_client.data client.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)

@@ -12,10 +12,10 @@
 #include <string.h>
 #include <sddf/util/printf.h>
 
-static seL4_CPtr paging_cnode_cptr;
+seL4_CPtr paging_cnode_cptr;
 
 /** Shadow page table roots, one per child. */
-static pgd_t page_tables[MAX_CHILDREN];
+static pgd_t page_tables[PAGER_MAX_CLIENTS];
 
 /**
  * Below is essentially a slub allocator.
@@ -23,6 +23,7 @@ static pgd_t page_tables[MAX_CHILDREN];
  */
 static uintptr_t table_memory;
 static uintptr_t table_memory_idx;
+static uintptr_t table_memory_size;
 
 // Bookkeeping for the pager's memory.
 static uintptr_t freed_tables[BUFFERS_SIZE];
@@ -34,36 +35,32 @@ static uint32_t unused_ips_idx = 0;
 
 static uint32_t ips_idx = 1;
 
-// 
-void insert_frame_to_page(uint32_t const frame, uint64_t* page) {
-    *page |= ((uint64_t) frame) << 12;
-}
-
-// get bits 12:47
-uint32_t get_frame_from_page(uint64_t const page) {
-    return (page >> 12) & 0xFFFFFFFFFULL;
-}
-
-seL4_CPtr ips_cptr(uint32_t ips) {
-    return paging_cnode_cptr + ips;
-}
-
-static void refill_ips() {
+static void refill_ips(uint32_t n) {
     sddf_dprintf("refilling ips\n");
-    for (int i = 0; i < REFILL_SIZE; ++i) {
-        seL4_Error err = untyped_alloc(seL4_ARM_PageTableObject, 12, ips_idx, paging_cnode_cptr);
+    while (n) {
+        uint32_t batch = n > RETYPE_BATCH ? RETYPE_BATCH : n;
+        if (unused_ips_idx + batch > BUFFERS_SIZE) {
+            sddf_printf("ips buffer full\n");
+            return;
+        }
+        seL4_Error err = untyped_alloc(seL4_ARM_PageTableObject, 12, ips_idx, paging_cnode_cptr, batch);
         if (err) {
             sddf_printf("error occured when creating ips caps %d\n", err);
+            return;
         }
-        unused_ips[unused_ips_idx] = ips_idx;
-        ++ips_idx;
-        ++unused_ips_idx;
+        for (uint32_t i = 0; i < batch; ++i) {
+            unused_ips[unused_ips_idx++] = ips_idx++;
+        }
+        n -= batch;
     }
 }
 
 uint32_t get_ips() {
     if (!unused_ips_idx) {
-        refill_ips();
+        refill_ips(REFILL_SIZE);
+        if (!unused_ips_idx) {
+            return 0;
+        }
     }
     return unused_ips[--unused_ips_idx];
 }
@@ -74,20 +71,26 @@ void put_ips(uint32_t ips) {
     }
 }
 
+/* The arena is zeroed once in page_table_init and tables are zeroed as they are
+ * freed, so there is nothing to clear here. */
 static uintptr_t allocate_page_table() {
     
     if (freed_tables_idx) {
         return freed_tables[--freed_tables_idx];
     }
     uint32_t size = sizeof(struct pud); // they are all the same size.
+    if (table_memory_idx + size > table_memory_size) {
+        sddf_printf("out of shadow page table memory\n");
+        return 0;
+    }
     uintptr_t ret = table_memory + table_memory_idx;
     table_memory_idx += size;
-    memset((void *)ret, 0, size);
     return ret;
 }
 
 static void free_page_table(uintptr_t table) {
     if (freed_tables_idx < BUFFERS_SIZE) {
+        memset((void *)table, 0, sizeof(struct pud));
         freed_tables[freed_tables_idx++] = table;
     }
 }
@@ -107,6 +110,7 @@ pte_t *make_page_table_entry(uintptr_t vaddr, uint32_t child) {
     if (!pud) {
         // allocate pud; & pt
         pud = (pud_t *) allocate_page_table();
+        if (!pud) return NULL;
         vspace->entries[PUD_INDEX(vaddr)] = pud;
         pud->cap = get_ips();
         seL4_Error err = seL4_ARM_PageTable_Map(ips_cptr(pud->cap), vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
@@ -118,6 +122,7 @@ pte_t *make_page_table_entry(uintptr_t vaddr, uint32_t child) {
     if (!pd) {
         // allocate pd; & pt
         pd = (pd_t *) allocate_page_table();
+        if (!pd) return NULL;
         pud->entries[PD_INDEX(vaddr)] = pd;
         pd->cap = get_ips();
         seL4_Error err = seL4_ARM_PageTable_Map(ips_cptr(pd->cap), vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
@@ -129,6 +134,7 @@ pte_t *make_page_table_entry(uintptr_t vaddr, uint32_t child) {
     if (!pt) {
         // allocat pt;
         pt = (pt_t *) allocate_page_table();
+        if (!pt) return NULL;
         pd->entries[PT_INDEX(vaddr)] = pt;
         pt->cap = get_ips();
         seL4_Error err = seL4_ARM_PageTable_Map(ips_cptr(pt->cap), vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
@@ -153,7 +159,7 @@ seL4_Error map_frame(uint64_t frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
 }
 
 void unmap_range(uintptr_t start, uintptr_t end, uint32_t child) {
-    if (child >= MAX_CHILDREN || start >= end) {
+    if (child >= PAGER_MAX_CLIENTS || start >= end) {
         return;
     }
 
@@ -250,11 +256,15 @@ void unmap_range(uintptr_t start, uintptr_t end, uint32_t child) {
     }
 }
 
-void page_table_init(uintptr_t memory, seL4_CPtr paging_cnode)
+void page_table_init(uintptr_t memory, uint64_t size, seL4_CPtr paging_cnode)
 {
     table_memory = memory;
     table_memory_idx = 0;
+    table_memory_size = size;
     paging_cnode_cptr = paging_cnode;
+    /* seL4 does not zero what it retypes, so do it once here rather than per
+     * table in allocate_page_table(). */
+    memset((void *)table_memory, 0, size);
 
-    refill_ips();
+    refill_ips(INIT_IPS);
 }
