@@ -23,12 +23,13 @@
  * Slots of the CNodes the Microkit tool mapped into the pager's root CSpace.
  * These must match PAGER_CNODES in meta.py.
  */
-#define UNTYPED_SLOT 1  // all untyped memory left after initialisation.
-#define FRAME_CNODE 2   // where frame caps are placed
-#define IPS_CNODE 3     // where intermediary paging structure caps are placed.
-#define GZP_CNODE 4     // where global zero frame caps are placed.
-#define PROCESS_CNODES 5 // where the CSpaces created by fork() are placed.
-#define ELF_CAPS 6      // the children's ELF frames, filled in by the tool.
+#define UNTYPED_CNODE_SLOT 1    // all untyped memory left after initialisation.
+#define FRAME_CNODE_SLOT 2      // where frame caps are placed.
+#define PAGING_CNODE_SLOT 3     // where intermediary paging structure caps are placed.
+#define ZERO_PAGE_CNODE_SLOT 4  // where global zero frame caps are placed.
+#define PROCESS_CNODE_SLOT 5    // where the CSpaces created by fork() are placed.
+#define ELF_CAPS_CNODE_SLOT 6   // the children's ELF frames, filled in by the tool.
+#define FRAME_COPY_CNODE_SLOT 7 // where copies of frame caps are placed.
 
 /*
  * Symbols the Microkit tool patches into pager.elf. pager_memory and

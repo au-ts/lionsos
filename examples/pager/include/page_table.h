@@ -99,10 +99,10 @@ typedef struct pgd pgd_t;
 
 /**
  * Takes over memory as the arena the shadow page tables are bump-allocated
- * from and fills the intermediary paging structure free list. ips_cnode is
+ * from and fills the intermediary paging structure free list. paging_cnode is
  * where the paging structure caps are placed.
  */
-void page_table_init(uintptr_t memory, seL4_CPtr ips_cnode);
+void page_table_init(uintptr_t memory, seL4_CPtr paging_cnode);
 
 /**
  * The root of a child's shadow page table.

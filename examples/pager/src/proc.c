@@ -14,7 +14,7 @@
 #include <sddf/util/printf.h>
 
 static struct process processes[MAX_CHILDREN];
-static seL4_CPtr process_cnodes_cptr;
+static seL4_CPtr process_cnode_cptr;
 static uint32_t next_process_cnode_slot;
 
 static int allocate_process(struct process *process, uint32_t pid,
@@ -25,11 +25,11 @@ static int allocate_process(struct process *process, uint32_t pid,
 	seL4_Error error;
 
 	if (cnode_slot >= 512) return PROCESS_FORK_NO_SLOTS;
-	error = untyped_alloc(seL4_CapTableObject, PROCESS_CNODE_SIZE_BITS,
-						  cnode_slot, process_cnodes_cptr);
+	error = untyped_alloc(seL4_CapTableObject, PROCESS_CSPACE_SIZE_BITS,
+						  cnode_slot, process_cnode_cptr);
 	if (error != seL4_NoError) return PROCESS_FORK_CAP;
 
-	cspace = process_cnodes_cptr + cnode_slot;
+	cspace = process_cnode_cptr + cnode_slot;
 	process->cspace = cspace;
 	process->vspace = cspace + PROCESS_VSPACE_SLOT;
 	process->parent_pid = parent;
@@ -161,9 +161,9 @@ void fork(uint32_t parent, uint32_t child)
     }
 }
 
-void process_init(seL4_CPtr process_cnodes)
+void process_init(seL4_CPtr process_cnode)
 {
-    process_cnodes_cptr = process_cnodes;
+    process_cnode_cptr = process_cnode;
     processes[0].allocated = true;
     processes[0].pid = 0;
 }

@@ -26,10 +26,10 @@ typedef struct {
 
 /**
  * Takes ownership of the pager's untyped memory. bootinfo_vaddr is where the
- * capDLBootInfo_t was written, cnode_cptr addresses the CNode holding the
- * untyped caps it describes.
+ * capDLBootInfo_t was written, untyped_cnode_cptr addresses the CNode holding
+ * the untyped caps it describes.
  */
-void untyped_init(uintptr_t bootinfo_vaddr, seL4_CPtr cnode_cptr);
+void untyped_init(uintptr_t bootinfo_vaddr, seL4_CPtr untyped_cnode_cptr);
 
 /**
  * Retypes one object out of the pager's untyped memory into slot cap_idx of

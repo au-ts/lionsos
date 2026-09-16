@@ -51,24 +51,34 @@ PAGER_BOOTINFO_VADDR = 0x8002000000
 #
 # The slots are hard-coded on the other side of this interface and must be kept
 # in sync with them:
-#   * include/pager.h names every slot (UNTYPED_SLOT, FRAME_CNODE, IPS_CNODE,
-#     GZP_CNODE, PROCESS_CNODES, ELF_CAPS) and src/pager.c reaches them via
-#     microkit_cspace_root_slot_to_cptr().
+#   * include/pager.h names every slot (UNTYPED_CNODE_SLOT, FRAME_CNODE_SLOT,
+#     PAGING_CNODE_SLOT, ZERO_PAGE_CNODE_SLOT, PROCESS_CNODE_SLOT,
+#     ELF_CAPS_CNODE_SLOT, FRAME_COPY_CNODE_SLOT) and src/pager.c reaches them
+#     via microkit_cspace_root_slot_to_cptr().
 #   * The Microkit tool fills the CNode named "elf_caps" with the child PDs'
-#     ELF frame caps, and places each child's VSpace cap from slot 7 onwards.
+#     ELF frame caps. The name is matched literally, so this one cannot be
+#     renamed without also changing the tool.
+#
+# The tool also hands the pager a VSpace cap per child, but those go into the
+# PD's *nested* Microkit CNode rather than the root CSpace described here, so
+# their slot numbering is independent of this table. The pager never names
+# those slots: it reads the resulting cptrs out of the `vspaces` symbol.
 PAGER_CNODES = (
     # All untyped memory left after initialisation.
-    ("remaining_untypeds", 1, 9, True),
+    ("untypeds", 1, 9, True),
     # Frames the pager retypes to satisfy faults.
-    ("pagerspace", 2, 20, False),
+    ("frames", 2, 20, False),
     # Intermediate paging structures (PUD/PD/PT).
-    ("ips_cnode", 3, 20, False),
+    ("paging_structures", 3, 20, False),
     # Copies of the global zero page cap, one per read-only mapping.
-    ("gzp", 4, 20, False),
+    ("zero_page_copies", 4, 20, False),
     # Per-process CSpaces created by fork().
-    ("process_cnodes", 5, 5, False),
+    ("process_cspaces", 5, 5, False),
     # Child PDs' ELF frames, populated by the Microkit tool.
     ("elf_caps", 6, 12, False),
+    # Copies of frame caps. A frame cap carries its own mapping, so a folio
+    # mapped into more than one VSpace needs a cap per mapping.
+    ("frame_copies", 7, 20, False),
 )
 
 # The example's filesystem lives on partition 1 of the block device. This is a

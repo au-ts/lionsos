@@ -13,7 +13,7 @@
 
 #include "pager.h"
 
-#define PROCESS_CNODE_SIZE_BITS 12
+#define PROCESS_CSPACE_SIZE_BITS 12
 #define PROCESS_VSPACE_SLOT 1
 
 #define PROCESS_FORK_OK 0
@@ -38,7 +38,7 @@ struct process {
  * Claims the CNode the per-process CSpaces are created in and registers the
  * child the system booted with as process zero.
  */
-void process_init(seL4_CPtr process_cnodes_cptr);
+void process_init(seL4_CPtr process_cnode);
 
 int process_fork(uint32_t parent, uint32_t child);
 

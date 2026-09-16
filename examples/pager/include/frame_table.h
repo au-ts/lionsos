@@ -41,9 +41,11 @@ typedef struct {
 /**
  * Takes over memory (FOLIO_MEMORY_SIZE bytes) for folio metadata, retypes the
  * global zero page and fills the free lists. frame_cnode is where frame caps
- * are placed, gzp_cnode where the copies of the global zero page cap go.
+ * are placed, zero_page_cnode where the copies of the global zero page cap go
+ * and frame_copy_cnode where copies of ordinary frame caps go.
  */
-void frame_table_init(uintptr_t memory, seL4_CPtr frame_cnode, seL4_CPtr gzp_cnode);
+void frame_table_init(uintptr_t memory, seL4_CPtr frame_cnode,
+                      seL4_CPtr zero_page_cnode, seL4_CPtr frame_copy_cnode);
 
 struct folio *get_folio_from_idx(uint32_t idx);
 
@@ -62,8 +64,12 @@ void put_frame(struct folio *folio);
 uint32_t get_gzp();
 void put_gzp(uint32_t gzp);
 
-/* CSpace addresses of a frame and of a global zero page cap copy. */
+/* CSpace addresses of a frame, of a global zero page cap copy, and of a copy
+ * of an ordinary frame cap. A frame cap carries its own mapping, so a folio
+ * mapped into more than one VSpace needs one copy per extra mapping.
+ */
 seL4_CPtr frame_cptr(uint32_t frame);
 seL4_CPtr gzp_cptr(uint32_t gzp);
+seL4_CPtr frame_copy_cptr(uint32_t copy);
 
 #endif

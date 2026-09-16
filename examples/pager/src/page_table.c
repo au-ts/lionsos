@@ -12,7 +12,7 @@
 #include <string.h>
 #include <sddf/util/printf.h>
 
-static seL4_CPtr ips_cnode_cptr;
+static seL4_CPtr paging_cnode_cptr;
 
 /** Shadow page table roots, one per child. */
 static pgd_t page_tables[MAX_CHILDREN];
@@ -45,13 +45,13 @@ uint32_t get_frame_from_page(uint64_t const page) {
 }
 
 seL4_CPtr ips_cptr(uint32_t ips) {
-    return ips_cnode_cptr + ips;
+    return paging_cnode_cptr + ips;
 }
 
 static void refill_ips() {
     sddf_dprintf("refilling ips\n");
     for (int i = 0; i < REFILL_SIZE; ++i) {
-        seL4_Error err = untyped_alloc(seL4_ARM_PageTableObject, 12, ips_idx, ips_cnode_cptr);
+        seL4_Error err = untyped_alloc(seL4_ARM_PageTableObject, 12, ips_idx, paging_cnode_cptr);
         if (err) {
             sddf_printf("error occured when creating ips caps %d\n", err);
         }
@@ -250,11 +250,11 @@ void unmap_range(uintptr_t start, uintptr_t end, uint32_t child) {
     }
 }
 
-void page_table_init(uintptr_t memory, seL4_CPtr ips_cnode)
+void page_table_init(uintptr_t memory, seL4_CPtr paging_cnode)
 {
     table_memory = memory;
     table_memory_idx = 0;
-    ips_cnode_cptr = ips_cnode;
+    paging_cnode_cptr = paging_cnode;
 
     refill_ips();
 }

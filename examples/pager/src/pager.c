@@ -25,17 +25,19 @@ uint32_t vspaces[MAX_CHILDREN];
 void init(void)
 {
     allocator_init();
-    untyped_init(remaining_untypeds_vaddr, microkit_cspace_root_slot_to_cptr(UNTYPED_SLOT));
+    untyped_init(remaining_untypeds_vaddr,
+                 microkit_cspace_root_slot_to_cptr(UNTYPED_CNODE_SLOT));
     /*
      * pager_memory holds the folio metadata at its base and is the arena the
      * shadow page tables are allocated from above that.
      */
     frame_table_init(pager_memory,
-                     microkit_cspace_root_slot_to_cptr(FRAME_CNODE),
-                     microkit_cspace_root_slot_to_cptr(GZP_CNODE));
+                     microkit_cspace_root_slot_to_cptr(FRAME_CNODE_SLOT),
+                     microkit_cspace_root_slot_to_cptr(ZERO_PAGE_CNODE_SLOT),
+                     microkit_cspace_root_slot_to_cptr(FRAME_COPY_CNODE_SLOT));
     page_table_init(pager_memory + FOLIO_MEMORY_SIZE,
-                    microkit_cspace_root_slot_to_cptr(IPS_CNODE));
-    process_init(microkit_cspace_root_slot_to_cptr(PROCESS_CNODES));
+                    microkit_cspace_root_slot_to_cptr(PAGING_CNODE_SLOT));
+    process_init(microkit_cspace_root_slot_to_cptr(PROCESS_CNODE_SLOT));
 }
 
 void notified(microkit_channel ch)

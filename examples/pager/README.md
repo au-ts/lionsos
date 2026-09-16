@@ -71,7 +71,7 @@ Each module owns its own state and exposes it through the matching header in `in
 | `src/pager.c` | The Microkit entry points only: `init()`, `notified()`, `fault()` and `protected()`. |
 | `src/untyped.c` | Owns the untypeds left after initialisation; everything that retypes an object goes through `untyped_alloc()`. |
 | `src/cspace.c` | Generic CSpace/untyped bookkeeping (`cnode_specs_t`) and `create_cap_rights()`. |
-| `src/frame_table.c` | Folio metadata, the frame free list and the global zero page cap copies. |
+| `src/frame_table.c` | Folio metadata, the frame free list, the global zero page cap copies and the `frame_copies` CNode. |
 | `src/page_table.c` | Shadow page tables: the intermediary paging structure free list, `make_page_table_entry()` and `unmap_range()`. |
 | `src/proc.c` | The process table and `fork()`. |
 | `src/mem.c` | The `brk`/`mmap`/`munmap`/`fork` PPCs from the client's libc. |
@@ -93,35 +93,35 @@ pager.add_map(pager_bootinfo_map)
 The BootInfo memory region should be specified with `prefill_bootinfo="post_capdl_untypeds"` so that metadata about untyped memory is written to this memory region. This should be mapped into the pager so that the pager has access to information about the remaining untypeds.
 
 - **CNodes:**
-We need to create CNodes:
-- `remaining_untypeds`: created with `post_capdl_untypeds=True` as this CNode contains all remaining untyped caps.
--  `pagers_empty_cnode`: Created frame caps placed in this CNode.
-- `pager_gzp_cnode`: Created copies of the global zero page cap placed in this CNode.
-- `pager_ips_cnode`: Created intermediary paging strucure (page table) caps placed in this CNode.
-```py
-remaining_untypeds = SystemDescription.CNode("remaining_untypeds", True, 9)
-pagers_empty_cnode = SystemDescription.CNode("pagerspace", False, 20)
-pager_gzp_cnode = SystemDescription.CNode("gzp", False, 20)
-pager_ips_cnode = SystemDescription.CNode("ips_cnode", False, 20)
-```
+The pager receives its caps at runtime, so it needs somewhere to put them. Each CNode below is
+declared once and mapped into a fixed slot of the pager's root CSpace; the slots are named in
+`include/pager.h` and reached with `microkit_cspace_root_slot_to_cptr()`.
 
-<!-- add to -->
-Create mappings with `type=Cnode` and `pd=None` as this CNode will not be shared.
-```py
-pagers_empty_cnode_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, pagers_empty_cnode, 2)
-pager_gzp_cnode_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, pager_gzp_cnode, 4)
-pager_ips_cnode_map = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, pager_ips_cnode, 3)
-pager_remaining_untypeds = SystemDescription.CapMap(SystemDescription.CapMap.CapType.Cnode, None, remaining_untypeds, 1)
-```
-Add these mappings to the pager.
+| Slot | CNode | `size_bits` | Holds |
+| --- | --- | --- | --- |
+| 1 | `untypeds` | 9 | All untyped memory left after initialisation. Declared with `post_capdl_untypeds=True`, which is what makes the Microkit tool fill it. |
+| 2 | `frames` | 20 | Frames the pager retypes to satisfy faults. |
+| 3 | `paging_structures` | 20 | Intermediary paging structures (PUD/PD/PT). |
+| 4 | `zero_page_copies` | 20 | Copies of the global zero page cap, one per read-only mapping. |
+| 5 | `process_cspaces` | 5 | The per-process CSpaces `fork()` creates. |
+| 6 | `elf_caps` | 12 | The children's ELF frames, filled in by the Microkit tool. **This name is matched literally by the tool and cannot be changed on its own.** |
+| 7 | `frame_copies` | 20 | Copies of ordinary frame caps. A frame cap carries its own mapping, so a folio mapped into more than one VSpace needs one cap per mapping. |
 
-<!-- mappings -->
+`meta.py` builds them from a single table, `PAGER_CNODES`:
 ```py
-pager.add_cap_map(pager_gzp_cnode_map)
-pager.add_cap_map(pager_ips_cnode_map)
-pager.add_cap_map(pager_remaining_untypeds)
-pager.add_cap_map(pagers_empty_cnode_map)
+for name, slot, size_bits, post_capdl_untypeds in PAGER_CNODES:
+    cnode = CNode(name, post_capdl_untypeds, size_bits)
+    sdf.add_cnode(cnode)
+    # pd=None because these CNodes are the pager's alone, not shared.
+    pager.add_cap_map(CapMap(CapMap.CapType.Cnode, None, cnode, slot))
 ```
+Create the mappings with `type=Cnode` and `pd=None`, as these CNodes are not shared with any other
+protection domain.
+
+Note that the Microkit tool separately hands the pager a VSpace cap per child, but those go into the
+PD's *nested* Microkit CNode rather than the root CSpace above, so the two slot numberings are
+independent and do not collide. The pager never names those slots -- it reads the resulting cptrs
+out of the `vspaces` symbol the tool patches into `pager.elf`.
 - **Memory regions:**
 This memory region is used to create shadow page tables.
 ```py

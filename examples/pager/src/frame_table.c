@@ -11,7 +11,8 @@
 #include <sddf/util/printf.h>
 
 static seL4_CPtr frame_cnode_cptr;
-static seL4_CPtr gzp_cnode_cptr;
+static seL4_CPtr zero_page_cnode_cptr;
+static seL4_CPtr frame_copy_cnode_cptr;
 
 /* Folio metadata, bump-allocated out of the memory given to frame_table_init(). */
 static uintptr_t frame_memory;
@@ -43,7 +44,11 @@ seL4_CPtr frame_cptr(uint32_t frame) {
 }
 
 seL4_CPtr gzp_cptr(uint32_t gzp) {
-    return gzp_cnode_cptr + gzp;
+    return zero_page_cnode_cptr + gzp;
+}
+
+seL4_CPtr frame_copy_cptr(uint32_t copy) {
+    return frame_copy_cnode_cptr + copy;
 }
 
 // Slub allocator local functions.
@@ -91,7 +96,7 @@ void put_frame(struct folio *folio) {
 static void refill_gzp() {
     sddf_dprintf("refilling gzp\n");
     for (int i = 0; i < REFILL_SIZE; ++i) {
-        seL4_Error err = seL4_CNode_Copy(gzp_cnode_cptr, gzp_idx, 58, frame_cnode_cptr, global_zero_page, 58, create_cap_rights(false));
+        seL4_Error err = seL4_CNode_Copy(zero_page_cnode_cptr, gzp_idx, 58, frame_cnode_cptr, global_zero_page, 58, create_cap_rights(false));
         if (err) {
             sddf_printf("error occured when copying GZP caps %d\n", err);
         }
@@ -114,11 +119,13 @@ void put_gzp(uint32_t gzp) {
     }
 }
 
-void frame_table_init(uintptr_t memory, seL4_CPtr frame_cnode, seL4_CPtr gzp_cnode)
+void frame_table_init(uintptr_t memory, seL4_CPtr frame_cnode,
+                      seL4_CPtr zero_page_cnode, seL4_CPtr frame_copy_cnode)
 {
     frame_memory = memory;
     frame_cnode_cptr = frame_cnode;
-    gzp_cnode_cptr = gzp_cnode;
+    zero_page_cnode_cptr = zero_page_cnode;
+    frame_copy_cnode_cptr = frame_copy_cnode;
 
     // create the global zero page.
     global_zero_page = frame_idx;
