@@ -354,7 +354,7 @@ static inline fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state, uint3
     empty_slot->src_port_any = src_port_any;
     empty_slot->dst_port_any = dst_port_any;
     empty_slot->action = action;
-    
+
 
     assert(rules_reserve_id(state, rule_id) == FILTER_ERR_OKAY);
 
