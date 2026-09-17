@@ -78,10 +78,10 @@ typedef struct fw_rule {
 } fw_rule_t;
 
 /* Bits used to store TCP flags */
-#define FW_TCP_FIN_BIT (1 << 0)
-#define FW_TCP_SYN_BIT (1 << 1)
-#define FW_TCP_RST_BIT (1 << 2)
-#define FW_TCP_ACK_BIT (1 << 4)
+#define FW_TCP_FIN_BIT 0x01
+#define FW_TCP_SYN_BIT 0x02
+#define FW_TCP_RST_BIT 0x04
+#define FW_TCP_ACK_BIT 0x10
 
 /* Data recorded from the last received packet in a TCP connection */
 typedef struct fw_tcp_interface_state {
