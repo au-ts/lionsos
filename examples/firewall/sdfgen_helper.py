@@ -260,6 +260,20 @@ if __name__ == '__main__':
                     continue
                 c_name = match.group(1)
                 struct = Struct(c_name)
+                
+                # Match on enum typedef block
+                if re.match(r"typedef[ \t]+enum\b", line):
+                    while not re.search(r"}\s*" + c_name_regex + r"\s*;", line):
+                        try:
+                            line = next(input)
+                        except StopIteration:
+                            break
+                    enum_match = re.search(r"}\s*(" + c_name_regex + r")\s*;", line)
+                    if enum_match:
+                        enum_type_name = enum_match.group(1)
+                        # Register enum type mapped to 32-bit unsigned int (or change to c_uint8 if required)
+                        c_type_to_p_class[enum_type_name] = "c_uint32"
+                    continue
 
                 # Find struct fields
                 line = next(input)
