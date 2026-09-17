@@ -48,40 +48,41 @@ static inline bool fw_tcp_instance_match(const fw_instance_t *instance, uint32_t
                                          uint32_t dst_ip, uint16_t dst_port) {
     bool forward = (instance->src_ip == src_ip && instance->src_port == src_port && instance->dst_ip == dst_ip &&
                     instance->dst_port == dst_port);
+
     bool reverse = (instance->src_ip == dst_ip && instance->src_port == dst_port && instance->dst_ip == src_ip &&
                     instance->dst_port == src_port);
+
     return forward || reverse;
 }
-
 
 /* Find firewall action for a given src & dst ip & port. Matches instances first,
 followed by the most specific rule. */
 static fw_action_t fw_tcp_filter_find_action(fw_filter_state_t *state, uint32_t src_ip, uint16_t src_port,
                                              uint32_t dst_ip, uint16_t dst_port, uint16_t *rule_id,
-                                             fw_tcp_instance_t **instance) {
+                                             fw_instance_t **instance) {
     /* We give priority to local instances */
     for (uint16_t i = 0; i < state->internal_instances_table->size; i++) {
-        fw_tcp_instance_t *curr_instance = (fw_tcp_instance_t *)((uint8_t *)state->internal_instances_table->instances +
-                                                                 (i * sizeof(fw_tcp_instance_t)));
+        fw_instance_t *curr_instance = (fw_instance_t *)((uint8_t *)state->internal_instances_table->instances +
+                                                                 (i * sizeof(fw_instance_t)));
         if (!fw_tcp_instance_match(curr_instance, src_ip, src_port, dst_ip, dst_port)) {
             continue;
         }
- 
+
         *rule_id = curr_instance->rule_id;
         if (instance) {
             *instance = curr_instance;
         }
         return FILTER_ACT_ESTABLISHED;
     }
- 
+
     for (uint8_t iface = 0; iface < state->num_interfaces; iface++) {
         fw_instances_table_t *ext_table = state->external_instances_table[iface];
         for (uint16_t i = 0; i < ext_table->size; i++) {
-            fw_tcp_instance_t *curr_instance = &ext_table->instances[i];
+            fw_instance_t *curr_instance = &ext_table->instances[i];
             if (!fw_tcp_instance_match(curr_instance, src_ip, src_port, dst_ip, dst_port)) {
                 continue;
             }
- 
+
             *rule_id = curr_instance->rule_id;
             if (instance) {
                 *instance = curr_instance;
@@ -89,33 +90,33 @@ static fw_action_t fw_tcp_filter_find_action(fw_filter_state_t *state, uint32_t 
             return FILTER_ACT_ESTABLISHED;
         }
     }
- 
+
     /* Check rules for best match otherwise we match with the default rule */
     fw_rule_t *match = NULL;
     for (uint16_t i = DEFAULT_ACTION_IDX + 1; i < state->rule_table->size; i++) {
         fw_rule_t *rule = state->rule_table->rules + i;
- 
+
         /* Check port numbers first */
         if ((!rule->src_port_any && rule->src_port != src_port) ||
             (!rule->dst_port_any && rule->dst_port != dst_port)) {
             continue;
         }
- 
+
         /* Match on src addr first */
         if ((subnet_mask(rule->src_subnet) & src_ip) != (subnet_mask(rule->src_subnet) & rule->src_ip)) {
             continue;
         }
- 
+
         /* Match on src addr first */
         if ((subnet_mask(rule->dst_subnet) & dst_ip) != (subnet_mask(rule->dst_subnet) & rule->dst_ip)) {
             continue;
         }
- 
+
         /* This if the first match we've found */
         if (match == NULL) {
             match = rule;
         }
- 
+
         /* We give priority to source matches over destination matches */
         if (rule->src_subnet == match->src_subnet) {
             if (rule->dst_subnet == match->dst_subnet) {
@@ -133,14 +134,15 @@ static fw_action_t fw_tcp_filter_find_action(fw_filter_state_t *state, uint32_t 
             match = rule; /* source subnet is a longer match */
         }
     }
- 
+
     if (match == NULL) {
         match = &state->rule_table->rules[DEFAULT_ACTION_IDX];
     }
- 
+
     *rule_id = match->rule_id;
     return (fw_action_t)match->action;
 }
+
 /* Valid flags for the TCP final ack sent/closed connection states */
 static inline bool fw_tcp_final_ack_sent(uint8_t local_flags, uint8_t extern_flags) {
     return ((local_flags & FW_TCP_FIN_BIT) && (extern_flags & FW_TCP_FIN_BIT) && (local_flags & FW_TCP_ACK_BIT) &&
@@ -266,54 +268,13 @@ static inline fw_tcp_conn_state_t fw_tcp_next_state(fw_tcp_conn_state_t current,
     return TCP_INVALID;
 }
 
-/* Create a new connection instance generated from a FILTER_ACT_CONNECT rule in a filters
-local instances region */
-static inline fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state, uint32_t src_ip, uint16_t src_port,
-                                                     uint32_t dst_ip, uint16_t dst_port, uint16_t rule_id,
-                                                     uint32_t seq) {
-    fw_instance_t *internal_array = (fw_instance_t *)state->internal_instances_table->instances;
-    for (uint16_t i = 0; i < state->internal_instances_table->size; i++) {
-        fw_instance_t *instance = &internal_array[i];
-
-        // Cleanup happens here, if any closed instance, remove
-        if (instance->current_state == TCP_NONE || instance->current_state == TCP_TIME_WAIT) {
-            uint16_t last_idx = state->internal_instances_table->size - 1;
-
-            // Swap the closed entry with the last active entry in the array
-            internal_array[i] = internal_array[last_idx];
-
-            // Shrink the tracker size counter
-            state->internal_instances_table->size--;
-
-            // Do not increment yet, as need to inspect newly swapped element
-            continue;
-        }
-
-        /* Check whether connection has already been established */
-        if (fw_tcp_instance_match(instance, src_ip, src_port, dst_ip, dst_port)) {
-            return FILTER_ERR_DUPLICATE;
-        }
-    }
-
-    if (state->internal_instances_table->size >= state->instances_capacity) {
-        return FILTER_ERR_FULL;
-    }
-
-    fw_instance_t *empty_slot = &internal_array[state->internal_instances_table->size];
-    empty_slot->rule_id = rule_id;
-    empty_slot->src_ip = src_ip;
-    empty_slot->src_port = src_port;
-    empty_slot->dst_ip = dst_ip;
-    empty_slot->dst_port = dst_port;
-    // empty_slot->local.flags = FW_TCP_SYN_BIT;
-    // empty_slot->local.seq = seq;
-    // empty_slot->external.flags = 0;
-    // empty_slot->external.seq = 0;
-    // empty_slot->current_state = TCP_SYN_SENT;
-    state->internal_instances_table->size++;
-    return FILTER_ERR_OKAY;
-}
-
+/* Instance creation now goes straight through filter.h's fw_filter_add_instance
+ * (declared in filter.h) instead of a local TCP-specific wrapper.
+ * NOTE: filter.h's version does NOT do the stale-instance (TCP_NONE /
+ * TCP_TIME_WAIT) sweep-and-reclaim that the removed wrapper did — closed
+ * connection slots are no longer proactively recycled here, so the internal
+ * instances table will fill up faster under churn until a timer-driven reaper
+ * is added elsewhere. */
 
 /* Queues for receiving and transmitting packets */
 net_queue_handle_t rx_queue;
