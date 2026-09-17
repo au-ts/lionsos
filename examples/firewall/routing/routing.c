@@ -79,7 +79,7 @@ static bool enqueue_icmp_unreachable(fw_buff_desc_t buffer, uint32_t next_hop)
     return enqueued;
 }
 
-static void drop_buffer(fw_buff_desc_t buffer)
+static void drop_packet(fw_buff_desc_t buffer)
 {
     net_buff_desc_t net_buff = { .io_or_offset = buffer.offset, .len = buffer.len };
     int err = fw_enqueue(&rx_free[buffer.interface], &net_buff);
@@ -87,10 +87,12 @@ static void drop_buffer(fw_buff_desc_t buffer)
     returned[buffer.interface] = true;
 }
 
-static bool transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t out_interface)
+static void transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t out_interface)
 {
     if (fw_queue_full(&tx_active[out_interface])) {
-        return false;
+        LOG_FIREWALL("ROUTING", "tx queue for interface %u full, dropping packet\n", out_interface);
+        drop_packet(buffer);
+        return;
     }
 
     uintptr_t pkt_vaddr = data_vaddr[buffer.interface] + buffer.offset;
@@ -115,7 +117,6 @@ static bool transmit_packet(fw_buff_desc_t buffer, uint8_t *mac_addr, uint8_t ou
     int err = fw_enqueue(&tx_active[out_interface], &buffer);
     assert(!err);
     tx_net[out_interface] = true;
-    return true;
 }
 
 static void process_arp_waiting(uint8_t out_interface)
@@ -156,11 +157,7 @@ static void process_arp_waiting(uint8_t out_interface)
             /* Substitute the MAC address and send packets out of the NIC */
             pkt_waiting_node_t *node = root;
             for (uint16_t i = 0; i < root->num_children + 1; i++) {
-                bool sent = transmit_packet(node->buffer, response.mac_addr, out_interface);
-                if (!sent) {
-                    LOG_FIREWALL("ROUTING", "tx queue for interface %u full, dropping packet\n", out_interface);
-                    drop_buffer(node->buffer);
-                }
+                transmit_packet(node->buffer, response.mac_addr, out_interface);
                 node = pkts_waiting_next_child(&pkt_waiting_queue[out_interface], node);
             }
         }
@@ -217,7 +214,7 @@ static void route(void)
                             /* Webserver queue can receive buffers from any interface */
                             LOG_FIREWALL("ROUTING", "webserver queue full, dropping packet from interface %u\n",
                                          interface);
-                            drop_buffer(fw_buffer);
+                            drop_packet(fw_buffer);
                             continue;
                         }
 
@@ -328,11 +325,7 @@ static void route(void)
                 }
 
                 /* valid arp entry found, transmit packet */
-                bool sent = transmit_packet(fw_buffer, arp->mac_addr, out_interface);
-                if (!sent) {
-                    LOG_FIREWALL("ROUTING", "tx queue for interface %u full, dropping packet\n", out_interface);
-                    drop_buffer(fw_buffer);
-                }
+                transmit_packet(fw_buffer, arp->mac_addr, out_interface);
             }
         }
     }
