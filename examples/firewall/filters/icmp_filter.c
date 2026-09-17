@@ -65,7 +65,7 @@ static void filter(void)
             case FILTER_ACT_CONNECT: {
                 /* Add an established connection in shared memory for corresponding filter */
                 fw_filter_err_t fw_err = fw_filter_add_instance(&filter_state, ip_hdr->src_ip, ICMP_FILTER_DUMMY_PORT,
-                                                                ip_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, rule_id);
+                                                                ip_hdr->dst_ip, ICMP_FILTER_DUMMY_PORT, rule_id, 0);
 
                 if (fw_err == FILTER_ERR_OKAY || fw_err == FILTER_ERR_DUPLICATE) {
                     LOG_FIREWALL("ICMP FILTER", "on interface %u establishing connection via rule %u: (ip %s, port %u) -> "
