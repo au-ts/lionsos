@@ -1,5 +1,5 @@
 #
-# Copyright 2024, UNSW
+# Copyright 2026, UNSW
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
@@ -22,13 +22,13 @@ IMAGE_FILE := ${BUILD_DIR}/loader.img
 
 all: ${IMAGE_FILE}
 
-qemu maaxboard ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
+qemu ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
 	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} SMP_CONFIG=${SMP_CONFIG} $(notdir $@)
 
 
-${BUILD_DIR}/Makefile: pager.mk
+${BUILD_DIR}/Makefile: pager_rpi4b.mk
 	mkdir -p ${BUILD_DIR}
-	cp pager.mk $@
+	cp pager_rpi4b.mk $@
 
 submodules:
 	git submodule update --init $(LIONSOS)/dep/musllibc

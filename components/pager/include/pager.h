@@ -22,7 +22,9 @@
 // vspace for pager in root cspace
 #define PAGER_OWN_VSPACE_SLOT 3
 
+#ifndef INIT_FRAMES
 #define INIT_FRAMES BUFFERS_SIZE
+#endif
 #define INIT_IPS 1024
 #define INIT_GZP 20000
 
