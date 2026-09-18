@@ -60,6 +60,8 @@ QEMU_ARGS := -machine virt,virtualization=on \
 		-device virtio-serial-device \
         -chardev pty,id=virtcon \
         -device virtconsole,chardev=virtcon \
+	    -drive file=disk,if=none,format=raw,id=hd \
+        -device virtio-blk-device,drive=hd,bus=virtio-mmio-bus.1 \
 		-icount shift=1
 
 
@@ -103,6 +105,11 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx_serial_virt_tx_config.data serial_virt_tx.elf
 	$(OBJCOPY) --update-section .serial_client_config=rr_main_serial_client_config.data rr_main.elf
+	$(OBJCOPY) --update-section .device_resources=blk_driver_device_resources.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_client_config=rr_main_blk_client_config.data rr_main.elf
+	$(OBJCOPY) --update-section .blk_driver_config=blk_driver_blk_driver_config.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_virt_config=blk_virt_blk_virt_config.data blk_virt.elf
+
 
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
@@ -111,7 +118,11 @@ $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 qemu_disk:
 	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 GPT
 
-qemu: ${IMAGE_FILE} qemu_disk
+qemu_virtio_disk:
+	$(SDDF)/tools/mkvirtdisk disk 1 512 16777216 MBR
+
+
+qemu: ${IMAGE_FILE} qemu_disk qemu_virtio_disk
 	$(QEMU) $(QEMU_ARGS)
 
 qemud: ${IMAGE_FILE} qemu_disk

@@ -2,14 +2,24 @@
 
 #include "sel4/functions.h"
 #include "sel4/shared_types_gen.h"
-#include "types.h"
 #include <sddf/util/printf.h>
+#include "../base.h"
+
+#ifdef RECORDER_BACKEND_BLK
+#include "block.h"
+#endif
 #include "../ipc.h"
-#define REC(...) do {sddf_printf("RECORD | "); sddf_printf(__VA_ARGS__);} while (0)
+
+static inline void rr_init_record_backend();
+
+static inline void rr_record_store_ipc_msg_backend(seL4_Word cycle_count, seL4_Word source_child, seL4_Word badge,
+                                           seL4_MessageInfo_t msg);
+static inline void rr_record_store_scheduler_event_backend(seL4_Word cycle_count, seL4_Word child_id, rr_ChildState_e new_state);
 
 static inline void rr_init_record()
 {
     REC("init\n");
+    rr_init_record_backend();
 }
 
 // We store ipc messages
@@ -63,9 +73,11 @@ static inline void rr_record_store_ipc_msg(seL4_Word cycle_count, seL4_Word sour
             msg.words[0]);
     } break;
     }
+    rr_record_store_ipc_msg_backend(cycle_count, source_child, badge, msg);
 }
 // We store scheduler events
 static inline void rr_record_store_scheduler_event(seL4_Word cycle_count, seL4_Word child_id, rr_ChildState_e new_state)
 {
     REC("0x%lx scheduler child_%lu %s\n", cycle_count, child_id, rr_child_state_to_string(new_state));
+    rr_record_store_scheduler_event_backend(cycle_count, child_id, new_state);
 }

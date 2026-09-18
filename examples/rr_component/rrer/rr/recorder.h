@@ -58,6 +58,8 @@ static inline void rec_init()
     INFO("Num pmu counters: %lu\n", counters.num_counters);
     assert(counters.num_counters > 0);
     NO_ERR(seL4_ARM_VPMU_VPMUCounterControl(VPMU_CAP, 1));
+
+    rr_init_record();
 }
 
 static inline void rec_perform_schedule(seL4_Word cycle_count)
@@ -233,7 +235,8 @@ static inline void rec_main()
         } break;
         case rr_IPCType_BlockChecker: {
             // if time did not progress, mark currently scheduled as blocked by recv.
-            if (cycle_count == last_cycle_count) {
+            // less than 3 because unsuspending takes 2 cycles for some reason?
+            if (cycle_count - last_cycle_count < 3) {
                 LOG("Cycle count did not increase, marking child %lu as \"BlockedOnRecv\"\n", rr_currently_sched->id);
                 // Also check if we were expecting a reply.
                 // If we were, then this is the case where the reply's IPC must be cancelled.

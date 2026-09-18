@@ -22,7 +22,7 @@ void init()
 {
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size,
                   serial_config.tx.data.vaddr);
-    serial_putchar_init(serial_config.tx.id, &serial_tx_queue_handle);
+    // serial_putchar_init(serial_config.tx.id, &serial_tx_queue_handle);
     LOG("INIT\n");
 
     rec_init();

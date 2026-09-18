@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from abc import ABC
 from copy import deepcopy
 import pathlib
-from acacia_sddf import sDDFSerial, Board
+from acacia_sddf import sDDFSerial, Board, sDDFBlk
 
 WORD_SIZE = 8
 
@@ -272,6 +272,7 @@ class RRSystem(System):
         print(f"DTB path: {str(dtb_path)}")
 
         # Setup block driver
+        # i guess the qemu addresses go up from the last referenced one?
         # TODO: don't hardcode this.
         serial_system = sDDFSerial(
             sdf,
@@ -281,4 +282,14 @@ class RRSystem(System):
             virt_tx_prio=self.BASE_SERIAL_DRIV_PRIO,
         )
         serial_system.add_client(main)
+
+        blk_system = sDDFBlk(
+            sdf,
+            dev_compatible="virtio,mmio",
+            dev_dt_path="virtio_mmio@a000200",
+            driver_prio=self.BASE_BLK_DRIV_PRIO+1,
+            virt_prio=self.BASE_SERIAL_DRIV_PRIO,
+        )
+
+        blk_system.add_client(main, partition_number=0)
         sdf.make_config_structs()
