@@ -83,7 +83,7 @@ include $(LIONSOS)/lib/libc/libc.mk
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS := -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a
 
-$(IMAGES): $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
+$(ETH_DRIV) $(IMAGES): $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
 vpath %.c $(SDDF) $(FIREWALL_SRC_DIR) $(FIREWALL_NET_COMPONENTS) $(FIREWALL_FILTERS) $(FIREWALL_ICMP) $(FIREWALL_ROUTING) $(FIREWALL_ARP)
 
