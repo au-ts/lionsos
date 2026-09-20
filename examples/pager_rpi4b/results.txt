@@ -11,3 +11,19 @@ read average latency: 4078
 Running WRITE benchmark...
 write average latency: 4216
 benchmark done
+
+Passive:
+
+Anonymous page-fault latency benchmark
+========================================
+CNTFRQ_EL0 : 54000000 Hz
+page size  : 4096 bytes
+pages      : 16384
+size       : 64 MiB
+
+Running READ benchmark...
+read average latency: 2562
+
+Running WRITE benchmark...
+write average latency: 2671
+benchmark done
