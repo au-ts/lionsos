@@ -92,59 +92,27 @@ static void print_statistics(const char *name,
     printf("max     : %lu ns\n", max);
 }
 
-static uint64_t timespec_to_ns(struct timespec ts)
-{
-    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
-}
-
 static void benchmark_read(uint64_t freq)
 {
-    static uint64_t samples[NUM_PAGES];
-
     volatile uint8_t *base =
         (volatile uint8_t *) mmap(
-    (void *)TEST_VADDR_R,
-    NUM_PAGES * PAGE_SIZE,
-    PROT_READ | PROT_WRITE,
-    MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE,
-    -1,
-    0
-);
+            (void *)TEST_VADDR_R,
+            NUM_PAGES * PAGE_SIZE,
+            PROT_READ | PROT_WRITE,
+            MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE,
+            -1,
+            0
+        );
 
     printf("\nRunning READ benchmark...\n");
-
+    uint64_t start = read_cntpct();
     for (size_t i = 0; i < NUM_PAGES; i++) {
-        volatile uint8_t *page =
-            base + i * PAGE_SIZE;
-
-        struct timespec start_ts;
-        struct timespec end_ts;
-        struct timespec start_tsred;
-        struct timespec end_tsred;
-        
-        uint64_t start = read_cntpct();
-        /*
-         * This is the operation that causes the page fault.
-         */
-        asm volatile("" ::: "memory");
+        volatile uint8_t *page = base + i * PAGE_SIZE;
         uint8_t value = *page;
-        asm volatile("" ::: "memory");
-
-        uint64_t end = read_cntpct();
-
-        /*
-         * Prevent the compiler from eliminating the load.
-         */
-        asm volatile("" :: "r"(value) : "memory");
-
-        samples[i] = ticks_to_ns(end - start, freq);
     }
+    uint64_t end = read_cntpct();
 
-    print_statistics(
-        "Anonymous READ page faults",
-        samples + WARMUP_SAMPLES,
-        NUM_PAGES - WARMUP_SAMPLES
-    );
+    printf("read average latency: %llu\n", ticks_to_ns(end - start, freq) / NUM_PAGES);
 }
 
 
@@ -154,41 +122,26 @@ static void benchmark_write(uint64_t freq)
 
     volatile uint8_t *base =
         (volatile uint8_t *)mmap(
-    (void *)TEST_VADDR_W,
-    NUM_PAGES * PAGE_SIZE,
-    PROT_READ | PROT_WRITE,
-    MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE,
-    -1,
-    0
-);
+            (void *)TEST_VADDR_W,
+            NUM_PAGES * PAGE_SIZE,
+            PROT_READ | PROT_WRITE,
+            MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE,
+            -1,
+            0
+        );
 
     printf("\nRunning WRITE benchmark...\n");
-
+    uint64_t start = read_cntpct();
     for (size_t i = 0; i < NUM_PAGES; i++) {
 
         volatile uint8_t *page =
             base + i * PAGE_SIZE;
-
-        struct timespec start_ts;
-        struct timespec end_ts;
-
-        uint64_t start = read_cntpct();
-        /*
-         * This is the operation that causes the page fault.
-         */
-        asm volatile("" ::: "memory");
         *page = 42;
-        asm volatile("" ::: "memory");
-        uint64_t end = read_cntpct();
 
-        samples[i] = ticks_to_ns(end - start, freq);
     }
+    uint64_t end = read_cntpct();
 
-    print_statistics(
-        "Anonymous WRITE page faults",
-        samples + WARMUP_SAMPLES,
-        NUM_PAGES - WARMUP_SAMPLES
-    );
+    printf("write average latency: %llu\n", ticks_to_ns(end - start, freq) / NUM_PAGES);
 }
 
 
