@@ -1,6 +1,47 @@
 #pragma once
 
-// Do not include this file directly.
+// Defines the API which is used for interacting with a storage backend, both for
+// reading and writing. This is a combination of a very very basic block driver abstraction
+// and the recorder "file" structure.
+// The structure is the following:
+//   0x000000 .. 0x?????? | Metadata (holds offsets into instructions, num instructions, data, numdata, num children, etc)
+//   0x?????? .. middle   | Instructions (stack growing to higher offsets)
+//   middle   .. MAX_SIZE | Data         (stack growing to lower offsets)
+// Hopefully this should ensure that we have enough size.
+
+// Instructions are fixed size, and have the following structure:
+//   [cycle_count] [instruction_type] [instruction_args]
+// (For now we will not pack these, if performance is bad we can improve it later.)
+// Instruction args depend on the instruction type.
+// Valid instruction types and their arguments:
+//   scheduler [target_child] [new_state]
+//   notification [source_ch] [badge] [tag]
+//   call [source_ch] [badge] [tag] [data_offset]
+//   reply [source_ch] [badge] [tag] [data_offset]
+//   (and maybe more?)
+// We can determine the number of data_words in a call/reply via the tag
+// We can determine the target_ch, target_child and source_child from the source_ch.
+// (hopefully should be deterministically determined).
+
+// The data is written to the datastack in the correct order.
+// Similarly for instructions
+// Every time we write an event occurs we do the following:
+    // 1. Write the instruction
+    // 2. Write the data
+    // 3. Increment the sizeof data and instruction count in the metadata section.
+    // 4. Continue.
+// During initialisation for recording, we must do the following:
+    // 1. Write magic and metadata for children.
+    // 2. Initialise a relevant handle for keeping track of both stacks and their respective metadata.
+
+// During initialisation for replaying, we must do the following:
+    // 1. Read magic and children metadata, check for errors.
+    // 2. Initialise a relevant handle for iterating through the instruction list and reading metadata.
+// During replay we'll have a different main program which will control the scheduler and other relevant
+// pd manipulators.
+// (BUG: For some reason the PMU cycle counter increments by like 2 whenever we unsuspend a child)
+
+// *Do not include this file directly.*
 #include "sel4/functions.h"
 #include "sel4/shared_types_gen.h"
 #include <sddf/util/printf.h>
@@ -10,11 +51,11 @@
 #define RR_STORAGE_HANDLE_STORAGE_SIZE 1024
 #define RR_STORAGE_MAGIC "potato"
 #define RR_MAX_CHILDREN 32
-// A handle to the storage unit.
 
 // We treat the storage backend similarly to a elf file.
 // It two main sections - one for storing variable-sized data (like .data),
 // and the other for the instructions.
+// A handle to the storage unit.
 typedef struct rr_storage_handle {
     uint8_t magic[sizeof(RR_STORAGE_MAGIC)];
     // The text section holds data in the given shape
@@ -67,14 +108,18 @@ typedef struct rr_storage_unit {
 // satisfied by included backend. (which this file is included by).
 static inline void rr_init_storage_backend();
 
-static inline void rr_storage_store_ipc_backend(seL4_Word cycle_count, seL4_Word source_child, seL4_Word badge,
-                                           seL4_MessageInfo_t msg);
-static inline void rr_storage_store_scheduler_event_backend(seL4_Word cycle_count, seL4_Word child_id, rr_ChildState_e new_state);
+// synchronous read and writes for now.
+// This is all the backend needs to supply for now.
+static inline bool rr_storage_write(uint64_t byte_offset, const uint8_t *bytes, uint64_t num_bytes);
+static inline bool rr_storage_read(uint64_t byte_offset, uint8_t *result, uint64_t num_bytes);
 
 static inline void rr_init_storage()
 {
     REC("init\n");
     rr_init_storage_backend();
+}
+
+static inline void rr_init_recorder_storage() {
 }
 
 // We store ipc messages
@@ -128,12 +173,10 @@ static inline void rr_storage_store_ipc_msg(seL4_Word cycle_count, seL4_Word sou
             msg.words[0]);
     } break;
     }
-    rr_storage_store_ipc_backend(cycle_count, source_child, badge, msg);
 }
 
 // We store scheduler events
 static inline void rr_storage_store_scheduler_event(seL4_Word cycle_count, seL4_Word child_id, rr_ChildState_e new_state)
 {
     REC("0x%lx scheduler child_%lu %s\n", cycle_count, child_id, rr_child_state_to_string(new_state));
-    rr_storage_store_scheduler_event_backend(cycle_count, child_id, new_state);
 }
