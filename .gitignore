@@ -6,3 +6,12 @@ docs/book/
 .#*
 __pycache__
 examples/pager/benchmarks/519.lbm_r
+components/pager/documentation/writeup.aux
+components/pager/documentation/writeup.bbl
+components/pager/documentation/writeup.blg
+components/pager/documentation/writeup.fdb_latexmk
+components/pager/documentation/writeup.fls
+components/pager/documentation/writeup.log
+components/pager/documentation/writeup.out
+components/pager/documentation/writeup.synctex.gz
+components/pager/documentation/writeup.pdf
