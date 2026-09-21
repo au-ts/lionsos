@@ -120,6 +120,7 @@
       "inputs": {
         "nixpkgs": "nixpkgs",
         "sdfgen": "sdfgen",
+        "systems-ci": "systems-ci",
         "zig-overlay": "zig-overlay_2"
       }
     },
@@ -158,6 +159,23 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "systems-ci": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1781054307,
+        "narHash": "sha256-KZhDOWZI7u+LgS1x1A3I8Dw+VYjf0HOeVgbFBXzlWKo=",
+        "owner": "au-ts",
+        "repo": "systems-ci",
+        "rev": "9a7f3fa63361008b6373c8131691da3fdc0552d0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "au-ts",
+        "ref": "main",
+        "repo": "systems-ci",
         "type": "github"
       }
     },
