@@ -7,10 +7,9 @@
 #include "ipc.h"
 #include "sel4/shared_types_gen.h"
 #include "sel4/simple_types.h"
+#include "storage_backend/block.h"
 #include "types.h"
 #include "fault.h"
-#define RECORDER_BACKEND_BLK
-#include "record_backend/record.h"
 
 static inline void rec_main();
 static inline void rec_init();
@@ -59,7 +58,7 @@ static inline void rec_init()
     assert(counters.num_counters > 0);
     NO_ERR(seL4_ARM_VPMU_VPMUCounterControl(VPMU_CAP, 1));
 
-    rr_init_record();
+    rr_init_storage_backend();
 }
 
 static inline void rec_perform_schedule(seL4_Word cycle_count)
@@ -124,8 +123,7 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
             seL4_Word source_channel = rr_ipc_child_queue_peek_channel(chosen->id);
             assert(source_channel < rr_channels_num);
             LOG("Source channel: %lu\n", source_channel);
-            // swap around to get the source channel.
-            seL4_Word source_child = rr_channel_to_target_child_id[rrer_source_ch_to_target_ch(source_channel)];
+            seL4_Word source_child = rr_source_ch_to_source_child(source_channel);
             assert(source_child < rr_children_num);
             LOG("Source child: %lu\n", source_child);
 
@@ -148,7 +146,7 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
             // We can peek the ipc queue for this thread?
 
             // store the event
-            rr_record_store_scheduler_event(cycle_count, rr_children_arr[source_child].id,
+            rr_storage_store_scheduler_event(cycle_count, rr_children_arr[source_child].id,
                                             rr_children_arr[source_child].sched_state);
 
             // setup sender thread
@@ -177,7 +175,7 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
 
 static inline void rec_unschedule_current(seL4_Word cycle_count, rr_ChildState_e new_state)
 {
-    rr_record_store_scheduler_event(cycle_count, rr_currently_sched->id, new_state);
+    rr_storage_store_scheduler_event(cycle_count, rr_currently_sched->id, new_state);
     rr_sched_unschedule_current(new_state);
 }
 
@@ -211,11 +209,11 @@ static inline void rec_main()
             assert(rr_recv_source_channel != UNSET_VALUE);
 
             seL4_Word replyee_child_id =
-                rr_channel_to_target_child_id[rrer_source_ch_to_target_ch(rr_recv_source_channel)];
+                rr_source_ch_to_source_child(rr_recv_source_channel);
             assert(replyee_child_id < rr_children_num);
 
             // store the message
-            rr_record_store_ipc_msg(cycle_count, rr_currently_sched->id, badge, msg);
+            rr_storage_store_ipc_msg(cycle_count, rr_currently_sched->id, badge, msg);
 
             // We can send the reply as it won't block.
             seL4_Send(BASE_REPLY_CAPS + replyee_child_id, msg);
@@ -224,7 +222,7 @@ static inline void rec_main()
 
             // and also set the replied to pd as schedulable
             rr_children_arr[replyee_child_id].sched_state = rr_ChildState_Schedulable;
-            rr_record_store_scheduler_event(cycle_count, replyee_child_id, rr_ChildState_Schedulable);
+            rr_storage_store_scheduler_event(cycle_count, replyee_child_id, rr_ChildState_Schedulable);
 
             rr_recv_source_channel = UNSET_VALUE;
         } break;
@@ -236,6 +234,11 @@ static inline void rec_main()
         case rr_IPCType_BlockChecker: {
             // if time did not progress, mark currently scheduled as blocked by recv.
             // less than 3 because unsuspending takes 2 cycles for some reason?
+
+            // guaranteed to subtract and have a >= 0 value
+            // this might be false if cycle_count overflows.
+            // That is a problem for later.
+            assert(cycle_count >= last_cycle_count);
             if (cycle_count - last_cycle_count < 3) {
                 LOG("Cycle count did not increase, marking child %lu as \"BlockedOnRecv\"\n", rr_currently_sched->id);
                 // Also check if we were expecting a reply.
@@ -246,7 +249,7 @@ static inline void rec_main()
                     WARN("Unexecuted reply object for child %lu! Suspending child %lu\n", child_id, child_id);
 
                     rr_children_arr[child_id].sched_state = rr_ChildState_Suspended;
-                    rr_record_store_scheduler_event(cycle_count, child_id, rr_ChildState_Suspended);
+                    rr_storage_store_scheduler_event(cycle_count, child_id, rr_ChildState_Suspended);
                 }
                 rec_unschedule_current(cycle_count, rr_ChildState_BlockedOnRecv);
             }
@@ -282,7 +285,7 @@ static inline void rec_main()
             LOG("Target child: %lu\n", target_child);
 
             rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
-            rr_record_store_ipc_msg(cycle_count, sending_child, badge, msg);
+            rr_storage_store_ipc_msg(cycle_count, sending_child, badge, msg);
         } break;
         case rr_IPCType_Ntfn: {
             seL4_Word source_ch = rr_badge_to_channel_id(badge);
@@ -299,12 +302,12 @@ static inline void rec_main()
             seL4_Word target_child = rr_channel_to_target_child_id[source_ch];
             LOG("Target child: %lu\n", target_child);
             rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
-            rr_record_store_ipc_msg(cycle_count, sending_child, badge, msg);
+            rr_storage_store_ipc_msg(cycle_count, sending_child, badge, msg);
         } break;
         }
         // perform a reschedule.
         rec_perform_schedule(cycle_count);
-        rr_record_store_scheduler_event(cycle_count, rr_currently_sched->id, rr_currently_sched->sched_state);
+        rr_storage_store_scheduler_event(cycle_count, rr_currently_sched->id, rr_currently_sched->sched_state);
         last_cycle_count = cycle_count;
     }
 }

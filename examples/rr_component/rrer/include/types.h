@@ -188,6 +188,7 @@ static bool rrer_badge_is_ntfn(seL4_Word badge)
 
 static inline seL4_Word rrer_source_ch_to_target_ch(seL4_Word ch)
 {
+    // just hardcoded.
     if (ch % 2 == 1)
         return ch - 1;
     return ch + 1;

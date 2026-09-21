@@ -97,6 +97,11 @@ rr_SchedState_e rr_sched_state = rr_SchedState_None;
 rr_Child_t **rr_children_sched_queue = NULL;
 
 seL4_Word rr_channels_num = 0;
+
+// a source channel to target child
+// it is possible to go from source channel to source child, through this method
+// source_ch -> target_ch -> source_child
+//  (via rrer_source_ch_to_target_ch(source_channel))
 seL4_Word *rr_channel_to_target_child_id = NULL;
 
 // The last channel used.
@@ -159,4 +164,9 @@ static inline const char *rr_ipc_type_to_string(rr_IPCType_e type)
     default:
         return "Unknown msg type";
     }
+}
+
+// a little bit round about.
+static inline seL4_Word rr_source_ch_to_source_child(seL4_Word channel) {
+    return rr_channel_to_target_child_id[rrer_source_ch_to_target_ch(channel)];
 }

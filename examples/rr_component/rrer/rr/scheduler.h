@@ -8,9 +8,13 @@ static inline void rr_init_scheduler();
 
 static inline void rr_init_scheduler()
 {
+    // We only suspend children who are correspondingly in a suspended state, or who
+    // are schedulable but not running
+    // Since everyone starts schedulable, everyone is suspended
+    // This ensures that those who are being replied to will receive the reply non-blocking.
     for (int i = 0; i < rr_children_num; i++) {
         rr_children_sched_queue[i] = &rr_children_arr[i];
-        seL4_TCB_Suspend(BASE_TCB_CAP + rr_children_arr[i].id);
+        NO_ERR(seL4_TCB_Suspend(rr_children_arr[i].id + BASE_TCB_CAP));
     }
 
     // Sort the schedule queue.
@@ -56,14 +60,16 @@ static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
     // sets up the correct priority of the child.
     rr_currently_sched = *cur;
 
+    // if the child was schedulable, then it was suspended, so unsuspend it
+    if (rr_currently_sched->sched_state == rr_ChildState_Schedulable)
+        NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
+
     // set the correct state.
     rr_currently_sched->sched_state = rr_ChildState_Scheduled;
     seL4_TCB_SetPriority(TCB(cur[0]->id), SELF_TCB(), SCHED_PRIO);
 
     // also assigns the vpmu.
     NO_ERR(seL4_TCB_BindVPMU(TCB(rr_currently_sched->id), VPMU_CAP));
-    // And unsusnpend the child
-    seL4_TCB_Resume(BASE_TCB_CAP + rr_currently_sched->id);
 
     return rr_currently_sched;
 }
@@ -71,7 +77,9 @@ static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
 
 static inline rr_Child_t* rr_sched_unschedule_current(rr_ChildState_e state) {
     seL4_TCB_SetPriority(TCB(rr_currently_sched->id), SELF_TCB(), rr_currently_sched->priority);
-    seL4_TCB_Suspend(BASE_TCB_CAP + rr_currently_sched->id);
+    // if we are changing the state to suspended, then we will suspend the thread as well.
+    if (state == rr_ChildState_Suspended) 
+        NO_ERR(seL4_TCB_Suspend(rr_currently_sched->id + BASE_TCB_CAP));
     NO_ERR(seL4_TCB_UnbindVPMU(TCB(rr_currently_sched->id)));
     rr_currently_sched->sched_state = state;
     rr_Child_t* temp = rr_currently_sched;

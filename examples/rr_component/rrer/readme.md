@@ -4,12 +4,15 @@ A basic recording component which does the following to every PD in it's subsyst
 2. Controls scheduling of each PD deterministically (naive version of the kernel scheduler)
 3. Records IPC events, their contents and their data.
 4. Replays deterministically the flow of events, inspectable via GDB.
-5. Records interrupts (So any interrupt-only can be RR'd)
+5. Records interrupts (So any interrupt-only driver can be RR'd)
 
 # What RR cannot do
 1. Inspect and record MMIO shared memory
 2. Accurate representation of how the kernel scheduler works
 3. Nested `microkit_ppcall`s, IE `pd_1 ppcall -> pd_2 protected which ppcalls -> pd_3 protected ...`
+
+# What is untested
+1. unidirectional channels.
 
 # Overhead
 1. TODO! measure this.

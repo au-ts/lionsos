@@ -262,7 +262,7 @@ class RRSystem(System):
         DATAPATH = output_path / "rr_children.data"
         children_data.serialise(DATAPATH)
 
-        # This data can and should be objcopied?
+        # TODO: Turn this into a config struct that is objcopied.
         # For now just use mr prefill.
         rr_mr = MemoryRegion(sdf, "rr_children_data", prefill_path=DATAPATH)
         main.add_map(Map(rr_mr, 0x1000000, "rw", setvar_vaddr="children_data_mem"))
