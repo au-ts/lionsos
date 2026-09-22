@@ -14,8 +14,8 @@
 
   outputs = { nixpkgs, zig-overlay, sdfgen, ... }:
     let
-      microkit-version = "2.3.0";
-      microkit-url = "https://github.com/seL4/microkit/releases/download/2.3.0/";
+      microkit-version = "2.3.1";
+      microkit-url = "https://github.com/seL4/microkit/releases/download/2.3.1/";
       microkit-platforms = {
         aarch64-darwin = "macos-aarch64";
         x86_64-darwin = "macos-x86-64";
@@ -63,10 +63,10 @@
                 url = "${microkit-url}/microkit-sdk-${microkit-version}-${microkit-platform}.tar.gz";
                 hash =
                   {
-                    aarch64-darwin = "sha256-7WtFeEf/BbcpNLCKtsJDWcypYXHxAAEMElL+p4KsVXc=";
-                    x86_64-darwin = "sha256-ob07JxvpiG9DqCB5rdEeDlUYPK2X2wqj1MFJjFbge6k=";
-                    aarch64-linux = "sha256-Chv1S0xxaf2ROQ4OcATLorQ9iaNaiXrCresl+AW0iBI=";
-                    x86_64-linux = "sha256-95nmS3e2Y0Mu3SC5Yy7lMDabyhEw7vjgwGMJpXAz4Hs=";
+                    aarch64-darwin = "sha256-UlAFbkVcJWcG+aCDlEK5q60j6+wPVUkQzxmHEM64xZ4=";
+                    x86_64-darwin = "sha256-paHtORN9WeMfK0RyfXYbcEuS21MRASA0ADfpgDvF2Nk=";
+                    aarch64-linux = "sha256-ZmzGNh5T92MZq7l43CywwbklRPN54TdpTx5h3Klbzwg=";
+                    x86_64-linux = "sha256-g4kIyso3X9wUlprpCHCk2TFuMLM9tmpfUDftxSs9yzs=";
                   }
                   .${system} or (throw "Unsupported system: ${system}");
               };
