@@ -151,7 +151,7 @@ manifest.py: ${KITTY_DIR}/manifest.py kitty.py pn532.py font_height50.py font_he
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
-%.o: %.c ${SDDF}/include
+%.o: %.c | $(LIONS_LIBC)/include ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
