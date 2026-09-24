@@ -3,10 +3,22 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
+FS ?= fat
+
+ifeq ($(strip $(FS)),fat)
+FS_IMAGE := fat.elf
+FS_PD_NAME := fatfs
+else ifeq ($(strip $(FS)),ext4)
+FS_IMAGE := ext4.elf
+FS_PD_NAME := ext4fs
+else
+$(error Unsupported FS '$(FS)'. Supported values: fat, ext4)
+endif
+
 IMAGES := \
 	timer_driver.elf \
 	micropython.elf \
-	fat.elf \
+	$(FS_IMAGE) \
 	serial_driver.elf \
 	serial_virt_rx.elf \
 	serial_virt_tx.elf \
@@ -31,7 +43,6 @@ all: ${IMAGE_FILE}
 include ${SDDF}/tools/make/board/common.mk
 
 METAPROGRAM := $(FILEIO_DIR)/meta.py
-FAT := $(LIONSOS)/components/fs/fat
 
 CFLAGS += \
 	-I$(LIONSOS)/include \
@@ -67,9 +78,15 @@ manifest.py: fs_test.py bench.py
 %.py: ${FILEIO_DIR}/%.py
 	cp $< $@
 
+ifeq ($(strip $(FS)),fat)
 FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
 FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIONSOS)/components/fs/fat/fat.mk
+else ifeq ($(strip $(FS)),ext4)
+EXT4_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
+EXT4_LIBC_INCLUDE := $(LIONS_LIBC)/include
+include $(LIONSOS)/components/fs/ext4/ext4.mk
+endif
 
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
@@ -79,7 +96,7 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 FORCE:
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
+	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --fs $(FS)
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
@@ -91,15 +108,18 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .device_resources=blk_driver_device_resources.data blk_driver.elf
 	$(OBJCOPY) --update-section .blk_driver_config=blk_driver.data blk_driver.elf
 	$(OBJCOPY) --update-section .blk_virt_config=blk_virt.data blk_virt.elf
-	$(OBJCOPY) --update-section .blk_client_config=blk_client_fatfs.data fat.elf
-	$(OBJCOPY) --update-section .fs_server_config=fs_server_fatfs.data fat.elf
+	$(OBJCOPY) --update-section .blk_client_config=blk_client_$(FS_PD_NAME).data $(FS_IMAGE)
+	$(OBJCOPY) --update-section .fs_server_config=fs_server_$(FS_PD_NAME).data $(FS_IMAGE)
+ifeq ($(strip $(FS)),ext4)
+	$(OBJCOPY) --update-section .serial_client_config=serial_client_$(FS_PD_NAME).data $(FS_IMAGE)
+endif
 	touch $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
 qemu_disk:
-	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 GPT
+	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 GPT $(FS)
 
 qemu: ${IMAGE_FILE} qemu_disk
 	$(QEMU) -machine virt,virtualization=on \
