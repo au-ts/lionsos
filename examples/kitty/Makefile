@@ -20,9 +20,6 @@ export KITTY_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 
-export KITTY_GRAPHICS_VM_ROOTFS := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
-export KITTY_GRAPHICS_VM_LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
-
 IMAGE_FILE := $(BUILD_DIR)/kitty.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
 
@@ -41,8 +38,6 @@ ${BUILD_DIR}/Makefile: kitty.mk
 	echo "export MICROKIT_CONFIG ?= ${MICROKIT_CONFIG}" >> $@
 	echo "export MICROKIT_BOARD ?= ${MICROKIT_BOARD}" >> $@
 	echo "export BUILD_DIR := ${BUILD_DIR}" >> $@
-	echo "export KITTY_GRAPHICS_VM_ROOTFS ?= ${KITTY_GRAPHICS_VM_ROOTFS}" >> $@
-	echo "export KITTY_GRAPHICS_VM_LINUX ?= ${KITTY_GRAPHICS_VM_LINUX}" >> $@
 	cat kitty.mk >> $@
 
 FORCE:

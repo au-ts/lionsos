@@ -200,10 +200,10 @@ FORCE:
 # then change these lines or just make sure you've already put
 # linux and rootfs.cpio.gz into the Build directory
 ${LINUX}:
-	curl -L ${LIONSOS_DOWNLOADS}/$(KITTY_GRAPHICS_VM_LINUX) -o $@
+	curl -L ${LIONSOS_DOWNLOADS}/$@ -o $@
 
 ${INITRD}:
-	curl -L ${LIONSOS_DOWNLOADS}/$(KITTY_GRAPHICS_VM_ROOTFS) -o $@
+	curl -L ${LIONSOS_DOWNLOADS}/$@ -o $@
 
 # Because we include the *.mk files they are an implicit dependency
 # for the build.  These rules instantiate the submodules that
