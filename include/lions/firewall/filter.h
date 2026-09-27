@@ -77,6 +77,47 @@ typedef struct fw_rule {
     uint16_t rule_id;
 } fw_rule_t;
 
+/* Bits used to store TCP flags */
+#define FW_TCP_FIN_BIT 0x01
+#define FW_TCP_SYN_BIT 0x02
+#define FW_TCP_RST_BIT 0x04
+#define FW_TCP_ACK_BIT 0x10
+
+/* Data recorded from the last received packet in a TCP connection */
+typedef struct fw_tcp_interface_state {
+    uint8_t flags; /* flags set in last received instance packet. fin flag is only unset upon final ack */
+    uint32_t seq;  /* sequence number of last received instance packet. Once fin is received, seq is only implemented
+                      upon final ack */
+} fw_tcp_interface_state_t;
+
+/* States relative to the filter's instance based on
+ * https://www.ibm.com/support/pages/flowchart-tcp-connections-and-their-definition/ */
+typedef enum {
+    /* no traffic has been seen (listen and closed combined) */
+    TCP_NONE,
+    /* TCP client has sent its first message in the three-way handshake. This message has the SYN bit set */
+    TCP_SYN_SENT,
+    /* TCP server has received the first TCP message from the client in the three-way TCP open hand-shake, aka SYN-ACK
+       received */
+    TCP_SYN_RCVD,
+    /* three-way syn handshake has been completed, ACK from original client returned */
+    TCP_ESTABLISHED,
+    /* local side sent a FIN; waiting for an ACK or a FIN from the remote side (FIN-WAIT-1) */
+    TCP_FIN_WAIT_1,
+    /* remote side acknowledged our FIN; waiting for the remote side's FIN (FIN-WAIT-2) */
+    TCP_FIN_WAIT_2,
+    /* remote side sent a FIN and we acknowledged it; waiting for local application to close (CLOSE-WAIT) */
+    TCP_CLOSE_WAIT,
+    /* local side sent its final FIN after being in CLOSE_WAIT; waiting for final ACK (LAST-ACK) */
+    TCP_LAST_ACK,
+    /* simultaneous close: both sides sent FINs without receiving ACKs first (CLOSING) */
+    TCP_CLOSING,
+    /* this connection is closed but the firewall is waiting so stray packets are handled (TIME-WAIT) */
+    TCP_TIME_WAIT,
+    /* A specific error case for if the transition is invalid and should be dropped */
+    TCP_INVALID,
+} fw_tcp_conn_state_t;
+
 /**
  * Instances are created by filters if traffic matches with a connect rule.
  * If this is the case, return traffic should be permitted also, thus the
@@ -92,6 +133,16 @@ typedef struct fw_instance {
     uint16_t src_port;
     /* destination port of traffic */
     uint16_t dst_port;
+    /* TCP related state tracking */
+    fw_tcp_interface_state_t local;
+    fw_tcp_interface_state_t external;
+    /* Byte numbers expected from both sides */
+    uint32_t local_next_seq;
+    uint32_t extern_next_seq;
+    /* What state it is currently expected to be in currently */
+    fw_tcp_conn_state_t current_state;
+    /* tick of last packet received */
+    uint64_t timestamp;
     /* ID of the rule this instance was created from. Allows instances
     to be removed upon rule removal */
     uint16_t rule_id;
@@ -304,6 +355,7 @@ static inline fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state, uint3
     empty_slot->dst_port_any = dst_port_any;
     empty_slot->action = action;
 
+
     assert(rules_reserve_id(state, rule_id) == FILTER_ERR_OKAY);
 
     empty_slot->rule_id = *rule_id;
@@ -386,7 +438,7 @@ static inline void fw_filter_state_init(fw_filter_state_t *state, void *rules, v
  * @return error status.
  */
 static inline fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state, uint32_t src_ip, uint16_t src_port,
-                                                     uint32_t dst_ip, uint16_t dst_port, uint16_t rule_id)
+                                                     uint32_t dst_ip, uint16_t dst_port, uint16_t rule_id, uint32_t seq)
 {
     if (state->internal_instances_table->size >= state->instances_capacity) {
         return FILTER_ERR_FULL;
@@ -408,6 +460,11 @@ static inline fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state, u
     empty_slot->src_port = src_port;
     empty_slot->dst_ip = dst_ip;
     empty_slot->dst_port = dst_port;
+    empty_slot->local.flags = FW_TCP_SYN_BIT;
+    empty_slot->local.seq = seq;
+    empty_slot->external.flags = 0;
+    empty_slot->external.seq = 0;
+    empty_slot->current_state = TCP_SYN_SENT;
     state->internal_instances_table->size++;
 
     return FILTER_ERR_OKAY;

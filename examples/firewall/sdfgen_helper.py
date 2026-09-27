@@ -254,6 +254,28 @@ if __name__ == '__main__':
                     macro = Macro(c_name, value)
                     continue;
 
+                # Match on enum typedef block
+                if re.match(r"typedef[ \t]+enum\b", line):
+                    enum_block = line
+                    # Accumulate lines until the closing semicolon is reached
+                    while ";" not in re.sub(r"/\*.*?\*/|//.*", "", enum_block):
+                        try:
+                            enum_block += "\n" + next(input)
+                        except StopIteration:
+                            break
+
+                    # Strip C single-line (//) and multi-line (/* */) comments
+                    clean_block = re.sub(r"//.*", "", enum_block)
+                    clean_block = re.sub(r"/\*.*?\*/", "", clean_block, flags=re.DOTALL)
+
+                    # Match closing brace, whitespace/newlines, type name, and semicolon
+                    enum_match = re.search(r"}\s*(" + c_name_regex + r")\s*;", clean_block)
+                    if enum_match:
+                        enum_type_name = enum_match.group(1)
+                        # Register enum type mapped to 32-bit unsigned integer
+                        c_type_to_p_class[enum_type_name] = "c_uint32"
+                    continue
+
                 # Match on struct typedef
                 match = re.match(r"typedef[ \t]+struct[ \t]+(" + c_name_regex + ")[ \t]*{", line)
                 if not match:
