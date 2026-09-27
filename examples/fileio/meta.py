@@ -17,7 +17,10 @@ Map = SystemDescription.Map
 Channel = SystemDescription.Channel
 
 
-def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
+def generate(sdf_path: str, output_dir: str, dtb: DeviceTree, fs: str):
+    fs_pd_name = f"{fs}fs"
+    fs_elf = f"{fs}.elf"
+
     serial_node = dtb.node(board.serial)
     assert serial_node is not None
     blk_node = dtb.node(board.blk)
@@ -39,14 +42,17 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
     micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, stack_size=0x10000)
 
+    fs_pd = ProtectionDomain(fs_pd_name, fs_elf, priority=96)
+
     serial_system.add_client(micropython)
+    if fs == "ext4":
+        serial_system.add_client(fs_pd)
     timer_system.add_client(micropython)
 
-    fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
-
+    # TODO: Using Fat even with Ext4 for now.
     fs = LionsOs.FileSystem.Fat(
         sdf,
-        fatfs,
+        fs_pd,
         micropython,
         blk=blk_system,
         partition=board.partition
@@ -60,7 +66,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         serial_virt_tx,
         serial_virt_rx,
         micropython,
-        fatfs,
+        fs_pd,
         timer_driver,
         blk_driver,
         blk_virt,
@@ -88,6 +94,7 @@ if __name__ == '__main__':
     parser.add_argument("--board", required=True, choices=[b.name for b in BOARDS])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
+    parser.add_argument("--fs", default="fat", choices=["fat", "ext4"])
 
     args = parser.parse_args()
 
@@ -99,4 +106,4 @@ if __name__ == '__main__':
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
 
-    generate(args.sdf, args.output, dtb)
+    generate(args.sdf, args.output, dtb, args.fs)
