@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <assert.h>
 #include <stdbool.h>
 #include <microkit.h>
 #include <sddf/util/util.h>
