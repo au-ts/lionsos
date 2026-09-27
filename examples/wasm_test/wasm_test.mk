@@ -4,7 +4,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-TOOLCHAIN ?= clang
 SUPPORTED_BOARDS := \
 	qemu_virt_aarch64 \
 	maaxboard
@@ -47,8 +46,6 @@ METAPROGRAM := $(WASM_TEST_DIR)/meta.py
 FAT := $(LIONSOS)/components/fs/fat
 
 CFLAGS += \
-	-Wno-bitwise-op-parentheses \
-	-Wno-shift-op-parentheses \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
@@ -144,6 +141,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_test_client.data test_client.elf
 	$(OBJCOPY) --update-section .lib_sddf_lwip_config=lib_sddf_lwip_config_test_client.data test_client.elf
 	$(OBJCOPY) --update-section .net_client_config=net_client_test_client.data test_client.elf
+	touch $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
