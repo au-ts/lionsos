@@ -7,31 +7,39 @@
 
 The beginnings of a native LionsOS desktop. Unlike the `kitty` example, which
 drives the display through a Linux driver VM, graphics here go straight
-through sDDF's GPU device class and input comes from native virtIO input
-drivers:
+through sDDF's GPU device class, input comes from native virtIO input
+drivers, and every application is its own protection domain:
 
 ```
-desktop  ->  gpu_virt    ->  gpu_driver      ->  virtio-gpu      (QEMU)
-   |     <-  input_virt  <-  input_keyboard  <-  virtio-keyboard (QEMU)
-   |                     <-  input_tablet    <-  virtio-tablet   (QEMU)
-   +------>  timer_driver
+notes  ─┐                  ┌─>  gpu_virt    ->  gpu_driver      ->  virtio-gpu      (QEMU)
+sketch ─┼─ <-> compositor ─┤
+clock  ─┘                  └─<  input_virt  <-  input_keyboard  <-  virtio-keyboard (QEMU)
+  │                                         <-  input_tablet    <-  virtio-tablet   (QEMU)
+  └─────────>  timer_driver
 ```
 
 ![The desktop running on QEMU](screenshot.png)
 
-The `desktop` protection domain keeps a small scene: wallpaper, taskbar,
-windows in z-order and a software cursor on top. It software-renders the scene
-into a framebuffer that lives in its GPU data region and scans it out as a 2D
-resource. Every change marks the rows it touches as damaged, and once all
-pending input or timer work has been handled only the damaged band is redrawn,
-transferred and flushed to the device.
+The **compositor** is the only client of the GPU and input virtualisers. It
+keeps a scene of wallpaper, taskbar, application windows in z-order and a
+software cursor, renders it in software into a framebuffer in its GPU data
+region, and scans that out as a 2D resource. Every change marks the rows it
+touches as damaged, and once all pending work has been handled only the
+damaged band is redrawn, transferred and flushed to the device.
+
+The **applications** (Notes, Sketch and Clock) are separate PDs. Each draws
+into its own surface and receives input only through its own event queue.
+The compositor maps each app's surface and state read-only, validates
+everything an app publishes, and draws the window decorations itself, so an
+app cannot draw outside its window, read the screen, or see input meant for
+another app.
 
 You can move the pointer, click a window to focus and raise it, drag windows
 by their title bar, close them with the red box, reopen or hide them from the
-taskbar, and type into the Notes window (US keyboard layout).
+taskbar, type into Notes (US keyboard layout) and draw in Sketch. Clock
+redraws itself every second from its own timer.
 
-This is milestone 3 of the plan below. The windows are still drawn by the
-desktop PD itself; making them separate PDs is the compositor's job.
+This is milestone 4 of the roadmap below.
 
 ## Building
 
@@ -53,23 +61,64 @@ make MICROKIT_SDK=/path/to/sdk qemu
 
 This opens a QEMU window with a 1024x768 display, a virtIO keyboard and a
 virtIO tablet (an absolute pointer, so the QEMU window does not need to grab
-the mouse). The mode can be changed with
-`DESKTOP_XRES` and `DESKTOP_YRES`; the framebuffer must fit in the 4 MiB GPU
-data region (`GPU_DATA_REGION_SIZE_CLI0` in `include/gpu_config.h`, and the
-matching size in `meta.py`).
+the mouse). The mode can be changed with `DESKTOP_XRES` and `DESKTOP_YRES`;
+the framebuffer must fit in the 4 MiB GPU data region
+(`GPU_DATA_REGION_SIZE_CLI0` in `include/gpu_config.h`, and the matching size
+in `meta.py`).
 
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `src/desktop.c` | The desktop PD: GPU setup, scene, input handling and damage tracking |
+| `src/compositor.c` | The compositor PD: GPU setup, scene, window management, input routing and damage tracking |
 | `src/gfx.[ch]` | Minimal clipped software renderer for BGRA surfaces |
 | `src/keymap.[ch]` | evdev key codes to ASCII (US layout) |
 | `src/font_petme128_8x8.h` | 8x8 bitmap font vendored from MicroPython (MIT) |
-| `meta.py` | System description: GPU and input drivers, virtualisers, desktop and timer |
+| `apps/gui_app.[ch]` | Helpers every app links against: surface setup, commits, events |
+| `apps/notes.c` | Text editing, keyboard focus |
+| `apps/sketch.c` | Drawing with the pointer, with pointer grabs |
+| `apps/clock.c` | A timer client that redraws on its own |
+| `meta.py` | System description: drivers, virtualisers, compositor, apps and timer |
+| `include/gui_config.h` | Application slots |
 | `include/gpu_config.h` | GPU class configuration, derived from sDDF's GPU example |
 | `include/input_config.h` | Input class configuration: two drivers, one client |
 | `include/compat/` | Shims that keep the pinned sDDF GPU components building |
+
+## Applications and the compositor
+
+The protocol is defined in `include/lions/gui/protocol.h`. Each application
+slot has:
+
+| Region | App | Compositor | Contents |
+|---|---|---|---|
+| surface (1 MiB) | read-write | read-only | Window content, 32-bit BGRA, stride = width |
+| state (4 KiB) | read-write | read-only | Size, title and the damage of the latest commit |
+| events (4 KiB) | read-write | read-write | Input from the compositor to the app |
+
+plus a channel. To update its window, an app draws into its surface, records
+the damaged rectangle and bumps a sequence number in its state page, then
+notifies the compositor. The compositor reads the sequence number before and
+after copying the state; if it changed, or if commits were skipped, it redraws
+the whole window instead of trusting the damage rectangle. Sizes, titles and
+damage are validated and clamped before use.
+
+Input routing:
+
+* Keys go to the focused window, which is the topmost visible one. Apps are
+  told when they gain or lose focus.
+* Pressing a button over a window's content focuses it and grabs the pointer
+  for that window until the button is released, so drags that leave the
+  window still reach it.
+* Pointer motion goes to the grabbing window, or to the focused window while
+  the pointer is over its content.
+* Title bars, close boxes and the taskbar are handled by the compositor and
+  are never seen by apps.
+* Axis events are coalesced per evdev frame, so a diagonal movement is one
+  motion event and not an X step followed by a Y step.
+
+Slots are fixed when the system is built, as with any Microkit system. To add
+an app, write it against `apps/gui_app.h`, add it to `GUI_APPS` in `meta.py`
+and `desktop.mk`, and bump `GUI_NUM_APPS` in `include/gui_config.h`.
 
 ## Input
 
@@ -122,8 +171,8 @@ Two further notes for the upstream GPU class:
 
 * The virtualiser bounds-checks and cleans the cache for `TRANSFER_TO_2D` as if
   the rectangle were contiguous in memory (`width * height * bpp` bytes from
-  `mem_offset`). That is only correct for full-width transfers, so the desktop
-  always transfers full-width row bands.
+  `mem_offset`). That is only correct for full-width transfers, so the
+  compositor always transfers full-width row bands.
 * The driver needs the physical addresses of its DMA regions and of each
   client's data region. sdfgen 0.35 has no GPU class, so `meta.py` describes
   these PDs by hand and adds Microkit `region_paddr` setvars to its output.
@@ -134,7 +183,7 @@ Two further notes for the upstream GPU class:
 2. A LionsOS client drawing natively, built in CI (done)
 3. Input: a virtio-input driver and an input virtualiser in the sDDF style (done)
 4. A compositor with a fixed number of client slots, each with its own surface
-   region, plus focus and damage tracking
+   region, plus focus and damage tracking (done)
 5. A widget toolkit (e.g. LVGL or microui) and a shell (taskbar, launcher)
 6. Dynamic applications as WebAssembly or MicroPython loaded from a file system
 7. Real hardware, which needs a native display driver

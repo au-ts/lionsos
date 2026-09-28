@@ -5,7 +5,7 @@
 
 /*
  * Input class configuration: a keyboard and a tablet (absolute pointer)
- * driver, and the desktop as the only client. Must match meta.py.
+ * driver, and the compositor as the only client. Must match meta.py.
  */
 
 #pragma once

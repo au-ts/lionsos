@@ -10,7 +10,9 @@ SUPPORTED_BOARDS := qemu_virt_aarch64
 SDDF := $(LIONSOS)/dep/sddf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 
-IMAGES := gpu_driver.elf gpu_virt.elf timer_driver.elf input_driver.elf input_virt.elf desktop.elf
+GUI_APPS := notes sketch clock
+IMAGES := gpu_driver.elf gpu_virt.elf timer_driver.elf input_driver.elf input_virt.elf compositor.elf \
+	$(addsuffix .elf,$(GUI_APPS))
 METAPROGRAM := $(DESKTOP_DIR)/meta.py
 SYSTEM_FILE := desktop.system
 IMAGE_FILE := desktop.img
@@ -51,21 +53,29 @@ include $(LIONSOS)/components/input/input.mk
 
 $(IMAGES): libsddf_util_debug.a
 
-DESKTOP_OBJS := desktop/desktop.o desktop/gfx.o desktop/keymap.o
+GFX_OBJS := desktop/gfx.o desktop/keymap.o
+APP_LIB_OBJS := apps/gui_app.o $(GFX_OBJS)
 
 desktop/%.o: $(DESKTOP_DIR)/src/%.c | $(SDDF_LIBC_INCLUDE)
 	mkdir -p desktop
 	$(CC) -c $(CFLAGS) $< -o $@
 
-desktop.elf: $(DESKTOP_OBJS)
+apps/%.o: $(DESKTOP_DIR)/apps/%.c | $(SDDF_LIBC_INCLUDE)
+	mkdir -p apps
+	$(CC) -c $(CFLAGS) $< -o $@
+
+compositor.elf: desktop/compositor.o $(GFX_OBJS)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
--include $(DESKTOP_OBJS:.o=.d)
+$(addsuffix .elf,$(GUI_APPS)): %.elf: apps/%.o $(APP_LIB_OBJS)
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+-include $(wildcard desktop/*.d apps/*.d)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	PYTHONPATH=$(SDDF)/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
-	$(OBJCOPY) --update-section .timer_client_config=timer_client_desktop.data desktop.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_clock.data clock.elf
 	$(OBJCOPY) --update-section .input_driver_config=input_driver_keyboard.data input_driver.elf input_keyboard.elf
 	$(OBJCOPY) --update-section .input_driver_config=input_driver_tablet.data input_driver.elf input_tablet.elf
 
@@ -96,7 +106,7 @@ qemu: $(IMAGE_FILE)
 	$(QEMU_CMD)
 
 clean::
-	rm -rf desktop
+	rm -rf desktop apps
 
 clobber:: clean
-	rm -f desktop.elf input_keyboard.elf input_tablet.elf $(IMAGE_FILE) $(REPORT_FILE) $(SYSTEM_FILE) *.data $(DTB)
+	rm -f compositor.elf $(addsuffix .elf,$(GUI_APPS)) input_keyboard.elf input_tablet.elf $(IMAGE_FILE) $(REPORT_FILE) $(SYSTEM_FILE) *.data $(DTB)

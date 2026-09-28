@@ -84,6 +84,23 @@ void gfx_draw_rect(gfx_surface_t *s, gfx_rect_t r, uint32_t thickness, uint32_t 
     gfx_fill_rect(s, (gfx_rect_t) { r.x + r.width - t, r.y + t, t, r.height - 2 * t }, colour);
 }
 
+void gfx_blit(gfx_surface_t *s, int32_t x, int32_t y, const uint32_t *src, int32_t width, int32_t height,
+              uint32_t src_stride)
+{
+    gfx_rect_t r = { x, y, width, height };
+    if (!clip(s, &r)) {
+        return;
+    }
+
+    for (int32_t row = r.y; row < r.y + r.height; row++) {
+        const uint32_t *in = src + (size_t)(row - y) * src_stride + (r.x - x);
+        uint32_t *out = s->pixels + (size_t)row * s->stride + r.x;
+        for (int32_t i = 0; i < r.width; i++) {
+            out[i] = in[i] | 0xff000000u;
+        }
+    }
+}
+
 static inline uint32_t lerp_channel(uint32_t a, uint32_t b, int32_t num, int32_t den)
 {
     return (uint32_t)((int32_t)a + ((int32_t)b - (int32_t)a) * num / den);

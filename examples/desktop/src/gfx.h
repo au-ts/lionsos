@@ -61,5 +61,12 @@ void gfx_fill_vgradient(gfx_surface_t *s, gfx_rect_t r, uint32_t top, uint32_t b
  */
 int32_t gfx_draw_text(gfx_surface_t *s, int32_t x, int32_t y, const char *text, uint32_t scale, uint32_t colour);
 
+/*
+ * Copy a `width` x `height` block of pixels with the given source stride (in
+ * pixels) to (x, y). Pixels are made opaque.
+ */
+void gfx_blit(gfx_surface_t *s, int32_t x, int32_t y, const uint32_t *src, int32_t width, int32_t height,
+              uint32_t src_stride);
+
 /* Width in pixels of `text` when drawn at `scale` */
 int32_t gfx_text_width(const char *text, uint32_t scale);

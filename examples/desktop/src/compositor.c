@@ -1,0 +1,944 @@
+/*
+ * Copyright 2026, LionsOS Contributors
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+/*
+ * The LionsOS compositor.
+ *
+ * The compositor is the only client of the GPU and input virtualisers.
+ * Applications are separate protection domains, each with a fixed slot (see
+ * gui_config.h and <lions/gui/protocol.h>): they draw into their own surface,
+ * which the compositor can only read, and receive input only through their
+ * own event queue.
+ *
+ * The compositor keeps a scene of wallpaper, taskbar, application windows in
+ * z-order and a software cursor, and software-renders it into its GPU data
+ * region, which is scanned out as a 2D resource. Every change marks the rows
+ * it touches as damaged; once all pending work has been handled only the
+ * damaged band is redrawn and sent to the device.
+ *
+ * Input routing: keys go to the focused (topmost) window. Pressing a button
+ * over a window's content focuses it and grabs the pointer for that window
+ * until the button is released. Pointer motion goes to the grabbing window,
+ * or to the focused window while the pointer is over its content. Title bars,
+ * close boxes and the taskbar are handled by the compositor itself.
+ *
+ * Layout of the GPU data region:
+ *   [0, FB_OFFSET)          display info written by the virtualiser
+ *   [FB_OFFSET, ...)        framebuffer, attached as the resource backing
+ */
+
+#include <stdint.h>
+#include <stddef.h>
+#include <microkit.h>
+#include <sddf/util/util.h>
+#include <sddf/util/printf.h>
+#include <sddf/gpu/queue.h>
+#include <sddf/gpu/events.h>
+#include <lions/input/input.h>
+#include <lions/gui/protocol.h>
+#include <gpu_config.h>
+#include <input_config.h>
+#include <gui_config.h>
+#include "gfx.h"
+
+#define LOG_COMPOSITOR(...) do{ sddf_dprintf("COMPOSITOR|INFO: "); sddf_dprintf(__VA_ARGS__); }while(0)
+#define LOG_COMPOSITOR_ERR(...) do{ sddf_dprintf("COMPOSITOR|ERROR: "); sddf_dprintf(__VA_ARGS__); }while(0)
+
+/* Fixed by meta.py */
+#define VIRT_CH 0
+#define INPUT_CH 2
+#define APP_CH(slot) (GUI_APP_CH_BASE + (slot))
+
+#define DISPLAY_INFO_OFFSET 0
+#define FB_OFFSET 0x1000
+#define FB_MAX_BYTES (GPU_DATA_REGION_SIZE_CLI0 - FB_OFFSET)
+
+#define SCANOUT_ID 0
+#define FB_RESOURCE_ID 1
+
+/* Limits on what an app may ask for */
+#define APP_MAX_DIMENSION 2048
+
+/* Theme */
+#define COLOUR_BG_TOP GFX_RGB(0x14, 0x2a, 0x4f)
+#define COLOUR_BG_BOTTOM GFX_RGB(0x2e, 0x7d, 0x8c)
+#define COLOUR_BG_LOGO GFX_RGB(0x9f, 0xc4, 0xd1)
+#define COLOUR_BG_HINT GFX_RGB(0x7f, 0xa8, 0xb8)
+#define COLOUR_TASKBAR GFX_RGB(0x1b, 0x1f, 0x27)
+#define COLOUR_TASKBAR_EDGE GFX_RGB(0x3a, 0x41, 0x4f)
+#define COLOUR_TAB_ACTIVE GFX_RGB(0x33, 0x3a, 0x48)
+#define COLOUR_BUTTON GFX_RGB(0xe0, 0x8a, 0x1e)
+#define COLOUR_TEXT_LIGHT GFX_RGB(0xf2, 0xf2, 0xf2)
+#define COLOUR_TEXT_TAB GFX_RGB(0xb8, 0xbe, 0xc9)
+#define COLOUR_TEXT_TAB_HIDDEN GFX_RGB(0x6b, 0x72, 0x80)
+#define COLOUR_TEXT_DARK GFX_RGB(0x22, 0x22, 0x22)
+#define COLOUR_WINDOW_BORDER GFX_RGB(0x0f, 0x14, 0x1c)
+#define COLOUR_TITLE_ACTIVE GFX_RGB(0x2f, 0x5d, 0xa8)
+#define COLOUR_TITLE_INACTIVE GFX_RGB(0x6b, 0x72, 0x80)
+#define COLOUR_SHADOW GFX_RGB(0x0a, 0x12, 0x20)
+#define COLOUR_CLOSE GFX_RGB(0xd9, 0x4c, 0x3d)
+#define COLOUR_CURSOR_EDGE GFX_RGB(0x00, 0x00, 0x00)
+#define COLOUR_CURSOR_FILL GFX_RGB(0xff, 0xff, 0xff)
+
+#define TASKBAR_HEIGHT 36
+#define TITLE_HEIGHT 24
+#define BORDER 1
+#define SHADOW_OFFSET 6
+#define TEXT_SCALE 2
+#define CHAR_HEIGHT (GFX_FONT_HEIGHT * TEXT_SCALE)
+#define CLOSE_SIZE 12
+
+gpu_events_t *gpu_events;
+gpu_req_queue_t *gpu_req_queue;
+gpu_resp_queue_t *gpu_resp_queue;
+uintptr_t gpu_data;
+uintptr_t input_queue;
+uintptr_t gui_surfaces;
+uintptr_t gui_states;
+uintptr_t gui_events;
+
+static gpu_queue_handle_t gpu_queue_handle;
+static input_queue_handle_t input_handle;
+static uint32_t next_req_id = 0;
+static uint32_t display_info_req_id = UINT32_MAX;
+static bool display_info_pending = false;
+static bool running = false;
+
+static gpu_rect_t scanout_rect;
+static gfx_surface_t screen;
+
+/* Rows [dirty_y0, dirty_y1) need to be redrawn and presented */
+static int32_t dirty_y0 = INT32_MAX;
+static int32_t dirty_y1 = 0;
+
+/* Application slots */
+typedef struct app {
+    /* Shared regions, see gui_config.h */
+    const volatile gui_state_t *state;
+    const uint32_t *pixels;
+    gui_event_queue_t *events;
+
+    /* Validated copies of what the app published */
+    int32_t width;
+    int32_t height;
+    char title[GUI_TITLE_MAX];
+    uint32_t seen_seq;
+
+    /* The app has published a valid surface and has a window */
+    bool mapped;
+    bool visible;
+    /* Top left of the window frame on screen */
+    int32_t x;
+    int32_t y;
+    gfx_rect_t tab;
+} app_t;
+
+static app_t apps[GUI_NUM_APPS];
+/* Slots from back to front */
+static int z_order[GUI_NUM_APPS];
+static int focused = -1;
+/* Apps that have been sent events since they were last notified */
+static uint32_t pending_notify;
+
+/* Pointer state */
+static int32_t pointer_x;
+static int32_t pointer_y;
+static int drag_slot = -1;
+static int32_t drag_dx, drag_dy;
+static int grab_slot = -1;
+
+/* Motion reported by the current input frame, applied at SYN_REPORT */
+static bool motion_pending;
+static int32_t next_pointer_x, next_pointer_y;
+
+/* Classic arrow cursor: 'X' is the outline, '.' the fill, hot spot top left */
+static const char *const cursor_image[] = {
+    "X           ", "XX          ", "X.X         ", "X..X        ", "X...X       ", "X....X      ",
+    "X.....X     ", "X......X    ", "X.......X   ", "X........X  ", "X.........X ", "X......XXXXX",
+    "X...X..X    ", "X..XX..X    ", "X.X  X..X   ", "XX   X..X   ", "X     X..X  ", "      X..X  ",
+    "       XX   ",
+};
+#define CURSOR_WIDTH 12
+#define CURSOR_HEIGHT ((int32_t)ARRAY_SIZE(cursor_image))
+
+/* GPU */
+
+static uint32_t new_req_id(void)
+{
+    return next_req_id++;
+}
+
+static void enqueue(gpu_req_t req)
+{
+    int err = gpu_enqueue_req(&gpu_queue_handle, req);
+    if (err) {
+        LOG_COMPOSITOR_ERR("GPU request queue full, dropping request with code %d\n", req.code);
+    }
+}
+
+static void request_display_info(void)
+{
+    display_info_req_id = new_req_id();
+    display_info_pending = true;
+    enqueue((gpu_req_t) {
+        .code = GPU_REQ_GET_DISPLAY_INFO,
+        .id = display_info_req_id,
+        .get_display_info = { .mem_offset = DISPLAY_INFO_OFFSET },
+    });
+    microkit_notify(VIRT_CH);
+}
+
+/*
+ * Send rows [y, y + height) of the framebuffer to the device and flush them to
+ * the scanout. We always transfer full-width bands so that the transferred
+ * bytes are contiguous in the backing memory: the virtualiser bounds-checks
+ * and cleans the cache for exactly width * height * bpp bytes starting at
+ * mem_offset, which is only correct for a contiguous region.
+ */
+static void present_rows(uint32_t y, uint32_t height)
+{
+    gpu_rect_t band = { .x = 0, .y = y, .width = screen.width, .height = height };
+
+    enqueue((gpu_req_t) {
+        .code = GPU_REQ_TRANSFER_TO_2D,
+        .id = new_req_id(),
+        .transfer_to_2d = {
+            .resource_id = FB_RESOURCE_ID,
+            .rect = band,
+            .mem_offset = (uint64_t)y * screen.stride * GPU_BPP_2D,
+        },
+    });
+    enqueue((gpu_req_t) {
+        .code = GPU_REQ_RESOURCE_FLUSH,
+        .id = new_req_id(),
+        .resource_flush = { .resource_id = FB_RESOURCE_ID, .rect = band },
+    });
+    microkit_notify(VIRT_CH);
+}
+
+/* Geometry */
+
+static gfx_rect_t frame_rect(int slot)
+{
+    app_t *a = &apps[slot];
+    return (gfx_rect_t) { a->x, a->y, a->width + 2 * BORDER, TITLE_HEIGHT + a->height + BORDER };
+}
+
+static gfx_rect_t content_rect(int slot)
+{
+    app_t *a = &apps[slot];
+    return (gfx_rect_t) { a->x + BORDER, a->y + TITLE_HEIGHT, a->width, a->height };
+}
+
+static gfx_rect_t close_button(gfx_rect_t frame)
+{
+    return (gfx_rect_t) { frame.x + frame.width - CLOSE_SIZE - 8, frame.y + (TITLE_HEIGHT - CLOSE_SIZE) / 2,
+                          CLOSE_SIZE, CLOSE_SIZE };
+}
+
+/* Damage tracking */
+
+static void damage_rows(int32_t y, int32_t height)
+{
+    if (height <= 0) {
+        return;
+    }
+    dirty_y0 = MIN(dirty_y0, y);
+    dirty_y1 = MAX(dirty_y1, y + height);
+}
+
+/* A window's frame including its drop shadow */
+static void damage_window(int slot)
+{
+    gfx_rect_t f = frame_rect(slot);
+    damage_rows(f.y, f.height + SHADOW_OFFSET);
+}
+
+static void damage_taskbar(void)
+{
+    damage_rows((int32_t)screen.height - TASKBAR_HEIGHT, TASKBAR_HEIGHT);
+}
+
+static void damage_cursor(void)
+{
+    damage_rows(pointer_y, CURSOR_HEIGHT);
+}
+
+/* Events to apps */
+
+static void send_event(int slot, gui_event_t ev)
+{
+    if (gui_event_enqueue(apps[slot].events, GUI_EVENT_QUEUE_CAPACITY(GUI_EVENTS_REGION_SIZE), ev) == 0) {
+        pending_notify |= BIT(slot);
+    }
+}
+
+static void send_pointer_event(int slot, uint16_t type, uint16_t code, int32_t value)
+{
+    gfx_rect_t c = content_rect(slot);
+    send_event(slot, (gui_event_t) {
+        .type = type, .code = code, .value = value, .x = pointer_x - c.x, .y = pointer_y - c.y
+    });
+}
+
+static void notify_apps(void)
+{
+    for (int slot = 0; slot < GUI_NUM_APPS; slot++) {
+        if (pending_notify & BIT(slot)) {
+            microkit_notify(APP_CH(slot));
+        }
+    }
+    pending_notify = 0;
+}
+
+/* Window management */
+
+static int topmost_visible(void)
+{
+    for (int i = GUI_NUM_APPS - 1; i >= 0; i--) {
+        if (apps[z_order[i]].mapped && apps[z_order[i]].visible) {
+            return z_order[i];
+        }
+    }
+    return -1;
+}
+
+/* Recompute the focused window and tell the apps involved */
+static void update_focus(void)
+{
+    int top = topmost_visible();
+    if (top == focused) {
+        return;
+    }
+
+    if (focused >= 0) {
+        send_event(focused, (gui_event_t) { .type = GUI_EV_FOCUS, .value = 0 });
+        if (apps[focused].visible) {
+            damage_window(focused);
+        }
+    }
+    if (top >= 0) {
+        send_event(top, (gui_event_t) { .type = GUI_EV_FOCUS, .value = 1 });
+        damage_window(top);
+    }
+    focused = top;
+    damage_taskbar();
+}
+
+static void raise_window(int slot)
+{
+    int pos = 0;
+    while (z_order[pos] != slot) {
+        pos++;
+    }
+    for (; pos < GUI_NUM_APPS - 1; pos++) {
+        z_order[pos] = z_order[pos + 1];
+    }
+    z_order[GUI_NUM_APPS - 1] = slot;
+    damage_window(slot);
+    update_focus();
+}
+
+static void show_window(int slot)
+{
+    apps[slot].visible = true;
+    raise_window(slot);
+}
+
+static void hide_window(int slot)
+{
+    damage_window(slot);
+    apps[slot].visible = false;
+    if (drag_slot == slot) {
+        drag_slot = -1;
+    }
+    if (grab_slot == slot) {
+        grab_slot = -1;
+    }
+    update_focus();
+}
+
+static void move_window(int slot, int32_t x, int32_t y)
+{
+    int32_t w = (int32_t)screen.width;
+    int32_t h = (int32_t)screen.height;
+    gfx_rect_t f = frame_rect(slot);
+
+    /* Keep enough of the title bar on screen to grab it again */
+    x = MAX(MIN(x, w - 40), 40 - f.width);
+    y = MAX(MIN(y, h - TASKBAR_HEIGHT - TITLE_HEIGHT), 0);
+    if (x == apps[slot].x && y == apps[slot].y) {
+        return;
+    }
+
+    damage_window(slot);
+    apps[slot].x = x;
+    apps[slot].y = y;
+    damage_window(slot);
+}
+
+/* Initial position of a newly mapped window, by slot */
+static void place_window(int slot)
+{
+    int32_t w = (int32_t)screen.width;
+    int32_t h = (int32_t)screen.height;
+    gfx_rect_t f = frame_rect(slot);
+
+    switch (slot) {
+    case 0:
+        apps[slot].x = 40;
+        apps[slot].y = 40;
+        break;
+    case 1:
+        apps[slot].x = w - f.width - 40;
+        apps[slot].y = 70;
+        break;
+    case 2:
+        apps[slot].x = 60;
+        /* Above the wallpaper logo */
+        apps[slot].y = h - TASKBAR_HEIGHT - f.height - 110;
+        break;
+    default:
+        apps[slot].x = 80 + 30 * slot;
+        apps[slot].y = 80 + 30 * slot;
+        break;
+    }
+    apps[slot].x = MAX(MIN(apps[slot].x, w - f.width), 0);
+    apps[slot].y = MAX(MIN(apps[slot].y, h - TASKBAR_HEIGHT - f.height), 0);
+}
+
+static void layout_taskbar(void)
+{
+    int32_t bar_y = (int32_t)screen.height - TASKBAR_HEIGHT;
+    int32_t tab_x = 6 + gfx_text_width("Lions", TEXT_SCALE) + 20 + 12;
+    for (int slot = 0; slot < GUI_NUM_APPS; slot++) {
+        if (!apps[slot].mapped) {
+            apps[slot].tab = (gfx_rect_t) { 0, 0, 0, 0 };
+            continue;
+        }
+        int32_t tab_w = gfx_text_width(apps[slot].title, TEXT_SCALE) + 16;
+        apps[slot].tab = (gfx_rect_t) { tab_x, bar_y + 5, tab_w, TASKBAR_HEIGHT - 10 };
+        tab_x += tab_w + 6;
+    }
+    damage_taskbar();
+}
+
+/*
+ * Pick up a commit from an app. Everything in its state page is untrusted and
+ * may change while we read it, so copy, validate, and fall back to redrawing
+ * the whole window when anything looks inconsistent.
+ */
+static void app_committed(int slot)
+{
+    app_t *a = &apps[slot];
+    uint32_t seq = __atomic_load_n(&a->state->seq, __ATOMIC_ACQUIRE);
+    gui_rect_t damage = a->state->damage;
+    uint32_t magic = a->state->magic;
+    int32_t width = (int32_t)a->state->width;
+    int32_t height = (int32_t)a->state->height;
+    char title[GUI_TITLE_MAX];
+    for (int i = 0; i < GUI_TITLE_MAX - 1; i++) {
+        char c = a->state->title[i];
+        title[i] = (c >= ' ' && c <= '~') || c == '\0' ? c : '?';
+    }
+    title[GUI_TITLE_MAX - 1] = '\0';
+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
+    bool consistent = __atomic_load_n(&a->state->seq, __ATOMIC_ACQUIRE) == seq && seq == a->seen_seq + 1;
+    a->seen_seq = seq;
+
+    if (magic != GUI_STATE_MAGIC || width <= 0 || height <= 0 || width > APP_MAX_DIMENSION
+        || height > APP_MAX_DIMENSION || (uint64_t)width * height * sizeof(uint32_t) > GUI_SURFACE_REGION_SIZE) {
+        if (a->mapped) {
+            LOG_COMPOSITOR_ERR("app %d published an invalid surface, hiding it\n", slot);
+            hide_window(slot);
+            a->mapped = false;
+            layout_taskbar();
+        }
+        return;
+    }
+
+    bool title_changed = false;
+    for (int i = 0; i < GUI_TITLE_MAX; i++) {
+        if (title[i] != a->title[i]) {
+            title_changed = true;
+        }
+        a->title[i] = title[i];
+        if (title[i] == '\0') {
+            break;
+        }
+    }
+
+    if (!a->mapped) {
+        a->width = width;
+        a->height = height;
+        a->mapped = true;
+        place_window(slot);
+        LOG_COMPOSITOR("app %d '%s' mapped a %dx%d window\n", slot, a->title, width, height);
+        layout_taskbar();
+        show_window(slot);
+        return;
+    }
+
+    if (width != a->width || height != a->height) {
+        damage_window(slot);
+        a->width = width;
+        a->height = height;
+        consistent = false;
+    }
+    if (title_changed) {
+        layout_taskbar();
+        consistent = false;
+    }
+    if (!a->visible) {
+        return;
+    }
+
+    if (!consistent) {
+        damage_window(slot);
+        return;
+    }
+
+    /* Clamp the damage to the content before trusting it */
+    int32_t y0 = MAX(damage.y, 0);
+    int32_t y1 = MIN((int64_t)damage.y + damage.height, height);
+    if (y1 > y0 && damage.width > 0) {
+        damage_rows(content_rect(slot).y + y0, y1 - y0);
+    }
+}
+
+/* Drawing */
+
+static void draw_window(int slot, bool is_focused)
+{
+    app_t *a = &apps[slot];
+    gfx_rect_t frame = frame_rect(slot);
+    gfx_rect_t content = content_rect(slot);
+
+    gfx_fill_rect(&screen, (gfx_rect_t) { frame.x + SHADOW_OFFSET, frame.y + SHADOW_OFFSET, frame.width, frame.height },
+                  COLOUR_SHADOW);
+    gfx_fill_rect(&screen, frame, COLOUR_WINDOW_BORDER);
+    gfx_fill_rect(&screen, (gfx_rect_t) { frame.x, frame.y, frame.width, TITLE_HEIGHT },
+                  is_focused ? COLOUR_TITLE_ACTIVE : COLOUR_TITLE_INACTIVE);
+
+    /* Keep the title clear of the close button */
+    gfx_rect_t title_clip = { frame.x, frame.y, frame.width - CLOSE_SIZE - 16, TITLE_HEIGHT };
+    gfx_rect_t saved = screen.clip;
+    gfx_rect_t clip = saved;
+    int32_t cx0 = MAX(clip.x, title_clip.x), cx1 = MIN(clip.x + clip.width, title_clip.x + title_clip.width);
+    int32_t cy0 = MAX(clip.y, title_clip.y), cy1 = MIN(clip.y + clip.height, title_clip.y + title_clip.height);
+    if (cx1 > cx0 && cy1 > cy0) {
+        screen.clip = (gfx_rect_t) { cx0, cy0, cx1 - cx0, cy1 - cy0 };
+        gfx_draw_text(&screen, frame.x + 8, frame.y + (TITLE_HEIGHT - CHAR_HEIGHT) / 2, a->title, TEXT_SCALE,
+                      COLOUR_TEXT_LIGHT);
+        screen.clip = saved;
+    }
+    gfx_fill_rect(&screen, close_button(frame), COLOUR_CLOSE);
+
+    gfx_blit(&screen, content.x, content.y, a->pixels, a->width, a->height, a->width);
+}
+
+static void draw_taskbar(void)
+{
+    int32_t w = (int32_t)screen.width;
+    int32_t bar_y = (int32_t)screen.height - TASKBAR_HEIGHT;
+    int32_t text_y = bar_y + (TASKBAR_HEIGHT - CHAR_HEIGHT) / 2;
+
+    gfx_fill_rect(&screen, (gfx_rect_t) { 0, bar_y, w, TASKBAR_HEIGHT }, COLOUR_TASKBAR);
+    gfx_fill_rect(&screen, (gfx_rect_t) { 0, bar_y, w, 1 }, COLOUR_TASKBAR_EDGE);
+
+    gfx_rect_t start = { 6, bar_y + 5, gfx_text_width("Lions", TEXT_SCALE) + 20, TASKBAR_HEIGHT - 10 };
+    gfx_fill_rect(&screen, start, COLOUR_BUTTON);
+    gfx_draw_text(&screen, start.x + 10, text_y, "Lions", TEXT_SCALE, COLOUR_TEXT_DARK);
+
+    for (int slot = 0; slot < GUI_NUM_APPS; slot++) {
+        app_t *a = &apps[slot];
+        if (!a->mapped) {
+            continue;
+        }
+        if (slot == focused) {
+            gfx_fill_rect(&screen, a->tab, COLOUR_TAB_ACTIVE);
+        }
+        gfx_draw_text(&screen, a->tab.x + 8, text_y, a->title, TEXT_SCALE,
+                      a->visible ? COLOUR_TEXT_TAB : COLOUR_TEXT_TAB_HIDDEN);
+    }
+
+    char label[40];
+    sddf_snprintf(label, sizeof(label), "compositor + %d app PDs", GUI_NUM_APPS);
+    gfx_draw_text(&screen, w - gfx_text_width(label, TEXT_SCALE) - 12, text_y, label, TEXT_SCALE,
+                  COLOUR_TEXT_TAB_HIDDEN);
+}
+
+static void draw_cursor(void)
+{
+    for (int32_t y = 0; y < CURSOR_HEIGHT; y++) {
+        for (int32_t x = 0; x < CURSOR_WIDTH; x++) {
+            char c = cursor_image[y][x];
+            if (c == 'X' || c == '.') {
+                gfx_fill_rect(&screen, (gfx_rect_t) { pointer_x + x, pointer_y + y, 1, 1 },
+                              c == 'X' ? COLOUR_CURSOR_EDGE : COLOUR_CURSOR_FILL);
+            }
+        }
+    }
+}
+
+/* Redraw the whole scene, limited to rows [y0, y1) */
+static void render(int32_t y0, int32_t y1)
+{
+    int32_t w = (int32_t)screen.width;
+    int32_t h = (int32_t)screen.height;
+    gfx_set_clip(&screen, (gfx_rect_t) { 0, y0, w, y1 - y0 });
+
+    gfx_fill_vgradient(&screen, (gfx_rect_t) { 0, 0, w, h - TASKBAR_HEIGHT }, COLOUR_BG_TOP, COLOUR_BG_BOTTOM);
+    gfx_draw_text(&screen, 24, h - TASKBAR_HEIGHT - 64, "LionsOS", 4, COLOUR_BG_LOGO);
+    gfx_draw_text(&screen, 24, h - TASKBAR_HEIGHT - 26, "Drag titles to move, red box closes, taskbar reopens",
+                  TEXT_SCALE, COLOUR_BG_HINT);
+
+    draw_taskbar();
+    for (int i = 0; i < GUI_NUM_APPS; i++) {
+        int slot = z_order[i];
+        if (apps[slot].mapped && apps[slot].visible) {
+            draw_window(slot, slot == focused);
+        }
+    }
+    draw_cursor();
+
+    gfx_reset_clip(&screen);
+}
+
+/* Redraw and present everything that has been damaged since the last flush */
+static void flush(void)
+{
+    notify_apps();
+
+    if (!running || dirty_y1 <= dirty_y0) {
+        return;
+    }
+
+    int32_t y0 = MAX(dirty_y0, 0);
+    int32_t y1 = MIN(dirty_y1, (int32_t)screen.height);
+    dirty_y0 = INT32_MAX;
+    dirty_y1 = 0;
+    if (y1 <= y0) {
+        return;
+    }
+
+    render(y0, y1);
+    present_rows(y0, y1 - y0);
+}
+
+/* Input */
+
+/* The window whose frame is under the pointer, or -1 */
+static int window_at_pointer(void)
+{
+    for (int i = GUI_NUM_APPS - 1; i >= 0; i--) {
+        int slot = z_order[i];
+        if (apps[slot].mapped && apps[slot].visible
+            && gfx_rect_contains(frame_rect(slot), pointer_x, pointer_y)) {
+            return slot;
+        }
+    }
+    return -1;
+}
+
+static void pointer_moved(int32_t x, int32_t y)
+{
+    x = MAX(MIN(x, (int32_t)screen.width - 1), 0);
+    y = MAX(MIN(y, (int32_t)screen.height - 1), 0);
+    if (x == pointer_x && y == pointer_y) {
+        return;
+    }
+
+    damage_cursor();
+    pointer_x = x;
+    pointer_y = y;
+    damage_cursor();
+
+    if (drag_slot >= 0) {
+        move_window(drag_slot, pointer_x - drag_dx, pointer_y - drag_dy);
+    } else if (grab_slot >= 0) {
+        send_pointer_event(grab_slot, GUI_EV_POINTER_MOTION, 0, 0);
+    } else if (focused >= 0 && window_at_pointer() == focused
+               && gfx_rect_contains(content_rect(focused), pointer_x, pointer_y)) {
+        send_pointer_event(focused, GUI_EV_POINTER_MOTION, 0, 0);
+    }
+}
+
+static void pointer_pressed(uint16_t button)
+{
+    for (int slot = 0; slot < GUI_NUM_APPS; slot++) {
+        if (apps[slot].mapped && gfx_rect_contains(apps[slot].tab, pointer_x, pointer_y)) {
+            if (button != INPUT_BTN_LEFT) {
+                return;
+            }
+            if (apps[slot].visible && focused == slot) {
+                hide_window(slot);
+            } else {
+                show_window(slot);
+            }
+            return;
+        }
+    }
+
+    int slot = window_at_pointer();
+    if (slot < 0) {
+        return;
+    }
+    gfx_rect_t frame = frame_rect(slot);
+
+    if (focused != slot) {
+        raise_window(slot);
+    }
+
+    if (gfx_rect_contains(content_rect(slot), pointer_x, pointer_y)) {
+        grab_slot = slot;
+        send_pointer_event(slot, GUI_EV_POINTER_BUTTON, button, INPUT_KEY_PRESSED);
+        return;
+    }
+
+    if (button != INPUT_BTN_LEFT) {
+        return;
+    }
+    if (gfx_rect_contains(close_button(frame), pointer_x, pointer_y)) {
+        hide_window(slot);
+    } else if (pointer_y < frame.y + TITLE_HEIGHT) {
+        drag_slot = slot;
+        drag_dx = pointer_x - frame.x;
+        drag_dy = pointer_y - frame.y;
+    }
+}
+
+static void pointer_released(uint16_t button)
+{
+    if (grab_slot >= 0) {
+        send_pointer_event(grab_slot, GUI_EV_POINTER_BUTTON, button, INPUT_KEY_RELEASED);
+        grab_slot = -1;
+    }
+    drag_slot = -1;
+}
+
+/*
+ * Axis events of one frame describe a single movement, so collect them and
+ * move the pointer once, at the end of the frame or before a button event.
+ */
+static void queue_motion(int32_t x, int32_t y)
+{
+    if (!motion_pending) {
+        next_pointer_x = pointer_x;
+        next_pointer_y = pointer_y;
+        motion_pending = true;
+    }
+    if (x != INT32_MIN) {
+        next_pointer_x = x;
+    }
+    if (y != INT32_MIN) {
+        next_pointer_y = y;
+    }
+}
+
+static void apply_motion(void)
+{
+    if (motion_pending) {
+        motion_pending = false;
+        pointer_moved(next_pointer_x, next_pointer_y);
+    }
+}
+
+static void handle_input_event(input_event_t *ev)
+{
+    int32_t base_x = motion_pending ? next_pointer_x : pointer_x;
+    int32_t base_y = motion_pending ? next_pointer_y : pointer_y;
+
+    switch (ev->type) {
+    case INPUT_EV_SYN:
+        if (ev->code == INPUT_SYN_REPORT) {
+            apply_motion();
+        }
+        break;
+    case INPUT_EV_ABS:
+        if (ev->code == INPUT_ABS_X) {
+            queue_motion(((int64_t)ev->value * (screen.width - 1)) / INPUT_ABS_MAX, INT32_MIN);
+        } else if (ev->code == INPUT_ABS_Y) {
+            queue_motion(INT32_MIN, ((int64_t)ev->value * (screen.height - 1)) / INPUT_ABS_MAX);
+        }
+        break;
+    case INPUT_EV_REL:
+        if (ev->code == INPUT_REL_X) {
+            queue_motion(base_x + ev->value, INT32_MIN);
+        } else if (ev->code == INPUT_REL_Y) {
+            queue_motion(INT32_MIN, base_y + ev->value);
+        }
+        break;
+    case INPUT_EV_KEY:
+        if (ev->code >= INPUT_BTN_LEFT && ev->code <= INPUT_BTN_MIDDLE) {
+            apply_motion();
+            if (ev->value == INPUT_KEY_PRESSED) {
+                pointer_pressed(ev->code);
+            } else if (ev->value == INPUT_KEY_RELEASED) {
+                pointer_released(ev->code);
+            }
+        } else if (ev->code == INPUT_BTN_TOUCH) {
+            /* Touch devices also report BTN_LEFT, so ignore the duplicate */
+        } else if (focused >= 0) {
+            send_event(focused, (gui_event_t) { .type = GUI_EV_KEY, .code = ev->code, .value = ev->value });
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+static void handle_input(void)
+{
+    input_event_t ev;
+    while (input_dequeue(&input_handle, &ev) == 0) {
+        if (running) {
+            handle_input_event(&ev);
+        }
+    }
+    /* A frame may continue in the next batch; show where the pointer is now */
+    apply_motion();
+    flush();
+}
+
+/* Setup */
+
+static bool setup_display(gpu_resp_get_display_info_t *info)
+{
+    if (info->num_scanouts == 0 || !info->scanouts[SCANOUT_ID].enabled) {
+        LOG_COMPOSITOR_ERR("scanout %d is not available\n", SCANOUT_ID);
+        return false;
+    }
+
+    scanout_rect = info->scanouts[SCANOUT_ID].rect;
+    uint64_t bytes = (uint64_t)scanout_rect.width * scanout_rect.height * GPU_BPP_2D;
+    if (bytes > FB_MAX_BYTES) {
+        LOG_COMPOSITOR_ERR("scanout %ux%u needs %lu bytes but only %lu are available, "
+                           "use a smaller mode or grow GPU_DATA_REGION_SIZE_CLI0\n",
+                           scanout_rect.width, scanout_rect.height, (unsigned long)bytes,
+                           (unsigned long)FB_MAX_BYTES);
+        return false;
+    }
+
+    screen = (gfx_surface_t) {
+        .pixels = (uint32_t *)(gpu_data + FB_OFFSET),
+        .width = scanout_rect.width,
+        .height = scanout_rect.height,
+        .stride = scanout_rect.width,
+    };
+    gfx_reset_clip(&screen);
+    LOG_COMPOSITOR("scanout %d is %ux%u\n", SCANOUT_ID, screen.width, screen.height);
+
+    pointer_x = screen.width / 2;
+    pointer_y = screen.height / 2;
+    running = true;
+
+    /* Pick up whatever the apps committed before the display was ready */
+    for (int slot = 0; slot < GUI_NUM_APPS; slot++) {
+        apps[slot].seen_seq = __atomic_load_n(&apps[slot].state->seq, __ATOMIC_ACQUIRE) - 1;
+        app_committed(slot);
+    }
+    layout_taskbar();
+
+    render(0, screen.height);
+    dirty_y0 = INT32_MAX;
+    dirty_y1 = 0;
+
+    gpu_rect_t full = { .x = 0, .y = 0, .width = screen.width, .height = screen.height };
+    enqueue((gpu_req_t) {
+        .code = GPU_REQ_RESOURCE_CREATE_2D,
+        .id = new_req_id(),
+        .resource_create_2d = {
+            .resource_id = FB_RESOURCE_ID,
+            .width = screen.width,
+            .height = screen.height,
+            .format = GPU_FORMAT_B8G8R8A8_UNORM,
+        },
+    });
+    enqueue((gpu_req_t) {
+        .code = GPU_REQ_RESOURCE_ATTACH_BACKING,
+        .id = new_req_id(),
+        .resource_attach_backing = {
+            .resource_id = FB_RESOURCE_ID,
+            .mem_offset = FB_OFFSET,
+            .mem_size = bytes,
+        },
+    });
+    enqueue((gpu_req_t) {
+        .code = GPU_REQ_SET_SCANOUT,
+        .id = new_req_id(),
+        .set_scanout = { .resource_id = FB_RESOURCE_ID, .scanout_id = SCANOUT_ID, .rect = full },
+    });
+    present_rows(0, screen.height);
+    notify_apps();
+
+    return true;
+}
+
+static void handle_gpu_responses(void)
+{
+    gpu_resp_t resp;
+    while (!gpu_dequeue_resp(&gpu_queue_handle, &resp)) {
+        bool is_display_info = resp.id == display_info_req_id;
+        if (is_display_info) {
+            display_info_pending = false;
+        }
+        if (resp.status != GPU_RESP_OK) {
+            LOG_COMPOSITOR_ERR("request %u failed with status %d\n", resp.id, resp.status);
+            continue;
+        }
+        if (!is_display_info) {
+            continue;
+        }
+
+        gpu_resp_get_display_info_t info;
+        memcpy(&info, (void *)(gpu_data + DISPLAY_INFO_OFFSET), sizeof(info));
+
+        if (!running) {
+            setup_display(&info);
+        } else if (info.scanouts[SCANOUT_ID].rect.width != scanout_rect.width
+                   || info.scanouts[SCANOUT_ID].rect.height != scanout_rect.height) {
+            /* TODO: recreate the resource at the new size */
+            LOG_COMPOSITOR("display is now %ux%u, resizing is not supported yet\n",
+                           info.scanouts[SCANOUT_ID].rect.width, info.scanouts[SCANOUT_ID].rect.height);
+        }
+    }
+}
+
+void init(void)
+{
+    LOG_COMPOSITOR("starting with %d app slots\n", GUI_NUM_APPS);
+    gpu_queue_init(&gpu_queue_handle, gpu_req_queue, gpu_resp_queue, GPU_QUEUE_CAPACITY_CLI0);
+    input_queue_init(&input_handle, (input_queue_t *)input_queue, INPUT_QUEUE_CAPACITY(INPUT_QUEUE_REGION_SIZE));
+
+    for (int slot = 0; slot < GUI_NUM_APPS; slot++) {
+        apps[slot].state = (const volatile gui_state_t *)(gui_states + slot * GUI_STATE_REGION_SIZE);
+        apps[slot].pixels = (const uint32_t *)(gui_surfaces + slot * GUI_SURFACE_REGION_SIZE);
+        apps[slot].events = (gui_event_queue_t *)(gui_events + slot * GUI_EVENTS_REGION_SIZE);
+        z_order[slot] = slot;
+    }
+
+    request_display_info();
+}
+
+void notified(microkit_channel ch)
+{
+    if (ch == VIRT_CH) {
+        handle_gpu_responses();
+        if (gpu_events_check_display_info(gpu_events) && !display_info_pending) {
+            gpu_events_clear_display_info(gpu_events);
+            request_display_info();
+        }
+    } else if (ch == INPUT_CH) {
+        handle_input();
+    } else if (ch >= APP_CH(0) && ch < APP_CH(GUI_NUM_APPS)) {
+        if (running) {
+            app_committed(ch - APP_CH(0));
+            flush();
+        }
+    } else {
+        LOG_COMPOSITOR_ERR("notification on unexpected channel %u\n", ch);
+    }
+}

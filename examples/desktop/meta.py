@@ -3,9 +3,9 @@
 #
 # Generates the system description for the desktop example.
 #
-#   desktop  <->  gpu_virt   <->  gpu_driver (virtIO GPU)
-#      |    <---  input_virt <---  input_keyboard, input_tablet (virtIO input)
-#      +------->  timer_driver
+#   notes, sketch, clock  <->  compositor  <->  gpu_virt   <->  gpu_driver (virtIO GPU)
+#       (app PDs)                          <---  input_virt <---  input_keyboard, input_tablet
+#   clock  -------------------------------->  timer_driver
 #
 # sdfgen 0.35 has no GPU or input device class, so those drivers, their
 # virtualisers and their shared regions are described by hand here. The GPU
@@ -34,6 +34,13 @@ GPU_DRIVER_DATA_REGION_SIZE = 0x1000
 GPU_CLIENT_DATA_REGION_SIZE = 0x400_000
 GPU_VIRTIO_METADATA_REGION_SIZE = 0x200_000
 GPU_VIRTIO_DATA_REGION_SIZE = 0x200_000
+
+# Must match include/gui_config.h. Apps are listed in slot order.
+GUI_APPS = ["notes", "sketch", "clock"]
+GUI_SURFACE_REGION_SIZE = 0x100_000
+GUI_STATE_REGION_SIZE = 0x1000
+GUI_EVENTS_REGION_SIZE = 0x1000
+GUI_APP_CH_BASE = 10
 
 # Must match include/input_config.h
 INPUT_QUEUE_REGION_SIZE = 0x1000
@@ -106,7 +113,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
     gpu_driver = ProtectionDomain("gpu_driver", "gpu_driver.elf", priority=254, stack_size=0x10000)
     gpu_virt = ProtectionDomain("gpu_virt", "gpu_virt.elf", priority=99, stack_size=0x10000)
-    desktop = ProtectionDomain("desktop", "desktop.elf", priority=1, stack_size=0x10000)
+    compositor = ProtectionDomain("compositor", "compositor.elf", priority=10, stack_size=0x10000)
 
     # Device and DMA regions of the driver. The DMA regions are physical so
     # that they are contiguous and their addresses can be handed to the device.
@@ -130,26 +137,26 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
                    ("gpu_driver_events", "gpu_driver_req_queue", "gpu_driver_resp_queue"))
     gpu_virt.add_map(Map(driver_data, 0x40_600_000, "rw", setvar_vaddr="gpu_driver_data"))
 
-    # Virtualiser <-> desktop. The data region holds the desktop's framebuffer
+    # Virtualiser <-> compositor. The data region holds the compositor's framebuffer
     # and the device reads it directly, so it is physical as well.
-    client_queues = add_gpu_queues(sdf, "gpu_desktop")
-    client_data = MemoryRegion(sdf, "gpu_desktop_data", GPU_CLIENT_DATA_REGION_SIZE, physical=True)
+    client_queues = add_gpu_queues(sdf, "gpu_compositor")
+    client_data = MemoryRegion(sdf, "gpu_compositor_data", GPU_CLIENT_DATA_REGION_SIZE, physical=True)
     sdf.add_mr(client_data)
     map_gpu_queues(gpu_virt, client_queues, 0x30_000_000,
                    ("gpu_client_events", "gpu_client_req_queue", "gpu_client_resp_queue"))
     gpu_virt.add_map(Map(client_data, 0x30_600_000, "rw", setvar_vaddr="gpu_client_data"))
-    map_gpu_queues(desktop, client_queues, 0x40_000_000, ("gpu_events", "gpu_req_queue", "gpu_resp_queue"))
-    desktop.add_map(Map(client_data, 0x40_800_000, "rw", setvar_vaddr="gpu_data"))
+    map_gpu_queues(compositor, client_queues, 0x40_000_000, ("gpu_events", "gpu_req_queue", "gpu_resp_queue"))
+    compositor.add_map(Map(client_data, 0x40_800_000, "rw", setvar_vaddr="gpu_data"))
 
     # Channel ids are fixed by the GPU components: the virtualiser talks to the
     # driver on 0 and to client i on 1 + i, the driver talks to it on 1, and
-    # the desktop uses 0 (VIRT_CH in src/desktop.c).
+    # the compositor uses 0 (VIRT_CH in src/compositor.c).
     sdf.add_channel(Channel(gpu_virt, gpu_driver, a_id=0, b_id=1))
-    sdf.add_channel(Channel(desktop, gpu_virt, a_id=0, b_id=1))
+    sdf.add_channel(Channel(compositor, gpu_virt, a_id=0, b_id=1))
 
     # Input: one driver PD per device, all feeding the input virtualiser,
-    # which delivers to the desktop. Channel ids must match
-    # components/input and INPUT_CH in src/desktop.c.
+    # which delivers to the compositor. Channel ids must match
+    # components/input and INPUT_CH in src/compositor.c.
     input_virt = ProtectionDomain("input_virt", "input_virt.elf", priority=200)
     input_drivers = []
     for i, name in enumerate(INPUT_DEVICES):
@@ -173,15 +180,42 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         with open(f"{output_dir}/input_driver_{name}.data", "wb") as f:
             f.write(struct.pack("<III", INPUT_DRIVER_CONFIG_MAGIC, regs_offset, INPUT_QUEUE_CAPACITY))
 
-    desktop_input_queue = MemoryRegion(sdf, "input_desktop_queue", INPUT_QUEUE_REGION_SIZE)
-    sdf.add_mr(desktop_input_queue)
-    input_virt.add_map(Map(desktop_input_queue, 0x5_000_000, "rw", setvar_vaddr="input_client_queues"))
-    desktop.add_map(Map(desktop_input_queue, 0x5_000_000, "rw", setvar_vaddr="input_queue"))
-    sdf.add_channel(Channel(input_virt, desktop, a_id=len(INPUT_DEVICES), b_id=2))
+    compositor_input_queue = MemoryRegion(sdf, "input_compositor_queue", INPUT_QUEUE_REGION_SIZE)
+    sdf.add_mr(compositor_input_queue)
+    input_virt.add_map(Map(compositor_input_queue, 0x5_000_000, "rw", setvar_vaddr="input_client_queues"))
+    compositor.add_map(Map(compositor_input_queue, 0x5_000_000, "rw", setvar_vaddr="input_queue"))
+    sdf.add_channel(Channel(input_virt, compositor, a_id=len(INPUT_DEVICES), b_id=2))
 
-    timer_system.add_client(desktop)
+    # Applications. Each gets a surface and a state page that the compositor
+    # maps read-only, and an event queue from the compositor.
+    apps = {}
+    for i, name in enumerate(GUI_APPS):
+        app = ProtectionDomain(name, f"{name}.elf", priority=5, stack_size=0x10000)
+        apps[name] = app
 
-    for pd in [timer_driver, gpu_driver, gpu_virt, input_virt, *input_drivers, desktop]:
+        surface = MemoryRegion(sdf, f"gui_{name}_surface", GUI_SURFACE_REGION_SIZE)
+        state = MemoryRegion(sdf, f"gui_{name}_state", GUI_STATE_REGION_SIZE)
+        events = MemoryRegion(sdf, f"gui_{name}_events", GUI_EVENTS_REGION_SIZE)
+        for mr in [surface, state, events]:
+            sdf.add_mr(mr)
+
+        app.add_map(Map(surface, 0x20_000_000, "rw", setvar_vaddr="gui_surface"))
+        app.add_map(Map(state, 0x21_000_000, "rw", setvar_vaddr="gui_state"))
+        app.add_map(Map(events, 0x22_000_000, "rw", setvar_vaddr="gui_events"))
+
+        first = i == 0
+        compositor.add_map(Map(surface, 0x60_000_000 + i * GUI_SURFACE_REGION_SIZE, "r",
+                               setvar_vaddr="gui_surfaces" if first else None))
+        compositor.add_map(Map(state, 0x61_000_000 + i * GUI_STATE_REGION_SIZE, "r",
+                               setvar_vaddr="gui_states" if first else None))
+        compositor.add_map(Map(events, 0x62_000_000 + i * GUI_EVENTS_REGION_SIZE, "rw",
+                               setvar_vaddr="gui_events" if first else None))
+
+        sdf.add_channel(Channel(compositor, app, a_id=GUI_APP_CH_BASE + i, b_id=0))
+
+    timer_system.add_client(apps["clock"])
+
+    for pd in [timer_driver, gpu_driver, gpu_virt, input_virt, *input_drivers, compositor, *apps.values()]:
         sdf.add_pd(pd)
 
     assert timer_system.connect()
@@ -190,7 +224,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     xml = add_region_paddr_setvars(sdf.render(), "gpu_driver", [
         ("virtio_metadata_paddr", "virtio_gpu_metadata"),
         ("virtio_data_paddr", "virtio_gpu_data"),
-        ("gpu_client_data_paddr", "gpu_desktop_data"),
+        ("gpu_client_data_paddr", "gpu_compositor_data"),
     ])
     for name in INPUT_DEVICES:
         xml = add_region_paddr_setvars(xml, f"input_{name}", [("virtio_dma_paddr", f"input_{name}_dma")])

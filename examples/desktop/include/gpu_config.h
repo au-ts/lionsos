@@ -5,7 +5,7 @@
 
 /*
  * Derived from sDDF examples/gpu/include/gpu_config.h. One GPU client (the
- * desktop) with a 4 MiB data region: 4 KiB for display info followed by the
+ * compositor) with a 4 MiB data region: 4 KiB for display info followed by the
  * framebuffer, which is enough for 1024x768 at 4 bytes per pixel.
  */
 
@@ -20,7 +20,7 @@
 
 #define GPU_NUM_CLIENTS                     1
 
-#define GPU_NAME_CLI0                       "desktop"
+#define GPU_NAME_CLI0                       "compositor"
 
 #define GPU_QUEUE_CAPACITY_CLI0             1024
 #define GPU_QUEUE_CAPACITY_DRV              1024
