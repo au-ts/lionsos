@@ -7,20 +7,22 @@
  * WebAssembly apps in seL4 sandboxes (build with SANDBOX=1).
  *
  * The host PD stays the broker: it reads apps and their .caps files from the
- * disk, applies the policy and shows the list. To run an app it builds a
- * fresh address space for the sandbox PD from an Untyped: the runner (WAMR
- * and runner.c), a stack, a heap, the module, and one page for each of the
- * grants and the mailbox. What the app is granted decides what else is
- * mapped:
+ * disk, applies the policy and shows the list. There are GUI_WASM_WINDOWS
+ * sandboxes, child PDs of the host, each paired with a window slot of the
+ * compositor, so as many apps can run at once, each in a window of its own.
+ * To run an app, the host picks a free sandbox and builds a fresh address
+ * space for it from that sandbox's Untyped: the runner (WAMR and runner.c),
+ * a stack, a heap, the module, and one page for each of the grants and the
+ * mailbox. What the app is granted decides what else is mapped:
  *
- *   window   the frames of the host's surface and state regions
+ *   window   the frames of the surface and state of the sandbox's window
  *   file X   a read-only copy of that file, and nothing else from the disk
  *
  * so an app without them has no way to reach them: the memory is not in its
  * address space. The console and the timer are services of the host, which
  * checks the grant on every request, as any seL4 server checks its
  * clients. Stopping the app revokes the Untyped, which takes everything
- * away at once, and deletes the host's copies of the surface frames.
+ * away at once, and deletes the host's copies of the window's frame caps.
  *
  * The sandbox's only static capabilities are its Microkit channel to the
  * host, over which the two signal each other, and its own TCB and
@@ -32,11 +34,14 @@
 #include <stdint.h>
 #include <lions/gui/protocol.h>
 
-/* The host's channel to the sandbox, and the sandbox's to the host */
-#define SANDBOX_HOST_CH 60
+/*
+ * The host's channel to sandbox k, whose id as a child of the host is k, and
+ * the sandbox's to the host. The host speaks to the compositor for the
+ * window of sandbox k on channel SANDBOX_WINDOW_CH_BASE + k. See meta.py.
+ */
+#define SANDBOX_HOST_CH_BASE 50
+#define SANDBOX_WINDOW_CH_BASE 40
 #define SANDBOX_RUNNER_CH 0
-/* The sandbox's id as a child of the host */
-#define SANDBOX_CHILD_ID 0
 
 /* The layout of the sandbox's address space. The runner is linked at SANDBOX_RUNNER_VADDR. */
 #define SANDBOX_RUNNER_VADDR 0x10000000UL

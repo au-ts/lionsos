@@ -30,11 +30,12 @@ WASM_APPS := hello life mandel reader probe
 # With SANDBOX=1, WebAssembly apps run in a sandbox PD that seL4 enforces
 # (see wasm_host/sandbox.h). This needs a Microkit SDK whose tool has the
 # patch in examples/dynamic_caps, for <cspace> elements stock Microkit lacks.
-# The disk then also has an app that never returns, which only a sandbox
-# can stop.
+# Each of SANDBOXES sandboxes runs one app in a window of its own. The disk
+# then also has an app that never returns, which only a sandbox can stop.
+SANDBOXES := 3
 ifeq ($(SANDBOX),1)
 IMAGES += sandbox.elf
-META_FLAGS := --sandbox
+META_FLAGS := --sandboxes $(SANDBOXES)
 WASM_APPS += spin
 endif
 WASM_FILES := $(addsuffix .wasm,$(WASM_APPS))
@@ -66,6 +67,10 @@ CFLAGS += \
 	-I$(SDDF)/include/microkit \
 	-I$(LIONSOS)/include \
 	-I$(DESKTOP_DIR)/include
+
+ifeq ($(SANDBOX),1)
+CFLAGS += -DGUI_WASM_WINDOWS=$(SANDBOXES)
+endif
 
 # Every PD uses the LionsOS C library (musl). Only the WebAssembly host calls
 # libc_init() to get stdio, files and a heap; the others just use its
@@ -149,7 +154,8 @@ wamr/libvmlib.a: $(WAMR_ROOT)/build-scripts/runtime_lib.cmake | $(LIONS_LIBC)/in
 
 ifeq ($(SANDBOX),1)
 WASM_HOST_DEFS := -DWASM_SANDBOX
-WASM_HOST_OBJS := wasm_host/wasm_host.o wasm_host/caps.o wasm_host/sandbox_host.o wasm_host/runner_blob.o
+WASM_HOST_OBJS := wasm_host/wasm_host.o wasm_host/caps.o wasm_host/sandbox_host.o wasm_host/sandbox_apps.o \
+	wasm_host/runner_blob.o
 else
 WASM_HOST_OBJS := wasm_host/wasm_host.o wasm_host/caps.o wamr/libvmlib.a
 endif

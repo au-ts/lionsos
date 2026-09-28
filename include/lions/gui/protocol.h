@@ -20,6 +20,9 @@
  * rectangle in its state page with gui_state_commit(), and notifies the
  * compositor. The compositor notifies the app when it has pushed events.
  *
+ * A slot has a window while its state page holds GUI_STATE_MAGIC and a valid
+ * size. An app withdraws its window by clearing the magic and committing.
+ *
  * The compositor treats everything in the app's regions as untrusted: sizes,
  * titles and damage rectangles are validated and clamped before use, and a
  * misbehaving app can only affect the pixels of its own window.
@@ -62,6 +65,7 @@ typedef struct gui_state {
 #define GUI_EV_POINTER_BUTTON 2 /* code: INPUT_BTN_*, value: INPUT_KEY_PRESSED/RELEASED, x, y */
 #define GUI_EV_KEY 3            /* code: INPUT_KEY_*, value: INPUT_KEY_PRESSED/RELEASED/REPEATED */
 #define GUI_EV_FOCUS 4          /* value: 1 if the window gained focus, 0 if it lost it */
+#define GUI_EV_CLOSE 5          /* the user closed the window; it can be reopened from the launcher */
 
 /* Pointer coordinates are relative to the top left of the content and may lie outside it during a grab */
 typedef struct gui_event {

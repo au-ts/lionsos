@@ -110,7 +110,9 @@ in `meta.py`).
 | `wasm_host/wasm_host.c` | The WebAssembly host app: file system, WAMR and the `lions` API |
 | `wasm_host/caps.[ch]` | Capabilities of WebAssembly apps: grant policy, checks, audit |
 | `wasm_host/sandbox.h` | With `SANDBOX=1`: the sandbox's layout and its protocol with the host |
-| `wasm_host/sandbox_host.[ch]` | With `SANDBOX=1`: building, feeding and revoking the sandbox |
+| `wasm_host/sandbox_host.[ch]` | With `SANDBOX=1`: building, feeding and revoking sandboxes |
+| `wasm_host/sandbox_apps.[ch]` | With `SANDBOX=1`: apps in sandboxes, their windows, input, ticks and requests |
+| `wasm_host/wasm_host.h` | What the host's two parts share |
 | `wasm_host/runner.[c,ld]` | With `SANDBOX=1`: WAMR and one app, loaded into the sandbox by the host |
 | `wasm_host/sandbox_stub.c` | With `SANDBOX=1`: the sandbox PD's own, empty program |
 | `wasm_apps/lions.h` | The API for WebAssembly apps |
@@ -158,12 +160,14 @@ Input routing:
 Slots are fixed when the system is built, as with any Microkit system. To add
 an app, write it against `apps/gui_app.h` (or `apps/mu_app.h` for microui),
 add it to `GUI_APPS` in `meta.py` and to `GUI_APPS` or `MU_APPS` in
-`desktop.mk`, and bump `GUI_NUM_APPS` in `include/gui_config.h`.
+`desktop.mk`, and bump `GUI_NUM_FIXED_APPS` in `include/gui_config.h`.
 
 ## The shell
 
 * **Windows** are open (on screen, with a taskbar tab), minimised (dimmed
-  tab) or closed (no tab). The red box closes a window. Clicking the tab of
+  tab) or closed (no tab). The red box closes a window, and the app gets a
+  `GUI_EV_CLOSE` event (a WebAssembly app in a sandbox is then stopped).
+  Clicking the tab of
   the focused window minimises it, and clicking any other tab restores and
   raises that window.
 * **The launcher** opens from the Lions button and lists every application,
@@ -328,33 +332,40 @@ mcopy -i build/apps_disk.img@@1M myapp.wasm myapp.caps ::/apps/
 
 ### Sandboxed apps (experimental)
 
-Built with `SANDBOX=1`, the host runs no WebAssembly itself. Each app runs in
-a separate `sandbox` PD, a child of the host, whose address space the host
-builds for that app from an Untyped and tears down when it stops. This
-needs a Microkit SDK whose tool has the patch in
-[`examples/dynamic_caps`](../dynamic_caps), for the `<cspace>` elements that
-give the host its Untyped and the frames of its window, so it is not built
-by CI:
+Built with `SANDBOX=1`, the host runs no WebAssembly itself. Apps run in
+sandbox PDs, children of the host, whose address spaces the host builds for
+each app from an Untyped and tears down when it stops. There are three
+sandboxes (`SANDBOXES` in `desktop.mk`), each paired with a window slot of
+its own, so three apps can run at once, each in its own window, and the
+host's window only lists apps. This needs a Microkit SDK whose tool has the
+patch in [`examples/dynamic_caps`](../dynamic_caps), for the `<cspace>`
+elements that give the host each sandbox's Untyped and the frames of its
+window, so it is not built by CI:
 
 ```sh
 make MICROKIT_SDK=/path/to/microkit-sdk-2.3.1-caps SANDBOX=1 BUILD_DIR=build-sandbox qemu
 ```
 
-To run an app, the host:
+Clicking an app in the list runs it in a free sandbox. The host opens the
+sandbox's window with the app's name, in a corner of the screen, and the
+list marks the app as running. To run it, the host:
 
-1. Retypes frames and page tables from its Untyped, and maps into the
-   sandbox a fresh copy of the runner (`wasm_host/runner.c`: WAMR, the
+1. Retypes frames and page tables from the sandbox's Untyped, and maps into
+   the sandbox a fresh copy of the runner (`wasm_host/runner.c`: WAMR, the
    `lions` API and musl, without libmicrokit), a stack, a heap and the
    app's module.
 2. Maps in what the `.caps` file grants, and nothing else. For `window`,
-   copies of the frame caps of its own surface and state regions; for each
-   `file`, a read-only copy of that file, read from the disk by the host.
+   copies of the frame caps of the surface and state of the sandbox's
+   window; for each `file`, a read-only copy of that file, read from the
+   disk by the host. An app without `window` still gets a window, drawn by
+   the host, saying so, which is where Esc stops it.
 3. Maps a read-only page describing the grants, and a mailbox page it
    shares with the runner, then restarts the sandbox's thread in the runner.
 
-The host forwards input and ticks through the mailbox and signals the
-sandbox over their channel; the runner calls the app and sends back
-requests. What a grant protects is enforced in one of two ways:
+The host speaks to the compositor for the window, forwards its input and
+the app's ticks through the mailbox, and signals the sandbox over their
+channel; the runner calls the app and sends back requests, such as telling
+the compositor that it has drawn. What a grant protects is enforced in one of two ways:
 
 * **By seL4**, for memory: an app without `window` has no surface mapped, and
   one granted a file has that file's bytes and no others. There is nothing
@@ -363,39 +374,52 @@ requests. What a grant protects is enforced in one of two ways:
   requests to the host, which checks the grant each time, as any seL4
   server checks its clients.
 
-Stopping an app, with Esc, when it exits or traps, or when seL4 reports a
-fault in the sandbox, suspends the sandbox, deletes the host's copies of the
-window's frame caps and revokes the Untyped, which deletes everything else
-made for the app at once. `cap_drop` unmaps what backs the capability. The
+Stopping an app, with Esc in its window or by closing the window, when it
+exits or traps, or when seL4 reports a fault in the sandbox, suspends the
+sandbox, deletes the host's copies of the window's frame caps and revokes
+the Untyped, which deletes everything else made for the app at once. The
+host then withdraws the window, and the sandbox is free for another app. `cap_drop` unmaps what backs the capability. The
 runner checks handles too, and reports refusals so that the audit log is
 the same as without `SANDBOX`.
 
-The sandbox runs below every other PD, so an app that never returns slows
-nothing else down and can still be stopped: the disk of a `SANDBOX=1` build
-has `spin`, which computes forever once clicked. Without `SANDBOX`, the same
-app would hang the host.
+Sandboxes run below every other PD, at the same priority as each other, so
+they share the processor round-robin. An app that never returns slows no
+PD down, other apps keep running, and it can still be stopped: the disk of
+a `SANDBOX=1` build has `spin`, which computes forever once clicked, and
+`life` keeps going next to it. Without `SANDBOX`, the same app would hang
+the host.
 
 ```
+AUDIT|hello: granted #0 window
+AUDIT|hello: granted #1 console
+COMPOSITOR|INFO: app 6 'hello' mapped a 480x360 window
+WASM HOST|INFO: running hello (1394 bytes) in sandbox 0
+WASM HOST|INFO: sandbox 0 for hello: 1047 objects made, 0 file(s) and the window mapped
+hello: hello, world
+AUDIT|life: granted #0 window
+AUDIT|life: granted #1 timer
+COMPOSITOR|INFO: app 7 'life' mapped a 480x360 window
+WASM HOST|INFO: running life (2160 bytes) in sandbox 1
+WASM HOST|INFO: sandbox 1 for life: 1047 objects made, 0 file(s) and the window mapped
+...
+AUDIT|hello: revoked all 2 capabilities
+COMPOSITOR|INFO: app 6 withdrew its window
+WASM HOST|INFO: hello: closed with Esc
 AUDIT|reader: granted #0 window
 AUDIT|reader: granted #1 file /apps/readme.txt
-WASM HOST|INFO: running reader (994 bytes) in a sandbox
-WASM HOST|INFO: sandbox for reader: 1051 objects made, 1 file(s) and the window mapped
-AUDIT|reader: revoked all 2 capabilities
-WASM HOST|INFO: reader: closed with Esc
-AUDIT|spin: granted #0 window
-WASM HOST|INFO: running spin (958 bytes) in a sandbox
-WASM HOST|INFO: sandbox for spin: 1049 objects made, 0 file(s) and the window mapped
-AUDIT|spin: revoked all 1 capabilities
-WASM HOST|INFO: spin: closed with Esc
+COMPOSITOR|INFO: app 6 'reader' mapped a 480x360 window
+WASM HOST|INFO: running reader (994 bytes) in sandbox 0
+WASM HOST|INFO: sandbox 0 for reader: 1049 objects made, 1 file(s) and the window mapped
 ```
 
 Limits:
 
-* One sandbox, so one app at a time, as without `SANDBOX`. More sandboxes
-  would be more child PDs, fixed in the system description, since Microkit
-  does not let a PD make threads or scheduling contexts.
-* The sandbox PD's own tiny program stays mapped next to the runner, and its
-  channel to the host is static. Neither gives it any authority.
+* The number of sandboxes, and so of apps running at once, is fixed when the
+  system is built: each is a child PD in the system description, since
+  Microkit does not let a PD make threads or scheduling contexts. Each costs
+  a 16 MiB Untyped and a window slot.
+* Each sandbox PD's own tiny program stays mapped next to the runner, and
+  its channel to the host is static. Neither gives it any authority.
 * Loading the runner afresh costs about a thousand kernel objects and a few
   hundred kilobytes of copying per start, which is not noticeable here.
 * `timer_now` reads the ARM counter, which seL4 lets user code read

@@ -121,17 +121,21 @@ def add_cspace(xml: str, pd_name: str, caps: List[str]) -> str:
     return xml
 
 
-# With --sandbox, WebAssembly apps run in a child PD of wasm_host that it
-# builds from an Untyped for each app (see wasm_host/sandbox.h). These must
-# match wasm_host/sandbox.h and the slots in wasm_host/sandbox_host.c.
-SANDBOX_HOST_CH = 60
+# With --sandboxes, WebAssembly apps run in child PDs of wasm_host that it
+# builds from an Untyped for each app, each with a window slot of its own
+# (see wasm_host/sandbox.h). These must match wasm_host/sandbox.h,
+# include/gui_config.h (GUI_WASM_WINDOWS, set by desktop.mk) and the slots
+# in wasm_host/sandbox_host.c.
+SANDBOX_WINDOW_CH_BASE = 40
+SANDBOX_HOST_CH_BASE = 50
 SANDBOX_RUNNER_CH = 0
-SANDBOX_CHILD_ID = 0
 SANDBOX_UNTYPED_SIZE = 0x1000000
-SANDBOX_BOOKKEEPING_SIZE = 0x40000
+SANDBOX_BOOKKEEPING_SIZE = 0x80000
+SANDBOX_SLOT_BASE = 8
+SANDBOX_SLOTS_EACH = 8
 
 
-def generate(sdf_path: str, output_dir: str, dtb: DeviceTree, sandbox: bool):
+def generate(sdf_path: str, output_dir: str, dtb: DeviceTree, sandboxes: int):
     timer_node = dtb.node(board.timer)
     assert timer_node is not None
     mmio = VIRTIO_MMIO[board.name]
@@ -255,6 +259,22 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree, sandbox: bool):
 
         sdf.add_channel(Channel(compositor, app, a_id=GUI_APP_CH_BASE + i, b_id=0))
 
+    # With --sandboxes, one more slot per sandbox. The host maps its state and
+    # events and speaks for it to the compositor; the sandbox gets the frames
+    # of its surface, and the host maps them too to clear them.
+    wasm_windows = []
+    for k in range(sandboxes):
+        i = len(GUI_APPS) + k
+        surface = MemoryRegion(sdf, f"gui_wasm{k}_surface", GUI_SURFACE_REGION_SIZE)
+        state = MemoryRegion(sdf, f"gui_wasm{k}_state", GUI_STATE_REGION_SIZE)
+        events = MemoryRegion(sdf, f"gui_wasm{k}_events", GUI_EVENTS_REGION_SIZE)
+        for mr in [surface, state, events]:
+            sdf.add_mr(mr)
+        compositor.add_map(Map(surface, 0x60_000_000 + i * GUI_SURFACE_REGION_SIZE, "r"))
+        compositor.add_map(Map(state, 0x61_000_000 + i * GUI_STATE_REGION_SIZE, "r"))
+        compositor.add_map(Map(events, 0x62_000_000 + i * GUI_EVENTS_REGION_SIZE, "rw"))
+        wasm_windows.append((i, surface, state, events))
+
     timer_system.add_client(apps["clock"])
 
     # The WebAssembly host reads apps from a FAT file system on the disk
@@ -264,11 +284,22 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree, sandbox: bool):
     fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
     fs = LionsOs.FileSystem.Fat(sdf, fatfs, wasm_host, blk=blk_system, partition=board.partition)
 
-    if sandbox:
-        # Below every other PD, so an app that never stops computing slows nothing else
-        sandbox_pd = ProtectionDomain("sandbox", "sandbox.elf", priority=1)
-        wasm_host.add_child_pd(sandbox_pd, child_id=SANDBOX_CHILD_ID)
-        sdf.add_channel(Channel(wasm_host, sandbox_pd, a_id=SANDBOX_HOST_CH, b_id=SANDBOX_RUNNER_CH))
+    for k, (i, surface, state, events) in enumerate(wasm_windows):
+        first = k == 0
+        wasm_host.add_map(Map(surface, 0x24_000_000 + k * GUI_SURFACE_REGION_SIZE, "rw",
+                              setvar_vaddr="wasm_surfaces" if first else None))
+        wasm_host.add_map(Map(state, 0x27_000_000 + k * GUI_STATE_REGION_SIZE, "rw",
+                              setvar_vaddr="wasm_states" if first else None))
+        wasm_host.add_map(Map(events, 0x28_000_000 + k * GUI_EVENTS_REGION_SIZE, "rw",
+                              setvar_vaddr="wasm_events" if first else None))
+        sdf.add_channel(Channel(compositor, wasm_host, a_id=GUI_APP_CH_BASE + i,
+                                b_id=SANDBOX_WINDOW_CH_BASE + k))
+
+        # Below every other PD, so an app that never stops computing slows
+        # nothing else; sandboxes share the processor round-robin.
+        sandbox_pd = ProtectionDomain(f"sandbox{k}", "sandbox.elf", priority=1)
+        wasm_host.add_child_pd(sandbox_pd, child_id=k)
+        sdf.add_channel(Channel(wasm_host, sandbox_pd, a_id=SANDBOX_HOST_CH_BASE + k, b_id=SANDBOX_RUNNER_CH))
 
     pds = [timer_driver, serial_driver, serial_virt_tx, blk_driver, blk_virt, fatfs, gpu_driver, gpu_virt,
            input_virt, *input_drivers, compositor, *apps.values()]
@@ -291,16 +322,21 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree, sandbox: bool):
     ])
     for name in INPUT_DEVICES:
         xml = add_region_paddr_setvars(xml, f"input_{name}", [("virtio_dma_paddr", f"input_{name}_dma")])
-    if sandbox:
-        xml = add_cspace(xml, "wasm_host", [
-            f'<cap_untyped slot="1" size="{SANDBOX_UNTYPED_SIZE:#x}" />',
-            '<cap_vspace slot="2" pd="sandbox" />',
-            '<cap_vspace slot="3" pd="wasm_host" />',
-            '<cap_cnode slot="4" pd="wasm_host" />',
-            '<cap_frames slot="5" mr="gui_wasm_host_surface" />',
-            '<cap_frames slot="6" mr="gui_wasm_host_state" />',
-            f'<cap_untyped slot="7" size="{SANDBOX_BOOKKEEPING_SIZE:#x}" />',
-        ])
+    if sandboxes:
+        caps = [
+            '<cap_vspace slot="1" pd="wasm_host" />',
+            '<cap_cnode slot="2" pd="wasm_host" />',
+            f'<cap_untyped slot="3" size="{SANDBOX_BOOKKEEPING_SIZE:#x}" />',
+        ]
+        for k in range(sandboxes):
+            base = SANDBOX_SLOT_BASE + k * SANDBOX_SLOTS_EACH
+            caps += [
+                f'<cap_untyped slot="{base}" size="{SANDBOX_UNTYPED_SIZE:#x}" />',
+                f'<cap_vspace slot="{base + 1}" pd="sandbox{k}" />',
+                f'<cap_frames slot="{base + 2}" mr="gui_wasm{k}_surface" />',
+                f'<cap_frames slot="{base + 3}" mr="gui_wasm{k}_state" />',
+            ]
+        xml = add_cspace(xml, "wasm_host", caps)
     with open(f"{output_dir}/{sdf_path}", "w+") as f:
         f.write(xml)
 
@@ -312,7 +348,8 @@ if __name__ == '__main__':
     parser.add_argument("--board", required=True, choices=[b for b in VIRTIO_MMIO])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
-    parser.add_argument("--sandbox", action="store_true")
+    parser.add_argument("--sandboxes", type=int, default=0,
+                        help="run WebAssembly apps in this many sandboxes, see wasm_host/sandbox.h")
 
     args = parser.parse_args()
 
@@ -324,4 +361,4 @@ if __name__ == '__main__':
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
 
-    generate(args.sdf, args.output, dtb, args.sandbox)
+    generate(args.sdf, args.output, dtb, args.sandboxes)

@@ -455,8 +455,9 @@ static void place_window(int slot)
         apps[slot].y = (h - TASKBAR_HEIGHT - f.height) / 2;
         break;
     default:
-        apps[slot].x = 80 + 30 * slot;
-        apps[slot].y = 80 + 30 * slot;
+        /* Windows of WebAssembly apps go in the corners, around the list at the centre */
+        apps[slot].x = (slot - GUI_FIRST_WASM_WINDOW) % 2 ? w - f.width - 20 : 20;
+        apps[slot].y = (slot - GUI_FIRST_WASM_WINDOW) / 2 % 2 ? h - TASKBAR_HEIGHT - f.height - 20 : 20;
         break;
     }
     apps[slot].x = MAX(MIN(apps[slot].x, w - f.width), 0);
@@ -505,7 +506,11 @@ static void app_committed(int slot)
     if (magic != GUI_STATE_MAGIC || width <= 0 || height <= 0 || width > APP_MAX_DIMENSION
         || height > APP_MAX_DIMENSION || (uint64_t)width * height * sizeof(uint32_t) > GUI_SURFACE_REGION_SIZE) {
         if (a->mapped) {
-            LOG_COMPOSITOR_ERR("app %d published an invalid surface, closing it\n", slot);
+            if (magic == 0) {
+                LOG_COMPOSITOR("app %d withdrew its window\n", slot);
+            } else {
+                LOG_COMPOSITOR_ERR("app %d published an invalid surface, closing it\n", slot);
+            }
             close_window(slot);
             a->mapped = false;
             layout_taskbar();
@@ -530,7 +535,7 @@ static void app_committed(int slot)
         a->mapped = true;
         place_window(slot);
         LOG_COMPOSITOR("app %d '%s' mapped a %dx%d window\n", slot, a->title, width, height);
-        if (GUI_START_OPEN & BIT(slot)) {
+        if ((GUI_START_OPEN | GUI_OPEN_ON_MAP) & BIT(slot)) {
             show_window(slot);
         }
         return;
@@ -623,7 +628,11 @@ static void draw_taskbar(void)
 
     /* Only when there is room next to the tabs */
     char label[40];
-    sddf_snprintf(label, sizeof(label), "compositor + %d app PDs", GUI_NUM_APPS);
+    if (GUI_WASM_WINDOWS) {
+        sddf_snprintf(label, sizeof(label), "%d app PDs + %d sandboxes", GUI_NUM_FIXED_APPS, GUI_WASM_WINDOWS);
+    } else {
+        sddf_snprintf(label, sizeof(label), "compositor + %d app PDs", GUI_NUM_FIXED_APPS);
+    }
     int32_t label_x = w - gfx_text_width(label, TEXT_SCALE) - 12;
     if (label_x > tabs_end + 24) {
         gfx_draw_text(&screen, label_x, text_y, label, TEXT_SCALE, COLOUR_TEXT_TAB_HIDDEN);
@@ -890,6 +899,7 @@ static void pointer_pressed(uint16_t button)
         return;
     }
     if (gfx_rect_contains(close_button(frame), pointer_x, pointer_y)) {
+        send_event(slot, (gui_event_t) { .type = GUI_EV_CLOSE });
         close_window(slot);
     } else if (pointer_y < frame.y + TITLE_HEIGHT) {
         drag_slot = slot;
