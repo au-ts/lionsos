@@ -11,11 +11,12 @@ through sDDF's GPU device class, input comes from native virtIO input
 drivers, and every application is its own protection domain:
 
 ```
-notes  ─┐                  ┌─>  gpu_virt    ->  gpu_driver      ->  virtio-gpu      (QEMU)
-sketch ─┼─ <-> compositor ─┤
-clock  ─┘                  └─<  input_virt  <-  input_keyboard  <-  virtio-keyboard (QEMU)
-  │                                         <-  input_tablet    <-  virtio-tablet   (QEMU)
-  └─────────>  timer_driver
+notes      ─┐                  ┌─>  gpu_virt    ->  gpu_driver      ->  virtio-gpu      (QEMU)
+sketch     ─┤                  │
+clock      ─┼─ <-> compositor ─┤
+calculator ─┤                  └─<  input_virt  <-  input_keyboard  <-  virtio-keyboard (QEMU)
+widgets    ─┘                                   <-  input_tablet    <-  virtio-tablet   (QEMU)
+clock  ─────────>  timer_driver
 ```
 
 ![The desktop running on QEMU](screenshot.png)
@@ -27,19 +28,26 @@ region, and scans that out as a 2D resource. Every change marks the rows it
 touches as damaged, and once all pending work has been handled only the
 damaged band is redrawn, transferred and flushed to the device.
 
-The **applications** (Notes, Sketch and Clock) are separate PDs. Each draws
+The compositor is also the **shell**: a taskbar, a launcher menu behind the
+Lions button, and Alt+Tab.
+
+The **applications** (Notes, Sketch, Clock, Calculator and Widgets) are
+separate PDs. Calculator and Widgets are built with the
+[microui](https://github.com/rxi/microui) immediate-mode widget toolkit. Each draws
 into its own surface and receives input only through its own event queue.
 The compositor maps each app's surface and state read-only, validates
 everything an app publishes, and draws the window decorations itself, so an
 app cannot draw outside its window, read the screen, or see input meant for
 another app.
 
-You can move the pointer, click a window to focus and raise it, drag windows
-by their title bar, close them with the red box, reopen or hide them from the
-taskbar, type into Notes (US keyboard layout) and draw in Sketch. Clock
-redraws itself every second from its own timer.
+You can launch apps from the Lions menu, click a window to focus and raise
+it, drag windows by their title bar, close them with the red box, minimise
+and restore them from the taskbar, cycle through them with Alt+Tab, type into
+Notes (US keyboard layout), draw in Sketch, calculate with the mouse or the
+keyboard, and play with the Widgets gallery. Clock redraws itself every second
+from its own timer.
 
-This is milestone 4 of the roadmap below.
+This is milestone 5 of the roadmap below.
 
 ## Building
 
@@ -78,6 +86,11 @@ in `meta.py`).
 | `apps/notes.c` | Text editing, keyboard focus |
 | `apps/sketch.c` | Drawing with the pointer, with pointer grabs |
 | `apps/clock.c` | A timer client that redraws on its own |
+| `apps/calculator.c` | microui: buttons and keyboard shortcuts |
+| `apps/widgets.c` | microui: a gallery of its controls |
+| `apps/mu_app.[ch]` | microui backend: rendering with `gfx`, input from the compositor |
+| `apps/mu_port.[ch]` | The few libc functions microui needs beyond sDDF's |
+| `apps/microui/` | microui 2.02, vendored unmodified (MIT) |
 | `meta.py` | System description: drivers, virtualisers, compositor, apps and timer |
 | `include/gui_config.h` | Application slots |
 | `include/gpu_config.h` | GPU class configuration, derived from sDDF's GPU example |
@@ -117,8 +130,51 @@ Input routing:
   motion event and not an X step followed by a Y step.
 
 Slots are fixed when the system is built, as with any Microkit system. To add
-an app, write it against `apps/gui_app.h`, add it to `GUI_APPS` in `meta.py`
-and `desktop.mk`, and bump `GUI_NUM_APPS` in `include/gui_config.h`.
+an app, write it against `apps/gui_app.h` (or `apps/mu_app.h` for microui),
+add it to `GUI_APPS` in `meta.py` and to `GUI_APPS` or `MU_APPS` in
+`desktop.mk`, and bump `GUI_NUM_APPS` in `include/gui_config.h`.
+
+## The shell
+
+* **Windows** are open (on screen, with a taskbar tab), minimised (dimmed
+  tab) or closed (no tab). The red box closes a window. Clicking the tab of
+  the focused window minimises it, and clicking any other tab restores and
+  raises that window.
+* **The launcher** opens from the Lions button and lists every application,
+  with a dot next to those whose window is open. Choosing one opens and
+  raises it. Escape or a click elsewhere dismisses it.
+* **Alt+Tab** brings the backmost open window to the front, so repeated
+  presses cycle through all of them. The compositor consumes Tab while Alt is
+  held, so apps never see it.
+* Which windows open at startup is set by `GUI_START_OPEN` in
+  `include/gui_config.h`. Calculator and Widgets start closed.
+
+A running app PD keeps running while its window is closed: "launching" shows
+its window again. Starting and stopping PDs is not possible in a static
+Microkit system; loading new programs at run time is milestone 6.
+
+## The microui toolkit
+
+[microui](https://github.com/rxi/microui) is an immediate-mode UI library of
+about 1500 lines of C with no dependencies beyond a few libc functions and no
+dynamic allocation, which suits a small PD well. An app describes its widgets
+in a frame function; `apps/mu_app.c` does the rest:
+
+* Each app's surface is a single microui window, pinned to the surface.
+* microui's draw commands (rectangles, text, icons, clip regions) are
+  rendered with the same `gfx` renderer and 8x8 font as the compositor, at
+  twice the size.
+* Compositor events become microui input. Before a button press the backend
+  runs a frame with the pointer at its new position, because microui decides
+  what is under the pointer from the previous frame.
+* A frame is only rendered and committed if its command list differs from the
+  previous frame's (compared by hash), so pointer movement that changes
+  nothing costs no redraw.
+
+microui is vendored unmodified. `sprintf`, `strtod`, `qsort`, `fprintf` and
+`abort`, which sDDF's minimal libc lacks, are provided by `apps/mu_port.c`
+and declared through a header that is force-included only when compiling
+`microui.c`.
 
 ## Input
 
@@ -184,6 +240,6 @@ Two further notes for the upstream GPU class:
 3. Input: a virtio-input driver and an input virtualiser in the sDDF style (done)
 4. A compositor with a fixed number of client slots, each with its own surface
    region, plus focus and damage tracking (done)
-5. A widget toolkit (e.g. LVGL or microui) and a shell (taskbar, launcher)
+5. A widget toolkit (microui) and a shell: taskbar, launcher, Alt+Tab (done)
 6. Dynamic applications as WebAssembly or MicroPython loaded from a file system
 7. Real hardware, which needs a native display driver

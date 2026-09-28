@@ -11,8 +11,9 @@ SDDF := $(LIONSOS)/dep/sddf
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 
 GUI_APPS := notes sketch clock
+MU_APPS := calculator widgets
 IMAGES := gpu_driver.elf gpu_virt.elf timer_driver.elf input_driver.elf input_virt.elf compositor.elf \
-	$(addsuffix .elf,$(GUI_APPS))
+	$(addsuffix .elf,$(GUI_APPS) $(MU_APPS))
 METAPROGRAM := $(DESKTOP_DIR)/meta.py
 SYSTEM_FILE := desktop.system
 IMAGE_FILE := desktop.img
@@ -70,6 +71,17 @@ compositor.elf: desktop/compositor.o $(GFX_OBJS)
 $(addsuffix .elf,$(GUI_APPS)): %.elf: apps/%.o $(APP_LIB_OBJS)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
+# Apps using the microui toolkit. microui.c is vendored unmodified, so the
+# few libc functions it needs beyond sDDF's are declared by a forced include.
+MU_LIB_OBJS := apps/mu_app.o apps/mu_port.o apps/microui.o $(APP_LIB_OBJS)
+
+apps/microui.o: $(DESKTOP_DIR)/apps/microui/microui.c | $(SDDF_LIBC_INCLUDE)
+	mkdir -p apps
+	$(CC) -c $(CFLAGS) -include $(DESKTOP_DIR)/apps/mu_port.h $< -o $@
+
+$(addsuffix .elf,$(MU_APPS)): %.elf: apps/%.o $(MU_LIB_OBJS)
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
 -include $(wildcard desktop/*.d apps/*.d)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
@@ -109,4 +121,4 @@ clean::
 	rm -rf desktop apps
 
 clobber:: clean
-	rm -f compositor.elf $(addsuffix .elf,$(GUI_APPS)) input_keyboard.elf input_tablet.elf $(IMAGE_FILE) $(REPORT_FILE) $(SYSTEM_FILE) *.data $(DTB)
+	rm -f compositor.elf $(addsuffix .elf,$(GUI_APPS) $(MU_APPS)) input_keyboard.elf input_tablet.elf $(IMAGE_FILE) $(REPORT_FILE) $(SYSTEM_FILE) *.data $(DTB)

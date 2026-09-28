@@ -18,6 +18,12 @@
  * it touches as damaged; once all pending work has been handled only the
  * damaged band is redrawn and sent to the device.
  *
+ * The compositor is also the shell: a taskbar with a tab per open window, a
+ * launcher menu behind the Lions button listing every application, and
+ * Alt+Tab to cycle through open windows. A window is either open (visible),
+ * minimised (open but hidden, dimmed tab) or closed (no tab, reopened from
+ * the launcher).
+ *
  * Input routing: keys go to the focused (topmost) window. Pressing a button
  * over a window's content focuses it and grabs the pointer for that window
  * until the button is released. Pointer motion goes to the grabbing window,
@@ -89,6 +95,11 @@
 #define TEXT_SCALE 2
 #define CHAR_HEIGHT (GFX_FONT_HEIGHT * TEXT_SCALE)
 #define CLOSE_SIZE 12
+#define MENU_ITEM_HEIGHT 28
+#define MENU_PADDING 6
+#define COLOUR_MENU GFX_RGB(0x24, 0x29, 0x33)
+#define COLOUR_MENU_HOVER GFX_RGB(0x2f, 0x5d, 0xa8)
+#define COLOUR_MENU_HEADER GFX_RGB(0x8a, 0x8f, 0x99)
 
 gpu_events_t *gpu_events;
 gpu_req_queue_t *gpu_req_queue;
@@ -128,6 +139,8 @@ typedef struct app {
 
     /* The app has published a valid surface and has a window */
     bool mapped;
+    /* Open windows have a taskbar tab; visible ones are also on screen */
+    bool open;
     bool visible;
     /* Top left of the window frame on screen */
     int32_t x;
@@ -148,6 +161,11 @@ static int32_t pointer_y;
 static int drag_slot = -1;
 static int32_t drag_dx, drag_dy;
 static int grab_slot = -1;
+static bool alt_left, alt_right;
+
+/* Launcher menu */
+static bool menu_open;
+static int menu_hover = -1;
 
 /* Motion reported by the current input frame, applied at SYN_REPORT */
 static bool motion_pending;
@@ -341,15 +359,25 @@ static void raise_window(int slot)
     update_focus();
 }
 
+static void layout_taskbar(void);
+
 static void show_window(int slot)
 {
+    bool was_open = apps[slot].open;
+    apps[slot].open = true;
     apps[slot].visible = true;
     raise_window(slot);
+    if (!was_open) {
+        layout_taskbar();
+    }
 }
 
-static void hide_window(int slot)
+/* Take a window off screen, keeping its tab if `keep_open` */
+static void withdraw_window(int slot, bool keep_open)
 {
-    damage_window(slot);
+    if (apps[slot].visible) {
+        damage_window(slot);
+    }
     apps[slot].visible = false;
     if (drag_slot == slot) {
         drag_slot = -1;
@@ -357,7 +385,21 @@ static void hide_window(int slot)
     if (grab_slot == slot) {
         grab_slot = -1;
     }
+    if (apps[slot].open && !keep_open) {
+        apps[slot].open = false;
+        layout_taskbar();
+    }
     update_focus();
+}
+
+static void minimise_window(int slot)
+{
+    withdraw_window(slot, true);
+}
+
+static void close_window(int slot)
+{
+    withdraw_window(slot, false);
 }
 
 static void move_window(int slot, int32_t x, int32_t y)
@@ -400,6 +442,14 @@ static void place_window(int slot)
         /* Above the wallpaper logo */
         apps[slot].y = h - TASKBAR_HEIGHT - f.height - 110;
         break;
+    case 3:
+        apps[slot].x = (w - f.width) / 2 + 60;
+        apps[slot].y = 50;
+        break;
+    case 4:
+        apps[slot].x = (w - f.width) / 2 - 60;
+        apps[slot].y = 90;
+        break;
     default:
         apps[slot].x = 80 + 30 * slot;
         apps[slot].y = 80 + 30 * slot;
@@ -414,7 +464,7 @@ static void layout_taskbar(void)
     int32_t bar_y = (int32_t)screen.height - TASKBAR_HEIGHT;
     int32_t tab_x = 6 + gfx_text_width("Lions", TEXT_SCALE) + 20 + 12;
     for (int slot = 0; slot < GUI_NUM_APPS; slot++) {
-        if (!apps[slot].mapped) {
+        if (!apps[slot].mapped || !apps[slot].open) {
             apps[slot].tab = (gfx_rect_t) { 0, 0, 0, 0 };
             continue;
         }
@@ -451,8 +501,8 @@ static void app_committed(int slot)
     if (magic != GUI_STATE_MAGIC || width <= 0 || height <= 0 || width > APP_MAX_DIMENSION
         || height > APP_MAX_DIMENSION || (uint64_t)width * height * sizeof(uint32_t) > GUI_SURFACE_REGION_SIZE) {
         if (a->mapped) {
-            LOG_COMPOSITOR_ERR("app %d published an invalid surface, hiding it\n", slot);
-            hide_window(slot);
+            LOG_COMPOSITOR_ERR("app %d published an invalid surface, closing it\n", slot);
+            close_window(slot);
             a->mapped = false;
             layout_taskbar();
         }
@@ -476,8 +526,9 @@ static void app_committed(int slot)
         a->mapped = true;
         place_window(slot);
         LOG_COMPOSITOR("app %d '%s' mapped a %dx%d window\n", slot, a->title, width, height);
-        layout_taskbar();
-        show_window(slot);
+        if (GUI_START_OPEN & BIT(slot)) {
+            show_window(slot);
+        }
         return;
     }
 
@@ -549,14 +600,16 @@ static void draw_taskbar(void)
     gfx_fill_rect(&screen, (gfx_rect_t) { 0, bar_y, w, 1 }, COLOUR_TASKBAR_EDGE);
 
     gfx_rect_t start = { 6, bar_y + 5, gfx_text_width("Lions", TEXT_SCALE) + 20, TASKBAR_HEIGHT - 10 };
-    gfx_fill_rect(&screen, start, COLOUR_BUTTON);
+    gfx_fill_rect(&screen, start, menu_open ? COLOUR_TEXT_LIGHT : COLOUR_BUTTON);
     gfx_draw_text(&screen, start.x + 10, text_y, "Lions", TEXT_SCALE, COLOUR_TEXT_DARK);
 
+    int32_t tabs_end = start.x + start.width;
     for (int slot = 0; slot < GUI_NUM_APPS; slot++) {
         app_t *a = &apps[slot];
-        if (!a->mapped) {
+        if (!a->mapped || !a->open) {
             continue;
         }
+        tabs_end = a->tab.x + a->tab.width;
         if (slot == focused) {
             gfx_fill_rect(&screen, a->tab, COLOUR_TAB_ACTIVE);
         }
@@ -564,10 +617,13 @@ static void draw_taskbar(void)
                       a->visible ? COLOUR_TEXT_TAB : COLOUR_TEXT_TAB_HIDDEN);
     }
 
+    /* Only when there is room next to the tabs */
     char label[40];
     sddf_snprintf(label, sizeof(label), "compositor + %d app PDs", GUI_NUM_APPS);
-    gfx_draw_text(&screen, w - gfx_text_width(label, TEXT_SCALE) - 12, text_y, label, TEXT_SCALE,
-                  COLOUR_TEXT_TAB_HIDDEN);
+    int32_t label_x = w - gfx_text_width(label, TEXT_SCALE) - 12;
+    if (label_x > tabs_end + 24) {
+        gfx_draw_text(&screen, label_x, text_y, label, TEXT_SCALE, COLOUR_TEXT_TAB_HIDDEN);
+    }
 }
 
 static void draw_cursor(void)
@@ -583,6 +639,103 @@ static void draw_cursor(void)
     }
 }
 
+/* Launcher menu: one item per mapped app, in slot order, above the Lions button */
+
+static gfx_rect_t lions_button(void)
+{
+    return (gfx_rect_t) { 6, (int32_t)screen.height - TASKBAR_HEIGHT + 5, gfx_text_width("Lions", TEXT_SCALE) + 20,
+                          TASKBAR_HEIGHT - 10 };
+}
+
+static int menu_items(int *slots)
+{
+    int n = 0;
+    for (int slot = 0; slot < GUI_NUM_APPS; slot++) {
+        if (apps[slot].mapped) {
+            slots[n++] = slot;
+        }
+    }
+    return n;
+}
+
+static gfx_rect_t menu_rect(void)
+{
+    int slots[GUI_NUM_APPS];
+    int n = menu_items(slots);
+    int32_t w = gfx_text_width("Applications", TEXT_SCALE);
+    for (int i = 0; i < n; i++) {
+        w = MAX(w, gfx_text_width(apps[slots[i]].title, TEXT_SCALE));
+    }
+    w += 2 * MENU_PADDING + 24;
+    int32_t h = (n + 1) * MENU_ITEM_HEIGHT + 2 * MENU_PADDING;
+    return (gfx_rect_t) { 6, (int32_t)screen.height - TASKBAR_HEIGHT - h - 4, w, h };
+}
+
+static gfx_rect_t menu_item_rect(int index)
+{
+    gfx_rect_t m = menu_rect();
+    return (gfx_rect_t) { m.x + MENU_PADDING, m.y + MENU_PADDING + (index + 1) * MENU_ITEM_HEIGHT,
+                          m.width - 2 * MENU_PADDING, MENU_ITEM_HEIGHT };
+}
+
+static void damage_menu(void)
+{
+    gfx_rect_t m = menu_rect();
+    damage_rows(m.y, m.height + SHADOW_OFFSET);
+}
+
+static void set_menu_open(bool open)
+{
+    if (open == menu_open) {
+        return;
+    }
+    damage_menu();
+    damage_taskbar();
+    menu_open = open;
+    menu_hover = -1;
+}
+
+static int menu_item_at_pointer(void)
+{
+    int slots[GUI_NUM_APPS];
+    int n = menu_items(slots);
+    for (int i = 0; i < n; i++) {
+        if (gfx_rect_contains(menu_item_rect(i), pointer_x, pointer_y)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void draw_menu(void)
+{
+    int slots[GUI_NUM_APPS];
+    int n = menu_items(slots);
+    gfx_rect_t m = menu_rect();
+
+    gfx_fill_rect(&screen, (gfx_rect_t) { m.x + SHADOW_OFFSET, m.y + SHADOW_OFFSET, m.width, m.height },
+                  COLOUR_SHADOW);
+    gfx_fill_rect(&screen, m, COLOUR_MENU);
+    gfx_draw_rect(&screen, m, 1, COLOUR_WINDOW_BORDER);
+    gfx_draw_text(&screen, m.x + MENU_PADDING + 8, m.y + MENU_PADDING + (MENU_ITEM_HEIGHT - CHAR_HEIGHT) / 2,
+                  "Applications", TEXT_SCALE, COLOUR_MENU_HEADER);
+
+    for (int i = 0; i < n; i++) {
+        app_t *a = &apps[slots[i]];
+        gfx_rect_t item = menu_item_rect(i);
+        if (i == menu_hover) {
+            gfx_fill_rect(&screen, item, COLOUR_MENU_HOVER);
+        }
+        /* A dot marks apps whose window is open */
+        if (a->open) {
+            gfx_fill_rect(&screen, (gfx_rect_t) { item.x + 8, item.y + MENU_ITEM_HEIGHT / 2 - 2, 4, 4 },
+                          COLOUR_TEXT_LIGHT);
+        }
+        gfx_draw_text(&screen, item.x + 20, item.y + (MENU_ITEM_HEIGHT - CHAR_HEIGHT) / 2, a->title, TEXT_SCALE,
+                      COLOUR_TEXT_LIGHT);
+    }
+}
+
 /* Redraw the whole scene, limited to rows [y0, y1) */
 static void render(int32_t y0, int32_t y1)
 {
@@ -592,7 +745,7 @@ static void render(int32_t y0, int32_t y1)
 
     gfx_fill_vgradient(&screen, (gfx_rect_t) { 0, 0, w, h - TASKBAR_HEIGHT }, COLOUR_BG_TOP, COLOUR_BG_BOTTOM);
     gfx_draw_text(&screen, 24, h - TASKBAR_HEIGHT - 64, "LionsOS", 4, COLOUR_BG_LOGO);
-    gfx_draw_text(&screen, 24, h - TASKBAR_HEIGHT - 26, "Drag titles to move, red box closes, taskbar reopens",
+    gfx_draw_text(&screen, 24, h - TASKBAR_HEIGHT - 26, "Lions opens apps, Alt+Tab switches windows",
                   TEXT_SCALE, COLOUR_BG_HINT);
 
     draw_taskbar();
@@ -601,6 +754,9 @@ static void render(int32_t y0, int32_t y1)
         if (apps[slot].mapped && apps[slot].visible) {
             draw_window(slot, slot == focused);
         }
+    }
+    if (menu_open) {
+        draw_menu();
     }
     draw_cursor();
 
@@ -656,6 +812,15 @@ static void pointer_moved(int32_t x, int32_t y)
     pointer_y = y;
     damage_cursor();
 
+    if (menu_open) {
+        int hover = menu_item_at_pointer();
+        if (hover != menu_hover) {
+            menu_hover = hover;
+            damage_menu();
+        }
+        return;
+    }
+
     if (drag_slot >= 0) {
         move_window(drag_slot, pointer_x - drag_dx, pointer_y - drag_dy);
     } else if (grab_slot >= 0) {
@@ -668,13 +833,32 @@ static void pointer_moved(int32_t x, int32_t y)
 
 static void pointer_pressed(uint16_t button)
 {
+    if (gfx_rect_contains(lions_button(), pointer_x, pointer_y)) {
+        if (button == INPUT_BTN_LEFT) {
+            set_menu_open(!menu_open);
+        }
+        return;
+    }
+
+    /* While the menu is open, a click either launches an app or dismisses it */
+    if (menu_open) {
+        int item = menu_item_at_pointer();
+        set_menu_open(false);
+        if (item >= 0 && button == INPUT_BTN_LEFT) {
+            int slots[GUI_NUM_APPS];
+            menu_items(slots);
+            show_window(slots[item]);
+        }
+        return;
+    }
+
     for (int slot = 0; slot < GUI_NUM_APPS; slot++) {
-        if (apps[slot].mapped && gfx_rect_contains(apps[slot].tab, pointer_x, pointer_y)) {
+        if (apps[slot].open && gfx_rect_contains(apps[slot].tab, pointer_x, pointer_y)) {
             if (button != INPUT_BTN_LEFT) {
                 return;
             }
             if (apps[slot].visible && focused == slot) {
-                hide_window(slot);
+                minimise_window(slot);
             } else {
                 show_window(slot);
             }
@@ -702,7 +886,7 @@ static void pointer_pressed(uint16_t button)
         return;
     }
     if (gfx_rect_contains(close_button(frame), pointer_x, pointer_y)) {
-        hide_window(slot);
+        close_window(slot);
     } else if (pointer_y < frame.y + TITLE_HEIGHT) {
         drag_slot = slot;
         drag_dx = pointer_x - frame.x;
@@ -746,6 +930,51 @@ static void apply_motion(void)
     }
 }
 
+/* Bring the backmost open window to the front, so repeated use cycles through all of them */
+static void cycle_windows(void)
+{
+    for (int i = 0; i < GUI_NUM_APPS; i++) {
+        int slot = z_order[i];
+        if (apps[slot].mapped && apps[slot].open && slot != focused) {
+            show_window(slot);
+            return;
+        }
+    }
+}
+
+/* Keyboard shortcuts of the shell. Returns true if the compositor consumed the key. */
+static bool handle_shortcut(input_event_t *ev)
+{
+    bool down = ev->value != INPUT_KEY_RELEASED;
+    switch (ev->code) {
+    case INPUT_KEY_LEFTALT:
+        alt_left = down;
+        return false;
+    case INPUT_KEY_RIGHTALT:
+        alt_right = down;
+        return false;
+    case INPUT_KEY_TAB:
+        if (!alt_left && !alt_right) {
+            return false;
+        }
+        if (down) {
+            set_menu_open(false);
+            cycle_windows();
+        }
+        return true;
+    case INPUT_KEY_ESC:
+        if (!menu_open) {
+            return false;
+        }
+        if (down) {
+            set_menu_open(false);
+        }
+        return true;
+    default:
+        return false;
+    }
+}
+
 static void handle_input_event(input_event_t *ev)
 {
     int32_t base_x = motion_pending ? next_pointer_x : pointer_x;
@@ -781,6 +1010,8 @@ static void handle_input_event(input_event_t *ev)
             }
         } else if (ev->code == INPUT_BTN_TOUCH) {
             /* Touch devices also report BTN_LEFT, so ignore the duplicate */
+        } else if (handle_shortcut(ev)) {
+            /* Consumed by the shell */
         } else if (focused >= 0) {
             send_event(focused, (gui_event_t) { .type = GUI_EV_KEY, .code = ev->code, .value = ev->value });
         }

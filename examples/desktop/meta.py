@@ -3,8 +3,8 @@
 #
 # Generates the system description for the desktop example.
 #
-#   notes, sketch, clock  <->  compositor  <->  gpu_virt   <->  gpu_driver (virtIO GPU)
-#       (app PDs)                          <---  input_virt <---  input_keyboard, input_tablet
+#   notes, sketch, clock,  <->  compositor  <->  gpu_virt   <->  gpu_driver (virtIO GPU)
+#   calculator, widgets              <---  input_virt <---  input_keyboard, input_tablet
 #   clock  -------------------------------->  timer_driver
 #
 # sdfgen 0.35 has no GPU or input device class, so those drivers, their
@@ -36,7 +36,7 @@ GPU_VIRTIO_METADATA_REGION_SIZE = 0x200_000
 GPU_VIRTIO_DATA_REGION_SIZE = 0x200_000
 
 # Must match include/gui_config.h. Apps are listed in slot order.
-GUI_APPS = ["notes", "sketch", "clock"]
+GUI_APPS = ["notes", "sketch", "clock", "calculator", "widgets"]
 GUI_SURFACE_REGION_SIZE = 0x100_000
 GUI_STATE_REGION_SIZE = 0x1000
 GUI_EVENTS_REGION_SIZE = 0x1000
