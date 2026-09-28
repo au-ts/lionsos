@@ -9,9 +9,9 @@ source /mnt/lionsOS/examples/firewall/docker/scripts/firewall_configuration.sh
 # firewall is running and is configured per the `firewall_configuration.sh`
 # script.
 
-# The tests expect interface 0 and 1 to exist, and test the flow of traffic
-# between these two interfaces. Additionally, the tests expect that allow rules
-# exist for traffic on `UDP_PORT` and `TCP_PORT` for interfaces 0 and 1
+# The tests expect at least two interfaces to exist, and test the flow of
+# traffic between each pair of interfaces. Additionally, the tests expect that
+# allow rules exist for traffic on `UDP_PORT` and `TCP_PORT` on each interface.
 #
 # The shUnit2 framework is used for setup, teardown and temporary file handling.
 # For further information on shUnit2 and its execution behaviour, please refer
