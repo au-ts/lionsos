@@ -12,7 +12,7 @@
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
 #include "mu_app.h"
-#include "mu_port.h"
+#include <stdlib.h>
 
 #define WIDTH 320
 #define HEIGHT 336

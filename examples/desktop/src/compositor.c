@@ -450,6 +450,10 @@ static void place_window(int slot)
         apps[slot].x = (w - f.width) / 2 - 60;
         apps[slot].y = 90;
         break;
+    case 5:
+        apps[slot].x = (w - f.width) / 2;
+        apps[slot].y = (h - TASKBAR_HEIGHT - f.height) / 2;
+        break;
     default:
         apps[slot].x = 80 + 30 * slot;
         apps[slot].y = 80 + 30 * slot;

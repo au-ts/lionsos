@@ -4,6 +4,7 @@
  */
 
 #include <stdint.h>
+#include <errno.h>
 #include <string.h>
 #include <microkit.h>
 #include <sddf/util/util.h>
@@ -17,6 +18,29 @@ static mu_app_frame_fn frame_fn;
 static mu_app_char_fn char_fn;
 static uint32_t width, height;
 static uint64_t last_hash;
+
+/*
+ * microui uses a few C library functions (sprintf, strtod, qsort). Set up
+ * musl's thread pointer so that any of them touching errno is safe. This is
+ * the part of the LionsOS libc_init() that needs neither serial nor a heap:
+ * these apps make no system calls, so the handler musl calls into during
+ * set-up just reports that none are available.
+ */
+void __init_libc(char **envp, char *pn);
+extern size_t __sysinfo;
+
+static long no_syscalls(long n, ...)
+{
+    (void)n;
+    return -ENOSYS;
+}
+
+static void init_libc(void)
+{
+    static char *envp[] = { NULL, NULL };
+    __sysinfo = (size_t)no_syscalls;
+    __init_libc(envp, NULL);
+}
 
 static int text_width(mu_Font font, const char *str, int len)
 {
@@ -144,6 +168,7 @@ bool mu_app_init(const char *title, uint32_t w, uint32_t h, mu_app_frame_fn fram
     if (!gui_app_init(title, w, h)) {
         return false;
     }
+    init_libc();
     width = w;
     height = h;
     frame_fn = frame;

@@ -5,7 +5,9 @@
 #
 #   notes, sketch, clock,  <->  compositor  <->  gpu_virt   <->  gpu_driver (virtIO GPU)
 #   calculator, widgets              <---  input_virt <---  input_keyboard, input_tablet
-#   clock  -------------------------------->  timer_driver
+#   clock, wasm_host  --------------------->  timer_driver
+#   wasm_host  <->  fatfs  <->  blk_virt  <->  blk_driver (virtIO block)
+#   wasm_host  --->  serial_virt_tx  --->  serial_driver (PL011)
 #
 # sdfgen 0.35 has no GPU or input device class, so those drivers, their
 # virtualisers and their shared regions are described by hand here. The GPU
@@ -15,7 +17,7 @@ import argparse
 import re
 import struct
 from typing import List, Tuple
-from sdfgen import SystemDescription, Sddf, DeviceTree
+from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 from importlib.metadata import version
 from board import BOARDS
 
@@ -36,7 +38,8 @@ GPU_VIRTIO_METADATA_REGION_SIZE = 0x200_000
 GPU_VIRTIO_DATA_REGION_SIZE = 0x200_000
 
 # Must match include/gui_config.h. Apps are listed in slot order.
-GUI_APPS = ["notes", "sketch", "clock", "calculator", "widgets"]
+# wasm_host runs WebAssembly apps loaded from the file system at run time.
+GUI_APPS = ["notes", "sketch", "clock", "calculator", "widgets", "wasm_host"]
 GUI_SURFACE_REGION_SIZE = 0x100_000
 GUI_STATE_REGION_SIZE = 0x1000
 GUI_EVENTS_REGION_SIZE = 0x1000
@@ -110,6 +113,20 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
     timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=254)
     timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
+
+    # Serial is used for the console of the WebAssembly host and its apps
+    serial_node = dtb.node(board.serial)
+    assert serial_node is not None
+    serial_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
+    serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
+    serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx)
+
+    # The disk holding the WebAssembly apps
+    blk_node = dtb.node(board.blk)
+    assert blk_node is not None
+    blk_driver = ProtectionDomain("blk_driver", "blk_driver.elf", priority=200)
+    blk_virt = ProtectionDomain("blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000)
+    blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
 
     gpu_driver = ProtectionDomain("gpu_driver", "gpu_driver.elf", priority=254, stack_size=0x10000)
     gpu_virt = ProtectionDomain("gpu_virt", "gpu_virt.elf", priority=99, stack_size=0x10000)
@@ -215,9 +232,24 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
     timer_system.add_client(apps["clock"])
 
-    for pd in [timer_driver, gpu_driver, gpu_virt, input_virt, *input_drivers, compositor, *apps.values()]:
+    # The WebAssembly host reads apps from a FAT file system on the disk
+    wasm_host = apps["wasm_host"]
+    timer_system.add_client(wasm_host)
+    serial_system.add_client(wasm_host)
+    fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
+    fs = LionsOs.FileSystem.Fat(sdf, fatfs, wasm_host, blk=blk_system, partition=board.partition)
+
+    pds = [timer_driver, serial_driver, serial_virt_tx, blk_driver, blk_virt, fatfs, gpu_driver, gpu_virt,
+           input_virt, *input_drivers, compositor, *apps.values()]
+    for pd in pds:
         sdf.add_pd(pd)
 
+    assert fs.connect()
+    assert fs.serialise_config(output_dir)
+    assert serial_system.connect()
+    assert serial_system.serialise_config(output_dir)
+    assert blk_system.connect()
+    assert blk_system.serialise_config(output_dir)
     assert timer_system.connect()
     assert timer_system.serialise_config(output_dir)
 

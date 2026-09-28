@@ -38,12 +38,18 @@ bool gui_app_init(const char *title, uint32_t width, uint32_t height)
     state->magic = GUI_STATE_MAGIC;
     state->width = width;
     state->height = height;
+    gui_app_set_title(title);
+    return true;
+}
+
+void gui_app_set_title(const char *title)
+{
+    gui_state_t *state = (gui_state_t *)gui_state;
     uint32_t i = 0;
     for (; title[i] != '\0' && i < GUI_TITLE_MAX - 1; i++) {
         state->title[i] = title[i];
     }
     state->title[i] = '\0';
-    return true;
 }
 
 gfx_surface_t *gui_app_surface(void)

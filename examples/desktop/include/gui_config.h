@@ -17,10 +17,10 @@
 
 #include <lions/gui/protocol.h>
 
-#define GUI_NUM_APPS 5
+#define GUI_NUM_APPS 6
 
 /* Slots whose window opens at startup; the others start closed (see the launcher) */
-#define GUI_START_OPEN ((1 << 0) | (1 << 1) | (1 << 2))
+#define GUI_START_OPEN ((1 << 0) | (1 << 1) | (1 << 2) | (1 << 5))
 
 #define GUI_SURFACE_REGION_SIZE 0x100000
 #define GUI_STATE_REGION_SIZE 0x1000

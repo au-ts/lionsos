@@ -23,6 +23,9 @@ bool gui_app_init(const char *title, uint32_t width, uint32_t height);
 
 gfx_surface_t *gui_app_surface(void);
 
+/* Change the window title; the compositor picks it up with the next commit */
+void gui_app_set_title(const char *title);
+
 /* Publish `damage` (content coordinates) and notify the compositor */
 void gui_app_commit(gfx_rect_t damage);
 
