@@ -36,6 +36,7 @@ ERROR_UDP_REJECT_UNEXPECTED_OUTPUT='UDP reject rule did not send a destination p
 ERROR_UNEXPECTED_ECHO_RESPONSE='Received echo response when ping responsiveness is disabled'
 INFO_SKIPPING_TEST='Skipping (feature not implemented yet)'
 ERROR_TIMEOUT='Did not receive time to live exceeded message'
+ERROR_API_UNRESPONSIVE='Firewall webserver did not respond'
 
 FONT_HEADER=$(printf '\033[1m\033[36m')
 FONT_RED=$(printf '\033[31m')
@@ -57,6 +58,11 @@ FIREWALL_ACTION_DROP=2
 FIREWALL_ACTION_REJECT=3
 
 BROADCAST_IP_ADDR='255.255.255.255'
+
+# Rules added by the capacity tests drop traffic to addresses in this range,
+# which does not overlap any test network. This means they never match test
+# traffic, and rules left over from an interrupted test can be found.
+CAPACITY_RULE_IP_PREFIX='10.100.'
 
 #
 # Setup and teardown
@@ -169,6 +175,12 @@ oneTimeSetUp() {
     # If `TEST_DEBUG` is set to true, the commands executed during a test will
     # be displayed on the console.
     TEST_DEBUG=false
+
+    # Capacity tests
+    #
+    # Requests sent by the capacity tests time out after `CAPACITY_MAX_TIME`
+    # seconds, so an unresponsive firewall fails a test instead of stalling it.
+    CAPACITY_MAX_TIME=30
 
     print_header "Running firewall tests across ${FW_INTERFACE_COUNT} interfaces..."
 }
@@ -659,6 +671,118 @@ run_rule_application_and_removal() {
     if ! diff "${SENT}" "${RECEIVED}" > /dev/null 2>&1; then
         log_interface_err "${ERROR_RULE_STILL_APPLIED}" ${src_iface} ${dst_iface}
     fi
+}
+
+#
+# Capacity tests
+#
+
+# Sends a request to the webserver, and sets `http_code` and `response` to the
+# status code and body of the reply. Unlike `api_request`, requests time out,
+# and a non-zero value is returned if no reply was received.
+capacity_api_request() {
+    method=$1
+    path=$2
+    data=$3
+
+    # Nothing is sent before the connection is established, so retrying is safe
+    for attempt in 1 2; do
+        output=$(curl --silent --show-error --header 'Content-Type: application/json' \
+            --max-time "${CAPACITY_MAX_TIME}" --request "${method}" ${data:+--data "${data}"} \
+            --write-out '\n%{http_code} %{time_connect}' "http://${FW_WEBSERVER_IP}${path}")
+        exit_code=$?
+        if [ "${exit_code}" -eq "${EXIT_SUCCESS}" ] || [ "${output##* }" != 0.000000 ]; then
+            break
+        fi
+    done
+
+    if [ "${exit_code}" -ne "${EXIT_SUCCESS}" ]; then
+        http_code='000'
+        response="${ERROR_API_UNRESPONSIVE} (curl exit status ${exit_code})"
+        return 1
+    fi
+
+    status=${output##*$'\n'}
+    http_code=${status% *}
+    response=${output%$'\n'*}
+}
+
+# Fails the current test, including the reply to the last capacity test request
+# in the failure message
+capacity_request_err() {
+    message=$1
+
+    fail "${message}. HTTP status: ${http_code}, response: ${response}"
+    print_log
+}
+
+# Sets `rule_count` to the number of rules in the `proto` filter on `iface`,
+# excluding the default action rule
+count_rules() {
+    proto=$1
+    iface=$2
+
+    capacity_api_request GET "/api/rules/${proto}/${iface}" || return 1
+    [ "${http_code}" = 200 ] || return 1
+
+    rule_count=$(echo "${response}" | jq --exit-status '.rules | if type == "array" then length else empty end' 2> /dev/null)
+}
+
+# Adds a rule to the `proto` filter on `iface` that drops traffic to the
+# capacity test address for `index`, and sets `rule_id` to the ID of the rule
+add_capacity_rule() {
+    proto=$1
+    iface=$2
+    index=$3
+
+    json=$(jq \
+        --null-input \
+        --argjson interface "${iface}" \
+        --argjson action "${FIREWALL_ACTION_DROP}" \
+        --arg src_ip "" \
+        --arg src_port "" \
+        --argjson src_subnet 0 \
+        --arg dest_ip "${CAPACITY_RULE_IP_PREFIX}$((index / 256)).$((index % 256))" \
+        --arg dest_port "" \
+        --argjson dest_subnet 32 \
+        "${TEMPLATE_RULE_JSON}")
+
+    rule_id=''
+    capacity_api_request POST "/api/rules/${proto}" "${json}" || return 1
+    [ "${http_code}" = 201 ] || return 1
+
+    rule_id=$(echo "${response}" | jq -r '.rule.id // empty' 2> /dev/null)
+    [ -n "${rule_id}" ]
+}
+
+delete_capacity_rule() {
+    proto=$1
+    iface=$2
+    delete_rule_id=$3
+
+    capacity_api_request DELETE "/api/rules/${proto}/${delete_rule_id}/${iface}" || return 1
+    [ "${http_code}" = 200 ] \
+        && echo "${response}" | jq --exit-status '.status == "ok"' > /dev/null 2>&1
+}
+
+# Removes every capacity test rule from the `proto` filter on `iface`
+remove_capacity_rules() {
+    proto=$1
+    iface=$2
+
+    count_rules "${proto}" "${iface}" || return 1
+
+    capacity_rule_ids=$(echo "${response}" \
+        | jq -r --arg prefix "${CAPACITY_RULE_IP_PREFIX}" \
+            '.rules[] | select(.dest_ip | startswith($prefix)) | .id' 2> /dev/null) || return 1
+
+    if [ -n "${capacity_rule_ids}" ]; then
+        print_info "Removing capacity test rules from the ${proto} filter on interface ${iface}..."
+    fi
+
+    for capacity_rule_id in ${capacity_rule_ids}; do
+        delete_capacity_rule "${proto}" "${iface}" "${capacity_rule_id}" || return 1
+    done
 }
 
 #
