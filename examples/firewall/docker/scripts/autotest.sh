@@ -199,9 +199,11 @@ oneTimeSetUp() {
     # Capacity tests
     #
     # The capacity tests fill the rule table of the `CAPACITY_TEST_PROTO` filter
-    # on `CAPACITY_TEST_IFACE`. They are skipped if `RUN_CAPACITY_TESTS` is
-    # false. All three can be set in the environment.
+    # on `CAPACITY_TEST_IFACE`, or of every filter if `FULL_CAPACITY_SWEEP` is
+    # true, which takes a multiple of the time. They are skipped if
+    # `RUN_CAPACITY_TESTS` is false. All of these can be set in the environment.
     RUN_CAPACITY_TESTS="${RUN_CAPACITY_TESTS:-true}"
+    FULL_CAPACITY_SWEEP="${FULL_CAPACITY_SWEEP:-false}"
     CAPACITY_TEST_PROTO="${CAPACITY_TEST_PROTO:-tcp}"
     CAPACITY_TEST_IFACE="${CAPACITY_TEST_IFACE:-0}"
 
@@ -890,15 +892,15 @@ check_full_rule_table() {
         "${last_rule_id}" "${rule_id}"
 }
 
-# Checks how the firewall handles a full rule table in the `proto` filter on
-# `iface`, then removes the capacity test rules even if a check failed
+# Fills and checks the rule table of the `proto` filter on `iface`, then
+# restores it even if a check failed. Returns 1 if it could not be restored.
 rule_table_capacity() {
     proto=$1
     iface=$2
 
     if ! count_rules "${proto}" "${iface}"; then
         capacity_request_err "${ERROR_FAILED_TO_GET_RULES}. Protocol: ${proto}, interface: ${iface}"
-        return
+        return 1
     fi
 
     initial_rule_count=${rule_count}
@@ -907,10 +909,12 @@ rule_table_capacity() {
     # Removing the capacity test rules must leave the filter as it was
     if ! remove_capacity_rules "${proto}" "${iface}" || ! count_rules "${proto}" "${iface}"; then
         capacity_request_err "${ERROR_FAILED_TO_REMOVE_RULE}. Protocol: ${proto}, interface: ${iface}"
+        return 1
     elif [ "${rule_count}" != "${initial_rule_count}" ]; then
         counts="${rule_count} rules after cleanup, expected ${initial_rule_count}"
         fail "${ERROR_UNEXPECTED_RULE_COUNT} (${counts}). Protocol: ${proto}, interface: ${iface}"
         print_log
+        return 1
     fi
 }
 
@@ -938,8 +942,8 @@ call_all_interface_pairs() {
     done
 }
 
-# Calls `test` with the protocol and interface of the filter to fill, unless
-# the capacity tests are disabled
+# Calls `test` with the protocol and interface of each filter to fill, unless
+# the capacity tests are disabled. Stops once `test` cannot restore a filter.
 call_capacity_filters() {
     test=$1
 
@@ -948,7 +952,16 @@ call_capacity_filters() {
         return 0
     fi
 
-    "${test}" "${CAPACITY_TEST_PROTO}" "${CAPACITY_TEST_IFACE}"
+    if [ "${FULL_CAPACITY_SWEEP}" != true ]; then
+        "${test}" "${CAPACITY_TEST_PROTO}" "${CAPACITY_TEST_IFACE}"
+        return 0
+    fi
+
+    for proto in ${CAPACITY_PROTOCOLS}; do
+        for ((iface=0; iface<"${FW_INTERFACE_COUNT}"; iface++)); do
+            "${test}" "${proto}" "${iface}" || return 0
+        done
+    done
 }
 
 test_icmp_ping_host() {
