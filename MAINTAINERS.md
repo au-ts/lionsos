@@ -21,6 +21,7 @@ The default reviewers of the LionsOS are currently
 * `ci/` - Julia (`@midnightveil`)
 * `components/`
     * `fs/` - Simon (`@dumsum`)
+    * `input/` - UNASSIGNED (`@`)
     * `micropython/` - Courtney (`@Courtney3141`)
     * `wamr/` - Simon (`@dumsum`)
 * `examples/`

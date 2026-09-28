@@ -34,7 +34,17 @@ typedef struct gfx_surface {
     uint32_t height;
     /* Distance between the start of two rows, in pixels */
     uint32_t stride;
+    /* Drawing is limited to this rectangle, which lies within the surface */
+    gfx_rect_t clip;
 } gfx_surface_t;
+
+/* Limit drawing to `r` (intersected with the surface bounds) */
+void gfx_set_clip(gfx_surface_t *s, gfx_rect_t r);
+
+/* Allow drawing to the whole surface again */
+void gfx_reset_clip(gfx_surface_t *s);
+
+bool gfx_rect_contains(gfx_rect_t r, int32_t x, int32_t y);
 
 void gfx_fill_rect(gfx_surface_t *s, gfx_rect_t r, uint32_t colour);
 

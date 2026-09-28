@@ -21,13 +21,13 @@ static inline int32_t min32(int32_t a, int32_t b)
     return a < b ? a : b;
 }
 
-/* Intersect r with the surface bounds. Returns false if nothing is left. */
-static bool clip(gfx_surface_t *s, gfx_rect_t *r)
+/* Intersect r with bounds. Returns false if nothing is left. */
+static bool intersect(gfx_rect_t *r, gfx_rect_t bounds)
 {
-    int32_t x0 = max32(r->x, 0);
-    int32_t y0 = max32(r->y, 0);
-    int32_t x1 = min32(r->x + r->width, (int32_t)s->width);
-    int32_t y1 = min32(r->y + r->height, (int32_t)s->height);
+    int32_t x0 = max32(r->x, bounds.x);
+    int32_t y0 = max32(r->y, bounds.y);
+    int32_t x1 = min32(r->x + r->width, bounds.x + bounds.width);
+    int32_t y1 = min32(r->y + r->height, bounds.y + bounds.height);
 
     if (x1 <= x0 || y1 <= y0) {
         return false;
@@ -35,6 +35,30 @@ static bool clip(gfx_surface_t *s, gfx_rect_t *r)
 
     *r = (gfx_rect_t) { x0, y0, x1 - x0, y1 - y0 };
     return true;
+}
+
+static inline bool clip(gfx_surface_t *s, gfx_rect_t *r)
+{
+    return intersect(r, s->clip);
+}
+
+void gfx_set_clip(gfx_surface_t *s, gfx_rect_t r)
+{
+    gfx_rect_t bounds = { 0, 0, (int32_t)s->width, (int32_t)s->height };
+    if (!intersect(&r, bounds)) {
+        r = (gfx_rect_t) { 0, 0, 0, 0 };
+    }
+    s->clip = r;
+}
+
+void gfx_reset_clip(gfx_surface_t *s)
+{
+    s->clip = (gfx_rect_t) { 0, 0, (int32_t)s->width, (int32_t)s->height };
+}
+
+bool gfx_rect_contains(gfx_rect_t r, int32_t x, int32_t y)
+{
+    return x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height;
 }
 
 void gfx_fill_rect(gfx_surface_t *s, gfx_rect_t r, uint32_t colour)

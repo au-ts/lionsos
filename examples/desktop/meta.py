@@ -3,15 +3,17 @@
 #
 # Generates the system description for the desktop example.
 #
-#   desktop  <->  gpu_virt  <->  gpu_driver (virtIO GPU)
-#      \
-#       +-----> timer_driver
+#   desktop  <->  gpu_virt   <->  gpu_driver (virtIO GPU)
+#      |    <---  input_virt <---  input_keyboard, input_tablet (virtIO input)
+#      +------->  timer_driver
 #
-# sdfgen 0.35 has no GPU device class, so the GPU driver, virtualiser and
-# their shared regions are described by hand here, mirroring sDDF's
-# examples/gpu. The timer uses sdfgen's Sddf.Timer as in other examples.
+# sdfgen 0.35 has no GPU or input device class, so those drivers, their
+# virtualisers and their shared regions are described by hand here. The GPU
+# part mirrors sDDF's examples/gpu. The timer uses sdfgen's Sddf.Timer as in
+# other examples.
 import argparse
 import re
+import struct
 from typing import List, Tuple
 from sdfgen import SystemDescription, Sddf, DeviceTree
 from importlib.metadata import version
@@ -33,11 +35,33 @@ GPU_CLIENT_DATA_REGION_SIZE = 0x400_000
 GPU_VIRTIO_METADATA_REGION_SIZE = 0x200_000
 GPU_VIRTIO_DATA_REGION_SIZE = 0x200_000
 
-# Per board virtIO GPU device: MMIO page, and the IRQ of the transport the
-# driver uses at VIRTIO_MMIO_GPU_OFFSET within that page. QEMU assigns the
-# first virtio-*-device on the command line to the last virtio-mmio slot.
-GPU_DEVICES = {
-    "qemu_virt_aarch64": (0xa003000, 79),
+# Must match include/input_config.h
+INPUT_QUEUE_REGION_SIZE = 0x1000
+INPUT_QUEUE_CAPACITY = (INPUT_QUEUE_REGION_SIZE - 16) // 8
+INPUT_VIRTIO_DMA_SIZE = 0x2000
+INPUT_DRIVER_CONFIG_MAGIC = 0x4c494e50
+INPUT_DEVICES = ["keyboard", "tablet"]
+
+
+class VirtioMmioLayout:
+    def __init__(self, page: int, devices: dict):
+        # Physical address of the 4K page holding the virtIO MMIO transports
+        self.page = page
+        # name -> (offset of the transport within the page, IRQ)
+        self.devices = devices
+
+
+# QEMU's virt machine has 32 virtIO MMIO transports of 0x200 bytes from
+# 0xa000000, with transport n using IRQ 48 + n. The `qemu` target in
+# desktop.mk puts each device on a fixed transport (bus=virtio-mmio-bus.n):
+# the GPU on 31 (the offset the sDDF GPU driver expects), the keyboard on 30
+# and the tablet on 29. All three share the page at 0xa003000.
+VIRTIO_MMIO = {
+    "qemu_virt_aarch64": VirtioMmioLayout(0xa003000, {
+        "gpu": (0xe00, 79),
+        "keyboard": (0xc00, 78),
+        "tablet": (0xa00, 77),
+    }),
 }
 
 
@@ -75,7 +99,7 @@ def add_region_paddr_setvars(xml: str, pd_name: str, setvars: List[Tuple[str, st
 def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     timer_node = dtb.node(board.timer)
     assert timer_node is not None
-    gpu_regs_paddr, gpu_irq = GPU_DEVICES[board.name]
+    mmio = VIRTIO_MMIO[board.name]
 
     timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=254)
     timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
@@ -86,7 +110,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
     # Device and DMA regions of the driver. The DMA regions are physical so
     # that they are contiguous and their addresses can be handed to the device.
-    virtio_regs = MemoryRegion(sdf, "virtio_gpu_regs", 0x1000, paddr=gpu_regs_paddr)
+    virtio_regs = MemoryRegion(sdf, "virtio_mmio", 0x1000, paddr=mmio.page)
     virtio_metadata = MemoryRegion(sdf, "virtio_gpu_metadata", GPU_VIRTIO_METADATA_REGION_SIZE, physical=True)
     virtio_data = MemoryRegion(sdf, "virtio_gpu_data", GPU_VIRTIO_DATA_REGION_SIZE, physical=True)
     for mr in [virtio_regs, virtio_metadata, virtio_data]:
@@ -94,7 +118,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     gpu_driver.add_map(Map(virtio_regs, 0x2_000_000, "rw", cached=False, setvar_vaddr="virtio_regs"))
     gpu_driver.add_map(Map(virtio_metadata, 0x60_000_000, "rw", cached=False, setvar_vaddr="virtio_metadata"))
     gpu_driver.add_map(Map(virtio_data, 0x60_200_000, "rw", cached=False, setvar_vaddr="virtio_data"))
-    gpu_driver.add_irq(Irq(gpu_irq, trigger=Irq.Trigger.EDGE, id=0))
+    gpu_driver.add_irq(Irq(mmio.devices["gpu"][1], trigger=Irq.Trigger.EDGE, id=0))
 
     # Driver <-> virtualiser
     driver_queues = add_gpu_queues(sdf, "gpu_driver")
@@ -123,9 +147,41 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     sdf.add_channel(Channel(gpu_virt, gpu_driver, a_id=0, b_id=1))
     sdf.add_channel(Channel(desktop, gpu_virt, a_id=0, b_id=1))
 
+    # Input: one driver PD per device, all feeding the input virtualiser,
+    # which delivers to the desktop. Channel ids must match
+    # components/input and INPUT_CH in src/desktop.c.
+    input_virt = ProtectionDomain("input_virt", "input_virt.elf", priority=200)
+    input_drivers = []
+    for i, name in enumerate(INPUT_DEVICES):
+        regs_offset, irq = mmio.devices[name]
+        driver = ProtectionDomain(f"input_{name}", f"input_{name}.elf", priority=253)
+        input_drivers.append(driver)
+
+        driver.add_map(Map(virtio_regs, 0x2_000_000, "rw", cached=False, setvar_vaddr="device_regs"))
+        dma = MemoryRegion(sdf, f"input_{name}_dma", INPUT_VIRTIO_DMA_SIZE, physical=True)
+        sdf.add_mr(dma)
+        driver.add_map(Map(dma, 0x3_000_000, "rw", cached=False, setvar_vaddr="virtio_dma"))
+        driver.add_irq(Irq(irq, trigger=Irq.Trigger.EDGE, id=0))
+
+        queue = MemoryRegion(sdf, f"input_{name}_queue", INPUT_QUEUE_REGION_SIZE)
+        sdf.add_mr(queue)
+        driver.add_map(Map(queue, 0x4_000_000, "rw", setvar_vaddr="input_queue"))
+        input_virt.add_map(Map(queue, 0x4_000_000 + i * INPUT_QUEUE_REGION_SIZE, "rw",
+                               setvar_vaddr="input_driver_queues" if i == 0 else None))
+        sdf.add_channel(Channel(input_virt, driver, a_id=i, b_id=1))
+
+        with open(f"{output_dir}/input_driver_{name}.data", "wb") as f:
+            f.write(struct.pack("<III", INPUT_DRIVER_CONFIG_MAGIC, regs_offset, INPUT_QUEUE_CAPACITY))
+
+    desktop_input_queue = MemoryRegion(sdf, "input_desktop_queue", INPUT_QUEUE_REGION_SIZE)
+    sdf.add_mr(desktop_input_queue)
+    input_virt.add_map(Map(desktop_input_queue, 0x5_000_000, "rw", setvar_vaddr="input_client_queues"))
+    desktop.add_map(Map(desktop_input_queue, 0x5_000_000, "rw", setvar_vaddr="input_queue"))
+    sdf.add_channel(Channel(input_virt, desktop, a_id=len(INPUT_DEVICES), b_id=2))
+
     timer_system.add_client(desktop)
 
-    for pd in [timer_driver, gpu_driver, gpu_virt, desktop]:
+    for pd in [timer_driver, gpu_driver, gpu_virt, input_virt, *input_drivers, desktop]:
         sdf.add_pd(pd)
 
     assert timer_system.connect()
@@ -136,6 +192,8 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
         ("virtio_data_paddr", "virtio_gpu_data"),
         ("gpu_client_data_paddr", "gpu_desktop_data"),
     ])
+    for name in INPUT_DEVICES:
+        xml = add_region_paddr_setvars(xml, f"input_{name}", [("virtio_dma_paddr", f"input_{name}_dma")])
     with open(f"{output_dir}/{sdf_path}", "w+") as f:
         f.write(xml)
 
@@ -144,7 +202,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--dtb", required=True)
     parser.add_argument("--sddf", required=True)
-    parser.add_argument("--board", required=True, choices=[b for b in GPU_DEVICES])
+    parser.add_argument("--board", required=True, choices=[b for b in VIRTIO_MMIO])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
 
