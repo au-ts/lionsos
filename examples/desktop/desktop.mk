@@ -23,9 +23,14 @@ SYSTEM_FILE := desktop.system
 IMAGE_FILE := desktop.img
 REPORT_FILE := report.txt
 
-# WebAssembly apps put on the disk that the wasm_host app slot loads from
-WASM_APPS := hello life mandel
+# WebAssembly apps put on the disk that the wasm_host app slot loads from,
+# each with the list of capabilities it is granted, plus files they use
+WASM_APPS := hello life mandel reader probe
 WASM_FILES := $(addsuffix .wasm,$(WASM_APPS))
+WASM_CAPS := $(addprefix $(DESKTOP_DIR)/wasm_apps/,$(addsuffix .caps,$(WASM_APPS)))
+WASM_DATA := $(DESKTOP_DIR)/wasm_apps/readme.txt
+# Outside /apps, so no app may be granted it (see wasm_apps/probe.c)
+DISK_SECRET := $(DESKTOP_DIR)/wasm_apps/secret.txt
 DISK_IMAGE := apps_disk.img
 
 # Display mode requested from QEMU. It must fit in GPU_DATA_REGION_SIZE_CLI0.
@@ -136,7 +141,11 @@ wasm_host/wasm_host.o: $(DESKTOP_DIR)/wasm_host/wasm_host.c $(WAMR_ROOT)/build-s
 	mkdir -p wasm_host
 	$(CC) -c $(CFLAGS) $(WASM_HOST_CFLAGS) $< -o $@
 
-wasm_host.elf: wasm_host/wasm_host.o $(APP_LIB_OBJS) wamr/libvmlib.a libmicrokitco_wasm_host.a
+wasm_host/caps.o: $(DESKTOP_DIR)/wasm_host/caps.c | $(SDDF_LIBC_INCLUDE)
+	mkdir -p wasm_host
+	$(CC) -c $(CFLAGS) $< -o $@
+
+wasm_host.elf: wasm_host/wasm_host.o wasm_host/caps.o $(APP_LIB_OBJS) wamr/libvmlib.a libmicrokitco_wasm_host.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 -include $(wildcard desktop/*.d apps/*.d wasm_host/*.d)
@@ -156,11 +165,12 @@ WASM_CFLAGS := --target=wasm32 -O2 -nostdlib -ffreestanding -Wall -Werror \
 
 # A disk with one FAT partition holding the apps in /apps. Needs gdisk,
 # mkfs.fat (dosfstools) and mtools. The partition starts 1 MiB in.
-$(DISK_IMAGE): $(WASM_FILES)
+$(DISK_IMAGE): $(WASM_FILES) $(WASM_CAPS) $(WASM_DATA) $(DISK_SECRET)
 	rm -f $@
 	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 GPT > /dev/null
 	mmd -i $@@@1M ::/apps
-	mcopy -i $@@@1M $(WASM_FILES) ::/apps/
+	mcopy -i $@@@1M $(WASM_FILES) $(WASM_CAPS) $(WASM_DATA) ::/apps/
+	mcopy -i $@@@1M $(DISK_SECRET) ::/
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	PYTHONPATH=$(SDDF)/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)

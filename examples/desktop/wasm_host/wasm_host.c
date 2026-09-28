@@ -11,13 +11,18 @@
  * shows them in its window. Clicking one loads it from the disk and runs it
  * with WAMR in the same window; Esc (or the app calling lions.exit) returns
  * to the list. Apps are compiled freestanding against wasm_apps/lions.h:
- * they import drawing and timing functions from the "lions" module and
- * export callbacks that the host calls:
+ * they import functions from the "lions" module and export callbacks that
+ * the host calls:
  *
- *   app_init(width, height)             once, after loading
+ *   app_init(width, height)             once, after loading (0, 0 without a window)
  *   app_event(type, code, value, x, y)  for each input event (GUI_EV_*); for
  *                                       key events x is the typed character
- *   app_tick(time_ms)                   after lions.set_tick(ms)
+ *   app_tick(time_ms)                   after lions.timer_start(timer, ms)
+ *
+ * Apps start with no authority at all. Each gets only the capabilities
+ * listed for it in /apps/<name>.caps and allowed by the host's policy, and
+ * every lions.* function takes a handle to one of them (see caps.h). The
+ * list shows what each app will be granted before it is run.
  *
  * Everything runs in one cothread, which waits on a semaphore that the
  * compositor and timer notifications signal, so file system requests can
@@ -32,6 +37,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include <microkit.h>
@@ -48,6 +54,7 @@
 #include <sddf/util/util.h>
 #include <wasm_export.h>
 #include "../apps/gui_app.h"
+#include "caps.h"
 
 #define WIDTH 480
 #define HEIGHT 360
@@ -71,10 +78,16 @@
 #define COLOUR_ERROR GFX_RGB(0xd9, 0x4c, 0x3d)
 
 #define ROW_Y0 70
-#define ROW_HEIGHT 34
+#define ROW_HEIGHT 42
+
+#define CAPS_TEXT_MAX 1024
+#define FILE_READ_MAX (64 * 1024)
+/* Apps without a .caps file */
+#define DEFAULT_CAPS "window\n"
 
 #define LOG_HOST(...) printf("WASM HOST|INFO: " __VA_ARGS__)
 #define LOG_HOST_ERR(...) printf("WASM HOST|ERROR: " __VA_ARGS__)
+#define COLOUR_REFUSED GFX_RGB(0xd9, 0x4c, 0x3d)
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
@@ -108,7 +121,9 @@ static uint8_t wasm_buf[WASM_MAX_SIZE];
 
 /* The app list */
 static char app_names[MAX_APPS][NAME_MAX_LEN];
-static uint32_t app_sizes[MAX_APPS];
+/* What each app would be granted, shown before it is run */
+static char app_grants[MAX_APPS][48];
+static int app_refused[MAX_APPS];
 static int num_apps;
 static char status[64];
 static bool status_is_error;
@@ -124,6 +139,8 @@ static uint32_t tick_ms;
 static bool exit_requested;
 static gfx_rect_t damage;
 static bool damaged;
+static caps_table_t caps;
+static char caps_text[CAPS_TEXT_MAX + 1];
 
 /* File system access over the LionsOS FS protocol */
 
@@ -171,20 +188,92 @@ static bool has_wasm_suffix(const char *name, size_t len)
     return true;
 }
 
-static uint64_t file_size(const char *path)
+static bool file_size(const char *path, uint64_t *size)
 {
     fs_cmpl_t cmpl;
     if (!fs_path_command(FS_CMD_FILE_OPEN, path, FS_OPEN_FLAGS_READ_ONLY, &cmpl)) {
-        return 0;
+        return false;
     }
     uint64_t fd = cmpl.data.file_open.fd;
-    uint64_t size = 0;
-    if (fs_command_blocking(&cmpl, (fs_cmd_t) { .type = FS_CMD_FILE_SIZE, .params.file_size.fd = fd }) == 0
-        && cmpl.status == FS_STATUS_SUCCESS) {
-        size = cmpl.data.file_size.size;
+    bool ok = fs_command_blocking(&cmpl, (fs_cmd_t) { .type = FS_CMD_FILE_SIZE, .params.file_size.fd = fd }) == 0
+              && cmpl.status == FS_STATUS_SUCCESS;
+    if (ok) {
+        *size = cmpl.data.file_size.size;
     }
     fs_command_blocking(&cmpl, (fs_cmd_t) { .type = FS_CMD_FILE_CLOSE, .params.file_close.fd = fd });
-    return size;
+    return ok;
+}
+
+/* Read up to `max` bytes at `offset` into `dst`; returns the number read or -1 */
+static int64_t read_file(const char *path, uint64_t offset, uint8_t *dst, uint64_t max)
+{
+    fs_cmpl_t cmpl;
+    if (!fs_path_command(FS_CMD_FILE_OPEN, path, FS_OPEN_FLAGS_READ_ONLY, &cmpl)) {
+        return -1;
+    }
+    uint64_t fd = cmpl.data.file_open.fd;
+
+    int64_t total = 0;
+    ptrdiff_t buf;
+    if (fs_buffer_allocate(&buf) != 0) {
+        total = -1;
+    } else {
+        while ((uint64_t)total < max) {
+            uint64_t chunk = MIN((uint64_t)FS_BUFFER_SIZE, max - total);
+            int err = fs_command_blocking(&cmpl, (fs_cmd_t) {
+                .type = FS_CMD_FILE_READ,
+                .params.file_read = { .fd = fd, .offset = offset + total, .buf = { .offset = buf, .size = chunk } },
+            });
+            if (err || cmpl.status != FS_STATUS_SUCCESS) {
+                total = -1;
+                break;
+            }
+            uint64_t n = MIN(cmpl.data.file_read.len_read, chunk);
+            if (n == 0) {
+                break;
+            }
+            memcpy(dst + total, fs_buffer_ptr(buf), n);
+            total += n;
+        }
+        fs_buffer_free(buf);
+    }
+    fs_command_blocking(&cmpl, (fs_cmd_t) { .type = FS_CMD_FILE_CLOSE, .params.file_close.fd = fd });
+    return total;
+}
+
+/* Name of app `index` without ".wasm" */
+static void app_base_name(int index, char *buf)
+{
+    size_t len = strlen(app_names[index]) - 5;
+    memcpy(buf, app_names[index], len);
+    buf[len] = '\0';
+}
+
+/* Read the capability list of app `index` into caps_text; returns its length */
+static size_t read_caps_text(int index)
+{
+    char base[NAME_MAX_LEN];
+    char path[sizeof(APPS_DIR) + NAME_MAX_LEN + 8];
+    app_base_name(index, base);
+    snprintf(path, sizeof(path), "%s/%s.caps", APPS_DIR, base);
+
+    int64_t n = read_file(path, 0, (uint8_t *)caps_text, CAPS_TEXT_MAX);
+    if (n < 0) {
+        strcpy(caps_text, DEFAULT_CAPS);
+        return strlen(caps_text);
+    }
+    caps_text[n] = '\0';
+    return n;
+}
+
+static void audit(const char *app, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    printf("AUDIT|%s: ", app);
+    vprintf(fmt, ap);
+    printf("\n");
+    va_end(ap);
 }
 
 static void scan_apps(void)
@@ -221,51 +310,28 @@ static void scan_apps(void)
     }
     fs_command_blocking(&cmpl, (fs_cmd_t) { .type = FS_CMD_DIR_CLOSE, .params.dir_close.fd = dir });
 
+    /* Preview what each app would be granted, without auditing */
     for (int i = 0; i < num_apps; i++) {
-        char path[sizeof(APPS_DIR) + NAME_MAX_LEN + 1];
-        snprintf(path, sizeof(path), "%s/%s", APPS_DIR, app_names[i]);
-        app_sizes[i] = file_size(path);
+        caps_table_t preview;
+        char base[NAME_MAX_LEN];
+        app_base_name(i, base);
+        size_t len = read_caps_text(i);
+        caps_grant(&preview, base, caps_text, len, true);
+        caps_summary(&preview, app_grants[i], sizeof(app_grants[i]));
+        app_refused[i] = preview.num_denied;
     }
     LOG_HOST("found %d app(s) in %s\n", num_apps, APPS_DIR);
 }
 
-/* Read a whole file into wasm_buf, returning its size or 0 on failure */
+/* Read a whole module into wasm_buf, returning its size or 0 on failure */
 static uint32_t load_file(const char *path)
 {
-    fs_cmpl_t cmpl;
-    if (!fs_path_command(FS_CMD_FILE_OPEN, path, FS_OPEN_FLAGS_READ_ONLY, &cmpl)) {
+    uint64_t size;
+    if (!file_size(path, &size) || size == 0 || size > WASM_MAX_SIZE) {
         return 0;
     }
-    uint64_t fd = cmpl.data.file_open.fd;
-
-    uint32_t total = 0;
-    ptrdiff_t buf;
-    if (fs_buffer_allocate(&buf) == 0) {
-        for (;;) {
-            uint64_t chunk = MIN((uint64_t)FS_BUFFER_SIZE, (uint64_t)(WASM_MAX_SIZE - total));
-            if (chunk == 0) {
-                total = 0; /* too big */
-                break;
-            }
-            int err = fs_command_blocking(&cmpl, (fs_cmd_t) {
-                .type = FS_CMD_FILE_READ,
-                .params.file_read = { .fd = fd, .offset = total, .buf = { .offset = buf, .size = chunk } },
-            });
-            if (err || cmpl.status != FS_STATUS_SUCCESS) {
-                total = 0;
-                break;
-            }
-            uint64_t n = MIN(cmpl.data.file_read.len_read, chunk);
-            if (n == 0) {
-                break;
-            }
-            memcpy(wasm_buf + total, fs_buffer_ptr(buf), n);
-            total += n;
-        }
-        fs_buffer_free(buf);
-    }
-    fs_command_blocking(&cmpl, (fs_cmd_t) { .type = FS_CMD_FILE_CLOSE, .params.file_close.fd = fd });
-    return total;
+    int64_t n = read_file(path, 0, wasm_buf, size);
+    return n == (int64_t)size ? (uint32_t)n : 0;
 }
 
 /* Drawing helpers for the host's own list view */
@@ -289,14 +355,18 @@ static void draw_list(void)
         }
         gfx_fill_rect(s, r, COLOUR_ROW);
         char name[NAME_MAX_LEN];
-        size_t len = strlen(app_names[i]) - 5;
-        memcpy(name, app_names[i], len);
-        name[len] = '\0';
-        gfx_draw_text(s, r.x + 10, r.y + (r.height - 16) / 2, name, 2, COLOUR_TEXT);
-        char size[16];
-        snprintf(size, sizeof(size), "%u KiB", (app_sizes[i] + 1023) / 1024);
-        gfx_draw_text(s, r.x + r.width - 10 - gfx_text_width(size, 2), r.y + (r.height - 16) / 2, size, 2,
-                      COLOUR_MUTED);
+        app_base_name(i, name);
+        gfx_draw_text(s, r.x + 10, r.y + 5, name, 2, COLOUR_TEXT);
+
+        /* What the app will be allowed to do, and how many requests the policy refuses */
+        char grants[64];
+        snprintf(grants, sizeof(grants), "may use: %s", app_grants[i]);
+        int32_t x = gfx_draw_text(s, r.x + 10, r.y + 25, grants, 1, COLOUR_MUTED);
+        if (app_refused[i]) {
+            char refused[24];
+            snprintf(refused, sizeof(refused), "  (%d refused)", app_refused[i]);
+            gfx_draw_text(s, x, r.y + 25, refused, 1, COLOUR_REFUSED);
+        }
     }
 
     const char *hint = status[0] ? status : "Click to run, Esc to return";
@@ -324,94 +394,176 @@ static void add_damage(int32_t x, int32_t y, int32_t w, int32_t h)
     damage = (gfx_rect_t) { dx0, dy0, dx1 - dx0, dy1 - dy0 };
 }
 
-static void n_fill_rect(wasm_exec_env_t env, int32_t x, int32_t y, int32_t w, int32_t h, int32_t rgb)
+static gfx_surface_t *window(int32_t handle, const char *op)
 {
-    (void)env;
-    gfx_fill_rect(gui_app_surface(), (gfx_rect_t) { x, y, w, h }, 0xff000000u | (uint32_t)rgb);
+    return caps_check(&caps, running_name, handle, CAP_WINDOW, op) ? gui_app_surface() : NULL;
 }
 
-static void n_draw_text(wasm_exec_env_t env, int32_t x, int32_t y, const char *text, int32_t scale, int32_t rgb)
+static int32_t n_fill_rect(wasm_exec_env_t env, int32_t win, int32_t x, int32_t y, int32_t w, int32_t h, int32_t rgb)
 {
     (void)env;
+    gfx_surface_t *s = window(win, "fill_rect");
+    if (!s) {
+        return -1;
+    }
+    gfx_fill_rect(s, (gfx_rect_t) { x, y, w, h }, 0xff000000u | (uint32_t)rgb);
+    return 0;
+}
+
+static int32_t n_draw_text(wasm_exec_env_t env, int32_t win, int32_t x, int32_t y, const char *text, int32_t scale,
+                           int32_t rgb)
+{
+    (void)env;
+    gfx_surface_t *s = window(win, "draw_text");
+    if (!s) {
+        return -1;
+    }
     scale = MAX(MIN(scale, 8), 1);
-    gfx_draw_text(gui_app_surface(), x, y, text, scale, 0xff000000u | (uint32_t)rgb);
+    gfx_draw_text(s, x, y, text, scale, 0xff000000u | (uint32_t)rgb);
+    return 0;
 }
 
 /* `pixels` holds w * h 0x00RRGGBB values; WAMR checked that it spans `len` bytes */
-static void n_blit(wasm_exec_env_t env, int32_t x, int32_t y, int32_t w, int32_t h, const uint8_t *pixels,
-                   uint32_t len)
+static int32_t n_blit(wasm_exec_env_t env, int32_t win, int32_t x, int32_t y, int32_t w, int32_t h,
+                      const uint8_t *pixels, uint32_t len)
 {
     (void)env;
-    if (w <= 0 || h <= 0 || (uint64_t)w * h * 4 > len) {
-        return;
+    gfx_surface_t *s = window(win, "blit");
+    if (!s || w <= 0 || h <= 0 || (uint64_t)w * h * 4 > len) {
+        return -1;
     }
-    gfx_blit(gui_app_surface(), x, y, (const uint32_t *)pixels, w, h, w);
+    gfx_blit(s, x, y, (const uint32_t *)pixels, w, h, w);
+    return 0;
 }
 
-static void n_commit(wasm_exec_env_t env, int32_t x, int32_t y, int32_t w, int32_t h)
+static int32_t n_commit(wasm_exec_env_t env, int32_t win, int32_t x, int32_t y, int32_t w, int32_t h)
 {
     (void)env;
+    if (!window(win, "commit")) {
+        return -1;
+    }
     add_damage(x, y, w, h);
+    return 0;
 }
 
-static void n_set_tick(wasm_exec_env_t env, int32_t ms)
+static int32_t n_width(wasm_exec_env_t env, int32_t win)
 {
     (void)env;
+    return window(win, "width") ? WIDTH : -1;
+}
+
+static int32_t n_height(wasm_exec_env_t env, int32_t win)
+{
+    (void)env;
+    return window(win, "height") ? HEIGHT : -1;
+}
+
+static int32_t n_set_title(wasm_exec_env_t env, int32_t win, const char *title)
+{
+    (void)env;
+    if (!window(win, "set_title")) {
+        return -1;
+    }
+    gui_app_set_title(title);
+    return 0;
+}
+
+static int32_t n_timer_start(wasm_exec_env_t env, int32_t timer, int32_t ms)
+{
+    (void)env;
+    if (!caps_check(&caps, running_name, timer, CAP_TIMER, "timer_start")) {
+        return -1;
+    }
     bool was_ticking = tick_ms != 0;
     tick_ms = ms <= 0 ? 0 : MAX(ms, MIN_TICK_MS);
     if (tick_ms && !was_ticking) {
         sddf_timer_set_timeout(timer_config.driver_id, (uint64_t)tick_ms * NS_IN_MS);
     }
+    return 0;
 }
 
+static int32_t now_ms(void)
+{
+    return (int32_t)(sddf_timer_time_now(timer_config.driver_id) / NS_IN_MS);
+}
+
+static int32_t n_timer_now(wasm_exec_env_t env, int32_t timer)
+{
+    (void)env;
+    return caps_check(&caps, running_name, timer, CAP_TIMER, "timer_now") ? now_ms() : -1;
+}
+
+static int32_t n_console_log(wasm_exec_env_t env, int32_t console, const char *text)
+{
+    (void)env;
+    if (!caps_check(&caps, running_name, console, CAP_CONSOLE, "console_log")) {
+        return -1;
+    }
+    printf("%s: %s\n", running_name, text);
+    return 0;
+}
+
+static int32_t n_file_size(wasm_exec_env_t env, int32_t file)
+{
+    (void)env;
+    cap_t *cap = caps_check(&caps, running_name, file, CAP_FILE, "file_size");
+    return cap ? (int32_t)MIN(cap->size, (uint64_t)INT32_MAX) : -1;
+}
+
+/* WAMR checked that `buf` spans `len` bytes of the app's memory */
+static int32_t n_file_read(wasm_exec_env_t env, int32_t file, uint32_t offset, uint8_t *buf, uint32_t len)
+{
+    (void)env;
+    cap_t *cap = caps_check(&caps, running_name, file, CAP_FILE, "file_read");
+    if (!cap) {
+        return -1;
+    }
+    if (offset >= cap->size) {
+        return 0;
+    }
+    uint64_t n = MIN(MIN((uint64_t)len, cap->size - offset), (uint64_t)FILE_READ_MAX);
+    return (int32_t)read_file(cap->path, offset, buf, n);
+}
+
+static int32_t n_cap_lookup(wasm_exec_env_t env, const char *name)
+{
+    (void)env;
+    return caps_lookup(&caps, name);
+}
+
+static int32_t n_cap_drop(wasm_exec_env_t env, int32_t handle)
+{
+    (void)env;
+    int err = caps_drop(&caps, running_name, handle);
+    if (!err && !caps_have(&caps, CAP_TIMER)) {
+        tick_ms = 0;
+    }
+    return err;
+}
+
+/* An app may always end itself */
 static void n_exit(wasm_exec_env_t env)
 {
     (void)env;
     exit_requested = true;
 }
 
-static int32_t n_width(wasm_exec_env_t env)
-{
-    (void)env;
-    return WIDTH;
-}
-
-static int32_t n_height(wasm_exec_env_t env)
-{
-    (void)env;
-    return HEIGHT;
-}
-
-static int32_t n_time_ms(wasm_exec_env_t env)
-{
-    (void)env;
-    return (int32_t)(sddf_timer_time_now(timer_config.driver_id) / NS_IN_MS);
-}
-
-static void n_log(wasm_exec_env_t env, const char *text)
-{
-    (void)env;
-    printf("%s: %s\n", running_name, text);
-}
-
-static void n_set_title(wasm_exec_env_t env, const char *title)
-{
-    (void)env;
-    gui_app_set_title(title);
-}
-
 static NativeSymbol native_symbols[] = {
-    { "fill_rect", n_fill_rect, "(iiiii)", NULL },
-    { "draw_text", n_draw_text, "(ii$ii)", NULL },
-    { "blit", n_blit, "(iiii*~)", NULL },
-    { "commit", n_commit, "(iiii)", NULL },
-    { "set_tick", n_set_tick, "(i)", NULL },
+    { "cap_lookup", n_cap_lookup, "($)i", NULL },
+    { "cap_drop", n_cap_drop, "(i)i", NULL },
+    { "win_fill_rect", n_fill_rect, "(iiiiii)i", NULL },
+    { "win_draw_text", n_draw_text, "(iii$ii)i", NULL },
+    { "win_blit", n_blit, "(iiiii*~)i", NULL },
+    { "win_commit", n_commit, "(iiiii)i", NULL },
+    { "win_width", n_width, "(i)i", NULL },
+    { "win_height", n_height, "(i)i", NULL },
+    { "win_set_title", n_set_title, "(i$)i", NULL },
+    { "timer_start", n_timer_start, "(ii)i", NULL },
+    { "timer_now", n_timer_now, "(i)i", NULL },
+    { "console_log", n_console_log, "(i$)i", NULL },
+    { "file_size", n_file_size, "(i)i", NULL },
+    { "file_read", n_file_read, "(ii*~)i", NULL },
     { "exit", n_exit, "()", NULL },
-    { "width", n_width, "()i", NULL },
-    { "height", n_height, "()i", NULL },
-    { "time_ms", n_time_ms, "()i", NULL },
-    { "log", n_log, "($)", NULL },
-    { "set_title", n_set_title, "($)", NULL },
 };
 
 /*
@@ -510,6 +662,7 @@ static void stop_app(const char *reason, bool is_error)
     instance = NULL;
     module = NULL;
     running = false;
+    caps_revoke_all(&caps, running_name);
     tick_ms = 0;
     damaged = false;
 
@@ -548,9 +701,7 @@ static void start_app(int index)
 {
     char path[sizeof(APPS_DIR) + NAME_MAX_LEN + 1];
     snprintf(path, sizeof(path), "%s/%s", APPS_DIR, app_names[index]);
-    size_t len = strlen(app_names[index]) - 5;
-    memcpy(running_name, app_names[index], len);
-    running_name[len] = '\0';
+    app_base_name(index, running_name);
 
     LOG_HOST("loading %s\n", path);
     uint32_t size = load_file(path);
@@ -584,6 +735,11 @@ static void start_app(int index)
     exit_requested = false;
     status[0] = '\0';
     gui_app_set_title(running_name);
+
+    /* Grant exactly what the app's .caps file lists and the policy allows */
+    size_t caps_len = read_caps_text(index);
+    caps_grant(&caps, running_name, caps_text, caps_len, false);
+
     fn_event = wasm_runtime_lookup_function(instance, "app_event");
     fn_tick = wasm_runtime_lookup_function(instance, "app_tick");
     wasm_function_inst_t fn_init = wasm_runtime_lookup_function(instance, "app_init");
@@ -592,7 +748,8 @@ static void start_app(int index)
     gfx_fill_rect(gui_app_surface(), (gfx_rect_t) { 0, 0, WIDTH, HEIGHT }, COLOUR_BG);
     add_damage(0, 0, WIDTH, HEIGHT);
     LOG_HOST("running %s (%u bytes)\n", running_name, size);
-    uint32_t argv[2] = { WIDTH, HEIGHT };
+    bool has_window = caps_have(&caps, CAP_WINDOW);
+    uint32_t argv[2] = { has_window ? WIDTH : 0, has_window ? HEIGHT : 0 };
     call_app(fn_init, 2, argv);
 }
 
@@ -624,6 +781,10 @@ static void handle_gui_events(void)
             stop_app("closed with Esc", false);
             continue;
         }
+        /* Input belongs to the window, so only an app holding it receives input */
+        if (!caps_have(&caps, CAP_WINDOW)) {
+            continue;
+        }
         uint32_t argv[5] = { ev.type, ev.code, (uint32_t)ev.value, (uint32_t)ev.x, (uint32_t)ev.y };
         if (ev.type == GUI_EV_KEY) {
             argv[3] = (uint8_t)c;
@@ -637,10 +798,10 @@ static void handle_gui_events(void)
 
 static void handle_tick(void)
 {
-    if (!running || tick_ms == 0) {
+    if (!running || tick_ms == 0 || !caps_have(&caps, CAP_TIMER)) {
         return;
     }
-    uint32_t argv[1] = { (uint32_t)n_time_ms(NULL) };
+    uint32_t argv[1] = { (uint32_t)now_ms() };
     if (call_app(fn_tick, 1, argv) && tick_ms) {
         sddf_timer_set_timeout(timer_config.driver_id, (uint64_t)tick_ms * NS_IN_MS);
     }
@@ -676,6 +837,7 @@ static void host_main(void)
         return;
     }
 
+    caps_init(file_size, audit);
     fs_set_blocking_wait(blocking_wait);
     fs_command_queue = fs_config.server.command_queue.vaddr;
     fs_completion_queue = fs_config.server.completion_queue.vaddr;

@@ -14,6 +14,7 @@
 #define ROWS_PER_TICK 8
 #define MAX_ITER 48
 
+static int win, timer, console;
 static int width, height;
 static double cx = -0.6, cy = 0.0, scale = 3.2;
 static int next_row;
@@ -50,23 +51,26 @@ static void render_rows(void)
             row_buf[ry * width + px] = colour(i);
         }
     }
-    lions_blit(0, next_row, width, rows, row_buf, (unsigned)(width * rows * 4));
-    lions_commit(0, next_row, width, rows);
+    lions_blit(win, 0, next_row, width, rows, row_buf, (unsigned)(width * rows * 4));
+    lions_commit(win, 0, next_row, width, rows);
     next_row += rows;
     if (next_row >= height) {
-        lions_set_tick(0);
-        lions_log("frame done");
+        lions_timer_start(timer, 0);
+        lions_log(console, "frame done");
     }
 }
 
 static void restart(void)
 {
     next_row = 0;
-    lions_set_tick(10);
+    lions_timer_start(timer, 10);
 }
 
 LIONS_EXPORT(app_init) void app_init(int w, int h)
 {
+    win = lions_cap("window");
+    timer = lions_cap("timer");
+    console = lions_cap("console");
     width = w > MAX_WIDTH ? MAX_WIDTH : w;
     height = h;
     restart();

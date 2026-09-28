@@ -53,8 +53,10 @@ and restore them from the taskbar, cycle through them with Alt+Tab, type into
 Notes (US keyboard layout), draw in Sketch, calculate with the mouse or the
 keyboard, and play with the Widgets gallery. Clock redraws itself every second
 from its own timer. In Apps, click a program to load it from the disk and run
-it (Game of Life, a Mandelbrot explorer and a hello world are included), and
-press Esc to return to the list.
+it (Game of Life, a Mandelbrot explorer, a hello world, a file reader and a
+capability probe are included), and press Esc to return to the list. Each app
+can only do what its capability list on the disk grants it, and the list shows
+this before you run it.
 
 This is milestone 6 of the roadmap below.
 
@@ -106,8 +108,10 @@ in `meta.py`).
 | `apps/widgets.c` | microui: a gallery of its controls |
 | `apps/mu_app.[ch]` | microui backend: rendering with `gfx`, input from the compositor |
 | `wasm_host/wasm_host.c` | The WebAssembly host app: file system, WAMR and the `lions` API |
+| `wasm_host/caps.[ch]` | Capabilities of WebAssembly apps: grant policy, checks, audit |
 | `wasm_apps/lions.h` | The API for WebAssembly apps |
-| `wasm_apps/*.c` | hello, life and mandel, built to `.wasm` and put on the disk |
+| `wasm_apps/*.c` | hello, life, mandel, reader and probe, built to `.wasm` and put on the disk |
+| `wasm_apps/*.caps` | What each of them may do |
 | `apps/microui/` | microui 2.02, vendored unmodified (MIT) |
 | `meta.py` | System description: drivers, virtualisers, compositor, apps and timer |
 | `include/gui_config.h` | Application slots |
@@ -212,6 +216,48 @@ Because the programs live on the disk, adding or changing an app needs no
 rebuild of the system: copy a new `.wasm` into `/apps` and it shows up in the
 list at the next boot.
 
+### Capabilities
+
+A WebAssembly app starts with no authority at all. What it may do is listed
+next to it on the disk, in `/apps/<name>.caps`, one capability per line:
+
+| Capability | Allows |
+|---|---|
+| `window` | drawing in the host's window, and receiving its input |
+| `timer` | reading the time and periodic `app_tick` calls |
+| `console` | writing lines to the serial console |
+| `file /apps/<path>` | reading that one file (read-only) |
+
+Because the list is a file on the disk rather than part of the app, it is
+controlled by whoever controls the disk, and it answers "what can this app
+do?" in plain text. An app without a `.caps` file gets only a window.
+
+The host applies its own policy on top: unknown or duplicate capabilities,
+files outside `/apps`, paths containing `..` and files that do not exist are
+refused. The app list shows what each app will be granted, and how many of
+its requests were refused, before it is run.
+
+Granted capabilities are installed in a table private to the running app.
+The app looks each one up by the name used in its `.caps` file to get a
+handle, and passes the handle to every function using it. A handle that is
+not live, or of the wrong type, is refused. An app can drop a capability for
+good, and all of them are revoked when it stops.
+
+Every grant, refusal, drop and revocation is written to an audit log on the
+serial console, for example:
+
+```
+AUDIT|probe: granted #0 window
+AUDIT|probe: refused 'file /secret.txt': files must lie under /apps/
+AUDIT|probe: denied file_read on handle 3 (no such capability)
+AUDIT|probe: revoked all 1 capabilities
+```
+
+The `probe` app tries to get around this and shows each attempt being
+blocked. This is enforced by the host PD, as apps run inside it; a step
+further would be to give each app its own PD, with its capabilities enforced
+by seL4 itself.
+
 ### Writing an app
 
 Apps are freestanding C compiled to 32-bit WebAssembly against
@@ -222,11 +268,14 @@ Apps are freestanding C compiled to 32-bit WebAssembly against
 ```c
 #include "lions.h"
 
+static int win;
+
 LIONS_EXPORT(app_init) void app_init(int width, int height)
 {
-    lions_fill_rect(0, 0, width, height, 0x1b1f27);
-    lions_draw_text(20, 20, "Hello!", 3, 0xe08a1e);
-    lions_commit(0, 0, width, height);
+    win = lions_cap("window");
+    lions_fill_rect(win, 0, 0, width, height, 0x1b1f27);
+    lions_draw_text(win, 20, 20, "Hello!", 3, 0xe08a1e);
+    lions_commit(win, 0, 0, width, height);
 }
 
 LIONS_EXPORT(app_event) void app_event(int type, int code, int value, int x, int y)
@@ -237,8 +286,14 @@ LIONS_EXPORT(app_event) void app_event(int type, int code, int value, int x, int
 
 LIONS_EXPORT(app_tick) void app_tick(int time_ms)
 {
-    /* Called every n ms after lions_set_tick(n) */
+    /* Called every n ms after lions_timer_start(timer, n) */
 }
+```
+
+with a `myapp.caps` next to it:
+
+```
+window
 ```
 
 Build it like the included apps (see `WASM_CFLAGS` in `desktop.mk`):
@@ -246,7 +301,7 @@ Build it like the included apps (see `WASM_CFLAGS` in `desktop.mk`):
 ```sh
 clang --target=wasm32 -O2 -nostdlib -ffreestanding -Wl,--no-entry \
     -Wl,--allow-undefined -Wl,-z,stack-size=16384 -o myapp.wasm myapp.c
-mcopy -i build/apps_disk.img@@1M myapp.wasm ::/apps/
+mcopy -i build/apps_disk.img@@1M myapp.wasm myapp.caps ::/apps/
 ```
 
 ### How the host works

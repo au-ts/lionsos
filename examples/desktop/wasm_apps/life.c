@@ -16,6 +16,7 @@
 #define TOP 40
 
 static unsigned char grid[ROWS][COLS], next[ROWS][COLS];
+static int win, timer;
 static int width, height;
 static int paused;
 static int generation;
@@ -59,27 +60,29 @@ static void step(void)
 static void draw(void)
 {
     char status[48];
-    lions_fill_rect(0, 0, width, height, 0x10141c);
+    lions_fill_rect(win, 0, 0, width, height, 0x10141c);
     snprintf(status, sizeof(status), "Generation %d%s", generation, paused ? "  (paused)" : "");
-    lions_draw_text(12, 12, status, 2, 0xe6e6e6);
+    lions_draw_text(win, 12, 12, status, 2, 0xe6e6e6);
     for (int r = 0; r < ROWS; r++) {
         for (int c = 0; c < COLS; c++) {
             if (grid[r][c]) {
-                lions_fill_rect(c * CELL, TOP + r * CELL, CELL - 1, CELL - 1, 0x3a9d5d);
+                lions_fill_rect(win, c * CELL, TOP + r * CELL, CELL - 1, CELL - 1, 0x3a9d5d);
             }
         }
     }
-    lions_commit(0, 0, width, height);
+    lions_commit(win, 0, 0, width, height);
 }
 
 LIONS_EXPORT(app_init) void app_init(int w, int h)
 {
+    win = lions_cap("window");
+    timer = lions_cap("timer");
     width = w;
     height = h;
-    seed = (unsigned)lions_time_ms();
+    seed = (unsigned)lions_time_ms(timer);
     randomise();
     draw();
-    lions_set_tick(120);
+    lions_timer_start(timer, 120);
 }
 
 LIONS_EXPORT(app_tick) void app_tick(int time_ms)

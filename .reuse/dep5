@@ -21,6 +21,12 @@ Files:
 Copyright: LionsOS Contributors
 License: CC-BY-SA-4.0
 
+Files:
+    examples/desktop/wasm_apps/*.caps
+    examples/desktop/wasm_apps/*.txt
+Copyright: LionsOS Contributors
+License: BSD-2-Clause
+
 # We use the Inter font which has the SIL Open Font License
 Files:
     examples/kitty/client/font/font_height35.py

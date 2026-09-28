@@ -7,6 +7,7 @@
 
 #include "lions.h"
 
+static int win, console;
 static int width, height;
 static int clicks;
 static char typed[28];
@@ -15,26 +16,28 @@ static int typed_len;
 static void draw(void)
 {
     char line[48];
-    lions_fill_rect(0, 0, width, height, 0x1b1f27);
-    lions_draw_text(20, 24, "Hello from", 3, 0xe6e6e6);
-    lions_draw_text(20, 56, "WebAssembly!", 3, 0xe08a1e);
-    lions_draw_text(20, 110, "Loaded from the FAT disk at", 2, 0x8a8f99);
-    lions_draw_text(20, 132, "run time and interpreted", 2, 0x8a8f99);
-    lions_draw_text(20, 154, "by WAMR in its own PD.", 2, 0x8a8f99);
+    lions_fill_rect(win, 0, 0, width, height, 0x1b1f27);
+    lions_draw_text(win, 20, 24, "Hello from", 3, 0xe6e6e6);
+    lions_draw_text(win, 20, 56, "WebAssembly!", 3, 0xe08a1e);
+    lions_draw_text(win, 20, 110, "Loaded from the FAT disk and", 2, 0x8a8f99);
+    lions_draw_text(win, 20, 132, "interpreted by WAMR. It can", 2, 0x8a8f99);
+    lions_draw_text(win, 20, 154, "only use what it was granted.", 2, 0x8a8f99);
 
     snprintf(line, sizeof(line), "Clicks: %d", clicks);
-    lions_draw_text(20, 200, line, 2, 0xe6e6e6);
-    lions_draw_text(20, 230, "Typed:", 2, 0xe6e6e6);
-    lions_draw_text(124, 230, typed, 2, 0x3a9d5d);
-    lions_draw_text(20, height - 30, "Esc returns to the list", 2, 0x8a8f99);
-    lions_commit(0, 0, width, height);
+    lions_draw_text(win, 20, 200, line, 2, 0xe6e6e6);
+    lions_draw_text(win, 20, 230, "Typed:", 2, 0xe6e6e6);
+    lions_draw_text(win, 124, 230, typed, 2, 0x3a9d5d);
+    lions_draw_text(win, 20, height - 30, "Esc returns to the list", 2, 0x8a8f99);
+    lions_commit(win, 0, 0, width, height);
 }
 
 LIONS_EXPORT(app_init) void app_init(int w, int h)
 {
+    win = lions_cap("window");
+    console = lions_cap("console");
     width = w;
     height = h;
-    lions_log("hello, world");
+    lions_log(console, "hello, world");
     draw();
 }
 

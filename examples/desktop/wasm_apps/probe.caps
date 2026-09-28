@@ -1,0 +1,5 @@
+# probe asks for more than the policy allows
+window
+console
+file /secret.txt
+network
