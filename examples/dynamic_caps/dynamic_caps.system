@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright 2026, LionsOS Contributors
+
+ SPDX-License-Identifier: BSD-2-Clause
+-->
+<!--
+ The manager gets real seL4 authority through <cspace>: an Untyped to make
+ kernel objects from, its own CNode, VSpace and TCB, and the CNode and VSpace of
+ an empty sandbox PD. cap_untyped and cap_cnode need the Microkit patch in
+ this directory.
+-->
+<system>
+    <protection_domain name="manager" priority="100">
+        <program_image path="manager.elf" />
+        <cspace>
+            <cap_untyped slot="1" size="0x100000" />
+            <cap_cnode slot="2" pd="sandbox" />
+            <cap_vspace slot="3" pd="sandbox" />
+            <cap_vspace slot="4" pd="manager" />
+            <cap_cnode slot="5" pd="manager" />
+            <cap_tcb slot="6" pd="manager" />
+        </cspace>
+        <protection_domain name="sandbox" priority="50" id="0">
+            <program_image path="sandbox.elf" />
+        </protection_domain>
+    </protection_domain>
+</system>

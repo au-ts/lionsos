@@ -26,6 +26,7 @@ The default reviewers of the LionsOS are currently
     * `wamr/` - Simon (`@dumsum`)
 * `examples/`
     * `desktop` - UNASSIGNED (`@`)
+    * `dynamic_caps` - UNASSIGNED (`@`)
     * `fileio` - UNASSIGNED (`@`)
     * `firewall` - Courtney (`@Courtney3141`)
     * `kitty` - Bill (`@dreamliner787-9 `)

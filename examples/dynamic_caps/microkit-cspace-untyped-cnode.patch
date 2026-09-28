@@ -1,0 +1,148 @@
+diff --git a/tool/microkit/src/capdl/builder.rs b/tool/microkit/src/capdl/builder.rs
+index 4360d83..c374e99 100644
+--- a/tool/microkit/src/capdl/builder.rs
++++ b/tool/microkit/src/capdl/builder.rs
+@@ -12,7 +12,7 @@ use std::{
+ };
+ 
+ use sel4_capdl_initializer_types::{
+-    object, Cap, CapTableEntry, Fill, FillEntry, FillEntryContent, FillEntryContentBootInfo,
++    cap, object, Cap, CapTableEntry, Fill, FillEntry, FillEntryContent, FillEntryContentBootInfo,
+     NamedObject, Object, ObjectId, Rights, Spec, Word,
+ };
+ 
+@@ -1330,14 +1330,35 @@ pub fn build_capdl_spec(
+     // *********************************
+     for pd in system.protection_domains.values() {
+         for cap_map in pd.cap_maps.iter() {
+-            // TODO: Once we add more CapMap options, they might not all have
+-            // the pd_name. But for now, they do.
+-            let pd_src_shadow_cspace = &pd_shadow_cspaces[&cap_map.pd];
+-
+             let cap_map_obj = match cap_map.cap_type {
+-                CapMapType::Tcb => capdl_util_make_tcb_cap(pd_src_shadow_cspace.tcb),
+-                CapMapType::Sc => capdl_util_make_sc_cap(pd_src_shadow_cspace.sched_context),
+-                CapMapType::VSpace => capdl_util_make_page_table_cap(pd_src_shadow_cspace.vspace),
++                CapMapType::Untyped { size_bits } => {
++                    // A fresh Untyped carved out of free memory by the initialiser
++                    let ut_obj_id = spec_container.add_root_object(CapDLNamedObject {
++                        name: format!("untyped_{}_slot_{}", pd.name, cap_map.slot).into(),
++                        object: Object::Untyped(object::Untyped { size_bits, paddr: None }),
++                    });
++                    Cap::Untyped(cap::Untyped { object: ut_obj_id })
++                }
++                _ => {
++                    let pd_src_shadow_cspace = &pd_shadow_cspaces[&cap_map.pd];
++                    match cap_map.cap_type {
++                        CapMapType::Tcb => capdl_util_make_tcb_cap(pd_src_shadow_cspace.tcb),
++                        CapMapType::Sc => capdl_util_make_sc_cap(pd_src_shadow_cspace.sched_context),
++                        CapMapType::VSpace => capdl_util_make_page_table_cap(pd_src_shadow_cspace.vspace),
++                        // The guard makes up the rest of a 64-bit lookup after this slot of the
++                        // holder's root CNode and a slot of this CNode. So the holder names slot
++                        // j of this CNode with CPtr (slot << 58) | j, and with a CNode cap to its
++                        // own root CNode in slot k, (k << 58) | j names its own root slot j as a
++                        // leaf, even if that holds a CNode cap. As a root for CNode invocations,
++                        // this cap addresses its slots with depth 58 and index = slot.
++                        CapMapType::CNode => capdl_util_make_cnode_cap(
++                            pd_src_shadow_cspace.cspace,
++                            0,
++                            (kernel_config.cap_address_bits - 2 * PD_ROOT_CAP_BITS as u64) as u8,
++                        ),
++                        CapMapType::Untyped { .. } => unreachable!(),
++                    }
++                }
+             };
+ 
+             // Map this into the destination pd's cspace and the specified slot.
+diff --git a/tool/microkit/src/capdl/spec.rs b/tool/microkit/src/capdl/spec.rs
+index eb1a086..db53a35 100644
+--- a/tool/microkit/src/capdl/spec.rs
++++ b/tool/microkit/src/capdl/spec.rs
+@@ -56,6 +56,7 @@ pub fn capdl_obj_physical_size_bits(obj: &Object<FrameFill>, sel4_config: &Confi
+             .unwrap(),
+         Object::SchedContext(sched_context) => sched_context.size_bits as u64,
+         Object::Reply => ObjectType::Reply.fixed_size_bits(sel4_config).unwrap(),
++        Object::Untyped(ut) => ut.size_bits as u64,
+         _ => 0,
+     }
+ }
+diff --git a/tool/microkit/src/sdf.rs b/tool/microkit/src/sdf.rs
+index 1de8722..9ff0f02 100644
+--- a/tool/microkit/src/sdf.rs
++++ b/tool/microkit/src/sdf.rs
+@@ -310,6 +310,9 @@ pub fn parse(
+ 
+     for pd in pds.values() {
+         for cap_map in pd.cap_maps.iter() {
++            if matches!(cap_map.cap_type, CapMapType::Untyped { .. }) {
++                continue;
++            }
+             if !pds.contains_key(&cap_map.pd) {
+                 return Err(format!(
+                     "Error: unknown PD name '{}': {}",
+diff --git a/tool/microkit/src/sdf/cspace.rs b/tool/microkit/src/sdf/cspace.rs
+index 50f0965..19bdff4 100644
+--- a/tool/microkit/src/sdf/cspace.rs
++++ b/tool/microkit/src/sdf/cspace.rs
+@@ -17,11 +17,16 @@ pub enum CapMapType {
+     Tcb,
+     Sc,
+     VSpace,
++    /// The root CNode of a PD's CSpace
++    CNode,
++    /// A fresh Untyped object of 2^size_bits bytes, owned by this PD alone
++    Untyped { size_bits: u8 },
+ }
+ 
+ #[derive(Debug, PartialEq, Eq)]
+ pub struct CapMap {
+     pub cap_type: CapMapType,
++    /// The PD the capability is from; empty for Untyped, which is from no PD
+     pub pd: Rc<str>,
+     // The destination "slot" in the CSpace: note that this is "opaque" and
+     // can be shifted depending on the location in the CSpace to work as the CPtr,
+@@ -75,6 +80,35 @@ impl CapMap {
+             text_pos: node.range().start,
+         })
+     }
++
++    fn untyped_from_xml(xml_sdf: &SystemDescriptionFile, node: &dyn SdfNode) -> Result<CapMap, String> {
++        check_attributes(xml_sdf, node, &["slot", "size"])?;
++
++        let slot: u64 = sdf_parse_required_attribute(xml_sdf, node, "slot")?;
++        if slot == 0 || slot >= CAP_MAP_MAX_SLOT {
++            return Err(value_error(
++                xml_sdf,
++                node,
++                format!("The destination slot must lie in 1..{CAP_MAP_MAX_SLOT}"),
++            ));
++        }
++
++        let size: u64 = sdf_parse_required_attribute(xml_sdf, node, "size")?;
++        if !size.is_power_of_two() || size < 0x1000 {
++            return Err(value_error(
++                xml_sdf,
++                node,
++                "The size of an untyped must be a power of two of at least 0x1000".to_string(),
++            ));
++        }
++
++        Ok(CapMap {
++            cap_type: CapMapType::Untyped { size_bits: size.trailing_zeros() as u8 },
++            pd: Rc::from(""),
++            slot,
++            text_pos: node.range().start,
++        })
++    }
+ }
+ 
+ impl CSpace {
+@@ -91,6 +125,8 @@ impl CSpace {
+                 "cap_tcb" => CapMap::from_xml(CapMapType::Tcb, xml_sdf, &*child)?,
+                 "cap_sc" => CapMap::from_xml(CapMapType::Sc, xml_sdf, &*child)?,
+                 "cap_vspace" => CapMap::from_xml(CapMapType::VSpace, xml_sdf, &*child)?,
++                "cap_cnode" => CapMap::from_xml(CapMapType::CNode, xml_sdf, &*child)?,
++                "cap_untyped" => CapMap::untyped_from_xml(xml_sdf, &*child)?,
+                 child_name => {
+                     let location = loc_string(xml_sdf, child.range().start);
+                     if let Some(type_name) = child_name.strip_prefix("cap_") {
