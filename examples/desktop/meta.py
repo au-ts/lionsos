@@ -106,7 +106,32 @@ def add_region_paddr_setvars(xml: str, pd_name: str, setvars: List[Tuple[str, st
     return xml
 
 
-def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
+def add_cspace(xml: str, pd_name: str, caps: List[str]) -> str:
+    """
+    Insert a Microkit <cspace> element into a protection domain, just after
+    its opening tag (it may have child PDs, so not before its closing tag).
+    sdfgen 0.35 cannot express <cspace>, and cap_untyped, cap_cnode and
+    cap_frames need the Microkit patch in examples/dynamic_caps.
+    """
+    pattern = re.compile(rf'(<protection_domain name="{pd_name}"[^>]*>)')
+    lines = "".join(f"\n            {cap}" for cap in caps)
+    block = f"\n        <cspace>{lines}\n        </cspace>"
+    xml, n = pattern.subn(lambda m: m.group(1) + block, xml, count=1)
+    assert n == 1, f"protection domain {pd_name} not found"
+    return xml
+
+
+# With --sandbox, WebAssembly apps run in a child PD of wasm_host that it
+# builds from an Untyped for each app (see wasm_host/sandbox.h). These must
+# match wasm_host/sandbox.h and the slots in wasm_host/sandbox_host.c.
+SANDBOX_HOST_CH = 60
+SANDBOX_RUNNER_CH = 0
+SANDBOX_CHILD_ID = 0
+SANDBOX_UNTYPED_SIZE = 0x1000000
+SANDBOX_BOOKKEEPING_SIZE = 0x40000
+
+
+def generate(sdf_path: str, output_dir: str, dtb: DeviceTree, sandbox: bool):
     timer_node = dtb.node(board.timer)
     assert timer_node is not None
     mmio = VIRTIO_MMIO[board.name]
@@ -239,6 +264,12 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     fatfs = ProtectionDomain("fatfs", "fat.elf", priority=96)
     fs = LionsOs.FileSystem.Fat(sdf, fatfs, wasm_host, blk=blk_system, partition=board.partition)
 
+    if sandbox:
+        # Below every other PD, so an app that never stops computing slows nothing else
+        sandbox_pd = ProtectionDomain("sandbox", "sandbox.elf", priority=1)
+        wasm_host.add_child_pd(sandbox_pd, child_id=SANDBOX_CHILD_ID)
+        sdf.add_channel(Channel(wasm_host, sandbox_pd, a_id=SANDBOX_HOST_CH, b_id=SANDBOX_RUNNER_CH))
+
     pds = [timer_driver, serial_driver, serial_virt_tx, blk_driver, blk_virt, fatfs, gpu_driver, gpu_virt,
            input_virt, *input_drivers, compositor, *apps.values()]
     for pd in pds:
@@ -260,6 +291,16 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
     ])
     for name in INPUT_DEVICES:
         xml = add_region_paddr_setvars(xml, f"input_{name}", [("virtio_dma_paddr", f"input_{name}_dma")])
+    if sandbox:
+        xml = add_cspace(xml, "wasm_host", [
+            f'<cap_untyped slot="1" size="{SANDBOX_UNTYPED_SIZE:#x}" />',
+            '<cap_vspace slot="2" pd="sandbox" />',
+            '<cap_vspace slot="3" pd="wasm_host" />',
+            '<cap_cnode slot="4" pd="wasm_host" />',
+            '<cap_frames slot="5" mr="gui_wasm_host_surface" />',
+            '<cap_frames slot="6" mr="gui_wasm_host_state" />',
+            f'<cap_untyped slot="7" size="{SANDBOX_BOOKKEEPING_SIZE:#x}" />',
+        ])
     with open(f"{output_dir}/{sdf_path}", "w+") as f:
         f.write(xml)
 
@@ -271,6 +312,7 @@ if __name__ == '__main__':
     parser.add_argument("--board", required=True, choices=[b for b in VIRTIO_MMIO])
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
+    parser.add_argument("--sandbox", action="store_true")
 
     args = parser.parse_args()
 
@@ -282,4 +324,4 @@ if __name__ == '__main__':
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
 
-    generate(args.sdf, args.output, dtb)
+    generate(args.sdf, args.output, dtb, args.sandbox)

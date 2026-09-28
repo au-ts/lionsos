@@ -26,6 +26,17 @@ REPORT_FILE := report.txt
 # WebAssembly apps put on the disk that the wasm_host app slot loads from,
 # each with the list of capabilities it is granted, plus files they use
 WASM_APPS := hello life mandel reader probe
+
+# With SANDBOX=1, WebAssembly apps run in a sandbox PD that seL4 enforces
+# (see wasm_host/sandbox.h). This needs a Microkit SDK whose tool has the
+# patch in examples/dynamic_caps, for <cspace> elements stock Microkit lacks.
+# The disk then also has an app that never returns, which only a sandbox
+# can stop.
+ifeq ($(SANDBOX),1)
+IMAGES += sandbox.elf
+META_FLAGS := --sandbox
+WASM_APPS += spin
+endif
 WASM_FILES := $(addsuffix .wasm,$(WASM_APPS))
 WASM_CAPS := $(addprefix $(DESKTOP_DIR)/wasm_apps/,$(addsuffix .caps,$(WASM_APPS)))
 WASM_DATA := $(DESKTOP_DIR)/wasm_apps/readme.txt
@@ -136,16 +147,41 @@ wamr/libvmlib.a: $(WAMR_ROOT)/build-scripts/runtime_lib.cmake | $(LIONS_LIBC)/in
 		-DWAMR_BUILD_ALLOC_WITH_USAGE=1 -DWAMR_BUILD_DUMP_CALL_STACK=1 -DWAMR_BUILD_CUSTOM_NAME_SECTION=1 > /dev/null
 	cmake --build wamr > /dev/null
 
+ifeq ($(SANDBOX),1)
+WASM_HOST_DEFS := -DWASM_SANDBOX
+WASM_HOST_OBJS := wasm_host/wasm_host.o wasm_host/caps.o wasm_host/sandbox_host.o wasm_host/runner_blob.o
+else
+WASM_HOST_OBJS := wasm_host/wasm_host.o wasm_host/caps.o wamr/libvmlib.a
+endif
+
 wasm_host/wasm_host.o: $(DESKTOP_DIR)/wasm_host/wasm_host.c $(WAMR_ROOT)/build-scripts/runtime_lib.cmake \
+		| $(SDDF_LIBC_INCLUDE)
+	mkdir -p wasm_host
+	$(CC) -c $(CFLAGS) $(WASM_HOST_CFLAGS) $(WASM_HOST_DEFS) $< -o $@
+
+wasm_host/%.o: $(DESKTOP_DIR)/wasm_host/%.c | $(SDDF_LIBC_INCLUDE)
+	mkdir -p wasm_host
+	$(CC) -c $(CFLAGS) $< -o $@
+
+wasm_host.elf: $(WASM_HOST_OBJS) $(APP_LIB_OBJS) libmicrokitco_wasm_host.a
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+# The sandbox's runner: WAMR and musl without libmicrokit, linked where the
+# host loads it. The host carries it in its image.
+wasm_host/runner.o: $(DESKTOP_DIR)/wasm_host/runner.c $(WAMR_ROOT)/build-scripts/runtime_lib.cmake \
 		| $(SDDF_LIBC_INCLUDE)
 	mkdir -p wasm_host
 	$(CC) -c $(CFLAGS) $(WASM_HOST_CFLAGS) $< -o $@
 
-wasm_host/caps.o: $(DESKTOP_DIR)/wasm_host/caps.c | $(SDDF_LIBC_INCLUDE)
-	mkdir -p wasm_host
-	$(CC) -c $(CFLAGS) $< -o $@
+runner.elf: wasm_host/runner.o desktop/gfx.o wamr/libvmlib.a $(LIONS_LIBC)/lib/libc.a $(DESKTOP_DIR)/wasm_host/runner.ld
+	$(LD) -T $(DESKTOP_DIR)/wasm_host/runner.ld -L$(LIONS_LIBC)/lib wasm_host/runner.o desktop/gfx.o \
+		wamr/libvmlib.a --start-group -lc --end-group -o $@
 
-wasm_host.elf: wasm_host/wasm_host.o wasm_host/caps.o $(APP_LIB_OBJS) wamr/libvmlib.a libmicrokitco_wasm_host.a
+wasm_host/runner_blob.o: $(DESKTOP_DIR)/wasm_host/runner_blob.S runner.elf
+	mkdir -p wasm_host
+	$(CC) -c $(CFLAGS) -DRUNNER_ELF=\"runner.elf\" $< -o $@
+
+sandbox.elf: wasm_host/sandbox_stub.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 -include $(wildcard desktop/*.d apps/*.d wasm_host/*.d)
@@ -173,7 +209,7 @@ $(DISK_IMAGE): $(WASM_FILES) $(WASM_CAPS) $(WASM_DATA) $(DISK_SECRET)
 	mcopy -i $@@@1M $(DISK_SECRET) ::/
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	PYTHONPATH=$(SDDF)/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
+	PYTHONPATH=$(SDDF)/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) $(META_FLAGS)
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
@@ -231,4 +267,5 @@ clean::
 
 clobber:: clean
 	rm -f compositor.elf $(addsuffix .elf,$(GUI_APPS) $(MU_APPS)) wasm_host.elf input_keyboard.elf input_tablet.elf \
+		runner.elf sandbox.elf \
 		$(WASM_FILES) $(DISK_IMAGE) $(IMAGE_FILE) $(REPORT_FILE) $(SYSTEM_FILE) *.data $(DTB)

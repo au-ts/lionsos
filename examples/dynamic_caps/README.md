@@ -11,11 +11,14 @@ at run time, and hand a sandbox memory that another PD maps, such as a
 window's surface, with the kernel enforcing the result? It can, with a small
 Microkit patch.
 
-This is step 3 of the plan for the desktop's apps. Today, WebAssembly apps in
-`examples/desktop` run inside one PD, and their capabilities are enforced by
-that PD (see `examples/desktop/wasm_host/caps.h`). Here the enforcement is by
-seL4 itself: the sandboxed program is a real thread in its own address space,
-and all it can reach is what the manager maps and grants.
+This is step 3 of the plan for the desktop's apps. By default, WebAssembly
+apps in `examples/desktop` run inside one PD, and their capabilities are
+enforced by that PD (see `examples/desktop/wasm_host/caps.h`). Here the
+enforcement is by seL4 itself: the sandboxed program is a real thread in its
+own address space, and all it can reach is what the manager maps and grants.
+Step 4 applies this to the desktop: built with `SANDBOX=1` and a Microkit SDK
+with this patch, it runs each app in a sandbox (see "Sandboxed apps" in
+`examples/desktop/README.md`).
 
 ## What it does
 

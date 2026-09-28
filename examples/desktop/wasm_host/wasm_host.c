@@ -33,6 +33,12 @@
  * stops. (The LionsOS libc's mmap never frees, and WAMR would otherwise use
  * it for linear memory.) Every pointer and rectangle passed by an app is
  * validated, so a misbehaving app can at worst fail itself or hang this PD.
+ *
+ * Built with SANDBOX=1 (WASM_SANDBOX), apps instead run in a separate
+ * sandbox PD whose address space this PD builds for each app from an
+ * Untyped, so that seL4 enforces what an app is granted (see sandbox.h).
+ * This PD then runs no WebAssembly itself: it lists apps, applies the
+ * policy, forwards input and ticks, and serves the app's requests.
  */
 
 #include <stdint.h>
@@ -52,9 +58,13 @@
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
 #include <sddf/util/util.h>
-#include <wasm_export.h>
 #include "../apps/gui_app.h"
 #include "caps.h"
+#ifdef WASM_SANDBOX
+#include "sandbox_host.h"
+#else
+#include <wasm_export.h>
+#endif
 
 #define WIDTH 480
 #define HEIGHT 360
@@ -77,8 +87,8 @@
 #define COLOUR_MUTED GFX_RGB(0x8a, 0x8f, 0x99)
 #define COLOUR_ERROR GFX_RGB(0xd9, 0x4c, 0x3d)
 
-#define ROW_Y0 70
-#define ROW_HEIGHT 42
+#define ROW_Y0 64
+#define ROW_HEIGHT 40
 
 #define CAPS_TEXT_MAX 1024
 #define FILE_READ_MAX (64 * 1024)
@@ -105,6 +115,7 @@ static co_control_t co_controller_mem;
 static microkit_cothread_sem_t wake;
 static bool gui_pending, tick_pending;
 
+#ifndef WASM_SANDBOX
 /*
  * WAMR's own pool allocator, from core/shared/mem-alloc/mem_alloc.h (which
  * cannot be included without WAMR's internal platform headers)
@@ -118,6 +129,7 @@ void mem_allocator_free(mem_allocator_t allocator, void *ptr);
 static char runtime_pool[RUNTIME_POOL_SIZE];
 static mem_allocator_t pool_allocator;
 static uint8_t wasm_buf[WASM_MAX_SIZE];
+#endif
 
 /* The app list */
 static char app_names[MAX_APPS][NAME_MAX_LEN];
@@ -131,14 +143,19 @@ static bool status_is_error;
 /* The running app, if any */
 static bool running;
 static char running_name[NAME_MAX_LEN];
+#ifndef WASM_SANDBOX
 static wasm_module_t module;
 static wasm_module_inst_t instance;
 static wasm_exec_env_t exec_env;
 static wasm_function_inst_t fn_event, fn_tick;
-static uint32_t tick_ms;
 static bool exit_requested;
 static gfx_rect_t damage;
 static bool damaged;
+#else
+static bool sandbox_pending, fault_pending;
+static char fault_reason[48];
+#endif
+static uint32_t tick_ms;
 static caps_table_t caps;
 static char caps_text[CAPS_TEXT_MAX + 1];
 
@@ -323,6 +340,7 @@ static void scan_apps(void)
     LOG_HOST("found %d app(s) in %s\n", num_apps, APPS_DIR);
 }
 
+#ifndef WASM_SANDBOX
 /* Read a whole module into wasm_buf, returning its size or 0 on failure */
 static uint32_t load_file(const char *path)
 {
@@ -333,6 +351,7 @@ static uint32_t load_file(const char *path)
     int64_t n = read_file(path, 0, wasm_buf, size);
     return n == (int64_t)size ? (uint32_t)n : 0;
 }
+#endif
 
 /* Drawing helpers for the host's own list view */
 
@@ -374,6 +393,22 @@ static void draw_list(void)
     gui_app_commit_all();
 }
 
+/* An app asked for ticks every `ms`, or none with 0 */
+static void set_tick(int32_t ms)
+{
+    bool was_ticking = tick_ms != 0;
+    tick_ms = ms <= 0 ? 0 : MAX(ms, MIN_TICK_MS);
+    if (tick_ms && !was_ticking) {
+        sddf_timer_set_timeout(timer_config.driver_id, (uint64_t)tick_ms * NS_IN_MS);
+    }
+}
+
+static int32_t now_ms(void)
+{
+    return (int32_t)(sddf_timer_time_now(timer_config.driver_id) / NS_IN_MS);
+}
+
+#ifndef WASM_SANDBOX
 /* Native functions imported by apps from the "lions" module */
 
 static void add_damage(int32_t x, int32_t y, int32_t w, int32_t h)
@@ -474,17 +509,8 @@ static int32_t n_timer_start(wasm_exec_env_t env, int32_t timer, int32_t ms)
     if (!caps_check(&caps, running_name, timer, CAP_TIMER, "timer_start")) {
         return -1;
     }
-    bool was_ticking = tick_ms != 0;
-    tick_ms = ms <= 0 ? 0 : MAX(ms, MIN_TICK_MS);
-    if (tick_ms && !was_ticking) {
-        sddf_timer_set_timeout(timer_config.driver_id, (uint64_t)tick_ms * NS_IN_MS);
-    }
+    set_tick(ms);
     return 0;
-}
-
-static int32_t now_ms(void)
-{
-    return (int32_t)(sddf_timer_time_now(timer_config.driver_id) / NS_IN_MS);
 }
 
 static int32_t n_timer_now(wasm_exec_env_t env, int32_t timer)
@@ -647,8 +673,15 @@ static void pool_free(mem_alloc_usage_t usage, void *ptr)
 
 /* Running apps */
 
+#endif /* !WASM_SANDBOX */
+
 static void stop_app(const char *reason, bool is_error)
 {
+#ifdef WASM_SANDBOX
+    sandbox_stop();
+    /* A fault the sandbox reported before it stopped is about this app, not the next one */
+    fault_pending = false;
+#else
     if (exec_env) {
         wasm_runtime_destroy_exec_env(exec_env);
     }
@@ -661,10 +694,11 @@ static void stop_app(const char *reason, bool is_error)
     exec_env = NULL;
     instance = NULL;
     module = NULL;
+    damaged = false;
+#endif
     running = false;
     caps_revoke_all(&caps, running_name);
     tick_ms = 0;
-    damaged = false;
 
     LOG_HOST("%s: %s\n", running_name, reason);
     snprintf(status, sizeof(status), "%s: %s", running_name, reason);
@@ -673,13 +707,13 @@ static void stop_app(const char *reason, bool is_error)
     draw_list();
 }
 
+#ifndef WASM_SANDBOX
 /* Call an app export, then publish what it drew. Returns false if the app stopped. */
 static bool call_app(wasm_function_inst_t fn, uint32_t argc, uint32_t *argv)
 {
     if (fn && !wasm_runtime_call_wasm(exec_env, fn, argc, argv)) {
+        /* WAMR has printed where the app trapped, with function names from the module */
         const char *exception = wasm_runtime_get_exception(instance);
-        /* Print where the app trapped (function names are kept in the module) */
-        wasm_runtime_dump_call_stack(exec_env);
         char reason[48];
         snprintf(reason, sizeof(reason), "%s", exception ? exception : "trapped");
         stop_app(reason, true);
@@ -752,6 +786,94 @@ static void start_app(int index)
     uint32_t argv[2] = { has_window ? WIDTH : 0, has_window ? HEIGHT : 0 };
     call_app(fn_init, 2, argv);
 }
+#else
+static void start_app(int index)
+{
+    char path[sizeof(APPS_DIR) + NAME_MAX_LEN + 1];
+    snprintf(path, sizeof(path), "%s/%s", APPS_DIR, app_names[index]);
+    app_base_name(index, running_name);
+
+    uint64_t size;
+    if (!file_size(path, &size)) {
+        snprintf(status, sizeof(status), "Could not read %s", app_names[index]);
+        status_is_error = true;
+        draw_list();
+        return;
+    }
+
+    /* Grant exactly what the app's .caps file lists and the policy allows */
+    size_t caps_len = read_caps_text(index);
+    caps_grant(&caps, running_name, caps_text, caps_len, false);
+
+    /* Start from a blank window in case the app draws only part of it */
+    gfx_fill_rect(gui_app_surface(), (gfx_rect_t) { 0, 0, WIDTH, HEIGHT }, COLOUR_BG);
+    gui_app_commit_all();
+    gui_app_set_title(running_name);
+
+    running = true;
+    status[0] = '\0';
+    char error[64];
+    LOG_HOST("running %s (%lu bytes) in a sandbox\n", running_name, (unsigned long)size);
+    if (!sandbox_start(running_name, path, size, &caps, WIDTH, HEIGHT, read_file, error, sizeof(error))) {
+        stop_app(error, true);
+    }
+}
+
+/* Requests from the app in the sandbox. Services check the grant themselves. */
+static void handle_sandbox(void)
+{
+    sandbox_req_t req;
+    while (running && sandbox_next_request(&req)) {
+        switch (req.type) {
+        case SANDBOX_REQ_COMMIT:
+            if (caps_have(&caps, CAP_WINDOW)) {
+                microkit_notify(GUI_COMPOSITOR_CH);
+            }
+            break;
+        case SANDBOX_REQ_LOG:
+            if (caps_check(&caps, running_name, req.arg, CAP_CONSOLE, "console_log")) {
+                printf("%s: %s\n", running_name, req.text);
+            }
+            break;
+        case SANDBOX_REQ_TIMER:
+            if (caps_have(&caps, CAP_TIMER)) {
+                set_tick(req.arg);
+            } else {
+                audit(running_name, "denied timer_start (no timer capability)");
+            }
+            break;
+        case SANDBOX_REQ_DROP:
+            if (req.arg >= 0 && req.arg < CAPS_MAX && caps.caps[req.arg].live) {
+                cap_type_t type = caps.caps[req.arg].type;
+                if (caps_drop(&caps, running_name, req.arg) == 0) {
+                    sandbox_revoke_grant(req.arg, type);
+                }
+                if (!caps_have(&caps, CAP_TIMER)) {
+                    tick_ms = 0;
+                }
+            }
+            break;
+        case SANDBOX_REQ_EXIT:
+            stop_app("exited", false);
+            break;
+        case SANDBOX_REQ_TRAP:
+            stop_app(req.text[0] ? req.text : "trapped", true);
+            break;
+        case SANDBOX_REQ_DEBUG:
+            printf("%s|runtime: %s\n", running_name, req.text);
+            break;
+        case SANDBOX_REQ_DENIED:
+            /* The runner refused a call; audit it as the in-PD host does */
+            if (req.grant_type >= CAP_WINDOW && req.grant_type <= CAP_FILE) {
+                caps_check(&caps, running_name, req.arg, req.grant_type, req.text);
+            }
+            break;
+        default:
+            break;
+        }
+    }
+}
+#endif
 
 /* Event handling */
 
@@ -785,6 +907,13 @@ static void handle_gui_events(void)
         if (!caps_have(&caps, CAP_WINDOW)) {
             continue;
         }
+#ifdef WASM_SANDBOX
+        if (ev.type == GUI_EV_KEY) {
+            ev.x = (uint8_t)c;
+            ev.y = 0;
+        }
+        sandbox_post_event(ev);
+#else
         uint32_t argv[5] = { ev.type, ev.code, (uint32_t)ev.value, (uint32_t)ev.x, (uint32_t)ev.y };
         if (ev.type == GUI_EV_KEY) {
             argv[3] = (uint8_t)c;
@@ -793,7 +922,13 @@ static void handle_gui_events(void)
         if (!call_app(fn_event, 5, argv)) {
             continue;
         }
+#endif
     }
+#ifdef WASM_SANDBOX
+    if (running) {
+        sandbox_kick();
+    }
+#endif
 }
 
 static void handle_tick(void)
@@ -801,10 +936,16 @@ static void handle_tick(void)
     if (!running || tick_ms == 0 || !caps_have(&caps, CAP_TIMER)) {
         return;
     }
+#ifdef WASM_SANDBOX
+    sandbox_post_tick(now_ms());
+    sandbox_kick();
+    sddf_timer_set_timeout(timer_config.driver_id, (uint64_t)tick_ms * NS_IN_MS);
+#else
     uint32_t argv[1] = { (uint32_t)now_ms() };
     if (call_app(fn_tick, 1, argv) && tick_ms) {
         sddf_timer_set_timeout(timer_config.driver_id, (uint64_t)tick_ms * NS_IN_MS);
     }
+#endif
 }
 
 static void host_main(void)
@@ -818,6 +959,14 @@ static void host_main(void)
     draw_list();
     status[0] = '\0';
 
+#ifdef WASM_SANDBOX
+    if (!sandbox_init()) {
+        snprintf(status, sizeof(status), "Could not set up sandboxes");
+        status_is_error = true;
+        draw_list();
+        return;
+    }
+#else
     pool_allocator = mem_allocator_create(runtime_pool, sizeof(runtime_pool));
     RuntimeInitArgs args = {
         .mem_alloc_type = Alloc_With_Allocator,
@@ -836,6 +985,7 @@ static void host_main(void)
         draw_list();
         return;
     }
+#endif
 
     caps_init(file_size, audit);
     fs_set_blocking_wait(blocking_wait);
@@ -863,6 +1013,18 @@ static void host_main(void)
             tick_pending = false;
             handle_tick();
         }
+#ifdef WASM_SANDBOX
+        if (fault_pending) {
+            fault_pending = false;
+            if (running) {
+                stop_app(fault_reason, true);
+            }
+        }
+        if (sandbox_pending) {
+            sandbox_pending = false;
+            handle_sandbox();
+        }
+#endif
     }
 }
 
@@ -891,11 +1053,46 @@ void notified(microkit_channel ch)
     } else if (ch == timer_config.driver_id) {
         tick_pending = true;
     }
+#ifdef WASM_SANDBOX
+    else if (ch == SANDBOX_HOST_CH) {
+        sandbox_pending = true;
+    }
+    bool pending = gui_pending || tick_pending || sandbox_pending;
+#else
+    bool pending = gui_pending || tick_pending;
+#endif
 
     fs_process_completions(NULL);
     microkit_cothread_recv_ntfn(ch);
 
-    if (gui_pending || tick_pending) {
+    if (pending) {
         microkit_cothread_semaphore_signal(&wake);
     }
 }
+
+#ifdef WASM_SANDBOX
+/*
+ * The kernel reports a fault of the app's sandbox, such as an access to
+ * memory it was not granted. Stopping the app takes blocking file system
+ * calls, so leave that to the host's cothread, and do not resume the
+ * sandbox.
+ */
+seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
+{
+    (void)child;
+    (void)reply_msginfo;
+    seL4_Word label = microkit_msginfo_get_label(msginfo);
+    if (label == seL4_Fault_VMFault) {
+        snprintf(fault_reason, sizeof(fault_reason), "VM fault at 0x%lx",
+                 (unsigned long)seL4_GetMR(seL4_VMFault_Addr));
+        LOG_HOST_ERR("%s: VM fault at 0x%lx, ip 0x%lx\n", running_name, (unsigned long)seL4_GetMR(seL4_VMFault_Addr),
+                     (unsigned long)seL4_GetMR(seL4_VMFault_IP));
+    } else {
+        snprintf(fault_reason, sizeof(fault_reason), "fault %lu", (unsigned long)label);
+        LOG_HOST_ERR("%s: fault with label %lu\n", running_name, (unsigned long)label);
+    }
+    fault_pending = true;
+    microkit_cothread_semaphore_signal(&wake);
+    return seL4_False;
+}
+#endif

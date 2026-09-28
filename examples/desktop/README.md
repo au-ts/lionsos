@@ -109,8 +109,12 @@ in `meta.py`).
 | `apps/mu_app.[ch]` | microui backend: rendering with `gfx`, input from the compositor |
 | `wasm_host/wasm_host.c` | The WebAssembly host app: file system, WAMR and the `lions` API |
 | `wasm_host/caps.[ch]` | Capabilities of WebAssembly apps: grant policy, checks, audit |
+| `wasm_host/sandbox.h` | With `SANDBOX=1`: the sandbox's layout and its protocol with the host |
+| `wasm_host/sandbox_host.[ch]` | With `SANDBOX=1`: building, feeding and revoking the sandbox |
+| `wasm_host/runner.[c,ld]` | With `SANDBOX=1`: WAMR and one app, loaded into the sandbox by the host |
+| `wasm_host/sandbox_stub.c` | With `SANDBOX=1`: the sandbox PD's own, empty program |
 | `wasm_apps/lions.h` | The API for WebAssembly apps |
-| `wasm_apps/*.c` | hello, life, mandel, reader and probe, built to `.wasm` and put on the disk |
+| `wasm_apps/*.c` | hello, life, mandel, reader and probe, built to `.wasm` and put on the disk; spin too with `SANDBOX=1` |
 | `wasm_apps/*.caps` | What each of them may do |
 | `apps/microui/` | microui 2.02, vendored unmodified (MIT) |
 | `meta.py` | System description: drivers, virtualisers, compositor, apps and timer |
@@ -254,9 +258,9 @@ AUDIT|probe: revoked all 1 capabilities
 ```
 
 The `probe` app tries to get around this and shows each attempt being
-blocked. This is enforced by the host PD, as apps run inside it; a step
-further would be to give each app its own PD, with its capabilities enforced
-by seL4 itself.
+blocked. This is enforced by the host PD, as apps run inside it. Built with
+`SANDBOX=1`, apps instead run in a PD of their own, and seL4 enforces what
+they are granted (see [Sandboxed apps](#sandboxed-apps-experimental)).
 
 ### Writing an app
 
@@ -321,6 +325,82 @@ mcopy -i build/apps_disk.img@@1M myapp.wasm myapp.caps ::/apps/
   memory, and rectangles are clipped to the window, so a misbehaving app can
   at worst trap. An app that loops forever hangs the host PD, but not the
   compositor or any other app.
+
+### Sandboxed apps (experimental)
+
+Built with `SANDBOX=1`, the host runs no WebAssembly itself. Each app runs in
+a separate `sandbox` PD, a child of the host, whose address space the host
+builds for that app from an Untyped and tears down when it stops. This
+needs a Microkit SDK whose tool has the patch in
+[`examples/dynamic_caps`](../dynamic_caps), for the `<cspace>` elements that
+give the host its Untyped and the frames of its window, so it is not built
+by CI:
+
+```sh
+make MICROKIT_SDK=/path/to/microkit-sdk-2.3.1-caps SANDBOX=1 BUILD_DIR=build-sandbox qemu
+```
+
+To run an app, the host:
+
+1. Retypes frames and page tables from its Untyped, and maps into the
+   sandbox a fresh copy of the runner (`wasm_host/runner.c`: WAMR, the
+   `lions` API and musl, without libmicrokit), a stack, a heap and the
+   app's module.
+2. Maps in what the `.caps` file grants, and nothing else. For `window`,
+   copies of the frame caps of its own surface and state regions; for each
+   `file`, a read-only copy of that file, read from the disk by the host.
+3. Maps a read-only page describing the grants, and a mailbox page it
+   shares with the runner, then restarts the sandbox's thread in the runner.
+
+The host forwards input and ticks through the mailbox and signals the
+sandbox over their channel; the runner calls the app and sends back
+requests. What a grant protects is enforced in one of two ways:
+
+* **By seL4**, for memory: an app without `window` has no surface mapped, and
+  one granted a file has that file's bytes and no others. There is nothing
+  for it to reach, whatever the runner or WAMR does.
+* **By the host**, for its services: `console` output and `timer` ticks are
+  requests to the host, which checks the grant each time, as any seL4
+  server checks its clients.
+
+Stopping an app, with Esc, when it exits or traps, or when seL4 reports a
+fault in the sandbox, suspends the sandbox, deletes the host's copies of the
+window's frame caps and revokes the Untyped, which deletes everything else
+made for the app at once. `cap_drop` unmaps what backs the capability. The
+runner checks handles too, and reports refusals so that the audit log is
+the same as without `SANDBOX`.
+
+The sandbox runs below every other PD, so an app that never returns slows
+nothing else down and can still be stopped: the disk of a `SANDBOX=1` build
+has `spin`, which computes forever once clicked. Without `SANDBOX`, the same
+app would hang the host.
+
+```
+AUDIT|reader: granted #0 window
+AUDIT|reader: granted #1 file /apps/readme.txt
+WASM HOST|INFO: running reader (994 bytes) in a sandbox
+WASM HOST|INFO: sandbox for reader: 1051 objects made, 1 file(s) and the window mapped
+AUDIT|reader: revoked all 2 capabilities
+WASM HOST|INFO: reader: closed with Esc
+AUDIT|spin: granted #0 window
+WASM HOST|INFO: running spin (958 bytes) in a sandbox
+WASM HOST|INFO: sandbox for spin: 1049 objects made, 0 file(s) and the window mapped
+AUDIT|spin: revoked all 1 capabilities
+WASM HOST|INFO: spin: closed with Esc
+```
+
+Limits:
+
+* One sandbox, so one app at a time, as without `SANDBOX`. More sandboxes
+  would be more child PDs, fixed in the system description, since Microkit
+  does not let a PD make threads or scheduling contexts.
+* The sandbox PD's own tiny program stays mapped next to the runner, and its
+  channel to the host is static. Neither gives it any authority.
+* Loading the runner afresh costs about a thousand kernel objects and a few
+  hundred kilobytes of copying per start, which is not noticeable here.
+* `timer_now` reads the ARM counter, which seL4 lets user code read
+  (`CONFIG_EXPORT_PCNT_USER`), so the grant only decides whether the runner
+  offers it.
 
 ## The C library
 
@@ -395,4 +475,6 @@ Two further notes for the upstream GPU class:
    region, plus focus and damage tracking (done)
 5. A widget toolkit (microui) and a shell: taskbar, launcher, Alt+Tab (done)
 6. Dynamic applications: WebAssembly programs loaded from a file system (done)
-7. Real hardware, which needs a native display driver
+7. Apps in sandboxes that seL4 enforces (experimental, with `SANDBOX=1` and a
+   patched Microkit)
+8. Real hardware, which needs a native display driver

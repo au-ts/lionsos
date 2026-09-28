@@ -24,7 +24,9 @@
  * are written to an audit log on the serial console.
  *
  * This is enforced by the host PD rather than by seL4, since apps run inside
- * it; the table plays the role a capability space plays for a PD.
+ * it; the table plays the role a capability space plays for a PD. Built with
+ * SANDBOX=1, apps run in a sandbox PD instead, and the host maps into it
+ * only what the table grants (see sandbox.h).
  */
 
 #pragma once
