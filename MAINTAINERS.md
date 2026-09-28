@@ -24,6 +24,7 @@ The default reviewers of the LionsOS are currently
     * `micropython/` - Courtney (`@Courtney3141`)
     * `wamr/` - Simon (`@dumsum`)
 * `examples/`
+    * `desktop` - UNASSIGNED (`@`)
     * `fileio` - UNASSIGNED (`@`)
     * `firewall` - Courtney (`@Courtney3141`)
     * `kitty` - Bill (`@dreamliner787-9 `)

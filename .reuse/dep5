@@ -16,6 +16,11 @@ Files:
 Copyright: UNSW
 License: CC-BY-SA-4.0
 
+Files:
+    examples/desktop/screenshot.png
+Copyright: LionsOS Contributors
+License: CC-BY-SA-4.0
+
 # We use the Inter font which has the SIL Open Font License
 Files:
     examples/kitty/client/font/font_height35.py
