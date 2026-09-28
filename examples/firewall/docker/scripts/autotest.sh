@@ -875,6 +875,15 @@ check_full_rule_table() {
     assertEquals "${ERROR_UNEXPECTED_RULE_COUNT} while the table was full. Protocol: ${proto}, interface: ${iface}" \
         "$((FILTER_RULES_CAPACITY - 1))" "${rule_count}"
 
+    # The capacity test rules only drop traffic to capacity test addresses, so
+    # traffic that passes through the full table must still be forwarded
+    dst_iface=$(((iface + 1) % FW_INTERFACE_COUNT))
+    case "${proto}" in
+        icmp) icmp_ping_host "${iface}" "${dst_iface}" ;;
+        tcp) tcp_connect_host "${iface}" "${dst_iface}" ;;
+        udp) udp_connect_host "${iface}" "${dst_iface}" ;;
+    esac
+
     # Rule IDs are allocated by searching forward from the most recently
     # allocated ID. Once the last rule added is removed from the full table, the
     # search must wrap around past the highest rule ID to find the only free ID.
