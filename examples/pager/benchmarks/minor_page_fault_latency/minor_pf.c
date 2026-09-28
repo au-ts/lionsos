@@ -216,6 +216,7 @@ int minor_pf(void)
     benchmark_read(freq);
 
     benchmark_write(freq);
-
+    
+    printf("benchmark done!\n");
     return 0;
 }

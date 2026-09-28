@@ -71,7 +71,7 @@ static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
 	error = seL4_ARM_Page_Map(child_frame_cptr, vspaces[child],
 							  vaddr, create_cap_rights(false), 0x03);
 	if (error != seL4_NoError) return PROCESS_FORK_CAP;
-
+	insert_frame_to_page(child_frame_cptr, child_entry);
 	if (parent_entry & DESC_NG) {
 		struct folio *folio = get_folio_from_idx(frame);
 		++folio->refcount;
@@ -79,6 +79,7 @@ static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
 	return PROCESS_FORK_OK;
 }
 
+// TODO: clone leaf fn may be suboptimal... small difference though..
 static int clone_pages(uint32_t parent, uint32_t child)
 {
 	pgd_t *pgd = page_table_root(parent);
@@ -121,11 +122,13 @@ int process_fork(uint32_t parent, uint32_t child)
 		!processes[parent].allocated || processes[child].allocated) {
 		return PROCESS_FORK_INVALID;
 	}
-
+	// cspace and vspace
 	int result = allocate_process(&processes[child], child, parent);
 	if (result != PROCESS_FORK_OK) return result;
 	vspaces[child] = processes[child].vspace;
-	return clone_pages(parent, child);
+	clone_pages(parent, child);
+	// TODO: do stuff like ipc mapping etc.
+	return 0;
 }
 
 long pager_fork(microkit_child parent)
@@ -133,7 +136,7 @@ long pager_fork(microkit_child parent)
     if (parent >= PAGER_MAX_CLIENTS || !processes[parent].allocated) {
         return -EINVAL;
     }
-
+	// allocate pid
     uint32_t child = 0;
     for (uint32_t i = num_static_processes; i < PAGER_MAX_CLIENTS; i++) {
         if (!processes[i].allocated) {
