@@ -12,6 +12,9 @@
 #define PROGRAM_STACK_VADDR 0x80010000UL
 #define PROGRAM_STACK_TOP (PROGRAM_STACK_VADDR + 0x1000)
 #define PROGRAM_SHARED_VADDR 0x80020000UL
+/* Where the manager maps the surface, whose frames it holds */
+#define PROGRAM_SURFACE_VADDR 0x80030000UL
+#define SURFACE_PAGES 4
 
 /* The slot of the sandbox's root CNode holding the notification it is granted */
 #define SANDBOX_NTFN_SLOT 7

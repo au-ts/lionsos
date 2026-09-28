@@ -6,11 +6,15 @@
 -->
 <!--
  The manager gets real seL4 authority through <cspace>: an Untyped to make
- kernel objects from, its own CNode, VSpace and TCB, and the CNode and VSpace of
- an empty sandbox PD. cap_untyped and cap_cnode need the Microkit patch in
- this directory.
+ kernel objects from, its own CNode, VSpace and TCB, the CNode and VSpace of
+ an empty sandbox PD, and the frames of a surface that a display PD shows.
+ cap_untyped, cap_cnode and cap_frames need the Microkit patch in this
+ directory.
 -->
 <system>
+    <!-- Stands in for a window's surface, owned by the compositor -->
+    <memory_region name="surface" size="0x4000" />
+
     <protection_domain name="manager" priority="100">
         <program_image path="manager.elf" />
         <cspace>
@@ -20,9 +24,21 @@
             <cap_vspace slot="4" pd="manager" />
             <cap_cnode slot="5" pd="manager" />
             <cap_tcb slot="6" pd="manager" />
+            <cap_frames slot="7" mr="surface" />
         </cspace>
         <protection_domain name="sandbox" priority="50" id="0">
             <program_image path="sandbox.elf" />
         </protection_domain>
     </protection_domain>
+
+    <!-- Stands in for the compositor: it maps the surface and shows it -->
+    <protection_domain name="display" priority="110">
+        <program_image path="display.elf" />
+        <map mr="surface" vaddr="0x5000000" perms="r" setvar_vaddr="surface" />
+    </protection_domain>
+
+    <channel>
+        <end pd="manager" id="1" />
+        <end pd="display" id="0" />
+    </channel>
 </system>

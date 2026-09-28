@@ -7,14 +7,18 @@
  * A manager PD with real seL4 authority over a sandbox PD.
  *
  * Through <cspace> in the system description, the manager holds an Untyped,
- * its own root CNode, VSpace and TCB, and the sandbox's root CNode and VSpace. At
- * run time it makes frames, page tables and a notification from the
- * Untyped, loads a program into the sandbox, grants it the notification and
- * starts it. Revoking the Untyped then destroys everything made from it, and
- * the kernel, not the manager, stops the program: its next instruction
- * fetch faults. The Untyped is reused for the next program. Revoking just
- * the notification takes away that one capability: the program runs on,
- * but its signals no longer reach the manager.
+ * its own root CNode, VSpace and TCB, the sandbox's root CNode and VSpace,
+ * and the frames of a surface that the display PD shows. At run time it
+ * makes frames, page tables and a notification from the Untyped, loads a
+ * program into the sandbox, grants it the notification and the surface, and
+ * starts it.
+ *
+ * Revoking the surface unmaps it from the sandbox, and the kernel stops the
+ * program at its next write to it, while the display keeps its own mapping.
+ * Revoking the Untyped destroys everything made from it; the Untyped is
+ * then reused for the next program. Revoking just the notification takes
+ * away that one capability: the program runs on, but its signals no longer
+ * reach the manager.
  */
 
 #include <stdint.h>
@@ -29,6 +33,8 @@
 #define SLOT_OWN_VSPACE 4
 #define SLOT_OWN_CNODE 5
 #define SLOT_OWN_TCB 6
+/* A CNode with a cap to each frame of the surface; (7 << 58) | i is frame i */
+#define SLOT_SURFACE 7
 /* Free root CNode slots for objects made at run time */
 #define SLOT_FIRST_FREE 8
 #define SLOT_LAST 63
@@ -49,6 +55,7 @@
 #define SHARED_VADDR 0x60100000UL
 
 #define SANDBOX 0
+#define DISPLAY_CH 1
 /* As in dynamic_caps.system */
 #define MANAGER_PRIORITY 100
 #define SANDBOX_PRIORITY 50
@@ -56,6 +63,8 @@
 extern char _program[], _program_end[];
 
 static unsigned next_slot;
+/* Our copies of the surface's frame caps, mapped into the sandbox */
+static unsigned surface_slots[SURFACE_PAGES];
 static seL4_CPtr ntfn_slot;
 static bool done;
 
@@ -144,7 +153,42 @@ static void map_page(unsigned frame, unsigned vspace, seL4_Word vaddr, seL4_CapR
     }
 }
 
-/* Load the program into the sandbox, grant it a notification and start it */
+/*
+ * Map the surface into the sandbox, through copies of the frame caps from
+ * the system description. Those caps are themselves copies made by the
+ * CapDL initialiser, not originals, so seL4_CNode_Revoke on them would not
+ * reach our copies: we keep track of the copies and delete them instead.
+ */
+static void grant_surface(void)
+{
+    for (int i = 0; i < SURFACE_PAGES; i++) {
+        unsigned slot = alloc_slot();
+        check(seL4_CNode_Copy(SELF, slot, SLOT_DEPTH, LEAF(SLOT_SURFACE), i, SLOT_DEPTH, seL4_ReadWrite),
+              "copying a frame of the surface");
+        map_page(slot, SLOT_SANDBOX_VSPACE, PROGRAM_SURFACE_VADDR + i * PAGE_SIZE, seL4_ReadWrite,
+                 seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
+        surface_slots[i] = slot;
+    }
+}
+
+/* Delete our copies of the surface's frame caps, which unmaps them from the sandbox */
+static void revoke_surface(void)
+{
+    for (int i = 0; i < SURFACE_PAGES; i++) {
+        if (surface_slots[i]) {
+            check(seL4_CNode_Delete(SELF, surface_slots[i], SLOT_DEPTH), "deleting a frame of the surface");
+            surface_slots[i] = 0;
+        }
+    }
+}
+
+/* Ask the display what the surface shows; it runs at a higher priority */
+static void show(void)
+{
+    microkit_notify(DISPLAY_CH);
+}
+
+/* Load the program into the sandbox, grant it a notification and the surface, and start it */
 static void spawn(void)
 {
     seL4_Word size = _program_end - _program;
@@ -188,9 +232,11 @@ static void spawn(void)
                           seL4_CanWrite, 1),
           "granting the notification");
 
+    grant_surface();
+
     say("MANAGER: made ");
     putdec(next_slot - SLOT_FIRST_FREE);
-    say(" objects from the untyped, starting the program\n");
+    say(" objects from the untyped, granted the surface, starting the program\n");
     microkit_pd_restart(SANDBOX, PROGRAM_VADDR);
 }
 
@@ -237,11 +283,12 @@ static void watch_without_signals(void)
     say(" signals reached us\n");
 }
 
-/* Destroy every object made from the Untyped, wherever its caps are */
+/* Take back the surface, and destroy every object made from the Untyped, wherever its caps are */
 static void revoke_all(void)
 {
+    revoke_surface();
     check(seL4_CNode_Revoke(SELF, SLOT_UNTYPED, SLOT_DEPTH), "revoking the untyped");
-    say("MANAGER: revoked the untyped: the program's memory, page tables and notification are gone\n");
+    say("MANAGER: revoked everything: the program's memory, page tables, notification and surface are gone\n");
 }
 
 void init(void)
@@ -249,7 +296,9 @@ void init(void)
     say("MANAGER: round 1: spawning\n");
     spawn();
     wait_for_signals(3);
-    revoke_all();
+    show();
+    revoke_surface();
+    say("MANAGER: revoked only the surface\n");
 }
 
 void notified(microkit_channel ch)
@@ -281,22 +330,27 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         say(" in the sandbox\n");
     }
 
-    if (label != seL4_Fault_VMFault || done) {
+    /* Round 1 ends with the program writing to the surface it lost */
+    if (label != seL4_Fault_VMFault || seL4_GetMR(seL4_VMFault_Addr) != PROGRAM_SURFACE_VADDR || done) {
         microkit_pd_stop(child);
         say("MANAGER: FAILED\n");
         return seL4_False;
     }
     done = true;
 
+    revoke_all();
+
     say("MANAGER: round 2: spawning again from the same untyped\n");
     spawn();
     wait_for_signals(2);
+    show();
     check(seL4_CNode_Revoke(SELF, ntfn_slot, SLOT_DEPTH), "revoking the notification");
     say("MANAGER: revoked only the sandbox's copy of the notification\n");
     watch_without_signals();
 
     microkit_pd_stop(child);
     revoke_all();
+    show();
     say("MANAGER: DONE\n");
     return seL4_False;
 }

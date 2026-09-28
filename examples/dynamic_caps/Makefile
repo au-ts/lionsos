@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 # A spike: a manager PD that makes, grants and revokes seL4 objects at run
-# time. It needs a Microkit SDK built with microkit-cspace-untyped-cnode.patch
+# time. It needs a Microkit SDK built with microkit-cspace-untyped-cnode-frames.patch
 # (see README.md), so it is not part of CI.
 #
 
@@ -58,7 +58,11 @@ $(BUILD_DIR)/manager.elf: $(BUILD_DIR)/manager.o $(BUILD_DIR)/program_blob.o
 $(BUILD_DIR)/sandbox.elf: $(BUILD_DIR)/sandbox.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(IMAGE_FILE) $(REPORT_FILE): $(BUILD_DIR)/manager.elf $(BUILD_DIR)/sandbox.elf dynamic_caps.system
+$(BUILD_DIR)/display.elf: $(BUILD_DIR)/display.o
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+$(IMAGE_FILE) $(REPORT_FILE): $(BUILD_DIR)/manager.elf $(BUILD_DIR)/sandbox.elf $(BUILD_DIR)/display.elf \
+		dynamic_caps.system
 	$(MICROKIT_TOOL) dynamic_caps.system --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) \
 		--config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
