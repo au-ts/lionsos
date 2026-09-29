@@ -41,9 +41,11 @@ bool dir_used[MAX_OPEN_FILES];
 extern uintptr_t *fs_client_shares;
 extern uint64_t fs_num_clients;
 #define FS_SHARE(args) ((char *)fs_client_shares[(args)->client_id])
+#define FS_CLIENT_ID(args) ((args)->client_id)
 #else
 extern char *fs_share;
 #define FS_SHARE(args) (fs_share)
+#define FS_CLIENT_ID(args) 0
 #endif
 
 FIL *file_alloc(void) {
@@ -224,9 +226,9 @@ void handle_file_open(void) {
     }
 
     fd_t fd;
-    err = fd_alloc(&fd);
+    err = fd_alloc_for_client(FS_CLIENT_ID(args), &fd);
     assert(!err);
-    fd_set_file(fd, file);
+    fd_set_file_for_client(FS_CLIENT_ID(args), fd, file);
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
     args->result.file_open.fd = fd;
@@ -251,7 +253,7 @@ void handle_file_write(void) {
     }
 
     FIL *file = NULL;
-    int err = fd_begin_op_file(fd, (void **)&file);
+    int err = fd_begin_op_file_for_client(FS_CLIENT_ID(args), fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd: %d\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -261,7 +263,7 @@ void handle_file_write(void) {
     FRESULT RET = f_lseek(file, offset);
 
     if (RET != FR_OK) {
-        fd_end_op(fd);
+        fd_end_op_for_client(FS_CLIENT_ID(args), fd);
         args->result.file_write.len_written = 0;
         args->status = FS_STATUS_ERROR;
         return;
@@ -277,7 +279,7 @@ void handle_file_write(void) {
         RET = f_sync(file);
     }
 #endif
-    fd_end_op(fd);
+    fd_end_op_for_client(FS_CLIENT_ID(args), fd);
 
     if (RET == FR_OK) {
         LOG_FATFS("fat_write: byte written: %u, content written: \n%.*s\n", bw, bw, (char *)data);
@@ -306,7 +308,7 @@ void handle_file_read(void) {
     }
 
     FIL *file = NULL;
-    int err = fd_begin_op_file(fd, (void **)&file);
+    int err = fd_begin_op_file_for_client(FS_CLIENT_ID(args), fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd: %d\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -318,7 +320,7 @@ void handle_file_read(void) {
     FRESULT RET = f_lseek(file, offset);
 
     if (RET != FR_OK) {
-        fd_end_op(fd);
+        fd_end_op_for_client(FS_CLIENT_ID(args), fd);
         args->status = FS_STATUS_ERROR;
         args->result.file_read.len_read = 0;
         return;
@@ -327,7 +329,7 @@ void handle_file_read(void) {
     uint32_t br = 0;
 
     RET = f_read(file, data, btr, &br);
-    fd_end_op(fd);
+    fd_end_op_for_client(FS_CLIENT_ID(args), fd);
 
     if (RET == FR_OK) {
         LOG_FATFS("fat_read: byte read: %u, content read: \n%.*s\n", br, br, (char *)data);
@@ -345,15 +347,15 @@ void handle_file_close(void) {
     fd_t fd = args->params.file_close.fd;
 
     FIL *file;
-    int err = fd_begin_op_file(fd, (void **)&file);
+    int err = fd_begin_op_file_for_client(FS_CLIENT_ID(args), fd, (void **)&file);
     if (err) {
         LOG_FATFS("fat_close: Invalid file descriptor\n");
         args->status = FS_STATUS_INVALID_FD;
         return;
     }
-    fd_end_op(fd);
+    fd_end_op_for_client(FS_CLIENT_ID(args), fd);
 
-    err = fd_unset(fd);
+    err = fd_unset_for_client(FS_CLIENT_ID(args), fd);
     if (err) {
         LOG_FATFS("fd has outstanding operations\n");
         args->status = FS_STATUS_OUTSTANDING_OPERATIONS;
@@ -363,10 +365,10 @@ void handle_file_close(void) {
     FRESULT RET = f_close(file);
     if (RET == FR_OK) {
         file_free(file);
-        fd_free(fd);
+        fd_free_for_client(FS_CLIENT_ID(args), fd);
     }
     else {
-        fd_set_file(fd, file);
+        fd_set_file_for_client(FS_CLIENT_ID(args), fd, file);
     }
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
@@ -449,7 +451,7 @@ void handle_file_size(void) {
     fd_t fd = args->params.file_size.fd;
 
     FIL *file = NULL;
-    int err = fd_begin_op_file(fd, (void **)&file);
+    int err = fd_begin_op_file_for_client(FS_CLIENT_ID(args), fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd: %d\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -457,7 +459,7 @@ void handle_file_size(void) {
     }
 
     uint64_t size = f_size(file);
-    fd_end_op(fd);
+    fd_end_op_for_client(FS_CLIENT_ID(args), fd);
     args->status = FS_STATUS_SUCCESS;
     args->result.file_size.size = size;
 }
@@ -518,7 +520,7 @@ void handle_file_truncate(void) {
     uint64_t len = args->params.file_truncate.length;
 
     FIL *file = NULL;
-    int err = fd_begin_op_file(fd, (void **)&file);
+    int err = fd_begin_op_file_for_client(FS_CLIENT_ID(args), fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd");
         args->status = FS_STATUS_INVALID_FD;
@@ -529,13 +531,13 @@ void handle_file_truncate(void) {
 
     if (RET != FR_OK) {
         LOG_FATFS("fat_truncate: Invalid file offset\n");
-        fd_end_op(fd);
+        fd_end_op_for_client(FS_CLIENT_ID(args), fd);
         args->status = FS_STATUS_ERROR;
         return;
     }
 
     RET = f_truncate(file);
-    fd_end_op(fd);
+    fd_end_op_for_client(FS_CLIENT_ID(args), fd);
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
@@ -625,9 +627,9 @@ void handle_dir_open(void) {
     }
 
     fd_t fd;
-    err = fd_alloc(&fd);
+    err = fd_alloc_for_client(FS_CLIENT_ID(args), &fd);
     assert(!err);
-    fd_set_dir(fd, dir);
+    fd_set_dir_for_client(FS_CLIENT_ID(args), fd, dir);
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
     args->result.dir_open.fd = fd;
@@ -651,7 +653,7 @@ void handle_dir_read(void) {
     }
 
     DIR *dir = NULL;
-    int err = fd_begin_op_dir(fd, (void **)&dir);
+    int err = fd_begin_op_dir_for_client(FS_CLIENT_ID(args), fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -677,7 +679,7 @@ void handle_dir_read(void) {
         }
     }
 
-    fd_end_op(fd);
+    fd_end_op_for_client(FS_CLIENT_ID(args), fd);
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
@@ -688,7 +690,7 @@ void handle_dir_tell(void){
     fd_t fd = args->params.dir_tell.fd;
 
     DIR *dir = NULL;
-    int err = fd_begin_op_dir(fd, (void **)&dir);
+    int err = fd_begin_op_dir_for_client(FS_CLIENT_ID(args), fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -696,7 +698,7 @@ void handle_dir_tell(void){
     }
 
     uint32_t offset = f_telldir(dir);
-    fd_end_op(fd);
+    fd_end_op_for_client(FS_CLIENT_ID(args), fd);
 
     args->status = FS_STATUS_SUCCESS;
     args->result.dir_tell.location = offset;
@@ -707,7 +709,7 @@ void handle_dir_rewind(void) {
     fd_t fd = args->params.dir_rewind.fd;
 
     DIR *dir = NULL;
-    int err = fd_begin_op_dir(fd, (void **)&dir);
+    int err = fd_begin_op_dir_for_client(FS_CLIENT_ID(args), fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -715,7 +717,7 @@ void handle_dir_rewind(void) {
     }
 
     FRESULT RET = f_readdir(dir, 0);
-    fd_end_op(fd);
+    fd_end_op_for_client(FS_CLIENT_ID(args), fd);
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
@@ -725,7 +727,7 @@ void handle_file_sync(void) {
     fd_t fd = args->params.file_sync.fd;
 
     FIL *file = NULL;
-    int err = fd_begin_op_file(fd, (void **)&file);
+    int err = fd_begin_op_file_for_client(FS_CLIENT_ID(args), fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -733,7 +735,7 @@ void handle_file_sync(void) {
     }
 
     FRESULT RET = f_sync(file);
-    fd_end_op(fd);
+    fd_end_op_for_client(FS_CLIENT_ID(args), fd);
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
@@ -744,15 +746,15 @@ void handle_dir_close(void) {
     fd_t fd = args->params.dir_close.fd;
 
     DIR *dir = NULL;
-    int err = fd_begin_op_dir(fd, (void **)&dir);
+    int err = fd_begin_op_dir_for_client(FS_CLIENT_ID(args), fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
         return;
     }
-    fd_end_op(fd);
+    fd_end_op_for_client(FS_CLIENT_ID(args), fd);
 
-    err = fd_unset(fd);
+    err = fd_unset_for_client(FS_CLIENT_ID(args), fd);
     if (err) {
         LOG_FATFS("trying to close fd with outstanding operations\n");
         args->status = FS_STATUS_OUTSTANDING_OPERATIONS;
@@ -762,7 +764,7 @@ void handle_dir_close(void) {
     FRESULT RET = f_closedir(dir);
 
     if (RET == FR_OK) {
-        fd_free(fd);
+        fd_free_for_client(FS_CLIENT_ID(args), fd);
         dir_free(dir);
     }
 
@@ -780,7 +782,7 @@ void handle_dir_seek(void) {
     int64_t loc = args->params.dir_seek.loc;
 
     DIR *dir = NULL;
-    int err = fd_begin_op_dir(fd, (void **)&dir);
+    int err = fd_begin_op_dir_for_client(FS_CLIENT_ID(args), fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
         args->status = FS_STATUS_INVALID_FD;
@@ -793,12 +795,12 @@ void handle_dir_seek(void) {
     for (int64_t i = 0; i < loc; i++) {
         if (RET != FR_OK) {
             args->status = FS_STATUS_ERROR;
-            fd_end_op(fd);
+            fd_end_op_for_client(FS_CLIENT_ID(args), fd);
             return;
         }
         RET = f_readdir(dir, &fno);
     }
-    fd_end_op(fd);
+    fd_end_op_for_client(FS_CLIENT_ID(args), fd);
 
     args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
