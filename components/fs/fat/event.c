@@ -14,6 +14,9 @@
 #include <sddf/blk/config.h>
 #include <lions/fs/protocol.h>
 #include <lions/fs/config.h>
+#ifdef FS_MULTIPLEXED
+#include <lions/fs/multiplexer.h>
+#endif
 #include "decl.h"
 #include "ff.h"
 #include "diskio.h"
@@ -30,7 +33,14 @@ char *blk_data;
 
 fs_queue_t *fs_command_queue;
 fs_queue_t *fs_completion_queue;
+#ifdef FS_MULTIPLEXED
+/* Points to one address-sized word per client in fs_config. Word i is
+ * the base address of client i's fixed-size data region; unused words are zero. */
+uintptr_t *fs_client_shares;
+uint64_t fs_num_clients;
+#else
 char *fs_share;
+#endif
 
 uint64_t worker_thread_stack_one;
 uint64_t worker_thread_stack_two;
@@ -95,6 +105,9 @@ void fill_client_response(fs_msg_t* message, const fs_request* finished_request)
 
 // Setting up the request in the request_pool and push the request to the thread pool
 void setup_request(int32_t index, fs_msg_t* message) {
+#ifdef FS_MULTIPLEXED
+    request_pool[index].shared_data.client_id = fs_multiplexer_client_id(message->cmd.id);
+#endif
     request_pool[index].request_id = message->cmd.id;
     request_pool[index].cmd = message->cmd.type;
     request_pool[index].shared_data.params = message->cmd.params;
@@ -126,9 +139,18 @@ void init(void) {
     assert(blk_config.virt.num_buffers >= FAT_WORKER_THREAD_NUM);
 
     max_cluster_size = blk_config.data.size / FAT_WORKER_THREAD_NUM;
+#ifdef FS_MULTIPLEXED
+    assert(fs_config.num_clients > 0);
+    assert(fs_config.num_clients <= FS_MULTIPLEXER_MAX_CLIENTS);
+    fs_command_queue = fs_config.multiplexer.command_queue.vaddr;
+    fs_completion_queue = fs_config.multiplexer.completion_queue.vaddr;
+    fs_client_shares = fs_config.client_shares;
+    fs_num_clients = fs_config.num_clients;
+#else
     fs_command_queue = fs_config.client.command_queue.vaddr;
     fs_completion_queue = fs_config.client.completion_queue.vaddr;
     fs_share = fs_config.client.share.vaddr;
+#endif
 
     blk_data = blk_config.data.vaddr;
 
@@ -166,7 +188,12 @@ void init(void) {
 */
 void notified(microkit_channel ch) {
     LOG_FATFS("Notification received on channel:: %d\n", ch);
-    if (ch != fs_config.client.id && ch != blk_config.virt.id) {
+#ifdef FS_MULTIPLEXED
+    const microkit_channel fs_channel = fs_config.multiplexer.id;
+#else
+    const microkit_channel fs_channel = fs_config.client.id;
+#endif
+    if (ch != fs_channel && ch != blk_config.virt.id) {
         LOG_FATFS("Unknown channel:%d\n", ch);
         return;
     }
@@ -247,6 +274,13 @@ void notified(microkit_channel ch) {
 
             // Copy the request to local buffer first to avoid modification from client side
             fs_msg_t client_req = *fs_queue_idx_filled(fs_command_queue, fs_request_dequeued);
+#ifdef FS_MULTIPLEXED
+            if (fs_multiplexer_client_id(client_req.cmd.id) >= fs_num_clients) {
+                fs_request_dequeued++;
+                command_queue_size--;
+                continue;
+            }
+#endif
 
             fs_request_dequeued++;
             command_queue_size--;
@@ -274,7 +308,7 @@ void notified(microkit_channel ch) {
     if (fs_response_enqueued) {
         LOG_FATFS("FS notify client\n");
         fs_queue_publish_production(fs_completion_queue, fs_response_enqueued);
-        microkit_notify(fs_config.client.id);
+        microkit_notify(fs_channel);
     }
     if (blk_request_pushed) {
         LOG_FATFS("FS notify block virt\n");
