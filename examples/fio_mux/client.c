@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -83,6 +84,89 @@ static bool read_message(const char *path, char *buffer, size_t size)
     return true;
 }
 
+#if CLIENT_ID == 0
+static bool open_server_file(const char *path, uint64_t *fd)
+{
+    ptrdiff_t path_buffer;
+    if (fs_buffer_allocate(&path_buffer)) {
+        return false;
+    }
+
+    size_t path_len = strlen(path);
+    memcpy(fs_buffer_ptr(path_buffer), path, path_len);
+    fs_cmpl_t completion;
+    int err = fs_command_blocking(&completion, (fs_cmd_t) {
+        .type = FS_CMD_FILE_OPEN,
+        .params.file_open = {
+            .path = { .offset = path_buffer, .size = path_len },
+            .flags = FS_OPEN_FLAGS_READ_WRITE | FS_OPEN_FLAGS_CREATE,
+        },
+    });
+    fs_buffer_free(path_buffer);
+    if (err || completion.status != FS_STATUS_SUCCESS) {
+        return false;
+    }
+
+    *fd = completion.data.file_open.fd;
+    return true;
+}
+#endif
+
+static bool file_size_status(uint64_t fd, uint64_t expected_status)
+{
+    fs_cmpl_t completion;
+    int err = fs_command_blocking(&completion, (fs_cmd_t) {
+        .type = FS_CMD_FILE_SIZE,
+        .params.file_size = { .fd = fd },
+    });
+    return !err && completion.status == expected_status;
+}
+
+#if CLIENT_ID == 0
+static bool close_server_file(uint64_t fd)
+{
+    fs_cmpl_t completion;
+    int err = fs_command_blocking(&completion, (fs_cmd_t) {
+        .type = FS_CMD_FILE_CLOSE,
+        .params.file_close = { .fd = fd },
+    });
+    return !err && completion.status == FS_STATUS_SUCCESS;
+}
+#endif
+
+static bool test_fd_ownership(void)
+{
+    char message[32];
+#if CLIENT_ID == 0
+    uint64_t fd;
+    if (!open_server_file("/fd-owner", &fd)) {
+        return false;
+    }
+    snprintf(message, sizeof(message), "%lu", fd);
+    if (!write_message("/fd-value", message)) {
+        close_server_file(fd);
+        return false;
+    }
+    do {
+        message[0] = '\0';
+    } while (!read_message("/fd-tested", message, sizeof(message)) || strcmp(message, "done") != 0);
+
+    bool ok = file_size_status(fd, FS_STATUS_SUCCESS);
+    return close_server_file(fd) && ok;
+#else
+    do {
+        message[0] = '\0';
+    } while (!read_message("/fd-value", message, sizeof(message)));
+
+    uint64_t fd = strtoull(message, NULL, 10);
+    // Server will reject the fabricated fd...
+    if (!file_size_status(fd, FS_STATUS_INVALID_FD)) {
+        return false;
+    }
+    return write_message("/fd-tested", "done");
+#endif
+}
+
 static void run_client(void)
 {
     libc_init(NULL, libc_heap, sizeof(libc_heap));
@@ -92,6 +176,12 @@ static void run_client(void)
         printf("FIO_MUX|client%d|FAIL|mount\n", CLIENT_ID);
         return;
     }
+
+    if (!test_fd_ownership()) {
+        printf("FIO_MUX|client%d|FAIL|fd-ownership\n", CLIENT_ID);
+        return;
+    }
+    printf("FIO_MUX|client%d|fd-ownership=PASS\n", CLIENT_ID);
 
     char expected[32];
     char received[32];
