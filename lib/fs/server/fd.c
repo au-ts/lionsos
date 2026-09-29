@@ -148,7 +148,8 @@ static struct oftable_slot *fd_to_of(fd_t fd) {
         return NULL;
     }
     struct oftable_slot *of = &oftable[index];
-    if (generation < of->generation) {
+    // Reject stale or fabricated file descriptors
+    if (generation != of->generation) {
         return NULL;
     }
     return of;
