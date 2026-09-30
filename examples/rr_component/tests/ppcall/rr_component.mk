@@ -96,11 +96,20 @@ $(DTB): $(DTS)
 
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
-	PYTHONPATH="$(PYTHONPATH):$(RR_COMPONENT_DIR)" $(PYTHON) $(METAPROGRAM) \
+	PYTHONPATH="$(PYTHONPATH):$(RR_COMPONENT_DIR):$(SDDF)" $(PYTHON) $(METAPROGRAM) \
 		--output . --sdf $(SYSTEM_FILE)
+	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_serial_driver_config.data serial_driver.elf
+	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx_serial_virt_tx_config.data serial_virt_tx.elf
+	$(OBJCOPY) --update-section .serial_client_config=rr_main_serial_client_config.data rr_main.elf
+	$(OBJCOPY) --update-section .device_resources=blk_driver_device_resources.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_client_config=rr_main_blk_client_config.data rr_main.elf
+	$(OBJCOPY) --update-section .blk_driver_config=blk_driver_blk_driver_config.data blk_driver.elf
+	$(OBJCOPY) --update-section .blk_virt_config=blk_virt_blk_virt_config.data blk_virt.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
+
 
 qemu_disk:
 	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 GPT

@@ -42,6 +42,7 @@
 // (BUG: For some reason the PMU cycle counter increments by like 2 whenever we unsuspend a child)
 
 // *Do not include this file directly.*
+#include "block.h"
 #include "sel4/functions.h"
 #include "sel4/shared_types_gen.h"
 #include <sddf/util/printf.h>
@@ -49,31 +50,30 @@
 #include "../ipc.h"
 
 #define RR_STORAGE_HANDLE_STORAGE_SIZE 1024
-#define RR_STORAGE_MAGIC "potato"
+#define RR_STORAGE_MAGIC "potator"
 #define RR_MAX_CHILDREN 32
+#define STR_NO_ERR(x) assert(x)
 
 // We treat the storage backend similarly to a elf file.
 // It two main sections - one for storing variable-sized data (like .data),
 // and the other for the instructions.
 // A handle to the storage unit.
-typedef struct rr_storage_handle {
+typedef struct __attribute__((packed)) rr_storage_metadata {
     uint8_t magic[sizeof(RR_STORAGE_MAGIC)];
     // The text section holds data in the given shape
     // [cycle count] [unit type] [specific unit args]
     // Each part is word size, with total size being sizeof(rr_storage_unit_t)
     // References to any stored data will be relaive to data_offset
-    seL4_Word num_children;
-    seL4_Word children_prio[RR_MAX_CHILDREN];
-    seL4_Word text_offset;
-    seL4_Word text_size;
-    seL4_Word data_offset;
-    seL4_Word data_size;
-    // Possibly add more metadata to ensure that the number of children are the same?
-    // And that their ids are the same?
-    uint8_t msg_read_storage[RR_STORAGE_HANDLE_STORAGE_SIZE];
-    uint8_t msg_write_storage[RR_STORAGE_HANDLE_STORAGE_SIZE];
-} rr_storage_handle_t;
-
+    seL4_Word children_num;
+    seL4_Word children_data_begin;
+    seL4_Word children_data_end;
+    seL4_Word inst_num;
+    seL4_Word inst_begin;
+    seL4_Word inst_end;
+    seL4_Word data_num;
+    seL4_Word data_begin; // The beginning will be growing
+    seL4_Word data_end; // marks the end of the storage device.
+} rr_storage_metadata_t;
 
 typedef enum rr_storage_unit_type {
     rr_storage_unit_REPLY = 1,
@@ -105,6 +105,11 @@ typedef struct rr_storage_unit {
     seL4_Word args[6];
 } rr_storage_unit_t;
 
+// Use the handle paradigm here so that this can be more easily reused later for replaying?
+typedef struct rr_storage_handle {
+    rr_storage_metadata_t metadata;
+} rr_storage_handle_t;
+
 // satisfied by included backend. (which this file is included by).
 static inline void rr_init_storage_backend();
 
@@ -112,15 +117,47 @@ static inline void rr_init_storage_backend();
 // This is all the backend needs to supply for now.
 static inline bool rr_storage_write(uint64_t byte_offset, const uint8_t *bytes, uint64_t num_bytes);
 static inline bool rr_storage_read(uint64_t byte_offset, uint8_t *result, uint64_t num_bytes);
+static inline seL4_Word rr_storage_get_size();
 
-static inline void rr_init_storage()
-{
-    REC("init\n");
+// this is for recording, it will give us a relevant handle, and write all the necessary preliminary data.
+static inline rr_storage_handle_t rr_storage_start() {
     rr_init_storage_backend();
+    // print the first 8 chars of the storage.
+    uint8_t chars[8] = {0};
+    STR_NO_ERR(rr_storage_read(0, chars, 8));
+    for (int i = 0; i < 8; i++) {
+        sddf_dprintf("%c ", chars[i]);
+    }
+    sddf_dprintf("\n");
+    seL4_Word size = rr_storage_get_size();
+    seL4_Word child_begin = sizeof(rr_storage_metadata_t);
+    seL4_Word child_end = child_begin + sizeof(rr_Child_t) * rr_children_num;
+    rr_storage_handle_t handle = {
+        .metadata = {
+            .children_num = rr_children_num,
+            .children_data_begin = child_begin,
+            .children_data_end = child_end,
+            .inst_num = 0,
+            .inst_begin = child_end,
+            .inst_end = child_end,
+            .data_num = 0,
+            .data_begin = size,
+            .data_end = size,
+        },
+    };
+    memcpy(handle.metadata.magic, RR_STORAGE_MAGIC, sizeof(RR_STORAGE_MAGIC));
+    // Write the metadata in now.
+    STR_NO_ERR(rr_storage_write(0, (const uint8_t*) &(handle.metadata), sizeof(rr_storage_metadata_t)));
+    // Write in the children data.
+    for (int i = 0; i < rr_children_num; i++) {
+        rr_storage_write(handle.metadata.children_data_begin + i * sizeof(rr_Child_t),
+                         (const uint8_t*) &rr_children_arr[i], sizeof(rr_Child_t)
+        );
+    }
+    return handle;
 }
 
-static inline void rr_init_recorder_storage() {
-}
+static inline rr_storage_handle_t rr_storage_retrieve();
 
 // We store ipc messages
 static inline void rr_storage_store_ipc_msg(seL4_Word cycle_count, seL4_Word source_child, seL4_Word badge,

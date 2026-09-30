@@ -60,7 +60,7 @@ QEMU_ARGS := -machine virt,virtualization=on \
 		-device virtio-serial-device \
         -chardev pty,id=virtcon \
         -device virtconsole,chardev=virtcon \
-	    -drive file=disk,if=none,format=raw,id=hd \
+	    -drive file=qemu_virtio_disk,if=none,format=raw,id=hd \
         -device virtio-blk-device,drive=hd,bus=virtio-mmio-bus.1 \
 		-icount shift=1
 
@@ -119,8 +119,7 @@ qemu_disk:
 	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 GPT
 
 qemu_virtio_disk:
-	$(SDDF)/tools/mkvirtdisk disk 1 512 16777216 MBR
-
+	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 MBR
 
 qemu: ${IMAGE_FILE} qemu_disk qemu_virtio_disk
 	$(QEMU) $(QEMU_ARGS)

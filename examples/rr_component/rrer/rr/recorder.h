@@ -11,6 +11,8 @@
 #include "types.h"
 #include "fault.h"
 
+rr_storage_handle_t storage_handle = {0};
+
 static inline void rec_main();
 static inline void rec_init();
 static inline void rec_perform_schedule(seL4_Word cycle_count);
@@ -58,7 +60,7 @@ static inline void rec_init()
     assert(counters.num_counters > 0);
     NO_ERR(seL4_ARM_VPMU_VPMUCounterControl(VPMU_CAP, 1));
 
-    rr_init_storage_backend();
+	storage_handle = rr_storage_start();
 }
 
 static inline void rec_perform_schedule(seL4_Word cycle_count)

@@ -9,11 +9,22 @@ from dataclasses import dataclass, field
 from abc import ABC
 from copy import deepcopy
 from rrer.rrer import RRChild, RRData, RRSystem
+from acacia_sddf.board import Board, DriverDouble
 import pathlib
 
+qemu_virt_aarch64 = Board(
+    name="qemu_virt_aarch64",
+    arch=aarch64,
+    paddr_top=0x6_0000_000,
+    serial=DriverDouble("arm,pl011", "pl011@9000000"),
+    timer=DriverDouble("arm,armv8-timer", "timer"),
+    blk=DriverDouble("virtio,mmio", "virtio_mmio@a000200"),
+    ethernet=DriverDouble("", "virtio_mmio@a000000"),
+    i2c=None,
+)
 
 def generate(sdf_path: str, output_dir: str):
-    rr = RRSystem(sdf)
+    rr = RRSystem(sdf, qemu_virt_aarch64)
 
     caller = ProtectionDomain(rr, "caller", "caller.elf", priority=1)
     callee = ProtectionDomain(rr, "callee", "callee.elf", priority=2)
@@ -36,6 +47,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    sdf = System(aarch64, paddr_top=0x10000)
+    sdf = System(aarch64, paddr_top=qemu_virt_aarch64.paddr_top)
 
     generate(args.sdf, args.output)

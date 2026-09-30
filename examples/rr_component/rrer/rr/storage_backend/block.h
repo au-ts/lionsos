@@ -24,6 +24,7 @@ static inline bool _rr_block_check_resp(uint64_t num_blocks, uint64_t expected_i
 // initialise the block storage and check that reading and writing succeeds.
 static inline void rr_init_storage_backend()
 {
+    // TODO!!!!! Make it write back the original values so that this can be run both on record and replay.
     REC("Initialising block storage\n");
     assert(blk_config_check_magic(&blk_config));
     blk_queue_init(&_rr_block_queue_handle, blk_config.virt.req_queue.vaddr, blk_config.virt.resp_queue.vaddr,
@@ -33,6 +34,9 @@ static inline void rr_init_storage_backend()
     REC("device config ready\n");
     REC("device size: 0x%lx bytes\n", _rr_block_storage_info->capacity * BLK_TRANSFER_SIZE);
     _rr_block_initialised = true;
+
+    uint8_t original[sizeof(RR_STORAGE_MAGIC)] = { 0 };
+    BLK_NO_ERR(rr_storage_read(99, (uint8_t *)original, sizeof(RR_STORAGE_MAGIC)));
 
     // now perform a quick test read and write
     REC("Test write of magic %s\n", RR_STORAGE_MAGIC);
@@ -45,7 +49,9 @@ static inline void rr_init_storage_backend()
 
     REC("Magic read: %x %x %x %x %x %x %x\n", magic_read[0], magic_read[1], magic_read[2], magic_read[3],
         magic_read[4], magic_read[5], magic_read[6]);
+    // make sure we read things correctly.
     assert(memcmp(magic_read, RR_STORAGE_MAGIC, sizeof(RR_STORAGE_MAGIC)) == 0);
+    BLK_NO_ERR(rr_storage_write(99, original, sizeof(RR_STORAGE_MAGIC)));
 }
 
 // Basic abstraction bc i'm stupid.
