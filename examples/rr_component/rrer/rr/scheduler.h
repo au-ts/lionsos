@@ -61,8 +61,9 @@ static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
     rr_currently_sched = *cur;
 
     // if the child was schedulable, then it was suspended, so unsuspend it
-    if (rr_currently_sched->sched_state == rr_ChildState_Schedulable)
-        NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
+    // this is moved to outside because choosing happened before writing the scheduler event, 
+    // if (rr_currently_sched->sched_state == rr_ChildState_Schedulable)
+    //     NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
 
     // set the correct state.
     rr_currently_sched->sched_state = rr_ChildState_Scheduled;
@@ -78,7 +79,10 @@ static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
 static inline rr_Child_t* rr_sched_unschedule_current(rr_ChildState_e state) {
     seL4_TCB_SetPriority(TCB(rr_currently_sched->id), SELF_TCB(), rr_currently_sched->priority);
     // if we are changing the state to suspended, then we will suspend the thread as well.
+    // or schedulable (as suspending it won't prevent it from receiving stuff).
     if (state == rr_ChildState_Suspended) 
+        NO_ERR(seL4_TCB_Suspend(rr_currently_sched->id + BASE_TCB_CAP));
+    if (state == rr_ChildState_Schedulable) 
         NO_ERR(seL4_TCB_Suspend(rr_currently_sched->id + BASE_TCB_CAP));
     NO_ERR(seL4_TCB_UnbindVPMU(TCB(rr_currently_sched->id)));
     rr_currently_sched->sched_state = state;

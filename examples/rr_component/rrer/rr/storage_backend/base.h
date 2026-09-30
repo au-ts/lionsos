@@ -26,17 +26,17 @@
 // The data is written to the datastack in the correct order.
 // Similarly for instructions
 // Every time we write an event occurs we do the following:
-    // 1. Write the instruction
-    // 2. Write the data
-    // 3. Increment the sizeof data and instruction count in the metadata section.
-    // 4. Continue.
+// 1. Write the instruction
+// 2. Write the data
+// 3. Increment the sizeof data and instruction count in the metadata section.
+// 4. Continue.
 // During initialisation for recording, we must do the following:
-    // 1. Write magic and metadata for children.
-    // 2. Initialise a relevant handle for keeping track of both stacks and their respective metadata.
+// 1. Write magic and metadata for children.
+// 2. Initialise a relevant handle for keeping track of both stacks and their respective metadata.
 
 // During initialisation for replaying, we must do the following:
-    // 1. Read magic and children metadata, check for errors.
-    // 2. Initialise a relevant handle for iterating through the instruction list and reading metadata.
+// 1. Read magic and children metadata, check for errors.
+// 2. Initialise a relevant handle for iterating through the instruction list and reading metadata.
 // During replay we'll have a different main program which will control the scheduler and other relevant
 // pd manipulators.
 // (BUG: For some reason the PMU cycle counter increments by like 2 whenever we unsuspend a child)
@@ -64,34 +64,55 @@ typedef struct __attribute__((packed)) rr_storage_metadata {
     // [cycle count] [unit type] [specific unit args]
     // Each part is word size, with total size being sizeof(rr_storage_unit_t)
     // References to any stored data will be relaive to data_offset
-    seL4_Word children_num;
+    seL4_Word children_num; // for error checking
     seL4_Word children_data_begin;
     seL4_Word children_data_end;
-    seL4_Word inst_num;
+    seL4_Word inst_num; // for error checking
     seL4_Word inst_begin;
     seL4_Word inst_end;
-    seL4_Word data_num;
-    seL4_Word data_begin; // The beginning will be growing
+    seL4_Word data_begin; // The beginning will be growing upwards (becoming smaller)
     seL4_Word data_end; // marks the end of the storage device.
 } rr_storage_metadata_t;
 
 typedef enum rr_storage_unit_type {
     rr_storage_unit_REPLY = 1,
     rr_storage_unit_MSG, // no msgs
-    rr_storage_unit_CALL, 
+    rr_storage_unit_CALL,
     rr_storage_unit_NTFN,
-    rr_storage_unit_SCHED, 
+    rr_storage_unit_SCHED,
     _rr_storage_unit_max = 1 << 63,
 } rr_storage_unit_type_e;
 
-// The backing type for replies and calls.
 typedef struct rr_storage_msg_args {
     seL4_Word source_chan; // We can determine the source and target children from here.
     seL4_Word target_chan;
-    seL4_Word label;
+    seL4_MessageInfo_t msginfo;
     seL4_Word badge;
     seL4_Word data_offset;
 } rr_storage_msg_args_t;
+
+typedef struct rr_storage_call_args {
+    seL4_Word source_chan;
+    seL4_Word target_chan;
+    seL4_MessageInfo_t msginfo;
+    seL4_Word badge;
+    seL4_Word data_offset;
+} rr_storage_call_args_t;
+
+typedef struct rr_storage_ntfn_args {
+    seL4_Word source_chan;
+    seL4_Word target_chan;
+    seL4_MessageInfo_t msginfo;
+    seL4_Word badge;
+} rr_storage_ntfn_args_t;
+
+typedef struct rr_storage_reply_args {
+    seL4_Word source_child;
+    seL4_Word target_child;
+    seL4_MessageInfo_t msginfo;
+    seL4_Word badge;
+    seL4_Word data_offset;
+} rr_storage_reply_args_t;
 
 // The backing type for scheduling events
 typedef struct rr_storage_sched_args {
@@ -102,7 +123,14 @@ typedef struct rr_storage_sched_args {
 typedef struct rr_storage_unit {
     seL4_Word cycle_count;
     rr_storage_unit_type_e unit_type;
-    seL4_Word args[6];
+    union {
+        rr_storage_msg_args_t msg_args;
+        rr_storage_sched_args_t sched_args;
+        rr_storage_reply_args_t reply_args;
+        rr_storage_call_args_t call_args;
+        rr_storage_ntfn_args_t ntfn_args;
+        seL4_Word _max_size[6];
+    } args;
 } rr_storage_unit_t;
 
 // Use the handle paradigm here so that this can be more easily reused later for replaying?
@@ -120,10 +148,11 @@ static inline bool rr_storage_read(uint64_t byte_offset, uint8_t *result, uint64
 static inline seL4_Word rr_storage_get_size();
 
 // this is for recording, it will give us a relevant handle, and write all the necessary preliminary data.
-static inline rr_storage_handle_t rr_storage_start() {
+static inline rr_storage_handle_t rr_storage_start()
+{
     rr_init_storage_backend();
     // print the first 8 chars of the storage.
-    uint8_t chars[8] = {0};
+    uint8_t chars[8] = { 0 };
     STR_NO_ERR(rr_storage_read(0, chars, 8));
     for (int i = 0; i < 8; i++) {
         sddf_dprintf("%c ", chars[i]);
@@ -140,29 +169,57 @@ static inline rr_storage_handle_t rr_storage_start() {
             .inst_num = 0,
             .inst_begin = child_end,
             .inst_end = child_end,
-            .data_num = 0,
             .data_begin = size,
             .data_end = size,
         },
     };
     memcpy(handle.metadata.magic, RR_STORAGE_MAGIC, sizeof(RR_STORAGE_MAGIC));
     // Write the metadata in now.
-    STR_NO_ERR(rr_storage_write(0, (const uint8_t*) &(handle.metadata), sizeof(rr_storage_metadata_t)));
+    STR_NO_ERR(rr_storage_write(0, (const uint8_t *)&(handle.metadata), sizeof(rr_storage_metadata_t)));
     // Write in the children data.
     for (int i = 0; i < rr_children_num; i++) {
-        rr_storage_write(handle.metadata.children_data_begin + i * sizeof(rr_Child_t),
-                         (const uint8_t*) &rr_children_arr[i], sizeof(rr_Child_t)
-        );
+        STR_NO_ERR(rr_storage_write(handle.metadata.children_data_begin + i * sizeof(rr_Child_t),
+                         (const uint8_t *)&rr_children_arr[i], sizeof(rr_Child_t)));
     }
     return handle;
 }
 
+static inline void rr_storage_update_metadata(const rr_storage_handle_t* handle) {
+    STR_NO_ERR(rr_storage_write(0, (const uint8_t *)&(handle->metadata), sizeof(rr_storage_metadata_t)));
+}
+
+// This is for the replayer.
 static inline rr_storage_handle_t rr_storage_retrieve();
 
-// We store ipc messages
-static inline void rr_storage_store_ipc_msg(seL4_Word cycle_count, seL4_Word source_child, seL4_Word badge,
-                                           seL4_MessageInfo_t msg)
+// stores what is currently in the IPC buffer into the data.
+// I'm pretty sure that the IPC buffer would not have been clobbered yet.
+// The data counter only increments when everything has been written.
+// Returns a "offset" into the respective data region.
+static inline seL4_Word rr_storage_store_ipc_data(rr_storage_handle_t *handle, seL4_MessageInfo_t msg)
 {
+    seL4_Word num_words = seL4_MessageInfo_get_length(msg);
+    // grows upwards/to lesser values.
+    seL4_Word begin = handle->metadata.data_begin;
+    for (int i = 0; i < num_words; i++) {
+        seL4_Word reg = seL4_GetMR(i);
+        rr_storage_write(begin - i * sizeof(seL4_Word), (const uint8_t *)&reg, sizeof(seL4_Word));
+    }
+    begin -= num_words * sizeof(seL4_Word);
+    handle->metadata.data_begin = begin;
+
+    // definitely slow, will optimize later.
+    rr_storage_update_metadata(handle);
+    return begin;
+}
+
+// We store ipc messages
+// The instruction counter only increments once both the data and instruction has been written.
+static inline void rr_storage_store_ipc_msg(rr_storage_handle_t *handle, seL4_Word cycle_count, seL4_Word source_child,
+                                            seL4_Word badge, seL4_MessageInfo_t msg)
+{
+    rr_storage_unit_t unit = {
+        .cycle_count = cycle_count,
+    };
     switch (rr_ipc_get_type(msg, badge)) {
     case rr_IPCType_BlockChecker: {
         assert(false);
@@ -176,6 +233,15 @@ static inline void rr_storage_store_ipc_msg(seL4_Word cycle_count, seL4_Word sou
             sddf_printf(" %lx", seL4_GetMR(i));
         }
         sddf_printf("\n");
+
+        unit.unit_type = rr_storage_unit_REPLY;
+        unit.args.reply_args = (rr_storage_reply_args_t) {
+            .badge = badge,
+            .msginfo = msg,
+            .data_offset = rr_storage_store_ipc_data(handle, msg),
+            .source_child = source_child,
+            .target_child = target_child,
+        };
     } break;
     case rr_IPCType_Msg: {
         assert(false);
@@ -186,34 +252,70 @@ static inline void rr_storage_store_ipc_msg(seL4_Word cycle_count, seL4_Word sou
     case rr_IPCType_Call: {
         // Format: [cycle_count] msg [source_child] [source_channel] [target_child] [target_channel] [badge] [message]
         // needs to be channel mask, the other is for ntfns.
-        seL4_Word source_ch = badge & CHANNEL_MASK;
+        seL4_Word source_chan = badge & CHANNEL_MASK;
         // not sus
-        seL4_Word target_child = rr_channel_to_target_child_id[source_ch];
-        seL4_Word target_ch = rrer_source_ch_to_target_ch(source_ch);
+        seL4_Word target_child = rr_channel_to_target_child_id[source_chan];
+        seL4_Word target_chan = rrer_source_ch_to_target_ch(source_chan);
         REC("0x%lx %s child_%lu channel_%lu child_%lu channel_%lu %lx %lx", cycle_count,
-            rr_ipc_type_to_string(rr_IPCType_Call), source_child, source_ch, target_child, target_ch, badge,
+            rr_ipc_type_to_string(rr_IPCType_Call), source_child, source_chan, target_child, target_chan, badge,
             msg.words[0]);
         seL4_Word msglen = seL4_MessageInfo_get_length(msg);
         for (seL4_Word i = 0; i < msglen; i++) {
             sddf_printf(" %lx", seL4_GetMR(i));
         }
         sddf_printf("\n");
+
+        unit.unit_type = rr_storage_unit_CALL;
+        unit.args.call_args = (rr_storage_call_args_t) {
+            .badge = badge,
+            .msginfo = msg,
+            .data_offset = rr_storage_store_ipc_data(handle, msg),
+            .source_chan = source_chan,
+            .target_chan = target_chan, // uwu
+        };
     } break;
     case rr_IPCType_Ntfn: {
         // only allowed for ntfns.
-        seL4_Word source_ch = rr_badge_to_channel_id(badge);
+        seL4_Word source_chan = rr_badge_to_channel_id(badge);
         // not sus
-        seL4_Word target_child = rr_channel_to_target_child_id[source_ch];
-        seL4_Word target_ch = rrer_source_ch_to_target_ch(source_ch);
+        seL4_Word target_child = rr_channel_to_target_child_id[source_chan];
+        seL4_Word target_chan = rrer_source_ch_to_target_ch(source_chan);
         REC("0x%lx %s child_%lu channel_%lu child_%lu channel_%lu %lx %lx\n", cycle_count,
-            rr_ipc_type_to_string(rr_IPCType_Ntfn), source_child, source_ch, target_child, target_ch, badge,
+            rr_ipc_type_to_string(rr_IPCType_Ntfn), source_child, source_chan, target_child, target_chan, badge,
             msg.words[0]);
+
+        unit.unit_type = rr_storage_unit_NTFN;
+        unit.args.ntfn_args = (rr_storage_ntfn_args_t) {
+            .badge = badge,
+            .msginfo = msg,
+            .source_chan = source_chan,
+            .target_chan = target_chan, // uwu
+        };
     } break;
     }
+    // write the instruction.
+    rr_storage_write(handle->metadata.inst_end, (const uint8_t*) &unit, sizeof(unit));
+    handle->metadata.inst_end += sizeof(unit);
+    handle->metadata.inst_num++;
+    rr_storage_update_metadata(handle);
 }
 
 // We store scheduler events
-static inline void rr_storage_store_scheduler_event(seL4_Word cycle_count, seL4_Word child_id, rr_ChildState_e new_state)
+static inline void rr_storage_store_scheduler_event(rr_storage_handle_t *handle, seL4_Word cycle_count,
+                                                    seL4_Word child_id, rr_ChildState_e new_state)
 {
     REC("0x%lx scheduler child_%lu %s\n", cycle_count, child_id, rr_child_state_to_string(new_state));
+    rr_storage_unit_t unit = {
+        .cycle_count = cycle_count,
+        .unit_type = rr_storage_unit_SCHED,
+        .args.sched_args = (rr_storage_sched_args_t) {
+            .child = child_id,
+            .state = new_state,
+        },
+    };
+    // write the instruction.
+    rr_storage_write(handle->metadata.inst_end, (const uint8_t*) &unit, sizeof(unit));
+    handle->metadata.inst_end += sizeof(unit);
+    handle->metadata.inst_num++;
+    rr_storage_update_metadata(handle);
 }
