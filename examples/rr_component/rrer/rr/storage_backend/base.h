@@ -132,10 +132,12 @@ typedef struct rr_storage_unit {
         seL4_Word _max_size[6];
     } args;
 } rr_storage_unit_t;
+static inline void rr_storage_unit_print(const rr_storage_unit_t *unit);
 
 // Use the handle paradigm here so that this can be more easily reused later for replaying?
 typedef struct rr_storage_handle {
     rr_storage_metadata_t metadata;
+    seL4_Word iptr; // instruction pointer, in bytes.
 } rr_storage_handle_t;
 
 // satisfied by included backend. (which this file is included by).
@@ -172,6 +174,8 @@ static inline rr_storage_handle_t rr_storage_start()
             .data_begin = size,
             .data_end = size,
         },
+        // not relevant for the recorder.
+        .iptr = 0,
     };
     memcpy(handle.metadata.magic, RR_STORAGE_MAGIC, sizeof(RR_STORAGE_MAGIC));
     // Write the metadata in now.
@@ -179,17 +183,53 @@ static inline rr_storage_handle_t rr_storage_start()
     // Write in the children data.
     for (int i = 0; i < rr_children_num; i++) {
         STR_NO_ERR(rr_storage_write(handle.metadata.children_data_begin + i * sizeof(rr_Child_t),
-                         (const uint8_t *)&rr_children_arr[i], sizeof(rr_Child_t)));
+                                    (const uint8_t *)&rr_children_arr[i], sizeof(rr_Child_t)));
     }
     return handle;
 }
 
-static inline void rr_storage_update_metadata(const rr_storage_handle_t* handle) {
+static inline void rr_storage_update_metadata(const rr_storage_handle_t *handle)
+{
     STR_NO_ERR(rr_storage_write(0, (const uint8_t *)&(handle->metadata), sizeof(rr_storage_metadata_t)));
 }
 
 // This is for the replayer.
-static inline rr_storage_handle_t rr_storage_retrieve();
+// This is to be called after the main initialisation.
+static inline rr_storage_handle_t rr_storage_retrieve()
+{
+    rr_init_storage_backend();
+    rr_storage_metadata_t metadata = { 0 };
+
+    // just realised rr_storage_read will abort if it fails, so it physically won't hit this assertion.
+    STR_NO_ERR(rr_storage_read(0, (uint8_t *)&metadata, sizeof(metadata)));
+    STORAGE_LOG("Metadata:\n");
+    STORAGE_LOG("    magic[sizeof(RR_STORAGE_MAGIC)] = %s\n", metadata.magic);
+    STORAGE_LOG("    children_num                    = %lu\n", metadata.children_num);
+    STORAGE_LOG("    children_data_begin             = %lx\n", metadata.children_data_begin);
+    STORAGE_LOG("    children_data_end               = %lx\n", metadata.children_data_end);
+    STORAGE_LOG("    inst_num                        = %lu\n", metadata.inst_num);
+    STORAGE_LOG("    inst_begin                      = %lx\n", metadata.inst_begin);
+    STORAGE_LOG("    inst_end                        = %lx\n", metadata.inst_end);
+    STORAGE_LOG("    data_begin                      = %lx\n", metadata.data_begin);
+    STORAGE_LOG("    data_end                        = %lx\n", metadata.data_end);
+
+    assert(memcmp(metadata.magic, RR_STORAGE_MAGIC, sizeof(RR_STORAGE_MAGIC)) == 0);
+    assert(metadata.children_data_begin <= metadata.children_data_end);
+    assert(metadata.children_num == rr_children_num);
+    assert(metadata.data_begin <= metadata.data_end);
+    assert(metadata.inst_begin <= metadata.inst_end);
+    assert(metadata.inst_num * sizeof(rr_storage_unit_t) == metadata.inst_end - metadata.inst_begin);
+    assert(metadata.children_num * sizeof(rr_Child_t) == metadata.children_data_end - metadata.children_data_begin);
+
+    for (int i = 0; i < rr_children_num; i++) {
+        rr_Child_t child = {0};
+        rr_storage_read(metadata.children_data_begin + i * sizeof(child), (uint8_t*)&child, sizeof(child));
+        STORAGE_LOG("    child[%d].id                   = %lx\n", i, child.id);
+        STORAGE_LOG("    child[%d].prio                 = %lx\n", i, child.priority);
+    }
+
+    return (rr_storage_handle_t) { .metadata = metadata, .iptr = metadata.inst_begin };
+}
 
 // stores what is currently in the IPC buffer into the data.
 // I'm pretty sure that the IPC buffer would not have been clobbered yet.
@@ -227,12 +267,6 @@ static inline void rr_storage_store_ipc_msg(rr_storage_handle_t *handle, seL4_Wo
     case rr_IPCType_SenderReply: {
         // Format: [cycle_count] Reply [source_child] [target_child] [badge] [message]
         seL4_Word target_child = rr_channel_to_target_child_id[rrer_source_ch_to_target_ch(rr_recv_source_channel)];
-        REC("0x%lx Reply child_%lu child_%lu %lx %lx", cycle_count, source_child, target_child, badge, msg.words[0]);
-        seL4_Word msglen = seL4_MessageInfo_get_length(msg);
-        for (seL4_Word i = 0; i < msglen; i++) {
-            sddf_printf(" %lx", seL4_GetMR(i));
-        }
-        sddf_printf("\n");
 
         unit.unit_type = rr_storage_unit_REPLY;
         unit.args.reply_args = (rr_storage_reply_args_t) {
@@ -254,16 +288,7 @@ static inline void rr_storage_store_ipc_msg(rr_storage_handle_t *handle, seL4_Wo
         // needs to be channel mask, the other is for ntfns.
         seL4_Word source_chan = badge & CHANNEL_MASK;
         // not sus
-        seL4_Word target_child = rr_channel_to_target_child_id[source_chan];
         seL4_Word target_chan = rrer_source_ch_to_target_ch(source_chan);
-        REC("0x%lx %s child_%lu channel_%lu child_%lu channel_%lu %lx %lx", cycle_count,
-            rr_ipc_type_to_string(rr_IPCType_Call), source_child, source_chan, target_child, target_chan, badge,
-            msg.words[0]);
-        seL4_Word msglen = seL4_MessageInfo_get_length(msg);
-        for (seL4_Word i = 0; i < msglen; i++) {
-            sddf_printf(" %lx", seL4_GetMR(i));
-        }
-        sddf_printf("\n");
 
         unit.unit_type = rr_storage_unit_CALL;
         unit.args.call_args = (rr_storage_call_args_t) {
@@ -278,11 +303,7 @@ static inline void rr_storage_store_ipc_msg(rr_storage_handle_t *handle, seL4_Wo
         // only allowed for ntfns.
         seL4_Word source_chan = rr_badge_to_channel_id(badge);
         // not sus
-        seL4_Word target_child = rr_channel_to_target_child_id[source_chan];
         seL4_Word target_chan = rrer_source_ch_to_target_ch(source_chan);
-        REC("0x%lx %s child_%lu channel_%lu child_%lu channel_%lu %lx %lx\n", cycle_count,
-            rr_ipc_type_to_string(rr_IPCType_Ntfn), source_child, source_chan, target_child, target_chan, badge,
-            msg.words[0]);
 
         unit.unit_type = rr_storage_unit_NTFN;
         unit.args.ntfn_args = (rr_storage_ntfn_args_t) {
@@ -294,7 +315,8 @@ static inline void rr_storage_store_ipc_msg(rr_storage_handle_t *handle, seL4_Wo
     } break;
     }
     // write the instruction.
-    rr_storage_write(handle->metadata.inst_end, (const uint8_t*) &unit, sizeof(unit));
+    rr_storage_unit_print(&unit);
+    rr_storage_write(handle->metadata.inst_end, (const uint8_t *)&unit, sizeof(unit));
     handle->metadata.inst_end += sizeof(unit);
     handle->metadata.inst_num++;
     rr_storage_update_metadata(handle);
@@ -304,18 +326,72 @@ static inline void rr_storage_store_ipc_msg(rr_storage_handle_t *handle, seL4_Wo
 static inline void rr_storage_store_scheduler_event(rr_storage_handle_t *handle, seL4_Word cycle_count,
                                                     seL4_Word child_id, rr_ChildState_e new_state)
 {
-    REC("0x%lx scheduler child_%lu %s\n", cycle_count, child_id, rr_child_state_to_string(new_state));
     rr_storage_unit_t unit = {
         .cycle_count = cycle_count,
         .unit_type = rr_storage_unit_SCHED,
-        .args.sched_args = (rr_storage_sched_args_t) {
-            .child = child_id,
-            .state = new_state,
-        },
+        .args.sched_args =
+            (rr_storage_sched_args_t) {
+                .child = child_id,
+                .state = new_state,
+            },
     };
     // write the instruction.
-    rr_storage_write(handle->metadata.inst_end, (const uint8_t*) &unit, sizeof(unit));
+    rr_storage_unit_print(&unit);
+    rr_storage_write(handle->metadata.inst_end, (const uint8_t *)&unit, sizeof(unit));
     handle->metadata.inst_end += sizeof(unit);
     handle->metadata.inst_num++;
     rr_storage_update_metadata(handle);
+}
+
+// gets the current instruction without incrementing the iptr.
+static inline rr_storage_unit_t rr_storage_get_inst(const rr_storage_metadata_t *metadata, seL4_Word iptr)
+{
+    rr_storage_unit_t inst = { 0 };
+    assert(iptr < metadata->inst_end);
+    INFO("iptr: %lx\n", iptr);
+    STR_NO_ERR(rr_storage_read(iptr, (uint8_t *)&inst, sizeof(inst)));
+    return inst;
+}
+
+// gets the instruction that the iptr is currently pointing to and then increments iptr.
+// iptr always points to the NEXT instruction!
+static inline rr_storage_unit_t rr_storage_get_next_inst(rr_storage_handle_t *handle)
+{
+    rr_storage_unit_t inst = rr_storage_get_inst(&handle->metadata, handle->iptr);
+    handle->iptr+= sizeof(rr_storage_unit_t);
+    return inst;
+}
+
+static inline void rr_storage_unit_print(const rr_storage_unit_t *unit)
+{
+    switch (unit->unit_type) {
+    case rr_storage_unit_REPLY: {
+        REC("0x%lx REPLY source_child:%lu target_child:%lu msginfo:0x%lx badge:0x%lx data_offset:0x%lx\n",
+            unit->cycle_count, unit->args.reply_args.source_child, unit->args.reply_args.target_child,
+            unit->args.reply_args.msginfo.words[0], unit->args.reply_args.badge, unit->args.reply_args.data_offset);
+    } break;
+    case rr_storage_unit_MSG: {
+        REC("0x%lx MSG source_chan:%lu target_chan:%lu msginfo:0x%lx badge:0x%lx data_offset:0x%lx\n",
+            unit->cycle_count, unit->args.msg_args.source_chan, unit->args.msg_args.target_chan,
+            unit->args.msg_args.msginfo.words[0], unit->args.msg_args.badge, unit->args.msg_args.data_offset);
+    } break;
+    case rr_storage_unit_CALL: {
+        REC("0x%lx CALL source_chan:%lu target_chan:%lu msginfo:0x%lx badge:0x%lx data_offset:0x%lx\n",
+            unit->cycle_count, unit->args.call_args.source_chan, unit->args.call_args.target_chan,
+            unit->args.call_args.msginfo.words[0], unit->args.call_args.badge, unit->args.call_args.data_offset);
+    } break;
+    case rr_storage_unit_NTFN: {
+        REC("0x%lx NTFN source_chan:%lu target_chan:%lu msginfo:0x%lx badge:0x%lx\n", unit->cycle_count,
+            unit->args.ntfn_args.source_chan, unit->args.ntfn_args.target_chan, unit->args.ntfn_args.msginfo.words[0],
+            unit->args.ntfn_args.badge);
+    } break;
+    case rr_storage_unit_SCHED: {
+        REC("0x%lx SCHED child:%lu new_state:%s\n", unit->cycle_count, unit->args.sched_args.child,
+            rr_child_state_to_string(unit->args.sched_args.state));
+    } break;
+
+    case _rr_storage_unit_max:
+    default:
+        assert(!"Unreachable");
+    }
 }

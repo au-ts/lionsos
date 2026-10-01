@@ -25,29 +25,29 @@ static inline bool _rr_block_check_resp(uint64_t num_blocks, uint64_t expected_i
 static inline void rr_init_storage_backend()
 {
     // TODO!!!!! Make it write back the original values so that this can be run both on record and replay.
-    REC("Initialising block storage\n");
+    STORAGE_LOG("Initialising block storage\n");
     assert(blk_config_check_magic(&blk_config));
     blk_queue_init(&_rr_block_queue_handle, blk_config.virt.req_queue.vaddr, blk_config.virt.resp_queue.vaddr,
                    blk_config.virt.num_buffers);
     _rr_block_storage_info = blk_config.virt.storage_info.vaddr;
     while (!blk_storage_is_ready(_rr_block_storage_info));
-    REC("device config ready\n");
-    REC("device size: 0x%lx bytes\n", _rr_block_storage_info->capacity * BLK_TRANSFER_SIZE);
+    STORAGE_LOG("device config ready\n");
+    STORAGE_LOG("device size: 0x%lx bytes\n", _rr_block_storage_info->capacity * BLK_TRANSFER_SIZE);
     _rr_block_initialised = true;
 
     uint8_t original[sizeof(RR_STORAGE_MAGIC)] = { 0 };
     BLK_NO_ERR(rr_storage_read(99, (uint8_t *)original, sizeof(RR_STORAGE_MAGIC)));
 
     // now perform a quick test read and write
-    REC("Test write of magic %s\n", RR_STORAGE_MAGIC);
+    STORAGE_LOG("Test write of magic %s\n", RR_STORAGE_MAGIC);
     BLK_NO_ERR(rr_storage_write(99, (const uint8_t *)RR_STORAGE_MAGIC, sizeof(RR_STORAGE_MAGIC)));
-    REC("Test read of magic\n");
+    STORAGE_LOG("Test read of magic\n");
 
     char magic_read[sizeof(RR_STORAGE_MAGIC)] = { 0 };
 
     BLK_NO_ERR(rr_storage_read(99, (uint8_t *)magic_read, sizeof(RR_STORAGE_MAGIC)));
 
-    REC("Magic read: %x %x %x %x %x %x %x\n", magic_read[0], magic_read[1], magic_read[2], magic_read[3],
+    STORAGE_LOG("Magic read: %x %x %x %x %x %x %x\n", magic_read[0], magic_read[1], magic_read[2], magic_read[3],
         magic_read[4], magic_read[5], magic_read[6]);
     // make sure we read things correctly.
     assert(memcmp(magic_read, RR_STORAGE_MAGIC, sizeof(RR_STORAGE_MAGIC)) == 0);
@@ -55,27 +55,29 @@ static inline void rr_init_storage_backend()
 }
 
 // Basic abstraction bc i'm stupid.
-// Very synchronous and slow.
+// Very synchronous and slow and unoptimized.
 static inline bool rr_storage_write(uint64_t byte_offset, const uint8_t *bytes, uint64_t num_bytes)
 {
     assert(_rr_block_initialised);
     assert(num_bytes + byte_offset < _rr_block_storage_info->capacity * BLK_TRANSFER_SIZE);
     assert(num_bytes > 0);
+
+    // Read the sectors that we are going to write to.
+    // So we don't clobber stuff on write (Please optimize me!)
     uint64_t blk_number = byte_offset / BLK_TRANSFER_SIZE;
     uint64_t blk_offset = byte_offset % BLK_TRANSFER_SIZE;
-
-    // now run the block driver.
-    // Copy our testing data into the block data region
-    memcpy(blk_config.data.vaddr + blk_offset, bytes, num_bytes);
-
-    // determine how many blocks will be overlapped
-    uint64_t num_blks = 1 + ((num_bytes + blk_offset) / BLK_TRANSFER_SIZE);
-
-	// not sure what the io_or_offset exactly is.
-    int err = blk_enqueue_req(&_rr_block_queue_handle, BLK_REQ_WRITE, 0, blk_number, num_blks, 0);
+    uint64_t num_blks = 1 + (blk_offset + num_bytes) / BLK_TRANSFER_SIZE;
+    int err = 0;
+    err = blk_enqueue_req(&_rr_block_queue_handle, BLK_REQ_READ, 0, blk_number, num_blks, 9);
     assert(!err);
-    // i guess can't fail for now.
-    assert(_rr_block_check_resp(num_blks, 0));
+    assert(_rr_block_check_resp(num_blks, 9));
+
+    // now write what we wanted.
+    memcpy(blk_config.data.vaddr + blk_offset, bytes, num_bytes);
+    // And then write back the blocks
+    err = blk_enqueue_req(&_rr_block_queue_handle, BLK_REQ_WRITE, 0, blk_number, num_blks, 8);
+    assert(!err);
+    assert(_rr_block_check_resp(num_blks, 8));
     return true;
 }
 
@@ -115,18 +117,18 @@ static inline bool rr_storage_read(uint64_t byte_offset, uint8_t *result, uint64
     assert(_rr_block_initialised);
     assert(num_bytes + byte_offset < _rr_block_storage_info->capacity * BLK_TRANSFER_SIZE);
 
+    // Read the sectors that we want
+    // So we don't clobber stuff on write (Please optimize me!)
     uint64_t blk_number = byte_offset / BLK_TRANSFER_SIZE;
     uint64_t blk_offset = byte_offset % BLK_TRANSFER_SIZE;
+    uint64_t num_blks = 1 + (blk_offset + num_bytes) / BLK_TRANSFER_SIZE;
+    int err = 0;
 
-    // determine how many blocks will be overlapped
-    uint64_t num_blks = 1 + ((num_bytes + blk_offset) / BLK_TRANSFER_SIZE);
-
-    int err = blk_enqueue_req(&_rr_block_queue_handle, BLK_REQ_READ, 0, blk_number, num_blks, 1);
+    err = blk_enqueue_req(&_rr_block_queue_handle, BLK_REQ_READ, 0, blk_number, num_blks, 1);
     assert(!err);
     // i guess can't fail for now.
     assert(_rr_block_check_resp(num_blks, 1));
-    // copy the data
+    // copy the data at the offset we want.
     memcpy(result, ((uint8_t*)blk_config.data.vaddr) + blk_offset, num_bytes);
-    //
     return true;
 }

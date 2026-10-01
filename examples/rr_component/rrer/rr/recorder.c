@@ -1,5 +1,4 @@
 // the generic header.
-#pragma once
 #include "base.h"
 #include "interfaces/sel4_client.h"
 #include "microkit.h"
@@ -7,61 +6,17 @@
 #include "ipc.h"
 #include "sel4/shared_types_gen.h"
 #include "sel4/simple_types.h"
-#include "storage_backend/block.h"
 #include "types.h"
 #include "fault.h"
+#include "init.h"
+#include <sddf/util/printf.h>
+#include <sddf/serial/config.h>
+#include <sddf/serial/queue.h>
 
-rr_storage_handle_t storage_handle = {0};
 
 static inline void rec_main();
-static inline void rec_init();
 static inline void rec_perform_schedule(seL4_Word cycle_count);
 
-// The index is the id. Points to mr_prefilled data.
-static inline void rec_init()
-{
-    assert(blocker_ch != UNSET_VALUE);
-    assert(sender_ch != UNSET_VALUE);
-    INFO("blocker_ch: %lu, sender_ch: %lu\n", blocker_ch, sender_ch);
-
-    uint8_t *head = children_data_mem;
-    assert(head != NULL);
-    // initialises the children.
-    rr_children_num = *head;
-    head += sizeof(seL4_Word);
-
-    rr_children_arr = (rr_Child_t *)head;
-    head += sizeof(rr_Child_t) * rr_children_num;
-    INFO("Num children: %lu @ %p\n", rr_children_num, rr_children_arr);
-
-    // serialise channels
-    rr_channels_num = *head;
-    head += sizeof(seL4_Word);
-
-    // serialise channel to target child
-    rr_channel_to_target_child_id = (seL4_Word *)head;
-    head += sizeof(seL4_Word) * rr_channels_num;
-    INFO("Channel id map: %lu @ %p\n", rr_channels_num, rr_channel_to_target_child_id);
-    for (int i = 0; i < rr_channels_num; i++) {
-        INFO("Channel %d = child %lu\n", i, rr_channel_to_target_child_id[i]);
-    }
-
-    // initiaise scheduler queue
-    rr_children_sched_queue = (rr_Child_t **)head;
-    INFO("Scheduler queue @ %p\n", rr_children_sched_queue);
-
-    rr_init_scheduler();
-    rr_init_ipc();
-
-    // initialise the vpmu to be recording and on.
-    seL4_ARM_VPMU_VPMUNumCounters_t counters = seL4_ARM_VPMU_VPMUNumCounters(VPMU_CAP);
-    NO_ERR(counters.error);
-    INFO("Num pmu counters: %lu\n", counters.num_counters);
-    assert(counters.num_counters > 0);
-    NO_ERR(seL4_ARM_VPMU_VPMUCounterControl(VPMU_CAP, 1));
-
-	storage_handle = rr_storage_start();
-}
 
 static inline void rec_perform_schedule(seL4_Word cycle_count)
 {
@@ -78,7 +33,7 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
             LOG("Chosen id: %lu\n", chosen->id);
 
 
-            rr_storage_store_scheduler_event(&storage_handle, cycle_count, chosen->id,
+            rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, chosen->id,
                                             chosen->sched_state);
             // Setup sender thread
             rr_ipc_sender_setup(chosen->id);
@@ -154,11 +109,11 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
                 assert(!"Unreachable");
             };
             // Store the changes made to the sender.
-            rr_storage_store_scheduler_event(&storage_handle, cycle_count, source_child_state->id,
+            rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, source_child_state->id,
                                             source_child_state->sched_state);
 
             // store the event
-            rr_storage_store_scheduler_event(&storage_handle, cycle_count, chosen->id,
+            rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, chosen->id,
                                             chosen->sched_state);
 
             // setup sender thread
@@ -189,7 +144,7 @@ static inline void rec_unschedule_current(seL4_Word cycle_count, rr_ChildState_e
 {
     seL4_Word last_sched_id = rr_currently_sched->id;
     rr_sched_unschedule_current(new_state);
-    rr_storage_store_scheduler_event(&storage_handle, cycle_count, last_sched_id, new_state);
+    rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, last_sched_id, new_state);
 }
 
 // main
@@ -228,7 +183,7 @@ static inline void rec_main()
             assert(replyee_child_id < rr_children_num);
 
             // store the message
-            rr_storage_store_ipc_msg(&storage_handle, cycle_count, rr_currently_sched->id, badge, msg);
+            rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, rr_currently_sched->id, badge, msg);
 
             // We can send the reply as it won't block.
             seL4_Send(BASE_REPLY_CAPS + replyee_child_id, msg);
@@ -237,7 +192,7 @@ static inline void rec_main()
 
             // and also set the replied to pd as schedulable
             rr_children_arr[replyee_child_id].sched_state = rr_ChildState_Schedulable;
-            rr_storage_store_scheduler_event(&storage_handle, cycle_count, replyee_child_id, rr_ChildState_Schedulable);
+            rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, replyee_child_id, rr_ChildState_Schedulable);
 
             rr_recv_source_channel = UNSET_VALUE;
         } break;
@@ -264,7 +219,7 @@ static inline void rec_main()
                     WARN("Unexecuted reply object for child %lu! Suspending child %lu\n", child_id, child_id);
 
                     rr_children_arr[child_id].sched_state = rr_ChildState_Suspended;
-                    rr_storage_store_scheduler_event(&storage_handle, cycle_count, child_id, rr_ChildState_Suspended);
+                    rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, child_id, rr_ChildState_Suspended);
                 }
                 rec_unschedule_current(cycle_count, rr_ChildState_BlockedOnRecv);
             }
@@ -300,7 +255,7 @@ static inline void rec_main()
             LOG("Target child: %lu\n", target_child);
 
             rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
-            rr_storage_store_ipc_msg(&storage_handle, cycle_count, sending_child, badge, msg);
+            rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, sending_child, badge, msg);
         } break;
         case rr_IPCType_Ntfn: {
             seL4_Word source_ch = rr_badge_to_channel_id(badge);
@@ -320,7 +275,7 @@ static inline void rec_main()
             seL4_Word target_child = rr_channel_to_target_child_id[source_ch];
             LOG("Target child: %lu\n", target_child);
             rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
-            rr_storage_store_ipc_msg(&storage_handle, cycle_count, sending_child, badge, msg);
+            rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, sending_child, badge, msg);
         } break;
         }
         // perform a reschedule.
@@ -328,4 +283,42 @@ static inline void rec_main()
         NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
         last_cycle_count = cycle_count;
     }
+}
+
+__attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
+
+serial_queue_t *tx_queue;
+
+serial_queue_handle_t serial_tx_queue_handle;
+
+// We never exit this.
+void init()
+{
+    serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size,
+                  serial_config.tx.data.vaddr);
+    // serial_putchar_init(serial_config.tx.id, &serial_tx_queue_handle);
+    LOG("INIT\n");
+
+    rr_init(true);
+    rec_main();
+}
+
+// Should not be called
+void notified(microkit_channel ch)
+{
+    LOG("Notified! %d\n", ch);
+}
+
+// Should not be called
+microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
+{
+    LOG("Protected!\n");
+    return msginfo;
+}
+
+// Should not be called.
+seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
+{
+    *reply_msginfo = microkit_msginfo_new(0, 0);
+    return false;
 }

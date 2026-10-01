@@ -35,6 +35,7 @@
 #define NO_CHILD ((seL4_Word)-1)
 
 #define REC(...) do {sddf_printf("RECORD | "); sddf_printf(__VA_ARGS__);} while (0)
+#define STORAGE_LOG(...) do {sddf_printf("STORAGE | "); sddf_printf(__VA_ARGS__);} while (0)
 
 typedef enum {
     rr_ChildState_Schedulable = 0,
