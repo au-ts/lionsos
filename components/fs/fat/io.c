@@ -87,7 +87,7 @@ DSTATUS disk_status (
 }
 
 DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
-    DRESULT res;
+    DRESULT res = RES_OK;
     if (cmd == GET_SECTOR_SIZE) {
         WORD *size = buff;
         *size = blk_storage_info->sector_size;

@@ -601,24 +601,24 @@ void handle_dir_read(void) {
     FRESULT RET = f_readdir(dir, &fno);
 
     uint64_t len = strlen(fno.fname);
+    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+
     // The buffer most have a size that is minimum length of the name plus one
-    if (RET == FR_OK && size < len) {
-        RET = FS_STATUS_ERROR;
+    if (args->status == FS_STATUS_SUCCESS && size < len) {
+        args->status = FS_STATUS_ERROR;
     }
 
-    if (RET == FR_OK) {
+    if (args->status == FS_STATUS_SUCCESS) {
         args->result.dir_read.path_len = len;
         memcpy(name, fno.fname, len);
         LOG_FATFS("FAT readdir file name: %.*s\n", (uint32_t)len, (char*)name);
         // Hacky change the ret value to FS_STATUS_END_OF_DIRECTORY when nothing is in the directory
         if (fno.fname[0] == 0) {
-            RET = FS_STATUS_END_OF_DIRECTORY;
+            args->status = FS_STATUS_END_OF_DIRECTORY;
         }
     }
 
     fd_end_op(fd);
-
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
 
 // Not sure if this one is implemented correctly
