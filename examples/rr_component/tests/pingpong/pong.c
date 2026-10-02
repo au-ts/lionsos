@@ -16,7 +16,7 @@ static size_t i = 0;
 void notified(microkit_channel ch)
 {
     LOG("Notified! %d %lu\n", ch, i);
-    if (ch == pingch && i++ < 10)
+    if (ch == pingch && i++ < 20)
         microkit_notify(ch);
     else {
         LOG("CRASHING!\n");

@@ -14,9 +14,8 @@ void init()
 static size_t i = 0;
 void notified(microkit_channel ch)
 {
-    LOG("Notified! %d %lu\n", ch, i);
-    if (i++ < 10)
-        microkit_notify(ch);
+    LOG("Notified! %d %lu\n", ch, i++);
+    microkit_notify(ch);
 }
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 {

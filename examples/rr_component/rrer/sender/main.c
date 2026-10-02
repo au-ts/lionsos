@@ -24,30 +24,30 @@ void init()
 
 void notified(microkit_channel ch)
 {
-    LOG("Starting sender!\n");
+    INFO("Starting sender!\n");
     assert(per_thread_recv_queue_mem != NULL);
     assert(per_thread_recv_queue_size != 0);
     rr_ipc_target_child_id = (seL4_Word *)per_thread_recv_queue_mem;
     queues = (rrer_queue_t *)(per_thread_recv_queue_mem + sizeof(seL4_Word));
     // if there's noone scheduled we ignore.
-    LOG("target child: %lx\n", *rr_ipc_target_child_id);
+    INFO("target child: %lx\n", *rr_ipc_target_child_id);
     if (*rr_ipc_target_child_id == NO_THREAD_SCHEDULED) {
-        LOG("No target, yielding\n");
+        INFO("No target, yielding\n");
         return;
     }
     rrer_queue_t *queue = queues + *rr_ipc_target_child_id;
     if (rrer_queue_len(queue) == 0) {
-        LOG("No messages, yielding\n");
+        INFO("No messages, yielding\n");
         return;
     }
     rrer_ipc_t ipc = rrer_queue_peek(queue);
     if (rrer_badge_is_ntfn(ipc.badge)) {
-        LOG("Sending ntfn ch %lu\n", rrer_source_ch_to_target_ch(ipc.channel));
+        INFO("Sending ntfn ch %lu\n", rrer_source_ch_to_target_ch(ipc.channel));
         seL4_Signal(BASE_OUTPUT_NOTIFICATION_CAP + rrer_source_ch_to_target_ch(ipc.channel));
         rrer_queue_pop_ignore(queue);
-        LOG("Ntfn sent!\n");
+        INFO("Ntfn sent!\n");
     } else {
-        LOG("Sending msg ch %lu\n", rrer_source_ch_to_target_ch(ipc.channel));
+        INFO("Sending msg ch %lu\n", rrer_source_ch_to_target_ch(ipc.channel));
         seL4_MessageInfo_t to_send = rrer_ipc_handler_read_msg(&queues->handler, ipc);
         // If this get's preempted, what happens?
         // The reply cap will get invalidated (IPC gets cancelled),
@@ -56,7 +56,7 @@ void notified(microkit_channel ch)
         // 2. leave it as unsupported (which is what i'll do for now).
         seL4_MessageInfo_t replied = seL4_Call(BASE_ENDPOINT_CAP + rrer_source_ch_to_target_ch(ipc.channel), to_send);
         rrer_queue_pop_ignore(queue);
-        LOG("Call finished!\n");
+        INFO("Call finished!\n");
         // Send the reply, just through using the current ipc buffer.
         seL4_Send(BASE_ENDPOINT_CAP + main_ch, replied);
     }

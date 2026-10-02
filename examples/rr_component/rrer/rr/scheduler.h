@@ -44,6 +44,8 @@ static inline rr_Child_t** rr_sched_iterate(rr_Child_t** cur) {
     return cur + 1;
 }
 
+static inline rr_Child_t* rr_sched_schedule_child(rr_Child_t* child);
+
 static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
     assert(cur != NULL);
     assert(cur >= rr_children_sched_queue);
@@ -57,8 +59,12 @@ static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
         cur[1] = temp;
         cur++;
     }
+    return rr_sched_schedule_child(*cur);
+}
+
+static inline rr_Child_t* rr_sched_schedule_child(rr_Child_t* child) {
     // sets up the correct priority of the child.
-    rr_currently_sched = *cur;
+    rr_currently_sched = child;
 
     // if the child was schedulable, then it was suspended, so unsuspend it
     // this is moved to outside because choosing happened before writing the scheduler event, 
@@ -67,7 +73,7 @@ static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
 
     // set the correct state.
     rr_currently_sched->sched_state = rr_ChildState_Scheduled;
-    seL4_TCB_SetPriority(TCB(cur[0]->id), SELF_TCB(), SCHED_PRIO);
+    seL4_TCB_SetPriority(TCB(child->id), SELF_TCB(), SCHED_PRIO);
 
     // also assigns the vpmu.
     NO_ERR(seL4_TCB_BindVPMU(TCB(rr_currently_sched->id), VPMU_CAP));

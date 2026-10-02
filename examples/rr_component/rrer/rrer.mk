@@ -53,10 +53,10 @@ rr_sender.o: deps
 	${CC} ${RRER_CFLAGS} -c ${RRER_SENDER_DIR}/main.c -o $@
 
 rr_sender.elf: rr_sender.o | libsddf_util_debug.a
-	${LD} $< ${RRER_LIBS} ${RRER_LDFLAGS} -o $@
+	${LD} $< ${RRER_LIBS} ${RRER_LDFLAGS} -o $@ libsddf_util_debug.a
 
 rr_block_checker.elf: rr_block_checker.o | libsddf_util_debug.a
-	${LD} $< ${RRER_LIBS} ${RRER_LDFLAGS} -o $@
+	${LD} $< ${RRER_LIBS} ${RRER_LDFLAGS} -o $@ libsddf_util_debug.a
 
 rr_recorder.o: deps
 	${CC} ${RRER_CFLAGS} -c ${RRER_RR_DIR}/recorder.c -o $@

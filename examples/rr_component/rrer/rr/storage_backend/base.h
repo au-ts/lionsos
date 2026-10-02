@@ -135,6 +135,7 @@ typedef struct rr_storage_unit {
 static inline void rr_storage_unit_print(const rr_storage_unit_t *unit);
 
 // Use the handle paradigm here so that this can be more easily reused later for replaying?
+// Also this handle should allow for easier optimization later (IE caching reads).
 typedef struct rr_storage_handle {
     rr_storage_metadata_t metadata;
     seL4_Word iptr; // instruction pointer, in bytes.
@@ -221,11 +222,12 @@ static inline rr_storage_handle_t rr_storage_retrieve()
     assert(metadata.inst_num * sizeof(rr_storage_unit_t) == metadata.inst_end - metadata.inst_begin);
     assert(metadata.children_num * sizeof(rr_Child_t) == metadata.children_data_end - metadata.children_data_begin);
 
+	STORAGE_LOG("Children:\n");
     for (int i = 0; i < rr_children_num; i++) {
         rr_Child_t child = {0};
         rr_storage_read(metadata.children_data_begin + i * sizeof(child), (uint8_t*)&child, sizeof(child));
-        STORAGE_LOG("    child[%d].id                   = %lx\n", i, child.id);
-        STORAGE_LOG("    child[%d].prio                 = %lx\n", i, child.priority);
+        STORAGE_LOG("    child[%d].id                     = %lx\n", i, child.id);
+        STORAGE_LOG("    child[%d].prio                   = %lx\n", i, child.priority);
     }
 
     return (rr_storage_handle_t) { .metadata = metadata, .iptr = metadata.inst_begin };
@@ -265,7 +267,7 @@ static inline void rr_storage_store_ipc_msg(rr_storage_handle_t *handle, seL4_Wo
         assert(false);
     } break;
     case rr_IPCType_SenderReply: {
-        // Format: [cycle_count] Reply [source_child] [target_child] [badge] [message]
+        // Format: [cycle_count] REPLY [source_child] [target_child] [badge] [message] [data_offset]
         seL4_Word target_child = rr_channel_to_target_child_id[rrer_source_ch_to_target_ch(rr_recv_source_channel)];
 
         unit.unit_type = rr_storage_unit_REPLY;
@@ -284,7 +286,7 @@ static inline void rr_storage_store_ipc_msg(rr_storage_handle_t *handle, seL4_Wo
         assert(!"TODO: handle faults");
     } break;
     case rr_IPCType_Call: {
-        // Format: [cycle_count] msg [source_child] [source_channel] [target_child] [target_channel] [badge] [message]
+        // Format: [cycle_count] MSG [source_channel] [target_channel] [badge] [message] [data_offset]
         // needs to be channel mask, the other is for ntfns.
         seL4_Word source_chan = badge & CHANNEL_MASK;
         // not sus
@@ -301,6 +303,7 @@ static inline void rr_storage_store_ipc_msg(rr_storage_handle_t *handle, seL4_Wo
     } break;
     case rr_IPCType_Ntfn: {
         // only allowed for ntfns.
+        // Format: [cycle_count] NTFN [source_channel] [target_channel] [badge] [message]
         seL4_Word source_chan = rr_badge_to_channel_id(badge);
         // not sus
         seL4_Word target_chan = rrer_source_ch_to_target_ch(source_chan);
@@ -326,6 +329,7 @@ static inline void rr_storage_store_ipc_msg(rr_storage_handle_t *handle, seL4_Wo
 static inline void rr_storage_store_scheduler_event(rr_storage_handle_t *handle, seL4_Word cycle_count,
                                                     seL4_Word child_id, rr_ChildState_e new_state)
 {
+    // Format: [cycle_count] SCHED [child] [new_state]
     rr_storage_unit_t unit = {
         .cycle_count = cycle_count,
         .unit_type = rr_storage_unit_SCHED,
@@ -348,7 +352,6 @@ static inline rr_storage_unit_t rr_storage_get_inst(const rr_storage_metadata_t 
 {
     rr_storage_unit_t inst = { 0 };
     assert(iptr < metadata->inst_end);
-    INFO("iptr: %lx\n", iptr);
     STR_NO_ERR(rr_storage_read(iptr, (uint8_t *)&inst, sizeof(inst)));
     return inst;
 }
