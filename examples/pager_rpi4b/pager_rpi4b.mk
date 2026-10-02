@@ -124,11 +124,12 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a minor_pf.a
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
-client.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
+# client.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
+# 	$(CC) -c $(CFLAGS) -I. $< -o $@
+client.o mailbox.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
 	$(CC) -c $(CFLAGS) -I. $< -o $@
 
-
-client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a minor_pf.a
+client.elf: client.o mailbox.o libsddf_util_debug.a libmicrokitco_client.a minor_pf.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 .PHONY: minor_pf.a

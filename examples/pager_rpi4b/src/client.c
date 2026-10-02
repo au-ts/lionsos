@@ -11,6 +11,7 @@
 #include <lions/posix/posix.h>
 
 #include <minor_pf.h>
+#include "mailbox.h"
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".pager_client_config"))) pager_client_config_t pager_config;
@@ -34,6 +35,7 @@ void init(void)
 
     /* The mmap arena the pager hands out of, so both sides agree on where it is. */
     libc_init(NULL, (void *)pager_config.mmap_base, 0x20000000);
+    mailbox_pin_arm_clock(1800000000U);
 
     minor_pf();
 

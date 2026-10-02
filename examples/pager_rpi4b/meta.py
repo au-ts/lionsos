@@ -7,7 +7,17 @@ from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 from board import BOARDS
 
 ProtectionDomain = SystemDescription.ProtectionDomain
+MemoryRegion = SystemDescription.MemoryRegion
+Map = SystemDescription.Map
+
+ProtectionDomain = SystemDescription.ProtectionDomain
 SUPPORTED_BOARDS = ("rpi4b_1gb", "qemu_virt_aarch64")
+
+MAILBOX_REGS_PADDR = 0xFE00B000
+MAILBOX_REGS_VADDR = 0x30000000
+MAILBOX_BUFFER_PADDR = 0x01000000
+MAILBOX_BUFFER_VADDR = 0x30001000
+MAILBOX_PAGE_SIZE = 0x1000
 
 
 def generate(
@@ -30,6 +40,18 @@ def generate(
     client = ProtectionDomain("client", "client.elf", priority=1)
     pager_system.add_client(client)
     serial_system.add_client(client)
+
+    if board.name == "rpi4b_1gb":
+        mailbox_regs = MemoryRegion(
+            sdf, "mailbox_regs", MAILBOX_PAGE_SIZE, paddr=MAILBOX_REGS_PADDR)
+        mailbox_buffer = MemoryRegion(
+            sdf, "mailbox_buffer", MAILBOX_PAGE_SIZE, paddr=MAILBOX_BUFFER_PADDR)
+        for mr in (mailbox_regs, mailbox_buffer):
+            sdf.add_mr(mr)
+        client.add_map(
+            Map(mailbox_regs, MAILBOX_REGS_VADDR, perms="rw", cached=False))
+        client.add_map(
+            Map(mailbox_buffer, MAILBOX_BUFFER_VADDR, perms="rw", cached=False))
 
     pds = [
         serial_driver,
