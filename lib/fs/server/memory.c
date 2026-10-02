@@ -17,6 +17,13 @@ void *fs_get_client_buffer(char *client_share, size_t client_share_size, fs_buff
     return (void *)(client_share + buf.offset);
 }
 
+void *fs_get_client_slot(char *client_share, size_t client_share_size, fs_buffer_t buf) {
+    if (buf.size > FS_BUFFER_SIZE) {
+        return NULL;
+    }
+    return fs_get_client_buffer(client_share, client_share_size, buf);
+}
+
 int fs_copy_client_path(char *dest, char *client_share, size_t client_share_size, fs_buffer_t buf) {
     char *client_buf = fs_get_client_buffer(client_share, client_share_size, buf);
     if (client_buf == NULL || buf.size > FS_MAX_PATH_LENGTH) {

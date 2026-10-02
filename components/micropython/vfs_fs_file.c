@@ -7,6 +7,7 @@
 #include "py/mpthread.h"
 #include "py/runtime.h"
 #include "py/stream.h"
+#include "py/misc.h"
 #include <lions/fs/helpers.h>
 #include "micropython.h"
 #include <fcntl.h>
@@ -47,6 +48,11 @@ static mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int 
     mp_obj_vfs_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
     // check_fd_is_open(o);
 
+    /* One command moves at most one share slot, so a bigger request has to be
+       satisfied over several. A short read is a legitimate answer for a stream, so
+       clamping is enough; the server refuses anything wider than a slot outright. */
+    mp_uint_t to_read = MIN(size, (mp_uint_t)FS_BUFFER_SIZE);
+
     ptrdiff_t read_buffer;
     int err = fs_buffer_allocate(&read_buffer);
     if (err) {
@@ -60,7 +66,7 @@ static mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int 
             .fd = o->fd,
             .offset = o->pos,
             .buf.offset = read_buffer,
-            .buf.size = size,
+            .buf.size = to_read,
         }
     });
     if (err || completion.status != FS_STATUS_SUCCESS) {
@@ -68,16 +74,24 @@ static mp_uint_t vfs_fs_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int 
         return MP_STREAM_ERROR;
     }
 
-    memcpy(buf, fs_buffer_ptr(read_buffer), completion.data.file_read.len_read);
-    o->pos += completion.data.file_read.len_read;
+    /* The server is a separate protection domain, so the length it reports is not
+       trusted to fit the caller's buffer either. */
+    mp_uint_t len_read = MIN((mp_uint_t)completion.data.file_read.len_read, to_read);
+
+    memcpy(buf, fs_buffer_ptr(read_buffer), len_read);
+    o->pos += len_read;
     fs_buffer_free(read_buffer);
 
-    return (mp_uint_t)completion.data.file_read.len_read;
+    return len_read;
 }
 
 static mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t size, int *errcode) {
     mp_obj_vfs_fs_file_t *o = MP_OBJ_TO_PTR(o_in);
     // check_fd_is_open(o);
+
+    /* This copy lands in the share buffer before the command is even sent, so it has
+       to be clamped here: nothing on the server side can catch it. */
+    mp_uint_t to_write = MIN(size, (mp_uint_t)FS_BUFFER_SIZE);
 
     ptrdiff_t write_buffer;
     int err = fs_buffer_allocate(&write_buffer);
@@ -85,7 +99,7 @@ static mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t siz
         return MP_STREAM_ERROR;
     }
 
-    memcpy(fs_buffer_ptr(write_buffer), buf, size);
+    memcpy(fs_buffer_ptr(write_buffer), buf, to_write);
 
     fs_cmpl_t completion;
     err = fs_command_blocking(&completion, (fs_cmd_t){
@@ -94,7 +108,7 @@ static mp_uint_t vfs_fs_file_write(mp_obj_t o_in, const void *buf, mp_uint_t siz
             .fd = o->fd,
             .offset = o->pos,
             .buf.offset = write_buffer,
-            .buf.size = size,
+            .buf.size = to_write,
         }
     });
     fs_buffer_free(write_buffer);
@@ -301,7 +315,7 @@ mp_obj_t mp_vfs_fs_file_open(const mp_obj_type_t *type, mp_obj_t file_in, mp_obj
             .type = FS_CMD_FILE_CLOSE,
             .params.file_close.fd = o->fd,
         });
-        fs_buffer_free(buffer);
+        // The path buffer was already released above, once FILE_OPEN returned.
         mp_raise_OSError(completion.status);
         return mp_const_none;
     }

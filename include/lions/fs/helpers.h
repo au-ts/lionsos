@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include <lions/fs/protocol.h>
 
-#define FS_BUFFER_SIZE 0x8000
+/* FS_BUFFER_SIZE is the slot size, declared in protocol.h because the server needs it too. */
 
 int fs_request_allocate(uint64_t *request_id);
 void fs_request_free(uint64_t request_id);

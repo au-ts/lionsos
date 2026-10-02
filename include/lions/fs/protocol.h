@@ -13,6 +13,18 @@
 #define FS_MAX_NAME_LENGTH 255
 #define FS_MAX_PATH_LENGTH 4095
 
+/*
+ * The client's share region is divided into fixed-size slots of this many bytes, and
+ * fs_buffer_allocate() hands out one at a time. A single read or write may therefore
+ * name at most one slot's worth of data: a transfer that claims more would run off the
+ * end of the slot and overwrite whatever the client has placed beside it.
+ *
+ * This belongs here rather than in the client helper header because it is a property
+ * of the wire protocol that both sides must agree on -- the client allocates slots of
+ * this size, and the server must refuse to write further than one.
+ */
+#define FS_BUFFER_SIZE 0x8000
+
 // flags to control the behaviour of the open command
 enum {
     FS_OPEN_FLAGS_READ_ONLY = 0,

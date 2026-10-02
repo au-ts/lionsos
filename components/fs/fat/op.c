@@ -188,7 +188,7 @@ void handle_file_write(void) {
 
     LOG_FATFS("fat_write: bytes to be write: %lu, write offset: %lu\n", btw, offset);
 
-    char *data = fs_get_client_buffer(fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
+    char *data = fs_get_client_slot(fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
     if (data == NULL) {
         LOG_FATFS("fat_write: invalid buffer\n");
         args->result.file_write.len_written = 0;
@@ -236,7 +236,7 @@ void handle_file_read(void) {
     uint64_t btr = args->params.file_read.buf.size;
     uint64_t offset = args->params.file_read.offset;
 
-    char *data = fs_get_client_buffer(fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
+    char *data = fs_get_client_slot(fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
     if (data == NULL) {
         LOG_FATFS("fat_read: invalid buffer provided\n");
         args->status = FS_STATUS_INVALID_BUFFER;

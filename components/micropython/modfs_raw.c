@@ -114,6 +114,13 @@ static mp_obj_t request_pread(mp_uint_t n_args, const mp_obj_t *args) {
     uint64_t offset = mp_obj_get_int(args[2]);
     mp_obj_t flag = args[3];
 
+    /* nbyte comes straight from Python, and one command may only move a single share
+       slot, so cap it here. A pread that returns fewer bytes than asked for is a
+       legitimate short read; the caller asked for a count, not a guarantee. */
+    if (nbyte > FS_BUFFER_SIZE) {
+        nbyte = FS_BUFFER_SIZE;
+    }
+
     ptrdiff_t read_buffer;
     int err = fs_buffer_allocate(&read_buffer);
     if (err) {

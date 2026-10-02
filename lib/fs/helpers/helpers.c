@@ -17,6 +17,12 @@ extern char *fs_share;
 
 void (*blocking_wait)(microkit_channel ch) = NULL;
 
+/*
+ * A request id is only useful if the server can complete it: fs_command_issue()
+ * refuses ids above REQUEST_ID_MAXIMUM, and fs_process_completions() drops such a
+ * completion, which would strand the caller. So the number of outstanding requests
+ * is bounded by the request table, not by the number of share buffers.
+ */
 #define REQUEST_ID_MAXIMUM (FS_QUEUE_CAPACITY - 1)
 struct request_metadata {
     fs_cmd_t command;
@@ -25,13 +31,21 @@ struct request_metadata {
     bool complete;
 } request_metadata[FS_QUEUE_CAPACITY];
 
+/*
+ * Share buffers are a different thing: each is a 32 KiB slice of the client's share
+ * region, so how many exist depends on that region's size rather than on the queue.
+ * Both filesystem backends give the client 64 MiB, which holds 2048 slices; we take
+ * NUM_BUFFERS of them and leave the rest. buffer_metadata must therefore be sized
+ * for NUM_BUFFERS -- sizing it for the queue capacity walked the table off its end
+ * and issued offsets the share region does not cover.
+ */
 #define NUM_BUFFERS FS_QUEUE_CAPACITY * 4
 struct buffer_metadata {
     bool used;
-} buffer_metadata[FS_QUEUE_CAPACITY];
+} buffer_metadata[NUM_BUFFERS];
 
 int fs_request_allocate(uint64_t *request_id) {
-    for (uint64_t i = 0; i < NUM_BUFFERS; i++) {
+    for (uint64_t i = 0; i < FS_QUEUE_CAPACITY; i++) {
         if (!request_metadata[i].used) {
             request_metadata[i].used = true;
             *request_id = i;

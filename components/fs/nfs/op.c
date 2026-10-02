@@ -460,7 +460,7 @@ void handle_file_read(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_file_read_t params = cmd.params.file_read;
 
-    char *buf = fs_get_client_buffer(fs_share, CLIENT_SHARE_SIZE, params.buf);
+    char *buf = fs_get_client_slot(fs_share, CLIENT_SHARE_SIZE, params.buf);
     if (buf == NULL) {
         dlog("invalid output buffer provided");
         status = FS_STATUS_INVALID_BUFFER;
@@ -518,7 +518,7 @@ void handle_file_write(fs_cmd_t cmd) {
     uint64_t status = FS_STATUS_ERROR;
     fs_cmd_params_file_write_t params = cmd.params.file_write;
 
-    char *buf = fs_get_client_buffer(fs_share, CLIENT_SHARE_SIZE, params.buf);
+    char *buf = fs_get_client_slot(fs_share, CLIENT_SHARE_SIZE, params.buf);
     if (buf == NULL) {
         dlog("invalid output buffer provided");
         status = FS_STATUS_INVALID_BUFFER;
@@ -577,7 +577,7 @@ void handle_rename(fs_cmd_t cmd) {
         status = FS_STATUS_INVALID_PATH;
         goto fail_buffer;
     }
-    err = fs_copy_client_path(new_path, fs_share, CLIENT_SHARE_SIZE, params.old_path);
+    err = fs_copy_client_path(new_path, fs_share, CLIENT_SHARE_SIZE, params.new_path);
     if (err) {
         dlog("invalid path buffer provided");
         status = FS_STATUS_INVALID_PATH;
