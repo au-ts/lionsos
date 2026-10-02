@@ -89,9 +89,14 @@ typedef struct sandbox {
         uint32_t first;
         uint32_t count;
     } grant_frames[CAPS_MAX];
-    /* Our copies of the frame caps of the window; page tables may lie between them */
+    /* Our copies of the frame caps of the window, in the order they were granted.
+       Only frames are listed: the page tables map_frame makes for the sandbox's
+       VSpace come from its Untyped, so revoking that takes them with it. */
     uint32_t window_objects[WINDOW_MAX_FRAMES];
     uint32_t window_count;
+    /* Our copy of the mailbox frame, mapped into our own VSpace; unmapped on stop */
+    uint32_t mailbox_object;
+    bool mailbox_mapped;
 } sandbox_t;
 
 static sandbox_t sandboxes[SANDBOX_COUNT];
@@ -278,11 +283,16 @@ static int64_t load_file(sandbox_t *sb, sandbox_read_fn read, const char *path, 
 /* Map copies of the first `n` frames of the region whose frame caps are in root slot `slot` */
 static bool grant_region(sandbox_t *sb, unsigned slot, uint32_t n, seL4_Word vaddr)
 {
+    /* Check up front, so a window that cannot fit does not leave the object count
+       past the end part way through the loop. */
+    if (n > WINDOW_MAX_FRAMES - sb->window_count || n > MAX_OBJECTS - sb->next_object) {
+        LOG_SANDBOX_ERR("the window does not fit\n");
+        return false;
+    }
     for (uint32_t i = 0; i < n; i++) {
         uint32_t copy = sb->next_object++;
-        if (copy >= MAX_OBJECTS || sb->window_count >= WINDOW_MAX_FRAMES
-            || !ok(seL4_CNode_Copy(objects(sb), copy, SLOT_DEPTH, LEAF(slot), i, SLOT_DEPTH, seL4_ReadWrite),
-                   "copying a frame of the window")) {
+        if (!ok(seL4_CNode_Copy(objects(sb), copy, SLOT_DEPTH, LEAF(slot), i, SLOT_DEPTH, seL4_ReadWrite),
+                "copying a frame of the window")) {
             return false;
         }
         sb->window_objects[sb->window_count++] = copy;
@@ -293,9 +303,13 @@ static bool grant_region(sandbox_t *sb, unsigned slot, uint32_t n, seL4_Word vad
     return true;
 }
 
+/* Unmap the window's frames from the sandbox before deleting their caps: deleting a
+   cap to a frame that is still mapped leaves the mapping alive, so the next app in
+   this sandbox would see this one's pixels and mapping over them would fail. */
 static void revoke_window(sandbox_t *sb)
 {
     for (uint32_t i = 0; i < sb->window_count; i++) {
+        seL4_ARM_Page_Unmap(obj(sb, sb->window_objects[i]));
         seL4_CNode_Delete(objects(sb), sb->window_objects[i], SLOT_DEPTH);
     }
     sb->window_count = 0;
@@ -366,6 +380,13 @@ void sandbox_stop(int k)
     }
     microkit_pd_stop(k);
     revoke_window(sb);
+    /* Our copy of the mailbox is mapped into our own VSpace, so unmap it before the
+       Untyped takes the frame away. Otherwise the mapping outlives the frame, and the
+       next app in this sandbox could not map a new mailbox over it. */
+    if (sb->mailbox_mapped) {
+        seL4_ARM_Page_Unmap(obj(sb, sb->mailbox_object));
+        sb->mailbox_mapped = false;
+    }
     /* Everything else was made from the Untyped */
     ok(seL4_CNode_Revoke(SELF, sb->base + SB_UNTYPED, SLOT_DEPTH), "revoking a sandbox's untyped");
     sb->next_object = 0;
@@ -380,6 +401,8 @@ bool sandbox_start(int k, const char *name, const char *module_path, uint64_t mo
     sb->started = true;
     sb->next_object = 0;
     sb->window_count = 0;
+    /* Cleared by sandbox_stop() above, set again once the mailbox is mapped */
+    sb->mailbox_mapped = false;
     memset(sb->grant_frames, 0, sizeof(sb->grant_frames));
     snprintf(error, error_len, "could not build the sandbox");
 
@@ -412,12 +435,15 @@ bool sandbox_start(int k, const char *name, const char *module_path, uint64_t mo
         goto fail;
     }
     uint32_t box_copy = sb->next_object++;
-    if (!ok(seL4_CNode_Copy(objects(sb), box_copy, SLOT_DEPTH, objects(sb), box, SLOT_DEPTH, seL4_ReadWrite),
-            "copying the mailbox")
+    if (box_copy >= MAX_OBJECTS
+        || !ok(seL4_CNode_Copy(objects(sb), box_copy, SLOT_DEPTH, objects(sb), box, SLOT_DEPTH, seL4_ReadWrite),
+               "copying the mailbox")
         || !map_frame(sb, box_copy, SLOT_OWN_VSPACE, HOST_MAILBOX_VADDR(k), seL4_ReadWrite,
                       seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever)) {
         goto fail;
     }
+    sb->mailbox_object = box_copy;
+    sb->mailbox_mapped = true;
 
     /* What the app is granted: files and the window are mapped, the rest is described */
     sandbox_grants_t g = { .magic = SANDBOX_GRANTS_MAGIC, .module_size = module_size };

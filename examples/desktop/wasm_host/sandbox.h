@@ -33,6 +33,7 @@
 
 #include <stdint.h>
 #include <lions/gui/protocol.h>
+#include "caps.h"
 
 /*
  * The host's channel to sandbox k, whose id as a child of the host is k, and
@@ -147,3 +148,15 @@ typedef struct sandbox_mailbox {
 
 _Static_assert(sizeof(sandbox_mailbox_t) <= SANDBOX_PAGE_SIZE, "the mailbox must fit in a page");
 _Static_assert(sizeof(sandbox_grants_t) <= SANDBOX_PAGE_SIZE, "the grants must fit in a page");
+
+/* A handle is an index into the host's caps table (caps.h), into the grants page
+   above, and into the frame ranges the host recorded by that same index, which
+   sandbox_revoke_grant() takes apart on cap_drop. If the table grew past the
+   page those indices would stop agreeing, and a dropped file would unmap the
+   wrong one. */
+_Static_assert(CAPS_MAX <= SANDBOX_MAX_GRANTS, "the caps table and the grants page must be indexed alike");
+
+/* Grants are described in one page and the mailbox is the next, so the two must
+   not run into each other. */
+_Static_assert(SANDBOX_GRANTS_VADDR + SANDBOX_PAGE_SIZE <= SANDBOX_MAILBOX_VADDR,
+               "the grants page must not reach into the mailbox");
