@@ -43,6 +43,38 @@ sdfgen 0.35.0, clang, qemu, dtc, dosfstools, gptfdisk, mtools, cmake, gcc for mp
 
 CI equivalent: `./ci/examples.sh $(pwd) $MICROKIT_SDK`.
 
+#### Without nix
+
+Only the Microkit SDK and sdfgen are actually needed to build; both can be fetched
+directly, which is enough to reproduce CI on a machine that has no nix.
+
+```sh
+# Microkit SDK 2.3.1 (the release tarball behind the flake's microkit-url)
+curl -sSLO https://github.com/seL4/microkit/releases/download/2.3.1/microkit-sdk-2.3.1-linux-x86-64.tar.gz
+tar xzf microkit-sdk-2.3.1-linux-x86-64.tar.gz
+
+# sdfgen 0.35 -- meta.py asserts version('sdfgen').split(".")[1] == "35"
+python3 -m venv sdkvenv && ./sdkvenv/bin/pip install 'sdfgen==0.35.0'
+
+export MICROKIT_SDK=/path/to/microkit-sdk-2.3.1
+export PYTHONPATH=/path/to/sdkvenv/lib/python3.*/site-packages
+./ci/examples.sh $(pwd) $MICROKIT_SDK
+```
+
+Notes from doing this:
+
+- The venv's Python must match the `python3` that runs `meta.py`; check
+  `sdkvenv/lib/pythonX.Y` rather than assuming a version.
+- Each example rebuilds musl and lwIP from scratch into `$LIONSOS/ci_build/`, so a
+  full `ci/examples.sh` run takes about an hour. Running the `ci/*.sh` scripts in
+  parallel (16 cores) brings it to roughly 20 minutes.
+- `ci_build/` is **not** gitignored (only `build/` is). Remove it after a run or it
+  shows up as untracked.
+- `examples/wasm_test` does not build this way: its Makefile invokes `clang` for the
+  wasm apps with no `--target=wasm32-wasi`, relying on WASI SDK 27's clang defaulting
+  to wasm and using `wasm-ld`. A host clang instead falls back to `/usr/bin/ld`, which
+  rejects `-Wl,--initial-memory=`. Everything else builds.
+
 ### The build pipeline (memorise this — it explains most "why" questions)
 
 Two stages, per example:
@@ -193,26 +225,42 @@ to the original analysis are in `docs/codebase-analysis.md` § 9.
   Fixed on both sides: `fs_get_client_slot()` now rejects any transfer wider than one
   slot, used by all four server handlers; the three unclamped callers (two in
   `vfs_fs_file.c`, one in `modfs_raw.c:request_pread`) now clamp. `FS_BUFFER_SIZE` moved
-  from `helpers.h` to `protocol.h`, since the server needs it and it is a wire contract.
-  Covered by `test/test_fs_server_memory.c`.
+   from `helpers.h` to `protocol.h`, since the server needs it and it is a wire contract.
+   Covered by `test/test_fs_server_memory.c`.
+ - **FIXED** `components/fs/fat/op.c` `handle_dir_read` — one variable carried both a
+   `FRESULT` and an `FS_STATUS`. End of directory is `FR_OK` with an empty name, which was
+   turned into `FS_STATUS_END_OF_DIRECTORY` and then overwritten by the trailing
+   `(RET == FR_OK)` ternary, so a client walking a directory saw `FS_STATUS_ERROR` and
+   never finished. `RET` is now only a `FRESULT` and the status goes to `args->status`.
+ - **FIXED** `components/fs/fat/io.c` `disk_ioctl` — `res` was uninitialised for any `cmd`
+   other than `GET_SECTOR_SIZE` and `CTRL_SYNC`, so it returned garbage. Only those two
+   are issued at run time (`FF_USE_MKFS` and `FF_USE_TRIM` are both 0), so it now
+   defaults to a no-op `RES_OK`.
+ - **FIXED** `components/fs/nfs/op.c:handle_deinitialise` — an empty function that never
+   replied, so a client issuing `FS_CMD_DEINITIALISE` hung forever. It now replies
+   `FS_STATUS_ERROR` when there is no mount, and otherwise does an `nfs_umount_async`
+   whose callback calls `nfs_destroy_context`, clears `nfs`, and replies. A failed
+   unmount leaves the mount intact so the client can retry.
+ - **FIXED** `components/micropython/modfb.c` — `cache_clean` covered the *source* image's
+   `width * height * 4` starting at the region base, but the loop writes the
+   destination's `config->xres * config->yres * 4` starting after the `fb_config_t`, so
+   whenever the sizes differed part of the frame stayed dirty in the cache. It now cleans
+   the range actually written. `framebuffer_data_region` is also declared `uintptr_t` to
+   match `micropython.c`, rather than `void *`.
+ - **FIXED** `components/micropython/machine_i2c.c` — both asserts could take the whole
+   PD down on a bus-level anomaly. `assert(returned_addr == addr)` checked something
+   `sddf_i2c_nb_return` explicitly does not promise (it cannot match overlapping requests
+   to responses, and a failed dequeue leaves `returned_addr` at its initialiser); the
+   `err` it already returns reports either. `assert(i2c_bus_release(...))` aborted when
+   the virtualiser refused a release, discarding a completed transfer; it now releases
+   unconditionally and logs, resolving that `FIXME: not-assert`. No asserts remain here.
 
 ### Open — worth looking at
 
-- `components/fs/nfs/op.c:handle_deinitialise` — an empty function that **never replies**,
-  so a client issuing `FS_CMD_DEINITIALISE` hangs forever. What it should do (reply
-  success? unmount?) is a design decision, not a mechanical patch.
-- `components/fs/fat/op.c` `handle_dir_read` — sets `END_OF_DIRECTORY` and then
-  unconditionally overwrites it with `FS_STATUS_ERROR`, so end-of-directory is
-  unreachable. Root cause: `FRESULT` and `FS_STATUS_*` share one variable.
-- `components/fs/fat/io.c` `disk_ioctl` — `res` is uninitialised for any `cmd` other than
-  the two handled, so e.g. `GET_BLOCK_SIZE` returns garbage.
-- `components/micropython/modfb.c` — `cache_clean` length uses the *source* image
-  dimensions instead of `config->xres`/`config->yres`, and omits the `fb_config_t` offset
-  between the region base and the pixels.
-- `components/micropython/modfb.c:14` vs `micropython.c:89` — `void *` vs `uintptr_t` on
-  `framebuffer_data_region`, which Microkit writes via `setvar_vaddr`.
-- `components/micropython/machine_i2c.c:95` — `assert(returned_addr == addr)` aborts the
-  whole PD on a bus-level anomaly. `:191` already carries a `FIXME: not-assert`.
+None outstanding. The one below is a toolchain TODO rather than a defect:
+
+- `examples/wasm_test` needs WASI SDK 27's clang to link (see "Without nix" above); it
+  compiles but cannot be linked with a host clang.
 
 ### Not bugs
 
