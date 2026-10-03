@@ -15,6 +15,23 @@ env:
   SDFGEN_VERSION: 0.35.0
 
 jobs:
+  host_tests:
+    name: Host tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout LionsOS repository
+        uses: actions/checkout@v4
+      # The host tests include <sddf/resources/common.h> and nothing else from a
+      # submodule, so shallow-init only sddf rather than every one of them, several
+      # of which are large and irrelevant here.
+      - name: Checkout sddf
+        run: git submodule update --init --depth 1 dep/sddf
+      # CI is otherwise build-only, so this is the only check that can catch silent
+      # memory corruption in the filesystem client and server. The default compiler
+      # is used deliberately: it ships its own sanitizer runtimes, whereas a bare
+      # clang install need not.
+      - name: Run host tests
+        run: make -C test
   build_examples_linux_x86_64:
     name: Build example systems (Linux x86-64 via apt)
     runs-on: ubuntu-24.04
