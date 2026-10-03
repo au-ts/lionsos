@@ -11,7 +11,7 @@
 #include "micropython.h"
 #include <lions/fb/fb.h>
 
-extern void *framebuffer_data_region;
+extern uintptr_t framebuffer_data_region;
 /*
  * We get notified when we *can* write to the framebuffer, meaning that MicroPython
  * needs to wait until the framebuffer is ready.
@@ -24,9 +24,9 @@ static MP_DEFINE_CONST_FUN_OBJ_0(fb_wait_obj, fb_wait);
 
 static mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t height_obj) {
     uint8_t *framebuffer;
-    fb_base_addr(framebuffer_data_region, &framebuffer);
+    fb_base_addr((void *)framebuffer_data_region, &framebuffer);
 
-    fb_config_t *config = fb_config_get(framebuffer_data_region);
+    fb_config_t *config = fb_config_get((void *)framebuffer_data_region);
 
     uint64_t width = mp_obj_get_int(width_obj);
     uint64_t height = mp_obj_get_int(height_obj);
@@ -74,7 +74,7 @@ static mp_obj_t machine_fb_send(mp_obj_t buf_obj, mp_obj_t width_obj, mp_obj_t h
      * propogate any cached writes so that it is visible by the Linux user-program that
      * talks to the real framebuffer.
      */
-    cache_clean((uintptr_t)framebuffer_data_region, (uintptr_t)framebuffer_data_region + (width * height * 4));
+    cache_clean((uintptr_t)framebuffer, (uintptr_t)framebuffer + (size_t)config->xres * config->yres * 4);
     microkit_notify(FRAMEBUFFER_VMM_CH);
 
     return mp_const_none;

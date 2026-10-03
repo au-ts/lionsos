@@ -200,7 +200,46 @@ fail_duplicate:
     reply((fs_cmpl_t){ .id = cmd.id, .status = status, .data = {0} });
 }
 
+static void deinitialise_cb(int status, struct nfs_context *nfs_ctx, void *data, void *private_data) {
+    struct continuation *cont = private_data;
+    fs_cmpl_t cmpl = { .id = cont->request_id, .status = FS_STATUS_SUCCESS, .data = {0} };
+
+    if (status != 0) {
+        dlog("failed to unmount nfs server (%d): %s", status, (char *)data);
+        cmpl.status = FS_STATUS_ERROR;
+        goto fail;
+    }
+
+    dlog("disconnected from nfs server");
+    /* Only tear the context down once the server is no longer using it, so that a
+       failed unmount leaves the mount intact and the client free to try again. */
+    nfs_destroy_context(nfs);
+    nfs = NULL;
+
+fail:
+    continuation_free(cont);
+    reply(cmpl);
+}
+
 void handle_deinitialise(fs_cmd_t cmd) {
+    dlog("received deinitialise command");
+
+    if (nfs == NULL) {
+        dlog("deinitialise command without an initialise");
+        reply((fs_cmpl_t){ .id = cmd.id, .status = FS_STATUS_ERROR, .data = {0} });
+        return;
+    }
+
+    struct continuation *cont = continuation_alloc();
+    assert(cont != NULL);
+    cont->request_id = cmd.id;
+
+    int err = nfs_umount_async(nfs, deinitialise_cb, cont);
+    if (err) {
+        dlog("failed to enqueue deinitialise command");
+        continuation_free(cont);
+        reply((fs_cmpl_t){ .id = cmd.id, .status = FS_STATUS_ERROR, .data = {0} });
+    }
 }
 
 static void stat_cb(int status, struct nfs_context *nfs, void *data, void *private_data) {
