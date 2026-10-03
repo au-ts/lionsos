@@ -194,8 +194,13 @@ static int machine_i2c_transfer_single(mp_obj_base_t *obj, uint16_t addr, size_t
 
     debug_printf("machine_i2c_transfer: done (err: %d)\n", err);
 
-    // always release the bus regardless of the return (FIXME: not-assert)
-    assert(i2c_bus_release(i2c_config.virt.id, addr));
+    /* Always release the bus regardless of the return. A release the virtualiser
+       refuses leaves the address claimed, which the next transfer reports when it
+       tries to claim it; aborting the PD here would only lose the transfer that
+       has already completed. */
+    if (!i2c_bus_release(i2c_config.virt.id, addr)) {
+        debug_printf("I2C(%d): could not release bus address %d\n", (int)self->port, (int)addr);
+    }
 
     if (err != I2C_ERR_OK) {
         switch (err) {
