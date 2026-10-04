@@ -30,11 +30,65 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
 #define GUI_STATE_MAGIC 0x4c475549 /* "LGUI" */
 #define GUI_TITLE_MAX 32
+
+/*
+ * Bounds on the content size of a window, shared by the compositor and the
+ * applications.
+ *
+ * The compositor proposes a size when a window is resized and then validates
+ * whatever the application commits. Those two must agree: a size the compositor
+ * proposed and then rejected would close the window it had just resized rather
+ * than resize it. So the minimum, the per-dimension cap and the surface area
+ * are all enforced here, and the compositor's own check uses these constants.
+ */
+#define GUI_MIN_WIDTH 64
+#define GUI_MIN_HEIGHT 64
+#define GUI_MAX_DIMENSION 2048
+
+/*
+ * Whether a content size is one both sides will accept: within the minimum and
+ * the per-dimension cap, and small enough for `surface_bytes` of pixels.
+ */
+static inline bool gui_size_fits(uint32_t width, uint32_t height, size_t surface_bytes)
+{
+    return width >= GUI_MIN_WIDTH && height >= GUI_MIN_HEIGHT && width <= GUI_MAX_DIMENSION
+           && height <= GUI_MAX_DIMENSION
+           && (uint64_t)width * height * sizeof(uint32_t) <= surface_bytes;
+}
+
+/*
+ * Bring a requested size into those bounds. Width is bounded first, so that the
+ * largest width still leaves room for the minimum height, then height is bounded
+ * against the width already settled on. The result always fits, provided the
+ * surface is at least GUI_MIN_WIDTH * GUI_MIN_HEIGHT pixels.
+ */
+static inline void gui_size_clamp(uint32_t *width, uint32_t *height, size_t surface_bytes)
+{
+    uint32_t max_width = surface_bytes / (GUI_MIN_HEIGHT * sizeof(uint32_t));
+    if (max_width > GUI_MAX_DIMENSION) {
+        max_width = GUI_MAX_DIMENSION;
+    }
+    uint32_t w = *width < GUI_MIN_WIDTH ? GUI_MIN_WIDTH : *width;
+    if (w > max_width) {
+        w = max_width;
+    }
+    uint32_t max_height = surface_bytes / (w * sizeof(uint32_t));
+    if (max_height > GUI_MAX_DIMENSION) {
+        max_height = GUI_MAX_DIMENSION;
+    }
+    uint32_t h = *height < GUI_MIN_HEIGHT ? GUI_MIN_HEIGHT : *height;
+    if (h > max_height) {
+        h = max_height;
+    }
+    *width = w;
+    *height = h;
+}
 
 typedef struct gui_rect {
     int32_t x;
@@ -58,7 +112,16 @@ typedef struct gui_state {
      */
     uint32_t seq;
     gui_rect_t damage;
+    /*
+     * What the application supports, from GUI_FLAG_* below. Read by the
+     * compositor like everything else on this page: a flag only ever affects
+     * the window of the application that set it.
+     */
+    uint32_t flags;
 } gui_state_t;
+
+/* The application can adopt a new size, so the compositor offers a resize handle */
+#define GUI_FLAG_RESIZABLE (1u << 0)
 
 /* Event types */
 #define GUI_EV_POINTER_MOTION 1 /* x, y */
@@ -66,6 +129,15 @@ typedef struct gui_state {
 #define GUI_EV_KEY 3            /* code: INPUT_KEY_*, value: INPUT_KEY_PRESSED/RELEASED/REPEATED */
 #define GUI_EV_FOCUS 4          /* value: 1 if the window gained focus, 0 if it lost it */
 #define GUI_EV_CLOSE 5          /* the user closed the window; it can be reopened from the launcher */
+#define GUI_EV_RESIZE 6         /* x, y: the new content size in pixels */
+
+/*
+ * GUI_EV_RESIZE asks the application to adopt a new content size. It is only
+ * sent to a slot whose state carries GUI_FLAG_RESIZABLE, and the size has
+ * already been clamped with gui_size_clamp(), so the application can trust it.
+ * The application resizes its surface, redraws the whole thing -- the layout
+ * changes with the stride -- and commits.
+ */
 
 /* Pointer coordinates are relative to the top left of the content and may lie outside it during a grab */
 typedef struct gui_event {

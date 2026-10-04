@@ -64,8 +64,9 @@
 #define SCANOUT_ID 0
 #define FB_RESOURCE_ID 1
 
-/* Limits on what an app may ask for */
-#define APP_MAX_DIMENSION 2048
+/* Limits on what an app may ask for. The cap is the protocol's, so that a size
+   gui_size_clamp() hands out is never one this file rejects. */
+#define APP_MAX_DIMENSION GUI_MAX_DIMENSION
 
 /* Theme */
 #define COLOUR_BG_TOP GFX_RGB(0x14, 0x2a, 0x4f)

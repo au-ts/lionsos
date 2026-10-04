@@ -40,6 +40,7 @@ MEMORY_SRC := $(LIONSOS)/lib/fs/server/memory.c
 
 HELPERS_BIN := $(BUILD_DIR)/test_fs_helpers
 MEMORY_BIN := $(BUILD_DIR)/test_fs_server_memory
+SIZE_BIN := $(BUILD_DIR)/test_gui_size
 
 all: run
 
@@ -55,9 +56,14 @@ $(HELPERS_BIN): test_fs_helpers.c $(HELPERS_SRC) | $(BUILD_DIR)
 $(MEMORY_BIN): test_fs_server_memory.c $(MEMORY_SRC) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(SANITIZERS) $(MEMORY_SRC) $< -o $@
 
-run: $(HELPERS_BIN) $(MEMORY_BIN)
+# No component source: the size limits are static inline in the protocol header,
+# which is the point of them living there.
+$(SIZE_BIN): test_gui_size.c $(LIONSOS)/include/lions/gui/protocol.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(SANITIZERS) $< -o $@
+
+run: $(HELPERS_BIN) $(MEMORY_BIN) $(SIZE_BIN)
 	@echo
-	@for t in $(HELPERS_BIN) $(MEMORY_BIN); do \
+	@for t in $(HELPERS_BIN) $(MEMORY_BIN) $(SIZE_BIN); do \
 		echo "=== $$(basename $$t) ==="; \
 		ASAN_OPTIONS=detect_leaks=0 "$$t" || exit 1; \
 		echo; \
