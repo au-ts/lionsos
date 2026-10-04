@@ -7,10 +7,13 @@
  * Application slots of the compositor. Must match meta.py.
  *
  * The regions of slot i are mapped in the compositor at
- *   gui_surfaces + i * GUI_SURFACE_REGION_SIZE   (read-only)
- *   gui_states   + i * GUI_STATE_REGION_SIZE     (read-only)
- *   gui_events   + i * GUI_EVENTS_REGION_SIZE
+ *   gui_surfaces + i * GUI_SURFACE_REGION_SIZE   (read-only), from 0x6000_0000
+ *   gui_states   + i * GUI_STATE_REGION_SIZE     (read-only), from 0x6300_0000
+ *   gui_events   + i * GUI_EVENTS_REGION_SIZE,             from 0x6400_0000
  * and the app of slot i is on compositor channel GUI_APP_CH_BASE + i.
+ *
+ * The surface window has to stay clear of the state window: 2 MiB a slot is
+ * room for 24 of them before the two meet.
  */
 
 #pragma once
@@ -37,7 +40,7 @@
 /* Slots whose window opens, in front, as soon as their app maps it */
 #define GUI_OPEN_ON_MAP (((1 << GUI_WASM_WINDOWS) - 1) << GUI_FIRST_WASM_WINDOW)
 
-#define GUI_SURFACE_REGION_SIZE 0x100000
+#define GUI_SURFACE_REGION_SIZE 0x200000
 #define GUI_STATE_REGION_SIZE 0x1000
 #define GUI_EVENTS_REGION_SIZE 0x1000
 

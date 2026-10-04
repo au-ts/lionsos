@@ -40,7 +40,7 @@ GPU_VIRTIO_DATA_REGION_SIZE = 0x200_000
 # Must match include/gui_config.h. Apps are listed in slot order.
 # wasm_host runs WebAssembly apps loaded from the file system at run time.
 GUI_APPS = ["notes", "sketch", "clock", "calculator", "widgets", "wasm_host"]
-GUI_SURFACE_REGION_SIZE = 0x100_000
+GUI_SURFACE_REGION_SIZE = 0x200_000
 GUI_STATE_REGION_SIZE = 0x1000
 GUI_EVENTS_REGION_SIZE = 0x1000
 GUI_APP_CH_BASE = 10
@@ -252,9 +252,9 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree, sandboxes: int):
         first = i == 0
         compositor.add_map(Map(surface, 0x60_000_000 + i * GUI_SURFACE_REGION_SIZE, "r",
                                setvar_vaddr="gui_surfaces" if first else None))
-        compositor.add_map(Map(state, 0x61_000_000 + i * GUI_STATE_REGION_SIZE, "r",
+        compositor.add_map(Map(state, 0x63_000_000 + i * GUI_STATE_REGION_SIZE, "r",
                                setvar_vaddr="gui_states" if first else None))
-        compositor.add_map(Map(events, 0x62_000_000 + i * GUI_EVENTS_REGION_SIZE, "rw",
+        compositor.add_map(Map(events, 0x64_000_000 + i * GUI_EVENTS_REGION_SIZE, "rw",
                                setvar_vaddr="gui_events" if first else None))
 
         sdf.add_channel(Channel(compositor, app, a_id=GUI_APP_CH_BASE + i, b_id=0))
@@ -271,8 +271,8 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree, sandboxes: int):
         for mr in [surface, state, events]:
             sdf.add_mr(mr)
         compositor.add_map(Map(surface, 0x60_000_000 + i * GUI_SURFACE_REGION_SIZE, "r"))
-        compositor.add_map(Map(state, 0x61_000_000 + i * GUI_STATE_REGION_SIZE, "r"))
-        compositor.add_map(Map(events, 0x62_000_000 + i * GUI_EVENTS_REGION_SIZE, "rw"))
+        compositor.add_map(Map(state, 0x63_000_000 + i * GUI_STATE_REGION_SIZE, "r"))
+        compositor.add_map(Map(events, 0x64_000_000 + i * GUI_EVENTS_REGION_SIZE, "rw"))
         wasm_windows.append((i, surface, state, events))
 
     timer_system.add_client(apps["clock"])
