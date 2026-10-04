@@ -133,6 +133,7 @@ static void activate(int32_t index)
         char child[FILES_PATH_MAX];
         snprintf(child, sizeof(child), "%s\\%s", current, e->name);
         strncpy(preview_name, e->name, sizeof(preview_name) - 1);
+        preview_name[sizeof(preview_name) - 1] = '\0';
         request(FILES_REQ_READ, child, 0, FILES_READ_MAX);
         return;
     }

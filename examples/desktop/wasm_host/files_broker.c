@@ -179,7 +179,7 @@ static uint32_t resolve(const char *display, char *out, size_t out_len, bool *is
     return FILES_OK;
 }
 
-static void fill_root(void)
+static void fill_root(uint64_t seq)
 {
     files_entry_t *e = page->response.entries;
     uint32_t n = 0;
@@ -199,15 +199,15 @@ static void fill_root(void)
         n++;
     }
 
-    reply(page->request.seq, FILES_OK, n);
+    reply(seq, FILES_OK, n);
 }
 
 /* List a directory of the one backed root */
-static void list_dir(const char *path)
+static void list_dir(const char *path, uint64_t seq)
 {
     fs_cmpl_t cmpl;
     if (!fs_path_command(FS_CMD_DIR_OPEN, path, 0, &cmpl)) {
-        reply(page->request.seq, FILES_ERR_NOT_FOUND, 0);
+        reply(seq, FILES_ERR_NOT_FOUND, 0);
         return;
     }
     uint64_t dir = cmpl.data.dir_open.fd;
@@ -255,22 +255,22 @@ static void list_dir(const char *path)
     }
     fs_command_blocking(&cmpl, (fs_cmd_t) { .type = FS_CMD_DIR_CLOSE, .params.dir_close.fd = dir });
 
-    reply(page->request.seq, n > 0 || cmpl.status == FS_STATUS_SUCCESS ? FILES_OK : FILES_ERR_NOT_FOUND, n);
+    reply(seq, n > 0 || cmpl.status == FS_STATUS_SUCCESS ? FILES_OK : FILES_ERR_NOT_FOUND, n);
 }
 
-static void read_preview(const char *path, uint32_t offset, uint32_t length)
+static void read_preview(const char *path, uint32_t offset, uint32_t length, uint64_t seq)
 {
     if (length > FILES_READ_MAX) {
-        reply(page->request.seq, FILES_ERR_TOO_LARGE, 0);
+        reply(seq, FILES_ERR_TOO_LARGE, 0);
         return;
     }
 
     int64_t n = read_file(path, offset, page->response.data, length);
     if (n < 0) {
-        reply(page->request.seq, FILES_ERR_NOT_FOUND, 0);
+        reply(seq, FILES_ERR_NOT_FOUND, 0);
         return;
     }
-    reply(page->request.seq, FILES_OK, (uint32_t)n);
+    reply(seq, FILES_OK, (uint32_t)n);
 }
 
 /*
@@ -286,7 +286,7 @@ void files_broker_handle(void)
     if (status != FILES_OK) {
         /* The root is synthetic, so resolve reports it before this branch */
         if (is_root && req.kind == FILES_REQ_LIST) {
-            fill_root();
+            fill_root(req.seq);
             return;
         }
         reply(req.seq, status, 0);
@@ -295,7 +295,7 @@ void files_broker_handle(void)
 
     if (is_root) {
         if (req.kind == FILES_REQ_LIST) {
-            fill_root();
+            fill_root(req.seq);
         } else {
             reply(req.seq, FILES_ERR_BAD_PATH, 0);
         }
@@ -303,9 +303,9 @@ void files_broker_handle(void)
     }
 
     if (req.kind == FILES_REQ_LIST) {
-        list_dir(path);
+        list_dir(path, req.seq);
     } else if (req.kind == FILES_REQ_READ) {
-        read_preview(path, req.offset, req.length);
+        read_preview(path, req.offset, req.length, req.seq);
     } else {
         reply(req.seq, FILES_ERR_BAD_PATH, 0);
     }
