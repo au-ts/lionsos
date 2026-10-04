@@ -14,6 +14,13 @@ Full architecture deep-dive: **[`docs/codebase-analysis.md`](docs/codebase-analy
 when you need detail beyond this file (per-component breakdown, exact line references,
 concurrency models, the full known-bugs list).
 
+Long-term resource and security direction: **[`docs/typed-resource-model.md`](docs/typed-resource-model.md)**.
+Read it before introducing a new service, resource handle, application permission,
+namespace, broker, or cross-PD protocol. It records the project's NT-inspired goal of
+making authority a coherent graph of explicitly typed resources while preserving
+seL4's small kernel and capability model. It also records the intended end-user
+namespace and the project's preference for small, visible, end-to-end desktop progress.
+
 ## Ground rules
 
 - **Language:** C11 + Python 3 (build-time codegen) + Python (on-target for MicroPython).
@@ -28,6 +35,10 @@ concurrency models, the full known-bugs list).
 - **Trailing whitespace is enforced by CI** (`.github/workflows/pr.yaml`).
 - **CI is build-only — there are no runtime tests.** Don't assume a target test suite
   exists. There *is* a small host-side suite in `test/`; see below.
+- **Delivery:** prefer the smallest demonstrable end-to-end slice that moves the usable
+  desktop forward. A rough but honest vertical slice is useful; do not disguise missing
+  security enforcement, corrupt data, or make an unstable protocol permanent merely to
+  produce a demo. See `docs/typed-resource-model.md` under “Incremental delivery”.
 
 ## Build
 
@@ -123,6 +134,28 @@ Every PD declares `__attribute__((section(".fs_client_config")))` (or `.timer_cl
 magic at `init()`. **This is what makes a component optional at runtime without
 recompiling** — if the SDF didn't wire it up, the magic check fails and the component
 degrades. Follow this pattern when adding configuration.
+
+## Long-term direction: typed resources and explicit authority
+
+For new architecture, follow [`docs/typed-resource-model.md`](docs/typed-resource-model.md).
+The short version is:
+
+- Model externally visible resources as explicit types with narrow operations and
+  unforgeable handles or seL4 capabilities; do not add ambient authority.
+- Keep policy and object management in isolated user-space services. Do not grow seL4
+  into an NT-style monolithic object manager.
+- Make delegation, attenuation, revocation, ownership and lifetime visible in the
+  protocol rather than implied by process-global state.
+- Design protocols so the system can eventually answer "what exactly may this PD or
+  agent do?" as one inspectable authority graph, with auditable grant, use, denial and
+  revocation events.
+- Preserve compatibility through versioned, typed protocol contracts, not by exposing
+  service internals.
+
+Apply this direction incrementally when adding or substantially changing a subsystem.
+Do not rewrite working components merely to rename them "objects", and do not introduce
+inheritance hierarchies or C++-style object orientation: "object" here means a typed,
+referenceable resource with controlled operations and lifetime.
 
 ## How the POSIX layer works
 
