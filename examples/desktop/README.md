@@ -182,6 +182,43 @@ an app, write it against `apps/gui_app.h` (or `apps/mu_app.h` for microui),
 add it to `GUI_APPS` in `meta.py` and to `GUI_APPS` or `MU_APPS` in
 `desktop.mk`, and bump `GUI_NUM_FIXED_APPS` in `include/gui_config.h`.
 
+## Files
+
+**Files** shows the namespace described in `docs/typed-resource-model.md`, as a
+read-only viewer. `C:\` lists `Applications`, `Users`, `System`, `Shared` and
+`Devices`. Only `C:\Applications` has anything behind it: it is the FAT `/apps`
+directory on the disk, the same one the WebAssembly host loads programs from.
+The others are shown as *not available yet* rather than left out, so the shape
+of the namespace is visible. Clicking a file shows its first 4 KiB as text.
+
+Files holds **no filesystem connection of its own**. `fs_server_config_t`
+describes a single client, so the filesystem server can serve one PD, which is
+the WebAssembly host. Files asks that host over one shared page
+(`include/files_ns.h`), and the host is the only component that turns a
+friendly name into a path and decides whether it may be served
+(`wasm_host/files_broker.c`).
+
+### What that means for authority
+
+The check is **policy in the host PD, not an seL4 capability**. It holds
+because nothing else can reach the filesystem: Files has no connection of its
+own, and the host is the server's only client. It does not confine a
+compromised host, and it is not a substitute for the typed, attenuated
+filesystem handle the resource model describes. It is the narrow end-to-end
+path, made visible, with the enforcement point stated rather than implied.
+
+### Limitations
+
+* **Read-only.** No create, write, rename or delete, in the protocol or the UI.
+* Only `C:\Applications` is real; the other roots have no backing store.
+* Authority is policy in the host, as above.
+* Subdirectories are not distinguished from files yet, so a directory below
+  `Applications` would be treated as a file.
+* Previews are the first 4 KiB, text only; binary content is reported, not
+  rendered.
+* The window is not resizable yet.
+* FAT has no permissions, ownership or symlinks, so the namespace shows none.
+
 ## The shell
 
 * **Windows** are open (on screen, with a taskbar tab), minimised (dimmed

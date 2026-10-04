@@ -21,7 +21,7 @@
 #include <lions/gui/protocol.h>
 
 /* Slots of the apps with PDs of their own; the last is the WebAssembly host's */
-#define GUI_NUM_FIXED_APPS 6
+#define GUI_NUM_FIXED_APPS 7
 
 /*
  * Built with SANDBOX=1, GUI_WASM_WINDOWS more slots follow, one per sandbox,
@@ -36,7 +36,7 @@
 #define GUI_NUM_APPS (GUI_NUM_FIXED_APPS + GUI_WASM_WINDOWS)
 
 /* Slots whose window opens at startup; the others start closed (see the launcher) */
-#define GUI_START_OPEN ((1 << 0) | (1 << 1) | (1 << 2) | (1 << 5))
+#define GUI_START_OPEN ((1 << 0) | (1 << 1) | (1 << 2) | (1 << 6))
 /* Slots whose window opens, in front, as soon as their app maps it */
 #define GUI_OPEN_ON_MAP (((1 << GUI_WASM_WINDOWS) - 1) << GUI_FIRST_WASM_WINDOW)
 

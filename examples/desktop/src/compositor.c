@@ -533,6 +533,11 @@ static void place_window(int slot)
         apps[slot].y = 90;
         break;
     case 5:
+        /* Files, to the side of the list of apps */
+        apps[slot].x = (w - f.width) / 2 - 80;
+        apps[slot].y = (h - TASKBAR_HEIGHT - f.height) / 2;
+        break;
+    case 6:
         apps[slot].x = (w - f.width) / 2;
         apps[slot].y = (h - TASKBAR_HEIGHT - f.height) / 2;
         break;

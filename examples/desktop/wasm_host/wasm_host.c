@@ -59,6 +59,7 @@
 #include <sddf/timer/config.h>
 #include <sddf/util/util.h>
 #include "../apps/gui_app.h"
+#include "../../include/files_ns.h"
 #include "caps.h"
 #include "wasm_host.h"
 #ifdef WASM_SANDBOX
@@ -104,7 +105,7 @@ static char libc_heap[0x40000];
 static char host_stack[HOST_STACK_SIZE];
 static co_control_t co_controller_mem;
 static microkit_cothread_sem_t wake;
-static bool gui_pending, tick_pending;
+static bool gui_pending, tick_pending, files_pending;
 
 #ifndef WASM_SANDBOX
 /*
@@ -156,7 +157,7 @@ static void blocking_wait(microkit_channel ch)
     microkit_cothread_wait_on_channel(ch);
 }
 
-static bool fs_path_command(uint64_t type, const char *path, uint64_t flags, fs_cmpl_t *cmpl)
+bool fs_path_command(uint64_t type, const char *path, uint64_t flags, fs_cmpl_t *cmpl)
 {
     ptrdiff_t buf;
     if (fs_buffer_allocate(&buf)) {
@@ -936,6 +937,7 @@ static void host_main(void)
     }
 
     scan_apps();
+    files_broker_init();
     draw_list();
 
     for (;;) {
@@ -947,6 +949,10 @@ static void host_main(void)
         if (tick_pending) {
             tick_pending = false;
             handle_tick();
+        }
+        if (files_pending) {
+            files_pending = false;
+            files_broker_handle();
         }
 #ifdef WASM_SANDBOX
         if (sandbox_pending) {
@@ -979,6 +985,8 @@ void notified(microkit_channel ch)
 {
     if (ch == GUI_COMPOSITOR_CH) {
         gui_pending = true;
+    } else if (ch == FILES_SERVICE_CH) {
+        files_pending = true;
     } else if (ch == timer_config.driver_id) {
         tick_pending = true;
     }
@@ -986,9 +994,9 @@ void notified(microkit_channel ch)
     else if (sandbox_apps_notified(ch)) {
         sandbox_pending = true;
     }
-    bool pending = gui_pending || tick_pending || sandbox_pending;
+    bool pending = gui_pending || tick_pending || files_pending || sandbox_pending;
 #else
-    bool pending = gui_pending || tick_pending;
+    bool pending = gui_pending || tick_pending || files_pending;
 #endif
 
     fs_process_completions(NULL);

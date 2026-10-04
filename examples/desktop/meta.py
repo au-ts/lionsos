@@ -39,11 +39,14 @@ GPU_VIRTIO_DATA_REGION_SIZE = 0x200_000
 
 # Must match include/gui_config.h. Apps are listed in slot order.
 # wasm_host runs WebAssembly apps loaded from the file system at run time.
-GUI_APPS = ["notes", "sketch", "clock", "calculator", "widgets", "wasm_host"]
+GUI_APPS = ["notes", "sketch", "clock", "calculator", "widgets", "files", "wasm_host"]
 GUI_SURFACE_REGION_SIZE = 0x200_000
 GUI_STATE_REGION_SIZE = 0x1000
 GUI_EVENTS_REGION_SIZE = 0x1000
 GUI_APP_CH_BASE = 10
+FILES_PAGE_REGION_SIZE = 0x4000
+FILES_SERVICE_CH = 3
+FILES_BROKER_CH = 1
 
 # Must match include/input_config.h
 INPUT_QUEUE_REGION_SIZE = 0x1000
@@ -258,6 +261,16 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree, sandboxes: int):
                                setvar_vaddr="gui_events" if first else None))
 
         sdf.add_channel(Channel(compositor, app, a_id=GUI_APP_CH_BASE + i, b_id=0))
+
+    # Files has no filesystem connection of its own: the FAT server serves one
+    # client, which is the WebAssembly host. So the two share a page for one
+    # request and one response, and the host brokers a read-only view of /apps.
+    files_page = MemoryRegion(sdf, "files_page", FILES_PAGE_REGION_SIZE)
+    sdf.add_mr(files_page)
+    apps["files"].add_map(Map(files_page, 0x23_000_000, "rw", setvar_vaddr="files_page_vaddr"))
+    wasm_host_files = apps["wasm_host"]
+    wasm_host_files.add_map(Map(files_page, 0x25_000_000, "rw", setvar_vaddr="files_page_vaddr"))
+    sdf.add_channel(Channel(wasm_host_files, apps["files"], a_id=FILES_SERVICE_CH, b_id=FILES_BROKER_CH))
 
     # With --sandboxes, one more slot per sandbox. The host maps its state and
     # events and speaks for it to the compositor; the sandbox gets the frames

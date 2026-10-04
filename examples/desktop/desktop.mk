@@ -13,7 +13,7 @@ WAMR_DIR := $(LIONSOS)/components/wamr
 WAMR_ROOT := $(LIONSOS)/dep/wasm-micro-runtime
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 
-GUI_APPS := notes sketch clock
+GUI_APPS := notes sketch clock files
 MU_APPS := calculator widgets
 IMAGES := gpu_driver.elf gpu_virt.elf timer_driver.elf input_driver.elf input_virt.elf compositor.elf \
 	serial_driver.elf serial_virt_tx.elf blk_driver.elf blk_virt.elf fat.elf wasm_host.elf \
@@ -154,10 +154,11 @@ wamr/libvmlib.a: $(WAMR_ROOT)/build-scripts/runtime_lib.cmake | $(LIONS_LIBC)/in
 
 ifeq ($(SANDBOX),1)
 WASM_HOST_DEFS := -DWASM_SANDBOX
-WASM_HOST_OBJS := wasm_host/wasm_host.o wasm_host/caps.o wasm_host/sandbox_host.o wasm_host/sandbox_apps.o \
+WASM_HOST_OBJS := wasm_host/wasm_host.o wasm_host/caps.o wasm_host/files_broker.o \
+	wasm_host/sandbox_host.o wasm_host/sandbox_apps.o \
 	wasm_host/runner_blob.o
 else
-WASM_HOST_OBJS := wasm_host/wasm_host.o wasm_host/caps.o wamr/libvmlib.a
+WASM_HOST_OBJS := wasm_host/wasm_host.o wasm_host/caps.o wasm_host/files_broker.o wamr/libvmlib.a
 endif
 
 wasm_host/wasm_host.o: $(DESKTOP_DIR)/wasm_host/wasm_host.c $(WAMR_ROOT)/build-scripts/runtime_lib.cmake \

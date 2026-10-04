@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <lions/fs/protocol.h>
 #include "../src/gfx.h"
 
 /* The size of the list's window, and of each app's */
@@ -26,6 +27,9 @@
 #define LOG_HOST(...) printf("WASM HOST|INFO: " __VA_ARGS__)
 #define LOG_HOST_ERR(...) printf("WASM HOST|ERROR: " __VA_ARGS__)
 
+/* Open `path` with `type` (FS_CMD_FILE_OPEN or FS_CMD_DIR_OPEN); true on success */
+bool fs_path_command(uint64_t type, const char *path, uint64_t flags, fs_cmpl_t *cmpl);
+
 /* The size of the file at `path`, or false if it cannot be read */
 bool file_size(const char *path, uint64_t *size);
 
@@ -37,6 +41,14 @@ void audit(const char *app, const char *fmt, ...);
 
 /* Show a status line under the list, and redraw it */
 void host_status(bool is_error, const char *fmt, ...);
+
+/*
+ * The filesystem broker behind the Files application: set up the shared page,
+ * and answer one request. Called from the host's cothread, so it may block on
+ * the filesystem. See wasm_host/files_broker.c and include/files_ns.h.
+ */
+void files_broker_init(void);
+void files_broker_handle(void);
 
 /* The time, and a timeout from the timer driver, in ms */
 int32_t now_ms(void);
