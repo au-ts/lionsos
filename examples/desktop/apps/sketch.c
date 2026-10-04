@@ -11,11 +11,23 @@
 #include <lions/input/input.h>
 #include "gui_app.h"
 
+/* Initial size; the window can be resized, so nothing below may depend on these */
 #define WIDTH 400
 #define HEIGHT 300
 #define TOOLBAR_H 32
 #define SWATCH 20
 #define BRUSH 4
+
+/* The live size, which the compositor can change */
+static int32_t surface_width(void)
+{
+    return (int32_t)gui_app_surface()->width;
+}
+
+static int32_t surface_height(void)
+{
+    return (int32_t)gui_app_surface()->height;
+}
 
 #define COLOUR_TOOLBAR GFX_RGB(0xe4, 0xe1, 0xda)
 #define COLOUR_CANVAS GFX_RGB(0xff, 0xff, 0xff)
@@ -57,13 +69,13 @@ static gfx_rect_t swatch_rect(uint32_t i)
 static gfx_rect_t clear_rect(void)
 {
     int32_t w = gfx_text_width("Clear", 2) + 16;
-    return (gfx_rect_t) { WIDTH - w - 8, 4, w, TOOLBAR_H - 8 };
+    return (gfx_rect_t) { surface_width() - w - 8, 4, w, TOOLBAR_H - 8 };
 }
 
 static void draw_toolbar(void)
 {
     gfx_surface_t *s = gui_app_surface();
-    gfx_fill_rect(s, (gfx_rect_t) { 0, 0, WIDTH, TOOLBAR_H }, COLOUR_TOOLBAR);
+    gfx_fill_rect(s, (gfx_rect_t) { 0, 0, surface_width(), TOOLBAR_H }, COLOUR_TOOLBAR);
     for (uint32_t i = 0; i < ARRAY_SIZE(palette); i++) {
         gfx_rect_t r = swatch_rect(i);
         gfx_fill_rect(s, r, palette[i]);
@@ -74,12 +86,12 @@ static void draw_toolbar(void)
     gfx_rect_t c = clear_rect();
     gfx_draw_rect(s, c, 1, COLOUR_OUTLINE);
     gfx_draw_text(s, c.x + 8, c.y + (c.height - 16) / 2, "Clear", 2, COLOUR_TEXT);
-    add_damage((gfx_rect_t) { 0, 0, WIDTH, TOOLBAR_H });
+    add_damage((gfx_rect_t) { 0, 0, surface_width(), TOOLBAR_H });
 }
 
 static void clear_canvas(void)
 {
-    gfx_rect_t canvas = { 0, TOOLBAR_H, WIDTH, HEIGHT - TOOLBAR_H };
+    gfx_rect_t canvas = { 0, TOOLBAR_H, surface_width(), surface_height() - TOOLBAR_H };
     gfx_fill_rect(gui_app_surface(), canvas, COLOUR_CANVAS);
     add_damage(canvas);
 }
@@ -87,7 +99,7 @@ static void clear_canvas(void)
 static void stroke(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
 {
     gfx_surface_t *s = gui_app_surface();
-    gfx_set_clip(s, (gfx_rect_t) { 0, TOOLBAR_H, WIDTH, HEIGHT - TOOLBAR_H });
+    gfx_set_clip(s, (gfx_rect_t) { 0, TOOLBAR_H, surface_width(), surface_height() - TOOLBAR_H });
 
     /* Bresenham, stamping a square brush at every step */
     int32_t dx = x1 > x0 ? x1 - x0 : x0 - x1;
@@ -151,6 +163,7 @@ void init(void)
     if (!gui_app_init("Sketch", WIDTH, HEIGHT)) {
         return;
     }
+    gui_app_set_flags(GUI_FLAG_RESIZABLE);
     draw_toolbar();
     clear_canvas();
     gfx_draw_text(gui_app_surface(), 12, TOOLBAR_H + 12, "Draw here!", 2, GFX_RGB(0xb0, 0xb4, 0xbb));
@@ -164,6 +177,7 @@ void notified(microkit_channel ch)
         return;
     }
 
+    bool resized = false;
     gui_event_t ev;
     while (gui_app_next_event(&ev)) {
         if (ev.type == GUI_EV_POINTER_BUTTON) {
@@ -172,10 +186,22 @@ void notified(microkit_channel ch)
             stroke(last_x, last_y, ev.x, ev.y);
             last_x = ev.x;
             last_y = ev.y;
+        } else if (ev.type == GUI_EV_RESIZE) {
+            /*
+             * The surface is the document, so keep the drawing across the
+             * stride change, and paint what the resize exposes with the canvas
+             * colour rather than leaving stale pixels there.
+             */
+            resized |= gui_app_resize_preserve(ev.x, ev.y, COLOUR_CANVAS);
         }
     }
 
-    if (damaged) {
+    if (resized) {
+        /* The toolbar reaches across the new width, and everything moved */
+        draw_toolbar();
+        gui_app_commit_all();
+        damaged = false;
+    } else if (damaged) {
         gui_app_commit(damage);
         damaged = false;
     }
