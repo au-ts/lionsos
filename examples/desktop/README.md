@@ -132,16 +132,36 @@ slot has:
 
 | Region | App | Compositor | Contents |
 |---|---|---|---|
-| surface (1 MiB) | read-write | read-only | Window content, 32-bit BGRA, stride = width |
-| state (4 KiB) | read-write | read-only | Size, title and the damage of the latest commit |
+| surface (2 MiB) | read-write | read-only | Window content, 32-bit BGRA, stride = width |
+| state (4 KiB) | read-write | read-only | Size, title, what it supports, and the damage of the latest commit |
 | events (4 KiB) | read-write | read-write | Input from the compositor to the app |
 
 plus a channel. To update its window, an app draws into its surface, records
 the damaged rectangle and bumps a sequence number in its state page, then
 notifies the compositor. The compositor reads the sequence number before and
 after copying the state; if it changed, or if commits were skipped, it redraws
-the whole window instead of trusting the damage rectangle. Sizes, titles and
-damage are validated and clamped before use.
+the whole window instead of trusting the damage rectangle. Sizes, titles,
+what an app says it supports, and damage are validated and clamped before use.
+
+## Resizing
+
+An app that can adopt a new size says so with `GUI_FLAG_RESIZABLE` in its
+state page, and the compositor then draws a corner to drag. Dragging moves the
+frame only: the content keeps the size the app last published until the app
+takes up the new one, so nothing is ever read outside what it declared. The
+compositor asks for the new size when the drag ends, so one drag is one
+redraw, and takes the frame back if it cannot be delivered, since an app may
+never commit again.
+
+Because the stride is the width, resizing moves every row: an app redraws the
+whole surface afterwards. `Notes` re-wraps its text at the new width. `Sketch`
+keeps the drawing, carrying the overlapping pixels across and painting what the
+resize exposes with its canvas colour.
+
+The size is bounded by the surface region, by a 64 pixel minimum and by a 2048
+pixel cap per side, all of which live in `lions/gui/protocol.h` so that the
+size the compositor offers is never one it would then reject. At 2 MiB the
+largest window is 524,288 pixels, about 724x724.
 
 Input routing:
 
