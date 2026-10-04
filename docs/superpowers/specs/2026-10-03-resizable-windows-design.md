@@ -56,6 +56,16 @@ Every other application keeps its current fixed size and needs no change.
 
 ### Protocol — `include/lions/gui/protocol.h`
 
+- Add `#include <stddef.h>` for `size_t`; the header includes only `<stdint.h>`
+  and `<stdbool.h>` today.
+- Add `#define GUI_MIN_WIDTH 64`, `#define GUI_MIN_HEIGHT 64` and
+  `#define GUI_MAX_DIMENSION 2048`, with `gui_size_fits()` and
+  `gui_size_clamp()` enforcing **all three**, not just the surface area. The
+  2048 matters: without it a size such as 3000x64 fits in 2 MiB and would be
+  handed out, only for the compositor's existing check (`src/compositor.c:506`)
+  to reject it and close the window. `APP_MAX_DIMENSION` in the compositor
+  therefore derives from `GUI_MAX_DIMENSION` instead of being a second
+  constant that can drift.
 - Append `uint32_t flags;` to `gui_state_t`, with
   `#define GUI_FLAG_RESIZABLE (1u << 0)`. Both sides are recompiled together.
 - Add `#define GUI_EV_RESIZE 6`, carrying the new content size in `x` (width)
@@ -69,10 +79,12 @@ Every other application keeps its current fixed size and needs no change.
   does not fit the surface region, re-point the surface (width, height and
   stride), reset the clip, update `state->width` and `state->height`. It does
   not commit; the caller redraws and then calls `gui_app_commit_all()`.
-- `void gui_app_resize_preserve(uint32_t width, uint32_t height)` — as above,
-  but also carries the overlapping pixels across the stride change. Because the
-  copy is in place, direction matters: top-down when the width shrinks and
-  bottom-up when it grows. This is what keeps a Sketch drawing intact.
+- `void gui_app_resize_preserve(uint32_t width, uint32_t height, uint32_t fill)`
+  — as above, but also carries the overlapping pixels across the stride change.
+  Because the copy is in place, direction matters: top-down when the width
+  shrinks and bottom-up when it grows. It **fills the area the resize exposes
+  with `fill`**, so a newly revealed region is painted rather than left holding
+  stale pixels from the old layout; Sketch passes its canvas background.
 - A way to set `GUI_FLAG_RESIZABLE` at init.
 
 ### Compositor — `examples/desktop/src/compositor.c`
@@ -86,11 +98,12 @@ Every other application keeps its current fixed size and needs no change.
   `[WINDOW_MIN, max]`; `content_rect()` keeps the application's *declared*
   size. During the drag the old content therefore sits in the corner of the
   enlarged frame: letterboxed, with no scaling code needed.
-- On release: clamp, enqueue `GUI_EV_RESIZE`, notify the application.
-- The pending size is cleared on the slot's **next commit**. Normally the
-  application commits the new size and the frame is already correct; if the
-  event was dropped, the next commit clears pending and the frame returns to
-  the application's real size instead of staying letterboxed forever.
+- On release: clamp, enqueue `GUI_EV_RESIZE`, notify the application. If the
+  enqueue fails, the frame is restored to the application's current size
+  immediately — an application may never commit again, so waiting for a commit
+  that never comes would leave it letterboxed forever. When the enqueue
+  succeeds the pending size stays until the slot's next commit, which clears
+  it as a backstop.
 - Maximum is unchanged in spirit: `APP_MAX_DIMENSION` plus the existing
   `width * height * 4 <= GUI_SURFACE_REGION_SIZE` check, now against 2 MiB.
 
@@ -134,8 +147,13 @@ compositor                          ->  validates size, adopts it, clears pendin
   cannot make the compositor read outside its surface.
 - All blits are clamped to the size the application declared, which is what
   keeps the letterboxed transient safe.
-- A full event queue drops the resize event. The pending size is then cleared by
-  the next commit, so the window converges instead of sticking.
+- A full event queue drops the resize event. The frame is then restored
+  straight away, so the window converges instead of sticking.
+- The area a resize exposes is filled, never left stale: `gfx_relayout()`
+  paints outside the overlap, and Sketch passes its canvas background.
+- Building with sandboxes needs a Microkit SDK carrying the `examples/dynamic_caps`
+  tool patch for `<cspace>` elements, which is why CI does not build it; a
+  stock SDK can verify the plain desktop build only.
 - An application that sets the flag but ignores the event ends up with a frame
   larger than its content until its next commit; this is visible but not unsafe.
 
