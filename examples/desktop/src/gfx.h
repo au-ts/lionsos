@@ -70,3 +70,20 @@ void gfx_blit(gfx_surface_t *s, int32_t x, int32_t y, const uint32_t *src, int32
 
 /* Width in pixels of `text` when drawn at `scale` */
 int32_t gfx_text_width(const char *text, uint32_t scale);
+
+/*
+ * Change a pixel block from one stride to another in place.
+ *
+ * A window's surface has stride == width, so resizing one moves its pixels:
+ * `pixels` is reinterpreted as new_width x new_height. The overlapping region
+ * is carried across, and everything the new layout exposes is set to `fill`,
+ * since leaving it alone would show whatever the old layout held there.
+ *
+ * The copy happens in the same memory it reads, so the rows are visited in the
+ * direction that cannot clobber one that has not been read yet: last row first
+ * when the rows are moving apart, first row first when they are moving together.
+ *
+ * `pixels` must hold new_width * new_height entries.
+ */
+void gfx_relayout(uint32_t *pixels, uint32_t old_width, uint32_t old_height, uint32_t new_width,
+                  uint32_t new_height, uint32_t fill);

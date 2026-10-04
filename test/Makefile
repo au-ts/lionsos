@@ -41,6 +41,7 @@ MEMORY_SRC := $(LIONSOS)/lib/fs/server/memory.c
 HELPERS_BIN := $(BUILD_DIR)/test_fs_helpers
 MEMORY_BIN := $(BUILD_DIR)/test_fs_server_memory
 SIZE_BIN := $(BUILD_DIR)/test_gui_size
+RELAYOUT_BIN := $(BUILD_DIR)/test_gui_relayout
 
 all: run
 
@@ -61,9 +62,15 @@ $(MEMORY_BIN): test_fs_server_memory.c $(MEMORY_SRC) | $(BUILD_DIR)
 $(SIZE_BIN): test_gui_size.c $(LIONSOS)/include/lions/gui/protocol.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(SANITIZERS) $< -o $@
 
-run: $(HELPERS_BIN) $(MEMORY_BIN) $(SIZE_BIN)
+# gfx.c is freestanding, so the desktop's drawing code compiles for the host.
+# Only src/ is needed on the include path, and never on a target build's.
+$(RELAYOUT_BIN): test_gui_relayout.c $(LIONSOS)/examples/desktop/src/gfx.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(SANITIZERS) -I$(LIONSOS)/examples/desktop/src \
+		$(LIONSOS)/examples/desktop/src/gfx.c $< -o $@
+
+run: $(HELPERS_BIN) $(MEMORY_BIN) $(SIZE_BIN) $(RELAYOUT_BIN)
 	@echo
-	@for t in $(HELPERS_BIN) $(MEMORY_BIN) $(SIZE_BIN); do \
+	@for t in $(HELPERS_BIN) $(MEMORY_BIN) $(SIZE_BIN) $(RELAYOUT_BIN); do \
 		echo "=== $$(basename $$t) ==="; \
 		ASAN_OPTIONS=detect_leaks=0 "$$t" || exit 1; \
 		echo; \

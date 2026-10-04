@@ -158,3 +158,42 @@ int32_t gfx_text_width(const char *text, uint32_t scale)
     }
     return n * GFX_FONT_WIDTH * (int32_t)scale;
 }
+
+void gfx_relayout(uint32_t *pixels, uint32_t old_width, uint32_t old_height, uint32_t new_width,
+                  uint32_t new_height, uint32_t fill)
+{
+    uint32_t copy_w = old_width < new_width ? old_width : new_width;
+    uint32_t copy_h = old_height < new_height ? old_height : new_height;
+
+    /*
+     * Carry the overlapping region across first, bottom-up when the rows move
+     * apart and top-down when they move together, so a row is never written
+     * over before it has been read.
+     */
+    if (new_width > old_width) {
+        for (uint32_t y = copy_h; y-- > 0;) {
+            for (uint32_t x = 0; x < copy_w; x++) {
+                pixels[y * new_width + x] = pixels[y * old_width + x];
+            }
+        }
+    } else {
+        for (uint32_t y = 0; y < copy_h; y++) {
+            for (uint32_t x = 0; x < copy_w; x++) {
+                pixels[y * new_width + x] = pixels[y * old_width + x];
+            }
+        }
+    }
+
+    /*
+     * Then paint what the new layout exposes. These pixels are outside the
+     * region just copied, so this cannot disturb it, and leaving them alone
+     * would show whatever the old layout held there.
+     */
+    for (uint32_t y = 0; y < new_height; y++) {
+        for (uint32_t x = 0; x < new_width; x++) {
+            if (x >= copy_w || y >= copy_h) {
+                pixels[y * new_width + x] = fill;
+            }
+        }
+    }
+}
