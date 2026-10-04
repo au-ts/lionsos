@@ -96,6 +96,8 @@
 #define TEXT_SCALE 2
 #define CHAR_HEIGHT (GFX_FONT_HEIGHT * TEXT_SCALE)
 #define CLOSE_SIZE 12
+/* Corner grab area for resizing */
+#define RESIZE_HANDLE 12
 #define MENU_ITEM_HEIGHT 28
 #define MENU_PADDING 6
 #define COLOUR_MENU GFX_RGB(0x24, 0x29, 0x33)
@@ -137,6 +139,8 @@ typedef struct app {
     int32_t height;
     char title[GUI_TITLE_MAX];
     uint32_t seen_seq;
+    /* The app says it can adopt a new size, so offer a corner to drag */
+    bool resizable;
 
     /* The app has published a valid surface and has a window */
     bool mapped;
@@ -161,6 +165,14 @@ static int32_t pointer_x;
 static int32_t pointer_y;
 static int drag_slot = -1;
 static int32_t drag_dx, drag_dy;
+/*
+ * Slot whose frame is showing a size the app has not adopted yet, and that size.
+ * Cleared when the app commits, so the window cannot stay letterboxed.
+ */
+static int resize_slot = -1;
+static int32_t resize_w, resize_h;
+/* A corner drag is live, so motion changes the size rather than moving */
+static bool resizing;
 static int grab_slot = -1;
 static bool alt_left, alt_right;
 
@@ -242,13 +254,29 @@ static void present_rows(uint32_t y, uint32_t height)
 static gfx_rect_t frame_rect(int slot)
 {
     app_t *a = &apps[slot];
-    return (gfx_rect_t) { a->x, a->y, a->width + 2 * BORDER, TITLE_HEIGHT + a->height + BORDER };
+    /*
+     * While a corner drag is live the frame follows the pointer, but the content
+     * keeps the size the app published, so the old pixels sit in the corner of
+     * the new frame until the app adopts it. No scaling: the blit stays 1:1 and
+     * is clamped to what the app declared.
+     */
+    int32_t w = slot == resize_slot && resize_w > 0 ? resize_w : a->width;
+    int32_t h = slot == resize_slot && resize_h > 0 ? resize_h : a->height;
+    return (gfx_rect_t) { a->x, a->y, w + 2 * BORDER, TITLE_HEIGHT + h + BORDER };
 }
 
 static gfx_rect_t content_rect(int slot)
 {
     app_t *a = &apps[slot];
     return (gfx_rect_t) { a->x + BORDER, a->y + TITLE_HEIGHT, a->width, a->height };
+}
+
+/* The corner an app that can be resized offers to drag, inside the frame's border */
+static gfx_rect_t resize_handle(int slot)
+{
+    gfx_rect_t f = frame_rect(slot);
+    return (gfx_rect_t) { f.x + f.width - RESIZE_HANDLE, f.y + f.height - RESIZE_HANDLE, RESIZE_HANDLE,
+                          RESIZE_HANDLE };
 }
 
 static gfx_rect_t close_button(gfx_rect_t frame)
@@ -287,11 +315,14 @@ static void damage_cursor(void)
 
 /* Events to apps */
 
-static void send_event(int slot, gui_event_t ev)
+/* False if the app's queue was full and the event was dropped */
+static bool send_event(int slot, gui_event_t ev)
 {
     if (gui_event_enqueue(apps[slot].events, GUI_EVENT_QUEUE_CAPACITY(GUI_EVENTS_REGION_SIZE), ev) == 0) {
         pending_notify |= BIT(slot);
+        return true;
     }
+    return false;
 }
 
 static void send_pointer_event(int slot, uint16_t type, uint16_t code, int32_t value)
@@ -422,6 +453,56 @@ static void move_window(int slot, int32_t x, int32_t y)
     damage_window(slot);
 }
 
+/*
+ * Follow a corner drag. Only the frame changes: the content keeps the size the
+ * app published until it adopts this one, so nothing is read outside what it
+ * declared. The drag is clamped with the same helper the app uses, so the size
+ * offered is one the compositor will not later reject.
+ */
+static void resize_dragged(int slot)
+{
+    gfx_rect_t c = content_rect(slot);
+    uint32_t w = pointer_x > c.x ? (uint32_t)(pointer_x - c.x) : 0;
+    uint32_t h = pointer_y > c.y ? (uint32_t)(pointer_y - c.y) : 0;
+    gui_size_clamp(&w, &h, GUI_SURFACE_REGION_SIZE);
+
+    if ((int32_t)w == resize_w && (int32_t)h == resize_h) {
+        return;
+    }
+
+    damage_window(slot);
+    resize_w = (int32_t)w;
+    resize_h = (int32_t)h;
+    damage_window(slot);
+}
+
+/*
+ * End a corner drag by asking the app for the size the frame is already
+ * showing. If the app cannot be told, take the frame back immediately: it may
+ * never commit again, so waiting for a commit that never comes would leave the
+ * window showing a size it does not have.
+ */
+static void resize_finished(void)
+{
+    int slot = resize_slot;
+    uint32_t w = (uint32_t)resize_w;
+    uint32_t h = (uint32_t)resize_h;
+    gui_size_clamp(&w, &h, GUI_SURFACE_REGION_SIZE);
+    resize_w = (int32_t)w;
+    resize_h = (int32_t)h;
+    resizing = false;
+
+    bool sent = send_event(slot, (gui_event_t) { .type = GUI_EV_RESIZE, .x = (int32_t)w, .y = (int32_t)h });
+    if (!sent) {
+        LOG_COMPOSITOR("app %d's queue was full, dropping a resize to %ux%u\n", slot, w, h);
+        damage_window(slot);
+        resize_w = 0;
+        resize_h = 0;
+        resize_slot = -1;
+        damage_window(slot);
+    }
+}
+
 /* Initial position of a newly mapped window, by slot */
 static void place_window(int slot)
 {
@@ -528,6 +609,23 @@ static void app_committed(int slot)
         if (title[i] == '\0') {
             break;
         }
+    }
+
+    /*
+     * What the app says it supports. Read from the same untrusted page, but a
+     * flag can only ever affect this app's own window.
+     */
+    a->resizable = (a->state->flags & GUI_FLAG_RESIZABLE) != 0;
+
+    /*
+     * Any commit at all means the app has had its say, so stop overriding the
+     * frame and show the size it really has. This is the backstop that recovers
+     * if the resize event was dropped: the window cannot stay letterboxed.
+     */
+    if (slot == resize_slot) {
+        resize_w = 0;
+        resize_h = 0;
+        resize_slot = -1;
     }
 
     if (!a->mapped) {
@@ -837,6 +935,8 @@ static void pointer_moved(int32_t x, int32_t y)
 
     if (drag_slot >= 0) {
         move_window(drag_slot, pointer_x - drag_dx, pointer_y - drag_dy);
+    } else if (resizing) {
+        resize_dragged(resize_slot);
     } else if (grab_slot >= 0) {
         send_pointer_event(grab_slot, GUI_EV_POINTER_MOTION, 0, 0);
     } else if (focused >= 0 && window_at_pointer() == focused
@@ -902,6 +1002,11 @@ static void pointer_pressed(uint16_t button)
     if (gfx_rect_contains(close_button(frame), pointer_x, pointer_y)) {
         send_event(slot, (gui_event_t) { .type = GUI_EV_CLOSE });
         close_window(slot);
+    } else if (apps[slot].resizable && gfx_rect_contains(resize_handle(slot), pointer_x, pointer_y)) {
+        resize_slot = slot;
+        resize_w = apps[slot].width;
+        resize_h = apps[slot].height;
+        resizing = true;
     } else if (pointer_y < frame.y + TITLE_HEIGHT) {
         drag_slot = slot;
         drag_dx = pointer_x - frame.x;
@@ -916,6 +1021,9 @@ static void pointer_released(uint16_t button)
         grab_slot = -1;
     }
     drag_slot = -1;
+    if (resizing) {
+        resize_finished();
+    }
 }
 
 /*
