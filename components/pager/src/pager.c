@@ -10,6 +10,7 @@
 #include "pager.h"
 #include "proc.h"
 #include "untyped.h"
+#include "pager_config.h"
 
 #include <microkit.h>
 #include <sddf/util/printf.h>
@@ -33,6 +34,14 @@ uint32_t elf_sizes[PAGER_MAX_CLIENTS];
  */
 #define PAGER_NO_CLIENT 0xFF
 static uint8_t client_of_channel[MICROKIT_MAX_CHANNELS];
+
+
+#ifdef PAGER_INSTRUMENTATION
+    uint64_t mapping_latencies[PAGER_MAX_SAMPLES];
+    uint64_t received_faults[PAGER_MAX_SAMPLES];
+    uint64_t return_faults[PAGER_MAX_SAMPLES];
+    uint64_t fault_idx = 0;
+#endif
 
 void init(void)
 {
@@ -79,10 +88,9 @@ void notified(microkit_channel ch)
  */
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
-    // TODO: implement instruction
     #ifdef PAGER_INSTRUMENTATION
-    uint64_t ct_received_fault, ct_before_map, ct_after_map, ct_return_fault;
-    ct_received_fault = read_cntpct();  
+    uint64_t ct_before_map, ct_after_map;
+    uint64_t ct_received_fault = read_cntpct();
     #endif
     // Only VM faults carry an address and an FSR in the message registers,
     // every other fault type would be decoded as garbage below.
@@ -96,6 +104,11 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     uint64_t fsr = microkit_mr_get(3);
     uint64_t fsc = fsr & 0x3F;
     bool is_write = (fsr >> 6) & 1;
+    #ifdef PAGER_INSTRUMENTATION
+    uintptr_t heap_base = pager_config.clients[child].mmap_base;
+    bool measure = fault_addr >= heap_base && fault_addr - heap_base < PAGER_HEAP_SIZE
+                   && fault_idx < PAGER_MAX_SAMPLES;
+    #endif
     struct folio *folio;
     uint32_t frame;
 
@@ -124,12 +137,28 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
         // if it is a read fault, map global zero page.
         if (!is_write) {
             frame = get_gzp();
+            #ifdef PAGER_INSTRUMENTATION
+            ct_before_map = read_cntpct();
+            #endif
             seL4_Error err = seL4_ARM_Page_Map(gzp_cptr(frame), vspaces[child], fault_addr, create_cap_rights(false), seL4_ARM_Default_VMAttributes);
+            #ifdef PAGER_INSTRUMENTATION
+            ct_after_map = read_cntpct();
+            #endif
             if (err) {
                 sddf_printf("error occured on map frame zero %d\n", err);
             }
             // add global zero page to the frame cap.
             insert_frame_to_page(frame, page_entry);
+
+            #ifdef PAGER_INSTRUMENTATION
+            if (measure) {
+                mapping_latencies[fault_idx] = ct_after_map - ct_before_map;
+                received_faults[fault_idx] = ct_received_fault;
+                
+                fault_idx++;
+                return_faults[fault_idx - 1] = read_cntpct();
+            }
+            #endif
             return seL4_True;
         }
         folio = get_frame();
@@ -172,10 +201,25 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     }
 
     // do mapping
+    #ifdef PAGER_INSTRUMENTATION
+    ct_before_map = read_cntpct();
+    #endif
     seL4_Error err = seL4_ARM_Page_Map(frame_cptr(frame), vspaces[child], fault_addr, create_cap_rights(true), seL4_ARM_Default_VMAttributes);
+    #ifdef PAGER_INSTRUMENTATION
+    ct_after_map = read_cntpct();
+    #endif
     if (err) {
         sddf_printf("error occured on map frame %d\n", err);
     }
+    #ifdef PAGER_INSTRUMENTATION
+    if (measure) {
+        mapping_latencies[fault_idx] = ct_after_map - ct_before_map;
+        received_faults[fault_idx] = ct_received_fault;
+        
+        fault_idx++;
+        return_faults[fault_idx - 1] = read_cntpct();
+    }
+    #endif
     return seL4_True;
 }
 
@@ -185,6 +229,20 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         sddf_printf("pager: protected procedure call on unconfigured channel %u\n", ch);
         return microkit_msginfo_new(0, 0);
     }
+#ifdef PAGER_INSTRUMENTATION
+    if (microkit_msginfo_get_label(msginfo) == PAGER_INSTRUMENTATION_TAG) {
+        /* MR0 = sample index in; reply MR0 = faults recorded, MR1..3 = that sample. */
+        uint64_t i = microkit_mr_get(0);
+        microkit_mr_set(0, fault_idx);
+        if (i >= fault_idx) {
+            return microkit_msginfo_new(0, 1);
+        }
+        microkit_mr_set(1, mapping_latencies[i]);
+        microkit_mr_set(2, received_faults[i]);
+        microkit_mr_set(3, return_faults[i]);
+        return microkit_msginfo_new(0, 4);
+    }
+#endif
     microkit_mr_set(0, pager_mem_call(msginfo, client_of_channel[ch]));
     return microkit_msginfo_new(0, 1);
 }
