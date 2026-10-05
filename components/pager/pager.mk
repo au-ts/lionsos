@@ -14,7 +14,8 @@
 PAGER_SRC_DIR := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 
 PAGER_CFLAGS := \
-	-I$(PAGER_SRC_DIR)/include
+	-I$(PAGER_SRC_DIR)/include \
+	-I(PAGER_SRC_DIR)/config
 
 PAGER_OBJ := \
 	pager/bitmap.o \

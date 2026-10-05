@@ -79,6 +79,11 @@ void notified(microkit_channel ch)
  */
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
+    // TODO: implement instruction
+    #ifdef PAGER_INSTRUMENTATION
+    uint64_t ct_received_fault, ct_before_map, ct_after_map, ct_return_fault;
+    ct_received_fault = read_cntpct();  
+    #endif
     // Only VM faults carry an address and an FSR in the message registers,
     // every other fault type would be decoded as garbage below.
     if (microkit_msginfo_get_label(msginfo) != seL4_Fault_VMFault) {
