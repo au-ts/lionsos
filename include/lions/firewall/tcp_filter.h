@@ -112,15 +112,16 @@ static inline fw_action_t fw_tcp_filter_find_action(fw_filter_state_t *state, ui
                                                 uint32_t dst_ip, uint16_t dst_port, uint16_t *rule_id,
                                                 fw_tcp_instance_t **tcp_instance)
 {
-    /* We give priority to (internal) instances */
+    /* We give priority to (internal) instances. These are stored from this
+    filter's perspective, so traffic in the same direction matches. */
     for (uint16_t i = 0; i < state->internal_instances_table->size; i++) {
         fw_tcp_instance_t *instance = (fw_tcp_instance_t *)state->internal_instances_table->instances + i;
 
-        if (instance->src_port != dst_port || instance->dst_port != src_port) {
+        if (instance->src_port != src_port || instance->dst_port != dst_port) {
             continue;
         }
 
-        if (instance->src_ip != dst_ip || instance->dst_ip != src_ip) {
+        if (instance->src_ip != src_ip || instance->dst_ip != dst_ip) {
             continue;
         }
 
@@ -129,7 +130,7 @@ static inline fw_action_t fw_tcp_filter_find_action(fw_filter_state_t *state, ui
         return FILTER_ACT_ESTABLISHED;
     }
 
-    /* Then the other filter's instances */
+    /* Then the other filter's instances, which match return traffic */
     for (size_t iface = 0; iface < state->num_interfaces; iface++) {
         for (uint16_t i = 0; i < state->external_instances_table[iface]->size; i++) {
             fw_tcp_instance_t *instance = (fw_tcp_instance_t *)state->external_instances_table[iface]->instances + i;
@@ -284,17 +285,16 @@ static fw_filter_err_t fw_tcp_extract_state(fw_filter_state_t *filter_state,
 
     /* Check if instance is internal */
     *internal_tracking = NULL;
-    if (instance >= (fw_tcp_instance_t *)filter_state->internal_instances_table &&
-        instance < (fw_tcp_instance_t *)filter_state->internal_instances_table
-                   + filter_state->instances_capacity * sizeof(fw_tcp_instance_t)) {
+    fw_tcp_instance_t *internal_base = (fw_tcp_instance_t *)filter_state->internal_instances_table->instances;
+    if (instance >= internal_base && instance < internal_base + filter_state->instances_capacity) {
         *internal_tracking = &instance->internal;
         *external_tracking = &instance->external;
     } else {
         /* Check if it is external */
         for (size_t iface = 0; iface < filter_state->num_interfaces; iface++) {
-            if (instance >= (fw_tcp_instance_t *)filter_state->external_instances_table &&
-                instance < (fw_tcp_instance_t *)filter_state->external_instances_table
-                        + filter_state->instances_capacity * sizeof(fw_tcp_instance_t)) {
+            fw_tcp_instance_t *external_base =
+                (fw_tcp_instance_t *)filter_state->external_instances_table[iface]->instances;
+            if (instance >= external_base && instance < external_base + filter_state->instances_capacity) {
                 *internal_tracking = &instance->external;
                 *external_tracking = &instance->internal;
                 break;
@@ -361,13 +361,14 @@ static fw_filter_err_t fw_tcp_extract_state(fw_filter_state_t *filter_state,
  * @param default_action whether connect rule was matched via filter's default action.
  * @param rule_id id of connect rule.
  * @param seq sequence number of TCP syn packet received.
+ * @param timestamp current tick.
  * @param return_instance newly created internal instance.
  *
  * @return error status.
  */
 static inline fw_filter_err_t fw_tcp_filter_add_instance(fw_filter_state_t *state, uint32_t src_ip, uint16_t src_port,
                                                      uint32_t dst_ip, uint16_t dst_port, uint16_t rule_id, uint32_t seq,
-                                                     fw_tcp_instance_t **return_instance)
+                                                     uint64_t timestamp, fw_tcp_instance_t **return_instance)
 {
     if (state->internal_instances_table->size >= state->instances_capacity) {
         return FILTER_ERR_FULL;
@@ -386,14 +387,16 @@ static inline fw_filter_err_t fw_tcp_filter_add_instance(fw_filter_state_t *stat
     fw_tcp_instance_t *empty_slot = (fw_tcp_instance_t *)state->internal_instances_table->instances +
         state->internal_instances_table->size;
     empty_slot->rule_id = rule_id;
-    empty_slot->src_ip = dst_ip;
-    empty_slot->src_port = dst_port;
-    empty_slot->dst_ip = src_ip;
-    empty_slot->dst_port = src_port;
+    empty_slot->src_ip = src_ip;
+    empty_slot->src_port = src_port;
+    empty_slot->dst_ip = dst_ip;
+    empty_slot->dst_port = dst_port;
     empty_slot->internal.flags = FW_TCP_SYN_BIT;
     empty_slot->internal.seq = seq;
     empty_slot->external.flags = 0;
     empty_slot->external.seq = 0;
+    empty_slot->timestamp = timestamp;
+    state->internal_instances_table->size++;
     *return_instance = empty_slot;
     return FILTER_ERR_OKAY;
 }
@@ -403,8 +406,6 @@ static inline fw_filter_err_t fw_tcp_filter_add_instance(fw_filter_state_t *stat
 //   https://www.rfc-editor.org/rfc/rfc793#section-3.5
 // - Figure out a solution to whether internal or external instances should be
 //   checked first
-// - Rectify whether dst_ip/src_ip should be stored in src_ip/dst_ip of
-//   instances (which filter's perspective?)
 // - Implement timer ticks for removing timed out and closed connections from
 //   instances
 // - Handle re-opening connections after closure

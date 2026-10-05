@@ -97,7 +97,7 @@ static void filter(void)
                     /* Create a new TCP instance */
                     fw_err = fw_tcp_filter_add_instance(&filter_state, ip_hdr->src_ip, tcp_hdr->src_port,
                                                                         ip_hdr->dst_ip, tcp_hdr->dst_port,
-                                                                        rule_id, seq, &instance);
+                                                                        rule_id, seq, curr_tick, &instance);
                     if (fw_err == FILTER_ERR_OKAY) {
                         LOG_FIREWALL("TCP FILTER", "on interface %u establishing connection via rule %u: (ip %s, port %u) -> "
                                      "(ip %s, port %u)\n", filter_config.interface, rule_id, ipaddr_to_string(ip_hdr->src_ip, ip_addr_buf0),
@@ -224,8 +224,12 @@ static void filter(void)
                     break;
                 }
                 }
-                /* Update timestamp */
-                instance->timestamp = curr_tick;
+                /* Update timestamp. No instance exists if the first packet was
+                rejected or the instance table is full. */
+                if (forward_packet && instance != NULL) {
+                    instance->timestamp = curr_tick;
+                }
+                break;
             }
             default: {
                 forward_packet = false;

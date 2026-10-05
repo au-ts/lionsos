@@ -302,6 +302,17 @@ filter_instances_region = FirewallMemoryRegions(
     data_structures=[filter_instances_wrapper, filter_instances_buffer]
 )
 
+# TCP filter instance table, entries also hold connection tracking state
+tcp_filter_instances_wrapper = FirewallDataStructure(
+    elf_name="tcp_filter.elf", c_name="fw_instances_table"
+)
+tcp_filter_instances_buffer = FirewallDataStructure(
+    elf_name="tcp_filter.elf", c_name="fw_tcp_instance", capacity=256
+)
+tcp_filter_instances_region = FirewallMemoryRegions(
+    data_structures=[tcp_filter_instances_wrapper, tcp_filter_instances_buffer]
+)
+
 ### ----------------------------------------------------------------------- ###
 ### Network constants ###
 ### ----------------------------------------------------------------------- ###
