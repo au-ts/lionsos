@@ -4,6 +4,7 @@
 #include <time.h>
 #include "minor_pf.h"
 #include <sys/mman.h>
+#include "pager_instrumentation.h"
 #define PAGE_SIZE       4096ULL
 
 #define NUM_PAGES       16384ULL
@@ -14,83 +15,8 @@
 
 #define WARMUP_SAMPLES  10
 
+uint64_t fault_idx = 0;
 
-static inline uint64_t read_cntpct(void)
-{
-    uint64_t value;
-
-    asm volatile(
-        "mrs %0, cntpct_el0"
-        : "=r"(value)
-    );
-
-    return value;
-}
-
-static inline uint64_t read_cntfrq(void)
-{
-    uint64_t value;
-
-    asm volatile(
-        "mrs %0, cntfrq_el0"
-        : "=r"(value)
-    );
-
-    return value;
-}
-
-static uint64_t ticks_to_ns(uint64_t ticks, uint64_t freq)
-{
-    return (ticks * 1000000000ULL) / freq;
-}
-
-static void print_statistics(const char *name,
-                             uint64_t *samples,
-                             size_t count)
-{
-    uint64_t min = UINT64_MAX;
-    uint64_t max = 0;
-    uint64_t sum = 0;
-    for (size_t i = 0; i < count; i++) {
-        uint64_t x = samples[i];
-
-        if (x < min)
-            min = x;
-
-        if (x > max)
-            max = x;
-
-        sum += x;
-    }
-    for (size_t i = 1; i < count; i++) {
-        uint64_t key = samples[i];
-        size_t j = i;
-
-        while (j > 0 && samples[j - 1] > key) {
-            samples[j] = samples[j - 1];
-            j--;
-        }
-
-        samples[j] = key;
-    }
-    uint64_t median;
-    if (count & 1) {
-        median = samples[count / 2];
-    } else {
-        median =
-            (samples[count / 2 - 1] +
-             samples[count / 2]) / 2;
-    }
-    uint64_t mean = sum / count;
-
-    printf("\n%s\n", name);
-    printf("-----------------------------\n");
-    printf("samples : %zu\n", count);
-    printf("min     : %lu ns\n", min);
-    printf("median  : %lu ns\n", median);
-    printf("mean    : %lu ns\n", mean);
-    printf("max     : %lu ns\n", max);
-}
 
 static void benchmark_read(uint64_t freq)
 {
@@ -108,7 +34,11 @@ static void benchmark_read(uint64_t freq)
     uint64_t start = read_cntpct();
     for (size_t i = 0; i < NUM_PAGES; i++) {
         volatile uint8_t *page = base + i * PAGE_SIZE;
+
+        before_faults[fault_idx] = read_cntpct();
         uint8_t value = *page;
+        after_faults[fault_idx] = read_cntpct();
+        fault_idx++;
     }
     uint64_t end = read_cntpct();
 
@@ -136,8 +66,10 @@ static void benchmark_write(uint64_t freq)
 
         volatile uint8_t *page =
             base + i * PAGE_SIZE;
+        before_faults[fault_idx] = read_cntpct();
         *page = 42;
-
+        after_faults[fault_idx] = read_cntpct();
+        fault_idx++;
     }
     uint64_t end = read_cntpct();
 
@@ -148,10 +80,7 @@ static void benchmark_write(uint64_t freq)
 int minor_pf(void)
 {
     uint64_t freq = read_cntfrq();
-
-    printf("Anonymous page-fault latency benchmark\n");
-    printf("========================================\n");
-
+    printf("pf latency benchmark:\n");
     printf("CNTFRQ_EL0 : %lu Hz\n", freq);
     printf("page size  : %lu bytes\n", PAGE_SIZE);
     printf("pages      : %lu\n", NUM_PAGES);
