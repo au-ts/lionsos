@@ -6,6 +6,7 @@ docs/book/
 .#*
 __pycache__
 examples/pager/benchmarks/519.lbm_r
+examples/benchmarks/519.lbm_r
 components/pager/documentation/writeup.aux
 components/pager/documentation/writeup.bbl
 components/pager/documentation/writeup.blg
