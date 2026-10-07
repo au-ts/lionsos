@@ -68,6 +68,11 @@ TOP := ${LIONSOS}/examples/pager_rpi4b
 CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
 
+# Shared with the other pager examples.
+BENCHMARK_DIR := $(LIONSOS)/examples/benchmarks/minor_page_fault_latency
+# Where pager_instrumentation.h lives. The client and the benchmark read it too.
+PAGER_CONFIG_DIR := $(LIONSOS)/components/pager/config
+
 # The client only ever needs the frames the WRITE pass allocates; retyping the
 # default 200000 at init does not fit in the Pi's 1GiB.
 PAGER_INIT_FRAMES := 40000
@@ -90,10 +95,11 @@ CFLAGS := \
 	-I$(SDDF)/include/microkit \
 	-I$(LIBMICROKITCO_PATH) \
 	-I$(TOP) \
-	-I$(TOP)/benchmarks/minor_page_fault_latency
+	-I$(PAGER_CONFIG_DIR) \
+	-I$(BENCHMARK_DIR)
 include $(LIONSOS)/lib/libc/libc.mk
 include $(SDDF)/tools/make/board/common.mk
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(TOP)/benchmarks/minor_page_fault_latency
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(BENCHMARK_DIR)
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 
@@ -124,17 +130,20 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a minor_pf.a
 %.elf: %.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
-# client.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
-# 	$(CC) -c $(CFLAGS) -I. $< -o $@
-client.o mailbox.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
+client.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
 	$(CC) -c $(CFLAGS) -I. $< -o $@
 
-client.elf: client.o mailbox.o libsddf_util_debug.a libmicrokitco_client.a minor_pf.a
+client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a minor_pf.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
+# PAGER_INSTRUMENTATION is a #define in pager_config.h, so the client has to
+# be recompiled when that header changes.
+-include client.d
+
 .PHONY: minor_pf.a
-minor_pf.a:
-	$(MAKE) -C $(TOP)/benchmarks/minor_page_fault_latency CPU=$(CPU) LIONS_LIBC=$(LIONS_LIBC)
+# The benchmark includes libc headers, which only exist once musl is installed.
+minor_pf.a: | $(LIONS_LIBC)/include
+	$(MAKE) -C $(BENCHMARK_DIR) CPU=$(CPU) LIONS_LIBC=$(LIONS_LIBC)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH \

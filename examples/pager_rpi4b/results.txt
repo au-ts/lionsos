@@ -1,33 +1,53 @@
-Anonymous page-fault latency benchmark
-========================================
+pf latency benchmark:
 CNTFRQ_EL0 : 54000000 Hz
 page size  : 4096 bytes
 pages      : 16384
 size       : 64 MiB
 
 Running READ benchmark...
-read average latency: 4078
+read average latency: 1235
 
 Running WRITE benchmark...
-write average latency: 4216
+write average latency: 1293
+instrumentation: 32768 samples
+results:
+mean mapping latency:       407 ns
+mean pager->client latency: 370 ns
+mean client->pager latency: 407 ns
 benchmark done
 
-Passive:
-
-Anonymous page-fault latency benchmark
-Raspberry Pi 4B pinning clock rate at 1800000000
-firmware left the cores at 600000000 Hz
-CPU successfully pinned at 1800000000 Hz
-Anonymous page-fault latency benchmark
-========================================
+pf latency benchmark:
 CNTFRQ_EL0 : 54000000 Hz
 page size  : 4096 bytes
 pages      : 16384
 size       : 64 MiB
 
 Running READ benchmark...
-read average latency: 1232
+read average latency: 1238
 
 Running WRITE benchmark...
-write average latency: 1269
+write average latency: 1298
+instrumentation: 32768 samples
+results:
+mean mapping latency:       425 ns
+mean pager->client latency: 370 ns
+mean client->pager latency: 407 ns
+benchmark done
+
+pf latency benchmark:
+CNTFRQ_EL0 : 54000000 Hz
+page size  : 4096 bytes
+pages      : 16384
+size       : 64 MiB
+
+Running READ benchmark...
+read average latency: 1236
+
+Running WRITE benchmark...
+write average latency: 1293
+instrumentation: 32768 samples
+results:
+mean mapping latency:       407 ns
+mean pager->client latency: 370 ns
+mean client->pager latency: 407 ns
 benchmark done

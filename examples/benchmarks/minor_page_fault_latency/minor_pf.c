@@ -15,7 +15,9 @@
 
 #define WARMUP_SAMPLES  10
 
+#ifdef PAGER_INSTRUMENTATION
 uint64_t fault_idx = 0;
+#endif
 
 
 static void benchmark_read(uint64_t freq)
@@ -35,14 +37,19 @@ static void benchmark_read(uint64_t freq)
     for (size_t i = 0; i < NUM_PAGES; i++) {
         volatile uint8_t *page = base + i * PAGE_SIZE;
 
+        #ifdef PAGER_INSTRUMENTATION
         before_faults[fault_idx] = read_cntpct();
+        #endif
         uint8_t value = *page;
+        #ifdef PAGER_INSTRUMENTATION
         after_faults[fault_idx] = read_cntpct();
         fault_idx++;
+        #endif
     }
     uint64_t end = read_cntpct();
 
-    printf("read average latency: %llu\n", ticks_to_ns(end - start, freq) / NUM_PAGES);
+    long double average = ticks_to_ns(end - start, freq) / NUM_PAGES;
+    printf("read average latency: %.3Lf ns\n", average);
 }
 
 
@@ -66,14 +73,19 @@ static void benchmark_write(uint64_t freq)
 
         volatile uint8_t *page =
             base + i * PAGE_SIZE;
+        #ifdef PAGER_INSTRUMENTATION
         before_faults[fault_idx] = read_cntpct();
+        #endif
         *page = 42;
+        #ifdef PAGER_INSTRUMENTATION
         after_faults[fault_idx] = read_cntpct();
         fault_idx++;
+        #endif
     }
     uint64_t end = read_cntpct();
 
-    printf("write average latency: %llu\n", ticks_to_ns(end - start, freq) / NUM_PAGES);
+    long double average = ticks_to_ns(end - start, freq) / NUM_PAGES;
+    printf("write average latency: %.3Lf ns\n", average);
 }
 
 

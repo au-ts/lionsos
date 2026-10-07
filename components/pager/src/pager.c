@@ -11,6 +11,7 @@
 #include "proc.h"
 #include "untyped.h"
 #include "pager_config.h"
+#include "pager_instrumentation.h"
 
 #include <microkit.h>
 #include <sddf/util/printf.h>
@@ -26,12 +27,7 @@ uint32_t vspaces[PAGER_MAX_CLIENTS];
 uint32_t elf_caps[PAGER_MAX_CLIENTS][PAGER_MAX_ELF_FRAMES];
 uint32_t elf_sizes[PAGER_MAX_CLIENTS];
 
-/*
- * Which client a PPC arrived from. sdfgen hands each client a fault id equal to its
- * index, so this is the only mapping we have to keep: the channel ids are allocated
- * alongside every other channel in the system and are not contiguous. Channels we
- * were not given a client for hold PAGER_NO_CLIENT.
- */
+
 #define PAGER_NO_CLIENT 0xFF
 static uint8_t client_of_channel[MICROKIT_MAX_CHANNELS];
 
@@ -79,13 +75,6 @@ void notified(microkit_channel ch)
     // does nothing for now.
 }
 
-/**
- * Service a client's VM fault: create the intermediary paging structures, map a page
- * and reply so the client retries the access.
- *
- * `child` is the fault id the system description gave this client, which sdfgen
- * allocates equal to the client's index, so it indexes every per-client array here.
- */
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
     #ifdef PAGER_INSTRUMENTATION
