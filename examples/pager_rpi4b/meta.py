@@ -41,18 +41,6 @@ def generate(
     pager_system.add_client(client)
     serial_system.add_client(client)
 
-    if board.name == "rpi4b_1gb":
-        mailbox_regs = MemoryRegion(
-            sdf, "mailbox_regs", MAILBOX_PAGE_SIZE, paddr=MAILBOX_REGS_PADDR)
-        mailbox_buffer = MemoryRegion(
-            sdf, "mailbox_buffer", MAILBOX_PAGE_SIZE, paddr=MAILBOX_BUFFER_PADDR)
-        for mr in (mailbox_regs, mailbox_buffer):
-            sdf.add_mr(mr)
-        client.add_map(
-            Map(mailbox_regs, MAILBOX_REGS_VADDR, perms="rw", cached=False))
-        client.add_map(
-            Map(mailbox_buffer, MAILBOX_BUFFER_VADDR, perms="rw", cached=False))
-
     pds = [
         serial_driver,
         serial_virt_tx,
