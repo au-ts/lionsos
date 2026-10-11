@@ -1,0 +1,79 @@
+pf latency benchmark:
+CNTFRQ_EL0 : 54000000 Hz
+page size  : 4096 bytes
+pages      : 16384
+size       : 64 MiB
+
+Running READ benchmark...
+read average latency: 1270.212 ns
+
+Running WRITE benchmark...
+write average latency: 1298.925 ns
+instrumentation: 32768 samples
+results:
+mean read mapping latency:  408.021 ns
+mean write mapping latency: 434.710 ns
+mean mapping latency:       421.366 ns
+mean pager->client latency: 398.611 ns
+mean client->pager latency: 426.409 ns
+benchmark done
+
+pf latency benchmark:
+CNTFRQ_EL0 : 54000000 Hz
+page size  : 4096 bytes
+pages      : 16384
+size       : 64 MiB
+
+Running READ benchmark...
+read average latency: 1273.363 ns
+
+Running WRITE benchmark...
+write average latency: 1299.238 ns
+instrumentation: 32768 samples
+results:
+mean read mapping latency:  410.695 ns
+mean write mapping latency: 435.650 ns
+mean mapping latency:       423.173 ns
+mean pager->client latency: 398.629 ns
+mean client->pager latency: 426.506 ns
+benchmark done
+
+pf latency benchmark:
+CNTFRQ_EL0 : 54000000 Hz
+page size  : 4096 bytes
+pages      : 16384
+size       : 64 MiB
+
+Running READ benchmark...
+read average latency: 1269.361 ns
+
+Running WRITE benchmark...
+write average latency: 1304.197 ns
+instrumentation: 32768 samples
+results:
+mean read mapping latency:  407.414 ns
+mean write mapping latency: 430.783 ns
+mean mapping latency:       419.098 ns
+mean pager->client latency: 402.962 ns
+mean client->pager latency: 426.650 ns
+benchmark done
+
+pf latency benchmark:
+CNTFRQ_EL0 : 54000000 Hz
+page size  : 4096 bytes
+pages      : 16384
+size       : 64 MiB
+
+Running READ benchmark...
+read average latency: 1274.202 ns
+
+Running WRITE benchmark...
+write average latency: 1298.298 ns
+instrumentation: 32768 samples
+results:
+mean read mapping latency:  409.483 ns
+mean write mapping latency: 433.732 ns
+mean mapping latency:       421.607 ns
+mean pager->client latency: 399.987 ns
+mean client->pager latency: 426.653 ns
+benchmark done

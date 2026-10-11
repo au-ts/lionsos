@@ -5,15 +5,10 @@ pages      : 16384
 size       : 64 MiB
 
 Running READ benchmark...
-read average latency: 1235
+read average latency: 1254.792 ns
 
 Running WRITE benchmark...
-write average latency: 1293
-instrumentation: 32768 samples
-results:
-mean mapping latency:       407 ns
-mean pager->client latency: 370 ns
-mean client->pager latency: 407 ns
+write average latency: 1276.104 ns
 benchmark done
 
 pf latency benchmark:
@@ -23,15 +18,10 @@ pages      : 16384
 size       : 64 MiB
 
 Running READ benchmark...
-read average latency: 1238
+read average latency: 1266.630 ns
 
 Running WRITE benchmark...
-write average latency: 1298
-instrumentation: 32768 samples
-results:
-mean mapping latency:       425 ns
-mean pager->client latency: 370 ns
-mean client->pager latency: 407 ns
+write average latency: 1282.537 ns
 benchmark done
 
 pf latency benchmark:
@@ -41,13 +31,8 @@ pages      : 16384
 size       : 64 MiB
 
 Running READ benchmark...
-read average latency: 1236
+read average latency: 1266.630 ns
 
 Running WRITE benchmark...
-write average latency: 1293
-instrumentation: 32768 samples
-results:
-mean mapping latency:       407 ns
-mean pager->client latency: 370 ns
-mean client->pager latency: 407 ns
+write average latency: 1282.537 ns
 benchmark done
