@@ -127,6 +127,29 @@ int process_fork(uint32_t parent, uint32_t child)
 	if (result != PROCESS_FORK_OK) return result;
 	vspaces[child] = processes[child].vspace;
 	clone_pages(parent, child);
+
+
+	// assign to asid pool
+	seL4_ARM_ASIDPool_Assign( seL4_CapInitThreadASIDPool, vspaces[child]);
+	// create IPC buffer
+	// just allocate a 4k page, but need to do some plumbing.
+	untyped_alloc() // should I create a new list for this???
+	// set the 0 slot of cspace as the endpoint of this process.
+	cspace_mint() // mint the badge
+	// allocate tcb
+	processes[child].tcb = 0; // TODO
+	seL4_TCB_Configure();
+	// allocate another slot for fault ep.
+	// allocate scheduling context.
+	// configure scheduling context.
+	// seL4_SchedControl_Configure
+	// seL4_TCB_SetSchedParams
+
+	// map in IPC buffer
+	// map in elf files. (lazily?)
+
+	// write tcb registers(this starts it)
+	// seL4_TCB_WriteRegisterss
 	// TODO: do stuff like ipc mapping etc.
 	return 0;
 }
