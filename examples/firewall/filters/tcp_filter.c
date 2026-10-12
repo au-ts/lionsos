@@ -17,6 +17,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* TODO: Instance creation goes straight through filter.h's fw_filter_add_instance
+ * (declared in filter.h) instead of a local TCP-specific wrapper.
+ * filter.h's version does not do the stale-instance (TCP_NONE /
+ * TCP_TIME_WAIT) sweep-and-reclaim closed connection slots are not proactively recycle
+ *  here, so the internal instances table will fill up faster under churn until a
+ * timer-driven reaper is added elsewhere. Furthermore when firewall parts are unified
+ * will probably have to rewrite this file to rely on a single table */
+
 __attribute__((__section__(".fw_filter_config"))) fw_filter_config_t filter_config;
 __attribute__((__section__(".net_client_config"))) net_client_config_t net_config;
 
@@ -267,14 +275,6 @@ static inline fw_tcp_conn_state_t fw_tcp_next_state(fw_tcp_conn_state_t current,
 
     return TCP_INVALID;
 }
-
-/* Instance creation now goes straight through filter.h's fw_filter_add_instance
- * (declared in filter.h) instead of a local TCP-specific wrapper.
- * NOTE: filter.h's version does NOT do the stale-instance (TCP_NONE /
- * TCP_TIME_WAIT) sweep-and-reclaim that the removed wrapper did — closed
- * connection slots are no longer proactively recycled here, so the internal
- * instances table will fill up faster under churn until a timer-driven reaper
- * is added elsewhere. */
 
 /* Queues for receiving and transmitting packets */
 net_queue_handle_t rx_queue;
