@@ -33,14 +33,13 @@ typedef enum {
     FILTER_ERR_INVALID_RULE_ID,
     /* unsupported action */
     FILTER_ERR_UNSUPPORTED_ACTION,
-    /* instance pointer is not within instance regions */
-    FILTER_ERR_INVALID_INSTANCE,
     /* instance is in an invalid state */
     FILTER_ERR_INVALID_INSTANCE_STATE
 } fw_filter_err_t;
 
 static const char *fw_filter_err_str[] = {
-    "Ok.", "Out of memory error.", "Duplicate entry.", "Clashing entry.", "Invalid rule ID.", "Unsupported action."
+    "Ok.", "Out of memory error.", "Duplicate entry.", "Clashing entry.", "Invalid rule ID.", "Unsupported action.",
+    "Invalid instance state."
 };
 
 typedef enum {
@@ -116,6 +115,12 @@ typedef struct fw_rule_id_bitmap {
     uint64_t id_bitmap[];
 } fw_rule_id_bitmap_t;
 
+struct fw_filter_state;
+
+/* Removes all instances created from a rule. Filters with their own instance
+format provide their own implementation. */
+typedef fw_filter_err_t fw_filter_remove_instances_fn(struct fw_filter_state *state, uint16_t rule_id);
+
 typedef struct fw_filter_state {
     /* filter rules */
     fw_rule_table_t *rule_table;
@@ -133,6 +138,8 @@ typedef struct fw_filter_state {
     uint16_t instances_capacity;
     /* number of interfaces */
     uint8_t num_interfaces;
+    /* called to remove instances when a connect rule is removed */
+    fw_filter_remove_instances_fn *remove_instances;
 } fw_filter_state_t;
 
 /* PP call parameters for webserver to call filters and update rules */
@@ -315,6 +322,8 @@ static inline fw_filter_err_t fw_filter_add_rule(fw_filter_state_t *state, uint3
     return FILTER_ERR_OKAY;
 }
 
+static fw_filter_err_t fw_filter_remove_instances(fw_filter_state_t *state, uint16_t rule_id);
+
 /**
  * Initialise filter state.
  *
@@ -338,6 +347,7 @@ static inline void fw_filter_state_init(fw_filter_state_t *state, void *rules, v
     state->rules_capacity = rules_capacity;
     state->rule_id_bitmap = (fw_rule_id_bitmap_t *)rule_id_bitmap;
     state->instances_capacity = instances_capacity;
+    state->remove_instances = fw_filter_remove_instances;
     state->internal_instances_table = (fw_instances_table_t *)internal_instances;
     state->num_interfaces = num_external_instances;
     /* Populate the array of possible external instance tables */
@@ -418,41 +428,21 @@ static inline fw_filter_err_t fw_filter_add_instance(fw_filter_state_t *state, u
 }
 
 /**
- * Find the filter action to be applied for a given source and destination ip
- * and port number. First external instances are checked so that return traffic
- * may be permitted. If traffic is not return traffic from a neighbour filter's
- * connection, the most specific matching filter rule is returned.
+ * Find the most specific filter rule matching a given source and destination
+ * ip and port number. If no rule matches, the default rule is returned.
  *
  * @param state address of filter state.
  * @param src_ip source ip to match.
  * @param src_port source port to match.
  * @param dst_ip destination ip to match.
  * @param dst_port destination port to match.
- * @param rule_id id of matching rule. Unmodified if no match.
+ * @param rule_id id of matching rule.
  *
- * @return filter action to be applied. None is returned if no match is found.
+ * @return filter action of the matching rule.
  */
-static inline fw_action_t fw_filter_find_action(fw_filter_state_t *state, uint32_t src_ip, uint16_t src_port,
-                                                uint32_t dst_ip, uint16_t dst_port, uint16_t *rule_id)
+static inline fw_action_t fw_filter_match_rule(fw_filter_state_t *state, uint32_t src_ip, uint16_t src_port,
+                                               uint32_t dst_ip, uint16_t dst_port, uint16_t *rule_id)
 {
-    /* First check external instances */
-    for (size_t iface = 0; iface < state->num_interfaces; iface++) {
-        for (uint16_t i = 0; i < state->external_instances_table[iface]->size; i++) {
-            fw_instance_t *instance = state->external_instances_table[iface]->instances + i;
-
-            if (instance->src_port != dst_port || instance->dst_port != src_port) {
-                continue;
-            }
-
-            if (instance->src_ip != dst_ip || instance->dst_ip != src_ip) {
-                continue;
-            }
-
-            *rule_id = instance->rule_id;
-            return FILTER_ACT_ESTABLISHED;
-        }
-    }
-
     /* Check rules for best match otherwise we match with the default rule */
     fw_rule_t *match = &state->rule_table->rules[DEFAULT_ACTION_IDX];
     for (uint16_t i = DEFAULT_ACTION_IDX + 1; i < state->rule_table->size; i++) {
@@ -502,6 +492,45 @@ static inline fw_action_t fw_filter_find_action(fw_filter_state_t *state, uint32
 }
 
 /**
+ * Find the filter action to be applied for a given source and destination ip
+ * and port number. First external instances are checked so that return traffic
+ * may be permitted. If traffic is not return traffic from a neighbour filter's
+ * connection, the most specific matching filter rule is returned.
+ *
+ * @param state address of filter state.
+ * @param src_ip source ip to match.
+ * @param src_port source port to match.
+ * @param dst_ip destination ip to match.
+ * @param dst_port destination port to match.
+ * @param rule_id id of matching rule. Unmodified if no match.
+ *
+ * @return filter action to be applied. None is returned if no match is found.
+ */
+static inline fw_action_t fw_filter_find_action(fw_filter_state_t *state, uint32_t src_ip, uint16_t src_port,
+                                                uint32_t dst_ip, uint16_t dst_port, uint16_t *rule_id)
+{
+    /* First check external instances */
+    for (size_t iface = 0; iface < state->num_interfaces; iface++) {
+        for (uint16_t i = 0; i < state->external_instances_table[iface]->size; i++) {
+            fw_instance_t *instance = state->external_instances_table[iface]->instances + i;
+
+            if (instance->src_port != dst_port || instance->dst_port != src_port) {
+                continue;
+            }
+
+            if (instance->src_ip != dst_ip || instance->dst_ip != src_ip) {
+                continue;
+            }
+
+            *rule_id = instance->rule_id;
+            return FILTER_ACT_ESTABLISHED;
+        }
+    }
+
+    return fw_filter_match_rule(state, src_ip, src_port, dst_ip, dst_port, rule_id);
+}
+
+/**
  * Remove instances associated with a rule. To be used when a rule is
  * deleted or default action is changed.
  *
@@ -545,7 +574,7 @@ static inline fw_filter_err_t fw_filter_update_default_action(fw_filter_state_t 
     }
 
     if (old_action == FILTER_ACT_CONNECT) {
-        fw_filter_err_t err = fw_filter_remove_instances(state, DEFAULT_ACTION_RULE_ID);
+        fw_filter_err_t err = state->remove_instances(state, DEFAULT_ACTION_RULE_ID);
         assert(err == FILTER_ERR_OKAY);
     }
 
@@ -580,7 +609,8 @@ static inline fw_filter_err_t fw_filter_remove_rule(fw_filter_state_t *state, ui
     assert(rule != NULL);
 
     if ((fw_action_t)rule->action == FILTER_ACT_CONNECT) {
-        assert(fw_filter_remove_instances(state, rule_id) == FILTER_ERR_OKAY);
+        fw_filter_err_t remove_err = state->remove_instances(state, rule_id);
+        assert(remove_err == FILTER_ERR_OKAY);
     }
 
     generic_array_shift(state->rule_table->rules, sizeof(fw_rule_t), state->rule_table->size,
