@@ -83,6 +83,7 @@ static inline rr_Child_t* rr_sched_schedule_child(rr_Child_t* child) {
 
 
 static inline rr_Child_t* rr_sched_unschedule_current(rr_ChildState_e state) {
+    NO_ERR(seL4_TCB_UnbindVPMU(TCB(rr_currently_sched->id)));
     seL4_TCB_SetPriority(TCB(rr_currently_sched->id), SELF_TCB(), rr_currently_sched->priority);
     // if we are changing the state to suspended, then we will suspend the thread as well.
     // or schedulable (as suspending it won't prevent it from receiving stuff).
@@ -90,7 +91,6 @@ static inline rr_Child_t* rr_sched_unschedule_current(rr_ChildState_e state) {
         NO_ERR(seL4_TCB_Suspend(rr_currently_sched->id + BASE_TCB_CAP));
     if (state == rr_ChildState_Schedulable) 
         NO_ERR(seL4_TCB_Suspend(rr_currently_sched->id + BASE_TCB_CAP));
-    NO_ERR(seL4_TCB_UnbindVPMU(TCB(rr_currently_sched->id)));
     rr_currently_sched->sched_state = state;
     rr_Child_t* temp = rr_currently_sched;
     rr_currently_sched = NULL;
@@ -99,5 +99,5 @@ static inline rr_Child_t* rr_sched_unschedule_current(rr_ChildState_e state) {
 }
 
 static inline void rr_sched_setup_block_checker() {
-    microkit_notify(blocker_ch);
+    microkit_pd_restart(BLOCK_CHECKER_ID, BLOCK_CHECKER_INIT);
 }

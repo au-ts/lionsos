@@ -28,6 +28,11 @@ serial_queue_handle_t serial_tx_queue_handle;
 
 void rep_main()
 {
+    for (int inst_num = 0; inst_num < _rr_storage_handle.metadata.inst_num; inst_num++) {
+        rr_storage_unit_t inst = rr_storage_get_next_inst(&_rr_storage_handle);
+        rr_storage_unit_print(&inst);
+    }
+    _rr_storage_handle.iptr = _rr_storage_handle.metadata.inst_begin;
 
     seL4_Word last_cycle_count = 0;
     seL4_MessageInfo_t msg = { 0 };
@@ -37,17 +42,28 @@ void rep_main()
     for (int inst_num = 0; inst_num < _rr_storage_handle.metadata.inst_num; inst_num++) {
         rr_storage_unit_t inst = rr_storage_get_next_inst(&_rr_storage_handle);
         if (last_cycle_count != inst.cycle_count) {
+
+            // Now we reschedule the child.
             rr_sched_schedule_child(rr_currently_sched);
-            NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
             rr_ipc_sender_setup(rr_currently_sched->id);
             rr_sched_setup_block_checker();
+            NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
             // setup for this cycle count has been done, so we will setup everything else and yield.
             // wait for preemption.
             msg = seL4_Recv(INPUT_CAP, &badge, REPLY_CAP);
-            seL4_ARM_VPMU_VPMUReadCycleCounter_t vpmu_res = seL4_ARM_VPMU_VPMUReadCycleCounter(VPMU_CAP);
-            NO_ERR(vpmu_res.error);
-            true_cycle_count = vpmu_res.cycle_counter_value;
-            assert(true_cycle_count == inst.cycle_count);
+            NO_ERR(seL4_TCB_Suspend(BLOCK_CHECKER_ID + BASE_TCB_CAP));
+            INFO("Recv'd message\n");
+
+            // // trigger the block checker
+            // {
+            //     INFO("Begin flushing blocker\n");
+            //     seL4_Word blocker_badge = 0;
+            //     seL4_TCB_SetPriority(BASE_TCB_CAP + BLOCK_CHECKER_ID, SELF_TCB(), SELF_PRIO);
+            //     seL4_Recv(INPUT_CAP, &blocker_badge, REPLY_CAP);
+            //     assert(rr_badge_to_channel_id(blocker_badge) == blocker_ch);
+            //     seL4_TCB_SetPriority(BASE_TCB_CAP + BLOCK_CHECKER_ID, SELF_TCB(), BLOCK_PRIO);
+            //     INFO("End flushing blocker\n");
+            // }
 
             // We must unschedule the thread to what the corresponding state should be after this type of message.
             // These will be overwritten later, it's just to ensure that the correct shutdown of a scheduled
@@ -70,11 +86,18 @@ void rep_main()
                 rr_sched_unschedule_current(rr_ChildState_BlockedOnCall);
             } break;
             case rr_IPCType_Fault: {
-                assert(!"Todo!");
+                // for now.
+                rr_sched_unschedule_current(rr_ChildState_Suspended);
             } break;
             case rr_IPCType_SenderReply: {
                 assert(!"Todo!");
             } break;
+            }
+            seL4_ARM_VPMU_VPMUReadCycleCounter_t vpmu_res = seL4_ARM_VPMU_VPMUReadCycleCounter(VPMU_CAP);
+            NO_ERR(vpmu_res.error);
+            true_cycle_count = vpmu_res.cycle_counter_value;
+            if (true_cycle_count != inst.cycle_count) {
+                WARN("Cycle count divergence! true: %lx, expected %lx\n", true_cycle_count, inst.cycle_count);
             }
         }
 

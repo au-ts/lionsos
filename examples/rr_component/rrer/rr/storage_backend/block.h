@@ -95,9 +95,7 @@ static inline bool _rr_block_check_resp(uint64_t num_blocks, uint64_t expected_i
 
     seL4_Yield();
     seL4_Word badge = 0;
-    do {
-        seL4_Recv(INPUT_CAP, &badge, REPLY_CAP);
-    } while (rr_badge_to_channel_id(badge) == blocker_ch || rr_badge_to_channel_id(badge) == sender_ch);
+    seL4_Recv(INPUT_CAP, &badge, REPLY_CAP);
     assert(rr_badge_to_channel_id(badge) == blk_config.virt.id);
 
     // assert that the write was successful.

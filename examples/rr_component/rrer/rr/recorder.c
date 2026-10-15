@@ -161,7 +161,15 @@ static inline void rec_main()
         LOG("Yielding!\n");
         msg = seL4_Recv(INPUT_CAP, &badge, BASE_REPLY_CAPS + rr_currently_sched->id);
         LOG("Woken!\n");
-        // pause the sender and the block checker.
+        // Pause the block checker.
+        // it gets restarted when we reschedule.
+        NO_ERR(seL4_TCB_Suspend(BLOCK_CHECKER_ID + BASE_TCB_CAP));
+
+        // This is set externally when there was a child trying to send
+        // to this child
+        // BUG: If the child being sent (the one just scheduled) was
+        // unscheduled due to yielding or timing out then we should not
+        // set this to NO_CHILD?
         seL4_Word sending_child = NO_CHILD;
 
         rr_IPCType_e type = rr_ipc_get_type(msg, badge);

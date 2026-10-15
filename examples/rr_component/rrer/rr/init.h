@@ -1,5 +1,7 @@
 #pragma once
 #include "base.h"
+#include "interfaces/sel4_client.h"
+#include "microkit.h"
 #include "scheduler.h"
 #include "storage_backend/block.h"
 
@@ -8,6 +10,7 @@ static rr_storage_handle_t _rr_storage_handle = {0};
 // The index is the id. Points to mr_prefilled data.
 static inline void rr_init(bool is_recorder)
 {
+    NO_ERR(seL4_TCB_Suspend(BLOCK_CHECKER_ID + BASE_TCB_CAP));
     assert(blocker_ch != UNSET_VALUE);
     assert(sender_ch != UNSET_VALUE);
     INFO("blocker_ch: %lu, sender_ch: %lu\n", blocker_ch, sender_ch);
@@ -48,6 +51,11 @@ static inline void rr_init(bool is_recorder)
     INFO("Num pmu counters: %lu\n", counters.num_counters);
     assert(counters.num_counters > 0);
     NO_ERR(seL4_ARM_VPMU_VPMUCounterControl(VPMU_CAP, 1));
+
+    // expect the block_checker to send to us immediately to ensure that it sets itself correctly.
+    // seL4_Word block_badge = 0;
+    // seL4_Recv(INPUT_CAP, &block_badge, REPLY_CAP);
+    // assert(rr_badge_to_channel_id(block_badge) == blocker_ch);
 
 	if (is_recorder) _rr_storage_handle = rr_storage_start();
 	else _rr_storage_handle = rr_storage_retrieve();
