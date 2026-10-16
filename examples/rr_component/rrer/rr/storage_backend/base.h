@@ -244,7 +244,7 @@ static inline seL4_Word rr_storage_store_ipc_data(rr_storage_handle_t *handle, s
     seL4_Word begin = handle->metadata.data_begin;
     for (int i = 0; i < num_words; i++) {
         seL4_Word reg = seL4_GetMR(i);
-        rr_storage_write(begin - i * sizeof(seL4_Word), (const uint8_t *)&reg, sizeof(seL4_Word));
+        rr_storage_write(begin - (i + 1) * sizeof(seL4_Word), (const uint8_t *)&reg, sizeof(reg));
     }
     begin -= num_words * sizeof(seL4_Word);
     handle->metadata.data_begin = begin;

@@ -59,14 +59,14 @@ static inline void rr_init_storage_backend()
 static inline bool rr_storage_write(uint64_t byte_offset, const uint8_t *bytes, uint64_t num_bytes)
 {
     assert(_rr_block_initialised);
-    assert(num_bytes + byte_offset < _rr_block_storage_info->capacity * BLK_TRANSFER_SIZE);
+    assert(num_bytes + byte_offset <= _rr_block_storage_info->capacity * BLK_TRANSFER_SIZE);
     assert(num_bytes > 0);
 
     // Read the sectors that we are going to write to.
     // So we don't clobber stuff on write (Please optimize me!)
     uint64_t blk_number = byte_offset / BLK_TRANSFER_SIZE;
     uint64_t blk_offset = byte_offset % BLK_TRANSFER_SIZE;
-    uint64_t num_blks = 1 + (blk_offset + num_bytes) / BLK_TRANSFER_SIZE;
+    uint64_t num_blks = 1 + (blk_offset + num_bytes - 1) / BLK_TRANSFER_SIZE;
     int err = 0;
     err = blk_enqueue_req(&_rr_block_queue_handle, BLK_REQ_READ, 0, blk_number, num_blks, 9);
     assert(!err);
