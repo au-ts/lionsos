@@ -5,34 +5,31 @@
 
 #include "decl.h"
 #include "ff.h"
-#include <libmicrokitco.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
 #include <sys/stat.h>
 #include <lions/fs/protocol.h>
 #include <lions/fs/server.h>
 #include <fat_config.h>
 
 /*
-This file define a bunch of wrapper functions of FATFs functions so those functions can be run in the
-worker thread.
+This file defines wrapper functions around FatFs that lib/libc/posix/ramfile.c calls directly, in the
+client's own thread. Each returns an FS_STATUS_* value; out-parameters are only written on success.
 */
 
-FATFS fatfs;
-bool fs_initialised;
+static FATFS fatfs;
+static bool fs_initialised;
 
-FIL files[MAX_OPEN_FILES];
-bool file_used[MAX_OPEN_FILES];
+static FIL files[MAX_OPEN_FILES];
+static bool file_used[MAX_OPEN_FILES];
 
-DIR dirs[MAX_OPEN_FILES];
-bool dir_used[MAX_OPEN_FILES];
+static DIR dirs[MAX_OPEN_FILES];
+static bool dir_used[MAX_OPEN_FILES];
 
-/* Data shared with client */
-extern char *fs_share;
-
-FIL *file_alloc(void) {
+static FIL *file_alloc(void) {
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
         if (!file_used[i]) {
             file_used[i] = true;
@@ -42,13 +39,13 @@ FIL *file_alloc(void) {
     return NULL;
 }
 
-void file_free(FIL *file) {
+static void file_free(FIL *file) {
     uint32_t i = file - files;
     assert(file_used[i]);
     file_used[i] = false;
 }
 
-DIR *dir_alloc(void) {
+static DIR *dir_alloc(void) {
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
         if (!dir_used[i]) {
             dir_used[i] = true;
@@ -58,14 +55,14 @@ DIR *dir_alloc(void) {
     return NULL;
 }
 
-void dir_free(DIR *dir) {
+static void dir_free(DIR *dir) {
     uint32_t i = dir - dirs;
     assert(dir_used[i]);
     dir_used[i] = false;
 }
 
 // Function to convert the open flag from fs_protocol
-unsigned char map_fs_flags_to_fat_flags(uint64_t fs_flags) {
+static unsigned char map_fs_flags_to_fat_flags(uint64_t fs_flags) {
     unsigned char fat_flags = 0;
 
     // Map read/write flags
@@ -93,12 +90,10 @@ unsigned char map_fs_flags_to_fat_flags(uint64_t fs_flags) {
 }
 
 // Change here later to support more than one FAT volumes
-void handle_initialise(void) {
+int handle_initialise(void) {
     LOG_FATFS("Mounting file system!\n");
-    co_data_t *args = microkit_cothread_my_arg();
     if (fs_initialised) {
-        args->status = FS_STATUS_ERROR;
-        return;
+        return FS_STATUS_ERROR;
     }
     fs_initialised = true;
     FRESULT RET = f_mount(&fatfs, "", 1);
@@ -106,44 +101,27 @@ void handle_initialise(void) {
         fs_initialised = false;
     }
     LOG_FATFS("Mounting file system result: %d\n", RET);
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    return (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
 
-void handle_deinitialise(void) {
-    co_data_t *args = microkit_cothread_my_arg();
+int handle_deinitialise(void) {
     if (!fs_initialised) {
-        args->status = FS_STATUS_ERROR;
-        return;
+        return FS_STATUS_ERROR;
     }
     FRESULT RET = f_unmount("");
     if (RET == FR_OK) {
         fs_initialised = false;
     }
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    return (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
 
-void handle_file_open(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    fs_buffer_t buffer = args->params.file_open.path;
-    uint64_t openflag = args->params.file_open.flags;
-
-    // Copy the name to our name buffer
-    char filepath[FS_MAX_NAME_LENGTH + 1];
-
-    int err = fs_copy_client_path(filepath, fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
-    if (err) {
-        args->status = FS_STATUS_ERROR;
-        return;
-    }
-
+int handle_file_open(const char *path, uint64_t openflag, fd_t *fd) {
     // Add open flag checking and mapping here
-    LOG_FATFS("fat_open: file path: %s\n", filepath);
+    LOG_FATFS("fat_open: file path: %s\n", path);
 
     FIL *file = file_alloc();
     if (file == NULL) {
-        args->status = FS_STATUS_TOO_MANY_OPEN_FILES;
-        return;
+        return FS_STATUS_TOO_MANY_OPEN_FILES;
     }
 
     unsigned char fat_flag = map_fs_flags_to_fat_flags(openflag);
@@ -152,68 +130,48 @@ void handle_file_open(void) {
     LOG_FATFS("fat_open: fat open flag: %hhu\n", fat_flag);
 
     // Micropython openflag still WIP, fixes this once that is completed
-    FRESULT RET = f_open(file, filepath, fat_flag);
+    FRESULT RET = f_open(file, path, fat_flag);
 
     // Error handling
     if (RET == FR_NO_FILE) {
         file_free(file);
-        args->status = FS_STATUS_NO_FILE;
-        return;
+        return FS_STATUS_NO_FILE;
     } else if (RET == FR_INVALID_NAME) {
         file_free(file);
-        args->status = FS_STATUS_INVALID_NAME;
-        return;
+        return FS_STATUS_INVALID_NAME;
     } else if (RET != FR_OK) {
         file_free(file);
-        args->status = FS_STATUS_ERROR;
-        return;
+        return FS_STATUS_ERROR;
     }
 
-    fd_t fd;
-    err = fd_alloc(&fd);
+    int err = fd_alloc(fd);
     assert(!err);
-    fd_set_file(fd, file);
+    fd_set_file(*fd, file);
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
-    args->result.file_open.fd = fd;
+    return FS_STATUS_SUCCESS;
 }
 
-void handle_file_write(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-    fd_t fd = args->params.file_write.fd;
-    // uint64_t buffer = args->params.file_write.buf.offset;
-    fs_buffer_t buffer = args->params.file_write.buf;
-    uint64_t btw = args->params.file_write.buf.size;
-    uint64_t offset = args->params.file_write.offset;
+int handle_file_write(fd_t fd, const void *data, uint64_t len, uint64_t offset, uint64_t *len_written) {
+    // f_write takes a 32-bit count, so writes larger than that come back short
+    UINT btw = (len > UINT_MAX) ? UINT_MAX : len;
 
-    LOG_FATFS("fat_write: bytes to be write: %lu, write offset: %lu\n", btw, offset);
-
-    char *data = fs_get_client_buffer(fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
-    if (data == NULL) {
-        LOG_FATFS("fat_write: invalid buffer\n");
-        args->result.file_write.len_written = 0;
-        args->status = FS_STATUS_INVALID_BUFFER;
-        return;
-    }
+    LOG_FATFS("fat_write: bytes to be write: %u, write offset: %lu\n", btw, offset);
 
     FIL *file = NULL;
     int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd: %d\n", fd);
-        args->status = FS_STATUS_INVALID_FD;
-        return;
+        return FS_STATUS_INVALID_FD;
     }
 
     FRESULT RET = f_lseek(file, offset);
 
     if (RET != FR_OK) {
         fd_end_op(fd);
-        args->result.file_write.len_written = 0;
-        args->status = FS_STATUS_ERROR;
-        return;
+        return FS_STATUS_ERROR;
     }
 
-    uint32_t bw = 0;
+    UINT bw = 0;
 
     RET = f_write(file, data, btw, &bw);
     fd_end_op(fd);
@@ -223,47 +181,34 @@ void handle_file_write(void) {
     }
     else {
         LOG_FATFS("fat_write: error");
+        return FS_STATUS_ERROR;
     }
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
-    args->result.file_write.len_written = bw;
+    *len_written = bw;
+    return FS_STATUS_SUCCESS;
 }
 
-void handle_file_read(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-    fd_t fd = args->params.file_read.fd;
-    fs_buffer_t buffer = args->params.file_read.buf;
-    uint64_t btr = args->params.file_read.buf.size;
-    uint64_t offset = args->params.file_read.offset;
-
-    char *data = fs_get_client_buffer(fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
-    if (data == NULL) {
-        LOG_FATFS("fat_read: invalid buffer provided\n");
-        args->status = FS_STATUS_INVALID_BUFFER;
-        args->result.file_read.len_read = 0;
-        return;
-    }
+int handle_file_read(fd_t fd, void *data, uint64_t len, uint64_t offset, uint64_t *len_read) {
+    // f_read takes a 32-bit count, so reads larger than that come back short
+    UINT btr = (len > UINT_MAX) ? UINT_MAX : len;
 
     FIL *file = NULL;
     int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd: %d\n", fd);
-        args->status = FS_STATUS_INVALID_FD;
-        return;
+        return FS_STATUS_INVALID_FD;
     }
 
-    LOG_FATFS("fat_read: bytes to be read: %lu, read offset: %lu\n", btr, offset);
+    LOG_FATFS("fat_read: bytes to be read: %u, read offset: %lu\n", btr, offset);
 
     FRESULT RET = f_lseek(file, offset);
 
     if (RET != FR_OK) {
         fd_end_op(fd);
-        args->status = FS_STATUS_ERROR;
-        args->result.file_read.len_read = 0;
-        return;
+        return FS_STATUS_ERROR;
     }
 
-    uint32_t br = 0;
+    UINT br = 0;
 
     RET = f_read(file, data, btr, &br);
     fd_end_op(fd);
@@ -273,30 +218,26 @@ void handle_file_read(void) {
     }
     else {
         LOG_FATFS("fat_read: error");
+        return FS_STATUS_ERROR;
     }
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
-    args->result.file_read.len_read = br;
+    *len_read = br;
+    return FS_STATUS_SUCCESS;
 }
 
-void handle_file_close(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-    fd_t fd = args->params.file_close.fd;
-
+int handle_file_close(fd_t fd) {
     FIL *file;
     int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("fat_close: Invalid file descriptor\n");
-        args->status = FS_STATUS_INVALID_FD;
-        return;
+        return FS_STATUS_INVALID_FD;
     }
     fd_end_op(fd);
 
     err = fd_unset(fd);
     if (err) {
         LOG_FATFS("fd has outstanding operations\n");
-        args->status = FS_STATUS_OUTSTANDING_OPERATIONS;
-        return;
+        return FS_STATUS_OUTSTANDING_OPERATIONS;
     }
 
     FRESULT RET = f_close(file);
@@ -308,44 +249,20 @@ void handle_file_close(void) {
         fd_set_file(fd, file);
     }
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    return (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
 
-void handle_stat(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    fs_buffer_t path = args->params.stat.path;
-    fs_buffer_t output_buffer = args->params.stat.buf;
-    uint64_t size = args->params.stat.buf.size;
-
-    char filepath[FS_MAX_PATH_LENGTH + 1];
-
-    fs_stat_t *file_stat = fs_get_client_buffer(fs_share, FAT_FS_DATA_REGION_SIZE, output_buffer);
-    if (file_stat == NULL || size < sizeof (fs_stat_t)) {
-        LOG_FATFS("invalid output buffer provided\n");
-        args->status = FS_STATUS_INVALID_BUFFER;
-        return;
-    }
-
-    int err = fs_copy_client_path(filepath, fs_share, FAT_FS_DATA_REGION_SIZE, path);
-    if (err) {
-        args->status = FS_STATUS_INVALID_PATH;
-        return;
-    }
-
-    LOG_FATFS("fat_stat:asking for filename: %s\n", filepath);
+int handle_stat(const char *path, fs_stat_t *file_stat) {
+    LOG_FATFS("fat_stat:asking for filename: %s\n", path);
 
     FILINFO fileinfo;
-    FRESULT RET = f_stat(filepath, &fileinfo);
+    FRESULT RET = f_stat(path, &fileinfo);
     if (RET == FR_NO_FILE) {
-        args->status = FS_STATUS_NO_FILE;
-        return;
+        return FS_STATUS_NO_FILE;
     } else if (RET == FR_INVALID_NAME) {
-        args->status = FS_STATUS_INVALID_NAME;
-        return;
+        return FS_STATUS_INVALID_NAME;
     } else if (RET != FR_OK) {
-        args->status = FS_STATUS_ERROR;
-        return;
+        return FS_STATUS_ERROR;
     }
 
     LOG_FATFS("fat_stat result: size: %lu\n", (unsigned long)fileinfo.fsize);
@@ -381,89 +298,46 @@ void handle_stat(void) {
         }
     }
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    return FS_STATUS_SUCCESS;
 }
 
-void handle_file_size(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    fd_t fd = args->params.file_size.fd;
-
+int handle_file_size(fd_t fd, uint64_t *size) {
     FIL *file = NULL;
     int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd: %d\n", fd);
-        args->status = FS_STATUS_INVALID_FD;
-        return;
+        return FS_STATUS_INVALID_FD;
     }
 
-    uint64_t size = f_size(file);
+    *size = f_size(file);
     fd_end_op(fd);
-    args->status = FS_STATUS_SUCCESS;
-    args->result.file_size.size = size;
+    return FS_STATUS_SUCCESS;
 }
 
-void handle_rename(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    fs_buffer_t oldpath_buffer = args->params.rename.old_path;
-    fs_buffer_t newpath_buffer = args->params.rename.new_path;
-
-    char oldpath[FS_MAX_PATH_LENGTH + 1];
-    char newpath[FS_MAX_PATH_LENGTH + 1];
-
-    int err = fs_copy_client_path(oldpath, fs_share, FAT_FS_DATA_REGION_SIZE, oldpath_buffer);
-    if (err) {
-        args->status = FS_STATUS_INVALID_PATH;
-        return;
-    }
-    err = fs_copy_client_path(newpath, fs_share, FAT_FS_DATA_REGION_SIZE, newpath_buffer);
-    if (err) {
-        args->status = FS_STATUS_INVALID_PATH;
-        return;
-    }
-
+int handle_rename(const char *oldpath, const char *newpath) {
     FRESULT RET = f_rename(oldpath, newpath);
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    return (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
 
-void handle_file_remove(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    fs_buffer_t buffer = args->params.file_remove.path;
-
-    char dirpath[FS_MAX_PATH_LENGTH + 1];
-    int err = fs_copy_client_path(dirpath, fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
-    if (err) {
-        LOG_FATFS("fat_unlink: invalid path buffer\n");
-        args->status = FS_STATUS_INVALID_PATH;
-        return;
-    }
-
-    FRESULT RET = f_unlink(dirpath);
+int handle_file_remove(const char *path) {
+    FRESULT RET = f_unlink(path);
 
     if (RET == FR_NO_FILE) {
-        args->status = FS_STATUS_NO_FILE;
+        return FS_STATUS_NO_FILE;
     } else if (RET != FR_OK) {
-        args->status = FS_STATUS_ERROR;
+        return FS_STATUS_ERROR;
     } else {
-        args->status = FS_STATUS_SUCCESS;
+        return FS_STATUS_SUCCESS;
     }
 }
 
-void handle_file_truncate(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    fd_t fd = args->params.file_truncate.fd;
-    uint64_t len = args->params.file_truncate.length;
-
+int handle_file_truncate(fd_t fd, uint64_t len) {
     FIL *file = NULL;
     int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd");
-        args->status = FS_STATUS_INVALID_FD;
-        return;
+        return FS_STATUS_INVALID_FD;
     }
 
     FRESULT RET = f_lseek(file, len);
@@ -471,132 +345,75 @@ void handle_file_truncate(void) {
     if (RET != FR_OK) {
         LOG_FATFS("fat_truncate: Invalid file offset\n");
         fd_end_op(fd);
-        args->status = FS_STATUS_ERROR;
-        return;
+        return FS_STATUS_ERROR;
     }
 
     RET = f_truncate(file);
     fd_end_op(fd);
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    return (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
 
-void handle_dir_create(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    fs_buffer_t buffer = args->params.dir_create.path;
-
-    char dirpath[FS_MAX_PATH_LENGTH + 1];
-    int err = fs_copy_client_path(dirpath, fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
-    if (err) {
-        LOG_FATFS("fat_mkdir: Invalid path buffer\n");
-        args->status = FS_STATUS_INVALID_PATH;
-        return;
-    }
-
-    FRESULT RET = f_mkdir(dirpath);
+int handle_dir_create(const char *path) {
+    FRESULT RET = f_mkdir(path);
     if (RET == FR_OK) {
-        args->status = FS_STATUS_SUCCESS;
+        return FS_STATUS_SUCCESS;
     } else if (RET == FR_EXIST) {
-        args->status = FS_STATUS_ALREADY_EXISTS;
+        return FS_STATUS_ALREADY_EXISTS;
     } else {
-        args->status = FS_STATUS_ERROR;
+        return FS_STATUS_ERROR;
     }
 }
 
 // This seems to do the exact same thing as fat_unlink
-void handle_dir_remove(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    fs_buffer_t buffer = args->params.dir_remove.path;
-
-    char dirpath[FS_MAX_PATH_LENGTH + 1];
-
-    int err = fs_copy_client_path(dirpath, fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
-    if (err) {
-        LOG_FATFS("fat_mkdir: Invalid path buffer\n");
-        args->status = FS_STATUS_INVALID_PATH;
-        return;
-    }
-
-    FRESULT RET = f_rmdir(dirpath);
+int handle_dir_remove(const char *path) {
+    FRESULT RET = f_rmdir(path);
 
     if (RET == FR_DENIED) {
-        args->status = FS_STATUS_NOT_EMPTY;
+        return FS_STATUS_NOT_EMPTY;
     } else if (RET != FR_OK) {
-        args->status = FS_STATUS_ERROR;
+        return FS_STATUS_ERROR;
     } else {
-        args->status = FS_STATUS_SUCCESS;
+        return FS_STATUS_SUCCESS;
     }
 }
 
-void handle_dir_open(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    fs_buffer_t buffer = args->params.dir_open.path;
-
-    char dirpath[FS_MAX_PATH_LENGTH + 1];
-    int err = fs_copy_client_path(dirpath, fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
-    if (err) {
-        LOG_FATFS("fat_readdir: Invalid buffer\n");
-        args->status = FS_STATUS_INVALID_PATH;
-        return;
-    }
-
+int handle_dir_open(const char *path, fd_t *fd) {
     DIR *dir = dir_alloc();
     if (dir == NULL) {
-        args->status = FS_STATUS_TOO_MANY_OPEN_FILES;
-        return;
+        return FS_STATUS_TOO_MANY_OPEN_FILES;
     }
 
-    LOG_FATFS("FAT opendir directory path: %s\n", dirpath);
+    LOG_FATFS("FAT opendir directory path: %s\n", path);
 
-    FRESULT RET = f_opendir(dir, dirpath);
+    FRESULT RET = f_opendir(dir, path);
 
     // Error handling
     if (RET != FR_OK) {
-        if (RET == FR_NO_FILE || RET == FR_NO_PATH) {
-            args->status = FS_STATUS_NOT_DIRECTORY;
-        } else {
-            args->status = FS_STATUS_ERROR;
-        }
         // Free this Dir structure
         dir_free(dir);
-        return;
+        if (RET == FR_NO_FILE || RET == FR_NO_PATH) {
+            return FS_STATUS_NOT_DIRECTORY;
+        } else {
+            return FS_STATUS_ERROR;
+        }
     }
 
-    fd_t fd;
-    err = fd_alloc(&fd);
+    int err = fd_alloc(fd);
     assert(!err);
-    fd_set_dir(fd, dir);
+    fd_set_dir(*fd, dir);
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
-    args->result.dir_open.fd = fd;
+    return FS_STATUS_SUCCESS;
 }
 
-void handle_dir_read(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    // Dir descriptor
-    fd_t fd = args->params.dir_read.fd;
-    fs_buffer_t buffer = args->params.dir_read.buf;
-    uint64_t size = args->params.dir_read.buf.size;
-
+int handle_dir_read(fd_t fd, char *name, uint64_t size, uint64_t *path_len) {
     LOG_FATFS("FAT readdir file descriptor: %lu\n", fd);
-
-    char *name = fs_get_client_buffer(fs_share, FAT_FS_DATA_REGION_SIZE, buffer);
-    if (name == NULL) {
-        LOG_FATFS("fat_readdir: invalid buffer\n");
-        args->status = FS_STATUS_INVALID_BUFFER;
-        return;
-    }
 
     DIR *dir = NULL;
     int err = fd_begin_op_dir(fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
-        args->status = FS_STATUS_INVALID_FD;
-        return;
+        return FS_STATUS_INVALID_FD;
     }
 
     FILINFO fno;
@@ -609,7 +426,7 @@ void handle_dir_read(void) {
     }
 
     if (RET == FR_OK) {
-        args->result.dir_read.path_len = len;
+        *path_len = len;
         memcpy(name, fno.fname, len);
         LOG_FATFS("FAT readdir file name: %.*s\n", (uint32_t)len, (char*)name);
         // Hacky change the ret value to FS_STATUS_END_OF_DIRECTORY when nothing is in the directory
@@ -620,84 +437,65 @@ void handle_dir_read(void) {
 
     fd_end_op(fd);
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    return (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
 
 // Not sure if this one is implemented correctly
-void handle_dir_tell(void){
-    co_data_t *args = microkit_cothread_my_arg();
-    fd_t fd = args->params.dir_tell.fd;
-
+int handle_dir_tell(fd_t fd, uint64_t *location) {
     DIR *dir = NULL;
     int err = fd_begin_op_dir(fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
-        args->status = FS_STATUS_INVALID_FD;
-        return;
+        return FS_STATUS_INVALID_FD;
     }
 
-    uint32_t offset = f_telldir(dir);
+    *location = f_telldir(dir);
     fd_end_op(fd);
 
-    args->status = FS_STATUS_SUCCESS;
-    args->result.dir_tell.location = offset;
+    return FS_STATUS_SUCCESS;
 }
 
-void handle_dir_rewind(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-    fd_t fd = args->params.dir_rewind.fd;
-
+int handle_dir_rewind(fd_t fd) {
     DIR *dir = NULL;
     int err = fd_begin_op_dir(fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
-        args->status = FS_STATUS_INVALID_FD;
-        return;
+        return FS_STATUS_INVALID_FD;
     }
 
     FRESULT RET = f_readdir(dir, 0);
     fd_end_op(fd);
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    return (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
 
-void handle_file_sync(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-    fd_t fd = args->params.file_sync.fd;
-
+int handle_file_sync(fd_t fd) {
     FIL *file = NULL;
     int err = fd_begin_op_file(fd, (void **)&file);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
-        args->status = FS_STATUS_INVALID_FD;
-        return;
+        return FS_STATUS_INVALID_FD;
     }
 
     FRESULT RET = f_sync(file);
     fd_end_op(fd);
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    return (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
 
-void handle_dir_close(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    fd_t fd = args->params.dir_close.fd;
-
+int handle_dir_close(fd_t fd) {
     DIR *dir = NULL;
     int err = fd_begin_op_dir(fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
-        args->status = FS_STATUS_INVALID_FD;
-        return;
+        return FS_STATUS_INVALID_FD;
     }
     fd_end_op(fd);
 
     err = fd_unset(fd);
     if (err) {
         LOG_FATFS("trying to close fd with outstanding operations\n");
-        args->status = FS_STATUS_OUTSTANDING_OPERATIONS;
-        return;
+        return FS_STATUS_OUTSTANDING_OPERATIONS;
     }
 
     FRESULT RET = f_closedir(dir);
@@ -707,25 +505,19 @@ void handle_dir_close(void) {
         dir_free(dir);
     }
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    return (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
 
 // Inefficient implementation of seekdir
 // There is no function as seekdir in the current Fatfs library
 // I can add one to the library but I do not want to add another layer of instability
 // So just use this inefficient one for now
-void handle_dir_seek(void) {
-    co_data_t *args = microkit_cothread_my_arg();
-
-    fd_t fd = args->params.dir_seek.fd;
-    int64_t loc = args->params.dir_seek.loc;
-
+int handle_dir_seek(fd_t fd, int64_t loc) {
     DIR *dir = NULL;
     int err = fd_begin_op_dir(fd, (void **)&dir);
     if (err) {
         LOG_FATFS("invalid fd (%d)\n", fd);
-        args->status = FS_STATUS_INVALID_FD;
-        return;
+        return FS_STATUS_INVALID_FD;
     }
 
     FRESULT RET = f_readdir(dir, 0);
@@ -733,13 +525,12 @@ void handle_dir_seek(void) {
 
     for (int64_t i = 0; i < loc; i++) {
         if (RET != FR_OK) {
-            args->status = FS_STATUS_ERROR;
             fd_end_op(fd);
-            return;
+            return FS_STATUS_ERROR;
         }
         RET = f_readdir(dir, &fno);
     }
     fd_end_op(fd);
 
-    args->status = (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
+    return (RET == FR_OK) ? FS_STATUS_SUCCESS : FS_STATUS_ERROR;
 }
