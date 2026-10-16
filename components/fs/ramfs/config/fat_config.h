@@ -22,3 +22,7 @@
 #define FAT_THREAD_NUM (FAT_WORKER_THREAD_NUM + 1)
 
 #define FAT_WORKER_THREAD_STACKSIZE 0x40000
+
+// comment this out if need to use real fatfs.
+#define RAM_FATFS
+
