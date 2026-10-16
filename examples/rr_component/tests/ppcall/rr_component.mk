@@ -1,3 +1,4 @@
+
 #
 # Copyright 2026, UNSW
 #
@@ -32,7 +33,6 @@ LIBVSPACE_DIR=$(LIBGDB_DIR)/libvspace
 METAPROGRAM := $(TOP_DIR)/meta.py
 DEBUGGER_DIR := $(LIONSOS)/components/debugger
 
-
 CFLAGS += \
 	-DMICROKIT \
 	-Wno-bitwise-op-parentheses \
@@ -59,6 +59,10 @@ QEMU_ARGS := -machine virt,virtualization=on \
 		-global virtio-mmio.force-legacy=false \
 		-d guest_errors \
 		-device virtio-serial-device \
+        -chardev pty,id=virtcon \
+        -device virtconsole,chardev=virtcon \
+	    -drive file=qemu_virtio_disk,if=none,format=raw,id=hd \
+        -device virtio-blk-device,drive=hd,bus=virtio-mmio-bus.1 \
 		-icount shift=1
 
 
@@ -74,7 +78,7 @@ include $(RR_COMPONENT_DIR)/rrer/rrer.mk
 
 all: ${IMAGE_FILE}
 
-${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a libsddf_util.a
+${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
 caller.o: $(TOP_DIR)/caller.c | $(LIONS_LIBC)/include
 	@echo "$(CFLAGS)"
@@ -97,7 +101,7 @@ $(DTB): $(DTS)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	PYTHONPATH="$(PYTHONPATH):$(RR_COMPONENT_DIR):$(SDDF)" $(PYTHON) $(METAPROGRAM) \
-		--output . --sdf $(SYSTEM_FILE)
+		--output . --sdf $(SYSTEM_FILE) $${NVME:+--nvme} --dtb $(DTB)
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx_serial_virt_tx_config.data serial_virt_tx.elf
@@ -107,14 +111,18 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	$(OBJCOPY) --update-section .blk_driver_config=blk_driver_blk_driver_config.data blk_driver.elf
 	$(OBJCOPY) --update-section .blk_virt_config=blk_virt_blk_virt_config.data blk_virt.elf
 
+
+
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
-
 
 qemu_disk:
 	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 GPT
 
-qemu: ${IMAGE_FILE} qemu_disk
+qemu_virtio_disk:
+	$(SDDF)/tools/mkvirtdisk $@ 1 512 16777216 MBR
+
+qemu: ${IMAGE_FILE} qemu_disk qemu_virtio_disk
 	$(QEMU) $(QEMU_ARGS)
 
 qemud: ${IMAGE_FILE} qemu_disk

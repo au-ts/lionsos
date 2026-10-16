@@ -165,13 +165,6 @@ static inline void rec_main()
         // it gets restarted when we reschedule.
         NO_ERR(seL4_TCB_Suspend(BLOCK_CHECKER_ID + BASE_TCB_CAP));
 
-        // This is set externally when there was a child trying to send
-        // to this child
-        // BUG: If the child being sent (the one just scheduled) was
-        // unscheduled due to yielding or timing out then we should not
-        // set this to NO_CHILD?
-        seL4_Word sending_child = NO_CHILD;
-
         rr_IPCType_e type = rr_ipc_get_type(msg, badge);
         // read the cycle count
         seL4_ARM_VPMU_VPMUReadCycleCounter_t vpmu_res = seL4_ARM_VPMU_VPMUReadCycleCounter(VPMU_CAP);
@@ -190,11 +183,13 @@ static inline void rec_main()
                 rr_source_ch_to_source_child(rr_recv_source_channel);
             assert(replyee_child_id < rr_children_num);
 
-            // store the message
-            rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, rr_currently_sched->id, badge, msg);
 
             // We can send the reply as it won't block.
             seL4_Send(BASE_REPLY_CAPS + replyee_child_id, msg);
+
+            // store the message
+            rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, rr_currently_sched->id, badge, msg);
+
             // and then we should unschedule the current.
             rec_unschedule_current(cycle_count, rr_ChildState_Schedulable);
 
@@ -245,12 +240,13 @@ static inline void rec_main()
             // Messages can only come from calls (in microkit)
             // So we assume that we will receive a reply to this message eventually.
 
+			// NOTE: there is no issue with not scheduling the correct thread.
+
             // check if we did a nested ppcall, and stop (unsupported).
             if (rr_last_sched_child != NULL && rr_last_sched_child->sched_state == rr_ChildState_BlockedOnReply) {
                 assert(!"Nested ppcalls are not supported through RR");
             }
-            sending_child = rr_currently_sched->id;
-            rec_unschedule_current(cycle_count, rr_ChildState_BlockedOnCall);
+            seL4_Word sending_child = rr_currently_sched->id;
             assert(sending_child != NO_CHILD);
 
             // store the message in the target's recv queue.
@@ -264,6 +260,7 @@ static inline void rec_main()
 
             rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
             rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, sending_child, badge, msg);
+            rec_unschedule_current(cycle_count, rr_ChildState_BlockedOnCall);
         } break;
         case rr_IPCType_Ntfn: {
             seL4_Word source_ch = rr_badge_to_channel_id(badge);
@@ -273,8 +270,7 @@ static inline void rec_main()
                 WARN("Extraneous channel of number %lu\n", source_ch);
                 continue;
             }
-            sending_child = rr_currently_sched->id;
-            rec_unschedule_current(cycle_count, rr_ChildState_Schedulable);
+            seL4_Word sending_child = rr_currently_sched->id;
             assert(sending_child != NO_CHILD);
             // store the message in the target's recv queue.
             // Oopsie i need to be able to map a target channel to a child.
@@ -284,6 +280,7 @@ static inline void rec_main()
             LOG("Target child: %lu\n", target_child);
             rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
             rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, sending_child, badge, msg);
+            rec_unschedule_current(cycle_count, rr_ChildState_Schedulable);
         } break;
         }
         // perform a reschedule.

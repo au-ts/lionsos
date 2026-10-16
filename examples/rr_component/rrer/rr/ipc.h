@@ -20,6 +20,7 @@ static inline microkit_channel rr_ch_to_target(microkit_channel ch)
 
 extern uint8_t *per_thread_recv_queue_mem;
 extern seL4_Word per_thread_recv_queue_size;
+// per thread receive queue.
 rrer_queue_t *pt_recv_queue = NULL;
 seL4_Word *rr_ipc_target_child_id = NULL;
 static inline void rr_init_ipc()
