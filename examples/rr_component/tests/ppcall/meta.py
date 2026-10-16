@@ -3,28 +3,22 @@
 import argparse
 from typing import List, Dict
 from acacia.arch import aarch64
-from acacia import ProtectionDomain, MemoryRegion, Map, System, Channel, Subsystem, PageTables, CSpace, Cap
+from acacia import ProtectionDomain, MemoryRegion, Map, System, Channel, Subsystem, PageTables, CSpace, Cap, DeviceTreeBlob
+from acacia_sddf import BOARDS
 import xml.etree.ElementTree as et
 from dataclasses import dataclass, field
 from abc import ABC
 from copy import deepcopy
 from rrer.rrer import RRChild, RRData, RRSystem
-from acacia_sddf.board import Board, DriverDouble
 import pathlib
+from random import randint, seed
 
-qemu_virt_aarch64 = Board(
-    name="qemu_virt_aarch64",
-    arch=aarch64,
-    paddr_top=0x6_0000_000,
-    serial=DriverDouble("arm,pl011", "pl011@9000000"),
-    timer=DriverDouble("arm,armv8-timer", "timer"),
-    blk=DriverDouble("virtio,mmio", "virtio_mmio@a000200"),
-    ethernet=DriverDouble("", "virtio_mmio@a000000"),
-    i2c=None,
-)
+DEFAULT_NUM_PINGPONG_PAIRS = 1
+
+seed(0)
 
 def generate(sdf_path: str, output_dir: str):
-    rr = RRSystem(sdf, qemu_virt_aarch64)
+    rr = RRSystem(sdf, board)
 
     caller = ProtectionDomain(rr, "caller", "caller.elf", priority=1)
     callee = ProtectionDomain(rr, "callee", "callee.elf", priority=2)
@@ -44,9 +38,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
+    parser.add_argument("--dtb", required=True)
 
     args = parser.parse_args()
-
-    sdf = System(aarch64, paddr_top=qemu_virt_aarch64.paddr_top)
+    dtb = DeviceTreeBlob(args.dtb)
+    board = next(filter(lambda b: b.name == "qemu_virt_aarch64", BOARDS))
+    assert board is not None
+    sdf = System(aarch64, paddr_top=board.paddr_top, dtb=dtb)
 
     generate(args.sdf, args.output)

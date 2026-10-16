@@ -234,19 +234,25 @@ static inline rr_storage_handle_t rr_storage_retrieve()
 }
 
 // stores what is currently in the IPC buffer into the data.
-// I'm pretty sure that the IPC buffer would not have been clobbered yet.
+// make sure that the ipc buffer is not clobbered as well!!!
 // The data counter only increments when everything has been written.
 // Returns a "offset" into the respective data region.
+// Note that this function clobbers.
 static inline seL4_Word rr_storage_store_ipc_data(rr_storage_handle_t *handle, seL4_MessageInfo_t msg)
 {
     seL4_Word num_words = seL4_MessageInfo_get_length(msg);
+    seL4_Word num_bytes = sizeof(seL4_Word) * num_words;
     // grows upwards/to lesser values.
     seL4_Word begin = handle->metadata.data_begin;
+    seL4_Word ipcbuffercopy[64] = {0};
     for (int i = 0; i < num_words; i++) {
-        seL4_Word reg = seL4_GetMR(i);
-        rr_storage_write(begin - (i + 1) * sizeof(seL4_Word), (const uint8_t *)&reg, sizeof(reg));
+        ipcbuffercopy[i] = seL4_GetMR(i);
     }
-    begin -= num_words * sizeof(seL4_Word);
+    // this clobbers, so we must ensure that we copy all the message contents before hand.
+    rr_storage_write(
+        begin - num_bytes, (const uint8_t *)ipcbuffercopy, num_bytes
+    );
+    begin -= num_bytes;
     handle->metadata.data_begin = begin;
 
     // definitely slow, will optimize later.
