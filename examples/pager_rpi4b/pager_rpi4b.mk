@@ -77,6 +77,15 @@ PAGER_CONFIG_DIR := $(LIONSOS)/components/pager/config
 # default 200000 at init does not fit in the Pi's 1GiB.
 PAGER_INIT_FRAMES := 40000
 
+# RAM_FATFS in the ramfs config moves the client's files from file.c (which has
+# no file system PD to talk to here) to FatFs over a RAM disk inside the client.
+# The disk starts out as a cpio archive of RAMFS_ROOT.
+RAMFS_CONFIG_DIR := $(LIONSOS)/components/fs/ramfs/config
+HASH := \#
+RAM_FATFS := $(shell grep -qE '^[[:space:]]*$(HASH)[[:space:]]*define[[:space:]]+RAM_FATFS([[:space:]]|$$)' $(RAMFS_CONFIG_DIR)/fat_config.h && echo 1)
+RAMFS_ROOT ?= $(LIONSOS)/examples/benchmarks/519.lbm_r/data/test/input
+RAMFS_SIZE ?= 0x4000000
+
 CFLAGS := \
 	-mstrict-align \
 	-ffreestanding \
@@ -121,6 +130,13 @@ $(PAGER_OBJ): | $(LIONS_LIBC)/include
 LIBMICROKITCO_CFLAGS_client := -O3 -I$(TOP)
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
+ifeq ($(RAM_FATFS),1)
+RAMFS_LIBC_INCLUDE := $(LIONS_LIBC)/include
+include $(LIONSOS)/components/fs/ramfs/ramfs.mk
+RAMFS_LIB := ramfs.a
+RAMFS_IMAGE := ramfs.cpio
+META_RAMFS_ARGS := --ramfs-image $(RAMFS_IMAGE) --ramfs-size $(RAMFS_SIZE)
+endif
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a minor_pf.a
 
@@ -131,10 +147,22 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a minor_pf.a
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 client.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
-	$(CC) -c $(CFLAGS) -I. $< -o $@
+	$(CC) -c $(CFLAGS) -I. -I$(RAMFS_CONFIG_DIR) $< -o $@
 
-client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a minor_pf.a
+client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a minor_pf.a $(RAMFS_LIB)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+ifeq ($(RAM_FATFS),1)
+# io.c unpacks this into a FAT volume when the client mounts it. Entry names
+# must not start with "./", and a missing RAMFS_ROOT gives an empty file system.
+$(RAMFS_IMAGE): $(shell find $(RAMFS_ROOT) 2>/dev/null)
+	if [ -d "$(RAMFS_ROOT)" ]; then \
+		(cd "$(RAMFS_ROOT)" && find . -mindepth 1 -printf '%P\n' | LC_ALL=C sort | cpio -o -H newc --quiet) > $@; \
+	else \
+		echo "WARNING: RAMFS_ROOT $(RAMFS_ROOT) not found, packing an empty ramfs"; \
+		cpio -o -H newc --quiet < /dev/null > $@; \
+	fi
+endif
 
 # PAGER_INSTRUMENTATION is a #define in pager_config.h, so the client has to
 # be recompiled when that header changes.
@@ -145,9 +173,9 @@ client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a minor_pf.a
 minor_pf.a: | $(LIONS_LIBC)/include
 	$(MAKE) -C $(BENCHMARK_DIR) CPU=$(CPU) LIONS_LIBC=$(LIONS_LIBC)
 
-$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
+$(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(RAMFS_CONFIG_DIR)/fat_config.h $(RAMFS_IMAGE)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH \
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE)
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) $(META_RAMFS_ARGS)
 
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf

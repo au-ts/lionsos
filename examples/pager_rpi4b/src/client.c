@@ -9,6 +9,10 @@
 #include <lions/fs/protocol.h>
 #include <lions/pager/config.h>
 #include <lions/posix/posix.h>
+#include <fat_config.h>
+#ifdef RAM_FATFS
+#include <lions/fs/ramfs.h>
+#endif
 
 #include <minor_pf.h>
 #include <pager_instrumentation.h>
@@ -28,10 +32,13 @@ serial_queue_handle_t serial_tx_queue_handle;
 
 
 timer_client_config_t timer_config;
+#ifndef RAM_FATFS
+// file.c's file system client helpers refer to these.
 fs_client_config_t fs_config;
 fs_queue_t *fs_command_queue;
 fs_queue_t *fs_completion_queue;
 char *fs_share;
+#endif
 
 void init(void)
 {
@@ -43,6 +50,14 @@ void init(void)
 
 
     libc_init(NULL, (void *)pager_config.mmap_base, 0x20000000);
+
+    #ifdef RAM_FATFS
+    int err = handle_initialise();
+    if (err != FS_STATUS_SUCCESS) {
+        printf("CLIENT|ERROR: failed to mount ramfs (%d)\n", err);
+        return;
+    }
+    #endif
 
     minor_pf();
     #ifdef PAGER_INSTRUMENTATION

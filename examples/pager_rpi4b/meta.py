@@ -41,6 +41,12 @@ def generate(
     pager_system.add_client(client)
     serial_system.add_client(client)
 
+    # comment below out to remove ramfs.
+    disk = MemoryRegion(sdf, "ramfs_disk", ramfs_size, prefill_path=ramfs_image)
+    sdf.add_mr(disk)
+    client.add_map(Map(disk, client.get_map_vaddr(disk), "rw", setvar_vaddr="disk_start_addr", setvar_size="disk_size"))
+    
+
     pds = [
         serial_driver,
         serial_virt_tx,
