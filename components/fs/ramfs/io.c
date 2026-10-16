@@ -3,52 +3,181 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <libmicrokitco.h>
+#include <sys/stat.h>
 #include <sddf/util/util.h>
 #include "ff.h"
 #include "diskio.h"
-#include "decl.h"
 
-#define IS_POWER_OF_2(x) ((x) && !((x) & ((x) - 1)))
+#define SECTOR_SIZE 512
+#define CLUSTER_SIZE 4096
 
+#define CPIO_HDR_SIZE 110
+#define CPIO_MODE 14
+#define CPIO_FILESIZE 54
+#define CPIO_NAMESIZE 94
 
-DSTATUS disk_initialize (
-    BYTE pdrv                /* Physical drive number to identify the drive */
-)
+uint64_t disk_start_addr;
+uint64_t disk_size;
+
+static DSTATUS status = STA_NOINIT;
+static bool started;
+
+typedef struct {
+    char *name;
+    uint32_t mode;
+    uint32_t size;
+    char *data;
+    uint64_t next;
+} cpio_entry_t;
+
+static uint32_t cpio_field(const char *p)
 {
-    // do nothing unless I support multiple ramfses.
+    uint32_t val = 0;
+    for (int i = 0; i < 8; i++) {
+        val = val * 16 + (p[i] <= '9' ? p[i] - '0' : (p[i] | 0x20) - 'a' + 10);
+    }
+    return val;
 }
 
-DSTATUS disk_status (
-    BYTE pdrv        /* Physical drive nmuber to identify the drive */
-)
+static bool cpio_entry(char *cpio, uint64_t off, cpio_entry_t *e)
 {
+    char *hdr = cpio + off;
+    if (memcmp(hdr, "070701", 6) != 0) {
+        return false;
+    }
+    uint64_t data = ALIGN(off + CPIO_HDR_SIZE + cpio_field(hdr + CPIO_NAMESIZE), 4);
+    e->name = hdr + CPIO_HDR_SIZE;
+    e->mode = cpio_field(hdr + CPIO_MODE);
+    e->size = cpio_field(hdr + CPIO_FILESIZE);
+    e->data = cpio + data;
+    e->next = ALIGN(data + e->size, 4);
+    return true;
+}
+
+static uint64_t frontier(FATFS *fs)
+{
+    LBA_t sector = fs->database;
+    if (fs->last_clst < fs->n_fatent) {
+        sector += (fs->last_clst - 1) * fs->csize;
+    }
+    return (uint64_t)sector * SECTOR_SIZE;
+}
+
+static FRESULT mkdir_parents(char *path)
+{
+    FRESULT res = FR_OK;
+    for (char *p = strchr(path, '/'); p && (res == FR_OK || res == FR_EXIST); p = strchr(p + 1, '/')) {
+        *p = '\0';
+        res = f_mkdir(path);
+        *p = '/';
+    }
+    return (res == FR_EXIST) ? FR_OK : res;
+}
+
+/*
+ * Turn the cpio archive prefilled at the start of the disk region into a FAT volume in the same
+ * region. The archive is moved to the end of the region, the region is formatted, and the archive
+ * is unpacked front to back. Before each entry is unpacked, it is checked that what FatFs writes
+ * stays below the part of the archive not yet read. This runs inside disk_initialize(); the FatFs
+ * calls it makes re-enter disk_initialize(), which reports the disk ready.
+ */
+static bool ramfs_build(void)
+{
+    char *disk = (char *)disk_start_addr;
+    cpio_entry_t e;
+    uint64_t len = 0;
+
+    do {
+        if (!cpio_entry(disk, len, &e)) {
+            return false;
+        }
+        len = e.next;
+    } while (strcmp(e.name, "TRAILER!!!") != 0);
+
+    uint64_t cpio_off = disk_size - len;
+    char *cpio = disk + cpio_off;
+    memmove(cpio, disk, len);
+
+    static BYTE work[FF_MAX_SS];
+    MKFS_PARM opt = { .fmt = FM_FAT | FM_FAT32 | FM_SFD, .n_fat = 1, .align = 1, .au_size = CLUSTER_SIZE };
+    DWORD nfree;
+    FATFS *fs;
+    if (f_mkfs("", &opt, work, sizeof(work)) != FR_OK || f_getfree("", &nfree, &fs) != FR_OK) {
+        return false;
+    }
+
+    static FIL file;
+    for (uint64_t off = 0;; off = e.next) {
+        if (!cpio_entry(cpio, off, &e)) {
+            return false;
+        }
+        if (strcmp(e.name, "TRAILER!!!") == 0) {
+            return true;
+        }
+
+        uint64_t depth = 1;
+        for (char *p = e.name; *p; p++) {
+            depth += (*p == '/');
+        }
+        if (frontier(fs) + ROUND_UP((uint64_t)e.size, CLUSTER_SIZE) + (depth + 1) * CLUSTER_SIZE > cpio_off + e.next) {
+            return false;
+        }
+
+        FRESULT res = mkdir_parents(e.name);
+        if (res == FR_OK && S_ISDIR(e.mode)) {
+            res = f_mkdir(e.name);
+        } else if (res == FR_OK && S_ISREG(e.mode)) {
+            UINT written;
+            res = f_open(&file, e.name, FA_WRITE | FA_CREATE_ALWAYS);
+            if (res == FR_OK) {
+                res = f_write(&file, e.data, e.size, &written);
+                f_close(&file);
+            }
+        }
+        if (res != FR_OK && res != FR_EXIST) {
+            return false;
+        }
+    }
+}
+
+DSTATUS disk_initialize(BYTE pdrv)
+{
+    if (!started) {
+        started = true;
+        status = 0;
+        if (!ramfs_build()) {
+            status = STA_NOINIT;
+        }
+    }
+    return status;
+}
+
+DSTATUS disk_status(BYTE pdrv)
+{
+    return status;
+}
+
+DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff)
+{
+    if (cmd == GET_SECTOR_COUNT) {
+        *(LBA_t *)buff = disk_size / SECTOR_SIZE;
+    } else if (cmd == GET_SECTOR_SIZE) {
+        *(WORD *)buff = SECTOR_SIZE;
+    }
     return RES_OK;
 }
 
-DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff) {
-    DRESULT res;
-    if (cmd == GET_SECTOR_SIZE) {
-        WORD *size = buff;
-        *size = blk_storage_info->sector_size;
-        res = RES_OK;
-    }
-    if (cmd == CTRL_SYNC) {
-        // do nothing
-    }
-    return res;
+DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count)
+{
+    memcpy(buff, (char *)disk_start_addr + (uint64_t)sector * SECTOR_SIZE, (size_t)count * SECTOR_SIZE);
+    return RES_OK;
 }
 
-#define MOD_POWER_OF_2(a, b) ((a) & ((b) - 1))
-#define DIV_POWER_OF_2(a, b) ((a) >> (__builtin_ctz(b)))
-#define MUL_POWER_OF_2(a, b) ((a) << (__builtin_ctz(b)))
-
-DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
-}
-
-DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
+DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count)
+{
+    memmove((char *)disk_start_addr + (uint64_t)sector * SECTOR_SIZE, buff, (size_t)count * SECTOR_SIZE);
+    return RES_OK;
 }
