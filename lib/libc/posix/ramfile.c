@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+// Files go to the in-process ramfs (components/fs/ramfs) when RAM_FATFS is set; file.c otherwise.
+#include <fat_config.h>
+
+#ifdef RAM_FATFS
+
 #include "lions/fs/protocol.h"
 #include <assert.h>
 #include <bits/syscall.h>
@@ -523,3 +528,5 @@ void libc_init_file() {
     memset(fs_server_fd_map, -1, sizeof(fs_server_fd_map));
     memset(fd_path, 0, sizeof(fd_path));
 }
+
+#endif /* RAM_FATFS */

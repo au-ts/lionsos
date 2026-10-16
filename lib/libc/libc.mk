@@ -40,6 +40,9 @@ $(LIONS_LIBC)/lib/libc.a: $(MUSL)/lib/libc.a $(LIB_C_POSIX_OBJ) $(LIB_C_COMPILER
 	$(AR) rcs $@ $(LIB_C_POSIX_OBJ) $(LIB_C_COMPILER_RT_OBJ) $(LIB_FS_HELPER_OBJ)
 	$(RANLIB) $@
 
+# RAM_FATFS in the ramfs config picks file.c or ramfile.c; scoped here so other
+# components keep finding their own fat_config.h.
+$(LIBC)/posix/%.o: CFLAGS += -I$(LIONSOS)/components/fs/ramfs/config
 $(LIBC)/posix/%.o: $(LIB_C_DIR)/posix/%.c | $(LIONS_LIBC)/include $(LIBC)/posix
 	$(CC) -c $(CFLAGS) $< -o $@
 
