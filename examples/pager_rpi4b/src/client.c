@@ -17,6 +17,8 @@
 #include <minor_pf.h>
 #include <pager_instrumentation.h>
 
+#include <519.h>
+
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".pager_client_config"))) pager_client_config_t pager_config;
 
@@ -59,7 +61,15 @@ void init(void)
     }
     #endif
 
-    minor_pf();
+    char *argv_519[] = {
+        "lbm",
+        "1",
+        "reference.dat",
+        "0",
+        "1",
+        "100_100_130_cf_a.of",
+    };
+    fiveonenine(sizeof(argv_519) / sizeof(argv_519[0]), argv_519);
     #ifdef PAGER_INSTRUMENTATION
     // get the pager to send us the instrumentation data
     uint64_t samples = 0;

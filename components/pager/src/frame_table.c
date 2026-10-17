@@ -175,6 +175,22 @@ void frame_table_zero_gzp(seL4_CPtr vspace)
     }
 }
 
+
+void frame_table_zero_frame(uint32_t frame)
+{
+    seL4_Error map_err = seL4_ARM_Page_Map(frame_cptr(frame), PAGER_OWN_VSPACE_CPTR, SCRATCH_VADDR,
+                                           create_cap_rights(true), seL4_ARM_Default_VMAttributes);
+    if (map_err) {
+        sddf_printf("error occured on mapping frame %u to zero it %d\n", frame, map_err);
+        return;
+    }
+    memset((void *)SCRATCH_VADDR, 0, PAGE_SIZE);
+    seL4_Error unmap_err = seL4_ARM_Page_Unmap(frame_cptr(frame));
+    if (unmap_err) {
+        sddf_printf("error occured on unmapping zeroed frame %u %d\n", frame, unmap_err);
+    }
+}
+
 void frame_table_init(uintptr_t memory, seL4_CPtr frame_cnode,
                       seL4_CPtr zero_page_cnode, seL4_CPtr frame_copy_cnode)
 {

@@ -184,16 +184,28 @@ void unmap_range(uintptr_t start, uintptr_t end, uint32_t child) {
         pte_t *entry = &pt->entries[PAGE_INDEX(vaddr)];
         if (*entry) {
             uint32_t frame = get_frame_from_page(*entry);
-            seL4_CPtr frame_cptr_to_unmap = (*entry & DESC_NG)
+            bool is_private = (*entry & DESC_NG) != 0;
+            seL4_CPtr frame_cptr_to_unmap = is_private
                 ? frame_cptr(frame)
                 : gzp_cptr(frame);
+
             seL4_Error err = seL4_ARM_Page_Unmap(frame_cptr_to_unmap);
             if (err != seL4_NoError) {
                 sddf_dprintf("error unmapping frame %u: %d\n", frame, err);
             }
 
-            if (*entry & DESC_NG) {
-                put_frame(get_folio_from_idx(frame));
+            if (is_private) {
+                struct folio *folio = get_folio_from_idx(frame);
+                /*
+                 * Only the last reference may be cleared, and only once the
+                 * unmap above has freed the cap's mapping. A zero page copy is
+                 * never cleared: every one of them aliases the single global
+                 * zero page, and they are mapped read-only.
+                 */
+                if (err == seL4_NoError && folio && folio->refcount <= 1) {
+                    frame_table_zero_frame(frame);
+                }
+                put_frame(folio);
             } else {
                 put_gzp(frame);
             }

@@ -44,9 +44,15 @@ void allocator_init(pager_server_config_t *config)
  */
 
 static long sys_brk(uintptr_t newbrk, microkit_child child) {
-    if (newbrk <= 0x800000000 && newbrk >= (uintptr_t)morecore_bases[child]) {
+    /*
+     * The heap runs from brk_base up to the mmap arena. The old literal bound
+     * 0x800000000 was a digit short of mmap_base, so with brk_base above it the
+     * test could never pass and brk() always failed.
+     */
+    if (newbrk <= (uintptr_t)heaps[child] && newbrk >= (uintptr_t)morecore_bases[child]) {
         if (newbrk < (uintptr_t)brks[child]) {
-            unmap_range(ROUND_DOWN_TO_4K(brks[child]), ROUND_DOWN_TO_4K(newbrk), child);
+            /* Round the start up: the page holding newbrk is still live below it. */
+            unmap_range(ROUND_UP_TO_4K(newbrk), (uintptr_t)brks[child], child);
         }
         brks[child] = (void *)newbrk;
         return (long)newbrk;

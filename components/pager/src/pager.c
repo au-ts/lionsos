@@ -65,7 +65,7 @@ void init(void)
     page_table_init((uintptr_t)pager_config.memory.vaddr + FOLIO_MEMORY_SIZE,
                     pager_config.memory.size - FOLIO_MEMORY_SIZE,
                     microkit_cspace_root_slot_to_cptr(pager_config.paging_structures.slot));
-    frame_table_zero_gzp(microkit_cspace_root_slot_to_cptr(PAGER_OWN_VSPACE_SLOT));
+    frame_table_zero_gzp(PAGER_OWN_VSPACE_CPTR);
     process_init(microkit_cspace_root_slot_to_cptr(pager_config.process_cspaces.slot),
                  pager_config.num_clients);
 }

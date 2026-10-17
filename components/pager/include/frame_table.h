@@ -54,6 +54,8 @@ void frame_table_init(uintptr_t memory, seL4_CPtr frame_cnode,
  */
 void frame_table_zero_gzp(seL4_CPtr vspace);
 
+void frame_table_zero_frame(uint32_t frame);
+
 struct folio *get_folio_from_idx(uint32_t idx);
 
 /**

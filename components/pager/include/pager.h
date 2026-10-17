@@ -19,16 +19,20 @@
 // batched untyped retype.
 #define RETYPE_BATCH 256
 
-// vspace for pager in root cspace
-#define PAGER_OWN_VSPACE_SLOT 3
+/*
+ * The pager's own VSpace. The Microkit tool places every PD's VSpace cap at
+ * PD_VSPACE_CAP_IDX of its Microkit CNode, so this is a bare cptr like
+ * BASE_OUTPUT_NOTIFICATION_CAP and friends. Do not pass it through
+ * microkit_cspace_root_slot_to_cptr(): that addresses root CSpace slots, where
+ * slot 3 is the paging_structures CNode.
+ */
+#define PAGER_OWN_VSPACE_CPTR 3
 
 #ifndef INIT_FRAMES
 #define INIT_FRAMES BUFFERS_SIZE
 #endif
 #define INIT_IPS 1024
 #define INIT_GZP 20000
-
-
 
  // below written to pager.elf by microkit
 extern uint32_t vspaces[PAGER_MAX_CLIENTS];

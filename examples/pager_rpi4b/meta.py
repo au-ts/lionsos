@@ -26,6 +26,8 @@ def generate(
     sdf_file: str,
     output_dir: str,
     dtb: Optional[DeviceTree],
+    ramfs_image: Optional[str] = None,
+    ramfs_size: Optional[int] = None,
 ):
     serial_node = dtb.node(board.serial)
     assert serial_node is not None
@@ -41,11 +43,14 @@ def generate(
     pager_system.add_client(client)
     serial_system.add_client(client)
 
-    # comment below out to remove ramfs.
-    disk = MemoryRegion(sdf, "ramfs_disk", ramfs_size, prefill_path=ramfs_image)
-    sdf.add_mr(disk)
-    client.add_map(Map(disk, client.get_map_vaddr(disk), "rw", setvar_vaddr="disk_start_addr", setvar_size="disk_size"))
-    
+    # The client's FatFs unpacks this cpio image into a FAT volume in place. The
+    # makefile only passes --ramfs-image when RAM_FATFS is set in fat_config.h.
+    if ramfs_image is not None:
+        disk = MemoryRegion(sdf, "ramfs_disk", ramfs_size, prefill_path=ramfs_image)
+        sdf.add_mr(disk)
+        client.add_map(Map(disk, client.get_map_vaddr(disk), "rw", setvar_vaddr="disk_start_addr",
+                           setvar_size="disk_size"))
+
 
     pds = [
         serial_driver,
@@ -69,6 +74,8 @@ if __name__ == "__main__":
     parser.add_argument("--board", required=True, choices=SUPPORTED_BOARDS)
     parser.add_argument("--output", required=True)
     parser.add_argument("--sdf", required=True)
+    parser.add_argument("--ramfs-image")
+    parser.add_argument("--ramfs-size", type=lambda s: int(s, 0))
 
     args = parser.parse_args()
 
@@ -80,4 +87,4 @@ if __name__ == "__main__":
     with open(args.dtb, "rb") as f:
         dtb = DeviceTree(f.read())
 
-    generate(sdf, board, args.sdf, args.output, dtb)
+    generate(sdf, board, args.sdf, args.output, dtb, args.ramfs_image, args.ramfs_size)

@@ -70,6 +70,8 @@ SDDF_CUSTOM_LIBC := 1
 
 # Shared with the other pager examples.
 BENCHMARK_DIR := $(LIONSOS)/examples/benchmarks/minor_page_fault_latency
+# SPEC CPU 519.lbm_r, driven by the client out of the ramfs image below.
+BENCHMARK_519_DIR := $(LIONSOS)/examples/benchmarks/519.lbm_r/src
 # Where pager_instrumentation.h lives. The client and the benchmark read it too.
 PAGER_CONFIG_DIR := $(LIONSOS)/components/pager/config
 
@@ -105,7 +107,8 @@ CFLAGS := \
 	-I$(LIBMICROKITCO_PATH) \
 	-I$(TOP) \
 	-I$(PAGER_CONFIG_DIR) \
-	-I$(BENCHMARK_DIR)
+	-I$(BENCHMARK_DIR) \
+	-I$(BENCHMARK_519_DIR)
 include $(LIONSOS)/lib/libc/libc.mk
 include $(SDDF)/tools/make/board/common.mk
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(BENCHMARK_DIR)
@@ -138,7 +141,7 @@ RAMFS_IMAGE := ramfs.cpio
 META_RAMFS_ARGS := --ramfs-image $(RAMFS_IMAGE) --ramfs-size $(RAMFS_SIZE)
 endif
 
-${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a minor_pf.a
+${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a minor_pf.a 519.a
 
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
@@ -149,7 +152,7 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a minor_pf.a
 client.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
 	$(CC) -c $(CFLAGS) -I. -I$(RAMFS_CONFIG_DIR) $< -o $@
 
-client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a minor_pf.a $(RAMFS_LIB)
+client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a minor_pf.a 519.a $(RAMFS_LIB)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 ifeq ($(RAM_FATFS),1)
@@ -168,10 +171,13 @@ endif
 # be recompiled when that header changes.
 -include client.d
 
-.PHONY: minor_pf.a
-# The benchmark includes libc headers, which only exist once musl is installed.
+.PHONY: minor_pf.a 519.a
+# The benchmarks include libc headers, which only exist once musl is installed.
 minor_pf.a: | $(LIONS_LIBC)/include
 	$(MAKE) -C $(BENCHMARK_DIR) CPU=$(CPU) LIONS_LIBC=$(LIONS_LIBC)
+
+519.a: | $(LIONS_LIBC)/include
+	$(MAKE) -C $(BENCHMARK_519_DIR) CPU=$(CPU) LIONS_LIBC=$(LIONS_LIBC)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(RAMFS_CONFIG_DIR)/fat_config.h $(RAMFS_IMAGE)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH \

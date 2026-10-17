@@ -128,7 +128,7 @@ int process_fork(uint32_t parent, uint32_t child)
 	vspaces[child] = processes[child].vspace;
 	clone_pages(parent, child);
 
-
+	/* WIP
 	// assign to asid pool
 	seL4_ARM_ASIDPool_Assign( seL4_CapInitThreadASIDPool, vspaces[child]);
 	// create IPC buffer
@@ -151,6 +151,7 @@ int process_fork(uint32_t parent, uint32_t child)
 	// write tcb registers(this starts it)
 	// seL4_TCB_WriteRegisterss
 	// TODO: do stuff like ipc mapping etc.
+	*/
 	return 0;
 }
 
