@@ -68,10 +68,13 @@ TOP := ${LIONSOS}/examples/pager_rpi4b
 CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
 
-# Shared with the other pager examples.
-BENCHMARK_DIR := $(LIONSOS)/examples/benchmarks/minor_page_fault_latency
+BENCHMARKS_DIR := $(LIONSOS)/dep/benchmarking/lionsos
+ifeq ($(wildcard $(BENCHMARKS_DIR)/519.lbm_r/src/Makefile),)
+$(error Could not find the benchmarks in $(BENCHMARKS_DIR) -- run `make submodules`)
+endif
+BENCHMARK_DIR := $(BENCHMARKS_DIR)/minor_page_fault_latency
 # SPEC CPU 519.lbm_r, driven by the client out of the ramfs image below.
-BENCHMARK_519_DIR := $(LIONSOS)/examples/benchmarks/519.lbm_r/src
+BENCHMARK_519_DIR := $(BENCHMARKS_DIR)/519.lbm_r/src
 # Where pager_instrumentation.h lives. The client and the benchmark read it too.
 PAGER_CONFIG_DIR := $(LIONSOS)/components/pager/config
 
@@ -85,7 +88,7 @@ PAGER_INIT_FRAMES := 40000
 RAMFS_CONFIG_DIR := $(LIONSOS)/components/fs/ramfs/config
 HASH := \#
 RAM_FATFS := $(shell grep -qE '^[[:space:]]*$(HASH)[[:space:]]*define[[:space:]]+RAM_FATFS([[:space:]]|$$)' $(RAMFS_CONFIG_DIR)/fat_config.h && echo 1)
-RAMFS_ROOT ?= $(LIONSOS)/examples/benchmarks/519.lbm_r/data/test/input
+RAMFS_ROOT ?= $(BENCHMARKS_DIR)/519.lbm_r/data/test/input
 RAMFS_SIZE ?= 0x4000000
 
 CFLAGS := \

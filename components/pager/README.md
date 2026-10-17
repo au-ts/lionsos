@@ -85,7 +85,7 @@ Each module owns its own state and exposes it through the matching header in `in
 | `src/bitmap.c` | The block allocator `mem.c` hands out the client's mmap arena with. |
 
 The example keeps only what is specific to it: `src/client.c`, which selects a benchmark
-from `benchmarks/`, and `meta.py`.
+from the `dep/benchmarking` submodule (`dep/benchmarking/lionsos/`), and `meta.py`.
 
 ### 3.2 System description (metaprogram)
 The pager is created like any other LionsOS system:

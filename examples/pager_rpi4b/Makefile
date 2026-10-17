@@ -34,5 +34,6 @@ submodules:
 	git submodule update --init $(LIONSOS)/dep/musllibc
 	git submodule update --init $(LIONSOS)/dep/sddf
 	git submodule update --init $(LIONSOS)/dep/libmicrokitco
+	git submodule update --init $(LIONSOS)/dep/benchmarking
 
 FORCE:
