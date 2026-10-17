@@ -196,14 +196,10 @@ void unmap_range(uintptr_t start, uintptr_t end, uint32_t child) {
 
             if (is_private) {
                 struct folio *folio = get_folio_from_idx(frame);
-                /*
-                 * Only the last reference may be cleared, and only once the
-                 * unmap above has freed the cap's mapping. A zero page copy is
-                 * never cleared: every one of them aliases the single global
-                 * zero page, and they are mapped read-only.
-                 */
                 if (err == seL4_NoError && folio && folio->refcount <= 1) {
-                    frame_table_zero_frame(frame);
+
+                    // TODO: need to figure out a way to zero out frames more efficiently.
+                    // frame_table_zero_frame(frame);
                 }
                 put_frame(folio);
             } else {
