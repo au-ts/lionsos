@@ -26,6 +26,8 @@ serial_queue_t *tx_queue;
 
 serial_queue_handle_t serial_tx_queue_handle;
 
+seL4_Word stored_ipc_message_buffer[64];
+
 void rep_main()
 {
     for (int inst_num = 0; inst_num < _rr_storage_handle.metadata.inst_num; inst_num++) {
@@ -50,7 +52,7 @@ void rep_main()
             NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
             // setup for this cycle count has been done, so we will setup everything else and yield.
             // wait for preemption.
-            msg = seL4_Recv(INPUT_CAP, &badge, REPLY_CAP);
+            msg = seL4_Recv(INPUT_CAP, &badge, BASE_REPLY_CAPS + rr_currently_sched->id);
             NO_ERR(seL4_TCB_Suspend(BLOCK_CHECKER_ID + BASE_TCB_CAP));
             INFO("Recv'd message\n");
 
@@ -119,13 +121,41 @@ void rep_main()
             assert(!"Unreachable");
         } break;
         case rr_storage_unit_CALL: {
-            assert(!"TODO!");
+            // We do not expect the messages being sent are the same.
+            // "Intercept" the value being sent and replace it with the one being recorded.
+            // this is so that hopefully execution remains as expected.
+
+            // Roundabout way.
+            // TODO: refactor this.
+            seL4_Word sourceId = rr_channel_to_target_child_id[inst.args.call_args.target_chan];
+            seL4_Word targetId = rr_channel_to_target_child_id[inst.args.call_args.source_chan];
+            assert(sourceId == rr_last_sched_child->id);
+
+            // check diversion
+            assert(rr_ipc_get_type(msg, badge) == rr_IPCType_Call);
+            assert((badge & CHANNEL_MASK) == inst.args.msg_args.source_chan);
+            assert(rrer_source_ch_to_target_ch(badge & CHANNEL_MASK) == inst.args.msg_args.target_chan);
+            assert(msg.words[0] == inst.args.msg_args.msginfo.words[0]);
+
+            // get the data and store it in the msg buffer.
+            seL4_Word msglen = seL4_MessageInfo_get_length(inst.args.ntfn_args.msginfo);
+            rr_storage_read(inst.args.msg_args.data_offset, (uint8_t*)stored_ipc_message_buffer, msglen * sizeof(seL4_Word));
+            seL4_MessageInfo_t msginfo = seL4_MessageInfo_new(seL4_MessageInfo_get_label(inst.args.msg_args.msginfo), 0, 0, msglen);
+            for (int i = 0; i < msglen; i++) {
+                seL4_SetMR(i, stored_ipc_message_buffer[i]);
+            }
+
+            // transfer the message into the sender message queue.
+            rr_ipc_store_ipc_msg(targetId,
+                                 msginfo, inst.args.call_args.badge,
+                                 inst.args.call_args.source_chan);
         } break;
         case rr_storage_unit_NTFN: {
             // check if we have diverged
             assert(rr_ipc_get_type(msg, badge) == rr_IPCType_Ntfn);
             assert(rr_badge_to_channel_id(badge) == inst.args.ntfn_args.source_chan);
             assert(rrer_source_ch_to_target_ch(rr_badge_to_channel_id(badge)) == inst.args.ntfn_args.target_chan);
+            // this is msginfo, not the actual data.
             assert(msg.words[0] == inst.args.ntfn_args.msginfo.words[0]);
             // Send the corresponding message to the child.
             rr_ipc_store_ipc_msg(rr_channel_to_target_child_id[inst.args.ntfn_args.source_chan],

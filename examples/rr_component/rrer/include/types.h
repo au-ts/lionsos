@@ -112,7 +112,7 @@ static seL4_Word rrer_ipc_handler_get_mr(rrer_ipc_handler_t *handler, rrer_ipc_t
 static void rrer_ipc_handler_free(rrer_ipc_handler_t *handler, rrer_ipc_t *ipc)
 {
     seL4_Word len = seL4_MessageInfo_get_length(ipc->msginfo);
-    // assert that we are dequeuing more than what we have.
+    // assert that we are dequeuing less than what we have.
     assert(len <= rrer_ipc_handler_len(handler));
 
     handler->tail += len;
