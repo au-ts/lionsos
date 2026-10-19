@@ -40,40 +40,51 @@ void rep_main()
     seL4_MessageInfo_t msg = { 0 };
     seL4_Word badge = 0;
     seL4_Word true_cycle_count = 0;
+    bool from_reply = false;
+    rr_Child_t* to_schedule = NULL;
     // idk how I should do this.
     for (int inst_num = 0; inst_num < _rr_storage_handle.metadata.inst_num; inst_num++) {
         rr_storage_unit_t inst = rr_storage_get_next_inst(&_rr_storage_handle);
         if (last_cycle_count != inst.cycle_count) {
-
-            // Now we reschedule the child.
-            rr_sched_schedule_child(rr_currently_sched);
-            rr_ipc_sender_setup(rr_currently_sched->id);
-            rr_sched_setup_block_checker();
-            NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
+            // sus, maybe should switch to FSM model.
+            if (!from_reply) {
+                // Now we reschedule the child.
+                rr_sched_schedule_child(to_schedule);
+                to_schedule = NULL;
+                rr_ipc_sender_setup(rr_currently_sched->id);
+                rr_sched_setup_block_checker();
+                // The TCB may or may not be suspended.
+                NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
+            }
+            from_reply = false;
             // setup for this cycle count has been done, so we will setup everything else and yield.
             // wait for preemption.
             msg = seL4_Recv(INPUT_CAP, &badge, BASE_REPLY_CAPS + rr_currently_sched->id);
             NO_ERR(seL4_TCB_Suspend(BLOCK_CHECKER_ID + BASE_TCB_CAP));
             INFO("Recv'd message\n");
 
-            // // trigger the block checker
-            // {
-            //     INFO("Begin flushing blocker\n");
-            //     seL4_Word blocker_badge = 0;
-            //     seL4_TCB_SetPriority(BASE_TCB_CAP + BLOCK_CHECKER_ID, SELF_TCB(), SELF_PRIO);
-            //     seL4_Recv(INPUT_CAP, &blocker_badge, REPLY_CAP);
-            //     assert(rr_badge_to_channel_id(blocker_badge) == blocker_ch);
-            //     seL4_TCB_SetPriority(BASE_TCB_CAP + BLOCK_CHECKER_ID, SELF_TCB(), BLOCK_PRIO);
-            //     INFO("End flushing blocker\n");
-            // }
+            seL4_ARM_VPMU_VPMUReadCycleCounter_t vpmu_res = seL4_ARM_VPMU_VPMUReadCycleCounter(VPMU_CAP);
+            NO_ERR(vpmu_res.error);
+            true_cycle_count = vpmu_res.cycle_counter_value;
+            if (true_cycle_count != inst.cycle_count) {
+                WARN("Cycle count divergence! true: %lx, expected %lx\n", true_cycle_count, inst.cycle_count);
+                assert(!"Cycle count divergence!");
+            }
 
             // We must unschedule the thread to what the corresponding state should be after this type of message.
             // These will be overwritten later, it's just to ensure that the correct shutdown of a scheduled
             // thread occurs.
             switch (rr_ipc_get_type(msg, badge)) {
             case rr_IPCType_BlockChecker: {
-                // schedulable -> if it were truly blockedByRecv we would set it later.
-                rr_sched_unschedule_current(rr_ChildState_Schedulable);
+                // We must determine if it's blockedByRecv or Schedulable.
+                // in the case it is schedulable we must suspend.
+                // This is so we can read the block driver.
+                if (true_cycle_count - last_cycle_count < 3) {
+                    rr_sched_unschedule_current(rr_ChildState_BlockedOnRecv);
+                }
+                else {
+                    rr_sched_unschedule_current(rr_ChildState_Schedulable);
+                }
             } break;
             case rr_IPCType_Ntfn: {
                 // schedulable -> Ntfns are non-blocking but act as preemption points
@@ -92,14 +103,9 @@ void rep_main()
                 rr_sched_unschedule_current(rr_ChildState_Suspended);
             } break;
             case rr_IPCType_SenderReply: {
-                assert(!"Todo!");
+                // schedulable.
+                rr_sched_unschedule_current(rr_ChildState_Schedulable);
             } break;
-            }
-            seL4_ARM_VPMU_VPMUReadCycleCounter_t vpmu_res = seL4_ARM_VPMU_VPMUReadCycleCounter(VPMU_CAP);
-            NO_ERR(vpmu_res.error);
-            true_cycle_count = vpmu_res.cycle_counter_value;
-            if (true_cycle_count != inst.cycle_count) {
-                WARN("Cycle count divergence! true: %lx, expected %lx\n", true_cycle_count, inst.cycle_count);
             }
         }
 
@@ -115,7 +121,30 @@ void rep_main()
         // What about blockchecker preemptions? We need this for blockedonrecv
         switch (inst.unit_type) {
         case rr_storage_unit_REPLY: {
-            assert(!"TODO!");
+            // check diversion
+            assert(rr_ipc_get_type(msg, badge) == rr_IPCType_SenderReply);
+            assert(msg.words[0] == inst.args.reply_args.msginfo.words[0]);
+
+            // get the data and store it in the msg buffer.
+            seL4_Word msglen = seL4_MessageInfo_get_length(inst.args.reply_args.msginfo);
+            rr_storage_read(inst.args.reply_args.data_offset, (uint8_t*)stored_ipc_message_buffer, msglen * sizeof(seL4_Word));
+            seL4_MessageInfo_t msginfo = seL4_MessageInfo_new(seL4_MessageInfo_get_label(inst.args.reply_args.msginfo), 0, 0, msglen);
+            for (int i = 0; i < msglen; i++) {
+                seL4_SetMR(i, stored_ipc_message_buffer[i]);
+            }
+
+            // This will transfer control early, so we need to do all the pre-ctxt switch bullshit beforehand.
+            last_cycle_count = inst.cycle_count;
+            from_reply = true;
+
+            rr_sched_schedule_child(&rr_children_arr[inst.args.reply_args.target_child]);
+            assert(inst.args.reply_args.target_child == rr_currently_sched->id);
+            rr_ipc_sender_setup(rr_currently_sched->id);
+            rr_sched_setup_block_checker();
+            // sus?
+            // NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
+            seL4_Send(BASE_REPLY_CAPS + inst.args.reply_args.target_child, msginfo);
+            continue;
         } break;
         case rr_storage_unit_MSG: {
             assert(!"Unreachable");
@@ -138,7 +167,7 @@ void rep_main()
             assert(msg.words[0] == inst.args.msg_args.msginfo.words[0]);
 
             // get the data and store it in the msg buffer.
-            seL4_Word msglen = seL4_MessageInfo_get_length(inst.args.ntfn_args.msginfo);
+            seL4_Word msglen = seL4_MessageInfo_get_length(inst.args.msg_args.msginfo);
             rr_storage_read(inst.args.msg_args.data_offset, (uint8_t*)stored_ipc_message_buffer, msglen * sizeof(seL4_Word));
             seL4_MessageInfo_t msginfo = seL4_MessageInfo_new(seL4_MessageInfo_get_label(inst.args.msg_args.msginfo), 0, 0, msglen);
             for (int i = 0; i < msglen; i++) {
@@ -163,9 +192,9 @@ void rep_main()
                                  inst.args.ntfn_args.source_chan);
         } break;
         case rr_storage_unit_SCHED: {
-            // if changing the state to scheduled we update the rr_currently_sched accordingly
+            // if changing the state to scheduled we update the to_schedule accordingly
             if (inst.args.sched_args.state == rr_ChildState_Scheduled) {
-                rr_currently_sched = &rr_children_arr[inst.args.sched_args.child];
+                to_schedule = &rr_children_arr[inst.args.sched_args.child];
             }
             rr_children_arr[inst.args.sched_args.child].sched_state = inst.args.sched_args.state;
         } break;
@@ -176,6 +205,7 @@ void rep_main()
         }
         last_cycle_count = inst.cycle_count;
     }
+    INFO("!!! Finished Replaying !!!\n");
 }
 
 void init()

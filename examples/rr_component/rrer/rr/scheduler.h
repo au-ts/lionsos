@@ -63,13 +63,12 @@ static inline rr_Child_t* rr_sched_choose_child(rr_Child_t **cur) {
 }
 
 static inline rr_Child_t* rr_sched_schedule_child(rr_Child_t* child) {
+    // Assert that we have nothing scheduled.
+    // Do this by rr_sched_unschedule_current.
+    assert(rr_currently_sched == NULL);
+
     // sets up the correct priority of the child.
     rr_currently_sched = child;
-
-    // if the child was schedulable, then it was suspended, so unsuspend it
-    // this is moved to outside because choosing happened before writing the scheduler event, 
-    // if (rr_currently_sched->sched_state == rr_ChildState_Schedulable)
-    //     NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
 
     // set the correct state.
     rr_currently_sched->sched_state = rr_ChildState_Scheduled;

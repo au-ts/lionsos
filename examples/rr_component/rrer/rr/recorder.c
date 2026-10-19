@@ -4,6 +4,7 @@
 #include "microkit.h"
 #include "scheduler.h"
 #include "ipc.h"
+#include "sel4/functions.h"
 #include "sel4/shared_types_gen.h"
 #include "sel4/simple_types.h"
 #include "types.h"
@@ -13,10 +14,8 @@
 #include <sddf/serial/config.h>
 #include <sddf/serial/queue.h>
 
-
 static inline void rec_main();
 static inline void rec_perform_schedule(seL4_Word cycle_count);
-
 
 static inline void rec_perform_schedule(seL4_Word cycle_count)
 {
@@ -32,9 +31,7 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
             rr_Child_t *chosen = rr_sched_choose_child(child_arr_ptr);
             LOG("Chosen id: %lu\n", chosen->id);
 
-
-            rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, chosen->id,
-                                            chosen->sched_state);
+            rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, chosen->id, chosen->sched_state);
             // Setup sender thread
             rr_ipc_sender_setup(chosen->id);
             // Setup block checker thread
@@ -88,11 +85,10 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
             assert(source_child < rr_children_num);
             LOG("Source child: %lu\n", source_child);
 
-			rr_Child_t* source_child_state = &rr_children_arr[source_child];
+            rr_Child_t *source_child_state = &rr_children_arr[source_child];
 
             // mark the source as no longer blocked.
-            if (source_child_state->sched_state == rr_ChildState_BlockedOnSend)
-            {
+            if (source_child_state->sched_state == rr_ChildState_BlockedOnSend) {
                 source_child_state->sched_state = rr_ChildState_Schedulable;
             }
             // mark a blocked on call as now blocked by reply.
@@ -104,17 +100,15 @@ static inline void rec_perform_schedule(seL4_Word cycle_count)
             }
             // the only other case is for notification, in which it's schedulable.
             else if (source_child_state->sched_state != rr_ChildState_Schedulable) {
-                ERR("Unexpected source child state %s\n",
-                    rr_child_state_to_string(source_child_state->sched_state));
+                ERR("Unexpected source child state %s\n", rr_child_state_to_string(source_child_state->sched_state));
                 assert(!"Unreachable");
             };
             // Store the changes made to the sender.
             rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, source_child_state->id,
-                                            source_child_state->sched_state);
+                                             source_child_state->sched_state);
 
             // store the event
-            rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, chosen->id,
-                                            chosen->sched_state);
+            rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, chosen->id, chosen->sched_state);
 
             // setup sender thread
             rr_ipc_sender_setup(chosen->id);
@@ -172,6 +166,11 @@ static inline void rec_main()
         seL4_Word cycle_count = vpmu_res.cycle_counter_value;
         LOG("msg type: %s\n", rr_ipc_type_to_string(type));
         switch (type) {
+        // Note on replying:
+        // - This is special because it is impossible to reply without yielding to the replyer's target.
+        //   Therefore we must ensure that the reply instruction is *last* for a specific cycle count.
+        // This is therefore a special instruction. Other instructions can have their ipc's
+        // intercepted and sent at a later time.
         case rr_IPCType_SenderReply: {
             // Determine the child to reply to.
             // The badge does not contain any useful information.
@@ -179,25 +178,58 @@ static inline void rec_main()
             // We store the recv_source_channel for this reason.
             assert(rr_recv_source_channel != UNSET_VALUE);
 
-            seL4_Word replyee_child_id =
-                rr_source_ch_to_source_child(rr_recv_source_channel);
+            seL4_Word replyee_child_id = rr_source_ch_to_source_child(rr_recv_source_channel);
             assert(replyee_child_id < rr_children_num);
 
-
-            // We can send the reply as it won't block.
-            seL4_Send(BASE_REPLY_CAPS + replyee_child_id, msg);
-
             // store the message
-            rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, rr_currently_sched->id, badge, msg);
+            // this clobbers so we had to copy the message.
+            seL4_Word ipcbuffercopy[32] = { 0 };
+            for (int i = 0; i < seL4_MessageInfo_get_length(msg); i++) {
+                ipcbuffercopy[i] = seL4_GetMR(i);
+            }
 
-            // and then we should unschedule the current.
+            // unschedule current, as the manual states that we must
+            // now schedule the caller.
             rec_unschedule_current(cycle_count, rr_ChildState_Schedulable);
 
-            // and also set the replied to pd as schedulable
-            rr_children_arr[replyee_child_id].sched_state = rr_ChildState_Schedulable;
-            rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, replyee_child_id, rr_ChildState_Schedulable);
+            // when the caller receives the message we must schedule it.
+            // (manual says "In particular, it starts running again")
 
+            rr_Child_t *caller_child = NULL;
+            for (rr_Child_t **child_arr_ptr = rr_sched_iterate(NULL); child_arr_ptr != NULL;
+                 child_arr_ptr = rr_sched_iterate(child_arr_ptr)) {
+                if (*child_arr_ptr == &rr_children_arr[replyee_child_id]) {
+                    assert(child_arr_ptr[0]->sched_state == rr_ChildState_BlockedOnReply);
+                    caller_child = rr_sched_choose_child(child_arr_ptr);
+                    rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, caller_child->id,
+                                                     caller_child->sched_state);
+                    rr_ipc_sender_setup(caller_child->id);
+                }
+            }
+            assert(caller_child != NULL);
+
+            // do what's wanted for the end.
+            last_cycle_count = cycle_count;
+            // now restore the message registers and perform the send.
+            for (int i = 0; i < seL4_MessageInfo_get_length(msg); i++) {
+                seL4_SetMR(i, ipcbuffercopy[i]);
+            }
+            // Store the message as the last instruction for this cycle count set.
+            // Then restore the clobbered registers again ;_;
+            rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, rr_last_sched_child->id, badge, msg);
+            for (int i = 0; i < seL4_MessageInfo_get_length(msg); i++) {
+                seL4_SetMR(i, ipcbuffercopy[i]);
+            }
+            // block checker after storing because the block checker interferes with the
+            // storer.
+            rr_sched_setup_block_checker();
+            // rr_storage_store_ipc relies on this to determine the target, so we have to unset it late.
             rr_recv_source_channel = UNSET_VALUE;
+
+            // and finally we can send.
+            seL4_Send(BASE_REPLY_CAPS + rr_currently_sched->id, msg);
+            // and the now we can recv, as the block checker will revive us.
+            continue;
         } break;
         case rr_IPCType_Fault: {
             WARN("TODO: Handle faults, for now just suspends the thread.\n");
@@ -222,7 +254,8 @@ static inline void rec_main()
                     WARN("Unexecuted reply object for child %lu! Suspending child %lu\n", child_id, child_id);
 
                     rr_children_arr[child_id].sched_state = rr_ChildState_Suspended;
-                    rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, child_id, rr_ChildState_Suspended);
+                    rr_storage_store_scheduler_event(&_rr_storage_handle, cycle_count, child_id,
+                                                     rr_ChildState_Suspended);
                 }
                 rec_unschedule_current(cycle_count, rr_ChildState_BlockedOnRecv);
             }
@@ -240,7 +273,7 @@ static inline void rec_main()
             // Messages can only come from calls (in microkit)
             // So we assume that we will receive a reply to this message eventually.
 
-			// NOTE: there is no issue with not scheduling the correct thread.
+            // NOTE: there is no issue with not scheduling the correct thread.
 
             // check if we did a nested ppcall, and stop (unsupported).
             if (rr_last_sched_child != NULL && rr_last_sched_child->sched_state == rr_ChildState_BlockedOnReply) {
@@ -285,6 +318,9 @@ static inline void rec_main()
         }
         // perform a reschedule.
         rec_perform_schedule(cycle_count);
+        // If a thread is schedulable then it was suspended.
+        // this prevents it from responding instead of the block-related storage.
+        // We just do this generically for all for simplicity.
         NO_ERR(seL4_TCB_Resume(rr_currently_sched->id + BASE_TCB_CAP));
         last_cycle_count = cycle_count;
     }
@@ -300,7 +336,7 @@ serial_queue_handle_t serial_tx_queue_handle;
 void init()
 {
     serial_queue_init(&serial_tx_queue_handle, serial_config.tx.queue.vaddr, serial_config.tx.data.size,
-                  serial_config.tx.data.vaddr);
+                      serial_config.tx.data.vaddr);
     // serial_putchar_init(serial_config.tx.id, &serial_tx_queue_handle);
     LOG("INIT\n");
 
