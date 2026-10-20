@@ -17,8 +17,12 @@
 #define CPIO_FILESIZE 54
 #define CPIO_NAMESIZE 94
 
-static DSTATUS status = STA_NOINIT;
-static bool started;
+DSTATUS status = STA_NOINIT;
+bool started;
+
+// These below should be filled in with meta file.
+char *disk;
+uint64_t disk_size;
 
 /**
  * TODO:
@@ -32,7 +36,7 @@ typedef struct {
     uint64_t next;
 } cpio_entry_t;
 
-static uint32_t cpio_field(const char *p)
+uint32_t cpio_field(const char *p)
 {
     uint32_t val = 0;
     for (int i = 0; i < 8; i++) {
@@ -41,7 +45,7 @@ static uint32_t cpio_field(const char *p)
     return val;
 }
 
-static bool cpio_entry(char *cpio, uint64_t off, cpio_entry_t *e)
+bool cpio_entry(char *cpio, uint64_t off, cpio_entry_t *e)
 {
     char *hdr = cpio + off;
     if (memcmp(hdr, "070701", 6) != 0) {
@@ -56,7 +60,7 @@ static bool cpio_entry(char *cpio, uint64_t off, cpio_entry_t *e)
     return true;
 }
 
-static FRESULT mkdir_parents(char *path)
+FRESULT mkdir_parents(char *path)
 {
     FRESULT res = FR_OK;
     for (char *p = strchr(path, '/'); p && (res == FR_OK || res == FR_EXIST); p = strchr(p + 1, '/')) {
@@ -72,7 +76,7 @@ static FRESULT mkdir_parents(char *path)
  * WARNING: memory region should be sufficiently big
  * enter in start of prefilled memory region and size of memory region
  */
-static bool ramfs_build(char *disk, uint64_t disk_size)
+bool ramfs_build()
 {
     // move cpio to the back of memory region.
     cpio_entry_t e;
@@ -149,12 +153,12 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff)
 
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count)
 {
-    memcpy(buff, (char *)disk_start_addr + (uint64_t)sector * SECTOR_SIZE, (size_t)count * SECTOR_SIZE);
+    memcpy(buff, disk + (uint64_t)sector * SECTOR_SIZE, (size_t)count * SECTOR_SIZE);
     return RES_OK;
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count)
 {
-    memmove((char *)disk_start_addr + (uint64_t)sector * SECTOR_SIZE, buff, (size_t)count * SECTOR_SIZE);
+    memmove(disk + (uint64_t)sector * SECTOR_SIZE, buff, (size_t)count * SECTOR_SIZE);
     return RES_OK;
 }
