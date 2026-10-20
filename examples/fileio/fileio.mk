@@ -19,60 +19,26 @@ SUPPORTED_BOARDS:= \
 
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
-SDDF := $(LIONSOS)/dep/sddf
-LWIP := $(SDDF)/network/ipstacks/lwip/src
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 SYSTEM_FILE := fileio.system
 IMAGE_FILE := fileio.img
 REPORT_FILE := report.txt
 
+METAPROGRAM := $(FILEIO_DIR)/meta.py
+
 all: ${IMAGE_FILE}
 
-include ${SDDF}/tools/make/board/common.mk
+# FIXME: We should rework makefiles so that we don't need to 'inject' this
+# everywhere, instead sDDF should depend on this intrinsically.
+LIBS := libsddf_util_debug.a
 
-METAPROGRAM := $(FILEIO_DIR)/meta.py
-FAT := $(LIONSOS)/components/fs/fat
-
-CFLAGS += \
-	-I$(LIONSOS)/include \
-	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit \
-	-I$(LIBMICROKITCO_PATH) \
-	-I$(LWIP)/include
-
-include $(LIONSOS)/lib/libc/libc.mk
-
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
-
-BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
-BLK_COMPONENTS := $(SDDF)/blk/components
-
-SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include ${SDDF}/util/util.mk
-include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
-include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk
-include ${SDDF}/serial/components/serial_components.mk
-include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
-include ${SDDF}/libco/libco.mk
-include ${BLK_DRIVER}/blk_driver.mk
-include ${BLK_COMPONENTS}/blk_components.mk
-
-MICROPYTHON_LIBMATH := ${LIBMATH}
+SDDF := $(LIONSOS)/dep/sddf
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
-include $(LIONSOS)/components/micropython/micropython.mk
+include ${LIONSOS}/components/lionsos.mk
 
 manifest.py: fs_test.py bench.py
 
 %.py: ${FILEIO_DIR}/%.py
 	cp $< $@
-
-FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
-FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include $(LIONSOS)/components/fs/fat/fat.mk
-
-LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
