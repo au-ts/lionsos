@@ -43,13 +43,10 @@ RRER_ELF_FILES := $(RRER_O_FILES:.o=.elf) $(RR_SERIAL_O_FILES:.o=.elf) $(RR_BLK_
 # not sure about proper make conventions
 IMAGES += ${RRER_ELF_FILES}
 
-.PHONY:: deps rr_main
-deps: $(RR_BLK_O_FILES:.o=.elf)
-
-rr_block_checker.o: deps
+rr_block_checker.o: | ${LIONS_LIBC}/include
 	${CC} ${RRER_CFLAGS} -c ${RRER_BLOCK_CHECKER_DIR}/main.c -o $@
 
-rr_sender.o: deps
+rr_sender.o: | ${LIONS_LIBC}/include
 	${CC} ${RRER_CFLAGS} -c ${RRER_SENDER_DIR}/main.c -o $@
 
 rr_sender.elf: rr_sender.o | libsddf_util_debug.a
@@ -58,13 +55,13 @@ rr_sender.elf: rr_sender.o | libsddf_util_debug.a
 rr_block_checker.elf: rr_block_checker.o | libsddf_util_debug.a
 	${LD} $< ${RRER_LIBS} ${RRER_LDFLAGS} -o $@ libsddf_util_debug.a
 
-rr_recorder.o: deps
+rr_recorder.o: | ${LIONS_LIBC}/include
 	${CC} ${RRER_CFLAGS} -c ${RRER_RR_DIR}/recorder.c -o $@
 
 rr_recorder.elf: rr_recorder.o | libsddf_util.a libsddf_util_debug.a
 	${LD} $< ${RRER_LIBS} ${RRER_LDFLAGS} -o $@ libsddf_util_debug.a
 
-rr_replayer.o: deps
+rr_replayer.o: | ${LIONS_LIBC}/include
 	${CC} ${RRER_CFLAGS} -c ${RRER_RR_DIR}/replayer.c -o $@
 
 rr_replayer.elf: rr_replayer.o | libsddf_util.a libsddf_util_debug.a

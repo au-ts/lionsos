@@ -6,7 +6,6 @@
 #include <string.h>
 #include "../base.h"
 #include "os/sddf.h"
-#include "sel4/shared_types_gen.h"
 #include "sel4/syscalls_mcs.h"
 #include "base.h"
 
@@ -24,7 +23,6 @@ static inline bool _rr_block_check_resp(uint64_t num_blocks, uint64_t expected_i
 // initialise the block storage and check that reading and writing succeeds.
 static inline void rr_init_storage_backend()
 {
-    // TODO!!!!! Make it write back the original values so that this can be run both on record and replay.
     STORAGE_LOG("Initialising block storage\n");
     assert(blk_config_check_magic(&blk_config));
     blk_queue_init(&_rr_block_queue_handle, blk_config.virt.req_queue.vaddr, blk_config.virt.resp_queue.vaddr,

@@ -41,6 +41,7 @@ def main():
     with makefile_path.open(mode="w") as makefile:
         makefile.write(
         f"""\
+export
 LIONSOS ?= {str(LIONSOS)}
 RR_COMPONENT_DIR ?= {str(RR_COMPONENT_PATH)}
 BUILD_DIR := {str(BUILD_DIR)}
@@ -48,6 +49,7 @@ MICROKIT_BOARD ?= {MICROKIT_BOARD}
 MICROKIT_SDK ?= {str(MICROKIT_SDK)}
 MICROKIT_CONFIG ?= {MICROKIT_CONFIG}
 TOP_DIR := {str(test_target_dir)}
+SDDF ?= $(LIONSOS)/dep/sddf
 CFLAGS += -Werror -DARCH_aarch64
 {rr_component_mk_path.read_text(encoding="utf-8")}\
         """)
