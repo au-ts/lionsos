@@ -64,6 +64,6 @@ micropython.elf: FORCE mpy-cross \
 		MICROPYTHON_LIBC=$(LIONS_LIBC)
 
 mpy-cross: FORCE $(LIONSOS)/dep/micropython/mpy-cross
-	make -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
+	$(MAKE) -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 FORCE: ;
