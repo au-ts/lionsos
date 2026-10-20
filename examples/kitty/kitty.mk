@@ -126,9 +126,6 @@ package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
 vmm.elf: ${VMM_OBJS} libvmm.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-# Build with two threads in parallel
-nproc=2
-
 MICROPYTHON_LIBMATH := ${LIBMATH}
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
 MICROPYTHON_ENABLE_FRAMEBUFFER := 1
