@@ -30,9 +30,6 @@ TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SDDF := $(LIONSOS)/dep/sddf
-LWIP := $(SDDF)/network/ipstacks/lwip/src
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
-WAMR := $(LIONSOS)/components/wamr
 
 SYSTEM_FILE := wasm_test.system
 IMAGE_FILE := wasm_test.img
@@ -40,7 +37,13 @@ REPORT_FILE := report.txt
 
 all: ${IMAGE_FILE}
 
-include ${SDDF}/tools/make/board/common.mk
+WASM_TARGETS := test_core test_file test_server test_client
+
+# FIXME: We should rework makefiles so that we don't need to 'inject' this
+# everywhere, instead sDDF should depend on this intrinsically.
+LIBS := libsddf_util_debug.a
+
+include ${LIONSOS}/components/lionsos.mk
 
 METAPROGRAM := $(WASM_TEST_DIR)/meta.py
 
@@ -48,42 +51,8 @@ FAT := $(LIONSOS)/components/fs/fat
 
 CFLAGS += \
 	-Wno-bitwise-op-parentheses \
-	-Wno-shift-op-parentheses \
-	-I$(LIONSOS)/include \
-	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit \
-	-I$(LIBMICROKITCO_PATH) \
-	-I$(LWIP)/include
+	-Wno-shift-op-parentheses
 
-include $(LIONSOS)/lib/libc/libc.mk
-
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
-
-BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
-BLK_COMPONENTS := $(SDDF)/blk/components
-
-WASM_TARGETS := test_core test_file test_server test_client
-include $(WAMR)/wamr.mk
-
-SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
-FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
-FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
-
-SDDF_MAKEFILES := ${SDDF}/util/util.mk \
-${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
-${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk \
-${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
-${SDDF}/serial/components/serial_components.mk \
-${SDDF}/network/components/network_components.mk \
-${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
-${SDDF}/libco/libco.mk \
-${BLK_DRIVER}/blk_driver.mk \
-${BLK_COMPONENTS}/blk_components.mk
-
-include ${SDDF_MAKEFILES}
-include $(LIONSOS)/components/fs/fat/fat.mk
-include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 

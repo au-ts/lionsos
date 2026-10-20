@@ -7,8 +7,6 @@
 # This makefile will be copied into the Build directory and used from there.
 #
 SDDF := $(LIONSOS)/dep/sddf
-LWIP := $(SDDF)/network/ipstacks/lwip/src
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 TOOLCHAIN ?= clang
 SUPPORTED_BOARDS := \
 	imx8mp_iotgate \
@@ -18,7 +16,16 @@ IMAGE_FILE := firewall.img
 REPORT_FILE := report.txt
 
 all: $(IMAGE_FILE)
-include ${SDDF}/tools/make/board/common.mk
+
+# FIXME: We should rework makefiles so that we don't need to 'inject' this
+# everywhere, instead sDDF should depend on this intrinsically.
+LIBS := libsddf_util_debug.a
+
+MICROPYTHON_EXEC_MODULE := ui_server.py
+MICROPYTHON_FROZEN_MANIFEST := manifest.py
+MICROPYTHON_USER_C_MODULES := modfirewall.c
+include ${LIONSOS}/components/lionsos.mk
+
 ETH_DRIV0 := ${ETH_DRIV}
 ETH_DRIV1 := ${ETH_DRIV_1}
 
@@ -71,31 +78,14 @@ SYSTEM_FILE := firewall.system
 
 CFLAGS += \
 	-Wno-bitwise-op-parentheses \
-	-Wno-shift-op-parentheses \
-	-I$(LIONSOS)/include \
-	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit \
-	-I$(LIBMICROKITCO_PATH) \
-	-I$(LWIP)/include
-
-include $(LIONSOS)/lib/libc/libc.mk
-
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
-LIBS := -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a
+	-Wno-shift-op-parentheses
 
 $(ETH_DRIV) $(IMAGES): $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
 vpath %.c $(SDDF) $(FIREWALL_SRC_DIR) $(FIREWALL_NET_COMPONENTS) $(FIREWALL_FILTERS) $(FIREWALL_ICMP) $(FIREWALL_ROUTING) $(FIREWALL_ARP)
 
-MICROPYTHON_LIBMATH := $(LIBMATH)
-MICROPYTHON_EXEC_MODULE := ui_server.py
-MICROPYTHON_FROZEN_MANIFEST := manifest.py
-MICROPYTHON_USER_C_MODULES := modfirewall.c
-
 $(MICROPYTHON_FROZEN_MANIFEST): $(MICROPYTHON_EXEC_MODULE)
 $(MICROPYTHON_EXEC_MODULE): $(MICRODOT)
-
-include $(LIONSOS)/components/micropython/micropython.mk
 
 %.py: $(FIREWALL_SRC_DIR)/%.py
 	cp $< $@
@@ -122,25 +112,7 @@ arp_responder.elf: arp_responder.o libsddf_util.a
 routing.elf: routing.o packet_queue.o routing_table.o libsddf_util.a
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
-SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
-
-SDDF_MAKEFILES := $(SDDF)/util/util.mk \
-		  $(SDDF)/drivers/network/$(NET_DRIV_DIR)/eth_driver.mk \
-		  $(SDDF)/drivers/serial/$(UART_DRIV_DIR)/serial_driver.mk \
-		  $(SDDF)/drivers/timer/$(TIMER_DRIV_DIR)/timer_driver.mk \
-		  $(SDDF)/network/components/network_components.mk \
-		  ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
-		  $(SDDF)/serial/components/serial_components.mk
-
-ifneq ($(NET_DRIV_DIR),${ETH_DRIV_DIR1})
-SDDF_MAKEFILES += $(SDDF)/drivers/network/$(ETH_DRIV_DIR1)/eth_driver.mk
-endif
-
-include $(SDDF_MAKEFILES)
 include $(FIREWALL_NET_COMPONENTS)/firewall_network_components.mk
-
-LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 $(PYFW_GENERATED_CONFIG): $(SDFGEN_HELPER) $(FIREWALL_CONFIG_HEADERS)
 	$(PYTHON) $(SDFGEN_HELPER) \
