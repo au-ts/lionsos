@@ -220,7 +220,6 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
     }
 #ifdef PAGER_INSTRUMENTATION
     if (microkit_msginfo_get_label(msginfo) == PAGER_INSTRUMENTATION_TAG) {
-        /* MR0 = sample index in; reply MR0 = faults recorded, MR1..3 = that sample. */
         uint64_t i = microkit_mr_get(0);
         microkit_mr_set(0, fault_idx);
         if (i >= fault_idx) {

@@ -8,12 +8,16 @@ static inline uint64_t read_cntpct(void)
     uint64_t value;
 
     asm volatile(
+        "isb\n\t"
         "mrs %0, cntpct_el0"
         : "=r"(value)
+        :
+        : "memory"
     );
 
     return value;
 }
+
 
 static inline uint64_t read_cntfrq(void)
 {
@@ -42,10 +46,6 @@ static inline long double ticks_to_ns(long double ticks, uint64_t freq)
 /* Label of the PPC a client sends to request instrumentation data. */
 #define PAGER_INSTRUMENTATION_TAG 321
 
-/*
- * When the benchmark took each fault and when it got control back. Defined by
- * the client, which sets them against what the pager recorded.
- */
 extern uint64_t before_faults[PAGER_MAX_SAMPLES];
 extern uint64_t after_faults[PAGER_MAX_SAMPLES];
 /* Faults recorded so far. The pager and the benchmark each count their own. */

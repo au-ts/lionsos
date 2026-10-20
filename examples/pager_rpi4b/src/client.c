@@ -61,20 +61,25 @@ void init(void)
     }
     #endif
 
-    char *argv_519[] = {
-        "lbm",
-        "1",
-        "reference.dat",
-        "0",
-        "1",
-        "100_100_130_cf_a.of",
-    };
-    fiveonenine(sizeof(argv_519) / sizeof(argv_519[0]), argv_519);
+    minor_pf();
+
+    // char *argv_519[] = {
+    //     "lbm",
+    //     "1",
+    //     "reference.dat",
+    //     "0",
+    //     "1",
+    //     "100_100_130_cf_a.of",
+    // };
+    // fiveonenine(sizeof(argv_519) / sizeof(argv_519[0]), argv_519);
     #ifdef PAGER_INSTRUMENTATION
     // get the pager to send us the instrumentation data
     uint64_t samples = 0;
+    uint64_t read_samples = 0;
+    uint64_t write_samples = 0;
     uint64_t total_read_mapping = 0;
     uint64_t total_write_mapping = 0;
+    uint64_t discarded = 0;
     for (uint64_t i = 0;; i++) {
         microkit_mr_set(0, i);
         microkit_msginfo reply = microkit_ppcall(pager_config.id,
@@ -82,27 +87,49 @@ void init(void)
         uint64_t total = microkit_mr_get(0);
         if (microkit_msginfo_get_count(reply) < 4 || i >= total) {
             printf("instrumentation: %lu samples\n", (uint64_t)total);
+            if (total != fault_idx) {
+                printf("instrumentation: WARNING pager recorded %lu faults but the "
+                       "benchmark recorded %lu -- samples are not aligned\n",
+                       (uint64_t)total, (uint64_t)fault_idx);
+            }
             break;
         }
+        /* A warmup fault: the slot only exists to keep the indices aligned. */
+        if (before_faults[i] == 0) {
+            ++discarded;
+            continue;
+        }
         ++samples;
-        if (i < 16384) {
+        if (i < minor_pf_read_end) {
             total_read_mapping += (uint64_t)microkit_mr_get(1);
+            ++read_samples;
         } else {
             total_write_mapping += (uint64_t)microkit_mr_get(1);
+            ++write_samples;
         }
 
         total_mapping_latency += (uint64_t)microkit_mr_get(1);
-        total_client_pager += (uint64_t)microkit_mr_get(2) - before_faults[i]; 
+        total_client_pager += (uint64_t)microkit_mr_get(2) - before_faults[i];
         total_pager_client += after_faults[i] - (uint64_t)microkit_mr_get(3);
     }
 
     uint64_t freq = read_cntfrq();
+
+    long double timer_checks = 0;
+    for (int i = 0; i < 100; ++i) {
+        uint64_t start_timer_check = read_cntpct();
+        uint64_t end_timer_check = read_cntpct();
+        timer_checks += end_timer_check - start_timer_check;
+    }
+    timer_checks /= 100;
+
+    printf("instrumentation: %lu measured, %lu warmup (discarded)\n", samples, discarded);
     printf("results:\n");
-    long double read_mapping = ticks_to_ns((long double)total_read_mapping / 16384, freq);
-    long double write_mapping = ticks_to_ns((long double)total_write_mapping / 16384, freq);
-    long double mean_mapping = ticks_to_ns((long double)total_mapping_latency / samples, freq);
-    long double mean_pager_client = ticks_to_ns((long double)total_pager_client / samples, freq);
-    long double mean_client_pager = ticks_to_ns((long double)total_client_pager / samples, freq);
+    long double read_mapping = ticks_to_ns((long double)total_read_mapping / read_samples - timer_checks, freq);
+    long double write_mapping = ticks_to_ns((long double)total_write_mapping / write_samples - timer_checks, freq);
+    long double mean_mapping = ticks_to_ns((long double)total_mapping_latency / samples - timer_checks, freq);
+    long double mean_pager_client = ticks_to_ns((long double)total_pager_client / samples - timer_checks, freq);
+    long double mean_client_pager = ticks_to_ns((long double)total_client_pager / samples - timer_checks, freq);
     printf("mean read mapping latency:  %.3Lf ns\n", read_mapping);
     printf("mean write mapping latency: %.3Lf ns\n", write_mapping);
     printf("mean mapping latency:       %.3Lf ns\n", mean_mapping);
