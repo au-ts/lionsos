@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
-# This Makefile snippet builds the FAT component
+# This Makefile snippet builds the RAMFAT component
 #
 # NOTES:
 # Requires variables:
@@ -13,53 +13,51 @@
 #	MICROKIT_BOARD
 #	MICROKIT_CONFIG
 #	CPU
-#	FAT_LIBC_INCLUDE
-#	FAT_LIBC_LIB
-# Generates fat.elf
+#	RAMFAT_LIBC_INCLUDE
+#	RAMFAT_LIBC_LIB
+# Generates ramfat.elf
 
-FAT_SRC_DIR := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
-FAT_FF15_SRC_DIR := $(LIONSOS)/dep/ff15
+RAMFAT_SRC_DIR := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
+RAMFAT_FF15_SRC_DIR := $(LIONSOS)/dep/ff15
 
-FAT_CFLAGS := \
-	-I$(FAT_LIBC_INCLUDE) \
-	-I$(LIBMICROKITCO_PATH) \
-	-I$(FAT_FF15_SRC_DIR) \
-	-I$(FAT_SRC_DIR)/config
+RAMFAT_CFLAGS := \
+	-I$(RAMFAT_LIBC_INCLUDE) \
+	-I$(RAMFAT_FF15_SRC_DIR) \
+	-I$(RAMFAT_SRC_DIR)/config
 
-LIBMICROKITCO_CFLAGS_fat := ${FAT_CFLAGS}
+RAMFAT_OBJ := \
+	ramfat/ff15/ff.o \
+	ramfat/ff15/ffunicode.o \
+	ramfat/event.o \
+	ramfat/op.o \
+	ramfat/io.o
 
-FAT_OBJ := \
-	fat/ff15/ff.o \
-	fat/ff15/ffunicode.o \
-	fat/event.o \
-	fat/op.o \
-	fat/io.o
+CHECK_RAMFAT_FLAGS_MD5 := .fat_cflags-$(shell echo -- $(CFLAGS) $(RAMFAT_CFLAGS) | shasum | sed 's/ *-//')
 
-CHECK_FAT_FLAGS_MD5 := .fat_cflags-$(shell echo -- $(CFLAGS) $(FAT_CFLAGS) | shasum | sed 's/ *-//')
-
-$(CHECK_FAT_FLAGS_MD5):
+$(CHECK_RAMFAT_FLAGS_MD5):
 	-rm -f .fat_cflags-*
 	touch $@
 
-LIB_FS_SERVER_LIBC_INCLUDE := $(FAT_LIBC_INCLUDE)
+LIB_FS_SERVER_LIBC_INCLUDE := $(RAMFAT_LIBC_INCLUDE)
 include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
 
-fat:
-	mkdir -p fat
+ramfat:
+	mkdir -p ramfat
 
-fat/ff15:
-	mkdir -p fat/ff15
+ramfat/ff15:
+	mkdir -p ramfat/ff15
 
-fat/ff15/%.o: CFLAGS := $(FAT_CFLAGS) \
+ramfat/ff15/%.o: CFLAGS := $(RAMFAT_CFLAGS) \
 						$(CFLAGS)
-fat/ff15/%.o: $(FAT_FF15_SRC_DIR)/%.c $(FAT_LIBC_INCLUDE) $(CHECK_FAT_FLAGS_MD5) |fat/ff15
+ramfat/ff15/%.o: $(RAMFAT_FF15_SRC_DIR)/%.c $(RAMFAT_LIBC_INCLUDE) $(CHECK_RAMFAT_FLAGS_MD5) |ramfat/ff15
 	$(CC) -c $(CFLAGS) $< -o $@
 
-fat/%.o: CFLAGS += $(FAT_CFLAGS)
-fat/%.o: $(FAT_SRC_DIR)/%.c $(FAT_LIBC_INCLUDE) $(CHECK_FAT_FLAGS_MD5) |fat
+ramfat/%.o: CFLAGS += $(RAMFAT_CFLAGS)
+ramfat/%.o: $(RAMFAT_SRC_DIR)/%.c $(RAMFAT_LIBC_INCLUDE) $(CHECK_RAMFAT_FLAGS_MD5) |ramfat
 	$(CC) -c $(CFLAGS) $< -o $@
 
-fat.elf: $(FAT_OBJ) libmicrokitco_fat.a $(FAT_LIBC_LIB) lib_fs_server.a
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+ramfat.a: $(RAMFS_OBJ) $(LIB_FS_SERVER_OBJ)
+	$(AR) crv $@ $^
+	$(RANLIB) $@
 
--include $(FAT_OBJ:.o=.d)
+-include $(RAMFAT_OBJ:.o=.d)
