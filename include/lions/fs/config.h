@@ -7,6 +7,10 @@
 #include <stdint.h>
 #include <sddf/resources/common.h>
 
+// this define identifies to lionsos/lib/libc/file.c that ramfatfs is being used.
+// fatfs and ramfatfs should not be used together.
+// #define RAMFATFS
+
 #define LIONS_FS_MAGIC_LEN 8
 static char LIONS_FS_MAGIC[LIONS_FS_MAGIC_LEN] = { 'L', 'i', 'o', 'n', 's', 'O', 'S', 0x1 };
 
