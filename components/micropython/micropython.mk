@@ -44,7 +44,6 @@ micropython.elf: FORCE mpy-cross \
 		tcp_mp.o \
 		| $(LIONS_LIBC)/include
 	$(MAKE) -C $(MICROPYTHON_DIR) \
-		-j$(nproc) \
 		MICROKIT_SDK=$(MICROKIT_SDK) \
 		MICROKIT_BOARD=$(MICROKIT_BOARD) \
 		MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
