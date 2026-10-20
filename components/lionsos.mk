@@ -45,6 +45,9 @@ include $(SDDF)/libco/libco.mk
 MICROPYTHON_LIBMATH := $(LIBMATH)
 include $(LIONSOS)/components/micropython/micropython.mk
 
+LIB_FS_SERVER_LIBC_INCLUDE := $(LIONS_LIBC)/include
+include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
+
 FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
 FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIONSOS)/components/fs/fat/fat.mk
