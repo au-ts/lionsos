@@ -28,64 +28,30 @@ IMAGES := \
 
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
-BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-SDDF := $(LIONSOS)/dep/sddf
-LWIP := $(SDDF)/network/ipstacks/lwip/src
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
+
 SYSTEM_FILE := posix_test.system
 IMAGE_FILE := posix_test.img
 REPORT_FILE := report.txt
 
 all: ${IMAGE_FILE}
 
-include ${SDDF}/tools/make/board/common.mk
+# FIXME: We should rework makefiles so that we don't need to 'inject' this
+# everywhere, instead sDDF should depend on this intrinsically.
+LIBS := libsddf_util_debug.a
+
+SDDF := $(LIONSOS)/dep/sddf
+LIB_SDDF_LWIP_CFLAGS := -I${POSIX_TEST_DIR}/lwip_include
+LIBMICROKITCO_CFLAGS_posix_test := -I$(POSIX_TEST_DIR)
+include ${LIONSOS}/components/lionsos.mk
 
 METAPROGRAM := $(POSIX_TEST_DIR)/meta.py
-
-FAT := $(LIONSOS)/components/fs/fat
 
 CFLAGS += \
 	-Wno-bitwise-op-parentheses \
 	-Wno-shift-op-parentheses \
 	-Wno-unused-function \
 	-Wno-tautological-constant-out-of-range-compare \
-	-I$(LIONSOS)/include \
-	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit \
-	-I$(LIBMICROKITCO_PATH) \
-	-I$(LWIP)/include \
 	-DMAX_FDS=8
-
-include $(LIONSOS)/lib/libc/libc.mk
-
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
-
-BLK_DRIVER := $(SDDF)/drivers/blk/${BLK_DRIV_DIR}
-BLK_COMPONENTS := $(SDDF)/blk/components
-
-SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include ${SDDF}/util/util.mk
-include ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk
-include ${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk
-include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
-include ${SDDF}/serial/components/serial_components.mk
-include ${SDDF}/network/components/network_components.mk
-
-LIB_SDDF_LWIP_CFLAGS := -I${POSIX_TEST_DIR}/lwip_include
-include ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk
-
-include ${SDDF}/libco/libco.mk
-include ${BLK_DRIVER}/blk_driver.mk
-include ${BLK_COMPONENTS}/blk_components.mk
-
-FAT_LIBC_LIB := $(LIONS_LIBC)/lib/libc.a
-FAT_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include $(LIONSOS)/components/fs/fat/fat.mk
-
-LIBMICROKITCO_CFLAGS_posix_test := -I$(POSIX_TEST_DIR)
-LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 

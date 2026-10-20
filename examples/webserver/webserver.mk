@@ -7,8 +7,6 @@
 # This makefile will be copied into the Build directory and used from there.
 #
 SDDF := $(LIONSOS)/dep/sddf
-LWIP := $(SDDF)/network/ipstacks/lwip/src
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 
 SUPPORTED_BOARDS := \
 	odroidc4 \
@@ -22,9 +20,14 @@ REPORT_FILE := report.txt
 
 all: $(IMAGE_FILE)
 
-include ${SDDF}/tools/make/board/common.mk
+# FIXME: We should rework makefiles so that we don't need to 'inject' this
+# everywhere, instead sDDF should depend on this intrinsically.
+LIBS := libsddf_util_debug.a
 
-NFS=$(LIONSOS)/components/fs/nfs
+MICROPYTHON_EXEC_MODULE := webserver.py
+MICROPYTHON_FROZEN_MANIFEST := manifest.py
+include ${LIONSOS}/components/lionsos.mk
+
 MICRODOT := ${LIONSOS}/dep/microdot/src
 
 METAPROGRAM := $(WEBSERVER_SRC_DIR)/meta.py
@@ -35,24 +38,7 @@ IMAGES := timer_driver.elf eth_driver.elf micropython.elf nfs.elf \
 
 SYSTEM_FILE := webserver.system
 
-CFLAGS += \
-	-I$(LIONSOS)/include \
-	-I$(SDDF)/include \
-	-I$(SDDF)/include/microkit \
-	-I$(LIBMICROKITCO_PATH) \
-	-I$(LWIP)/include
-
-include $(LIONSOS)/lib/libc/libc.mk
-
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
-LIBS := -lmicrokit -Tmicrokit.ld -lc libsddf_util_debug.a
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
-
-
-MICROPYTHON_LIBMATH := $(LIBMATH)
-MICROPYTHON_EXEC_MODULE := webserver.py
-MICROPYTHON_FROZEN_MANIFEST := manifest.py
-include $(LIONSOS)/components/micropython/micropython.mk
 
 manifest.py: webserver.py config.py
 webserver.py: $(MICRODOT) config.py
@@ -62,23 +48,6 @@ config.py:
 
 %.py: ${WEBSERVER_SRC_DIR}/%.py
 	cp $< $@
-
-include $(NFS)/nfs.mk
-
-SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
-
-SDDF_MAKEFILES := ${SDDF}/util/util.mk \
-		  ${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
-		  ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
-		  ${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk \
-		  ${SDDF}/network/components/network_components.mk \
-		  ${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
-		  ${SDDF}/serial/components/serial_components.mk
-
-include ${SDDF_MAKEFILES}
-
-LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH $(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) --nfs-server $(NFS_SERVER) --nfs-dir $(NFS_DIRECTORY)
