@@ -41,9 +41,6 @@ $(CHECK_FAT_FLAGS_MD5):
 	-rm -f .fat_cflags-*
 	touch $@
 
-LIB_FS_SERVER_LIBC_INCLUDE := $(FAT_LIBC_INCLUDE)
-include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
-
 fat:
 	mkdir -p fat
 
