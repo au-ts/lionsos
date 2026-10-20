@@ -15,7 +15,7 @@
 #	CPU
 #	RAMFAT_LIBC_INCLUDE
 #	RAMFAT_LIBC_LIB
-# Generates ramfat.elf
+# Generates ramfat.a
 
 RAMFAT_SRC_DIR := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 RAMFAT_FF15_SRC_DIR := $(LIONSOS)/dep/ff15
@@ -38,8 +38,6 @@ $(CHECK_RAMFAT_FLAGS_MD5):
 	-rm -f .fat_cflags-*
 	touch $@
 
-LIB_FS_SERVER_LIBC_INCLUDE := $(RAMFAT_LIBC_INCLUDE)
-include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
 
 ramfat:
 	mkdir -p ramfat
@@ -56,7 +54,7 @@ ramfat/%.o: CFLAGS += $(RAMFAT_CFLAGS)
 ramfat/%.o: $(RAMFAT_SRC_DIR)/%.c $(RAMFAT_LIBC_INCLUDE) $(CHECK_RAMFAT_FLAGS_MD5) |ramfat
 	$(CC) -c $(CFLAGS) $< -o $@
 
-ramfat.a: $(RAMFAT_OBJ) $(LIB_FS_SERVER_OBJ)
+ramfat.a: $(RAMFAT_OBJ)
 	$(AR) crv $@ $^
 	$(RANLIB) $@
 
