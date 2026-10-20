@@ -13,6 +13,15 @@
 
 typedef uint64_t fd_t;
 
+int fd_alloc_for_client(uint64_t client_id, fd_t *fd);
+int fd_free_for_client(uint64_t client_id, fd_t fd);
+int fd_set_file_for_client(uint64_t client_id, fd_t fd, void *file_handle);
+int fd_set_dir_for_client(uint64_t client_id, fd_t fd, void *dir_handle);
+int fd_unset_for_client(uint64_t client_id, fd_t fd);
+int fd_begin_op_file_for_client(uint64_t client_id, fd_t fd, void **file_handle);
+int fd_begin_op_dir_for_client(uint64_t client_id, fd_t fd, void **dir_handle);
+void fd_end_op_for_client(uint64_t client_id, fd_t fd);
+
 int fd_alloc(fd_t *fd);
 int fd_free(fd_t fd);
 int fd_set_file(fd_t fd, void *file_handle);

@@ -14,6 +14,9 @@ typedef struct {
     fs_cmd_params_t params;
     uint64_t status;
     fs_cmpl_data_t result;
+#ifdef FS_MULTIPLEXED
+    uint64_t client_id;
+#endif
 } co_data_t;
 
 void handle_initialise(void);
