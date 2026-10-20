@@ -56,7 +56,7 @@ ramfat/%.o: CFLAGS += $(RAMFAT_CFLAGS)
 ramfat/%.o: $(RAMFAT_SRC_DIR)/%.c $(RAMFAT_LIBC_INCLUDE) $(CHECK_RAMFAT_FLAGS_MD5) |ramfat
 	$(CC) -c $(CFLAGS) $< -o $@
 
-ramfat.a: $(RAMFS_OBJ) $(LIB_FS_SERVER_OBJ)
+ramfat.a: $(RAMFAT_OBJ) $(LIB_FS_SERVER_OBJ)
 	$(AR) crv $@ $^
 	$(RANLIB) $@
 
