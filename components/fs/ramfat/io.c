@@ -81,6 +81,10 @@ bool ramfs_build()
     // move cpio to the back of memory region.
     cpio_entry_t e;
     uint64_t len = 0;
+
+    // don't do anything if there is no cpio file.
+    if (!cpio_entry(disk,len, &e)) return true;
+
     do {
         if (!cpio_entry(disk, len, &e)) {
             return false;
