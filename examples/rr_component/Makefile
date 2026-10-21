@@ -11,7 +11,9 @@ ifeq ($(filter $(RR_TEST_TARGET), $(POSSIBLE_TESTS)),)
     $(error Please specify RR_TEST_TARGET as one of the following options: $(shell ls tests))
 endif
 
-${BUILD_DIR}/Makefile: tests/$(RR_TEST_TARGET)/rr_component.mk setup.py
+.PHONY:: FORCE
+
+${BUILD_DIR}/Makefile: tests/$(RR_TEST_TARGET)/rr_component.mk setup.py FORCE
 	python setup.py --test-target=$(RR_TEST_TARGET)
 
 %: ${BUILD_DIR}/Makefile

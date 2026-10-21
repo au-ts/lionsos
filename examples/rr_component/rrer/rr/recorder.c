@@ -152,19 +152,17 @@ static inline void rec_main()
     seL4_MessageInfo_t msg = { 0 };
     seL4_Word last_cycle_count = 0;
     while (true) {
-        LOG("Yielding!\n");
+        INFO("Yielding!\n");
         msg = seL4_Recv(INPUT_CAP, &badge, BASE_REPLY_CAPS + rr_currently_sched->id);
-        LOG("Woken!\n");
+        INFO("Woken!\n");
         // Pause the block checker.
         // it gets restarted when we reschedule.
         NO_ERR(seL4_TCB_Suspend(BLOCK_CHECKER_ID + BASE_TCB_CAP));
 
         rr_IPCType_e type = rr_ipc_get_type(msg, badge);
         // read the cycle count
-        seL4_ARM_VPMU_VPMUReadCycleCounter_t vpmu_res = seL4_ARM_VPMU_VPMUReadCycleCounter(VPMU_CAP);
-        NO_ERR(vpmu_res.error);
-        seL4_Word cycle_count = vpmu_res.cycle_counter_value;
-        LOG("msg type: %s\n", rr_ipc_type_to_string(type));
+        seL4_Word cycle_count = rr_read_cycle_counter();
+        INFO("msg type: %s\n", rr_ipc_type_to_string(type));
         switch (type) {
         // Note on replying:
         // - This is special because it is impossible to reply without yielding to the replyer's target.
@@ -226,6 +224,8 @@ static inline void rec_main()
             // rr_storage_store_ipc relies on this to determine the target, so we have to unset it late.
             rr_recv_source_channel = UNSET_VALUE;
 
+            assert(cycle_count == rr_read_cycle_counter());
+
             // and finally we can send.
             seL4_Send(BASE_REPLY_CAPS + rr_currently_sched->id, msg);
             // and the now we can recv, as the block checker will revive us.
@@ -235,6 +235,7 @@ static inline void rec_main()
             WARN("TODO: Handle faults, for now just suspends the thread.\n");
             fault_print(msg, badge);
             rec_unschedule_current(cycle_count, rr_ChildState_Suspended);
+            assert(cycle_count == rr_read_cycle_counter());
         } break;
         case rr_IPCType_BlockChecker: {
             // if time did not progress, mark currently scheduled as blocked by recv.
@@ -263,6 +264,7 @@ static inline void rec_main()
             else {
                 rec_unschedule_current(cycle_count, rr_ChildState_Schedulable);
             }
+            assert(cycle_count == rr_read_cycle_counter());
         } break;
         case rr_IPCType_Msg: {
             // This is a stub, and won't happen in the microkit context.
@@ -294,6 +296,7 @@ static inline void rec_main()
             rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
             rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, sending_child, badge, msg);
             rec_unschedule_current(cycle_count, rr_ChildState_BlockedOnCall);
+            assert(cycle_count == rr_read_cycle_counter());
         } break;
         case rr_IPCType_Ntfn: {
             seL4_Word source_ch = rr_badge_to_channel_id(badge);
@@ -311,9 +314,13 @@ static inline void rec_main()
             assert(source_ch < rr_channels_num);
             seL4_Word target_child = rr_channel_to_target_child_id[source_ch];
             LOG("Target child: %lu\n", target_child);
-            rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
-            rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, sending_child, badge, msg);
             rec_unschedule_current(cycle_count, rr_ChildState_Schedulable);
+            rr_ipc_store_ipc_msg(target_child, msg, badge, source_ch);
+            // BUG: For some reason this will sometimes increment the cycle counter by 0x48 cycles.
+            // In specific cases if the currently scheduled thread has not been unscheduled.
+            // Very weird.
+            rr_storage_store_ipc_msg(&_rr_storage_handle, cycle_count, sending_child, badge, msg);
+            assert(cycle_count == rr_read_cycle_counter());
         } break;
         }
         // perform a reschedule.

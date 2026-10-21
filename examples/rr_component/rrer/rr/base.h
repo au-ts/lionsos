@@ -172,6 +172,14 @@ static inline const char *rr_ipc_type_to_string(rr_IPCType_e type)
 }
 
 // a little bit round about.
-static inline seL4_Word rr_source_ch_to_source_child(seL4_Word channel) {
+static inline seL4_Word rr_source_ch_to_source_child(seL4_Word channel)
+{
     return rr_channel_to_target_child_id[rrer_source_ch_to_target_ch(channel)];
+}
+
+static inline seL4_Word rr_read_cycle_counter()
+{
+    seL4_ARM_VPMU_VPMUReadCycleCounter_t vpmu_res = seL4_ARM_VPMU_VPMUReadCycleCounter(VPMU_CAP);
+    NO_ERR(vpmu_res.error);
+    return vpmu_res.cycle_counter_value;
 }
