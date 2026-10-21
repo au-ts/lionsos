@@ -33,6 +33,19 @@ typedef ssize_t (*fd_read_func)(void *, size_t, int);
 typedef int (*fd_close_func)(int);
 typedef int (*fd_dup3_func)(int, int);
 typedef int (*fd_fstat_func)(int, struct stat *);
+// new ones below
+typedef int (*fd_readlinkat_func)();
+/**
+ * TODO:
+ * Need to implement some path resolution
+ * so that openat can be redirected to the 
+ * correct fs openat function in the case
+ * that there are multiple filesystems.
+ */
+typedef int (*fd_openat_func)(int dirfd, const char *path, int flags);
+typedef int (*fd_lseek_func)(long fd, off_t offset, int whence);
+typedef int (*fd_mkdirat)(int dirfd, const char *path, mode_t mode);
+typedef int (*fd_unlinkat)(int dirfd, const char *path, int flags);
 
 typedef struct {
     fd_write_func write;
@@ -40,6 +53,12 @@ typedef struct {
     fd_close_func close;
     fd_dup3_func dup3;
     fd_fstat_func fstat;
+    // new ones below
+    fd_readlinkat_func readlinkat;
+    fd_openat_func openat;
+    fd_lseek_func lseek;
+    fd_mkdirat mkdirat;
+    fd_unlinkat unlinkat;
     int flags;
     off_t file_ptr;
 } fd_entry_t;

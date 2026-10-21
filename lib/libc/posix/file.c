@@ -373,6 +373,12 @@ static long sys_fstatat(va_list ap) {
 
 static long sys_readlinkat(va_list ap) { return -EINVAL; }
 
+/**
+ * TODO:
+ * The path should check which fs is mounted to the path location
+ * then the openat instance of the specific filesystem should be
+ * used to set the fd funcs.
+ */
 static long sys_openat(va_list ap) {
     int dirfd = va_arg(ap, int);
     const char *path = va_arg(ap, const char *);
@@ -525,56 +531,62 @@ static long sys_lseek(va_list ap) {
         return -EBADF;
     }
 
-    off_t curr_fp = fd_entry->file_ptr;
-    off_t new_fp;
-    switch (whence) {
-    case SEEK_SET:
-        if (offset < 0) {
-            return -EINVAL;
-        }
-        new_fp = offset;
-        break;
-    case SEEK_CUR:
-        // result would overflow off_t
-        if ((off_t)(LONG_MAX - curr_fp) < offset) {
-            return -EOVERFLOW;
-        }
-        // result would be negative
-        if (offset < 0 && curr_fp < (size_t)(-offset)) {
-            return -EINVAL;
-        }
-        new_fp = curr_fp + offset;
-        break;
-    case SEEK_END: {
-        fs_cmpl_t completion;
-        int err = fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_FILE_SIZE,
-                                                                .params.file_size = {
-                                                                    .fd = fs_server_fd_map[fd],
-                                                                } });
+    return fd_entry->lseek(fd, offset, whence);
 
-        if (err) {
-            return -ENOMEM;
-        }
+    // off_t curr_fp = fd_entry->file_ptr;
+    // off_t new_fp;
+    // switch (whence) {
+    // case SEEK_SET:
+    //     if (offset < 0) {
+    //         return -EINVAL;
+    //     }
+    //     new_fp = offset;
+    //     break;
+    // case SEEK_CUR:
+    //     // result would overflow off_t
+    //     if ((off_t)(LONG_MAX - curr_fp) < offset) {
+    //         return -EOVERFLOW;
+    //     }
+    //     // result would be negative
+    //     if (offset < 0 && curr_fp < (size_t)(-offset)) {
+    //         return -EINVAL;
+    //     }
+    //     new_fp = curr_fp + offset;
+    //     break;
+    // case SEEK_END: {
+    //     fs_cmpl_t completion;
+    //     int err = fs_command_blocking(&completion, (fs_cmd_t) { .type = FS_CMD_FILE_SIZE,
+    //                                                             .params.file_size = {
+    //                                                                 .fd = fs_server_fd_map[fd],
+    //                                                             } });
 
-        if (completion.status != FS_STATUS_SUCCESS) {
-            return -fs_status_to_errno[completion.status];
-        }
+    //     if (err) {
+    //         return -ENOMEM;
+    //     }
 
-        if ((off_t)(LONG_MAX - completion.data.file_size.size) < offset) {
-            return -EOVERFLOW;
-        }
-        new_fp = completion.data.file_size.size + offset;
-        break;
-    }
-    default:
-        fprintf(stderr, "POSIX|ERROR: lseek got unsupported whence %d\n", whence);
-        return -EINVAL;
-    }
+    //     if (completion.status != FS_STATUS_SUCCESS) {
+    //         return -fs_status_to_errno[completion.status];
+    //     }
 
-    fd_entry->file_ptr = new_fp;
-    return new_fp;
+    //     if ((off_t)(LONG_MAX - completion.data.file_size.size) < offset) {
+    //         return -EOVERFLOW;
+    //     }
+    //     new_fp = completion.data.file_size.size + offset;
+    //     break;
+    // }
+    // default:
+    //     fprintf(stderr, "POSIX|ERROR: lseek got unsupported whence %d\n", whence);
+    //     return -EINVAL;
+    // }
+
+    // fd_entry->file_ptr = new_fp;
+    // return new_fp;
 }
 
+/**
+ * TODO:
+ * path should be used to identify fs.
+ */
 static long sys_mkdirat(va_list ap) {
     int dirfd = va_arg(ap, int);
     const char *path = va_arg(ap, const char *);
@@ -617,6 +629,9 @@ static long sys_mkdirat(va_list ap) {
     return 0;
 }
 
+/**
+ * TODO: path should be used to find fs.
+ */
 static long sys_unlinkat(va_list ap) {
     int dirfd = va_arg(ap, int);
     const char *path = va_arg(ap, const char *);
