@@ -240,6 +240,8 @@ static inline void rec_main()
         case rr_IPCType_BlockChecker: {
             // if time did not progress, mark currently scheduled as blocked by recv.
             // less than 3 because unsuspending takes 2 cycles for some reason?
+            // BUG: unsuspending takes 2 cycles, when it should use none?
+            // probably will have to patch the kernel for that.
 
             // guaranteed to subtract and have a >= 0 value
             // this might be false if cycle_count overflows.
