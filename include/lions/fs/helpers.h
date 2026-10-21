@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <lions/fs/protocol.h>
 #include <lions/fs/config.h>
+#include <lions/fs/server.h>
 
 #define FS_BUFFER_SIZE 0x8000
 

@@ -28,14 +28,13 @@ RAMFAT_CFLAGS := \
 RAMFAT_OBJ := \
 	ramfat/ff15/ff.o \
 	ramfat/ff15/ffunicode.o \
-	ramfat/event.o \
 	ramfat/op.o \
 	ramfat/io.o
 
-CHECK_RAMFAT_FLAGS_MD5 := .fat_cflags-$(shell echo -- $(CFLAGS) $(RAMFAT_CFLAGS) | shasum | sed 's/ *-//')
+CHECK_RAMFAT_FLAGS_MD5 := .ramfat_cflags-$(shell echo -- $(CFLAGS) $(RAMFAT_CFLAGS) | shasum | sed 's/ *-//')
 
 $(CHECK_RAMFAT_FLAGS_MD5):
-	-rm -f .fat_cflags-*
+	-rm -f .ramfat_cflags-*
 	touch $@
 
 
@@ -54,7 +53,7 @@ ramfat/%.o: CFLAGS += $(RAMFAT_CFLAGS)
 ramfat/%.o: $(RAMFAT_SRC_DIR)/%.c $(RAMFAT_LIBC_INCLUDE) $(CHECK_RAMFAT_FLAGS_MD5) |ramfat
 	$(CC) -c $(CFLAGS) $< -o $@
 
-ramfat.a: $(RAMFAT_OBJ)
+ramfat.a: $(RAMFAT_OBJ) $(FAT_LIBC_LIB)
 	$(AR) crv $@ $^
 	$(RANLIB) $@
 

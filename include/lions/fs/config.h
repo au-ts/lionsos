@@ -2,6 +2,8 @@
  * Copyright 2025, UNSW
  * SPDX-License-Identifier: BSD-2-Clause
  */
+#pragma once
+
 #include <microkit.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -9,7 +11,7 @@
 
 // this define identifies to lionsos/lib/libc/file.c that ramfatfs is being used.
 // fatfs and ramfatfs should not be used together.
-// #define RAMFATFS
+#define RAMFATFS
 
 #define LIONS_FS_MAGIC_LEN 8
 static char LIONS_FS_MAGIC[LIONS_FS_MAGIC_LEN] = { 'L', 'i', 'o', 'n', 's', 'O', 'S', 0x1 };
