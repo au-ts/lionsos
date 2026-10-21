@@ -24,9 +24,10 @@
 #define SENDER_PRIO 211
 #define SELF_PRIO 212
 #define BLOCK_PRIO SCHED_PRIO
-// TODO: Don't hard code this you bozo.
-// Add config structs please...
-#define BLOCK_CHECKER_INIT 0x210670
+
+#ifndef BLOCK_CHECKER_INIT
+#error "Define BLOCK_CHECKER_INIT with the address of the init function of the block checker"
+#endif
 
 #define PD_MASK 0xff
 #define BADGE_GET_PD_ID(badge) (badge & PD_MASK)

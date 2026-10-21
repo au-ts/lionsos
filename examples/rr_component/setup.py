@@ -41,7 +41,6 @@ def main():
     with makefile_path.open(mode="w") as makefile:
         makefile.write(
         f"""\
-export
 LIONSOS ?= {str(LIONSOS)}
 RR_COMPONENT_DIR ?= {str(RR_COMPONENT_PATH)}
 BUILD_DIR := {str(BUILD_DIR)}

@@ -55,14 +55,17 @@ rr_sender.elf: rr_sender.o | libsddf_util_debug.a
 rr_block_checker.elf: rr_block_checker.o | libsddf_util_debug.a
 	${LD} $< ${RRER_LIBS} ${RRER_LDFLAGS} -o $@ libsddf_util_debug.a
 
-rr_recorder.o: | ${LIONS_LIBC}/include
-	${CC} ${RRER_CFLAGS} -c ${RRER_RR_DIR}/recorder.c -o $@
+# Requires the block checker to define the init point
+rr_recorder.o: rr_block_checker.elf | ${LIONS_LIBC}/include
+	${CC} ${RRER_CFLAGS} -c ${RRER_RR_DIR}/recorder.c -o $@\
+		-DBLOCK_CHECKER_INIT="$(shell llvm-readelf --symbols rr_block_checker.elf | grep -E "\binit\b"  | awk '{print "0x"$$2}')"
 
 rr_recorder.elf: rr_recorder.o | libsddf_util.a libsddf_util_debug.a
 	${LD} $< ${RRER_LIBS} ${RRER_LDFLAGS} -o $@ libsddf_util_debug.a
 
-rr_replayer.o: | ${LIONS_LIBC}/include
-	${CC} ${RRER_CFLAGS} -c ${RRER_RR_DIR}/replayer.c -o $@
+rr_replayer.o: rr_block_checker.elf | ${LIONS_LIBC}/include
+	${CC} ${RRER_CFLAGS} -c ${RRER_RR_DIR}/replayer.c -o $@\
+		-DBLOCK_CHECKER_INIT="$(shell llvm-readelf --symbols rr_block_checker.elf | grep -E "\binit\b"  | awk '{print "0x"$$2}')"
 
 rr_replayer.elf: rr_replayer.o | libsddf_util.a libsddf_util_debug.a
 	${LD} $< ${RRER_LIBS} ${RRER_LDFLAGS} -o $@ libsddf_util_debug.a
@@ -74,7 +77,7 @@ ifneq ($(RR_MODE),$(filter $(RR_MODE),recorder replayer))
 	$(error Please specify RR_MODE (currently "${RR_MODE}") as one of the following options: recorder replayer)
 endif
 
-rr_main.elf: rr_replayer.elf rr_recorder.elf
+rr_main.elf: rr_replayer.elf rr_recorder.elf FORCE
 	cp -f rr_${RR_MODE}.elf rr_main.elf
 
 -include $(RRER_O_FILES:.o=.d)
