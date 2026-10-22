@@ -1,13 +1,13 @@
 # Copyright 2026, UNSW SPDX-License-Identifier: BSD-2-Clause
 
 from typing import Dict, Iterator, Optional
-from sdfgen import SystemDescription
 from pyfw.component_arp import ArpRequester, ArpResponder
 from pyfw.component_base import Component
 from pyfw.component_bridge import Bridge
 from pyfw.component_filter import Filter
 from pyfw.component_net_interface import NetworkInterface
 from pyfw.component_net_virt import NetVirtRx, NetVirtTx
+from pyfw.component_port import FirewallPort
 from pyfw.constants import BuildConstants
 from pyfw.specs import FirewallMemoryRegion, TrackedNet
 
@@ -17,13 +17,13 @@ class FirewallInterface(NetworkInterface):
     ) -> None:
         super().__init__(index=network_interface.index,
                          name=network_interface.name,
-                         board_ethernet_idx=network_interface.board_ethernet_idx,
+                         ports=network_interface.ports,
                          mac=network_interface.mac,
                          ip=network_interface.ip,
                          subnet_bits=network_interface.subnet_bits,
                          priorities=network_interface.priorities)
 
-        self._ethernet_driver: Optional[SystemDescription.ProtectionDomain] = None
+        self._fw_ports: list[FirewallPort] = []
         self._rx_virtualiser: Optional[NetVirtRx] = None
         self._tx_virtualiser: Optional[NetVirtTx] = None
         self._arp_requester: Optional[ArpRequester] = None
@@ -34,15 +34,13 @@ class FirewallInterface(NetworkInterface):
         self._net_system: Optional[TrackedNet] = None
 
     @property
-    def ethernet_driver(self) -> SystemDescription.ProtectionDomain:
-        assert self._ethernet_driver is not None
-        return self._ethernet_driver
+    def fw_ports(self) -> list[FirewallPort]:
+        return self._fw_ports
 
 
-    @ethernet_driver.setter
-    def ethernet_driver(self, ethernet_driver: SystemDescription.ProtectionDomain):
-        assert ethernet_driver is not None
-        self._ethernet_driver = ethernet_driver
+    @fw_ports.setter
+    def fw_ports(self, fw_ports: list[FirewallPort]):
+        self._fw_ports = fw_ports
 
     @property
     def rx_virtualiser(self) -> NetVirtRx:
@@ -131,5 +129,6 @@ class FirewallInterface(NetworkInterface):
         yield self.tx_virtualiser
         yield self.arp_requester
         yield self.arp_responder
+        yield self.bridge
         for ip_filter in self.filters.values():
             yield ip_filter

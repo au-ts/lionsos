@@ -22,16 +22,15 @@ include ${SDDF}/tools/make/board/common.mk
 ETH_DRIV0 := ${ETH_DRIV}
 ETH_DRIV1 := ${ETH_DRIV_1}
 
-# Set the number of interfaces used by the firewall here. This must be <= the
-# actual number of interfaces
-FIREWALL_INTERFACE_COUNT := 2
+# Set the number of logical interfaces (override with FIREWALL_INTERFACE_COUNT=3).
+FIREWALL_INTERFACE_COUNT ?= 2
 ifeq ($(MICROKIT_BOARD),qemu_virt_aarch64)
-FIREWALL_INTERFACE_COUNT := 3
 ETH_DRIV2 := ${ETH_DRIV}
-endif
-
-ifeq (${FIREWALL_INTERFACE_COUNT},3)
 IMAGES := eth_driver2.elf
+ifeq ($(FIREWALL_INTERFACE_COUNT),3)
+ETH_DRIV3 := ${ETH_DRIV}
+IMAGES += eth_driver3.elf
+endif
 endif
 
 MICRODOT := $(LIONSOS)/dep/microdot/src
@@ -107,6 +106,9 @@ eth_driver1.elf: $(ETH_DRIV1)
 	cp $< $@
 
 eth_driver2.elf: $(ETH_DRIV2)
+	cp $< $@
+
+eth_driver3.elf: $(ETH_DRIV3)
 	cp $< $@
 
 %.o: %.c | $(LIONS_LIBC)/include
@@ -190,9 +192,6 @@ endif
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf
 
 # Interface 0 components
-	$(OBJCOPY) --update-section .device_resources=net_data0/ethernet_driver0_device_resources.data eth_driver0.elf
-	$(OBJCOPY) --update-section .net_driver_config=net_data0/net_driver.data eth_driver0.elf
-
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data0/net_virt_rx.data firewall_network_virt_rx0.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data0/net_virt_tx.data firewall_network_virt_tx0.elf
 
@@ -205,9 +204,6 @@ endif
 	$(OBJCOPY) --update-section .net_config_0=net_data0/net_client_icmp_module.data icmp_module.elf
 
 # Interface 1 components
-	$(OBJCOPY) --update-section .device_resources=net_data1/ethernet_driver1_device_resources.data eth_driver1.elf
-	$(OBJCOPY) --update-section .net_driver_config=net_data1/net_driver.data eth_driver1.elf
-
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data1/net_virt_rx.data firewall_network_virt_rx1.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data1/net_virt_tx.data firewall_network_virt_tx1.elf
 
@@ -223,9 +219,6 @@ endif
 
 ifeq ($(FIREWALL_INTERFACE_COUNT),3)
 # Interface 2 components
-	$(OBJCOPY) --update-section .device_resources=net_data2/ethernet_driver2_device_resources.data eth_driver2.elf
-	$(OBJCOPY) --update-section .net_driver_config=net_data2/net_driver.data eth_driver2.elf
-
 	$(OBJCOPY) --update-section .net_virt_rx_config=net_data2/net_virt_rx.data firewall_network_virt_rx2.elf
 	$(OBJCOPY) --update-section .net_virt_tx_config=net_data2/net_virt_tx.data firewall_network_virt_tx2.elf
 

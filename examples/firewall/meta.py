@@ -11,15 +11,17 @@ from sdfgen import SystemDescription, Sddf, DeviceTree
 assert version("sdfgen").split(".")[1] == "35", "Unexpected sdfgen version"
 
 from typing import List
+from config_structs import FwBridgeMaxPorts, NetDriverConfig
 from pyfw.memory_layout import (
     resolve_region_sizes,
 )
-from pyfw.specs import TrackedNet, FirewallMemoryRegion
+from pyfw.specs import TrackedNet, FirewallMemoryRegion, NetworkDevice, render_system
 from pyfw.component_arp import ArpRequester, ArpResponder
 from pyfw.component_bridge import Bridge
 from pyfw.component_filter import Filter
 from pyfw.component_icmp import IcmpModule
 from pyfw.component_net_virt import NetVirtRx, NetVirtTx
+from pyfw.component_port import FirewallPort
 from pyfw.component_router import Router
 from pyfw.component_webserver import Webserver
 from pyfw.constants import (
@@ -41,18 +43,24 @@ SDF_Channel = SystemDescription.Channel
 fw_interfaces: List[FirewallInterface] = []
 
 def generate(sdf_file: str, dtb: DeviceTree) -> None:
+    used_ports = set()
+    for net_iface in BuildConstants.interfaces():
+        assert (
+            1 <= len(net_iface.ports) <= FwBridgeMaxPorts
+        ), f"Interface {net_iface.name} must have between 1 and {FwBridgeMaxPorts} ports"
+        for idx in net_iface.ports:
+            assert (
+                0 <= idx < len(board.ethernet)
+            ), f"Ethernet port {idx} is not available on {board.name}"
+            assert (
+                idx not in used_ports
+            ), f"Ethernet port {idx} is assigned more than once"
+            used_ports.add(idx)
+
     # Create interfaces and component classes
     for net_iface in BuildConstants.interfaces():
         iface = FirewallInterface(net_iface)
         fw_interfaces.append(iface)
-
-        iface.ethernet_driver = SDF_ProtectionDomain(
-            f"ethernet_driver{iface.index}",
-            f"eth_driver{iface.index}.elf",
-            priority=iface.priorities.ethernet_driver,
-            budget=100,
-            period=400,
-        )
 
         iface.rx_virtualiser = NetVirtRx(iface, None, iface.priorities.rx_virtualiser)
         iface.tx_virtualiser = NetVirtTx(iface, iface.priorities.tx_virtualiser)
@@ -69,16 +77,14 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
         iface.rx_dma_region = FirewallMemoryRegion(
             f"rx_dma_region{iface.index}", dma_buffer_region.region_size, physical=True,
         )
+        # First mapped data region should be the Rx region for this interface
+        # (Easy for the bridge identify it without another config field)
+        iface.bridge.map_data(iface.rx_dma_region.mr)
 
-        ethernet_node_path = board.ethernet_node_path(iface.board_ethernet_idx)
-        ethernet_node = dtb.node(ethernet_node_path)
-        assert ethernet_node is not None, (
-            f"Could not find device tree node: {ethernet_node_path}"
-        )
-
+        # No physical device is set up here, and the virtualisers are connected to the bridge acting in place of a single physical device
         iface.net_system = TrackedNet(
-            ethernet_node,
-            iface.ethernet_driver,
+            None,
+            iface.bridge.pd,
             iface.tx_virtualiser.pd,
             iface.rx_virtualiser.pd,
             iface.rx_dma_region.mr,
@@ -89,6 +95,33 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
 
         if not path.isdir(iface.out_dir):
             assert subprocess.run(["mkdir", iface.out_dir]).returncode == 0
+
+        for port_index, board_index in enumerate(iface.ports):
+            driver = SDF_ProtectionDomain(
+                f"ethernet_driver{board_index}",
+                f"eth_driver{board_index}.elf",
+                priority=iface.priorities.ethernet_driver,
+                budget=100,
+                period=400,
+            )
+            device = dtb.node(board.ethernet_node_path(board_index))
+            assert device is not None
+            device_system = NetworkDevice(device, driver)
+            driver_rx, driver_tx = iface.bridge.connect_port(driver)
+            port = FirewallPort(
+                board_ethernet_idx=board_index,
+                driver=driver,
+                out_dir=f"{iface.out_dir}/port{port_index}",
+                driver_config=NetDriverConfig(
+                    magic="sDDF\x05", # From dep/sddf/include/sddf/network/config.h
+                    virt_rx=driver_rx,
+                    virt_tx=driver_tx,
+                ),
+                device_system=device_system,
+            )
+            iface.fw_ports.append(port)
+            if not path.isdir(port.out_dir):
+                assert subprocess.run(["mkdir", port.out_dir]).returncode == 0
 
     router = Router()
     webserver = Webserver()
@@ -128,8 +161,14 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
 
     # Connect sDDF systems and serialize subsystems
     for iface in fw_interfaces:
+        for port in iface.fw_ports:
+            port.connect()
         assert iface.net_system.connect()
         assert iface.net_system.serialise_config(iface.out_dir)
+        iface.bridge.connect_local(iface.net_system)
+        for source in fw_interfaces:
+            # No issue with mapping the interface's own Rx region again (bridge map function ignores duplicate mappings)
+            iface.bridge.map_data(source.rx_dma_region.mr)
 
     assert serial_system.connect()
     assert serial_system.serialise_config(BuildConstants.output_dir())
@@ -139,12 +178,31 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
     assert webserver_lib_sddf_lwip.connect()
     assert webserver_lib_sddf_lwip.serialise_config(BuildConstants.output_dir())
 
+    for iface in fw_interfaces:
+        for port in iface.fw_ports:
+            update_elf_section(
+                obj_copy,
+                port.driver.program_image,
+                "device_resources",
+                f"{port.out_dir}/{port.driver.name}_device_resources.data",
+            )
+            update_elf_section(
+                obj_copy,
+                port.driver.program_image,
+                "net_driver_config",
+                f"{port.out_dir}/net_driver.data",
+            )
+
     # Serialize firewall configs- this implicitly finalises all configs
     serialize_all_fw_configs(router, webserver, icmp_module, obj_copy)
 
     # Render SDF
     with open(f"{BuildConstants.output_dir()}/{sdf_file}", "w+") as f:
-        f.write(BuildConstants.sdf().render())
+        # Note that interfaces must be passed in the same order as the interface .connect() loop above
+        devices = [
+            port.device_system for iface in fw_interfaces for port in iface.fw_ports
+        ]
+        f.write(render_system([iface.net_system for iface in fw_interfaces], devices))
 
 
 def register_pds(
@@ -160,6 +218,8 @@ def register_pds(
         BuildConstants.sdf().add_pd(pd)
 
     for iface in fw_interfaces:
+        for port in iface.fw_ports:
+            BuildConstants.sdf().add_pd(port.driver)
         for component in [
             iface.tx_virtualiser,
             iface.rx_virtualiser,
@@ -169,8 +229,6 @@ def register_pds(
         ]:
             copy_elf(component.pd.program_image[:-5], component.pd.program_image[:-5], iface.index)
             BuildConstants.sdf().add_pd(component.pd)
-
-        BuildConstants.sdf().add_pd(iface.ethernet_driver)
 
         for ip_filter in iface.filters.values():
             copy_elf(ip_filter.pd.program_image[:-5], ip_filter.pd.program_image[:-5], iface.index)

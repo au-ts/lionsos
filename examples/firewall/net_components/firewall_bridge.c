@@ -1,7 +1,9 @@
 #include <sddf/timer/client.h>
 #include <sddf/timer/config.h>
 #include <lions/firewall/bridge.h>
+#include <lions/firewall/config.h>
 
+__attribute__((__section__(".fw_bridge_config"))) fw_bridge_config_t config;
 __attribute__((__section__(".timer_client_config"))) timer_client_config_t timer_config;
 
 static fw_fdb_entry_t scratch[FW_FDB_NUM_ENTRIES];

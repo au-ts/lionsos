@@ -23,7 +23,7 @@ class InterfacePriorities:
 class NetworkInterface:
     index: int
     name: str
-    board_ethernet_idx: int
+    ports: List[int]
     mac: Tuple[int, ...]
     ip: str
     subnet_bits: int
