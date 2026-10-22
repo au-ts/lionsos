@@ -14,12 +14,32 @@ from random import randint, seed
 import pdcontrol as pdc
 
 def generate(sdf_path: str, output_dir: str):
-   # ping pong pairs with interesting interwoven priorities.
     controller = ProtectionDomain(sdf, f"controller", "controller.elf", priority=250)
-    testpd = ProtectionDomain(sdf, "test", "test.elf", priority=1)
+    pingpd = ProtectionDomain(sdf, "ping", "ping.elf", priority=1)
+    pongpd = ProtectionDomain(sdf, "pong", "pong.elf", priority=1)
+    pingpongch = Channel(
+        sdf,
+        Channel.End(
+            pd=pingpd,
+            can_notify=True,
+            can_pp=False,
+            ch_id=3,
+            setvar_id="pongch",
+        ),
+        Channel.End(
+            pd=pongpd,
+            can_notify=True,
+            can_pp=False,
+            ch_id=19,
+            setvar_id="pingch",
+        )
+    )
     controllerSystem = pdc.PDControlSystem(sdf, controller)
-    controllerSystem.add_client(testpd)
+    controllerSystem.add_client(pingpd)
+    controllerSystem.add_client(pongpd)
+    # Bug with my branch of acacia.
     controllerSystem.build()
+
     sdf.write_xml_file(f"{output_dir}/{sdf_path}")
     sdf.make_config_structs()
 

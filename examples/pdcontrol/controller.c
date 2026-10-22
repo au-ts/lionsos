@@ -7,12 +7,13 @@
 #include <pdcontrol/pdcontrol.h>
 #include <sddf/util/printf.h>
 
-__attribute__((__section__(".pdc_pd_all_config"))) pdc_pd_all_config_t config;
+__attribute__((__section__(".pdc_pd_all_config"))) pdc_pd_all_config_t pdc_pd_all_config;
+__attribute__((__section__(".pdc_channel_all_config"))) pdc_channel_all_config_t pdc_channel_all_config;
 
 
 void init()
 {
-    pdc_config_init(&config, NULL);
+    pdc_config_init(&pdc_pd_all_config, &pdc_channel_all_config);
 }
 void notified(microkit_channel ch)
 {

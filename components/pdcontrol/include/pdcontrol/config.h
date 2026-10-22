@@ -39,7 +39,6 @@ typedef struct {
     pdc_pd_config_t configs[PDC_MAX_CLIENTS];
 } pdc_pd_all_config_t;
 
-// not needed in some cases.
 typedef struct {
     char magic[sizeof(PDC_CHANNEL_CONFIG_MAGIC)];
     seL4_Word num_channels;
@@ -50,8 +49,8 @@ typedef struct {
 // contains necessary maps for querying efficiently.
 typedef struct {
     const pdc_pd_all_config_t* pd_config;
-    const pdc_channel_config_t* chan_config;
+    const pdc_channel_all_config_t* chan_config;
 } pdc_config_handle_t;
 
 // chan_config is nullable. pd_config is not.
-pdc_config_handle_t pdc_config_init(pdc_pd_all_config_t* pd_config, pdc_channel_config_t* chan_config);
+pdc_config_handle_t pdc_config_init(pdc_pd_all_config_t* pd_config, pdc_channel_all_config_t* chan_config);

@@ -9,8 +9,8 @@ SUPPORTED_BOARDS := \
 
 IMAGES := \
 	controller.elf \
-	test.elf
-
+	ping.elf \
+	pong.elf
 
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
@@ -70,10 +70,16 @@ controller.o: $(TOP)/controller.c libsddf_util_debug.a | $(LIONS_LIBC)/include
 controller.elf: controller.o $(LIONS_LIBC)/lib/libc.a libpdcontrol.a
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
-test.o: $(TOP)/test.c
+ping.o: $(TOP)/ping.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-test.elf: test.o
+ping.elf: ping.o
+	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
+
+pong.o: $(TOP)/pong.c
+	${CC} ${CFLAGS} -c -o $@ $<
+
+pong.elf: pong.o
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
 FORCE:
@@ -86,6 +92,7 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) FORCE
 	PYTHONPATH="${PDC_PYPATH}:$(SDDF)" $(PYTHON) $(METAPROGRAM) \
 		--output . --sdf $(SYSTEM_FILE) --dtb $(DTB)
 	${OBJCOPY} --update-section .pdc_pd_all_config=controller_pdc_pd_all_config.data controller.elf
+	${OBJCOPY} --update-section .pdc_channel_all_config=controller_pdc_channel_all_config.data controller.elf
 
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
@@ -99,6 +106,6 @@ qemu: ${IMAGE_FILE} qemu_disk
 
 
 clean::
-	${RM} -rf ${IMAGES} faulter.o faulter.elf
+	${RM} -rf ${IMAGES}
 
 -include controller.d
