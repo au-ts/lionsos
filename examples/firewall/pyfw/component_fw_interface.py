@@ -4,6 +4,7 @@ from typing import Dict, Iterator, Optional
 from sdfgen import SystemDescription
 from pyfw.component_arp import ArpRequester, ArpResponder
 from pyfw.component_base import Component
+from pyfw.component_bridge import Bridge
 from pyfw.component_filter import Filter
 from pyfw.component_net_interface import NetworkInterface
 from pyfw.component_net_virt import NetVirtRx, NetVirtTx
@@ -27,6 +28,7 @@ class FirewallInterface(NetworkInterface):
         self._tx_virtualiser: Optional[NetVirtTx] = None
         self._arp_requester: Optional[ArpRequester] = None
         self._arp_responder: Optional[ArpResponder] = None
+        self._bridge: Optional[Bridge] = None
         self._filters: Dict[int, Filter] = dict()
         self._rx_dma_region: Optional[FirewallMemoryRegion] = None
         self._net_system: Optional[TrackedNet] = None
@@ -89,6 +91,16 @@ class FirewallInterface(NetworkInterface):
     def arp_responder(self, arp_responder: ArpResponder):
         assert arp_responder is not None
         self._arp_responder = arp_responder
+
+    @property
+    def bridge(self) -> Bridge:
+        assert self._bridge is not None
+        return self._bridge
+
+    @bridge.setter
+    def bridge(self, bridge: Bridge):
+        assert bridge is not None
+        self._bridge = bridge
 
     @property
     def rx_dma_region(self) -> FirewallMemoryRegion:

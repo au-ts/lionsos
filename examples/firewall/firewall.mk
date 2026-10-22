@@ -60,7 +60,7 @@ FIREWALL_CONFIG_HEADERS := \
 PYFW_CLASS_FILES := $(wildcard $(FIREWALL_SRC_DIR)/pyfw/*)
 
 IMAGES += arp_requester.elf arp_responder.elf routing.elf micropython.elf \
-		  firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
+		  firewall_bridge.elf firewall_network_virt_rx.elf firewall_network_virt_tx.elf \
 		  timer_driver.elf serial_driver.elf serial_virt_tx.elf \
 		  icmp_filter.elf udp_filter.elf tcp_filter.elf icmp_module.elf \
 		  eth_driver0.elf eth_driver1.elf
@@ -177,11 +177,14 @@ endif
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester0.data arp_requester0.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_firewall_bridge0.data firewall_bridge0.elf
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester1.data arp_requester1.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_firewall_bridge1.data firewall_bridge1.elf
 
 ifeq ($(FIREWALL_INTERFACE_COUNT),3)
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester2.data arp_requester2.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_firewall_bridge2.data firewall_bridge2.elf
 endif
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf

@@ -16,6 +16,7 @@ from pyfw.memory_layout import (
 )
 from pyfw.specs import TrackedNet, FirewallMemoryRegion
 from pyfw.component_arp import ArpRequester, ArpResponder
+from pyfw.component_bridge import Bridge
 from pyfw.component_filter import Filter
 from pyfw.component_icmp import IcmpModule
 from pyfw.component_net_virt import NetVirtRx, NetVirtTx
@@ -57,6 +58,7 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
         iface.tx_virtualiser = NetVirtTx(iface, iface.priorities.tx_virtualiser)
         iface.arp_requester = ArpRequester(iface, iface.priorities.arp_requester)
         iface.arp_responder = ArpResponder(iface, iface.priorities.arp_responder)
+        iface.bridge = Bridge(iface, iface.priorities.bridge)
 
         iface.filters = {
             protocol:
@@ -163,6 +165,7 @@ def register_pds(
             iface.rx_virtualiser,
             iface.arp_requester,
             iface.arp_responder,
+            iface.bridge,
         ]:
             copy_elf(component.pd.program_image[:-5], component.pd.program_image[:-5], iface.index)
             BuildConstants.sdf().add_pd(component.pd)
@@ -227,6 +230,7 @@ def wire_interface_connections(
 
         # Add timer clients
         timer_system.add_client(iface.arp_requester.pd)
+        timer_system.add_client(iface.bridge.pd)
 
 
 def wire_virtualiser_connections() -> None:
