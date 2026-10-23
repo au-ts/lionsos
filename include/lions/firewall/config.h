@@ -23,6 +23,7 @@
 #define FW_MAX_INITIAL_FILTER_RULES 16
 #define FW_MAX_INITIAL_ROUTES 16
 #define FW_MAX_ARP_REQUESTER_CLIENTS 2
+#define FW_BRIDGE_MAX_PORTS 4
 
 #define FW_FILTER_NUM_ACTIONS 4
 
@@ -36,6 +37,23 @@ typedef struct fw_data_connection_resource {
     fw_connection_resource_t conn;
     device_region_resource_t data;
 } fw_data_connection_resource_t;
+
+typedef struct fw_bridge_port {
+    net_connection_resource_t rx;
+    net_connection_resource_t tx;
+} fw_bridge_port_t;
+
+typedef struct fw_bridge_config {
+    uint8_t mac_addr[MAC802_BYTES];
+    /* One Rx pool per interface, one Tx pool per Tx client on this interface */
+    /* Region zero is this interface's Rx pool. */
+    device_region_resource_t data_regions[FW_MAX_INTERFACES + SDDF_NET_MAX_CLIENTS];
+    uint8_t num_data_regions;
+    net_connection_resource_t local_rx;
+    net_connection_resource_t local_tx;
+    fw_bridge_port_t ports[FW_BRIDGE_MAX_PORTS];
+    uint8_t num_ports;
+} fw_bridge_config_t;
 
 typedef struct fw_net_virt_tx_config {
     uint8_t interface;
