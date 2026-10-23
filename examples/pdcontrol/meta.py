@@ -14,7 +14,8 @@ from random import randint, seed
 import pdcontrol as pdc
 
 def generate(sdf_path: str, output_dir: str):
-    controller = ProtectionDomain(sdf, f"controller", "controller.elf", priority=250)
+    sender = ProtectionDomain(sdf, f"sender", "sender.elf", priority=250)
+    receiver = ProtectionDomain(sdf, f"receiver", "receiver.elf", priority=249)
     pingpd = ProtectionDomain(sdf, "ping", "ping.elf", priority=1)
     pongpd = ProtectionDomain(sdf, "pong", "pong.elf", priority=1)
     pingpongch = Channel(
@@ -34,11 +35,13 @@ def generate(sdf_path: str, output_dir: str):
             setvar_id="pingch",
         )
     )
-    controllerSystem = pdc.PDControlSystem(sdf, controller)
-    controllerSystem.add_client(pingpd)
-    controllerSystem.add_client(pongpd)
+    tracerSystem = pdc.IPCTracerSystem(sdf, sender, receiver)
+    tracerSystem.add_client(pingpd)
+    tracerSystem.add_client(pongpd)
+
     # Bug with my branch of acacia.
-    controllerSystem.build()
+    # Forcing us to build
+    tracerSystem.build()
 
     sdf.write_xml_file(f"{output_dir}/{sdf_path}")
     sdf.make_config_structs()

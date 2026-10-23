@@ -15,6 +15,7 @@
 
 static char PDC_PD_CONFIG_MAGIC[] = "pdmagic";
 static char PDC_CHANNEL_CONFIG_MAGIC[] = "chanmagic";
+static char PDC_IPC_CONFIG_MAGIC[] = "ipcmagic";
 // Notifications is the number of leading zeros.
 
 typedef struct {

@@ -39,6 +39,8 @@ pdc_config_handle_t pdc_config_init(pdc_pd_all_config_t* pd_config, pdc_channel_
 {
     assert(pd_config != NULL);
     assert(chan_config != NULL);
+    assert(strcmp(pd_config->magic, PDC_PD_CONFIG_MAGIC) == 0);
+    assert(strcmp(chan_config->magic, PDC_CHANNEL_CONFIG_MAGIC) == 0);
     pdc_pd_all_config_print(pd_config);
     pdc_channel_all_config_print(chan_config);
     return (pdc_config_handle_t){ .pd_config=pd_config, .chan_config=chan_config };

@@ -1,5 +1,4 @@
 # Python tooling for using pdcontrol with microkit_acacia.
-
 from acacia import (
     System,
     Subsystem,
@@ -7,9 +6,6 @@ from acacia import (
     Channel,
     Map,
     MemoryRegion,
-    DTBNode,
-    DeviceTreeBlob,
-    SchedulingProperties,
     ConfigStruct,
     SubsystemBuildError,
 )
@@ -17,13 +13,13 @@ from dataclasses import dataclass
 from typing import override, List, Dict
 
 @dataclass
-class PDCClient:
+class ClientInfo:
     pd: ProtectionDomain
     id: int
 
     def to_config_struct(self) -> ConfigStruct:
         """
-        local_id is the id from the perspective of the system's main_pd given.
+        id is the id from the perspective of the system's main_pd given.
         """
         assert self.pd.priority is not None
         fields = dict(name=self.pd.name, def_prio=self.pd.priority, id=self.id)
@@ -34,10 +30,10 @@ class PDCClient:
 
 
 @dataclass
-class PDCChannel:
+class ChannelInfo:
     original: Channel
-    end_a_client: PDCClient
-    end_b_client: PDCClient
+    end_a_client: ClientInfo
+    end_b_client: ClientInfo
 
     def to_config_struct(self) -> ConfigStruct:
         fields = dict(
@@ -51,7 +47,7 @@ class PDCChannel:
             fields=fields
         )
 
-class PDControlSystem(Subsystem):
+class PDInfoSystem(Subsystem):
     @override
     def __init__(self,
         sdf: System,
@@ -63,12 +59,13 @@ class PDControlSystem(Subsystem):
         self.pd_all_config_section = pd_all_config_section
         self.channel_all_config_section = channel_all_config_section
         # int is the client's name.
-        self._clients: Dict[str, PDCClient] = {}
+        self._clients: Dict[str, ClientInfo] = {}
+        self._connected = False
         super().__init__(sdf, main_pd.name, clients_allowed=True)
 
 
     @staticmethod
-    def channel_all_config_factory(target_file: str, section: str, channels: List[PDCChannel]) -> ConfigStruct:
+    def channel_all_config_factory(target_file: str, section: str, channels: List[ChannelInfo]) -> ConfigStruct:
 
         configs: List[ConfigStruct] = []
         for ch in channels:
@@ -88,7 +85,7 @@ class PDControlSystem(Subsystem):
         )
 
     @staticmethod
-    def pd_all_config_factory(target_file: str, section: str, clients: List[PDCClient]) -> ConfigStruct:
+    def pd_all_config_factory(target_file: str, section: str, clients: List[ClientInfo]) -> ConfigStruct:
 
         pd_config_structs: List["ConfigStruct"] = []
         for client in clients:
@@ -109,16 +106,17 @@ class PDControlSystem(Subsystem):
             target_file=target_file,
         )
 
-    def _get_client_channels(self) -> List[PDCChannel]:
+    def _get_client_channels(self) -> List[ChannelInfo]:
+        # not technically supported by acacia api, and will be prone to breaking.
         channels_sorted = sorted(self.sdf.channels,
             key=lambda ch: ch.end_a.pd.name + ch.end_b.pd.name)
 
-        our_channels: List[PDCChannel] = []
+        our_channels: List[ChannelInfo] = []
 
         # find the channels that are contained in this system.
         for chan in channels_sorted:
             if chan.end_a.pd.name in self._clients and chan.end_b.pd.name in self._clients:
-                our_channels.append(PDCChannel(
+                our_channels.append(ChannelInfo(
                     chan,
                     self._clients[chan.end_a.pd.name],
                     self._clients[chan.end_b.pd.name],
@@ -129,7 +127,7 @@ class PDControlSystem(Subsystem):
     def add_client(self, client: "ProtectionDomain"):
         super().add_client(client)
         assert client.name not in self._clients
-        self._clients[client.name] = PDCClient(client, len(self._clients))
+        self._clients[client.name] = ClientInfo(client, len(self._clients))
 
     @override
     def get_clients(self) -> List[ProtectionDomain]:
@@ -137,8 +135,10 @@ class PDControlSystem(Subsystem):
 
     @override
     def connect_clients(self):
+        assert not self._connected
         for pd in self.clients:
             self.main_pd.add_child_pd(pd)
+        self._connected = True
 
     @override
     def generate_config_structs(self) -> List["ConfigStruct"]:
@@ -147,7 +147,7 @@ class PDControlSystem(Subsystem):
         """
         return (super().generate_config_structs() +
             [self
-                .pd_all_config_factory(self.main_pd.prog_image, self.pd_all_config_section, self._clients.values()),
+                .pd_all_config_factory(self.main_pd.prog_image, self.pd_all_config_section, list(self._clients.values())),
              self
                  .channel_all_config_factory(
                      self.main_pd.prog_image,
@@ -157,15 +157,5 @@ class PDControlSystem(Subsystem):
 
     @override
     def build(self):
-        """
-        Construct subsystem, initialising all PDs and connecting clients
-        if possible.
-        """
-        if self.built:
-            raise RuntimeError("Cannot build a subsystem more than once!")
-
-        # Connect clients if needed
-        if self.clients_allowed:
-            self.connect_clients()
-        self.built = True
+        super().build()
 

@@ -8,9 +8,7 @@ SUPPORTED_BOARDS := \
 	maaxboard
 
 IMAGES := \
-	controller.elf \
-	ping.elf \
-	pong.elf
+	$(addsuffix .elf,$(basename $(notdir $(wildcard ${TOP}/pds/*.c))))
 
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
@@ -62,37 +60,34 @@ SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include ${SDDF}/util/util.mk
 include ${SDDF}/libco/libco.mk
 
+DEBUG::
+	@echo ${IMAGES}
+
 all: ${IMAGE_FILE}
 
-controller.o: $(TOP)/controller.c libsddf_util_debug.a | $(LIONS_LIBC)/include
+$(IMAGES:.elf=.o): %.o: ${TOP}/pds/%.c libsddf_util_debug.a | ${LIONS_LIBC}/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
-controller.elf: controller.o $(LIONS_LIBC)/lib/libc.a libpdcontrol.a
+${IMAGES}: %.elf: %.o ${LIONS_LIBC}/lib/libc.a libpdcontrol.a
 	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
 
-ping.o: $(TOP)/ping.c
-	${CC} ${CFLAGS} -c -o $@ $<
-
-ping.elf: ping.o
-	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
-
-pong.o: $(TOP)/pong.c
-	${CC} ${CFLAGS} -c -o $@ $<
-
-pong.elf: pong.o
-	${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
-
-FORCE:
+FORCE: ${IMAGES}
 
 $(DTB): $(DTS)
 	dtc -q -I dts -O dtb $(DTS) > $(DTB)
 
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) FORCE
+	@echo ${IMAGES}
 	PYTHONPATH="${PDC_PYPATH}:$(SDDF)" $(PYTHON) $(METAPROGRAM) \
 		--output . --sdf $(SYSTEM_FILE) --dtb $(DTB)
-	${OBJCOPY} --update-section .pdc_pd_all_config=controller_pdc_pd_all_config.data controller.elf
-	${OBJCOPY} --update-section .pdc_channel_all_config=controller_pdc_channel_all_config.data controller.elf
+	# for now manually put in all of the required pds for objcopying.
+	${OBJCOPY} --update-section .pdc_pd_all_config=receiver_pdc_pd_all_config.data receiver.elf
+	${OBJCOPY} --update-section .pdc_channel_all_config=receiver_pdc_channel_all_config.data receiver.elf
+	${OBJCOPY} --update-section .pdc_ipc_tracer_config=receiver_pdc_ipc_tracer_config.data receiver.elf
+	${OBJCOPY} --update-section .pdc_pd_all_config=sender_pdc_pd_all_config.data sender.elf
+	${OBJCOPY} --update-section .pdc_channel_all_config=sender_pdc_channel_all_config.data sender.elf
+	${OBJCOPY} --update-section .pdc_ipc_tracer_config=sender_pdc_ipc_tracer_config.data sender.elf
 
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
@@ -108,4 +103,4 @@ qemu: ${IMAGE_FILE} qemu_disk
 clean::
 	${RM} -rf ${IMAGES}
 
--include controller.d
+-include $(IMAGES:.elf=.d)

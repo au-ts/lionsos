@@ -20,6 +20,9 @@ CFLAGS += -I${PDC_include}
 PDC_c_files := $(wildcard ${PDC_src}/*.c)
 PDC_o_files := $(patsubst ${PDC_src}/%.c,%.o,${PDC_c_files})
 
+DEBUG::
+	@echo "pdc o files: ${PDC_o_files}"
+
 ${PDC_o_files}: | ${LIONS_LIBC}/include
 	${CC} -c ${PDC_cflags} ${PDC_ldflags} $(patsubst %.o,${PDC_src}/%.c,$@) -o $@
 

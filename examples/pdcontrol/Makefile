@@ -21,7 +21,7 @@ REPORT_FILE := report.txt
 
 all: ${IMAGE_FILE}
 
-qemu qemud ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
+qemu qemud ${IMAGE_FILE} ${REPORT_FILE} clean clobber DEBUG: ${BUILD_DIR}/Makefile FORCE
 	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} $(notdir $@)
 
 ${BUILD_DIR}/Makefile: pdcontrol.mk Makefile
