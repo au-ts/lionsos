@@ -35,6 +35,7 @@ typedef struct bridge_buffer_state {
     // First descriptor received for forwarding
     net_buff_desc_t original;
     // Where did this buffer come from?
+    // TODO: Can I just track this via where the buffer is?
     enum buffer_origin origin;
     // Are we waiting on sending this buffer on a port?
     uint16_t tx_pending;
@@ -114,6 +115,7 @@ static bool rx_select_destinations(uint8_t ingress_port, const net_buff_desc_t *
     *destinations = (bridge_rx_destinations_t) { 0 };
     assert(ingress_port < config.num_ports);
 
+    // TODO: Pass through the location, we should know it!!
     buffer_location_t location;
     if (!get_buffer_location(buffer, &location) || location.region != 0 || location.slot >= local_rx.capacity) {
         return false;
@@ -230,6 +232,7 @@ static bool tx_enqueue(uint8_t port, net_buff_desc_t buffer, bridge_buffer_state
         return false;
     }
 
+    // TODO: Change this to just enqueue and add on success
     state->tx_pending++;
     tx_outstanding[port]++;
     int err = net_enqueue_active(&tx_ports[port], buffer);
@@ -277,6 +280,7 @@ static void finish_buffer(bridge_buffer_state_t *state)
             microkit_notify(config.local_tx.id);
         }
     } else if (deliver_local) {
+        // TODO: do this in batches (like ports, consider global)
         // Buffer is now safe to send to Rx virtualiser (it may be written to)
         int err = net_enqueue_active(&local_rx, buffer);
         assert(!err);
@@ -471,12 +475,8 @@ static void rx_provide(void)
             assert(state->origin == BUFFER_IDLE);
             assert(state->tx_pending == 0);
 
-            // TODO: Is this sane?
-            // Cache clean since Rx virt or further PDs may have written to the buffer
-            cache_clean_and_invalidate(location.vaddr, location.vaddr + NET_BUFFER_SIZE);
-
-            // Simples method for assigning buffers to ports is just divide evenly
-            // Could do this smarter in the future?
+            // Simplest method for assigning buffers to ports is just divide evenly
+            // TODO: Consider increasing the number of DMA buffers (scale on len(ports) in constants.py)
             size_t port = location.slot % config.num_ports;
             buffer.len = 0;
 
