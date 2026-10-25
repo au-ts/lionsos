@@ -17,7 +17,18 @@
 #include <minor_pf.h>
 #include <pager_instrumentation.h>
 
+#ifdef BENCH_505
+#include <505.h>
+#endif
+#ifdef BENCH_519
 #include <519.h>
+#endif
+#ifdef BENCH_544
+#include <544.h>
+#endif
+#ifdef BENCH_557
+#include <557.h>
+#endif
 
 __attribute__((__section__(".serial_client_config"))) serial_client_config_t serial_config;
 __attribute__((__section__(".pager_client_config"))) pager_client_config_t pager_config;
@@ -63,6 +74,19 @@ void init(void)
 
     minor_pf();
 
+    /*
+     * The SPEC CPU benchmarks. Each argv below is that benchmark's test
+     * workload command, taken from its data/test/input/control, and its input
+     * files are packed into the ramfs root by pager_rpi4b.mk. Uncomment one at
+     * a time: they run for a long time, and the instrumentation below is
+     * aligned to the faults minor_pf takes.
+     */
+    // char *argv_505[] = {
+    //     "mcf",
+    //     "inp.in",
+    // };
+    // fivezerofive(sizeof(argv_505) / sizeof(argv_505[0]), argv_505);
+
     // char *argv_519[] = {
     //     "lbm",
     //     "1",
@@ -72,6 +96,28 @@ void init(void)
     //     "100_100_130_cf_a.of",
     // };
     // fiveonenine(sizeof(argv_519) / sizeof(argv_519[0]), argv_519);
+
+    // char *argv_544[] = {
+    //     "nab",
+    //     "hkrdenq",
+    //     "1930344093",
+    //     "1000",
+    // };
+    // fivefourfour(sizeof(argv_544) / sizeof(argv_544[0]), argv_544);
+
+    /* argv[1] is the .xz; control names the tar it decompresses to, whose
+     * SHA-512 is argv[3]. argv[2] is the input buffer size in MiB. */
+    // char *argv_557[] = {
+    //     "xz",
+    //     "cpu2006docs.tar.xz",
+    //     "4",
+    //     "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+    //     "1548636",
+    //     "1555348",
+    //     "0",
+    // };
+    // fivefiveseven(sizeof(argv_557) / sizeof(argv_557[0]), argv_557);
+
     #ifdef PAGER_INSTRUMENTATION
     // get the pager to send us the instrumentation data
     uint64_t samples = 0;

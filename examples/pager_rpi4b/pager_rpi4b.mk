@@ -69,12 +69,22 @@ CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
 
 BENCHMARKS_DIR := $(LIONSOS)/dep/benchmarking/lionsos
-ifeq ($(wildcard $(BENCHMARKS_DIR)/519.lbm_r/src/Makefile),)
-$(error Could not find the benchmarks in $(BENCHMARKS_DIR) -- run `make submodules`)
-endif
 BENCHMARK_DIR := $(BENCHMARKS_DIR)/minor_page_fault_latency
-# SPEC CPU 519.lbm_r, driven by the client out of the ramfs image below.
-BENCHMARK_519_DIR := $(BENCHMARKS_DIR)/519.lbm_r/src
+# The SPEC CPU benchmarks, driven by the client out of the ramfs image below.
+# Dropping one from this list drops its archive, its include directory, its
+# -DBENCH_<nnn> and its input data together; the client's call sites are
+# commented out, so only the one you uncomment actually runs.
+SPEC_BENCHMARKS ?= 505.mcf_r 519.lbm_r 544.nab_r 557.xz_r
+SPEC_DIRS := $(foreach b,$(SPEC_BENCHMARKS),$(BENCHMARKS_DIR)/$(b)/src)
+# Each benchmark's Makefile builds $(BUILD_DIR)/<nnn>.a: 519.lbm_r -> 519.a.
+SPEC_LIBS := $(foreach b,$(SPEC_BENCHMARKS),$(firstword $(subst ., ,$(b))).a)
+BENCHMARK_LIBS := minor_pf.a $(SPEC_LIBS)
+$(foreach d,$(BENCHMARK_DIR) $(SPEC_DIRS),$(if $(wildcard $(d)/Makefile),,$(error Could not find a benchmark Makefile in $(d) -- run `make submodules`)))
+# Only client.c includes the benchmark headers, and $(SPEC_DIRS) holds two
+# different config.h and four copies of bench_timer.h that differ from
+# $(BENCHMARK_DIR)'s, so these stay off everything else's include path.
+BENCHMARK_INCLUDES := -I$(BENCHMARK_DIR) $(addprefix -I,$(SPEC_DIRS))
+BENCHMARK_DEFINES := $(foreach b,$(SPEC_BENCHMARKS),-DBENCH_$(firstword $(subst ., ,$(b))))
 # Where pager_instrumentation.h lives. The client and the benchmark read it too.
 PAGER_CONFIG_DIR := $(LIONSOS)/components/pager/config
 
@@ -84,12 +94,18 @@ PAGER_INIT_FRAMES := 40000
 
 # RAM_FATFS in the ramfs config moves the client's files from file.c (which has
 # no file system PD to talk to here) to FatFs over a RAM disk inside the client.
-# The disk starts out as a cpio archive of RAMFS_ROOT.
+# The disk starts out as a cpio archive of the RAMFS_ROOTS merged together.
 RAMFS_CONFIG_DIR := $(LIONSOS)/components/fs/ramfs/config
 HASH := \#
 RAM_FATFS := $(shell grep -qE '^[[:space:]]*$(HASH)[[:space:]]*define[[:space:]]+RAM_FATFS([[:space:]]|$$)' $(RAMFS_CONFIG_DIR)/fat_config.h && echo 1)
-RAMFS_ROOT ?= $(BENCHMARKS_DIR)/519.lbm_r/data/test/input
+RAMFS_ROOTS ?= $(foreach b,$(SPEC_BENCHMARKS),$(BENCHMARKS_DIR)/$(b)/data/test/input)
 RAMFS_SIZE ?= 0x4000000
+# The benchmarks open their inputs by bare name, so the trees are merged flat
+# into one staging directory. "control" is SPEC's runspec metadata that no
+# benchmark reads, and three of the four trees ship one, which makes it the only
+# name that collides.
+RAMFS_STAGE := ramfs_root
+RAMFS_EXCLUDE := control
 
 CFLAGS := \
 	-mstrict-align \
@@ -109,9 +125,7 @@ CFLAGS := \
 	-I$(SDDF)/include/microkit \
 	-I$(LIBMICROKITCO_PATH) \
 	-I$(TOP) \
-	-I$(PAGER_CONFIG_DIR) \
-	-I$(BENCHMARK_DIR) \
-	-I$(BENCHMARK_519_DIR)
+	-I$(PAGER_CONFIG_DIR)
 include $(LIONSOS)/lib/libc/libc.mk
 include $(SDDF)/tools/make/board/common.mk
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(BENCHMARK_DIR)
@@ -144,7 +158,7 @@ RAMFS_IMAGE := ramfs.cpio
 META_RAMFS_ARGS := --ramfs-image $(RAMFS_IMAGE) --ramfs-size $(RAMFS_SIZE)
 endif
 
-${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a minor_pf.a 519.a
+${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a $(BENCHMARK_LIBS)
 
 %.o: %.c
 	${CC} ${CFLAGS} -c -o $@ $<
@@ -153,34 +167,49 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a minor_pf.a 519.a
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 client.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
-	$(CC) -c $(CFLAGS) -I. -I$(RAMFS_CONFIG_DIR) $< -o $@
+	$(CC) -c $(CFLAGS) -I. -I$(RAMFS_CONFIG_DIR) $(BENCHMARK_INCLUDES) $(BENCHMARK_DEFINES) $< -o $@
 
-client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a minor_pf.a 519.a $(RAMFS_LIB)
+client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a $(BENCHMARK_LIBS) $(RAMFS_LIB)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 ifeq ($(RAM_FATFS),1)
 # io.c unpacks this into a FAT volume when the client mounts it. Entry names
-# must not start with "./", and a missing RAMFS_ROOT gives an empty file system.
-$(RAMFS_IMAGE): $(shell find $(RAMFS_ROOT) 2>/dev/null)
-	if [ -d "$(RAMFS_ROOT)" ]; then \
-		(cd "$(RAMFS_ROOT)" && find . -mindepth 1 -printf '%P\n' | LC_ALL=C sort | cpio -o -H newc --quiet) > $@; \
-	else \
-		echo "WARNING: RAMFS_ROOT $(RAMFS_ROOT) not found, packing an empty ramfs"; \
-		cpio -o -H newc --quiet < /dev/null > $@; \
-	fi
+# must not start with "./". cpio names its entries relative to a single
+# directory, so the input trees are staged into one first; a missing root is a
+# warning rather than an error, and no roots at all gives an empty file system.
+$(RAMFS_IMAGE): $(shell find $(RAMFS_ROOTS) 2>/dev/null)
+	rm -rf $(RAMFS_STAGE)
+	mkdir -p $(RAMFS_STAGE)
+	for root in $(RAMFS_ROOTS); do \
+		if [ -d "$$root" ]; then \
+			cp -R "$$root"/. $(RAMFS_STAGE)/; \
+		else \
+			echo "WARNING: ramfs input $$root not found, skipping"; \
+		fi; \
+	done
+	$(foreach e,$(RAMFS_EXCLUDE),rm -rf $(RAMFS_STAGE)/$(e);)
+	(cd $(RAMFS_STAGE) && find . -mindepth 1 -printf '%P\n' | LC_ALL=C sort | cpio -o -H newc --quiet) > $@
+
+clean::
+	rm -rf $(RAMFS_STAGE)
 endif
 
 # PAGER_INSTRUMENTATION is a #define in pager_config.h, so the client has to
 # be recompiled when that header changes.
 -include client.d
 
-.PHONY: minor_pf.a 519.a
+.PHONY: $(BENCHMARK_LIBS)
 # The benchmarks include libc headers, which only exist once musl is installed.
 minor_pf.a: | $(LIONS_LIBC)/include
 	$(MAKE) -C $(BENCHMARK_DIR) CPU=$(CPU) LIONS_LIBC=$(LIONS_LIBC)
 
-519.a: | $(LIONS_LIBC)/include
-	$(MAKE) -C $(BENCHMARK_519_DIR) CPU=$(CPU) LIONS_LIBC=$(LIONS_LIBC)
+# One `<nnn>.a` rule per entry in SPEC_BENCHMARKS, each re-invoking that
+# benchmark's own Makefile, which writes its archive into $(BUILD_DIR).
+define spec_benchmark_rule
+$(firstword $(subst ., ,$(1))).a: | $$(LIONS_LIBC)/include
+	$$(MAKE) -C $$(BENCHMARKS_DIR)/$(1)/src CPU=$$(CPU) LIONS_LIBC=$$(LIONS_LIBC)
+endef
+$(foreach b,$(SPEC_BENCHMARKS),$(eval $(call spec_benchmark_rule,$(b))))
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(RAMFS_CONFIG_DIR)/fat_config.h $(RAMFS_IMAGE)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH \

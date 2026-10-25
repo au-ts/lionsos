@@ -9,13 +9,6 @@
 #include "ff.h"
 #include <lions/fs/protocol.h>
 
-// Use struct instead of union
-typedef struct {
-    fs_cmd_params_t params;
-    uint64_t status;
-    fs_cmpl_data_t result;
-} co_data_t;
-
 void handle_initialise(void);
 void handle_deinitialise(void);
 void handle_file_open(void);
