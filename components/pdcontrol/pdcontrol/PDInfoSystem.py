@@ -145,6 +145,7 @@ class PDInfoSystem(Subsystem):
         """
         returns the config structs required for config.h in pdcontrol.
         """
+        assert self._connected
         return (super().generate_config_structs() +
             [self
                 .pd_all_config_factory(self.main_pd.prog_image, self.pd_all_config_section, list(self._clients.values())),

@@ -10,9 +10,10 @@ from acacia import (
     SubsystemBuildError,
 )
 from dataclasses import dataclass
-from typing import override, List, Dict
+from typing import override, List, Dict, Final
 
 class IPCTracerSystem(PDInfoSystem):
+    DEFAULT_SENDER_RECEIVER_CHANNEL_ID: Final[int] = 61
     """
     An IPC Tracer system, which is an extension on the PDInfo system.
     This has a forced topology of the following:
@@ -21,6 +22,8 @@ class IPCTracerSystem(PDInfoSystem):
            This ensures that sends and recvs work as expected. You must set a
            badge calling convention to determine between ppcalls and sends/notifications.
            However, ppcalls cannot be chained. See appendix X for reasoning.
+    This system also has a memory region mapped between the sender and receiver can communicate to pass
+    IPC without having to do blocking calls.
     """
     @override
     def __init__(self,
@@ -44,10 +47,21 @@ class IPCTracerSystem(PDInfoSystem):
         self.receiver_channel_all_config_section = receiver_channel_all_config_section
         self.receiver_ipc_tracer_config_section = receiver_ipc_tracer_config_section
         self.channel_id_to_source_child: Dict[int, ClientInfo] = dict()
+        self.queue_mr = MemoryRegion(sdf, "ipc_queue_mr", 0x4000)
+        self.sender_map = self.sender_pd.create_automap(self.queue_mr, "rw");
+        self.receiver_map = self.receiver_pd.create_automap(self.queue_mr, "rw");
         super().__init__(sdf, receiver_pd, receiver_pd_all_config_section, receiver_channel_all_config_section)
 
     @staticmethod
-    def ipc_tracer_config_factory(target_file: str, target_section: str, channel_id_to_source_child: Dict[int, ClientInfo]) -> ConfigStruct:
+    def ipc_tracer_config_factory(
+        target_file: str,
+        target_section: str,
+        channel_id_to_source_child: Dict[int, ClientInfo],
+        sender_channel_id: int,
+        receiver_channel_id: int,
+        sender_id: int,
+        queue_map: Map,
+    ) -> ConfigStruct:
         # A pseudo map from channel id to source child id.
         arraything: List[int] = [0 for _ in range(max(channel_id_to_source_child.keys())+1)]
         for key, value in channel_id_to_source_child.items():
@@ -55,7 +69,11 @@ class IPCTracerSystem(PDInfoSystem):
 
         fields = dict(
             magic="ipcmagic" + chr(0x0),
-            channel_id_to_source_child_id=arraything
+            channel_id_to_source_child_id=arraything,
+            receiver_channel_id=receiver_channel_id,
+            sender_channel_id=sender_channel_id,
+            sender_id=sender_id,
+            queue_storage=queue_map.vaddr,
         )
         return ConfigStruct(
             target_file=target_file,
@@ -78,6 +96,13 @@ class IPCTracerSystem(PDInfoSystem):
         super().connect_clients()
         # now we need to modify all of our relevant channels
         original_channels = self._get_client_channels()
+
+        # need to channel between sender and receiver
+        chan = Channel(self.sdf,
+            Channel.End(pd=self.receiver_pd, can_notify=True, can_pp=False, ch_id=self.DEFAULT_SENDER_RECEIVER_CHANNEL_ID),
+            Channel.End(pd=self.sender_pd, can_notify=False, can_pp=False, ch_id=self.DEFAULT_SENDER_RECEIVER_CHANNEL_ID),
+        )
+        self.receiver_pd.add_child_pd(self.sender_pd, child_id=self.DEFAULT_SENDER_RECEIVER_CHANNEL_ID)
 
         # remove all of these channel's references
         # and add equivalent channels.
@@ -128,8 +153,25 @@ class IPCTracerSystem(PDInfoSystem):
                  self.sender_pd.prog_image,
                  self.sender_channel_all_config_section,
                  self._get_client_channels()),
-            self.ipc_tracer_config_factory(self.sender_pd.prog_image, self.sender_ipc_tracer_config_section, self.channel_id_to_source_child),
-            self.ipc_tracer_config_factory(self.receiver_pd.prog_image, self.receiver_ipc_tracer_config_section, self.channel_id_to_source_child),
+            self.ipc_tracer_config_factory(
+                self.sender_pd.prog_image,
+                self.sender_ipc_tracer_config_section,
+                self.channel_id_to_source_child,
+                self.DEFAULT_SENDER_RECEIVER_CHANNEL_ID,
+                self.DEFAULT_SENDER_RECEIVER_CHANNEL_ID,
+                self.DEFAULT_SENDER_RECEIVER_CHANNEL_ID,
+                self.sender_map,
+            ),
+            self.ipc_tracer_config_factory(
+                self.receiver_pd.prog_image,
+                self.receiver_ipc_tracer_config_section,
+                self.channel_id_to_source_child,
+                self.DEFAULT_SENDER_RECEIVER_CHANNEL_ID,
+                self.DEFAULT_SENDER_RECEIVER_CHANNEL_ID,
+                self.DEFAULT_SENDER_RECEIVER_CHANNEL_ID,
+                self.receiver_map
+            ),
+
         ]
         return results
 

@@ -12,7 +12,7 @@ PDC_cflags := -MD \
 	-I ${PDC_include} \
 	-I ${LIONS_LIBC}/include \
 	-I ${SDDF}/include \
-	-I$(SDDF)/include/microkit
+	-I ${SDDF}/include/microkit
 
 PDC_ldflags := -l${LIONS_LIBC}/lib/libc.a
 

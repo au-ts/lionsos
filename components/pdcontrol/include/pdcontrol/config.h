@@ -7,16 +7,32 @@
 // Higher pds ids are reserved for drivers and extensions.
 #define PDC_MAX_PD_ID 32
 #define PDC_MAX_CHANNELS 48
+#define PDC_PD_MASK 0xff
+#define PDC_CHANNEL_MASK 0x3f
+
+#define PDC_BADGE_FAULT_BIT 62
+#define PDC_BADGE_ENDPOINT_BIT 63
+
 
 #define PDC_INPUT_CAP 1
 #define PDC_REPLY_CAP 4
 #define PDC_MAX_NAME_LEN 64
 #define PDC_MICROKIT_CALL_BADGE_MASK 0xff
+#define PDC_UNSET_VALUE ((seL4_Word)(-1))
 
 static char PDC_PD_CONFIG_MAGIC[] = "pdmagic";
 static char PDC_CHANNEL_CONFIG_MAGIC[] = "chanmagic";
 static char PDC_IPC_CONFIG_MAGIC[] = "ipcmagic";
 // Notifications is the number of leading zeros.
+
+typedef enum pdc_ipctype {
+    pdc_ipctype_SenderReply = 1,
+    pdc_ipctype_Call,
+    pdc_ipctype_Ntfn,
+    pdc_ipctype_Fault,
+    pdc_ipctype_Send,
+    pdc_ipctype_BlockChecker,
+} pdc_ipctype_e;
 
 typedef struct {
     char name[PDC_MAX_NAME_LEN];
@@ -55,3 +71,15 @@ typedef struct {
 
 // chan_config is nullable. pd_config is not.
 pdc_config_handle_t pdc_config_init(pdc_pd_all_config_t* pd_config, pdc_channel_all_config_t* chan_config);
+
+static inline seL4_Word pdc_badge_to_channel_id(seL4_Word badge) {
+    unsigned int idx = 0;
+    do {
+        if (badge & 1) {
+            break;
+        }
+        badge >>= 1;
+        idx++;
+    } while (badge != 0);
+    return idx;// __builtin_ctz(badge);
+}
