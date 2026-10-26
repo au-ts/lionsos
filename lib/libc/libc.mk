@@ -42,7 +42,13 @@ $(LIONS_LIBC)/lib/libc.a: $(MUSL)/lib/libc.a $(LIB_C_POSIX_OBJ) $(LIB_C_COMPILER
 
 # RAM_FATFS in the ramfs config picks file.c or ramfile.c; scoped here so other
 # components keep finding their own fat_config.h.
-$(LIBC)/posix/%.o: CFLAGS += -I$(LIONSOS)/components/fs/ramfs/config
+#
+# LIBC_PAGER := 1 before this include makes mem.c forward brk/mmap/munmap to a
+# pager PD and proc.c forward fork/clone, which requires the client to define
+# pager_config in .pager_client_config. Left unset, the client gets a morecore
+# allocator over the static heap it passes to libc_init() and libc has no pager
+# dependency at all. Scoped to the posix objects: only they look at it.
+$(LIBC)/posix/%.o: CFLAGS += -I$(LIONSOS)/components/fs/ramfs/config $(if $(LIBC_PAGER),-DLIBC_PAGER)
 $(LIBC)/posix/%.o: $(LIB_C_DIR)/posix/%.c | $(LIONS_LIBC)/include $(LIBC)/posix
 	$(CC) -c $(CFLAGS) $< -o $@
 

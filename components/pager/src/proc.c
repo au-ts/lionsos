@@ -15,33 +15,39 @@
 
 static struct process processes[PAGER_MAX_CLIENTS];
 static seL4_CPtr process_cnode_cptr;
-static uint32_t next_process_cnode_slot;
+static uint32_t process_cnode_slots;
+/* Slot 0 of the CNode holds its own self-reference, so the processes start above it. */
+static uint32_t next_process_cnode_slot = 1;
 static uint8_t num_static_processes;
+
+#define PROCESS_CNODE_SLOTS 2
 
 static int allocate_process(struct process *process, uint32_t pid,
 							uint32_t parent)
 {
-	uint32_t cnode_slot = next_process_cnode_slot++;
-	seL4_CPtr cspace;
+	uint32_t cnode_slot = next_process_cnode_slot;
 	seL4_Error error;
 
-	if (cnode_slot >= 512) return PROCESS_FORK_NO_SLOTS;
+	if (cnode_slot + PROCESS_CNODE_SLOTS > process_cnode_slots) return PROCESS_FORK_NO_SLOTS;
+	if (vspaces[pid] == 0) return PROCESS_FORK_CAP;
+
 	error = untyped_alloc(seL4_CapTableObject, PROCESS_CSPACE_SIZE_BITS,
 						  cnode_slot, process_cnode_cptr, 1);
 	if (error != seL4_NoError) return PROCESS_FORK_CAP;
 
-	cspace = process_cnode_cptr + cnode_slot;
-	process->cspace = cspace;
-	process->vspace = cspace + PROCESS_VSPACE_SLOT;
+	error = untyped_alloc(seL4_TCBObject, 0, cnode_slot + 1, process_cnode_cptr, 1);
+	if (error != seL4_NoError) return PROCESS_FORK_CAP;
+
+	/* TODO: neither these slots nor the channel minted below are reclaimed if a
+	 * process fails to start. */
+	next_process_cnode_slot = cnode_slot + PROCESS_CNODE_SLOTS;
+	process->cspace = process_cnode_cptr + cnode_slot;
+	process->tcb = process_cnode_cptr + cnode_slot + 1;
+	process->vspace = vspaces[pid];
+	process->ppc_ep_slot = processes[parent].ppc_ep_slot;
 	process->parent_pid = parent;
 	process->pid = pid;
 	process->allocated = true;
-
-	error = untyped_alloc(seL4_ARM_VSpaceObject, 0, PROCESS_VSPACE_SLOT, cspace, 1);
-	if (error != seL4_NoError) {
-		process->allocated = false;
-		return PROCESS_FORK_CAP;
-	}
 	return PROCESS_FORK_OK;
 }
 
@@ -80,6 +86,7 @@ static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
 }
 
 // TODO: clone leaf fn may be suboptimal... small difference though..
+// TODO: stack pages must also be copied.
 static int clone_pages(uint32_t parent, uint32_t child)
 {
 	pgd_t *pgd = page_table_root(parent);
@@ -109,12 +116,66 @@ static int clone_pages(uint32_t parent, uint32_t child)
 	return PROCESS_FORK_OK;
 }
 
+
+static int map_ipc_buffer(uint32_t child)
+{
+	struct folio *folio = get_frame();
+	if (!folio) return PROCESS_FORK_CAP;
+	uint32_t frame = folio->frame_page;
+
+	frame_table_zero_frame(frame);
+
+	pte_t *entry = make_page_table_entry(IPC_LOCATION, child);
+	if (!entry) {
+		put_frame(folio);
+		return PROCESS_FORK_CAP;
+	}
+	insert_frame_to_page(frame, entry);
+	*entry |= DESC_NG;
+
+	seL4_Error error = seL4_ARM_Page_Map(frame_cptr(frame), vspaces[child], IPC_LOCATION,
+										 create_cap_rights(true),
+										 seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
+	if (error != seL4_NoError) {
+		sddf_printf("fork: could not map the IPC buffer of %u: %d\n", child, error);
+		return PROCESS_FORK_CAP;
+	}
+	processes[child].ipc_buffer = frame_cptr(frame);
+	return PROCESS_FORK_OK;
+}
+
+
+static int mint_endpoints(uint32_t child)
+{
+	seL4_CPtr self_ep_cnode = microkit_cspace_root_slot_to_cptr(pager_config.pager_caps.slot);
+	seL4_CPtr cspace = processes[child].cspace;
+	seL4_Error error;
+
+	uint8_t channel = pager_claim_channel(child);
+	if (channel == PAGER_NO_CHANNEL) return PROCESS_FORK_NO_SLOTS;
+
+	error = seL4_CNode_Mint(cspace, PROCESS_FAULT_EP_SLOT, PROCESS_CSPACE_SIZE_BITS,
+						self_ep_cnode, PAGER_SELF_EP_SLOT, PAGER_CNODE_DEPTH ,create_ep_cap_rights(),
+						MICROKIT_FAULT_BADGE | child);
+	if (error != seL4_NoError) return PROCESS_FORK_CAP;
+
+	error = seL4_CNode_Mint(cspace, processes[child].ppc_ep_slot, PROCESS_CSPACE_SIZE_BITS,
+						self_ep_cnode, PAGER_SELF_EP_SLOT, PAGER_CNODE_DEPTH, create_ep_cap_rights(),
+						MICROKIT_PPC_BADGE | channel);
+	if (error != seL4_NoError) return PROCESS_FORK_CAP;
+	return PROCESS_FORK_OK;
+}
+
 /**
- * TODO:
- * - assign vspace to asid pool: seL4_ARM_ASIDPool_Assign
- * - TCB object creation & configuration: seL4_TCB_Configure
- * - IPC buffer mapping: seL4_TCB_SetIPCBuffer
- * - set up scheduling context: seL4_SchedContext_Configure,
+ * TODO: the process is configured but cannot run yet. It still needs
+ * - a scheduling context: seL4_SchedControl_Configure, seL4_TCB_SetSchedParams, which
+ *   also installs the fault endpoint minted above. Both need a SchedControl cap the
+ *   pager is not given; pre-created scheduling contexts in pager_caps are the way in,
+ *   the same way the VSpaces above are pre-created.
+ * - its registers: the parent's, with the fork() return value zeroed, through the cap to
+ *   the parent's TCB the tool leaves at BASE_TCB_CAP + its fault id.
+ * - its own endpoint, reply object and notification before it reaches libmicrokit's
+ *   event loop, and the stack clone_pages() does not copy yet.
  */
 int process_fork(uint32_t parent, uint32_t child)
 {
@@ -122,37 +183,32 @@ int process_fork(uint32_t parent, uint32_t child)
 		!processes[parent].allocated || processes[child].allocated) {
 		return PROCESS_FORK_INVALID;
 	}
-	// cspace and vspace
+	// cspace, vspace and tcb
 	int result = allocate_process(&processes[child], child, parent);
 	if (result != PROCESS_FORK_OK) return result;
-	vspaces[child] = processes[child].vspace;
 	clone_pages(parent, child);
 
-	/* WIP
-	// assign to asid pool
-	seL4_ARM_ASIDPool_Assign( seL4_CapInitThreadASIDPool, vspaces[child]);
-	// create IPC buffer
-	// just allocate a 4k page, but need to do some plumbing.
-	untyped_alloc() // should I create a new list for this???
-	// set the 0 slot of cspace as the endpoint of this process.
-	cspace_mint() // mint the badge
-	// allocate tcb
-	processes[child].tcb = 0; // TODO
-	seL4_TCB_Configure();
-	// allocate another slot for fault ep.
-	// allocate scheduling context.
-	// configure scheduling context.
-	// seL4_SchedControl_Configure
-	// seL4_TCB_SetSchedParams
+	result = map_ipc_buffer(child);
+	if (result != PROCESS_FORK_OK) goto failed;
 
-	// map in IPC buffer
-	// map in elf files. (lazily?)
+	result = mint_endpoints(child);
+	if (result != PROCESS_FORK_OK) goto failed;
 
-	// write tcb registers(this starts it)
-	// seL4_TCB_WriteRegisterss
-	// TODO: do stuff like ipc mapping etc.
-	*/
-	return 0;
+	seL4_Error error = seL4_TCB_Configure(processes[child].tcb,
+										  processes[child].cspace,
+										  seL4_CNode_CapData_new(0, PROCESS_CSPACE_GUARD_SIZE).words[0],
+										  vspaces[child], 0,
+										  IPC_LOCATION, processes[child].ipc_buffer);
+	if (error != seL4_NoError) {
+		sddf_printf("fork: could not configure the TCB of %u: %d\n", child, error);
+		result = PROCESS_FORK_CAP;
+		goto failed;
+	}
+	return PROCESS_FORK_OK;
+
+failed:
+	processes[child].allocated = false;
+	return result;
 }
 
 long pager_fork(microkit_child parent)
@@ -189,16 +245,16 @@ void fork(uint32_t parent, uint32_t child)
     }
 }
 
-void process_init(seL4_CPtr process_cnode, uint8_t num_clients)
+void process_init(seL4_CPtr process_cnode, uint8_t process_cnode_size_bits,
+                  uint8_t num_clients)
 {
     process_cnode_cptr = process_cnode;
-    /*
-     * The clients the system booted with occupy the first slots: their fault ids are
-     * their indices, so a fork() must not hand one of them out again.
-     */
+    process_cnode_slots = 1u << process_cnode_size_bits;
     for (uint8_t i = 0; i < num_clients; ++i) {
         processes[i].allocated = true;
         processes[i].pid = i;
+        processes[i].vspace = vspaces[i];
+        processes[i].ppc_ep_slot = PROCESS_PPC_EP_SLOT(pager_config.clients[i].client_id);
     }
     num_static_processes = num_clients;
 }

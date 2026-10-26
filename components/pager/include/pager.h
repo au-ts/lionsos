@@ -35,4 +35,8 @@ extern uint32_t elf_sizes[PAGER_MAX_CLIENTS];
 /* Serialised by sdfgen's LionsOs.Pager into the .pager_server_config section. */
 extern pager_server_config_t pager_config;
 
+#define PAGER_NO_CHANNEL 0xFF
+
+uint8_t pager_claim_channel(uint32_t child);
+
 #endif

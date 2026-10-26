@@ -67,7 +67,18 @@ void init(void)
                     microkit_cspace_root_slot_to_cptr(pager_config.paging_structures.slot));
     frame_table_zero_gzp(PAGER_OWN_VSPACE_CPTR);
     process_init(microkit_cspace_root_slot_to_cptr(pager_config.process_cspaces.slot),
-                 pager_config.num_clients);
+                 pager_config.process_cspaces.size_bits, pager_config.num_clients);
+}
+
+uint8_t pager_claim_channel(uint32_t child)
+{
+    for (uint8_t ch = 0; ch < MICROKIT_MAX_CHANNELS; ++ch) {
+        if (client_of_channel[ch] == PAGER_NO_CLIENT) {
+            client_of_channel[ch] = (uint8_t)child;
+            return ch;
+        }
+    }
+    return PAGER_NO_CHANNEL;
 }
 
 void notified(microkit_channel ch)

@@ -1,7 +1,9 @@
 # Memory Pager for LionsOS
 Minimal demand-paging service (`pager` PD) that backs the `client` PD on seL4/Microkit (AArch64) via fault handling, shadow 4-level page tables, CoW global zero page, and bump/slab allocators for frames and paging structures.
 
-This pager is meant for benchmarking minor page faults of anonymous memory like in Figure 8 of the [HongMeng paper](https://www.usenix.org/system/files/osdi24-chen-haibo.pdf). It is also to be used to benchmark the address space copy semantics of `fork()` but this is WIP.
+This pager is meant for benchmarking minor page faults of anonymous memory like in Figure 8 of the [HongMeng paper](https://www.usenix.org/system/files/osdi24-chen-haibo.pdf). It is also to be used to benchmark the address space copy semantics of `fork()` but this is WIP:
+a forked process gets its address space, CSpace, endpoint caps, IPC buffer and a configured
+TCB, but no scheduling context or registers yet, so it does not run.
 It can be used for real applications but should only really be used for a *static* system as frame objects and paging objects do not get untyped. 
 <!-- TODO: write a quick description of the pager.
 TODO: big caveats like only for aarch64, supports the maaxboard and qemu. -->
@@ -143,11 +145,25 @@ slots from `pager_config` and reaches them with `microkit_cspace_root_slot_to_cp
 | 5 | `process_cspaces` | 5 | The per-process CSpaces `fork()` creates. |
 | 6 | `elf_caps` | 12 | The clients' ELF frames, filled in by the Microkit tool. The pager points the tool at it with the `elf_caps_cnode` attribute. |
 | 7 | `frame_copies` | 20 | Copies of ordinary frame caps. A frame cap carries its own mapping, so a folio mapped into more than one VSpace needs one cap per mapping. |
+| 8 | `pager_caps` | 5 | Caps the Microkit tool hands the pager for the processes it creates at runtime. Slot 1 (`PAGER_SELF_EP_SLOT`) is a copy of the pager's own endpoint, named by the `self_ep_cnode` attribute, which is what lets `fork()` mint the badged endpoint caps a new process needs: the cap libmicrokit receives on is in the PD's nested Microkit CNode, which the pager holds no cap to and so cannot mint from. |
 
 Note that the Microkit tool separately hands the pager a VSpace cap per client, but those go
 into the PD's *nested* Microkit CNode rather than the root CSpace above, so the two slot
 numberings are independent and do not collide. The pager never names those slots -- it reads
 the resulting cptrs out of the `vspaces` symbol the tool patches into `pager.elf`.
+
+The tool fills the rest of that symbol with VSpaces it pre-creates for the processes
+`fork()` goes on to make, one per unused `fault_id`. They are in the spec so that the
+system initialiser assigns each an ASID, which the pager could not do later: assigning one
+needs an ASID pool cap, and no protection domain is given one. The same applies to a
+scheduling context, which is why a forked process cannot be started yet.
+
+A process' own CSpace is a single flat CNode (`PROCESS_CSPACE_SIZE_BITS`) in a slot of
+`process_cspaces`, with its TCB in the slot beside it. A cap *inside* that CSpace cannot be
+named from the pager's root CSpace -- the 64 bits of a cptr are spent reaching the CSpace
+itself -- so only the caps the process invokes go in it (its fault and PPC endpoints, at the
+slot numbers `libmicrokit` expects), and everything the pager has to invoke on the process'
+behalf sits beside it in `process_cspaces`.
 
 - **Scratch memory:** `connect()` also creates the memory region the shadow page tables and
 folio metadata are built in, reachable as `pager_config.memory`.
@@ -157,11 +173,14 @@ folio metadata are built in, reachable as `pager_config.memory`.
   that is not its parent.
 - `elf_caps_cnode` attribute, naming the CNode a fault handler's clients' ELF frame caps are
   placed in. The tool patches `vspaces`, `elf_caps` and `elf_sizes` into the handler's ELF.
+- `self_ep_cnode` attribute, naming the CNode a copy of the handler's own endpoint cap is
+  placed in, and spare VSpaces for the processes a handler creates at runtime.
 - Option to have unbacked stack pages for protection domains.
 
 ### 3.4 [sdfgen](https://github.com/au-ts/microkit_sdf_gen) changes
 - `LionsOs.Pager(sdf, pager_pd)` with `add_client()`, `connect()` and `serialise_config()`.
 - `backed=False` for protection domains.
+- `self_ep_cnode` on a protection domain.
 
 ## 4. Caveats
 - No untyping of typed objects implemented yet: A system using the pager would only be able to dynamically create caps and paging structures.

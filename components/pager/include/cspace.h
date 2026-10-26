@@ -32,6 +32,8 @@ typedef struct {
     seL4_CPtr cptr;         // CNode cap addr
 } cnode_specs_t;
 
+#define PAGER_CNODE_DEPTH 58
+
 seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
     seL4_Word size_bits, uint32_t retyped_cap_idx, seL4_CPtr destination_cnode,
     uint32_t num);
@@ -47,6 +49,10 @@ void update_active_ut_idx(cnode_specs_t *cnode_specs);
 /* Grant and grant-reply mean nothing to a frame cap. */
 static inline seL4_CapRights_t create_cap_rights(bool is_write) {
     return seL4_CapRights_new(0, 0, 1, is_write);
+}
+
+static inline seL4_CapRights_t create_ep_cap_rights(void) {
+    return seL4_CapRights_new(0, 1, 1, 1);
 }
 
 #endif

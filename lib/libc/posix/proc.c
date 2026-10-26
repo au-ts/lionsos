@@ -10,14 +10,21 @@
 #include <sys/types.h>
 #include <bits/syscall.h>
 #include <lions/posix/posix.h>
+#ifdef LIBC_PAGER
 #include <lions/pager/config.h>
 #include <lions/posix/pager.h>
 #include <microkit.h>
+#endif
 
 /*
- * Defined by client PD in .pager_client_config.
- * libc is linked into clients that have no pager. TODO: do something about this.
+ * fork()/clone() are the pager's to implement -- it is the one that can copy a
+ * vspace -- so without LIBC_PAGER there is nothing to forward them to and they
+ * stay undefined, as they were before the pager component existed. libc_init()
+ * always calls libc_init_proc(), so this file is always linked in.
  */
+#ifdef LIBC_PAGER
+
+/* Defined by the client PD in .pager_client_config. */
 extern pager_client_config_t pager_config;
 
 #ifdef __NR_clone
@@ -45,12 +52,16 @@ static long sys_fork(va_list ap) {
 }
 #endif
 
+#endif /* LIBC_PAGER */
+
 void libc_init_proc(void) {
+#ifdef LIBC_PAGER
 #ifdef __NR_clone
     libc_define_syscall(__NR_clone, sys_clone);
 #endif
 #ifdef __NR_fork
     libc_define_syscall(__NR_fork, sys_fork);
 #endif
+#endif /* LIBC_PAGER */
 }
 

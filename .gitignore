@@ -4,6 +4,7 @@ docs/book/
 *~
 \#*#
 .#*
+.vscode
 __pycache__
 examples/pager/benchmarks/519.lbm_r
 components/pager/documentation/writeup.aux

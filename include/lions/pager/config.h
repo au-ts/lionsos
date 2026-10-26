@@ -17,6 +17,7 @@ static char LIONS_PAGER_MAGIC[LIONS_PAGER_MAGIC_LEN] = { 'L', 'i', 'o', 'n', 's'
 #define PAGER_MAX_CLIENTS 10
 // Must match MAX_CLIENT_ELF_FRAMES in microkit
 #define PAGER_MAX_ELF_FRAMES 1500
+#define PAGER_SELF_EP_SLOT 1
 
 // represents cnodes inside pager cspace
 typedef struct pager_cnode_resource {
@@ -27,8 +28,8 @@ typedef struct pager_cnode_resource {
 typedef struct pager_client_resource {
     // PPC channel for pager endpoint
     uint8_t id;
-    // microkit_child is fault_id
     uint8_t fault_id;
+    uint8_t client_id;
     uintptr_t mmap_base;
     uintptr_t brk_base;
 } pager_client_resource_t;
@@ -45,6 +46,8 @@ typedef struct pager_server_config {
     pager_cnode_resource_t process_cspaces;
     pager_cnode_resource_t elf_caps;
     pager_cnode_resource_t frame_copies;
+    // Caps the Microkit tool hands the pager for the processes it creates at runtime.
+    pager_cnode_resource_t pager_caps;
     uint8_t num_clients;
     pager_client_resource_t clients[PAGER_MAX_CLIENTS];
 } pager_server_config_t;
