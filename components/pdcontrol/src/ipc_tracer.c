@@ -131,8 +131,7 @@ seL4_Word pdc_ipc_source_ch_to_target_ch(seL4_Word ch)
     return ch + 1;
 }
 
-// ONLY CALL on the RECEIVER.
-pdc_ipc_tracer_handle_t pdc_ipc_tracer_config_init_receiver(const pdc_config_handle_t *all_cfg,
+pdc_ipc_tracer_handle_t pdc_ipc_tracer_init(const pdc_config_handle_t *all_cfg,
                                                             const pdc_ipc_tracer_config_t *ipc_cfg)
 {
     assert(all_cfg != NULL);
@@ -225,5 +224,31 @@ seL4_Word pdc_ipc_obj_child_queue_peek_channel(pdc_ipc_tracer_handle_t* cfg, seL
 {
     assert(target_child < cfg->all_cfg->pd_config->num_clients);
     return pdc_ipc_obj_queue_peek_channel(&cfg->per_thread_queue[target_child]);
+}
+
+
+void pdc_ipc_tracer_store(pdc_ipc_tracer_handle_t* handle, seL4_Word target_child, seL4_MessageInfo_t msg, seL4_Word badge,
+                                        seL4_Word source_ch)
+{
+    assert(target_child < handle->all_cfg->pd_config->num_clients);
+    pdc_ipc_obj_queue_push(&handle->per_thread_queue[target_child], msg, badge, source_ch);
+}
+
+seL4_Word pdc_ipc_child_queue_len(pdc_ipc_tracer_handle_t* handle, seL4_Word target_child)
+{
+    assert(target_child < handle->all_cfg->pd_config->num_clients);
+    return pdc_ipc_obj_queue_len(&handle->per_thread_queue[target_child]);
+}
+
+seL4_Word pdc_ipc_child_queue_peek_badge(pdc_ipc_tracer_handle_t* handle, seL4_Word target_child)
+{
+    assert(target_child < handle->all_cfg->pd_config->num_clients);
+    return pdc_ipc_obj_queue_peek_badge(&handle->per_thread_queue[target_child]);
+}
+
+seL4_Word pdc_ipc_child_queue_peek_channel(pdc_ipc_tracer_handle_t* handle, seL4_Word target_child)
+{
+    assert(target_child < handle->all_cfg->pd_config->num_clients);
+    return pdc_ipc_obj_queue_peek_channel(&handle->per_thread_queue[target_child]);
 }
 

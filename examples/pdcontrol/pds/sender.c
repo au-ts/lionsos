@@ -18,7 +18,7 @@ pdc_ipc_tracer_handle_t ipc_handle;
 void init()
 {
     cfg_all = pdc_config_init(&pdc_pd_all_config, &pdc_channel_all_config);
-    ipc_handle = pdc_ipc_tracer_config_init_receiver(&cfg_all, &pdc_ipc_tracer_config) ;
+    ipc_handle = pdc_ipc_tracer_init(&cfg_all, &pdc_ipc_tracer_config) ;
 }
 
 void notified(microkit_channel ch)

@@ -64,7 +64,7 @@ typedef struct {
     pdc_ipc_obj_queue_t* per_thread_queue;
 } pdc_ipc_tracer_handle_t;
 
-pdc_ipc_tracer_handle_t pdc_ipc_tracer_config_init_receiver(const pdc_config_handle_t *all_cfg,
+pdc_ipc_tracer_handle_t pdc_ipc_tracer_init(const pdc_config_handle_t *all_cfg,
                                                    const pdc_ipc_tracer_config_t *ipc_cfg);
 
 pdc_ipc_obj_queue_t *pdc_ipc_obj_queue_init(uint8_t *memory);
@@ -96,3 +96,20 @@ void pdc_ipc_obj_queue_pop_ignore(pdc_ipc_obj_queue_t *q);
 bool pdc_ipc_obj_badge_is_ntfn(seL4_Word badge);
 
 seL4_Word pdc_ipc_obj_source_ch_to_target_ch(seL4_Word ch);
+
+// store the curretly stored message in the ipc buffer into the recv queue of that
+// child.
+void pdc_ipc_tracer_store(pdc_ipc_tracer_handle_t* handle, seL4_Word target_child, seL4_MessageInfo_t msg, seL4_Word badge,
+                                        seL4_Word source_ch);
+
+
+// check the size of the child's ipc queue.
+seL4_Word pdc_ipc_child_queue_len(pdc_ipc_tracer_handle_t* handle, seL4_Word target_child);
+
+
+// Get the badge of the earliest sender.
+seL4_Word pdc_ipc_child_queue_peek_badge(pdc_ipc_tracer_handle_t* handle, seL4_Word target_child);
+
+
+// Get the badge of the channel sender.
+seL4_Word pdc_ipc_child_queue_peek_channel(pdc_ipc_tracer_handle_t* handle, seL4_Word target_child);
