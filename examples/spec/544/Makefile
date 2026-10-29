@@ -26,9 +26,9 @@ qemu ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
 	${MAKE} -C ${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} SMP_CONFIG=${SMP_CONFIG} $(notdir $@)
 
 
-${BUILD_DIR}/Makefile: pager_rpi4b.mk
+${BUILD_DIR}/Makefile: 544.mk
 	mkdir -p ${BUILD_DIR}
-	cp pager_rpi4b.mk $@
+	cp 544.mk $@
 
 submodules:
 	git submodule update --init $(LIONSOS)/dep/musllibc

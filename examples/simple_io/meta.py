@@ -10,14 +10,7 @@ ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 
-ProtectionDomain = SystemDescription.ProtectionDomain
 SUPPORTED_BOARDS = ("rpi4b_1gb", "qemu_virt_aarch64")
-
-MAILBOX_REGS_PADDR = 0xFE00B000
-MAILBOX_REGS_VADDR = 0x30000000
-MAILBOX_BUFFER_PADDR = 0x01000000
-MAILBOX_BUFFER_VADDR = 0x30001000
-MAILBOX_PAGE_SIZE = 0x1000
 
 
 def generate(

@@ -4,8 +4,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-vpath %.c ${SDDF} ${LIONSOS}/examples/pager_rpi4b
-IMAGES := pager.elf client.elf \
+vpath %.c ${SDDF} ${LIONSOS}/examples/io_rpi4b
+IMAGES := client.elf \
 	serial_driver.elf \
 	serial_virt_tx.elf
 SUPPORTED_BOARDS := \
@@ -62,35 +62,22 @@ endif
 
 IMAGE_FILE := loader.img
 REPORT_FILE  := report.txt
-SYSTEM_FILE := pager_rpi4b.system
+SYSTEM_FILE := simple_io.system
 
-TOP := ${LIONSOS}/examples/pager_rpi4b
+TOP := ${LIONSOS}/examples/io_rpi4b
 CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
 
+# simple_io is the only benchmark here. It needs a filesystem and a
+# serial console and nothing else, which is why this example has no pager PD:
+# the client is an ordinary statically-mapped Microkit PD and libc's heap is the
+# static arena it passes to libc_init(). Only client.c needs the benchmark
+# header, so it stays off everything else's include path.
 BENCHMARKS_DIR := $(LIONSOS)/dep/benchmarking/lionsos
-BENCHMARK_DIR := $(BENCHMARKS_DIR)/minor_page_fault_latency
-# The SPEC CPU benchmarks, driven by the client out of the ramfs image below.
-# Dropping one from this list drops its archive, its include directory, its
-# -DBENCH_<nnn> and its input data together; the client's call sites are
-# commented out, so only the one you uncomment actually runs.
-SPEC_BENCHMARKS ?= 505.mcf_r 519.lbm_r 544.nab_r 557.xz_r
-SPEC_DIRS := $(foreach b,$(SPEC_BENCHMARKS),$(BENCHMARKS_DIR)/$(b)/src)
-# Each benchmark's Makefile builds $(BUILD_DIR)/<nnn>.a: 519.lbm_r -> 519.a.
-SPEC_LIBS := $(foreach b,$(SPEC_BENCHMARKS),$(firstword $(subst ., ,$(b))).a)
-BENCHMARK_LIBS := minor_pf.a $(SPEC_LIBS)
-$(foreach d,$(BENCHMARK_DIR) $(SPEC_DIRS),$(if $(wildcard $(d)/Makefile),,$(error Could not find a benchmark Makefile in $(d) -- run `make submodules`)))
-# Only client.c includes the benchmark headers, and $(SPEC_DIRS) holds two
-# different config.h and four copies of bench_timer.h that differ from
-# $(BENCHMARK_DIR)'s, so these stay off everything else's include path.
-BENCHMARK_INCLUDES := -I$(BENCHMARK_DIR) $(addprefix -I,$(SPEC_DIRS))
-BENCHMARK_DEFINES := $(foreach b,$(SPEC_BENCHMARKS),-DBENCH_$(firstword $(subst ., ,$(b))))
-# Where pager_instrumentation.h lives. The client and the benchmark read it too.
-PAGER_CONFIG_DIR := $(LIONSOS)/components/pager/config
-
-# The client only ever needs the frames the WRITE pass allocates; retyping the
-# default 200000 at init does not fit in the Pi's 1GiB.
-PAGER_INIT_FRAMES := 40000
+SIMPLE_IO_DIR := $(BENCHMARKS_DIR)/simple_io
+BENCHMARK_LIBS := simple_io.a
+BENCHMARK_INCLUDES := -I$(SIMPLE_IO_DIR)
+$(if $(wildcard $(SIMPLE_IO_DIR)/Makefile),,$(error Could not find a benchmark Makefile in $(SIMPLE_IO_DIR) -- run `make submodules`))
 
 # RAM_FATFS in the ramfs config moves the client's files from file.c (which has
 # no file system PD to talk to here) to FatFs over a RAM disk inside the client.
@@ -98,14 +85,14 @@ PAGER_INIT_FRAMES := 40000
 RAMFS_CONFIG_DIR := $(LIONSOS)/components/fs/ramfs/config
 HASH := \#
 RAM_FATFS := $(shell grep -qE '^[[:space:]]*$(HASH)[[:space:]]*define[[:space:]]+RAM_FATFS([[:space:]]|$$)' $(RAMFS_CONFIG_DIR)/fat_config.h && echo 1)
-RAMFS_ROOTS ?= $(foreach b,$(SPEC_BENCHMARKS),$(BENCHMARKS_DIR)/$(b)/data/test/input)
-RAMFS_SIZE ?= 0x4000000
-# The benchmarks open their inputs by bare name, so the trees are merged flat
-# into one staging directory. "control" is SPEC's runspec metadata that no
-# benchmark reads, and three of the four trees ship one, which makes it the only
-# name that collides.
+# simple_io reads no input files -- it creates its own 4 KiB file at runtime --
+# so the volume starts out empty and an empty cpio is what it wants.
+RAMFS_ROOTS ?=
+# 32 MiB: the volume is formatted with 4 KiB clusters and FM_FAT|FM_FAT32|FM_SFD,
+# and this puts the cluster count clear of the FAT12/FAT16 boundary while leaving
+# plenty of room above simple_io's own 4 KiB file.
+RAMFS_SIZE ?= 0x2000000
 RAMFS_STAGE := ramfs_root
-RAMFS_EXCLUDE := control
 
 CFLAGS := \
 	-mstrict-align \
@@ -119,19 +106,14 @@ CFLAGS := \
 	-I$(BOARD_DIR)/include \
 	$(CFLAGS_ARCH) \
 	-DBOARD_$(MICROKIT_BOARD) \
-	-DINIT_FRAMES=$(PAGER_INIT_FRAMES) \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
 	-I$(LIBMICROKITCO_PATH) \
-	-I$(TOP) \
-	-I$(PAGER_CONFIG_DIR)
-# The client is demand-paged by the pager PD, so libc's brk/mmap/munmap and
-# fork/clone become PPCs to it rather than a static morecore arena.
-LIBC_PAGER := 1
+	-I$(TOP)
 include $(LIONSOS)/lib/libc/libc.mk
 include $(SDDF)/tools/make/board/common.mk
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(BENCHMARK_DIR)
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 
@@ -147,9 +129,6 @@ SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include ${SDDF}/util/util.mk
 include ${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk
 include ${SDDF}/serial/components/serial_components.mk
-include $(LIONSOS)/components/pager/pager.mk
-# musl has to be configured before the pager, which includes its headers.
-$(PAGER_OBJ): | $(LIONS_LIBC)/include
 LIBMICROKITCO_CFLAGS_client := -O3 -I$(TOP)
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
@@ -170,7 +149,7 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a $(BENCHMARK_LIBS)
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 client.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
-	$(CC) -c $(CFLAGS) -I. -I$(RAMFS_CONFIG_DIR) $(BENCHMARK_INCLUDES) $(BENCHMARK_DEFINES) $< -o $@
+	$(CC) -c $(CFLAGS) -I. -I$(RAMFS_CONFIG_DIR) $(BENCHMARK_INCLUDES) $< -o $@
 
 client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a $(BENCHMARK_LIBS) $(RAMFS_LIB)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
@@ -179,8 +158,10 @@ ifeq ($(RAM_FATFS),1)
 # io.c unpacks this into a FAT volume when the client mounts it. Entry names
 # must not start with "./". cpio names its entries relative to a single
 # directory, so the input trees are staged into one first; a missing root is a
-# warning rather than an error, and no roots at all gives an empty file system.
-$(RAMFS_IMAGE): $(shell find $(RAMFS_ROOTS) 2>/dev/null)
+# warning rather than an error, and no roots at all -- the default here -- gives
+# an empty file system. The $(if) guards the prerequisite scan: bare `find` with
+# no path walks the build directory and would make this depend on its own output.
+$(RAMFS_IMAGE): $(if $(strip $(RAMFS_ROOTS)),$(shell find $(RAMFS_ROOTS) 2>/dev/null))
 	rm -rf $(RAMFS_STAGE)
 	mkdir -p $(RAMFS_STAGE)
 	for root in $(RAMFS_ROOTS); do \
@@ -190,29 +171,18 @@ $(RAMFS_IMAGE): $(shell find $(RAMFS_ROOTS) 2>/dev/null)
 			echo "WARNING: ramfs input $$root not found, skipping"; \
 		fi; \
 	done
-	$(foreach e,$(RAMFS_EXCLUDE),rm -rf $(RAMFS_STAGE)/$(e);)
 	(cd $(RAMFS_STAGE) && find . -mindepth 1 -printf '%P\n' | LC_ALL=C sort | cpio -o -H newc --quiet) > $@
 
 clean::
 	rm -rf $(RAMFS_STAGE)
 endif
 
-# PAGER_INSTRUMENTATION is a #define in pager_config.h, so the client has to
-# be recompiled when that header changes.
 -include client.d
 
 .PHONY: $(BENCHMARK_LIBS)
-# The benchmarks include libc headers, which only exist once musl is installed.
-minor_pf.a: | $(LIONS_LIBC)/include
-	$(MAKE) -C $(BENCHMARK_DIR) CPU=$(CPU) LIONS_LIBC=$(LIONS_LIBC)
-
-# One `<nnn>.a` rule per entry in SPEC_BENCHMARKS, each re-invoking that
-# benchmark's own Makefile, which writes its archive into $(BUILD_DIR).
-define spec_benchmark_rule
-$(firstword $(subst ., ,$(1))).a: | $$(LIONS_LIBC)/include
-	$$(MAKE) -C $$(BENCHMARKS_DIR)/$(1)/src CPU=$$(CPU) LIONS_LIBC=$$(LIONS_LIBC)
-endef
-$(foreach b,$(SPEC_BENCHMARKS),$(eval $(call spec_benchmark_rule,$(b))))
+# The benchmark includes libc headers, which only exist once musl is installed.
+simple_io.a: | $(LIONS_LIBC)/include
+	$(MAKE) -C $(SIMPLE_IO_DIR) CPU=$(CPU) LIONS_LIBC=$(LIONS_LIBC)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(RAMFS_CONFIG_DIR)/fat_config.h $(RAMFS_IMAGE)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH \
@@ -222,8 +192,6 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(RAMFS_CONFIG_DIR)/fat_config.h
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_virt_tx_config=serial_virt_tx.data serial_virt_tx.elf
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_client.data client.elf
-	$(OBJCOPY) --update-section .pager_server_config=pager_server_pager.data pager.elf
-	$(OBJCOPY) --update-section .pager_client_config=pager_client_client.data client.elf
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)

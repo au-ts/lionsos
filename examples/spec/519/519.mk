@@ -62,30 +62,25 @@ endif
 
 IMAGE_FILE := loader.img
 REPORT_FILE  := report.txt
-SYSTEM_FILE := pager_rpi4b.system
+SYSTEM_FILE := 519.system
 
 TOP := ${LIONSOS}/examples/pager_rpi4b
 CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
 
 BENCHMARKS_DIR := $(LIONSOS)/dep/benchmarking/lionsos
-BENCHMARK_DIR := $(BENCHMARKS_DIR)/minor_page_fault_latency
-# The SPEC CPU benchmarks, driven by the client out of the ramfs image below.
-# Dropping one from this list drops its archive, its include directory, its
-# -DBENCH_<nnn> and its input data together; the client's call sites are
-# commented out, so only the one you uncomment actually runs.
-SPEC_BENCHMARKS ?= 505.mcf_r 519.lbm_r 544.nab_r 557.xz_r
+# The SPEC CPU benchmark, driven by the client out of the ramfs image below.
+SPEC_BENCHMARKS ?= 519.lbm_r
 SPEC_DIRS := $(foreach b,$(SPEC_BENCHMARKS),$(BENCHMARKS_DIR)/$(b)/src)
 # Each benchmark's Makefile builds $(BUILD_DIR)/<nnn>.a: 519.lbm_r -> 519.a.
 SPEC_LIBS := $(foreach b,$(SPEC_BENCHMARKS),$(firstword $(subst ., ,$(b))).a)
-BENCHMARK_LIBS := minor_pf.a $(SPEC_LIBS)
-$(foreach d,$(BENCHMARK_DIR) $(SPEC_DIRS),$(if $(wildcard $(d)/Makefile),,$(error Could not find a benchmark Makefile in $(d) -- run `make submodules`)))
-# Only client.c includes the benchmark headers, and $(SPEC_DIRS) holds two
-# different config.h and four copies of bench_timer.h that differ from
-# $(BENCHMARK_DIR)'s, so these stay off everything else's include path.
-BENCHMARK_INCLUDES := -I$(BENCHMARK_DIR) $(addprefix -I,$(SPEC_DIRS))
+BENCHMARK_LIBS := $(SPEC_LIBS)
+$(foreach d,$(SPEC_DIRS),$(if $(wildcard $(d)/Makefile),,$(error Could not find a benchmark Makefile in $(d) -- run `make submodules`)))
+# Only client.c includes the benchmark headers, so they stay off everything
+# else's include path.
+BENCHMARK_INCLUDES := $(addprefix -I,$(SPEC_DIRS))
 BENCHMARK_DEFINES := $(foreach b,$(SPEC_BENCHMARKS),-DBENCH_$(firstword $(subst ., ,$(b))))
-# Where pager_instrumentation.h lives. The client and the benchmark read it too.
+# Where pager_config.h and pager_instrumentation.h live.
 PAGER_CONFIG_DIR := $(LIONSOS)/components/pager/config
 
 # The client only ever needs the frames the WRITE pass allocates; retyping the
@@ -100,12 +95,7 @@ HASH := \#
 RAM_FATFS := $(shell grep -qE '^[[:space:]]*$(HASH)[[:space:]]*define[[:space:]]+RAM_FATFS([[:space:]]|$$)' $(RAMFS_CONFIG_DIR)/fat_config.h && echo 1)
 RAMFS_ROOTS ?= $(foreach b,$(SPEC_BENCHMARKS),$(BENCHMARKS_DIR)/$(b)/data/test/input)
 RAMFS_SIZE ?= 0x4000000
-# The benchmarks open their inputs by bare name, so the trees are merged flat
-# into one staging directory. "control" is SPEC's runspec metadata that no
-# benchmark reads, and three of the four trees ship one, which makes it the only
-# name that collides.
 RAMFS_STAGE := ramfs_root
-RAMFS_EXCLUDE := control
 
 CFLAGS := \
 	-mstrict-align \
@@ -131,7 +121,7 @@ CFLAGS := \
 LIBC_PAGER := 1
 include $(LIONSOS)/lib/libc/libc.mk
 include $(SDDF)/tools/make/board/common.mk
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib -L$(BENCHMARK_DIR)
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
 LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a
 CHECK_FLAGS_BOARD_MD5:=.board_cflags-$(shell echo -- ${CFLAGS} ${BOARD} ${MICROKIT_CONFIG} | shasum | sed 's/ *-//')
 
@@ -190,22 +180,16 @@ $(RAMFS_IMAGE): $(shell find $(RAMFS_ROOTS) 2>/dev/null)
 			echo "WARNING: ramfs input $$root not found, skipping"; \
 		fi; \
 	done
-	$(foreach e,$(RAMFS_EXCLUDE),rm -rf $(RAMFS_STAGE)/$(e);)
 	(cd $(RAMFS_STAGE) && find . -mindepth 1 -printf '%P\n' | LC_ALL=C sort | cpio -o -H newc --quiet) > $@
 
 clean::
 	rm -rf $(RAMFS_STAGE)
 endif
 
-# PAGER_INSTRUMENTATION is a #define in pager_config.h, so the client has to
-# be recompiled when that header changes.
 -include client.d
 
 .PHONY: $(BENCHMARK_LIBS)
 # The benchmarks include libc headers, which only exist once musl is installed.
-minor_pf.a: | $(LIONS_LIBC)/include
-	$(MAKE) -C $(BENCHMARK_DIR) CPU=$(CPU) LIONS_LIBC=$(LIONS_LIBC)
-
 # One `<nnn>.a` rule per entry in SPEC_BENCHMARKS, each re-invoking that
 # benchmark's own Makefile, which writes its archive into $(BUILD_DIR).
 define spec_benchmark_rule
