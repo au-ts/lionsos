@@ -33,8 +33,7 @@
 
 #include <lions/posix/posix.h>
 
-//TODO: fix to use header; have issue with providing correct libmicrokitco_opts.h
-void microkit_cothread_wait_on_channel(const microkit_channel wake_on);
+__attribute__((weak)) void microkit_cothread_wait_on_channel(const microkit_channel wake_on);
 
 //TODO: fix to use header in "dep/musllibc/src/internal/libc.h"
 void __init_libc(char**, char*);
@@ -92,7 +91,9 @@ static long sys_nanosleep(va_list ap) {
     // Loop until target time reached
     // May wake spuriously due to timer expiring for other reasons
     while (sddf_timer_time_now(timer_config.driver_id) < target_time) {
-        microkit_cothread_wait_on_channel(timer_config.driver_id);
+        if (microkit_cothread_wait_on_channel != NULL) {
+            microkit_cothread_wait_on_channel(timer_config.driver_id);
+        }
     }
 
     // No signal interruption support - always sleep full duration

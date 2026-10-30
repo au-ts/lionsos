@@ -4,13 +4,9 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-vpath %.c ${SDDF} ${LIONSOS}/examples/pager_rpi4b
 IMAGES := pager.elf client.elf \
 	serial_driver.elf \
 	serial_virt_tx.elf
-SUPPORTED_BOARDS := \
-	rpi4b_1gb \
-	qemu_virt_aarch64
 ifeq ($(strip $(MICROKIT_SDK)),)
 $(error MICROKIT_SDK must be specified)
 endif
@@ -20,16 +16,12 @@ endif
 ifeq ($(strip $(LIONSOS)),)
 $(error LIONSOS must be specified)
 endif
-ifeq ($(strip $(MICROKIT_BOARD)), rpi4b_1gb)
-	SERIAL_DRIV_DIR := ns16550a
-	CPU := cortex-a72
-else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
-	SERIAL_DRIV_DIR := arm
-	CPU := cortex-a53
-	QEMU := qemu-system-aarch64
-else
-$(error Unsupported MICROKIT_BOARD given)
+ifeq ($(strip $(TOP)),)
+$(error TOP must be specified)
 endif
+# SERIAL_DRIV_DIR, CPU, PAGER_INIT_FRAMES, QEMU and SUPPORTED_BOARDS, all
+# selected by MICROKIT_BOARD.
+include $(LIONSOS)/examples/board.mk
 TOOLCHAIN := clang
 CC := clang
 LD := ld.lld
@@ -46,7 +38,6 @@ $(error Could not find $(GEN_CONFIG_H) -- check that MICROKIT_SDK ($(MICROKIT_SD
 endif
 ARCH := $(shell grep 'CONFIG_SEL4_ARCH  ' $(GEN_CONFIG_H) | cut -d' ' -f4)
 SDDF := $(LIONSOS)/dep/sddf
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 ifeq ($(ARCH),aarch64)
 	CFLAGS_ARCH := -mcpu=$(CPU)
 	TARGET := aarch64-none-elf
@@ -64,28 +55,28 @@ IMAGE_FILE := loader.img
 REPORT_FILE  := report.txt
 SYSTEM_FILE := 544.system
 
-TOP := ${LIONSOS}/examples/pager_rpi4b
+vpath %.c ${SDDF} ${TOP}
 CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
 
-BENCHMARKS_DIR := $(LIONSOS)/dep/benchmarking/lionsos
+BENCHMARKS_DIR := $(LIONSOS)/dep/benchmarking
 # The SPEC CPU benchmark, driven by the client out of the ramfs image below.
 SPEC_BENCHMARKS ?= 544.nab_r
 SPEC_DIRS := $(foreach b,$(SPEC_BENCHMARKS),$(BENCHMARKS_DIR)/$(b)/src)
-# Each benchmark's Makefile builds $(BUILD_DIR)/<nnn>.a: 519.lbm_r -> 519.a.
-SPEC_LIBS := $(foreach b,$(SPEC_BENCHMARKS),$(firstword $(subst ., ,$(b))).a)
+# Each benchmark ships one Make snippet per OS, named after its number:
+# 519.lbm_r -> src/519-lions.mk, which builds $(BUILD_DIR)/519.a.
+spec_num = $(firstword $(subst ., ,$(1)))
+SPEC_LIBS := $(foreach b,$(SPEC_BENCHMARKS),$(call spec_num,$(b)).a)
 BENCHMARK_LIBS := $(SPEC_LIBS)
-$(foreach d,$(SPEC_DIRS),$(if $(wildcard $(d)/Makefile),,$(error Could not find a benchmark Makefile in $(d) -- run `make submodules`)))
+$(foreach b,$(SPEC_BENCHMARKS),\
+  $(if $(wildcard $(BENCHMARKS_DIR)/$(b)/src/$(call spec_num,$(b))-lions.mk),,\
+    $(error Could not find $(call spec_num,$(b))-lions.mk in $(BENCHMARKS_DIR)/$(b)/src -- run `make submodules`)))
 # Only client.c includes the benchmark headers, so they stay off everything
 # else's include path.
 BENCHMARK_INCLUDES := $(addprefix -I,$(SPEC_DIRS))
 BENCHMARK_DEFINES := $(foreach b,$(SPEC_BENCHMARKS),-DBENCH_$(firstword $(subst ., ,$(b))))
 # Where pager_config.h and pager_instrumentation.h live.
 PAGER_CONFIG_DIR := $(LIONSOS)/components/pager/config
-
-# The client only ever needs the frames the WRITE pass allocates; retyping the
-# default 200000 at init does not fit in the Pi's 1GiB.
-PAGER_INIT_FRAMES := 40000
 
 # RAM_FATFS in the ramfs config moves the client's files from file.c (which has
 # no file system PD to talk to here) to FatFs over a RAM disk inside the client.
@@ -115,7 +106,6 @@ CFLAGS := \
 	-I$(LIONSOS)/include \
 	-I$(SDDF)/include \
 	-I$(SDDF)/include/microkit \
-	-I$(LIBMICROKITCO_PATH) \
 	-I$(TOP) \
 	-I$(PAGER_CONFIG_DIR)
 # The client is demand-paged by the pager PD, so libc's brk/mmap/munmap and
@@ -142,9 +132,6 @@ include ${SDDF}/serial/components/serial_components.mk
 include $(LIONSOS)/components/pager/pager.mk
 # musl has to be configured before the pager, which includes its headers.
 $(PAGER_OBJ): | $(LIONS_LIBC)/include
-LIBMICROKITCO_CFLAGS_client := -O3 -I$(TOP)
-LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 ifeq ($(RAM_FATFS),1)
 RAMFS_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIONSOS)/components/fs/ramfs/ramfs.mk
@@ -164,7 +151,7 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a $(BENCHMARK_LIBS)
 client.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
 	$(CC) -c $(CFLAGS) -I. -I$(RAMFS_CONFIG_DIR) $(BENCHMARK_INCLUDES) $(BENCHMARK_DEFINES) $< -o $@
 
-client.elf: client.o libsddf_util_debug.a libmicrokitco_client.a $(BENCHMARK_LIBS) $(RAMFS_LIB)
+client.elf: client.o libsddf_util_debug.a $(BENCHMARK_LIBS) $(RAMFS_LIB)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 ifeq ($(RAM_FATFS),1)
@@ -194,10 +181,12 @@ endif
 .PHONY: $(BENCHMARK_LIBS)
 # The benchmarks include libc headers, which only exist once musl is installed.
 # One `<nnn>.a` rule per entry in SPEC_BENCHMARKS, each re-invoking that
-# benchmark's own Makefile, which writes its archive into $(BUILD_DIR).
+# benchmark's own snippet, which writes its archive into $(BUILD_DIR). CPU is
+# whatever board.mk picked for MICROKIT_BOARD.
 define spec_benchmark_rule
-$(firstword $(subst ., ,$(1))).a: | $$(LIONS_LIBC)/include
-	$$(MAKE) -C $$(BENCHMARKS_DIR)/$(1)/src CPU=$$(CPU) LIONS_LIBC=$$(LIONS_LIBC)
+$(call spec_num,$(1)).a: | $$(LIONS_LIBC)/include
+	$$(MAKE) -C $$(BENCHMARKS_DIR)/$(1)/src -f $(call spec_num,$(1))-lions.mk \
+		CPU=$$(CPU) LIONS_LIBC=$$(LIONS_LIBC)
 endef
 $(foreach b,$(SPEC_BENCHMARKS),$(eval $(call spec_benchmark_rule,$(b))))
 
@@ -215,11 +204,12 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(RAMFS_CONFIG_DIR)/fat_config.h
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
 
+# QEMU_ARCH_ARGS is sddf's description of the qemu machine for this board; QEMU
+# is only set for a board that has one, so an empty QEMU means `make qemu` was
+# asked for on real hardware.
 qemu: ${IMAGE_FILE}
-	$(QEMU) -machine virt,virtualization=on \
-		-cpu cortex-a53 \
-		-serial mon:stdio \
-		-device loader,file=$(IMAGE_FILE),addr=0x70000000,cpu-num=0 \
-		-m size=2G \
-		-nographic \
-		-d guest_errors
+ifeq ($(strip $(QEMU)),)
+	$(error make qemu is not supported for MICROKIT_BOARD=$(MICROKIT_BOARD))
+else
+	$(QEMU) $(QEMU_ARCH_ARGS) -nographic -d guest_errors
+endif

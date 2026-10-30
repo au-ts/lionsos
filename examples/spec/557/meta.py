@@ -10,7 +10,7 @@ ProtectionDomain = SystemDescription.ProtectionDomain
 MemoryRegion = SystemDescription.MemoryRegion
 Map = SystemDescription.Map
 
-SUPPORTED_BOARDS = ("rpi4b_1gb", "qemu_virt_aarch64")
+SUPPORTED_BOARDS = ("rpi4b_1gb", "maaxboard", "qemu_virt_aarch64")
 
 
 def generate(

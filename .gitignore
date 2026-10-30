@@ -1,4 +1,5 @@
 build/
+build_*/
 docs/book/
 .DS_Store
 *~
