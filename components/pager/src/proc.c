@@ -183,6 +183,9 @@ int process_fork(uint32_t parent, uint32_t child)
 		!processes[parent].allocated || processes[child].allocated) {
 		return PROCESS_FORK_INVALID;
 	}
+	if (pager_config.sched_control == 0) {
+		return PROCESS_FORK_NO_SCHED_CONTROL;
+	}
 	// cspace, vspace and tcb
 	int result = allocate_process(&processes[child], child, parent);
 	if (result != PROCESS_FORK_OK) return result;
@@ -232,7 +235,7 @@ long pager_fork(microkit_child parent)
     int result = process_fork(parent, child);
     if (result != PROCESS_FORK_OK) {
         sddf_printf("fork(%u, %u) failed: %d\n", parent, child, result);
-        return -ENOMEM;
+        return result == PROCESS_FORK_NO_SCHED_CONTROL ? -ENOSYS : -ENOMEM;
     }
     return child;
 }

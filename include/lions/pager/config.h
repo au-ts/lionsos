@@ -48,6 +48,7 @@ typedef struct pager_server_config {
     pager_cnode_resource_t frame_copies;
     // Caps the Microkit tool hands the pager for the processes it creates at runtime.
     pager_cnode_resource_t pager_caps;
+    uint8_t sched_control;
     uint8_t num_clients;
     pager_client_resource_t clients[PAGER_MAX_CLIENTS];
 } pager_server_config_t;
