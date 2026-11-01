@@ -32,7 +32,7 @@ def generate(
     serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx)
     pager = ProtectionDomain("pager", "pager.elf", priority=198, passive=True)
     pager_system = LionsOs.Pager(sdf, pager)
-    client = ProtectionDomain("client", "client.elf", priority=1)
+    client = ProtectionDomain("client", "client.elf", priority=1, backed=False)
     pager_system.add_client(client)
     serial_system.add_client(client)
 

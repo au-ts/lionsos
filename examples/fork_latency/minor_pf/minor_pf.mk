@@ -53,15 +53,15 @@ endif
 
 IMAGE_FILE := loader.img
 REPORT_FILE  := report.txt
-SYSTEM_FILE := minor_pf.system
+SYSTEM_FILE := fork_latency.system
 
 vpath %.c ${SDDF} ${TOP}
 CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
 
 BENCHMARKS_DIR := $(LIONSOS)/dep/benchmarking
-BENCHMARK_DIR := $(BENCHMARKS_DIR)/minor_page_fault_latency
-BENCHMARK_LIBS := minor_pf.a
+BENCHMARK_DIR := $(BENCHMARKS_DIR)/fork_latency
+BENCHMARK_LIBS := fork_latency.a
 # The benchmark ships one Make snippet per OS; -lions.mk is the LionsOS one and
 # writes its archive into $(BUILD_DIR).
 BENCHMARK_MK := mpf-lions.mk
@@ -178,7 +178,7 @@ endif
 # CPU is passed the way the other benchmarks' snippets take it, but mpf-lions.mk
 # currently hard-codes -mcpu=cortex-a53 and ignores it, so minor_pf.a is built
 # for the a53 on every board until the submodule grows the same `CPU ?=` hook.
-minor_pf.a: | $(LIONS_LIBC)/include
+fork_latency.a: | $(LIONS_LIBC)/include
 	$(MAKE) -C $(BENCHMARK_DIR) -f $(BENCHMARK_MK) CPU=$(CPU) LIONS_LIBC=$(LIONS_LIBC)
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(RAMFS_CONFIG_DIR)/fat_config.h $(RAMFS_IMAGE)
