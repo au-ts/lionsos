@@ -98,4 +98,6 @@ static inline seL4_CPtr frame_copy_cptr(uint32_t copy) {
     return frame_copy_cnode_cptr + copy;
 }
 
+seL4_CPtr copy_frame_cap(seL4_CPtr frame_cap);
+void delete_copied_frame_cap(seL4_CPtr copy);
 #endif

@@ -195,6 +195,28 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
                 insert_frame_to_page(new_folio->frame_page, page_entry);
                 --folio->refcount;
                 // TODO: copy the frames.
+                // There is a bit of a problem with copying the frames.
+                // We need to create 2 copies of the frame caps
+                // then we need to map both of them
+                // then copy over 
+                // unmap both
+                
+                // keeping all frames mapped maybe will improve things.
+                // batched can also help. 
+                /**
+                 * Create copies of the two frames caps
+                 * map both into pager's vspace
+                 * 
+                 */
+
+                seL4_CPtr old_frame = copy_frame_cap(frame)
+                seL4_ARM_Page_Map(old_frame, PAGER_OWN_VSPACE_CPTR, PAGER_SCRATCH_1, create_cap_rights(false), seL4_ARM_Default_VMAttributes);
+                seL4_ARM_Page_Map(new_folio->frame_page, PAGER_OWN_VSPACE_CPTR, PAGER_SCRATCH_2, create_cap_rights(true), seL4_ARM_Default_VMAttributes);
+                memcpy(PAGER_SCRATCH_2, PAGER_SCRATCH_1, PAGE_SIZE);
+                seL4_ARM_Page_Unmap(old_frame);
+                seL4_ARM_Page_Unmap(new_folio->frame_page);
+                // TODO: delete old_frame.
+
                 frame = new_folio->frame_page;
             }
         }

@@ -210,3 +210,9 @@ void frame_table_init(uintptr_t memory, seL4_CPtr frame_cnode,
     // copy a bunch of zero pages to the zero page thing
     refill_gzp(INIT_GZP);
 }
+
+/**
+ * Copy frame cap
+ */
+seL4_CPtr copy_frame_cap(seL4_CPtr frame_cap);
+void delete_copied_frame_cap(seL4_CPtr copy);
