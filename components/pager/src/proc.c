@@ -176,6 +176,9 @@ static int mint_endpoints(uint32_t child)
  *   the parent's TCB the tool leaves at BASE_TCB_CAP + its fault id.
  * - its own endpoint, reply object and notification before it reaches libmicrokit's
  *   event loop, and the stack clone_pages() does not copy yet.
+ * 
+ *  Should at least connect to pager, serial virt and network (when network is done.).
+ *  RAMFS is also a consideration to be made. 
  */
 int process_fork(uint32_t parent, uint32_t child)
 {
@@ -198,7 +201,7 @@ int process_fork(uint32_t parent, uint32_t child)
 	if (result != PROCESS_FORK_OK) goto failed;
 
 	seL4_Error error = seL4_TCB_Configure(processes[child].tcb,
-										  processes[child].cspace,
+										  processes[child].cspace, 
 										  seL4_CNode_CapData_new(0, PROCESS_CSPACE_GUARD_SIZE).words[0],
 										  vspaces[child], 0,
 										  IPC_LOCATION, processes[child].ipc_buffer);
@@ -207,6 +210,9 @@ int process_fork(uint32_t parent, uint32_t child)
 		result = PROCESS_FORK_CAP;
 		goto failed;
 	}
+
+	
+
 	return PROCESS_FORK_OK;
 
 failed:
