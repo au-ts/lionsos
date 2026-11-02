@@ -194,6 +194,8 @@ int process_fork(uint32_t parent, uint32_t child)
 	if (result != PROCESS_FORK_OK) return result;
 	clone_pages(parent, child);
 
+	seL4_Word err = seL4_ARM_ASIDPool_Assign(seL4_CapInitThreadASIDPool, vspaces[child]);
+
 	result = map_ipc_buffer(child);
 	if (result != PROCESS_FORK_OK) goto failed;
 
@@ -211,7 +213,42 @@ int process_fork(uint32_t parent, uint32_t child)
 		goto failed;
 	}
 
-	
+	// /* Create scheduling context */
+    // new_proc->sched_context_ut = alloc_retype(&new_proc->sched_context, seL4_SchedContextObject,
+    //                                                  seL4_MinSchedContextBits);
+    // if (new_proc->sched_context_ut == NULL) {
+    //     ZF_LOGE("Failed to alloc sched context ut");
+    //     cleanup_process(new_proc, NULL);
+    //     return -1;
+    // }
+
+    // /* Configure the scheduling context to use the first core with budget equal to period */
+    // err = seL4_SchedControl_Configure(sched_ctrl_start, new_proc->sched_context, US_IN_MS, US_IN_MS, 0, 0);
+    // if (err != seL4_NoError) {
+    //     ZF_LOGE("Unable to configure scheduling context");
+    //     cleanup_process(new_proc, NULL);
+    //     return -1;
+    // }
+    
+    // /* bind sched context, set fault endpoint and priority
+    //  * In MCS, fault end point needed here should be in current thread's cspace.
+    //  * NOTE this will use the unbadged ep unlike above, you might want to mint it with a badge
+    //  * so you can identify which thread faulted in your fault handler */
+    // err = seL4_TCB_SetSchedParams(new_proc->tcb, seL4_CapInitThreadTCB, seL4_MinPrio, APP_PRIORITY,
+    //                               new_proc->sched_context, badged_fault_cap);
+    // if (err != seL4_NoError) {
+    //     ZF_LOGE("Unable to set scheduling params");
+    //     cleanup_process(new_proc, NULL);
+    //     return -1;
+    // }
+
+	seL4_TCB_SetSchedParams(
+		processes[child].tcb,
+		PAGER_TCB,
+		1, // default prio
+		TODO:SCHEDCONTEXT,
+		PAGER_SELF_EP_SLOT, // pager is fault handler.
+	);
 
 	return PROCESS_FORK_OK;
 
