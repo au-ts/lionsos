@@ -39,6 +39,7 @@ class Bridge(Component, FwBridgeConfig):
     def connect_port(
         self, driver: SystemDescription.ProtectionDomain
     ) -> tuple[NetConnectionResource, NetConnectionResource]:
+        # CD: Where is this initialised?
         assert self.ports is not None
         assert len(self.ports) < FwBridgeMaxPorts
 
@@ -49,22 +50,41 @@ class Bridge(Component, FwBridgeConfig):
 
         return driver_rx, driver_tx
 
+    # CD: This function name is not helpful to understand what it does. Connect
+    # virtualisers perhaps?
     def connect_local(self, net_system: TrackedNet) -> None:
+        # CD: What is driver_config? why would the virtualisers live in the "driver config"?
         driver_config = net_system.driver_config
+        # CD: Okay, do you mean the net_driver_config? In this case, these are
+        # the virtual addresses and queue specs of the driver-virt queues from
+        # the *driver's perspective*. Why would the bridge require these in
+        # order to map in queues?
         self.local_rx = net_connection(driver_config.virt_rx)
         self.local_tx = net_connection(driver_config.virt_tx)
+        # CD: I think what you are doing here is "stealing" the mapping
+        # generated for the driver and replacing it to be mapped into the
+        # bridge?
         for mr in net_system.tx_data_regions:
             self.map_data(mr)
 
     def map_data(self, mr: SystemDescription.MemoryRegion) -> None:
+        # CD: What do you mean if already mapped? Why would that be the case?
         """Map a packet pool region into the bridge's PD, read only. If already mapped, no-op."""
+        # CD: Where is this initialised?
         assert self.data_regions is not None
         assert mr.paddr is not None
         io_addr = mr.paddr.value
+        # CD: Why would there be duplicates in this case?
         if any(region.io_addr == io_addr for region in self.data_regions):
             return
+        # CD: Net max clients applies to each *interface*. It is not a global
+        # constant. So this assertion is not correct
         assert len(self.data_regions) < FwMaxInterfaces + SddfNetMaxClients
 
+        # CD: I'm wondering if it's even worth giving the bridge access to all
+        # of these regions, or whether it would have been a better design to
+        # have the firewall net TX virt just pass along the MAC address directly
+        # to the bridge? I.e. it could be bridge aware
         mapping = SystemDescription.Map(mr, self.pd.get_map_vaddr(mr), perms="r")
         self.pd.add_map(mapping)
         self.data_regions.append(
@@ -75,9 +95,16 @@ class Bridge(Component, FwBridgeConfig):
         )
 
     def finalise_config(self) -> None:
+        # CD: The purpose of this function is to do things that need to be done
+        # *after* other things have completed. For example, you may want to map
+        # in all the Tx data regions *after* all the Tx net clients have been
+        # added. It can also be used for assertions that ought to hold true by
+        # the end of the metaprogram. It surprises me that this is empty
         pass
 
 
+# CD: This function name is also a bit vague. Which queues? There are lots of
+# queues in the firewall
 def connect_queues(
     name: str,
     driver: SystemDescription.ProtectionDomain,
@@ -101,10 +128,16 @@ def connect_queues(
         num_buffers=dma_buffer_queue.capacity,
         id=channel.pd_b_id,
     )
+    # CD: Where do you map these queues in??
 
     return driver_conn, bridge_conn
 
 
+# CD: Why do you steal the driver's virtual address for the bridge's mapping?
+# CD: Why are you using the NetConnectionResourceStruct here? This is really
+# supposed to be only be used *within* the config structs module? Why does this
+# function even exist? Why are you declaring a region resource here that you
+# haven't created?
 def net_connection(conn: NetConnectionResourceStruct) -> NetConnectionResource:
     return NetConnectionResource(
         free_queue=RegionResource(

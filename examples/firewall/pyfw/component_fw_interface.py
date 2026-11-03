@@ -92,6 +92,7 @@ class FirewallInterface(NetworkInterface):
 
     @property
     def bridge(self) -> Bridge:
+        # CD: Can't it be none?
         assert self._bridge is not None
         return self._bridge
 

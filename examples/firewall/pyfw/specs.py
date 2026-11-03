@@ -47,11 +47,13 @@ class NetworkDevice:
 
     def __init__(self, device: DeviceTree.Node, driver: ProtectionDomain) -> None:
         self.driver = driver
+        # CD: What on earth is this?
         self.pds = [
             ProtectionDomain(f"{driver.name}_setup_{role}", "unused.elf")
             for role in ("tx", "rx", "client")
         ]
         for pd in self.pds:
+            # CD: What does this comment mean? Why are you adding all these unused elf files?
             # Warning: this will result in PDs and their queues/mappings in the system description
             # Will need to clean this up during render_system
             BuildConstants.sdf().add_pd(pd)
@@ -96,6 +98,7 @@ class TrackedNet:
         self._ethernet_node = ethernet_node
         self._driver_config: Optional[NetDriverConfigStruct] = None
         self._tx_clients: list[ProtectionDomain] = []
+        # CD: Why is this not initialised as a list and the above field is?
         self._tx_data_regions: Optional[list[MemoryRegion]] = None
 
     def add_client_with_copier(
@@ -132,12 +135,14 @@ class TrackedNet:
         self._driver_config = NetDriverConfigStruct.from_buffer_copy(
             Path(output_dir, "net_driver.data").read_bytes()
         )
+        # CD: How could this be none?
         if self._ethernet_node is None:
             tx_config = NetVirtTxConfigStruct.from_buffer_copy(
                 Path(output_dir, "net_virt_tx.data").read_bytes()
             )
             assert tx_config.num_clients == len(self._tx_clients)
             self._tx_data_regions = []
+            # CD: How do you know the clients at each index of these lists correspond to each other?
             for client, entry in zip(self._tx_clients, tx_config.clients):
                 # Check there is only one Tx pool region (currently this should always be the case)
                 assert entry.num_regions == 1
@@ -163,16 +168,20 @@ def render_system(
     <memory_region name="interface0/net/rx/virt_metadata" ...>
     <memory_region name="interface1/net/rx/virt_metadata" ...>
     
+    # CD: Do you check this assumption anywhere? Why do you have this assumption?
     This function renames the regions, assuming the provided net_systems
     are in the same order as the .connect() calls that created them.
     
+    # CD: What are the corresponding PDs?
     This also updates corresponding PD mappings. i.e.
     <map mr="generic/net/tx/data/client/icmp_module" ...> becomes
     <map mr="interface0/net/tx/data/client/icmp_module" ...>
     
+    # CD: Why do the Rx virtualiser's mappings need to be updated?
     For Rx metadata, this updates the Rx virtualiser's mapping.
     For each Tx pool, this updates both the Tx virtualiser's mapping and the Tx client's mapping.
     
+    # CD: I don't think it's fair to say that sdfgen creates them. You create them in the metaprogram
     Also removes temporary PDs and MRS created by sdfgen during setup of physical drivers.
     For example:
     
@@ -238,16 +247,22 @@ def render_system(
     for net in net_systems:
         if net._ethernet_node is not None:
             continue
+        # CD: Names?
         names = [("rx/virt_metadata", [net._virt_rx])]
         names.extend(
             (f"tx/data/client/{client.name}", [net._virt_tx, client])
             for client in net._tx_clients
         )
+        # CD: Endpoints?
         for suffix, endpoints in names:
             old_name = f"generic/net/{suffix}"
             new_name = f"interface{net._interface_index}/net/{suffix}"
             region = next(region for region in regions if region.get("name") == old_name)
             region.set("name", new_name)
+            # CD: These names are way too generic given you are doing a specific
+            # thing. IMO This is impossible to fully understand. The comments
+            # theoretically explain what the function does, but not why, and the
+            # code makes no sense
             for pd in endpoints:
                 mapping = next(mapping for mapping in pds[pd.name].findall("map")
                                if mapping.get("mr") == old_name)

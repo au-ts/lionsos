@@ -44,7 +44,10 @@ typedef struct fw_bridge_port {
 } fw_bridge_port_t;
 
 typedef struct fw_bridge_config {
+    // CD: Shouldn't this be per port??
     uint8_t mac_addr[MAC802_BYTES];
+    // CD: Not all Tx clients are associated with an interface
+    // CD: I'd prefer to have a special field for local Rx data region
     /* One Rx pool per interface, one Tx pool per Tx client on this interface */
     /* Region zero is this interface's Rx pool. */
     device_region_resource_t data_regions[FW_MAX_INTERFACES + SDDF_NET_MAX_CLIENTS];

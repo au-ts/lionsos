@@ -66,6 +66,7 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
         iface.tx_virtualiser = NetVirtTx(iface, iface.priorities.tx_virtualiser)
         iface.arp_requester = ArpRequester(iface, iface.priorities.arp_requester)
         iface.arp_responder = ArpResponder(iface, iface.priorities.arp_responder)
+        # CD: Shouldn't this only be created sometimes?
         iface.bridge = Bridge(iface, iface.priorities.bridge)
 
         iface.filters = {
@@ -77,6 +78,7 @@ def generate(sdf_file: str, dtb: DeviceTree) -> None:
         iface.rx_dma_region = FirewallMemoryRegion(
             f"rx_dma_region{iface.index}", dma_buffer_region.region_size, physical=True,
         )
+        # CD: I would prefer there to be a separate field for this pool rather than this be order dependent
         # First mapped data region should be the Rx region for this interface
         # (Easy for the bridge identify it without another config field)
         iface.bridge.map_data(iface.rx_dma_region.mr)
