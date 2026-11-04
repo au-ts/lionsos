@@ -8,6 +8,7 @@ from acacia import (
     MemoryRegion,
     ConfigStruct,
     SubsystemBuildError,
+    CSpace, Cap,
 )
 from dataclasses import dataclass
 from typing import override, List, Dict, Final
@@ -146,6 +147,10 @@ class IPCTracerSystem(PDInfoSystem):
 
             self.channel_id_to_source_child[2 * ch_ind] = ch.end_a_client
             self.channel_id_to_source_child[2 * ch_ind + 1] = ch.end_b_client
+        # Now we need to add the cap to ourself.
+        cspace = CSpace()
+        cspace.add_cap(Cap.TCB, 1, pd_name=self.receiver_pd.name)
+        self.receiver_pd.add_cspace(cspace)
 
     @override
     def generate_config_structs(self) -> List["ConfigStruct"]:

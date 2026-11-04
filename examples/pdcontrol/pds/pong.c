@@ -5,6 +5,7 @@ seL4_Word pingch;
 void init()
 {
     microkit_dbg_puts("pong init\n");
+    microkit_notify(pingch);
 }
 
 seL4_Word curr = 0;

@@ -99,6 +99,9 @@ qemu_disk:
 qemu: ${IMAGE_FILE} qemu_disk
 	$(QEMU) $(QEMU_ARGS)
 
+qemud: ${IMAGE_FILE} qemu_disk
+	$(QEMU) $(QEMU_ARGS) -S -s
+
 
 clean::
 	${RM} -rf ${IMAGES}

@@ -2,7 +2,8 @@
  * Copyright 2025, UNSW
  * SPDX-License-Identifier: BSD-2-Clause
  */
-#include "pdcontrol/ipc_tracer.h"
+#include <pdcontrol/ipc_tracer.h>
+#include <pdcontrol/scheduler.h>
 #include <microkit.h>
 #include <stddef.h>
 #include <pdcontrol/pdcontrol.h>
@@ -14,15 +15,35 @@ __attribute__((__section__(".pdc_ipc_tracer_config"))) pdc_ipc_tracer_config_t p
 
 pdc_config_handle_t cfg_all;
 pdc_ipc_tracer_handle_t ipc_handle;
+pdc_sched_handle_t sched_handle;
 void init()
 {
     cfg_all = pdc_config_init(&pdc_pd_all_config, &pdc_channel_all_config);
     ipc_handle = pdc_ipc_tracer_init(&cfg_all, &pdc_ipc_tracer_config) ;
+    sched_handle = pdc_sched_init(&cfg_all);
+    for (pdc_sched_pd_handle_t** handle = pdc_sched_iterate(&sched_handle, NULL); 
+    	handle != NULL; handle = pdc_sched_iterate(&sched_handle, handle)) {
+        pdc_sched_schedule_child(&sched_handle, pdc_sched_choose_child(&sched_handle, handle));
+    	break;
+	}
 }
 
 void notified(microkit_channel ch)
 {
+    microkit_dbg_puts(microkit_name);
+    microkit_dbg_puts(" was notified by ");
+    microkit_dbg_put32(ch);
+    microkit_dbg_puts("\n");
+    pdc_sched_unschedule_current(&sched_handle, pdc_sched_pd_state_BlockedOnRecv);
+    for (pdc_sched_pd_handle_t** handle = pdc_sched_iterate(&sched_handle, NULL); 
+    	handle != NULL; handle = pdc_sched_iterate(&sched_handle, handle)) {
+    	if (pdc_sched_state_is_blocking(handle[0]->state))
+        	continue;
+        pdc_sched_schedule_child(&sched_handle, pdc_sched_choose_child(&sched_handle, handle));
+    	break;
+	}
 }
+
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     return microkit_msginfo_new(0,0);
