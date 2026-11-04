@@ -14,6 +14,7 @@ export FILEIO_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 export MICROKIT_CONFIG ?= debug
 export BUILD_DIR ?= $(abspath build)
 export MICROKIT_BOARD ?= qemu_virt_aarch64
+export FS ?= fat
 
 IMAGE_FILE := $(BUILD_DIR)/fileio.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
@@ -31,6 +32,7 @@ ${BUILD_DIR}/Makefile: fileio.mk Makefile
 	echo "export MICROKIT_BOARD ?= ${MICROKIT_BOARD}" >> $@
 	echo "export MICROKIT_SDK ?= ${MICROKIT_SDK}" >> $@
 	echo "export MICROKIT_CONFIG ?= ${MICROKIT_CONFIG}" >> $@
+	echo "export FS ?= ${FS}" >> $@
 	cat fileio.mk >> $@
 
 submodules:
