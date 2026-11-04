@@ -10,7 +10,8 @@ from acacia import (
     SubsystemBuildError,
 )
 from dataclasses import dataclass
-from typing import override, List, Dict
+from typing import override, List, Dict, Optional
+from copy import copy
 
 @dataclass
 class ClientInfo:
@@ -61,6 +62,8 @@ class PDInfoSystem(Subsystem):
         # int is the client's name.
         self._clients: Dict[str, ClientInfo] = {}
         self._connected = False
+        # Only exists after connection.
+        self._channels : Optional[List[ChannelInfo]] = None;
         super().__init__(sdf, main_pd.name, clients_allowed=True)
 
 
@@ -106,22 +109,30 @@ class PDInfoSystem(Subsystem):
             target_file=target_file,
         )
 
-    def _get_client_channels(self) -> List[ChannelInfo]:
-        # not technically supported by acacia api, and will be prone to breaking.
-        channels_sorted = sorted(self.sdf.channels,
-            key=lambda ch: ch.end_a.pd.name + ch.end_b.pd.name)
-
+    @staticmethod
+    def _channel_info_list_factory(chs : List[Channel], name_to_clientinfo: Dict[str, ClientInfo]) -> List[ChannelInfo] :
         our_channels: List[ChannelInfo] = []
 
-        # find the channels that are contained in this system.
-        for chan in channels_sorted:
-            if chan.end_a.pd.name in self._clients and chan.end_b.pd.name in self._clients:
-                our_channels.append(ChannelInfo(
-                    chan,
-                    self._clients[chan.end_a.pd.name],
-                    self._clients[chan.end_b.pd.name],
-                ))
+        for ch in chs:
+            our_channels.append(ChannelInfo(
+                ch,
+                name_to_clientinfo[ch.end_a.pd.name],
+                name_to_clientinfo[ch.end_b.pd.name],
+            ))
         return our_channels
+
+    def _get_client_channels(self) -> List[ChannelInfo]:
+        if not self._connected:
+            # not technically supported by acacia api, and will be prone to breaking.
+            channels_sorted = sorted(self.sdf.channels,
+                key=lambda ch: ch.end_a.pd.name + ch.end_b.pd.name)
+
+            # find the channels that are contained in this system.
+            filtered = filter(lambda chan: chan.end_a.pd.name in self._clients and chan.end_b.pd.name in self._clients, channels_sorted)
+            return self._channel_info_list_factory(filtered, self._clients)
+        else:
+            assert self._channels is not None
+            return self._channels
 
     @override
     def add_client(self, client: "ProtectionDomain"):
@@ -138,6 +149,10 @@ class PDInfoSystem(Subsystem):
         assert not self._connected
         for pd in self.clients:
             self.main_pd.add_child_pd(pd)
+        # _get_client_channels must be called here early, because of this stateful design.
+        # We may overwrite the channels later.
+        self._channels = copy(self._get_client_channels())
+
         self._connected = True
 
     @override
@@ -153,7 +168,7 @@ class PDInfoSystem(Subsystem):
                  .channel_all_config_factory(
                      self.main_pd.prog_image,
                      self.channel_all_config_section,
-                     self._get_client_channels()),
+                     self._channels),
             ])
 
     @override

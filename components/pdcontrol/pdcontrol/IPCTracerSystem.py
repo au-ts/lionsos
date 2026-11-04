@@ -62,6 +62,7 @@ class IPCTracerSystem(PDInfoSystem):
         sender_id: int,
         queue_map: Map,
     ) -> ConfigStruct:
+        print(f"Tracer Config : {channel_id_to_source_child}")
         # A pseudo map from channel id to source child id.
         arraything: List[int] = [0 for _ in range(max(channel_id_to_source_child.keys())+1)]
         for key, value in channel_id_to_source_child.items():
@@ -92,6 +93,7 @@ class IPCTracerSystem(PDInfoSystem):
 
     @override
     def connect_clients(self):
+        assert self.built == False
         # adds all clients as children.
         super().connect_clients()
         # now we need to modify all of our relevant channels
@@ -111,7 +113,11 @@ class IPCTracerSystem(PDInfoSystem):
             # intercept channels.
             # child_a -> receiver
             child_a_to_receiver_end = Channel.End(pd=self.receiver_pd, can_notify=False, can_pp=False, ch_id=ch_ind * 2)
-            child_a_to_receiver_ch = Channel(self.sdf, end_a=ch.original.end_a ,end_b=child_a_to_receiver_end) 
+            child_a_to_receiver_ch = Channel(
+                self.sdf,
+                end_a=ch.original.end_a,
+                end_b=child_a_to_receiver_end,
+            ) 
 
             # child_a <- sender
             sender_to_child_a_end = Channel.End(pd=self.sender_pd, can_notify=True, can_pp=True, ch_id=ch_ind * 2)
@@ -119,7 +125,7 @@ class IPCTracerSystem(PDInfoSystem):
                 pd=ch.original.end_a.pd,
                 can_notify=False,
                 can_pp=False,
-                ch_id=ch.original.end_a.ch_id
+                ch_id=ch.original.end_a.ch_id,
             )
             sender_to_child_a_ch = Channel(self.sdf, sender_to_child_a_end, child_a_to_sender_end)
 
