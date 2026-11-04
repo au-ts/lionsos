@@ -17,21 +17,29 @@ extern char *fs_share;
 
 void (*blocking_wait)(microkit_channel ch) = NULL;
 
-#define REQUEST_ID_MAXIMUM (FS_QUEUE_CAPACITY - 1)
+#define NUM_REQUESTS FS_QUEUE_CAPACITY
+#define REQUEST_ID_MAXIMUM (NUM_REQUESTS - 1)
 struct request_metadata {
     fs_cmd_t command;
     fs_cmpl_t completion;
     bool used;
     bool complete;
-} request_metadata[FS_QUEUE_CAPACITY];
+} request_metadata[NUM_REQUESTS];
 
-#define NUM_BUFFERS FS_QUEUE_CAPACITY * 4
+/* The largest share this client can carve into FS_BUFFER_SIZE buffers. A
+ * smaller share lowers the count at runtime. */
+#define NUM_BUFFERS (FS_QUEUE_CAPACITY * 4)
 struct buffer_metadata {
     bool used;
-} buffer_metadata[FS_QUEUE_CAPACITY];
+} buffer_metadata[NUM_BUFFERS];
+
+static uint64_t buffer_count(void) {
+    uint64_t fit = fs_config.server.share.size / FS_BUFFER_SIZE;
+    return fit < NUM_BUFFERS ? fit : NUM_BUFFERS;
+}
 
 int fs_request_allocate(uint64_t *request_id) {
-    for (uint64_t i = 0; i < NUM_BUFFERS; i++) {
+    for (uint64_t i = 0; i < NUM_REQUESTS; i++) {
         if (!request_metadata[i].used) {
             request_metadata[i].used = true;
             *request_id = i;
@@ -49,7 +57,8 @@ void fs_request_free(uint64_t request_id) {
 }
 
 int fs_buffer_allocate(ptrdiff_t *buffer) {
-    for (int i = 0; i < NUM_BUFFERS; i++) {
+    uint64_t count = buffer_count();
+    for (uint64_t i = 0; i < count; i++) {
         if (!buffer_metadata[i].used) {
             buffer_metadata[i].used = true;
             *buffer = i * FS_BUFFER_SIZE;
@@ -61,7 +70,7 @@ int fs_buffer_allocate(ptrdiff_t *buffer) {
 
 void fs_buffer_free(ptrdiff_t buffer) {
     uint64_t i = buffer / FS_BUFFER_SIZE;
-    assert(i < NUM_BUFFERS);
+    assert(i < buffer_count());
     assert(buffer_metadata[i].used);
     buffer_metadata[i].used = false;
     memset(fs_share + buffer, 0, FS_BUFFER_SIZE);
