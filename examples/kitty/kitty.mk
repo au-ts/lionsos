@@ -126,9 +126,6 @@ package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
 vmm.elf: ${VMM_OBJS} libvmm.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-# Build with two threads in parallel
-nproc=2
-
 MICROPYTHON_LIBMATH := ${LIBMATH}
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
 MICROPYTHON_ENABLE_FRAMEBUFFER := 1
@@ -151,7 +148,7 @@ manifest.py: ${KITTY_DIR}/manifest.py kitty.py pn532.py font_height50.py font_he
 
 ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a
 
-%.o: %.c ${SDDF}/include
+%.o: %.c | $(LIONS_LIBC)/include ${SDDF}/include
 	${CC} ${CFLAGS} -c -o $@ $<
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB)
@@ -200,10 +197,10 @@ FORCE:
 # then change these lines or just make sure you've already put
 # linux and rootfs.cpio.gz into the Build directory
 ${LINUX}:
-	curl -L ${LIONSOS_DOWNLOADS}/$(KITTY_GRAPHICS_VM_LINUX) -o $@
+	curl -L ${LIONSOS_DOWNLOADS}/$@ -o $@
 
 ${INITRD}:
-	curl -L ${LIONSOS_DOWNLOADS}/$(KITTY_GRAPHICS_VM_ROOTFS) -o $@
+	curl -L ${LIONSOS_DOWNLOADS}/$@ -o $@
 
 # Because we include the *.mk files they are an implicit dependency
 # for the build.  These rules instantiate the submodules that

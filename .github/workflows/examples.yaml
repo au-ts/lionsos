@@ -10,8 +10,8 @@ on:
     branches: [ "main" ]
 
 env:
-  MICROKIT_VERSION: 2.3.0
-  MICROKIT_URL: https://github.com/seL4/microkit/releases/download/2.3.0/
+  MICROKIT_VERSION: 2.3.1
+  MICROKIT_URL: https://github.com/seL4/microkit/releases/download/2.3.1/
   SDFGEN_VERSION: 0.35.0
 
 jobs:

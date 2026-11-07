@@ -32,7 +32,6 @@ export LIONSOS := $(abspath ../..)
 
 IMAGE_FILE := $(BUILD_DIR)/webserver.img
 REPORT_FILE := $(BUILD_DIR)/report.txt
-nproc:= $(shell sh -c "if test -f /proc/cpuinfo; then grep processor /proc/cpuinfo | wc -l; else echo 2; fi")
 
 all: ${IMAGE_FILE}
 
