@@ -163,24 +163,21 @@ static void tx_provide(void)
     bool reprocess = true;
 
     while (reprocess) {
-        if (net_clients_go_first) {
-            enqueued |= tx_provide_net_clients_pass();
-            enqueued |= tx_provide_fw_clients_pass();
-        } else {
-            enqueued |= tx_provide_fw_clients_pass();
-            enqueued |= tx_provide_net_clients_pass();
-        }
-        net_clients_go_first = !net_clients_go_first;
-
-        reprocess = driver_queue_has_space() && clients_have_buffers();
-
-        for (int client = 0; client < config.num_clients; client++) {
-            if (!net_queue_empty_active(&tx_queue_clients[client])) {
-                continue;
+        while (driver_queue_has_space() && clients_have_buffers()) {
+            if (net_clients_go_first) {
+                enqueued |= tx_provide_net_clients_pass();
+                enqueued |= tx_provide_fw_clients_pass();
+            } else {
+                enqueued |= tx_provide_fw_clients_pass();
+                enqueued |= tx_provide_net_clients_pass();
             }
+            net_clients_go_first = !net_clients_go_first;
+        }
 
+        reprocess = false;
+        for (int client = 0; client < config.num_clients; client++) {
             net_request_signal_active(&tx_queue_clients[client]);
-            if (!net_queue_empty_active(&tx_queue_clients[client])) {
+            if (driver_queue_has_space() && !net_queue_empty_active(&tx_queue_clients[client])) {
                 net_cancel_signal_active(&tx_queue_clients[client]);
                 reprocess = true;
             }
