@@ -23,6 +23,16 @@ net_queue_handle_t tx_queue_clients[SDDF_NET_MAX_CLIENTS];
 fw_queue_t fw_free_clients[FW_MAX_FW_CLIENTS];
 fw_queue_t fw_active_clients[FW_MAX_FW_CLIENTS];
 
+uint32_t num_queued_to_driver;
+
+/* Alternate which client group goes first each pass*/
+bool net_clients_go_first = true;
+
+static inline bool driver_queue_has_space(void)
+{
+    return num_queued_to_driver < tx_queue_drv.capacity;
+}
+
 static int extract_offset_net_client(uintptr_t *phys)
 {
     for (int client = 0; client < config.num_clients; client++) {
@@ -48,64 +58,129 @@ static int extract_offset_fw_client(uintptr_t *phys)
     return -1;
 }
 
-static void tx_provide(void)
+/* Forwards one buffer for this client, if it has one. The caller must have
+already checked driver_queue_has_space(). */
+static bool tx_provide_net_client(uint32_t client)
+{
+    if (net_queue_empty_active(&tx_queue_clients[client])) {
+        return false;
+    }
+
+    net_buff_desc_t buffer;
+    int err = net_dequeue_active(&tx_queue_clients[client], &buffer);
+    assert(!err);
+
+    if (buffer.io_or_offset % NET_BUFFER_SIZE
+        || buffer.io_or_offset >= NET_BUFFER_SIZE * tx_queue_clients[client].capacity) {
+        sddf_dprintf("VIRT TX LOG, Interface %u: Client provided offset %lx which is not buffer aligned or "
+                     "outside of buffer region\n",
+                     fw_config.interface, buffer.io_or_offset);
+        err = net_enqueue_free(&tx_queue_clients[client], buffer);
+        assert(!err);
+        return false;
+    }
+
+    uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.clients[client].regions[0].data.region.vaddr;
+    cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
+    buffer.io_or_offset = buffer.io_or_offset + config.clients[client].regions[0].data.io_addr;
+
+    err = net_enqueue_active(&tx_queue_drv, buffer);
+    assert(!err);
+    num_queued_to_driver++;
+    return true;
+}
+
+static bool tx_provide_fw_client(uint32_t client)
+{
+    if (fw_queue_empty(&fw_active_clients[client])) {
+        return false;
+    }
+
+    fw_buff_desc_t buffer;
+    int err = fw_dequeue(&fw_active_clients[client], &buffer);
+    assert(!err);
+
+    assert(buffer.offset % NET_BUFFER_SIZE == 0
+           && buffer.offset < NET_BUFFER_SIZE * fw_active_clients[client].capacity);
+    assert(buffer.interface < fw_config.num_data_regions);
+
+    uintptr_t buffer_vaddr = buffer.offset + (uintptr_t)fw_config.data_regions[buffer.interface].region.vaddr;
+    cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
+    uintptr_t io_addr = buffer.offset + fw_config.data_regions[buffer.interface].io_addr;
+
+    net_buff_desc_t net_buffer = { .io_or_offset = io_addr, .len = buffer.len };
+    err = net_enqueue_active(&tx_queue_drv, net_buffer);
+    assert(!err);
+    num_queued_to_driver++;
+    return true;
+}
+
+/* Next client to serve in each group */
+static uint32_t net_client_cursor;
+static uint32_t fw_client_cursor;
+
+/* One buffer per net client, starting from net_client_cursor. */
+static bool tx_provide_net_clients_pass(void)
 {
     bool enqueued = false;
-    for (int client = 0; client < config.num_clients; client++) {
-        bool reprocess = true;
-        while (reprocess) {
-            while (!net_queue_empty_active(&tx_queue_clients[client])) {
-                net_buff_desc_t buffer;
-                int err = net_dequeue_active(&tx_queue_clients[client], &buffer);
-                assert(!err);
+    for (uint32_t i = 0; i < config.num_clients && driver_queue_has_space(); i++) {
+        enqueued |= tx_provide_net_client(net_client_cursor);
+        net_client_cursor = (net_client_cursor + 1) % config.num_clients;
+    }
+    return enqueued;
+}
 
-                if (buffer.io_or_offset % NET_BUFFER_SIZE
-                    || buffer.io_or_offset >= NET_BUFFER_SIZE * tx_queue_clients[client].capacity) {
-                    sddf_dprintf("VIRT TX LOG, Interface %u: Client provided offset %lx which is not buffer aligned or "
-                                 "outside of buffer region\n",
-                                 fw_config.interface, buffer.io_or_offset);
-                    err = net_enqueue_free(&tx_queue_clients[client], buffer);
-                    assert(!err);
-                    continue;
-                }
+static bool tx_provide_fw_clients_pass(void)
+{
+    bool enqueued = false;
+    for (uint32_t i = 0; i < fw_config.num_active_clients && driver_queue_has_space(); i++) {
+        enqueued |= tx_provide_fw_client(fw_client_cursor);
+        fw_client_cursor = (fw_client_cursor + 1) % fw_config.num_active_clients;
+    }
+    return enqueued;
+}
 
-                uintptr_t buffer_vaddr = buffer.io_or_offset + (uintptr_t)config.clients[client].regions[0].data.region.vaddr;
-                cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
-                buffer.io_or_offset = buffer.io_or_offset + config.clients[client].regions[0].data.io_addr;
-
-                err = net_enqueue_active(&tx_queue_drv, buffer);
-                assert(!err);
-                enqueued = true;
-            }
-
-            net_request_signal_active(&tx_queue_clients[client]);
-            reprocess = false;
-
-            if (!net_queue_empty_active(&tx_queue_clients[client])) {
-                net_cancel_signal_active(&tx_queue_clients[client]);
-                reprocess = true;
-            }
+static bool clients_have_buffers(void)
+{
+    for (uint32_t client = 0; client < config.num_clients; client++) {
+        if (!net_queue_empty_active(&tx_queue_clients[client])) {
+            return true;
         }
     }
 
-    for (int client = 0; client < fw_config.num_active_clients; client++) {
-        while (!fw_queue_empty(&fw_active_clients[client])) {
-            fw_buff_desc_t buffer;
-            int err = fw_dequeue(&fw_active_clients[client], &buffer);
-            assert(!err);
+    for (uint32_t client = 0; client < fw_config.num_active_clients; client++) {
+        if (!fw_queue_empty(&fw_active_clients[client])) {
+            return true;
+        }
+    }
 
-            assert(buffer.offset % NET_BUFFER_SIZE == 0
-                   && buffer.offset < NET_BUFFER_SIZE * fw_active_clients[client].capacity);
-            assert(buffer.interface < fw_config.num_data_regions);
+    return false;
+}
 
-            uintptr_t buffer_vaddr = buffer.offset + (uintptr_t)fw_config.data_regions[buffer.interface].region.vaddr;
-            cache_clean(buffer_vaddr, buffer_vaddr + buffer.len);
-            uintptr_t io_addr = buffer.offset + fw_config.data_regions[buffer.interface].io_addr;
+static void tx_provide(void)
+{
+    bool enqueued = false;
+    bool reprocess = true;
 
-            net_buff_desc_t net_buffer = { .io_or_offset = io_addr, .len = buffer.len };
-            err = net_enqueue_active(&tx_queue_drv, net_buffer);
-            assert(!err);
-            enqueued = true;
+    while (reprocess) {
+        while (driver_queue_has_space() && clients_have_buffers()) {
+            if (net_clients_go_first) {
+                enqueued |= tx_provide_net_clients_pass();
+                enqueued |= tx_provide_fw_clients_pass();
+            } else {
+                enqueued |= tx_provide_fw_clients_pass();
+                enqueued |= tx_provide_net_clients_pass();
+            }
+            net_clients_go_first = !net_clients_go_first;
+        }
+
+        reprocess = false;
+        for (int client = 0; client < config.num_clients; client++) {
+            net_request_signal_active(&tx_queue_clients[client]);
+            if (driver_queue_has_space() && !net_queue_empty_active(&tx_queue_clients[client])) {
+                net_cancel_signal_active(&tx_queue_clients[client]);
+                reprocess = true;
+            }
         }
     }
 
@@ -125,6 +200,8 @@ static void tx_return(void)
             net_buff_desc_t buffer;
             int err = net_dequeue_free(&tx_queue_drv, &buffer);
             assert(!err);
+            assert(num_queued_to_driver > 0);
+            num_queued_to_driver--;
 
             int client = extract_offset_net_client(&buffer.io_or_offset);
             if (client >= 0) {
