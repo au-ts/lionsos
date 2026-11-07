@@ -211,7 +211,6 @@ static void route(void)
                     tcp_hdr_t *tcp_pkt = (tcp_hdr_t *)(pkt_vaddr + transport_layer_offset(ip_hdr));
                     if (ip_hdr->protocol == IPV4_PROTO_TCP && tcp_pkt->dst_port == htons(WEBSERVER_PORT)) {
                         if (fw_queue_full(&webserver)) {
-                            /* Webserver queue can receive buffers from any interface */
                             LOG_FIREWALL("ROUTING", "webserver queue full, dropping packet from interface %u\n",
                                          interface);
                             drop_packet(fw_buffer);
