@@ -32,9 +32,9 @@ qemu ${IMAGE_FILE} ${REPORT_FILE} clean clobber: ${BUILD_DIR}/Makefile FORCE
 	${MAKE} -C ${BUILD_DIR} BUILD_DIR=${BUILD_DIR} MICROKIT_SDK=${MICROKIT_SDK} SMP_CONFIG=${SMP_CONFIG} $(notdir $@)
 
 
-${BUILD_DIR}/Makefile: minor_pf.mk
+${BUILD_DIR}/Makefile: fork_latency.mk
 	mkdir -p ${BUILD_DIR}
-	cp minor_pf.mk $@
+	cp fork_latency.mk $@
 
 submodules:
 	git submodule update --init $(LIONSOS)/dep/musllibc

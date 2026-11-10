@@ -23,6 +23,7 @@ endif
 # selected by MICROKIT_BOARD.
 include $(LIONSOS)/examples/board.mk
 TOOLCHAIN := clang
+, := ,
 CC := clang
 LD := ld.lld
 RANLIB := llvm-ranlib
@@ -64,7 +65,7 @@ BENCHMARK_DIR := $(BENCHMARKS_DIR)/fork_latency
 BENCHMARK_LIBS := fork_latency.a
 # The benchmark ships one Make snippet per OS; -lions.mk is the LionsOS one and
 # writes its archive into $(BUILD_DIR).
-BENCHMARK_MK := mpf-lions.mk
+BENCHMARK_MK := fork-lions.mk
 $(if $(wildcard $(BENCHMARK_DIR)/$(BENCHMARK_MK)),,$(error Could not find $(BENCHMARK_MK) in $(BENCHMARK_DIR) -- run `make submodules`))
 # Only client.c includes the benchmark header, so it stays off everything
 # else's include path.
@@ -115,6 +116,19 @@ ${CHECK_FLAGS_BOARD_MD5}:
 
 METAPROGRAM := $(TOP)/meta.py
 
+# How many processes the client can fork: each takes a spare connection to every
+# virtualiser the client is a client of. Must not exceed PAGER_MAX_CLIENTS - 1.
+FORK_SLOTS ?= 9
+# FORK_NET=1 adds a network system the client, and so each process it forks, is a client
+# of. Off by default so as not to disturb the benchmark.
+FORK_NET ?= 0
+ifeq ($(FORK_NET),1)
+FORK_NET_COPIERS := client $(addprefix fork,$(shell seq 0 $$(($(FORK_SLOTS) - 1))))
+IMAGES += eth_driver.elf network_virt_rx.elf network_virt_tx.elf network_copy.elf
+META_NET_ARGS := --net
+CLIENT_NET_CFLAGS := -DFORK_NET
+endif
+
 all: $(IMAGE_FILE)
 
 SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
@@ -122,6 +136,13 @@ include ${SDDF}/util/util.mk
 include ${SDDF}/drivers/serial/${SERIAL_DRIV_DIR}/serial_driver.mk
 include ${SDDF}/serial/components/serial_components.mk
 include $(LIONSOS)/components/pager/pager.mk
+ifeq ($(FORK_NET),1)
+include ${SDDF}/network/components/network_components.mk
+include ${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk
+
+eth_driver.elf: $(ETH_DRIV)
+	cp $< $@
+endif
 # musl has to be configured before the pager, which includes its headers.
 $(PAGER_OBJ): | $(LIONS_LIBC)/include
 ifeq ($(RAM_FATFS),1)
@@ -141,7 +162,7 @@ ${IMAGES}: $(LIONS_LIBC)/lib/libc.a libsddf_util_debug.a $(BENCHMARK_LIBS)
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}
 
 client.o: %.o: $(TOP)/src/%.c | $(LIONS_LIBC)/include
-	$(CC) -c $(CFLAGS) -I. -I$(RAMFS_CONFIG_DIR) $(BENCHMARK_INCLUDES) $< -o $@
+	$(CC) -c $(CFLAGS) $(CLIENT_NET_CFLAGS) -I. -I$(RAMFS_CONFIG_DIR) $(BENCHMARK_INCLUDES) $< -o $@
 
 client.elf: client.o libsddf_util_debug.a $(BENCHMARK_LIBS) $(RAMFS_LIB)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
@@ -183,7 +204,8 @@ fork_latency.a: | $(LIONS_LIBC)/include
 
 $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(RAMFS_CONFIG_DIR)/fat_config.h $(RAMFS_IMAGE)
 	PYTHONPATH=${SDDF}/tools/meta:$$PYTHONPATH \
-	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) $(META_RAMFS_ARGS)
+	$(PYTHON) $(METAPROGRAM) --sddf $(SDDF) --board $(MICROKIT_BOARD) --dtb $(DTB) --output . --sdf $(SYSTEM_FILE) \
+		--fork-slots $(FORK_SLOTS) $(META_RAMFS_ARGS) $(META_NET_ARGS)
 
 	$(OBJCOPY) --update-section .device_resources=serial_driver_device_resources.data serial_driver.elf
 	$(OBJCOPY) --update-section .serial_driver_config=serial_driver_config.data serial_driver.elf
@@ -191,6 +213,14 @@ $(SYSTEM_FILE): $(METAPROGRAM) $(IMAGES) $(DTB) $(RAMFS_CONFIG_DIR)/fat_config.h
 	$(OBJCOPY) --update-section .serial_client_config=serial_client_client.data client.elf
 	$(OBJCOPY) --update-section .pager_server_config=pager_server_pager.data pager.elf
 	$(OBJCOPY) --update-section .pager_client_config=pager_client_client.data client.elf
+ifeq ($(FORK_NET),1)
+	$(OBJCOPY) --update-section .device_resources=ethernet_driver_device_resources.data eth_driver.elf
+	$(OBJCOPY) --update-section .net_driver_config=net_driver.data eth_driver.elf
+	$(OBJCOPY) --update-section .net_virt_rx_config=net_virt_rx.data network_virt_rx.elf
+	$(OBJCOPY) --update-section .net_virt_tx_config=net_virt_tx.data network_virt_tx.elf
+	$(OBJCOPY) --update-section .net_client_config=net_client_client.data client.elf
+	$(foreach copier,$(FORK_NET_COPIERS),$(OBJCOPY) --update-section .net_copy_config=net_copy_$(copier)_net_copier.data network_copy.elf network_copy_$(copier).elf;)
+endif
 
 $(IMAGE_FILE) $(REPORT_FILE): $(IMAGES) $(SYSTEM_FILE)
 	$(MICROKIT_TOOL) $(SYSTEM_FILE) --search-path $(BUILD_DIR) --board $(MICROKIT_BOARD) --config $(MICROKIT_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
@@ -202,5 +232,6 @@ qemu: ${IMAGE_FILE}
 ifeq ($(strip $(QEMU)),)
 	$(error make qemu is not supported for MICROKIT_BOARD=$(MICROKIT_BOARD))
 else
-	$(QEMU) $(QEMU_ARCH_ARGS) -nographic -d guest_errors
+	$(QEMU) $(QEMU_ARCH_ARGS) $(if $(filter 1,$(FORK_NET)),$(QEMU_NET_ARGS) -netdev user$(,)id=netdev0 -global virtio-mmio.force-legacy=false) \
+		-nographic -d guest_errors
 endif

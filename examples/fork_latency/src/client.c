@@ -5,6 +5,9 @@
 #include <sddf/serial/queue.h>
 #include <sddf/serial/config.h>
 #include <sddf/timer/config.h>
+#ifdef FORK_NET
+#include <sddf/network/config.h>
+#endif
 #include <lions/fs/config.h>
 #include <lions/fs/protocol.h>
 #include <lions/pager/config.h>
