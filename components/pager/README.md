@@ -2,8 +2,10 @@
 Minimal demand-paging service (`pager` PD) that backs the `client` PD on seL4/Microkit (AArch64) via fault handling, shadow 4-level page tables, CoW global zero page, and bump/slab allocators for frames and paging structures.
 
 This pager is meant for benchmarking minor page faults of anonymous memory like in Figure 8 of the [HongMeng paper](https://www.usenix.org/system/files/osdi24-chen-haibo.pdf). It is also to be used to benchmark the address space copy semantics of `fork()` but this is WIP:
-a forked process gets its address space, CSpace, endpoint caps, IPC buffer and a configured
-TCB, but no scheduling context or registers yet, so it does not run.
+a forked process gets a CSpace, TCB, scheduling context, notification, reply object, IPC
+buffer and its parent's registers, and shares every page of its parent copy-on-write,
+including its ELF. Memory regions the system description maps into the parent are not
+cloned, and a process cannot exit yet.
 It can be used for real applications but should only really be used for a *static* system as frame objects and paging objects do not get untyped. 
 <!-- TODO: write a quick description of the pager.
 TODO: big caveats like only for aarch64, supports the maaxboard and qemu. -->
@@ -76,14 +78,15 @@ Each module owns its own state and exposes it through the matching header in `in
 | File | Responsibility |
 | --- | --- |
 | `lions/pager/config.h` | The contract with sdfgen: `pager_server_config_t` (the CNode slots, the scratch and BootInfo regions, the per-client channel and fault ids) and `pager_client_config_t` (the channel the client's libc PPCs on). |
-| `include/pager.h` | The contract with the Microkit tool: the symbols it patches in (`vspaces`, `elf_caps`, `elf_sizes`) and the slab sizes. |
+| `include/pager.h` | The contract with the Microkit tool: the symbols it patches in (`vspaces`, `elf_caps`, `elf_vaddrs`, `elf_sizes`) and the slab sizes. |
 | `src/pager.c` | The Microkit entry points only: `init()`, `notified()`, `fault()` and `protected()`. |
 | `src/untyped.c` | Owns the untypeds left after initialisation; everything that retypes an object goes through `untyped_alloc()`. |
 | `src/cspace.c` | Generic CSpace/untyped bookkeeping (`cnode_specs_t`) and `create_cap_rights()`. |
 | `src/frame_table.c` | Folio metadata, the frame free list, the global zero page cap copies and the `frame_copies` CNode. |
 | `src/page_table.c` | Shadow page tables: the intermediary paging structure free list, `make_page_table_entry()` and `unmap_range()`. |
 | `src/proc.c` | The process table and `fork()`. |
-| `src/mem.c` | The `brk`/`mmap`/`munmap`/`fork` PPCs from the client's libc. |
+| `src/conn.c` | The connections of forked processes to the serial and network virtualisers (see 3.5). |
+| `src/mem.c` | The `brk`/`mmap`/`munmap`/`fork` PPCs from the client's libc, and the one a forked process asks for its MAC address with. |
 | `src/bitmap.c` | The block allocator `mem.c` hands out the client's mmap arena with. |
 
 The example keeps only what is specific to it: `src/client.c`, which selects a benchmark
@@ -142,10 +145,11 @@ slots from `pager_config` and reaches them with `microkit_cspace_root_slot_to_cp
 | 2 | `frames` | 20 | Frames the pager retypes to satisfy faults. |
 | 3 | `paging_structures` | 20 | Intermediary paging structures (PUD/PD/PT). |
 | 4 | `zero_page_copies` | 20 | Copies of the global zero page cap, one per read-only mapping. |
-| 5 | `process_cspaces` | 5 | The per-process CSpaces `fork()` creates. |
-| 6 | `elf_caps` | 12 | The clients' ELF frames, filled in by the Microkit tool. The pager points the tool at it with the `elf_caps_cnode` attribute. |
+| 5 | `process_cspaces` | 7 | What `fork()` creates for each process, in a fixed block of slots per process (see below). |
+| 6 | `elf_caps` | 12 | The clients' ELF frames, filled in by the Microkit tool. The pager points the tool at it with the `elf_caps_cnode` attribute. At init the pager moves each into `frames` and maps it over the system initialiser's mapping of the same frame (`elf_vaddrs` says where), so a client's ELF is in its shadow page table and `fork()` shares it copy-on-write. |
 | 7 | `frame_copies` | 20 | Copies of ordinary frame caps. A frame cap carries its own mapping, so a folio mapped into more than one VSpace needs one cap per mapping. |
-| 8 | `pager_caps` | 5 | Caps the Microkit tool hands the pager for the processes it creates at runtime. Slot 1 (`PAGER_SELF_EP_SLOT`) is a copy of the pager's own endpoint, named by the `self_ep_cnode` attribute, which is what lets `fork()` mint the badged endpoint caps a new process needs: the cap libmicrokit receives on is in the PD's nested Microkit CNode, which the pager holds no cap to and so cannot mint from. |
+| 8 | `pager_caps` | 6 | Caps the Microkit tool hands the pager for the processes it creates at runtime. Slot 1 (`PAGER_SELF_EP_SLOT`) is a copy of the pager's own endpoint, named by the `self_ep_cnode` attribute, which is what lets `fork()` mint the badged endpoint caps a new process needs: the cap libmicrokit receives on is in the PD's nested Microkit CNode, which the pager holds no cap to and so cannot mint from. Slot 2 holds the sink notification and the slots from 4 the caps to each peer, see 3.5. |
+| 10 | `connection_frames` | 13 | The frames of every spare connection, see 3.5. |
 
 Note that the Microkit tool separately hands the pager a VSpace cap per client, but those go
 into the PD's *nested* Microkit CNode rather than the root CSpace above, so the two slot
@@ -155,30 +159,91 @@ the resulting cptrs out of the `vspaces` symbol the tool patches into `pager.elf
 The tool fills the rest of that symbol with VSpaces it pre-creates for the processes
 `fork()` goes on to make, one per unused `fault_id`. They are in the spec so that the
 system initialiser assigns each an ASID, which the pager could not do later: assigning one
-needs an ASID pool cap, and no protection domain is given one. The same applies to a
-scheduling context, which is why a forked process cannot be started yet.
+needs an ASID pool cap, and no protection domain is given one. Scheduling contexts the pager
+can configure itself, with the SchedControl cap sdfgen maps into slot 9 of its root CSpace.
 
-A process' own CSpace is a single flat CNode (`PROCESS_CSPACE_SIZE_BITS`) in a slot of
-`process_cspaces`, with its TCB in the slot beside it. A cap *inside* that CSpace cannot be
-named from the pager's root CSpace -- the 64 bits of a cptr are spent reaching the CSpace
-itself -- so only the caps the process invokes go in it (its fault and PPC endpoints, at the
-slot numbers `libmicrokit` expects), and everything the pager has to invoke on the process'
-behalf sits beside it in `process_cspaces`.
+A process' own CSpace is a single flat CNode (`PROCESS_CSPACE_SIZE_BITS`). A cap *inside*
+that CSpace cannot be named from the pager's root CSpace -- the 64 bits of a cptr are spent
+reaching the CSpace itself -- so only the caps the process invokes go in it, at the slot
+numbers `libmicrokit` expects: its notification at `INPUT_CAP` (1), its fault endpoint (2),
+its reply object at `REPLY_CAP` (4) and its PPC endpoint. Everything the pager has to invoke
+on the process' behalf sits in the process' block of `process_cspaces`, starting at
+`PROCESS_BLOCK(pid)` (`include/proc.h`):
+
+| Offset | Holds |
+| --- | --- |
+| 0 | The process' CSpace |
+| 1 | Its TCB |
+| 2 | Its scheduling context, configured with the budget and period of the client it descends from |
+| 3 | The unbadged original of its notification |
+| 4 | Its badged fault endpoint. On MCS, `seL4_TCB_SetSchedParams` looks the fault endpoint up in the caller's CSpace, so the copy in the process' own CSpace cannot be used for it |
+
+A forked process inherits its parent's priority, and the parent's TCB is the authority
+`seL4_TCB_SetSchedParams` checks it against. It starts at the instruction after the `svc` of
+its parent's fork PPC, with 0 in the register that call returns.
 
 - **Scratch memory:** `connect()` also creates the memory region the shadow page tables and
 folio metadata are built in, reachable as `pager_config.memory`.
+
+### 3.5 Connections of forked processes
+A forked process runs its parent's code against a copy of its parent's `serial_config` and
+`net_config`, so it signals the virtualisers on the same channels and expects its queues at
+the same addresses. It cannot share its parent's: their queues have a single producer, and
+the virtualiser would take the child for the parent. sDDF virtualisers are configured at
+build time, so each gets *spare* clients then, that no PD is on the other end of, and
+`fork()` hands one to each new process (`src/conn.c`):
+
+```py
+pager_system = LionsOs.Pager(sdf, pager, fork_slots=9)
+pager_system.add_client(client)
+serial_system.add_client(client)
+pager_system.add_serial(serial_system)          # fork_slots spare serial clients
+net_system.add_client_with_copier(client, client_copier)
+pager_system.add_net(net_system, fork_copiers)  # one copier PD per fork slot
+for system in (serial_system, net_system, pager_system):   # the pager last
+    assert system.connect()
+```
+
+- **Spares.** sdfgen maps a spare's queue and data regions into the virtualiser (or, for
+  received packets, a copier of the spare's own) and reserves a channel id on it, and lists
+  the spare in the virtualiser's config as client `fork<n>`. It hands the pager a cap to
+  each frame of those regions in `connection_frames`, with the `<cap_frames>` cap map.
+- **Peers.** For each PD on the other end of a spare, the pager is given a cap to its
+  notification and an unguarded cap to its Microkit CNode, in `pager_caps` at
+  `PAGER_PEER_NTFN_SLOT(peer)` and `PAGER_PEER_CNODE_SLOT(peer)`.
+- **At init**, the pager points the peer's end of every spare at a sink notification of its
+  own, so that a peer signalling a spare nobody has taken does not fault.
+- **At fork**, for each connection of the client the process descends from
+  (`pager_config.clients[i].conns`), the pager takes a free spare of the same kind and
+  sizes, maps its frames where that client maps its regions, mints into the process'
+  CSpace a cap to the peer's notification badged with the spare's channel, and replaces
+  the sink in the peer's CSpace with a cap to the process' notification badged with the
+  client's channel. The mappings are left out of the shadow page tables, so that a fork
+  of the process gets spares of its own rather than sharing these.
+- **Network.** The virtualiser routes each spare its own MAC address, which the process
+  reads with `pager_net_mac_addr()` (the `PAGER_PROC_MAC_ADDR` PPC) and must use in place of
+  the one in its copied config. Its parent's network stack state is not valid in it, so it
+  has to initialise networking again.
+
+`examples/fork_latency` gives every process slot a serial spare, and with `FORK_NET=1` also
+a network connection over virtio-net on QEMU.
 
 ### 3.3 [Microkit](https://github.com/au-ts/microkit) changes
 - `fault_handler`/`fault_id` attributes on a protection domain, routing its faults to a PD
   that is not its parent.
 - `elf_caps_cnode` attribute, naming the CNode a fault handler's clients' ELF frame caps are
-  placed in. The tool patches `vspaces`, `elf_caps` and `elf_sizes` into the handler's ELF.
+  placed in. The tool patches `vspaces`, `elf_caps`, `elf_vaddrs` and `elf_sizes` into the
+  handler's ELF.
 - `self_ep_cnode` attribute, naming the CNode a copy of the handler's own endpoint cap is
   placed in, and spare VSpaces for the processes a handler creates at runtime.
 - Option to have unbacked stack pages for protection domains.
+- `<cap_notification>`, `<cap_microkit_cnode>` and `<cap_frames>` cap maps, and a
+  `dest_cnode` attribute placing a cap map in a user CNode instead of the root CNode.
 
 ### 3.4 [sdfgen](https://github.com/au-ts/microkit_sdf_gen) changes
-- `LionsOs.Pager(sdf, pager_pd)` with `add_client()`, `connect()` and `serialise_config()`.
+- `LionsOs.Pager(sdf, pager_pd, fork_slots)` with `add_client()`, `add_serial()`,
+  `add_net()`, `connect()` and `serialise_config()`.
+- Spare clients in `Sddf.Serial` and `Sddf.Net`, for the pager to give forked processes.
 - `backed=False` for protection domains.
 - `self_ep_cnode` on a protection domain.
 

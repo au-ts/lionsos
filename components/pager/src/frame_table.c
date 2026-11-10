@@ -19,6 +19,8 @@ seL4_CPtr frame_copy_cnode_cptr;
 /* Somewhere in our own address space clear of every MR we were given, used to
  * get at a frame's contents. */
 #define SCRATCH_VADDR 0x30000000
+/* A second page for frame_table_copy_frame()'s source, in the same page table. */
+#define SCRATCH_SRC_VADDR (SCRATCH_VADDR + PAGE_SIZE)
 
 /* Folio metadata, bump-allocated out of the memory given to frame_table_init(). */
 static uintptr_t frame_memory;
@@ -40,6 +42,12 @@ static uint32_t unused_gzp_idx = 0;
 /* Copies still carrying a mapping we have since overwritten. */
 static uint32_t dirty_gzp[BUFFERS_SIZE];
 static uint32_t dirty_gzp_idx = 0;
+
+// Bookkeeping for frame cap copies.
+static uint32_t frame_copy_idx = 1;
+
+static uint32_t unused_frame_copies[BUFFERS_SIZE];
+static uint32_t unused_frame_copies_idx = 0;
 
 struct folio *get_folio_from_idx(uint32_t idx) {
     if (idx == 0 || idx > FOLIO_COUNT) {
@@ -93,6 +101,10 @@ void put_frame(struct folio *folio) {
     }
     if (folio->refcount > 0) {
         --folio->refcount;
+    }
+    // Another process still maps it.
+    if (folio->refcount > 0) {
+        return;
     }
     if (unused_frames_idx < BUFFERS_SIZE) {
         unused_frames[unused_frames_idx++] = folio;
@@ -211,8 +223,85 @@ void frame_table_init(uintptr_t memory, seL4_CPtr frame_cnode,
     refill_gzp(INIT_GZP);
 }
 
-/**
- * Copy frame cap
- */
-seL4_CPtr copy_frame_cap(seL4_CPtr frame_cap);
-void delete_copied_frame_cap(seL4_CPtr copy);
+struct folio *frame_table_adopt(seL4_CPtr cnode, seL4_Word slot)
+{
+    if (frame_idx >= FOLIO_COUNT) {
+        sddf_printf("frame metadata exhausted\n");
+        return NULL;
+    }
+    seL4_Error err = seL4_CNode_Move(frame_cnode_cptr, frame_idx, PAGER_CNODE_DEPTH, cnode, slot,
+                                     PAGER_CNODE_DEPTH);
+    if (err) {
+        sddf_printf("error occured when adopting frame cap %lu %d\n", slot, err);
+        return NULL;
+    }
+    struct folio *folio = get_folio_from_idx(frame_idx);
+    folio->frame_page = frame_idx;
+    folio->refcount = 1;
+    ++frame_idx;
+    return folio;
+}
+
+uint32_t copy_frame_cap(uint32_t frame)
+{
+    uint32_t copy;
+    if (unused_frame_copies_idx) {
+        copy = unused_frame_copies[--unused_frame_copies_idx];
+    } else if (frame_copy_idx < (1u << pager_config.frame_copies.size_bits)) {
+        copy = frame_copy_idx++;
+    } else {
+        sddf_printf("frame cap copies exhausted\n");
+        return 0;
+    }
+    seL4_Error err = seL4_CNode_Copy(frame_copy_cnode_cptr, copy, PAGER_CNODE_DEPTH, frame_cnode_cptr,
+                                     frame, PAGER_CNODE_DEPTH, seL4_AllRights);
+    if (err) {
+        sddf_printf("error occured when copying frame cap %u %d\n", frame, err);
+        unused_frame_copies[unused_frame_copies_idx++] = copy;
+        return 0;
+    }
+    return copy;
+}
+
+void delete_copied_frame_cap(uint32_t copy)
+{
+    seL4_Error err = seL4_CNode_Delete(frame_copy_cnode_cptr, copy, PAGER_CNODE_DEPTH);
+    if (err) {
+        sddf_printf("error occured when deleting frame cap copy %u %d\n", copy, err);
+        return;
+    }
+    if (unused_frame_copies_idx < BUFFERS_SIZE) {
+        unused_frame_copies[unused_frame_copies_idx++] = copy;
+    }
+}
+
+seL4_Error frame_table_copy_frame(uint32_t dst, uint32_t src)
+{
+    // src's own cap already carries a client's mapping, so it is read through a copy.
+    uint32_t copy = copy_frame_cap(src);
+    if (!copy) {
+        return seL4_NotEnoughMemory;
+    }
+    seL4_Error err = seL4_ARM_Page_Map(frame_copy_cptr(copy), PAGER_OWN_VSPACE_CPTR, SCRATCH_SRC_VADDR,
+                                       create_cap_rights(false), seL4_ARM_Default_VMAttributes);
+    if (err) {
+        sddf_printf("error occured on mapping frame %u to copy it %d\n", src, err);
+        delete_copied_frame_cap(copy);
+        return err;
+    }
+    err = seL4_ARM_Page_Map(frame_cptr(dst), PAGER_OWN_VSPACE_CPTR, SCRATCH_VADDR,
+                            create_cap_rights(true), seL4_ARM_Default_VMAttributes);
+    if (err) {
+        sddf_printf("error occured on mapping frame %u to copy into it %d\n", dst, err);
+        delete_copied_frame_cap(copy);
+        return err;
+    }
+    memcpy((void *)SCRATCH_VADDR, (void *)SCRATCH_SRC_VADDR, PAGE_SIZE);
+    err = seL4_ARM_Page_Unmap(frame_cptr(dst));
+    if (err) {
+        sddf_printf("error occured on unmapping copied frame %u %d\n", dst, err);
+    }
+    // Deleting the copy unmaps src.
+    delete_copied_frame_cap(copy);
+    return err;
+}

@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
+#include "conn.h"
 #include "cspace.h"
 #include "frame_table.h"
 #include "mem.h"
@@ -21,10 +22,13 @@ __attribute__((__section__(".pager_server_config"))) pager_server_config_t pager
 
 /*
  * Patched into pager.elf by the Microkit tool, see include/pager.h. vspaces maps a
- * client's fault id to the VSpace cap the tool placed in our CSpace.
+ * client's fault id to the VSpace cap the tool placed in our CSpace. elf_caps holds the
+ * slots in the elf_caps CNode of each client's ELF frames and elf_vaddrs where each is
+ * mapped.
  */
 uint32_t vspaces[PAGER_MAX_CLIENTS];
 uint32_t elf_caps[PAGER_MAX_CLIENTS][PAGER_MAX_ELF_FRAMES];
+uint64_t elf_vaddrs[PAGER_MAX_CLIENTS][PAGER_MAX_ELF_FRAMES];
 uint32_t elf_sizes[PAGER_MAX_CLIENTS];
 
 
@@ -66,8 +70,10 @@ void init(void)
                     pager_config.memory.size - FOLIO_MEMORY_SIZE,
                     microkit_cspace_root_slot_to_cptr(pager_config.paging_structures.slot));
     frame_table_zero_gzp(PAGER_OWN_VSPACE_CPTR);
+    // Takes over the clients' ELF mappings, so needs both tables.
     process_init(microkit_cspace_root_slot_to_cptr(pager_config.process_cspaces.slot),
                  pager_config.process_cspaces.size_bits, pager_config.num_clients);
+    conn_init();
 }
 
 uint8_t pager_claim_channel(uint32_t child)
@@ -111,6 +117,9 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     #endif
     struct folio *folio;
     uint32_t frame;
+    seL4_CPtr frame_cap;
+    /* After a copy-on-write, the cap this VSpace mapped the shared frame through. */
+    pte_t shared_entry = 0;
 
     // // TODO: implement access flag faults.
     // if (fsc >= 0x08 && fsc <= 0x0B) {
@@ -167,8 +176,9 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
             return seL4_False;
         }
         frame = folio->frame_page;
+        *page_entry = DESC_NG;
         insert_frame_to_page(frame, page_entry);
-        *page_entry |= DESC_NG;
+        frame_cap = frame_cptr(frame);
     }
     // Permission fault (level 1–3)
     else {
@@ -181,43 +191,38 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
                 return seL4_False;
             }
             frame = folio->frame_page;
+            *page_entry = DESC_NG;
             insert_frame_to_page(frame, page_entry);
-            *page_entry |= DESC_NG;
+            frame_cap = frame_cptr(frame);
             // The map below overwrites the zero page's PTE, so the copy only
             // needs unmapping before it is handed out again.
             put_dirty_gzp(gzp);
         } else {
             frame = get_frame_from_page(*page_entry);
             folio = get_folio_from_idx(frame);
+            if (!folio) {
+                return seL4_False;
+            }
             if (folio->refcount > 1) {
                 // copy on write
                 struct folio *new_folio = get_frame();
-                insert_frame_to_page(new_folio->frame_page, page_entry);
+                if (!new_folio) {
+                    sddf_printf("out of frames for 0x%lx\n", fault_addr);
+                    return seL4_False;
+                }
+                if (frame_table_copy_frame(new_folio->frame_page, frame) != seL4_NoError) {
+                    put_frame(new_folio);
+                    return seL4_False;
+                }
+                shared_entry = *page_entry;
                 --folio->refcount;
-                // TODO: copy the frames.
-                // There is a bit of a problem with copying the frames.
-                // We need to create 2 copies of the frame caps
-                // then we need to map both of them
-                // then copy over 
-                // unmap both
-                
-                // keeping all frames mapped maybe will improve things.
-                // batched can also help. 
-                /**
-                 * Create copies of the two frames caps
-                 * map both into pager's vspace
-                 * 
-                 */
-
-                seL4_CPtr old_frame = copy_frame_cap(frame)
-                seL4_ARM_Page_Map(old_frame, PAGER_OWN_VSPACE_CPTR, PAGER_SCRATCH_1, create_cap_rights(false), seL4_ARM_Default_VMAttributes);
-                seL4_ARM_Page_Map(new_folio->frame_page, PAGER_OWN_VSPACE_CPTR, PAGER_SCRATCH_2, create_cap_rights(true), seL4_ARM_Default_VMAttributes);
-                memcpy(PAGER_SCRATCH_2, PAGER_SCRATCH_1, PAGE_SIZE);
-                seL4_ARM_Page_Unmap(old_frame);
-                seL4_ARM_Page_Unmap(new_folio->frame_page);
-                // TODO: delete old_frame.
-
                 frame = new_folio->frame_page;
+                *page_entry = DESC_NG;
+                insert_frame_to_page(frame, page_entry);
+                frame_cap = frame_cptr(frame);
+            } else {
+                // The last one mapping it, through whichever cap it already does.
+                frame_cap = mapping_cptr(*page_entry);
             }
         }
     }
@@ -226,12 +231,20 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     #ifdef PAGER_INSTRUMENTATION
     ct_before_map = read_cntpct();
     #endif
-    seL4_Error err = seL4_ARM_Page_Map(frame_cptr(frame), vspaces[child], fault_addr, create_cap_rights(true), seL4_ARM_Default_VMAttributes);
+    seL4_Error err = seL4_ARM_Page_Map(frame_cap, vspaces[child], fault_addr, create_cap_rights(true), seL4_ARM_Default_VMAttributes);
     #ifdef PAGER_INSTRUMENTATION
     ct_after_map = read_cntpct();
     #endif
     if (err) {
         sddf_printf("error occured on map frame %d\n", err);
+    }
+    if (shared_entry) {
+        uint32_t copy = get_copy_from_page(shared_entry);
+        if (copy) {
+            delete_copied_frame_cap(copy);
+        } else {
+            seL4_ARM_Page_Unmap(frame_cptr(get_frame_from_page(shared_entry)));
+        }
     }
     #ifdef PAGER_INSTRUMENTATION
     if (measure) {

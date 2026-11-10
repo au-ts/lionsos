@@ -5,6 +5,7 @@
  */
 #include "mem.h"
 #include "bitmap.h"
+#include "conn.h"
 #include "page_table.h"
 #include "pager.h"
 #include "proc.h"

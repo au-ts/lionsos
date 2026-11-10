@@ -99,6 +99,19 @@ pgd_t *page_table_root(uint32_t child) {
     return &page_tables[child];
 }
 
+static uint32_t map_paging_structure(seL4_CPtr vspace, uintptr_t vaddr) {
+    uint32_t ips = get_ips();
+    seL4_Error err = seL4_ARM_PageTable_Map(ips_cptr(ips), vspace, vaddr, seL4_ARM_Default_VMAttributes);
+    if (err == seL4_DeleteFirst) {
+        put_ips(ips);
+        return 0;
+    }
+    if (err) {
+        sddf_dprintf("error when mapping a paging structure at 0x%lx %d\n", vaddr, err);
+    }
+    return ips;
+}
+
 /**
  * make shadow page table entry
  * creates mappings for intermediary paging structures
@@ -112,11 +125,7 @@ pte_t *make_page_table_entry(uintptr_t vaddr, uint32_t child) {
         pud = (pud_t *) allocate_page_table();
         if (!pud) return NULL;
         vspace->entries[PUD_INDEX(vaddr)] = pud;
-        pud->cap = get_ips();
-        seL4_Error err = seL4_ARM_PageTable_Map(ips_cptr(pud->cap), vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
-        if (err) {
-            sddf_dprintf("error when mapping page tables pud %d\n", err);
-        }
+        pud->cap = map_paging_structure(vspace_idx, vaddr);
     }
     pd_t *pd = pud->entries[PD_INDEX(vaddr)];
     if (!pd) {
@@ -124,11 +133,7 @@ pte_t *make_page_table_entry(uintptr_t vaddr, uint32_t child) {
         pd = (pd_t *) allocate_page_table();
         if (!pd) return NULL;
         pud->entries[PD_INDEX(vaddr)] = pd;
-        pd->cap = get_ips();
-        seL4_Error err = seL4_ARM_PageTable_Map(ips_cptr(pd->cap), vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
-        if (err) {
-            sddf_dprintf("error when mapping page tables pd %d\n", err);
-        }
+        pd->cap = map_paging_structure(vspace_idx, vaddr);
     }
     pt_t *pt = pd->entries[PT_INDEX(vaddr)];
     if (!pt) {
@@ -136,11 +141,7 @@ pte_t *make_page_table_entry(uintptr_t vaddr, uint32_t child) {
         pt = (pt_t *) allocate_page_table();
         if (!pt) return NULL;
         pd->entries[PT_INDEX(vaddr)] = pt;
-        pt->cap = get_ips();
-        seL4_Error err = seL4_ARM_PageTable_Map(ips_cptr(pt->cap), vspace_idx, vaddr, seL4_ARM_Default_VMAttributes);
-        if (err) {
-            sddf_dprintf("error when mapping page tables pt %d\n", err);
-        }
+        pt->cap = map_paging_structure(vspace_idx, vaddr);
     }
     return &pt->entries[PAGE_INDEX(vaddr)];
 }
@@ -156,6 +157,17 @@ seL4_Error map_frame(uint64_t frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
     }
     err = seL4_ARM_Page_Map(frame_cap, vspace, vaddr, rights, attr);
     return err;
+}
+
+static void unmap_paging_structure(uint32_t ips) {
+    if (!ips) {
+        return;
+    }
+    seL4_Error err = seL4_ARM_PageTable_Unmap(ips_cptr(ips));
+    if (err != seL4_NoError) {
+        sddf_dprintf("error unmapping paging structure %u: %d\n", ips, err);
+    }
+    put_ips(ips);
 }
 
 void unmap_range(uintptr_t start, uintptr_t end, uint32_t child) {
@@ -184,14 +196,18 @@ void unmap_range(uintptr_t start, uintptr_t end, uint32_t child) {
         pte_t *entry = &pt->entries[PAGE_INDEX(vaddr)];
         if (*entry) {
             uint32_t frame = get_frame_from_page(*entry);
+            uint32_t copy = get_copy_from_page(*entry);
             bool is_private = (*entry & DESC_NG) != 0;
-            seL4_CPtr frame_cptr_to_unmap = is_private
-                ? frame_cptr(frame)
-                : gzp_cptr(frame);
 
-            seL4_Error err = seL4_ARM_Page_Unmap(frame_cptr_to_unmap);
-            if (err != seL4_NoError) {
-                sddf_dprintf("error unmapping frame %u: %d\n", frame, err);
+            seL4_Error err = seL4_NoError;
+            if (is_private && copy) {
+                // Deleting the copy unmaps it.
+                delete_copied_frame_cap(copy);
+            } else {
+                err = seL4_ARM_Page_Unmap(mapping_cptr(*entry));
+                if (err != seL4_NoError) {
+                    sddf_dprintf("error unmapping frame %u: %d\n", frame, err);
+                }
             }
 
             if (is_private) {
@@ -218,11 +234,7 @@ void unmap_range(uintptr_t start, uintptr_t end, uint32_t child) {
         if (!pt_empty) {
             continue;
         }
-        seL4_Error err = seL4_ARM_PageTable_Unmap(ips_cptr(pt->cap));
-        if (err != seL4_NoError) {
-            sddf_dprintf("error unmapping pt %u: %d\n", pt->cap, err);
-        }
-        put_ips(pt->cap);
+        unmap_paging_structure(pt->cap);
         free_page_table((uintptr_t)pt);
         pd->entries[PT_INDEX(vaddr)] = NULL;
 
@@ -236,11 +248,7 @@ void unmap_range(uintptr_t start, uintptr_t end, uint32_t child) {
         if (!pd_empty) {
             continue;
         }
-        err = seL4_ARM_PageTable_Unmap(ips_cptr(pd->cap));
-        if (err != seL4_NoError) {
-            sddf_dprintf("error unmapping pd %u: %d\n", pd->cap, err);
-        }
-        put_ips(pd->cap);
+        unmap_paging_structure(pd->cap);
         free_page_table((uintptr_t)pd);
         pud->entries[PD_INDEX(vaddr)] = NULL;
 
@@ -254,11 +262,7 @@ void unmap_range(uintptr_t start, uintptr_t end, uint32_t child) {
         if (!pud_empty) {
             continue;
         }
-        err = seL4_ARM_PageTable_Unmap(ips_cptr(pud->cap));
-        if (err != seL4_NoError) {
-            sddf_dprintf("error unmapping pud %u: %d\n", pud->cap, err);
-        }
-        put_ips(pud->cap);
+        unmap_paging_structure(pud->cap);
         free_page_table((uintptr_t)pud);
         vspace->entries[PUD_INDEX(vaddr)] = NULL;
     }

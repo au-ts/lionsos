@@ -18,14 +18,12 @@ PAGER_CFLAGS := \
 	-I$(PAGER_SRC_DIR)/config
 
 PAGER_OBJ := \
-	pager/bitmap.o \
-	pager/cspace.o \
+	pager/conn.o \
 	pager/frame_table.o \
 	pager/mem.o \
 	pager/page_table.o \
 	pager/pager.o \
 	pager/proc.o \
-	pager/untyped.o
 
 CHECK_PAGER_FLAGS_MD5 := .pager_cflags-$(shell echo -- $(CFLAGS) $(PAGER_CFLAGS) | shasum | sed 's/ *-//')
 
