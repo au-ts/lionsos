@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <sel4/sel4.h>
 
+#include "page_table.h"
 #include "pager.h"
 
 /**
@@ -34,7 +35,8 @@ typedef struct {
     uint64_t length;
 } frame_list_t;
 
-#define FOLIO_COUNT (BUFFERS_SIZE + 1)
+/* The global zero page, the free list and every client's adopted ELF frames. */
+#define FOLIO_COUNT (BUFFERS_SIZE + 1 + PAGER_MAX_CLIENTS * PAGER_MAX_ELF_FRAMES)
 /* Bytes of pager_memory frame_table_init() needs for the folio metadata. */
 #define FOLIO_MEMORY_SIZE (FOLIO_COUNT * sizeof(struct folio))
 
@@ -56,6 +58,19 @@ void frame_table_zero_gzp(seL4_CPtr vspace);
 
 void frame_table_zero_frame(uint32_t frame);
 
+/**
+ * Copies the contents of frame src into frame dst. dst must not be mapped, src may be:
+ * it is read through a copy of its cap.
+ */
+seL4_Error frame_table_copy_frame(uint32_t dst, uint32_t src);
+
+/**
+ * Moves the frame cap in slot of cnode into the frames CNode and gives it a folio with a
+ * refcount of one, so a frame the Microkit tool created is paged like one of ours.
+ * Returns NULL if it could not.
+ */
+struct folio *frame_table_adopt(seL4_CPtr cnode, seL4_Word slot);
+
 struct folio *get_folio_from_idx(uint32_t idx);
 
 /**
@@ -63,7 +78,7 @@ struct folio *get_folio_from_idx(uint32_t idx);
  */
 struct folio *get_frame();
 /**
- * Drops a reference to a frame and returns it to the unused list.
+ * Drops a reference to a frame, returning it to the unused list once nothing maps it.
  */
 void put_frame(struct folio *folio);
 
@@ -98,6 +113,22 @@ static inline seL4_CPtr frame_copy_cptr(uint32_t copy) {
     return frame_copy_cnode_cptr + copy;
 }
 
-seL4_CPtr copy_frame_cap(seL4_CPtr frame_cap);
-void delete_copied_frame_cap(seL4_CPtr copy);
+/* The cap a shadow page table entry's mapping is held through. */
+static inline seL4_CPtr mapping_cptr(pte_t entry) {
+    if (!(entry & DESC_NG)) {
+        return gzp_cptr(get_frame_from_page(entry));
+    }
+    uint32_t copy = get_copy_from_page(entry);
+    return copy ? frame_copy_cptr(copy) : frame_cptr(get_frame_from_page(entry));
+}
+
+/**
+ * Copies frame's cap into the frame_copies CNode, returning the copy's index there, or 0
+ * if it could not.
+ */
+uint32_t copy_frame_cap(uint32_t frame);
+/**
+ * Deletes a copy made by copy_frame_cap(), which also removes any mapping it carries.
+ */
+void delete_copied_frame_cap(uint32_t copy);
 #endif

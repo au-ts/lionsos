@@ -137,17 +137,25 @@ static inline seL4_CPtr ips_cptr(uint32_t ips) {
     return paging_cnode_cptr + ips;
 }
 
-// bits 12:47, the frame's index within its CNode
-#define DESC_OA (0xFFFFFFFFFULL << 12)
+#define DESC_OA (0xFFFFFULL << 12)
+#define DESC_COPY (0xFFFFFULL << 32)
 
-// 
 static inline void insert_frame_to_page(uint32_t const frame, uint64_t* page) {
     *page = (*page & ~DESC_OA) | (((uint64_t) frame) << 12);
 }
 
-// get bits 12:47
+// get bits 12:31
 static inline uint32_t get_frame_from_page(uint64_t const page) {
-    return (page >> 12) & 0xFFFFFFFFFULL;
+    return (page >> 12) & 0xFFFFFULL;
+}
+
+static inline void insert_copy_to_page(uint32_t const copy, uint64_t* page) {
+    *page = (*page & ~DESC_COPY) | (((uint64_t) copy) << 32);
+}
+
+// get bits 32:51
+static inline uint32_t get_copy_from_page(uint64_t const page) {
+    return (page >> 32) & 0xFFFFFULL;
 }
 
 // void set_nG(uint64_t *page) {
