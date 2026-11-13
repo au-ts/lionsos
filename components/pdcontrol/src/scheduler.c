@@ -89,7 +89,8 @@ pdc_sched_pd_handle_t *pdc_sched_schedule_child(pdc_sched_handle_t *handle, pdc_
 
 pdc_sched_pd_handle_t *pdc_sched_unschedule_current(pdc_sched_handle_t *handle, pdc_sched_pd_state_e state)
 {
-    assert(handle->currently_sched != NULL && state != pdc_sched_pd_state_Scheduled);
+    assert(handle->currently_sched != NULL);
+    assert(state != pdc_sched_pd_state_Scheduled);
     seL4_TCB_SetPriority(TCB(handle->currently_sched->cfg->id), SELF_TCB(), handle->currently_sched->cfg->def_prio);
     // if we are changing the state to suspended, then we will suspend the thread as well.
     // or schedulable (as suspending it won't prevent it from receiving stuff).
@@ -104,7 +105,8 @@ pdc_sched_pd_handle_t *pdc_sched_unschedule_current(pdc_sched_handle_t *handle, 
     return temp;
 }
 
-bool pdc_sched_state_is_blocking(pdc_sched_pd_state_e state) {
+bool pdc_sched_state_is_blocking(pdc_sched_pd_state_e state)
+{
     switch (state) {
     case pdc_sched_pd_state_Schedulable:
         return false;
@@ -118,4 +120,9 @@ bool pdc_sched_state_is_blocking(pdc_sched_pd_state_e state) {
     case _pdc_sched_pd_state_: // force to be seL4_Word size
         assert(!"Invalid pdc_sched_state");
     }
+}
+
+pdc_sched_pd_handle_t *pdc_sched_get_current(pdc_sched_handle_t *handle)
+{
+    return handle->currently_sched;
 }

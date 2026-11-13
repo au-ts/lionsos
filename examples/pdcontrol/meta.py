@@ -16,8 +16,8 @@ import pdcontrol as pdc
 def generate(sdf_path: str, output_dir: str):
     sender = ProtectionDomain(sdf, f"sender", "sender.elf", priority=249)
     receiver = ProtectionDomain(sdf, f"receiver", "receiver.elf", priority=250)
-    pingpd = ProtectionDomain(sdf, "ping", "ping.elf", priority=1)
-    pongpd = ProtectionDomain(sdf, "pong", "pong.elf", priority=2)
+    pingpd = ProtectionDomain(sdf, "ping", "ping.elf", priority=2)
+    pongpd = ProtectionDomain(sdf, "pong", "pong.elf", priority=1)
     pingpongch = Channel(
         sdf,
         Channel.End(

@@ -19,18 +19,26 @@ pdc_ipc_tracer_handle_t ipc_handle;
 void init()
 {
     cfg_all = pdc_config_init(&pdc_pd_all_config, &pdc_channel_all_config);
-    ipc_handle = pdc_ipc_tracer_init(&cfg_all, &pdc_ipc_tracer_config) ;
+    ipc_handle = pdc_ipc_tracer_init(&cfg_all, &pdc_ipc_tracer_config);
     // Sender does not have access to scheduler, only on PD can
     // act as a scheduler.
 }
 
+// the receiver notifies us.
 void notified(microkit_channel ch)
 {
     microkit_dbg_puts(microkit_name);
     microkit_dbg_puts(" was notified\n");
+    if (!pdc_ipc_tracer_can_peek_ipc(&ipc_handle)) {
+        microkit_dbg_puts("No messages!\n");
+        return;
+    }
+    pdc_ipc_obj_t msg = pdc_ipc_tracer_peek_ipc(&ipc_handle);
+    pdc_ipc_do_ipc(&ipc_handle, &msg);
+    pdc_ipc_tracer_consume_ipc(&ipc_handle);
 }
 
 microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo)
 {
-    return microkit_msginfo_new(0,0);
+    return microkit_msginfo_new(0, 0);
 }

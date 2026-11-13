@@ -1,5 +1,6 @@
 #pragma once
 #include <sel4/sel4.h>
+#include <assert.h>
 
 // all the config structs and initalisation stuff required.
 #define PDC_MAX_CLIENTS 32
@@ -24,6 +25,9 @@
 #define PDC_MAX_NAME_LEN 64
 #define PDC_MICROKIT_CALL_BADGE_MASK 0xff
 #define PDC_UNSET_VALUE ((seL4_Word)(-1))
+
+#define PDC_BADGE_FAULT_BIT 62
+#define PDC_BADGE_ENDPOINT_BIT 63
 
 static char PDC_PD_CONFIG_MAGIC[] = "pdmagic";
 static char PDC_CHANNEL_CONFIG_MAGIC[] = "chanmagic";
@@ -70,14 +74,15 @@ typedef struct {
 
 // contains necessary maps for querying efficiently.
 typedef struct {
-    const pdc_pd_all_config_t* pd_config;
-    const pdc_channel_all_config_t* chan_config;
+    const pdc_pd_all_config_t *pd_config;
+    const pdc_channel_all_config_t *chan_config;
 } pdc_config_handle_t;
 
 // chan_config is nullable. pd_config is not.
-pdc_config_handle_t pdc_config_init(pdc_pd_all_config_t* pd_config, pdc_channel_all_config_t* chan_config);
+pdc_config_handle_t pdc_config_init(pdc_pd_all_config_t *pd_config, pdc_channel_all_config_t *chan_config);
 
-static inline seL4_Word pdc_badge_to_channel_id(seL4_Word badge) {
+static inline seL4_Word pdc_badge_to_channel_id(seL4_Word badge)
+{
     unsigned int idx = 0;
     do {
         if (badge & 1) {
@@ -87,4 +92,56 @@ static inline seL4_Word pdc_badge_to_channel_id(seL4_Word badge) {
         idx++;
     } while (badge != 0);
     return idx;// __builtin_ctz(badge);
+}
+
+static inline pdc_channel_config_t pdc_channel_to_child_id(const pdc_config_handle_t *cfg, seL4_Word chan)
+{
+    return cfg->chan_config->configs[chan];
+}
+
+static inline pdc_ipctype_e pdc_badge_to_ipctype(seL4_Word badge)
+{
+    seL4_Word is_endpoint = badge >> PDC_BADGE_ENDPOINT_BIT;
+    seL4_Word is_fault = (badge >> PDC_BADGE_FAULT_BIT) & 1;
+
+    if (is_endpoint) {
+        return pdc_ipctype_Call;
+    };
+    if (is_fault)
+        return pdc_ipctype_Fault;
+    return pdc_ipctype_Ntfn;
+}
+
+static inline seL4_Word pdc_badge_to_channel(seL4_Word badge)
+{
+    switch (pdc_badge_to_ipctype(badge)) {
+    case pdc_ipctype_SenderReply:
+        assert(!"TODO");
+        break;
+    case pdc_ipctype_Call: {
+        return badge & PDC_PD_MASK;
+    }
+    case pdc_ipctype_Ntfn: {
+        unsigned int idx = 0;
+        do {
+            if (badge & 1) {
+                break;
+            }
+            badge >>= 1;
+            idx++;
+        } while (badge != 0);
+        return idx;// __builtin_ctz(badge);
+    }
+    case pdc_ipctype_Fault:
+        assert(!"TODO");
+        break;
+    case pdc_ipctype_Send:
+        assert(!"TODO");
+        break;
+    case pdc_ipctype_BlockChecker:
+        assert(!"TODO");
+        break;
+    default:
+        assert(!"Unknown badge");
+    }
 }
