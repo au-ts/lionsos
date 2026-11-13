@@ -1,3 +1,10 @@
+/**
+ * Basic configuration and the default debug info config.
+ * Config structs hold information about traced PDs, such as their names and
+ * their ids, and channels.
+ * 
+ * Can be used to make a nicer fault handler.
+ */
 #pragma once
 #include <sel4/sel4.h>
 #include <assert.h>

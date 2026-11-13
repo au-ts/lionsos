@@ -1,3 +1,24 @@
+/**
+ * Custom userspace "scheduler".
+ *
+ * Allows us to keep track of the state of PDs by manually scheduling them.
+ * It is not possible to my knowledge to get the current scheduling state of TCBs from seL4.
+ *
+ * A basic tiered round robin scheduler which is similar? to the one implemented by the seL4?
+ * Just keeps track of multiple queues of pds to schedule, sorted by priority then by LRU.
+ *
+ * DOES NOT automatically update states, nor can deduce which state a PD should be in.
+ *  (It is possible to emperically determine if a child PD is blocked by send/ppcall, although unideal.)
+ * DOES NOT do preemption. Use another PD to wake up the scheduler.
+ *
+ * The main method for preemption is the following:
+ * - Separate PD X at some higher priority. Make scheduling a PD change the priority of said PD to be
+ *   equivalent to this separate PD X
+ * - Make PD X perform a yield, and then a notification to the scheduler
+ *   This ensures that when the currently scheduled PD is blocked or runs out of it's time slice,
+ *   that we preempt the "scheduler".
+ */
+
 #pragma once
 #include <stddef.h>
 #include "ipc_tracer.h"
@@ -48,7 +69,9 @@ pdc_sched_pd_handle_t *pdc_sched_unschedule_current(pdc_sched_handle_t *handle, 
 // Does not schedule the child, rather just moves it to the back of the queue.
 pdc_sched_pd_handle_t *pdc_sched_choose_child(pdc_sched_handle_t *handle, pdc_sched_pd_handle_t **cur);
 
+// Unimplemented
 void pdc_sched_setup_block_checker(pdc_sched_handle_t *handle);
+
 bool pdc_sched_state_is_blocking(pdc_sched_pd_state_e state);
 
 pdc_sched_pd_handle_t *pdc_sched_get_current(pdc_sched_handle_t *handle);
