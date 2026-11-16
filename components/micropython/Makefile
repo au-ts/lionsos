@@ -121,7 +121,7 @@ $(BUILD)/libi2c.o: $(SDDF)/i2c/libi2c.c
 
 all: $(BUILD)/micropython.elf
 
-$(BUILD)/micropython.elf: $(OBJ) $(BUILD)/libi2c.o $(BUILD)/tcp_mp.o
+$(BUILD)/micropython.elf: $(OBJ) $(BUILD)/libi2c.o $(BUILD)/tcp_mp.o $(MICROPYTHON_LIBC)/lib/libc.a
 	$(ECHO) "LINK $@"
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 	$(Q)$(SIZE) $@
