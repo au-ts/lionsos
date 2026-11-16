@@ -56,10 +56,10 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
     # Test components
     test_core = ProtectionDomain(
-        "test_core", "test_core.elf", priority=1, stack_size=0x10000
+        "test_core", "test_core.elf", priority=4, stack_size=0x10000
     )
     test_file = ProtectionDomain(
-        "test_file", "test_file.elf", priority=1, stack_size=0x10000
+        "test_file", "test_file.elf", priority=3, stack_size=0x10000
     )
     test_server = ProtectionDomain(
         "test_server", "test_server.elf", priority=2, stack_size=0x10000
