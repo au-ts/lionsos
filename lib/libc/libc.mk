@@ -18,6 +18,12 @@ MUSL := musllibc
 LIBC := libc
 LIONS_LIBC = $(abspath $(LIBC))
 
+# musllibc builds its own objects from inside $(MUSL); without depending on the
+# sources here, edits inside dep/musllibc leave libc.a silently stale.
+MUSL_SRC_FILES := $(shell find $(MUSL_SRC)/src $(MUSL_SRC)/crt $(MUSL_SRC)/arch \
+	$(MUSL_SRC)/ldso $(MUSL_SRC)/include -type f \
+	\( -name '*.[csS]' -o -name '*.h' -o -name '*.h.in' \) 2>/dev/null)
+
 CFLAGS += -I$(LIONS_LIBC)/include
 
 LIB_C_POSIX_FILES := $(wildcard $(LIB_C_DIR)/posix/*.c)
@@ -53,7 +59,7 @@ $(MUSL):
 # At the "checking compiler works" step, without this it tries to create /dev/null.d
 $(MUSL)/lib/libc.a $(LIONS_LIBC)/include &: CFLAGS += -MF musl.d
 
-$(MUSL)/lib/libc.a $(LIONS_LIBC)/include &: ${MUSL_SRC}/Makefile | $(MUSL) $(LIBC)
+$(MUSL)/lib/libc.a $(LIONS_LIBC)/include &: ${MUSL_SRC}/Makefile $(MUSL_SRC_FILES) | $(MUSL) $(LIBC)
 	cd ${MUSL} && CC=$(CC) CFLAGS="$(CFLAGS)" AR=$(AR) RANLIB=$(RANLIB) \
 		${MUSL_SRC}/configure --target=$(TARGET) --srcdir=${MUSL_SRC} --prefix=$(MUSL) \
 		--includedir=$(LIONS_LIBC)/include --with-malloc=oldmalloc --enable-warnings --disable-shared --enable-static
