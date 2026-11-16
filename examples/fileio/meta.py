@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import List, Tuple
 from sdfgen import SystemDescription, Sddf, DeviceTree, LionsOs
 from importlib.metadata import version
-from board import BOARDS
+from board import BOARDS, add_x86_hpet
 
 assert version('sdfgen').split(".")[1] == "35", "Unexpected sdfgen version"
 
@@ -18,24 +18,58 @@ Channel = SystemDescription.Channel
 
 
 def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
-    serial_node = dtb.node(board.serial)
-    assert serial_node is not None
-    blk_node = dtb.node(board.blk)
-    assert blk_node is not None
-    timer_node = dtb.node(board.timer)
-    assert timer_node is not None
+    serial_node = None
+    blk_node = None
+    timer_node = None
+    if dtb is not None:
+        serial_node = dtb.node(board.serial)
+        assert serial_node is not None
+        blk_node = dtb.node(board.blk)
+        assert blk_node is not None
+        timer_node = dtb.node(board.timer)
+        assert timer_node is not None
 
     timer_driver = ProtectionDomain("timer_driver", "timer_driver.elf", priority=254)
     timer_system = Sddf.Timer(sdf, timer_node, timer_driver)
+    if board.arch == SystemDescription.Arch.X86_64:
+        add_x86_hpet(sdf, timer_driver)
 
     serial_driver = ProtectionDomain("serial_driver", "serial_driver.elf", priority=100)
     serial_virt_tx = ProtectionDomain("serial_virt_tx", "serial_virt_tx.elf", priority=99)
     serial_virt_rx = ProtectionDomain("serial_virt_rx", "serial_virt_rx.elf", priority=99)
+    if board.arch == SystemDescription.Arch.X86_64:
+        serial_driver.add_ioport(SystemDescription.IoPort(0x3F8, 8, 0))
+        serial_driver.add_irq(SystemDescription.IrqIoapic(0, 4, 0, id=1))
     serial_system = Sddf.Serial(sdf, serial_node, serial_driver, serial_virt_tx, virt_rx=serial_virt_rx)
 
     blk_driver = ProtectionDomain("blk_driver", "blk_driver.elf", priority=200)
     blk_virt = ProtectionDomain("blk_virt", "blk_virt.elf", priority=199, stack_size=0x2000)
     blk_system = Sddf.Blk(sdf, blk_node, blk_driver, blk_virt)
+    if board.arch == SystemDescription.Arch.X86_64:
+        # VirtIO PCI blk device at PCI 0:3.0. The addresses below are hard-coded
+        # in dep/sddf/drivers/blk/virtio/block.c and virtio/transport/pci.c.
+        blk_driver.add_ioport(SystemDescription.IoPort(0xCF8, 4, 1))
+        blk_driver.add_ioport(SystemDescription.IoPort(0xCFC, 4, 2))
+        virtio_requests_mr = SystemDescription.MemoryRegion(
+            sdf, "virtio_requests", 0x10000, paddr=0x5FDF0000
+        )
+        sdf.add_mr(virtio_requests_mr)
+        blk_driver.add_map(SystemDescription.Map(virtio_requests_mr, 0x20200000, "rw"))
+        virtio_metadata_mr = SystemDescription.MemoryRegion(
+            sdf, "virtio_metadata", 0x10000, paddr=0x5FFF0000
+        )
+        sdf.add_mr(virtio_metadata_mr)
+        blk_driver.add_map(SystemDescription.Map(virtio_metadata_mr, 0x20210000, "rw"))
+        virtio_blk_regs_mr = SystemDescription.MemoryRegion(
+            sdf, "virtio_blk_regs", 0x4000, paddr=0xFE000000
+        )
+        sdf.add_mr(virtio_blk_regs_mr)
+        blk_driver.add_map(
+            SystemDescription.Map(virtio_blk_regs_mr, 0x60000000, "rw", cached=False)
+        )
+        blk_driver.add_irq(
+            SystemDescription.IrqIoapic(ioapic_id=0, pin=11, vector=1, id=17)
+        )
 
     micropython = ProtectionDomain("micropython", "micropython.elf", priority=1, stack_size=0x10000)
 
@@ -83,7 +117,7 @@ def generate(sdf_path: str, output_dir: str, dtb: DeviceTree):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dtb", required=True)
+    parser.add_argument("--dtb", nargs="?")
     parser.add_argument("--sddf", required=True)
     parser.add_argument("--board", required=True, choices=[b.name for b in BOARDS])
     parser.add_argument("--output", required=True)
@@ -96,7 +130,9 @@ if __name__ == '__main__':
     sdf = SystemDescription(board.arch, board.paddr_top)
     sddf = Sddf(args.sddf)
 
-    with open(args.dtb, "rb") as f:
-        dtb = DeviceTree(f.read())
+    dtb = None
+    if board.arch != SystemDescription.Arch.X86_64:
+        with open(args.dtb, "rb") as f:
+            dtb = DeviceTree(f.read())
 
     generate(args.sdf, args.output, dtb)
