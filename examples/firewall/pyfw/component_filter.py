@@ -8,6 +8,8 @@ from pyfw.constants import (
     supported_filter_actions,
     filter_instances_buffer,
     filter_instances_region,
+    tcp_filter_instances_buffer,
+    tcp_filter_instances_region,
     filter_rules_buffer,
     filter_rules_region,
     filter_rule_bitmap_region,
@@ -50,10 +52,18 @@ class Filter(Component, FwFilterConfig):
             budget,
         )
 
+        # TCP instances are larger as they track connection state
+        if proto_name == "tcp":
+            instances_region = tcp_filter_instances_region
+            self._instances_capacity = tcp_filter_instances_buffer.capacity
+        else:
+            instances_region = filter_instances_region
+            self._instances_capacity = filter_instances_buffer.capacity
+
         # Create local instances region
         self._local_instance_mr = FirewallMemoryRegion(
             "instances_" + self.name,
-            filter_instances_region.region_size,
+            instances_region.region_size,
         )
 
         # Store region to map into filters of the same protocol later
@@ -81,7 +91,7 @@ class Filter(Component, FwFilterConfig):
             router=None,
             internal_instances=self._local_instance_mr.map(self.pd, "rw"),
             external_instances=[],
-            instances_capacity=filter_instances_buffer.capacity,
+            instances_capacity=self._instances_capacity,
             webserver=FwWebserverFilterConfig(
                 protocol=protocol,
                 ch=None,
@@ -147,7 +157,10 @@ class Filter(Component, FwFilterConfig):
     def finalise_config(self) -> None:
         # Create external instance mappings
         external_mrs = Filter.instance_regions[self.webserver.protocol]
+        # TCP filters write their half of the connection state into
+        # neighbouring filters' instances
+        perms = "rw" if supported_protocols[self.webserver.protocol] == "tcp" else "r"
         self.external_instances = [
-            instance_mr.map(self.pd, "r") for instance_mr in external_mrs if instance_mr != self._local_instance_mr
+            instance_mr.map(self.pd, perms) for instance_mr in external_mrs if instance_mr != self._local_instance_mr
         ]
         assert len(self.external_instances) == len(BuildConstants.interfaces()) - 1

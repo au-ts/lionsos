@@ -302,12 +302,27 @@ filter_instances_region = FirewallMemoryRegions(
     data_structures=[filter_instances_wrapper, filter_instances_buffer]
 )
 
+# TCP filter instance table, entries also hold connection tracking state. The
+# table is a hash table, so is sized to stay well below full.
+tcp_filter_instances_wrapper = FirewallDataStructure(
+    elf_name="tcp_filter.elf", c_name="fw_tcp_table"
+)
+tcp_filter_instances_buffer = FirewallDataStructure(
+    elf_name="tcp_filter.elf", c_name="fw_tcp_instance", capacity=1024
+)
+tcp_filter_instances_region = FirewallMemoryRegions(
+    data_structures=[tcp_filter_instances_wrapper, tcp_filter_instances_buffer]
+)
+
 ### ----------------------------------------------------------------------- ###
 ### Network constants ###
 ### ----------------------------------------------------------------------- ###
 # Ethernet types
 eththype_ip = 0x0800
 ethtype_arp = 0x0806
+
+# IP protocol numbers
+ip_protocol_tcp = 0x06
 
 # Ethernet ARP opcodes
 arp_eth_opcode_request = 1

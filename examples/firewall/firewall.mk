@@ -177,11 +177,14 @@ endif
 	$(OBJCOPY) --update-section .device_resources=timer_driver_device_resources.data timer_driver.elf
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester0.data arp_requester0.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_tcp_filter0.data tcp_filter0.elf
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester1.data arp_requester1.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_tcp_filter1.data tcp_filter1.elf
 
 ifeq ($(FIREWALL_INTERFACE_COUNT),3)
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_arp_requester2.data arp_requester2.elf
+	$(OBJCOPY) --update-section .timer_client_config=timer_client_tcp_filter2.data tcp_filter2.elf
 endif
 
 	$(OBJCOPY) --update-section .timer_client_config=timer_client_micropython.data micropython.elf

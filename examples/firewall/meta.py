@@ -31,6 +31,7 @@ from pyfw.constants import (
     arp_eth_opcode_request,
     arp_eth_opcode_response,
     eththype_ip,
+    ip_protocol_tcp,
 )
 from pyfw.component_fw_interface import FirewallInterface
 
@@ -227,6 +228,9 @@ def wire_interface_connections(
 
         # Add timer clients
         timer_system.add_client(iface.arp_requester.pd)
+
+        # TCP filters receive ticks to remove timed out connections
+        timer_system.add_client(iface.filters[ip_protocol_tcp].pd)
 
 
 def wire_virtualiser_connections() -> None:
