@@ -22,7 +22,7 @@ BOARDS = [
         paddr_top=0x6_0000_000,
         serial="pl011@9000000",
         timer="timer",
-        ethernet=("virtio_mmio@a003e00", "virtio_mmio@a003c00", "virtio_mmio@a003a00")
+        ethernet=("virtio_mmio@a003e00", "virtio_mmio@a003c00", "virtio_mmio@a003a00", "virtio_mmio@a003800")
     ),
     Board(
         name="imx8mp_iotgate",
@@ -97,7 +97,7 @@ interfaces = [
     NetworkInterface(
         index=0,
         name="external",
-        board_ethernet_idx=0,
+        ports=[0],
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x18),
         ip="172.16.2.1",
         subnet_bits=16,
@@ -105,7 +105,7 @@ interfaces = [
     NetworkInterface(
         index=1,
         name="internal0",
-        board_ethernet_idx=1,
+        ports=[1, 2],
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x10),
         ip="192.168.1.1",
         subnet_bits=24,
@@ -113,7 +113,7 @@ interfaces = [
     NetworkInterface(
         index=2,
         name="internal1",
-        board_ethernet_idx=2,
+        ports=[3],
         mac=(0x00, 0x01, 0xC0, 0x39, 0xD5, 0x12),
         ip="10.0.2.1",
         subnet_bits=24,
@@ -216,6 +216,15 @@ dma_buffer_queue_region = FirewallMemoryRegions(
 # Rx DMA buffer memory region
 dma_buffer_region = FirewallMemoryRegions(
     min_size=dma_buffer_queue.capacity * 2048
+)
+
+# --------------------------------------------- #
+# sDDF queues connecting Ethernet drivers to bridges
+sddf_net_queue_header = FirewallDataStructure(
+    elf_name="firewall_network_virt_rx.elf", c_name="net_queue"
+)
+sddf_net_queue_region = FirewallMemoryRegions(
+    data_structures=[sddf_net_queue_header, dma_buffer_queue]
 )
 
 # --------------------------------------------- #
