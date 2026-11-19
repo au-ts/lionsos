@@ -19,12 +19,19 @@ LionsOS and its verification story are under active research and development.
 
 For more information, see the [website](https://lionsos.org).
 
-## LLMs LionsOS
+## Contributing to LionsOS
 
-We do not allow LLM-authored pull-requests, commits or prose in this repository as they complicated maintenance.
+We highly value community engagement and contributions to our projects, however
+please keep in mind that our maintainers’ time is a limited resource. In order
+to receive feedback on a contribution, it is important to ensure that
+descriptions of your issues and pull requests are clear, concise, to the point
+and simple to comprehend.
 
-* All prose in issues and pull-requests should be written by you (usage of translation tools is okay).
-* Any PRs with code that is clearly labelled as being authored by an LLM such as Claude or Copilot will be closed. We find that these tend to introduce unnecessarily complex code and can be hard to review.
-* We expect all contributors to understand their contribution and take responsibility for their code. LLMs can perform surprisingly poorly on experimental projects like LionsOS, so please take care if you use LLM assistance.
-
-If you find an issue with an LLM, please open an issue to report it.
+The titles and descriptions of pull requests and issues contain important
+contextual background for our reviewers. Pull requests or issues may be promptly
+closed if:
+* There is no clear description motivating _why_ the changes are desirable.
+* There is no clear explanation of _how_ the changes work.
+* The code changes _do not match_ the description.
+* The author _fails to take responsibility_ for their work. This includes
+  answering reviewers’ questions and incorporating reviewers’ feedback.
