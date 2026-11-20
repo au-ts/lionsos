@@ -24,8 +24,8 @@ For more information, see the [website](https://lionsos.org).
 We highly value community engagement and contributions to our projects, however
 please keep in mind that our maintainers’ time is a limited resource. In order
 to receive feedback on a contribution, it is important to ensure that
-descriptions of your issues and pull requests are clear, concise, to the point
-and simple to comprehend.
+descriptions of your issues and pull requests are clear, concise and to the
+point.
 
 The titles and descriptions of pull requests and issues contain important
 contextual background for our reviewers. Pull requests or issues may be promptly
