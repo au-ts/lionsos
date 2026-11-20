@@ -19,3 +19,19 @@ LionsOS and its verification story are under active research and development.
 
 For more information, see the [website](https://lionsos.org).
 
+## Contributing to LionsOS
+
+We highly value community engagement and contributions to our projects, however
+please keep in mind that our maintainers’ time is a limited resource. In order
+to receive feedback on a contribution, it is important to ensure that
+descriptions of your issues and pull requests are clear, concise and to the
+point.
+
+The titles and descriptions of pull requests and issues contain important
+contextual background for our reviewers. Pull requests or issues may be promptly
+closed if:
+* There is no clear description motivating _why_ the changes are desirable.
+* There is no clear explanation of _how_ the changes work.
+* The code changes _do not match_ the description.
+* The author _fails to take responsibility_ for their work. This includes
+  answering reviewers’ questions and incorporating reviewers’ feedback.
