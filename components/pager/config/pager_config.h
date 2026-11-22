@@ -7,3 +7,5 @@
 
 
 // #define PAGER_INSTRUMENTATION
+
+// #define PAGER_TEST_BATCHED_MAPPINGS

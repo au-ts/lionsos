@@ -18,6 +18,7 @@ PAGER_CFLAGS := \
 	-I$(PAGER_SRC_DIR)/config
 
 PAGER_OBJ := \
+	pager/batched_test.o \
 	pager/conn.o \
 	pager/frame_table.o \
 	pager/mem.o \

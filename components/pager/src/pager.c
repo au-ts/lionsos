@@ -74,6 +74,9 @@ void init(void)
     process_init(microkit_cspace_root_slot_to_cptr(pager_config.process_cspaces.slot),
                  pager_config.process_cspaces.size_bits, pager_config.num_clients);
     conn_init();
+#ifdef PAGER_TEST_BATCHED_MAPPINGS
+    pager_test_batched_mappings();
+#endif
 }
 
 uint8_t pager_claim_channel(uint32_t child)

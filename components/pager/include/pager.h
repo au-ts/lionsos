@@ -38,4 +38,7 @@ extern pager_server_config_t pager_config;
 
 uint8_t pager_claim_channel(uint32_t child);
 
+/* Built with PAGER_TEST_BATCHED_MAPPINGS, see src/batched_test.c. */
+void pager_test_batched_mappings(void);
+
 #endif
