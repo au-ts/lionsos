@@ -3,6 +3,7 @@
 #ifdef PAGER_TEST_BATCHED_MAPPINGS
 
 #include "frame_table.h"
+#include "batched.h"
 #include <sddf/util/printf.h>
 
 #define N seL4_MaxBatchedMap

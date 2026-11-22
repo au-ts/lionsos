@@ -1,19 +1,19 @@
+/*
+ * Copyright 2026, UNSW
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 #pragma once
+#include <stdbool.h>
 #include <sel4/sel4.h>
-#define MAX_BATCHED_MAPPINGS 58
-#define MAX_BATCHED_UNMAPPINGS 119
-typedef struct seL4_ARM_BatchedMapping_ {
-    seL4_CPtr frame;
-    seL4_Word vaddr;
-} seL4_ARM_BatchedMapping;
 
 typedef struct map_batch_ {
-    seL4_ARM_BatchedMapping mappings[MAX_BATCHED_MAPPINGS];
-    int count;
-    seL4_Word rights;
+    seL4_ARM_BatchedMapping mappings[seL4_MaxBatchedMap];
+    seL4_Word count;
+    seL4_CapRights_t rights;
     seL4_ARM_VMAttributes attr;
     bool is_active;
-    seL4_CPtr vspace;
+    seL4_ARM_VSpace vspace;
 } map_batch;
 
 static map_batch current_map = {.count = 0, .is_active = false};
@@ -22,9 +22,9 @@ static map_batch current_map = {.count = 0, .is_active = false};
  * Begin a batched mapping operation. This function initializes the batch.
  * Required for add_batched_map.
  */
-seL4_Error seL4_ARM_start_batched_mapping(seL4_CPtr vspace, seL4_Word rights, seL4_ARM_VMAttributes attr) {
+static inline seL4_Error seL4_ARM_start_batched_mapping(seL4_ARM_VSpace vspace, seL4_CapRights_t rights, seL4_ARM_VMAttributes attr) {
     if ( current_map.is_active) {
-        return seL4_InvalidOperation; // Already in a batched mapping operation
+        return seL4_IllegalOperation;
     }
     current_map.count = 0;
     current_map.is_active = true;
@@ -60,55 +60,56 @@ seL4_Error seL4_ARM_start_batched_mapping(seL4_CPtr vspace, seL4_Word rights, se
 
 /**
  * Add mapping to current batch. Batch must be active.
- * Batch processed when count reaches MAX_BATCHED_MAPPINGS or when finish_batched_mapping is called.
+ * Batch processed when count reaches seL4_MaxBatchedMap or when finish_batched_mapping is called.
  */
-seL4_Error seL4_ARM_add_batched_map(seL4_CPtr frame, seL4_Word vaddr) {
+static inline seL4_Error seL4_ARM_add_batched_map(seL4_CPtr frame, seL4_Word vaddr) {
     if (!current_map.is_active) {
-        return seL4_InvalidOperation; // Not in a batched mapping operation
+        return seL4_IllegalOperation; // Not in a batched mapping operation
     }
 
     current_map.mappings[current_map.count].frame = frame;
     current_map.mappings[current_map.count].vaddr = vaddr;
     current_map.count++;
 
-    if (current_map.count >= MAX_BATCHED_MAPPINGS) {
+    if (current_map.count >= seL4_MaxBatchedMap) {
         seL4_Error err = seL4_ARM_VSpace_Map_Batched(current_map.vspace, current_map.count, current_map.mappings, current_map.rights, current_map.attr);
+        current_map.count = 0;
         if (err != seL4_NoError) {
             return err;
         }
-        current_map.count = 0;
     }
 
     return seL4_NoError;
 }
 
-seL4_Error seL4_ARM_finish_batched_mapping(seL4_CPtr vspace, seL4_Word rights, seL4_ARM_VMAttributes attr) {
+static inline seL4_Error seL4_ARM_finish_batched_mapping(void) {
+    seL4_Error err = seL4_NoError;
+
     if (current_map.count > 0) {
-        seL4_Error err = seL4_ARM_VSpace_Map_Batched(current_map.vspace, current_map.count, current_map.mappings, current_map.rights, current_map.attr);
-        if (err != seL4_NoError) {
-            return err;
-        }
-        // Reset the batch after processing
+        err = seL4_ARM_VSpace_Map_Batched(current_map.vspace, current_map.count, current_map.mappings, current_map.rights, current_map.attr);
         current_map.count = 0;
     }
+    current_map.is_active = false;
 
-    return seL4_NoError;
+    return err;
 }
 
 typedef struct unmap_batch_ {
-    seL4_CPtr frames[MAX_BATCHED_UNMAPPINGS];
-    int count;
+    seL4_CPtr frames[seL4_MaxBatchedUnmap];
+    seL4_Word count;
     bool is_active;
+    seL4_ARM_VSpace vspace;
 } unmap_batch;
 
 static unmap_batch current_unmap = {.count = 0, .is_active = false};
 
-seL4_Error seL4_ARM_start_batched_unmapping() {
-    if (current_map.is_active) {
-        return seL4_InvalidOperation; // Already in a batched unmapping operation
+static inline seL4_Error seL4_ARM_start_batched_unmapping(seL4_ARM_VSpace vspace) {
+    if (current_unmap.is_active) {
+        return seL4_IllegalOperation; // Already in a batched unmapping operation
     }
     current_unmap.count = 0;
     current_unmap.is_active = true;
+    current_unmap.vspace = vspace;
     return seL4_NoError;
 }
 
@@ -131,35 +132,33 @@ seL4_Error seL4_ARM_start_batched_unmapping() {
 //     return (seL4_Error) seL4_MessageInfo_get_label(output_tag);
 // }
 
-seL4_Error seL4_ARM_add_batched_unmap(seL4_CPtr frame) {
+static inline seL4_Error seL4_ARM_add_batched_unmap(seL4_CPtr frame) {
     if (!current_unmap.is_active) {
-        return seL4_InvalidOperation;
+        return seL4_IllegalOperation;
     }
 
     current_unmap.frames[current_unmap.count] = frame;
     current_unmap.count++;
 
-    if (current_unmap.count >= MAX_BATCHED_UNMAPPINGS) {
+    if (current_unmap.count >= seL4_MaxBatchedUnmap) {
         seL4_Error err = seL4_ARM_VSpace_Unmap_Batched(current_unmap.vspace, current_unmap.count, current_unmap.frames);
+        current_unmap.count = 0;
         if (err != seL4_NoError) {
             return err;
         }
-        current_unmap.count = 0;
     }
 
     return seL4_NoError;
 }
 
-seL4_Error seL4_ARM_finish_batched_unmapping() {
+static inline seL4_Error seL4_ARM_finish_batched_unmapping(void) {
+    seL4_Error err = seL4_NoError;
+
     if (current_unmap.count > 0) {
-        seL4_Error err = seL4_ARM_VSpace_Unmap_Batched(current_unmap.vspace, current_unmap.count, current_unmap.frames);
-        if (err != seL4_NoError) {
-            return err;
-        }
-
+        err = seL4_ARM_VSpace_Unmap_Batched(current_unmap.vspace, current_unmap.count, current_unmap.frames);
         current_unmap.count = 0;
     }
+    current_unmap.is_active = false;
 
-    return seL4_NoError;
+    return err;
 }
-
