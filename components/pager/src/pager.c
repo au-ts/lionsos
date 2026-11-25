@@ -69,7 +69,9 @@ void init(void)
     page_table_init((uintptr_t)pager_config.memory.vaddr + FOLIO_MEMORY_SIZE,
                     pager_config.memory.size - FOLIO_MEMORY_SIZE,
                     microkit_cspace_root_slot_to_cptr(pager_config.paging_structures.slot));
+    #ifdef USE_GZP
     frame_table_zero_gzp(PAGER_OWN_VSPACE_CPTR);
+    #endif
     // Takes over the clients' ELF mappings, so needs both tables.
     process_init(microkit_cspace_root_slot_to_cptr(pager_config.process_cspaces.slot),
                  pager_config.process_cspaces.size_bits, pager_config.num_clients);
@@ -94,6 +96,9 @@ void notified(microkit_channel ch)
 {
     // does nothing for now.
 }
+
+// for when we do mapreplyrecv.
+seL4_Bool vm_fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo, seL4_CPtr src, seL4_Word *sender, seL4_CPtr reply);
 
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
@@ -146,6 +151,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
 
     // Translation fault (level 0–3)
     if (fsc <= 0x07) {
+        #ifdef USE_GZP
         // if it is a read fault, map global zero page.
         if (!is_write) {
             frame = get_gzp();
@@ -173,6 +179,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
             #endif
             return seL4_True;
         }
+        #endif
         folio = get_frame();
         if (!folio) {
             sddf_printf("out of frames for 0x%lx\n", fault_addr);
@@ -229,15 +236,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
             }
         }
     }
-
-    // do mapping
-    #ifdef PAGER_INSTRUMENTATION
-    ct_before_map = read_cntpct();
-    #endif
-    seL4_Error err = seL4_ARM_Page_Map(frame_cap, vspaces[child], fault_addr, create_cap_rights(true), seL4_ARM_Default_VMAttributes);
-    #ifdef PAGER_INSTRUMENTATION
-    ct_after_map = read_cntpct();
-    #endif
+    
     if (err) {
         sddf_printf("error occured on map frame %d\n", err);
     }
@@ -249,6 +248,14 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
             seL4_ARM_Page_Unmap(frame_cptr(get_frame_from_page(shared_entry)));
         }
     }
+    // do mapping
+    #ifdef PAGER_INSTRUMENTATION
+    ct_before_map = read_cntpct();
+    #endif
+    seL4_Error err = seL4_ARM_Page_Map(frame_cap, vspaces[child], fault_addr, create_cap_rights(true), seL4_ARM_Default_VMAttributes);
+    #ifdef PAGER_INSTRUMENTATION
+    ct_after_map = read_cntpct();
+    #endif
     #ifdef PAGER_INSTRUMENTATION
     if (measure) {
         mapping_latencies[fault_idx] = ct_after_map - ct_before_map;
