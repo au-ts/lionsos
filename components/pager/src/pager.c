@@ -98,7 +98,180 @@ void notified(microkit_channel ch)
 }
 
 // for when we do mapreplyrecv.
-seL4_Bool vm_fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo, seL4_CPtr src, seL4_Word *sender, seL4_CPtr reply);
+seL4_Bool vm_fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo, seL4_CPtr src, seL4_Word *sender, seL4_CPtr reply)
+{
+    #ifdef PAGER_INSTRUMENTATION
+    uint64_t ct_before_map, ct_after_map;
+    uint64_t ct_received_fault = read_cntpct();
+    #endif
+    // Only VM faults carry an address and an FSR in the message registers,
+    // every other fault type would be decoded as garbage below.
+    if (microkit_msginfo_get_label(msginfo) != seL4_Fault_VMFault) {
+        sddf_printf("unhandled fault %lu from child %u at ip 0x%lx\n",
+            microkit_msginfo_get_label(msginfo), child, microkit_mr_get(0));
+        return seL4_False;
+    }
+    // get fault info
+    uintptr_t fault_addr = ROUND_DOWN_TO_4K(microkit_mr_get(1));
+    uint64_t fsr = microkit_mr_get(3);
+    uint64_t fsc = fsr & 0x3F;
+    bool is_write = (fsr >> 6) & 1;
+    #ifdef PAGER_INSTRUMENTATION
+    uintptr_t heap_base = pager_config.clients[child].mmap_base;
+    bool measure = fault_addr >= heap_base && fault_addr - heap_base < PAGER_HEAP_SIZE
+                   && fault_idx < PAGER_MAX_SAMPLES;
+    #endif
+    struct folio *folio;
+    uint32_t frame;
+    seL4_CPtr frame_cap;
+    /* After a copy-on-write, the cap this VSpace mapped the shared frame through. */
+    pte_t shared_entry = 0;
+
+    // // TODO: implement access flag faults.
+    // if (fsc >= 0x08 && fsc <= 0x0B) {
+    //     // Access flag fault (level 0–3)
+    //     // unset access flag
+    // }
+    // Nothing but a translation or a permission fault is serviceable, and
+    // classifying first keeps an unserviceable one from allocating anything.
+    if (fsc < 0x04 || (fsc > 0x07 && fsc < 0x0D) || fsc > 0x0F) {
+        sddf_printf("unhandled fault status code 0x%lx at 0x%lx ip 0x%lx\n", fsc, fault_addr,
+            microkit_mr_get(0));
+        return seL4_False;
+    }
+    *reply_msginfo = microkit_msginfo_new(0, 0);
+
+    pte_t *page_entry = make_page_table_entry(fault_addr, child);
+    if (!page_entry) {
+        sddf_printf("out of shadow page tables for 0x%lx\n", fault_addr);
+        return seL4_False;
+    }
+
+    // Translation fault (level 0–3)
+    if (fsc <= 0x07) {
+        #ifdef USE_GZP
+        // if it is a read fault, map global zero page.
+        if (!is_write) {
+            frame = get_gzp();
+            #ifdef PAGER_INSTRUMENTATION
+            ct_before_map = read_cntpct();
+            #endif
+            seL4_Error err = seL4_ARM_Page_Map(gzp_cptr(frame), vspaces[child], fault_addr, create_cap_rights(false), seL4_ARM_Default_VMAttributes);
+            #ifdef PAGER_INSTRUMENTATION
+            ct_after_map = read_cntpct();
+            #endif
+            if (err) {
+                sddf_printf("error occured on map frame zero %d\n", err);
+            }
+            // add global zero page to the frame cap.
+            insert_frame_to_page(frame, page_entry);
+
+            #ifdef PAGER_INSTRUMENTATION
+            if (measure) {
+                mapping_latencies[fault_idx] = ct_after_map - ct_before_map;
+                received_faults[fault_idx] = ct_received_fault;
+                
+                fault_idx++;
+                return_faults[fault_idx - 1] = read_cntpct();
+            }
+            #endif
+            return seL4_True;
+        }
+        #endif
+        folio = get_frame();
+        if (!folio) {
+            sddf_printf("out of frames for 0x%lx\n", fault_addr);
+            return seL4_False;
+        }
+        frame = folio->frame_page;
+        *page_entry = DESC_NG;
+        insert_frame_to_page(frame, page_entry);
+        frame_cap = frame_cptr(frame);
+    }
+    // Permission fault (level 1–3)
+    else {
+        // if global zero page get new frame
+        if (!(*page_entry & DESC_NG)) {
+            uint32_t gzp = get_frame_from_page(*page_entry);
+            folio = get_frame();
+            if (!folio) {
+                sddf_printf("out of frames for 0x%lx\n", fault_addr);
+                return seL4_False;
+            }
+            frame = folio->frame_page;
+            *page_entry = DESC_NG;
+            insert_frame_to_page(frame, page_entry);
+            frame_cap = frame_cptr(frame);
+            // The map below overwrites the zero page's PTE, so the copy only
+            // needs unmapping before it is handed out again.
+            put_dirty_gzp(gzp);
+        } else {
+            frame = get_frame_from_page(*page_entry);
+            folio = get_folio_from_idx(frame);
+            if (!folio) {
+                return seL4_False;
+            }
+            if (folio->refcount > 1) {
+                // copy on write
+                struct folio *new_folio = get_frame();
+                if (!new_folio) {
+                    sddf_printf("out of frames for 0x%lx\n", fault_addr);
+                    return seL4_False;
+                }
+                if (frame_table_copy_frame(new_folio->frame_page, frame) != seL4_NoError) {
+                    put_frame(new_folio);
+                    return seL4_False;
+                }
+                shared_entry = *page_entry;
+                --folio->refcount;
+                frame = new_folio->frame_page;
+                *page_entry = DESC_NG;
+                insert_frame_to_page(frame, page_entry);
+                frame_cap = frame_cptr(frame);
+            } else {
+                // The last one mapping it, through whichever cap it already does.
+                frame_cap = mapping_cptr(*page_entry);
+            }
+        }
+    }
+    
+    if (err) {
+        sddf_printf("error occured on map frame %d\n", err);
+    }
+    if (shared_entry) {
+        uint32_t copy = get_copy_from_page(shared_entry);
+        if (copy) {
+            delete_copied_frame_cap(copy);
+        } else {
+            seL4_ARM_Page_Unmap(frame_cptr(get_frame_from_page(shared_entry)));
+        }
+    }
+    // do mapping
+    // LIBSEL4_INLINE_FUNC seL4_MessageInfo_t seL4_ARM_Page_MapReplyRecv(seL4_ARM_Page frame, seL4_CPtr vspace,
+    //                                                               seL4_Word vaddr, seL4_CapRights_t rights,
+    //                                                               seL4_ARM_VMAttributes attr, seL4_CPtr src,
+    //                                                               seL4_MessageInfo_t msgInfo, seL4_Word *sender,
+    //                                                               seL4_CPtr reply)
+    seL4_ARM_Page_MapReplyRecv(frame_cap, vspaces[child], fault_addr, create_cap_rights(true), seL4_ARM_Default_VMAttributes, src, *reply_msginfo, sender, reply);
+    // instrumentation will just completely break...
+    // #ifdef PAGER_INSTRUMENTATION
+    // ct_before_map = read_cntpct();
+    // #endif
+    // seL4_Error err = seL4_ARM_Page_Map(frame_cap, vspaces[child], fault_addr, create_cap_rights(true), seL4_ARM_Default_VMAttributes);
+    // #ifdef PAGER_INSTRUMENTATION
+    // ct_after_map = read_cntpct();
+    // #endif
+    // #ifdef PAGER_INSTRUMENTATION
+    // if (measure) {
+    //     mapping_latencies[fault_idx] = ct_after_map - ct_before_map;
+    //     received_faults[fault_idx] = ct_received_fault;
+        
+    //     fault_idx++;
+    //     return_faults[fault_idx - 1] = read_cntpct();
+    // }
+    // #endif
+    return seL4_True;
+}
 
 seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo)
 {
