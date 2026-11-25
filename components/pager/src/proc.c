@@ -10,6 +10,7 @@
 #include "page_table.h"
 #include "pager.h"
 #include "untyped.h"
+#include "batched.h"
 
 #include <errno.h>
 #include <sddf/util/printf.h>
@@ -76,13 +77,17 @@ static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
 	pte_t *child_entry = make_page_table_entry(vaddr, child);
 	if (!child_entry) return PROCESS_FORK_CAP;
 	uint32_t frame = get_frame_from_page(parent_entry);
-	seL4_Error error;
+	seL4_Error error = seL4_NoError;
 
 	if (!(parent_entry & DESC_NG)) {
 		uint32_t gzp = get_gzp();
 		if (!gzp) return PROCESS_FORK_CAP;
+		#ifdef USE_BATCHED_MAPPINGS
+		error = seL4_ARM_add_batched_map(gzp_cptr(gzp), vaddr);
+		#else
 		error = seL4_ARM_Page_Map(gzp_cptr(gzp), vspaces[child], vaddr,
 								  create_cap_rights(false), seL4_ARM_Default_VMAttributes);
+		#endif
 		if (error != seL4_NoError) {
 			put_gzp(gzp);
 			return PROCESS_FORK_CAP;
@@ -94,7 +99,7 @@ static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
 
 	struct folio *folio = get_folio_from_idx(frame);
 	if (!folio) return PROCESS_FORK_INVALID;
-
+	// I need two simultaenous mappings happening here...
 	error = seL4_ARM_Page_Map(mapping_cptr(parent_entry), vspaces[parent], vaddr,
 							  create_cap_rights(false), seL4_ARM_Default_VMAttributes);
 	if (error != seL4_NoError) return PROCESS_FORK_CAP;
@@ -118,6 +123,11 @@ static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
 static int clone_pages(uint32_t parent, uint32_t child)
 {
 	pgd_t *pgd = page_table_root(parent);
+
+	#ifdef USE_BATCHED_MAPPINGS
+	// vspace rights attr
+	seL4_ARM_start_batched_mapping()
+	#endif
 
 	for (uint32_t pgdi = 0; pgdi < PAGE_TABLE_ENTRIES; ++pgdi) {
 		pud_t *pud = pgd->entries[pgdi];

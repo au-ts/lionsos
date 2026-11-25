@@ -441,6 +441,10 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     return seL4_True;
 }
 
+
+/**
+ * This could implement a thing where we measure the latency to map x amount of pages batched vs non batched.
+ */
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     if (ch >= MICROKIT_MAX_CHANNELS || client_of_channel[ch] == PAGER_NO_CLIENT) {
@@ -458,6 +462,10 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         microkit_mr_set(2, received_faults[i]);
         microkit_mr_set(3, return_faults[i]);
         return microkit_msginfo_new(0, 4);
+    } else if (microkit_msginfo_get_label(msginfo) == PAGER_TEST_MAP) {
+
+    } else if (microkit_msginfo_get_label(msginfo) == PAGER_TEST_UNMAP) {
+
     }
 #endif
     microkit_mr_set(0, pager_mem_call(msginfo, client_of_channel[ch]));
