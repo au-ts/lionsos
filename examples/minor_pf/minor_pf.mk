@@ -60,7 +60,7 @@ CONFIGS_INCLUDE := ${TOP}
 SDDF_CUSTOM_LIBC := 1
 
 BENCHMARKS_DIR := $(LIONSOS)/dep/benchmarking
-BENCHMARK_DIR := $(BENCHMARKS_DIR)/minor_pf
+BENCHMARK_DIR := $(BENCHMARKS_DIR)/minor_page_fault_latency
 BENCHMARK_LIBS := minor_pf.a
 # The benchmark ships one Make snippet per OS; -lions.mk is the LionsOS one and
 # writes its archive into $(BUILD_DIR).

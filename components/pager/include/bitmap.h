@@ -20,16 +20,7 @@
  */
 #define BITMAP_SIZE ((NUM_BLOCKS + 7) / 8)
 
-/**
- * Allocate num_blocks contiguous BLOCK_SIZE-byte blocks.
- *
- * Returns:
- *
- *     heap + offset
- *
- * or NULL if no sufficiently large contiguous region exists.
- */
-void *block_alloc(size_t num_blocks, void *heap, uint8_t *bitmap)
+static inline void *block_alloc(size_t num_blocks, void *heap, uint8_t *bitmap)
 {
     if (num_blocks == 0 || num_blocks > NUM_BLOCKS)
         return NULL;
@@ -64,10 +55,7 @@ void *block_alloc(size_t num_blocks, void *heap, uint8_t *bitmap)
     return NULL;
 }
 
-/**
- * Free num_blocks previously allocated by block_alloc().
- */
-void block_free(void *ptr, size_t num_blocks, void *heap, uint8_t *bitmap)
+static inline void block_free(void *ptr, size_t num_blocks, void *heap, uint8_t *bitmap)
 {
     if (ptr == NULL || num_blocks == 0)
         return;

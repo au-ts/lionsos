@@ -21,16 +21,14 @@
 __attribute__((__section__(".pager_server_config"))) pager_server_config_t pager_config;
 
 /*
- * Patched into pager.elf by the Microkit tool, see include/pager.h. vspaces maps a
- * client's fault id to the VSpace cap the tool placed in our CSpace. elf_caps holds the
- * slots in the elf_caps CNode of each client's ELF frames and elf_vaddrs where each is
- * mapped.
+ * Patched into pager.elf by the Microkit tool
  */
 uint32_t vspaces[PAGER_MAX_CLIENTS];
 uint32_t elf_caps[PAGER_MAX_CLIENTS][PAGER_MAX_ELF_FRAMES];
 uint64_t elf_vaddrs[PAGER_MAX_CLIENTS][PAGER_MAX_ELF_FRAMES];
 uint32_t elf_sizes[PAGER_MAX_CLIENTS];
 
+cnode_specs_t untyped_cnode;
 
 #define PAGER_NO_CLIENT 0xFF
 static uint8_t client_of_channel[MICROKIT_MAX_CHANNELS];
@@ -234,10 +232,7 @@ seL4_Bool vm_fault(microkit_child child, microkit_msginfo msginfo, microkit_msgi
             }
         }
     }
-    
-    if (err) {
-        sddf_printf("error occured on map frame %d\n", err);
-    }
+
     if (shared_entry) {
         uint32_t copy = get_copy_from_page(shared_entry);
         if (copy) {
@@ -252,7 +247,7 @@ seL4_Bool vm_fault(microkit_child child, microkit_msginfo msginfo, microkit_msgi
     //                                                               seL4_ARM_VMAttributes attr, seL4_CPtr src,
     //                                                               seL4_MessageInfo_t msgInfo, seL4_Word *sender,
     //                                                               seL4_CPtr reply)
-    seL4_ARM_Page_MapReplyRecv(frame_cap, vspaces[child], fault_addr, create_cap_rights(true), seL4_ARM_Default_VMAttributes, src, *reply_msginfo, sender, reply);
+    *reply_msginfo = seL4_ARM_Page_MapReplyRecv(frame_cap, vspaces[child], fault_addr, create_cap_rights(true), seL4_ARM_Default_VMAttributes, src, *reply_msginfo, sender, reply);
     // instrumentation will just completely break...
     // #ifdef PAGER_INSTRUMENTATION
     // ct_before_map = read_cntpct();
@@ -409,10 +404,7 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
             }
         }
     }
-    
-    if (err) {
-        sddf_printf("error occured on map frame %d\n", err);
-    }
+
     if (shared_entry) {
         uint32_t copy = get_copy_from_page(shared_entry);
         if (copy) {
@@ -429,6 +421,9 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     #ifdef PAGER_INSTRUMENTATION
     ct_after_map = read_cntpct();
     #endif
+    if (err) {
+        sddf_printf("error occured on map frame %d\n", err);
+    }
     #ifdef PAGER_INSTRUMENTATION
     if (measure) {
         mapping_latencies[fault_idx] = ct_after_map - ct_before_map;

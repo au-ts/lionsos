@@ -11,7 +11,7 @@
 #include "cspace.h"
 
 #include <sel4/bootinfo_types.h>
-
+#include <sddf/util/printf.h>
 
 typedef struct {
     // seL4_CNode untyped_cnode_cptr;
@@ -19,8 +19,10 @@ typedef struct {
     seL4_UntypedDesc untypedList[CONFIG_MAX_NUM_BOOTINFO_UNTYPED_CAPS];
 } capDLBootInfo_t;
 
+extern cnode_specs_t untyped_cnode;
+
 // capDLBootInfo_t is bootinfo_vaddr, cnode holding untyped caps
-void untyped_init(uintptr_t bootinfo_vaddr, seL4_CPtr untyped_cnode_cptr)
+static inline void untyped_init(uintptr_t bootinfo_vaddr, seL4_CPtr untyped_cnode_cptr)
 {
     capDLBootInfo_t *capDLBootInfo = (capDLBootInfo_t *) bootinfo_vaddr;
 
@@ -33,13 +35,13 @@ void untyped_init(uintptr_t bootinfo_vaddr, seL4_CPtr untyped_cnode_cptr)
         untyped_cnode.caps[i].is_device = capDLBootInfo->untypedList[i].isDevice;
         untyped_cnode.caps[i].object_type = seL4_UntypedObject;
         untyped_cnode.end = i + 1;
-        sddf_dprintf("i: %lu, 0x%lx-0x%lx: device? %d\n", i, untyped_cnode.caps[i].base_addr, untyped_cnode.caps[i].end_addr, untyped_cnode.caps[i].is_device);
+        sddf_printf("i: %lu, 0x%lx-0x%lx: device? %d\n", i, untyped_cnode.caps[i].base_addr, untyped_cnode.caps[i].end_addr, untyped_cnode.caps[i].is_device);
     }
     update_active_ut_idx(&untyped_cnode);
-    sddf_dprintf("cnode start: %d\n", untyped_cnode.start);
+    sddf_printf("cnode start: %d\n", untyped_cnode.start);
 }
 
-seL4_Error untyped_alloc(seL4_Word object_type, seL4_Word size_bits,
+static inline seL4_Error untyped_alloc(seL4_Word object_type, seL4_Word size_bits,
                          uint32_t cap_idx, seL4_CPtr destination_cnode,
                          uint32_t num)
 {

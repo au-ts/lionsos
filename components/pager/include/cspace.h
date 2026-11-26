@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <sel4/sel4.h>
+#include <sddf/util/printf.h>
 
 #define MAX_NUM_CAP_SLOTS 512
 #define GET_OBJECT_SIZE(object_type, size_bits) (1ULL << get_object_size_bits(object_type, size_bits))
@@ -34,12 +35,8 @@ typedef struct {
 
 #define PAGER_CNODE_DEPTH 58
 
-/*
- * Retype num objects into consecutive slots from retyped_cap_idx. The window is
- * halved rather than abandoned when the active untyped cannot fit it, so we do
- * not throw away the tail of every untyped we walk past.
- */
-seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
+
+static inline seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
     seL4_Word size_bits, uint32_t retyped_cap_idx, seL4_CPtr destination_cnode,
     uint32_t num) {
 
@@ -73,7 +70,7 @@ seL4_Error do_untyped_retype(cnode_specs_t *cnode_specs, seL4_Word object_type,
     return seL4_NoError;
 }
 
-uint8_t get_object_size_bits(seL4_Word object_type, seL4_Word size_bits)
+static inline uint8_t get_object_size_bits(seL4_Word object_type, seL4_Word size_bits)
 {
     switch (object_type) {
     /* Generic objects. */
@@ -93,7 +90,7 @@ uint8_t get_object_size_bits(seL4_Word object_type, seL4_Word size_bits)
     }
 }
 
-seL4_Word max_size_bits(seL4_Word size)
+static inline seL4_Word max_size_bits(seL4_Word size)
 {
     seL4_Word i = 63;
     while (((1ULL << i) & size) == 0) {
@@ -102,7 +99,7 @@ seL4_Word max_size_bits(seL4_Word size)
     return i;
 }
 
-void clear_cnode_specs_entry(cnode_specs_t *cnode_specs, uint32_t ut_idx) {
+static inline void clear_cnode_specs_entry(cnode_specs_t *cnode_specs, uint32_t ut_idx) {
     cnode_specs->caps[ut_idx].base_addr = 0;
     cnode_specs->caps[ut_idx].end_addr = 0;
     cnode_specs->caps[ut_idx].is_device = 0;
@@ -111,7 +108,7 @@ void clear_cnode_specs_entry(cnode_specs_t *cnode_specs, uint32_t ut_idx) {
     cnode_specs->caps[ut_idx].child = 0;
 }
 
-void update_active_ut_idx(cnode_specs_t *cnode_specs) {
+static inline void update_active_ut_idx(cnode_specs_t *cnode_specs) {
     // TODO: find a proper untyped for PT objects, not the first one is used by capDL initialiser
     // uint32_t non_dev_mem_id = 0;
     uint32_t i;
