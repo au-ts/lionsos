@@ -40,6 +40,62 @@ fs_queue_t *fs_completion_queue;
 char *fs_share;
 #endif
 
+#ifdef PAGER_INSTRUMENTATION
+#define TIMER_OVERHEAD_SAMPLES 1000
+
+static long double timer_read_overhead(void)
+{
+    uint64_t total = 0;
+    for (int i = 0; i < TIMER_OVERHEAD_SAMPLES; ++i) {
+        uint64_t start = read_cntpct();
+        uint64_t end = read_cntpct();
+        total += end - start;
+    }
+    return (long double)total / TIMER_OVERHEAD_SAMPLES;
+}
+
+static void report_pager_instrumentation(void)
+{
+    uint64_t samples = 0;
+    for (uint64_t i = 0;; i++) {
+        microkit_mr_set(0, i);
+        microkit_msginfo reply = microkit_ppcall(pager_config.id,
+                                                 microkit_msginfo_new(PAGER_INSTRUMENTATION_TAG, 1));
+        uint64_t total = microkit_mr_get(0);
+        if (microkit_msginfo_get_count(reply) < 4 || i >= total) {
+            printf("instrumentation: %lu samples\n", (uint64_t)total);
+            break;
+        }
+        if (before_faults[i] == 0) {
+            continue;
+        }
+        ++samples;
+        #ifndef PAGER_INSTRUMENTATION_MAPREPLYRECV
+        total_mapping_latency += (uint64_t)microkit_mr_get(1);
+        #endif
+        total_client_pager += (uint64_t)microkit_mr_get(2) - before_faults[i];
+        total_pager_client += after_faults[i] - (uint64_t)microkit_mr_get(3);
+    }
+    if (samples == 0) {
+        return;
+    }
+
+    uint64_t freq = read_cntfrq();
+    long double overhead = timer_read_overhead();
+    printf("results:\n");
+    #ifdef PAGER_INSTRUMENTATION_MAPREPLYRECV
+    printf("mean mapping latency:       n/a (mapreplyrecv)\n");
+    #else
+    printf("mean mapping latency:       %.3Lf ns\n",
+           ticks_to_ns((long double)total_mapping_latency / samples - overhead, freq));
+    #endif
+    printf("mean pager->client latency: %.3Lf ns\n",
+           ticks_to_ns((long double)total_pager_client / samples - overhead, freq));
+    printf("mean client->pager latency: %.3Lf ns\n",
+           ticks_to_ns((long double)total_client_pager / samples - overhead, freq));
+}
+#endif
+
 void init(void)
 {
     assert(serial_config_check_magic(&serial_config));
@@ -59,7 +115,22 @@ void init(void)
     }
     #endif
 
+    // check CPU frequency.
+    uint64_t pmcr; asm volatile("mrs %0, pmcr_el0" : "=r"(pmcr));
+    asm volatile("msr pmcr_el0, %0" :: "r"((pmcr | 1) & ~(1UL << 3))); 
+    asm volatile("msr pmcntenset_el0, %0" :: "r"(1UL << 31));         
+    uint64_t c0, c1, t0 = read_cntpct();
+    asm volatile("isb; mrs %0, pmccntr_el0" : "=r"(c0));
+    for (volatile uint64_t i = 0; i < 100000000; i++);
+    asm volatile("isb; mrs %0, pmccntr_el0" : "=r"(c1));
+    uint64_t t1 = read_cntpct();
+    printf("CPU ~%lu MHz\n", (c1 - c0) * read_cntfrq() / (t1 - t0) / 1000000);
+
     minor_pf();
+
+    #ifdef PAGER_INSTRUMENTATION
+    report_pager_instrumentation();
+    #endif
 
     printf("benchmark done\n");
 }
