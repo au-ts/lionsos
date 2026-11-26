@@ -11,6 +11,7 @@
 #include "pager.h"
 #include "untyped.h"
 #include "batched.h"
+#include "pager_config.h"
 
 #include <errno.h>
 #include <sddf/util/printf.h>
@@ -79,6 +80,7 @@ static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
 	uint32_t frame = get_frame_from_page(parent_entry);
 	seL4_Error error = seL4_NoError;
 
+	#ifdef USE_GZP
 	if (!(parent_entry & DESC_NG)) {
 		uint32_t gzp = get_gzp();
 		if (!gzp) return PROCESS_FORK_CAP;
@@ -96,6 +98,7 @@ static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
 		insert_frame_to_page(gzp, child_entry);
 		return PROCESS_FORK_OK;
 	}
+	#endif
 
 	struct folio *folio = get_folio_from_idx(frame);
 	if (!folio) return PROCESS_FORK_INVALID;

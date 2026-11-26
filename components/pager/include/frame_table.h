@@ -11,6 +11,7 @@
 
 #include "page_table.h"
 #include "pager.h"
+#include "pager_config.h"
 
 /**
  * TODO: support multiple mappings.
@@ -49,12 +50,14 @@ typedef struct {
 void frame_table_init(uintptr_t memory, seL4_CPtr frame_cnode,
                       seL4_CPtr zero_page_cnode, seL4_CPtr frame_copy_cnode);
 
+#ifdef USE_GZP
 /**
  * seL4 does not zero what it retypes, so the global zero page has to be mapped
  * into our own VSpace once and cleared. Needs the paging structure free list,
  * so call it after page_table_init().
  */
 void frame_table_zero_gzp(seL4_CPtr vspace);
+#endif
 
 void frame_table_zero_frame(uint32_t frame);
 
@@ -82,6 +85,7 @@ struct folio *get_frame();
  */
 void put_frame(struct folio *folio);
 
+#ifdef USE_GZP
 /**
  * Takes a copy of the global zero page cap off the unused list.
  */
@@ -89,14 +93,17 @@ uint32_t get_gzp();
 void put_gzp(uint32_t gzp);
 
 /**
- * mapping has been overwritten by a private frame. 
+ * mapping has been overwritten by a private frame.
  * cannot be handed out again until unmapped, which get_gzp() does in batches so
  * fault that dropped it does not pay for it.
  */
 void put_dirty_gzp(uint32_t gzp);
+#endif
 
 extern seL4_CPtr frame_cnode_cptr;
+#ifdef USE_GZP
 extern seL4_CPtr zero_page_cnode_cptr;
+#endif
 extern seL4_CPtr frame_copy_cnode_cptr;
 
 /* CSpace addrs of caps below. copies required to do double mappings.*/
@@ -105,9 +112,11 @@ static inline seL4_CPtr frame_cptr(uint32_t frame) {
     return frame_cnode_cptr + frame;
 }
 
+#ifdef USE_GZP
 static inline seL4_CPtr gzp_cptr(uint32_t gzp) {
     return zero_page_cnode_cptr + gzp;
 }
+#endif
 
 static inline seL4_CPtr frame_copy_cptr(uint32_t copy) {
     return frame_copy_cnode_cptr + copy;
@@ -115,9 +124,11 @@ static inline seL4_CPtr frame_copy_cptr(uint32_t copy) {
 
 /* The cap a shadow page table entry's mapping is held through. */
 static inline seL4_CPtr mapping_cptr(pte_t entry) {
+#ifdef USE_GZP
     if (!(entry & DESC_NG)) {
         return gzp_cptr(get_frame_from_page(entry));
     }
+#endif
     uint32_t copy = get_copy_from_page(entry);
     return copy ? frame_copy_cptr(copy) : frame_cptr(get_frame_from_page(entry));
 }

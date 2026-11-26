@@ -8,12 +8,15 @@
 #include "page_table.h"
 #include "pager.h"
 #include "untyped.h"
+#include "pager_config.h"
 
 #include <string.h>
 #include <sddf/util/printf.h>
 
 seL4_CPtr frame_cnode_cptr;
+#ifdef USE_GZP
 seL4_CPtr zero_page_cnode_cptr;
+#endif
 seL4_CPtr frame_copy_cnode_cptr;
 
 /* Somewhere in our own address space clear of every MR we were given, used to
@@ -26,13 +29,16 @@ seL4_CPtr frame_copy_cnode_cptr;
 static uintptr_t frame_memory;
 static uint32_t frame_idx = 1;
 
+#ifdef USE_GZP
 /* The frame every read-only anonymous mapping is backed by. */
 static uint32_t global_zero_page;
+#endif
 
 // Bookkeeping for frames.
 static struct folio *unused_frames[BUFFERS_SIZE];
 static uint32_t unused_frames_idx = 0;
 
+#ifdef USE_GZP
 // Bookkeeping for global zero pages.
 static uint32_t gzp_idx = 1;
 
@@ -42,6 +48,7 @@ static uint32_t unused_gzp_idx = 0;
 /* Copies still carrying a mapping we have since overwritten. */
 static uint32_t dirty_gzp[BUFFERS_SIZE];
 static uint32_t dirty_gzp_idx = 0;
+#endif
 
 // Bookkeeping for frame cap copies.
 static uint32_t frame_copy_idx = 1;
@@ -111,6 +118,7 @@ void put_frame(struct folio *folio) {
     }
 }
 
+#ifdef USE_GZP
 static void refill_gzp(uint32_t n) {
     sddf_dprintf("refilling gzp\n");
     // there is no batched seL4_CNode_Copy, one mapping needs one cap.
@@ -186,6 +194,7 @@ void frame_table_zero_gzp(seL4_CPtr vspace)
         sddf_printf("error occured on unmapping the global zero page %d\n", err);
     }
 }
+#endif
 
 
 void frame_table_zero_frame(uint32_t frame)
@@ -208,19 +217,23 @@ void frame_table_init(uintptr_t memory, seL4_CPtr frame_cnode,
 {
     frame_memory = memory;
     frame_cnode_cptr = frame_cnode;
-    zero_page_cnode_cptr = zero_page_cnode;
     frame_copy_cnode_cptr = frame_copy_cnode;
 
+    #ifdef USE_GZP
+    zero_page_cnode_cptr = zero_page_cnode;
     // create the global zero page.
     global_zero_page = frame_idx;
     untyped_alloc(seL4_ARM_SmallPageObject, seL4_PageBits, frame_idx, frame_cnode_cptr, 1);
     ++frame_idx;
     sddf_printf("global zero page is %d\n", global_zero_page);
+    #endif
 
     // refill buffers
     refill_frames(INIT_FRAMES);
+    #ifdef USE_GZP
     // copy a bunch of zero pages to the zero page thing
     refill_gzp(INIT_GZP);
+    #endif
 }
 
 struct folio *frame_table_adopt(seL4_CPtr cnode, seL4_Word slot)

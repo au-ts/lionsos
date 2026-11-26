@@ -7,6 +7,7 @@
 #include "frame_table.h"
 #include "pager.h"
 #include "untyped.h"
+#include "pager_config.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -218,9 +219,12 @@ void unmap_range(uintptr_t start, uintptr_t end, uint32_t child) {
                     // frame_table_zero_frame(frame);
                 }
                 put_frame(folio);
-            } else {
+            }
+            #ifdef USE_GZP
+            else {
                 put_gzp(frame);
             }
+            #endif
             *entry = 0;
         }
 
