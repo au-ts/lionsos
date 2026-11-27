@@ -12,10 +12,10 @@
 #   LDFLAGS (appended to)
 #   LIBMATH (passed to micropython)
 #
-# Transitively used variables:
+# Conditionally used variables required for some components/examples:
 #	WASM_TARGETS (used for WASM)
-#   LIB_SDDF_LWIP_CFLAGS
-#   LIBMICROKITCO_CFLAGS_????
+#   LIB_SDDF_LWIP_CFLAGS_*
+#   LIBMICROKITCO_CFLAGS_*
 #   MICROPYTHON_EXEC_MODULE
 #   MICROPYTHON_FROZEN_MANIFEST
 #
