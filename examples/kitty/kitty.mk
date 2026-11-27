@@ -5,8 +5,7 @@
 #
 
 TOOLCHAIN ?= clang
-SDDF := $(LIONSOS)/dep/sddf
-LWIP := $(SDDF)/network/ipstacks/lwip/src
+
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 SUPPORTED_BOARDS := \
 	odroidc4 \
@@ -18,22 +17,29 @@ REPORT_FILE := report.txt
 
 all: ${IMAGE_FILE}
 
-
-include ${SDDF}/tools/make/board/common.mk
-
 ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
-	INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
-	LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
+    INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
+    LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
-	INITRD := 8d4a14e2c92a638d68f04832580a57b94e8a4f6b-rootfs.cpio.gz
-	LINUX := 75757e2972d5dc528d98cab377e2c74a9e02d6f9-linux
+    INITRD := 8d4a14e2c92a638d68f04832580a57b94e8a4f6b-rootfs.cpio.gz
+    LINUX := 75757e2972d5dc528d98cab377e2c74a9e02d6f9-linux
+else
+    $(error Unsupported board $(MICROKIT_BOARD))
 endif
+
+# FIXME: We should rework makefiles so that we don't need to 'inject' this
+# everywhere, instead sDDF should depend on this intrinsically.
+LIBS := libsddf_util_debug.a
 
 # If the KITTY_CONFIG is in deploy, then we will set the exec module
 # of Micropython to be the "deploy.py" file resident in the client directory.
 ifeq ($(strip $(DEPLOY)),1)
-export MICROPYTHON_EXEC_MODULE := deploy.py
+MICROPYTHON_EXEC_MODULE := deploy.py
 endif
+
+MICROPYTHON_FROZEN_MANIFEST := manifest.py
+MICROPYTHON_ENABLE_FRAMEBUFFER := 1
+include ${LIONSOS}/components/lionsos.mk
 
 VMM_IMAGE_DIR := ${KITTY_DIR}/board/$(MICROKIT_BOARD)/framebuffer_vmm_images
 VMM_SRC_DIR := ${KITTY_DIR}/src/vmm
@@ -42,11 +48,7 @@ LINUX_DTB := linux.dtb
 
 METAPROGRAM := $(KITTY_DIR)/meta.py
 
-LWIP := $(SDDF)/network/ipstacks/lwip/src
-NFS := $(LIONSOS)/components/fs/nfs
-MICROPYTHON := $(LIONSOS)/components/micropython
 LIONSOS_DOWNLOADS := https://lionsos.org/downloads/examples/kitty
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 
 # I2C config
 I2C_BUS_NUM=2
@@ -65,46 +67,16 @@ IMAGES := timer_driver.elf \
 	  i2c_virt.elf \
 	  i2c_driver.elf
 
-CFLAGS += -I$(LIONSOS)/include \
-	      -I$(SDDF)/include \
-	      -I$(SDDF)/include/microkit \
-	      -I$(LIBMICROKITCO_PATH) \
-	      -I$(LWIP)/include \
-		  -I$(LIBVMM_DIR)/include
+CFLAGS += -I$(LIBVMM_DIR)/include
 
-include $(LIONSOS)/lib/libc/libc.mk
-
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(LIONS_LIBC)/lib
-LIBS := -lmicrokit -Tmicrokit.ld libsddf_util_debug.a -lc
-
-SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
-
-SDDF_MAKEFILES := ${SDDF}/util/util.mk \
-	${SDDF}/drivers/timer/${TIMER_DRIV_DIR}/timer_driver.mk \
-	${SDDF}/drivers/network/${NET_DRIV_DIR}/eth_driver.mk \
-	${SDDF}/drivers/serial/${UART_DRIV_DIR}/serial_driver.mk \
-	${SDDF}/network/components/network_components.mk \
-	${SDDF}/network/lib_sddf_lwip/lib_sddf_lwip.mk \
-	${SDDF}/serial/components/serial_components.mk \
-	${SDDF}/i2c/components/i2c_virt.mk \
-	${SDDF}/libco/libco.mk
-
-# We can build the kitty system without the I2C Driver
-ifneq ($(I2C_DRIV_DIR), )
-SDDF_MAKEFILES += ${SDDF}/drivers/i2c/${I2C_DRIV_DIR}/i2c_driver.mk
-endif
-
-include ${SDDF_MAKEFILES}
-
+# TODO: Move into 'lionsos.mk'
 LIBVMM_LIBC_INCLUDE := $(LIONS_LIBC)/include
-
 include ${LIBVMM_DIR}/vmm.mk
 
 CFLAGS += \
 	-Wno-bitwise-op-parentheses \
 	-Wno-shift-op-parentheses
 
-include ${NFS}/nfs.mk
 
 # Build the VMM for graphics
 VMM_OBJS := vmm.o package_guest_images.o
@@ -125,14 +97,6 @@ package_guest_images.o: $(LIBVMM_DIR)/tools/package_guest_images.S \
 
 vmm.elf: ${VMM_OBJS} libvmm.a
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
-MICROPYTHON_LIBMATH := ${LIBMATH}
-MICROPYTHON_FROZEN_MANIFEST := manifest.py
-MICROPYTHON_ENABLE_FRAMEBUFFER := 1
-include $(MICROPYTHON)/micropython.mk
-
-LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
 
 config.py: ${KITTY_DIR}/board/$(MICROKIT_BOARD)/config.py
 	cp $< $@
@@ -207,16 +171,6 @@ ${INITRD}:
 # include the makefiles.
 ${LIBVMM_DIR}/vmm.mk:
 	cd ${LIONSOS}; git submodule update --init dep/libvmm
-
-$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross &:
-	cd ${LIONSOS}; git submodule update --init dep/micropython
-	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
-
-${LIONSOS}/dep/libmicrokitco/libmicrokitco.mk:
-	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
-
-${SDDF}/tools/make/board/common.mk ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
-	cd ${LIONSOS}; git submodule update --init dep/sddf
 
 qemu: $(IMAGE_FILE)
 	$(QEMU) -machine virt,virtualization=on \

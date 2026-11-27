@@ -39,11 +39,16 @@ micropython.elf: FORCE mpy-cross \
 		$(MICROPYTHON_FROZEN_MANIFEST) \
 		$(MICROPYTHON_EXEC_MODULE) \
 		$(MICROPYTHON_USER_C_MODULES_PATH) \
+		libsddf_util_debug.a \
 		lib_sddf_lwip_mp.a \
 		libmicrokitco_mp.a \
 		tcp_mp.o \
 		| $(LIONS_LIBC)/include
 	$(MAKE) -C $(MICROPYTHON_DIR) \
+		LIONSOS=$(LIONSOS) \
+		SDDF=$(SDDF) \
+		LWIP=$(LWIP) \
+		LIBMICROKITCO_PATH=$(LIBMICROKITCO_PATH) \
 		MICROKIT_SDK=$(MICROKIT_SDK) \
 		MICROKIT_BOARD=$(MICROKIT_BOARD) \
 		MICROKIT_CONFIG=$(MICROKIT_CONFIG) \
@@ -67,3 +72,7 @@ mpy-cross: FORCE $(LIONSOS)/dep/micropython/mpy-cross
 	$(MAKE) -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 FORCE: ;
+
+$(LIONSOS)/dep/micropython/py/mkenv.mk $(LIONSOS)/dep/micropython/mpy-cross &:
+	cd ${LIONSOS} && git submodule update --init dep/micropython
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib

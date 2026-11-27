@@ -41,9 +41,6 @@ libnfs/lib/libnfs.a: $(LIBNFS)/CMakeLists.txt | $(LIONS_LIBC)/include
 		-DBUILD_SHARED_LIBS=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 	cmake --build libnfs
 
-LIB_FS_SERVER_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include $(LIONSOS)/lib/fs/server/lib_fs_server.mk
-
 tcp_nfs.o: $(LIONSOS)/lib/sock/tcp.c | $(LIONS_LIBC)/include
 	${CC} ${CFLAGS} ${CFLAGS_nfs} -c -o $@ $<
 

@@ -33,11 +33,4 @@ ${BUILD_DIR}/Makefile: fileio.mk Makefile
 	echo "export MICROKIT_CONFIG ?= ${MICROKIT_CONFIG}" >> $@
 	cat fileio.mk >> $@
 
-submodules:
-	git submodule update --init $(LIONSOS)/dep/libnfs
-	git submodule update --init $(LIONSOS)/dep/micropython
-	git submodule update --init $(LIONSOS)/dep/sddf
-	git submodule update --init $(LIONSOS)/dep/libmicrokitco
-	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
-
 FORCE:

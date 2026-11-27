@@ -2,13 +2,33 @@
 # Copyright 2024, UNSW
 # SPDX-License-Identifier: BSD-2-Clause
 #
+# NOTES:
+# Requires variables passed from micropython.mk:
+#   LIONSOS
+#   SDDF
+#   LWIP
+#   LIBMICROKITCO_PATH
+#   MICROKIT_SDK
+#   MICROKIT_BOARD
+#   MICROKIT_CONFIG
+#   CFLAGS_ARCH
+#   USE_CC
+#   USE_LD
+#   USE_SIZE
+#   MICROPY_MPYCROSS
+#   MICROPY_MPYCROSS_DEPENDENCY
+#   BUILD
+#   LIBMATH
+#   MICROPYTHON_LIBC
+#
+# Optional variables:
+#   FROZEN_MANIFEST
+#   EXEC_MODULE
+#   ENABLE_FRAMEBUFFER
+#   ENABLE_VFS_STDIO
+#   ENABLE_SERIAL_STDIO
+#   MICROPYTHON_USER_C_MODULES
 
-LIONSOS := $(abspath ../../)
-SDDF := $(LIONSOS)/dep/sddf
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
-LIBI2C_DIR := $(SDDF)/i2c
-LWIP := $(SDDF)/network/ipstacks/lwip
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 # Path to micropython source code
 MICROPYTHON_SRC := $(LIONSOS)/dep/micropython
 FROZEN_MANIFEST ?= $(MICROPYTHON_SRC)/extmod/asyncio/manifest.py
@@ -28,7 +48,7 @@ include $(TOP)/extmod/extmod.mk
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 
 # Set CFLAGS and libraries.
-CFLAGS += \
+CFLAGS := \
 	-O2 \
 	-I. \
 	-Ilwip_include \
@@ -39,16 +59,16 @@ CFLAGS += \
 	-I$(BOARD_DIR)/include \
 	-I$(LIBMICROKITCO_PATH) \
 	-I$(LIONSOS)/include \
-	-I$(LWIP)/src/include \
-	-I$(LWIP)/src/include/ipv4 \
+	-I$(LWIP)/include \
+	-I$(LWIP)/include/ipv4 \
 	-I$(MICROPYTHON_LIBC)/include \
 	-Wno-shift-op-parentheses \
 	-DLWIP_TCP_KEEPALIVE=1 \
 	-ffreestanding \
 	$(CFLAGS_ARCH)
 
-LDFLAGS += -L$(BOARD_DIR)/lib -L$(MICROPYTHON_LIBC)/lib
-LIBS += -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a $(BUILD)/libmicrokitco_mp.a
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(MICROPYTHON_LIBC)/lib
+LIBS := -lmicrokit -Tmicrokit.ld -lc $(BUILD)/libsddf_util_debug.a $(BUILD)/lib_sddf_lwip_mp.a $(BUILD)/libmicrokitco_mp.a
 
 # Define the required source files.
 SRC_C = \

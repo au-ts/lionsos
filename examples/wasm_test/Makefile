@@ -34,8 +34,4 @@ ${BUILD_DIR}/Makefile: wasm_test.mk Makefile
 	echo "export MICROKIT_CONFIG ?= ${MICROKIT_CONFIG}" >> $@
 	cat wasm_test.mk >> $@
 
-submodules:
-	git submodule update --init $(LIONSOS)/dep/sddf
-	git submodule update --init $(LIONSOS)/dep/libmicrokitco
-
 FORCE:
