@@ -217,17 +217,7 @@ qemu: $(IMAGE_FILE)
 
 FORCE: ;
 
-$(LIONSOS)/dep/micropython/py/mkenv.mk $(LIONSOS)/dep/micropython/mpy-cross:
-	cd $(LIONSOS); git submodule update --init dep/micropython
-	cd $(LIONSOS)/dep/micropython && git submodule update --init lib/micropython-lib
-
-$(LIONSOS)/dep/libmicrokitco/libmicrokitco.mk:
-	cd $(LIONSOS); git submodule update --init dep/libmicrokitco
-
 $(MICRODOT):
 	cd $(LIONSOS); git submodule update --init dep/microdot
-
-${SDDF}/tools/make/board/common.mk ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
-	cd $(LIONSOS); git submodule update --init dep/sddf
 
 -include $(DEPS)

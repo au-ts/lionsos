@@ -58,3 +58,11 @@ include $(LIONSOS)/components/wamr/wamr.mk
 
 LIBMICROKITCO_LIBC_INCLUDE := $(LIONS_LIBC)/include
 include $(LIBMICROKITCO_PATH)/libmicrokitco.mk
+
+# Automatically clone submodules if a user has not done this already.
+
+$(SDDF)/tools/make/sddf.mk $(SDDF)/libco/libco.mk $(SDDF)/include &:
+	cd ${LIONSOS} && git submodule update --init dep/sddf
+
+$(LIBMICROKITCO_PATH)/libmicrokitco.mk:
+	cd $(LIONSOS) && git submodule update --init dep/libmicrokitco

@@ -67,3 +67,7 @@ mpy-cross: FORCE $(LIONSOS)/dep/micropython/mpy-cross
 	$(MAKE) -C $(LIONSOS)/dep/micropython/mpy-cross BUILD=$(abspath ./mpy_cross)
 
 FORCE: ;
+
+$(LIONSOS)/dep/micropython/py/mkenv.mk $(LIONSOS)/dep/micropython/mpy-cross &:
+	cd ${LIONSOS} && git submodule update --init dep/micropython
+	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib

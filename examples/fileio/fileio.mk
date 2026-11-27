@@ -78,6 +78,3 @@ qemu: ${IMAGE_FILE} qemu_disk
 		-d guest_errors \
 		-drive file=qemu_disk,if=none,format=raw,id=hd \
 		-device virtio-blk-device,drive=hd,bus=virtio-mmio-bus.1
-
-${SDDF}/tools/make/board/common.mk ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
-	cd $(LIONSOS); git submodule update --init dep/sddf

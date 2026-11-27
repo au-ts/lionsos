@@ -171,16 +171,6 @@ ${INITRD}:
 ${LIBVMM_DIR}/vmm.mk:
 	cd ${LIONSOS}; git submodule update --init dep/libvmm
 
-$(LIONSOS)/dep/micropython/py/mkenv.mk ${LIONSOS}/dep/micropython/mpy-cross &:
-	cd ${LIONSOS}; git submodule update --init dep/micropython
-	cd ${LIONSOS}/dep/micropython && git submodule update --init lib/micropython-lib
-
-${LIONSOS}/dep/libmicrokitco/libmicrokitco.mk:
-	cd ${LIONSOS}; git submodule update --init dep/libmicrokitco
-
-${SDDF}/tools/make/board/common.mk ${SDDF_MAKEFILES} ${LIONSOS}/dep/sddf/include &:
-	cd ${LIONSOS}; git submodule update --init dep/sddf
-
 qemu: $(IMAGE_FILE)
 	$(QEMU) -machine virt,virtualization=on \
 			-cpu cortex-a53 \
