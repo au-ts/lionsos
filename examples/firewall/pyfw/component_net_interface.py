@@ -6,10 +6,11 @@ from typing import List, Tuple
 @dataclass
 class InterfacePriorities:
     ethernet_driver: int = 101
-    tx_virtualiser: int = 100
-    rx_virtualiser: int = 99
-    arp_requester: int = 98
-    arp_responder: int = 95
+    bridge: int = 100
+    tx_virtualiser: int = 99
+    rx_virtualiser: int = 98
+    arp_requester: int = 97
+    arp_responder: int = 96
     filters: dict[str, int] = field(
         default_factory=lambda: {
             "icmp": 90,
@@ -22,7 +23,7 @@ class InterfacePriorities:
 class NetworkInterface:
     index: int
     name: str
-    board_ethernet_idx: int
+    ports: List[int]
     mac: Tuple[int, ...]
     ip: str
     subnet_bits: int
