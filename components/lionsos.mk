@@ -37,8 +37,12 @@ include $(LIONSOS)/lib/libc/libc.mk
 LDFLAGS := $(LDFLAGS) -L$(LIONS_LIBC)/lib
 LIBS := $(LIBS) -lc
 
-SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
-include $(SDDF)/tools/make/sddf.mk
+# Prevent duplicate inclusions of sddf.mk, as libVMM will also want to import it.
+ifndef SDDF_MK_INCLUDED
+    SDDF_MK_INCLUDED := 1
+    SDDF_LIBC_INCLUDE := $(LIONS_LIBC)/include
+    include $(SDDF)/tools/make/sddf.mk
+endif
 
 include $(SDDF)/libco/libco.mk
 
