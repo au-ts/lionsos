@@ -123,14 +123,9 @@ static int clone_leaf(uint32_t parent, uint32_t child, uintptr_t vaddr,
 }
 
 // TODO: clone leaf fn may be suboptimal... small difference though..
-static int clone_pages(uint32_t parent, uint32_t child)
+static int clone_leaves(uint32_t parent, uint32_t child)
 {
 	pgd_t *pgd = page_table_root(parent);
-
-	#ifdef USE_BATCHED_MAPPINGS
-	// vspace rights attr
-	seL4_ARM_start_batched_mapping()
-	#endif
 
 	for (uint32_t pgdi = 0; pgdi < PAGE_TABLE_ENTRIES; ++pgdi) {
 		pud_t *pud = pgd->entries[pgdi];
@@ -157,6 +152,20 @@ static int clone_pages(uint32_t parent, uint32_t child)
 		}
 	}
 	return PROCESS_FORK_OK;
+}
+
+static int clone_pages(uint32_t parent, uint32_t child)
+{
+	#ifdef USE_BATCHED_MAPPINGS
+	seL4_ARM_start_batched_mapping(vspaces[child], create_cap_rights(false), seL4_ARM_Default_VMAttributes);
+	int result = clone_leaves(parent, child);
+	if (seL4_ARM_finish_batched_mapping() != seL4_NoError && result == PROCESS_FORK_OK) {
+		result = PROCESS_FORK_CAP;
+	}
+	return result;
+	#else
+	return clone_leaves(parent, child);
+	#endif
 }
 
 

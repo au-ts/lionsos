@@ -13,6 +13,9 @@
 #include "untyped.h"
 #include "pager_config.h"
 #include "pager_instrumentation.h"
+#ifdef USE_BATCHED_MAPPINGS
+#include "batched.h"
+#endif
 
 #include <microkit.h>
 #include <sddf/util/printf.h>
@@ -415,10 +418,106 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
     return seL4_True;
 }
 
+#ifdef PAGER_INSTRUMENTATION
+#define PAGER_TEST_MAX_PAGES 4096
+static struct folio *test_frames[PAGER_TEST_MAX_PAGES];
 
-/**
- * This could implement a thing where we measure the latency to map x amount of pages batched vs non batched.
- */
+static seL4_MessageInfo_t test_reply(seL4_Error err, uint64_t map_ticks, uint64_t unmap_ticks)
+{
+    microkit_mr_set(0, err);
+    microkit_mr_set(1, map_ticks);
+    microkit_mr_set(2, unmap_ticks);
+    return microkit_msginfo_new(0, 3);
+}
+
+static seL4_Error test_map(seL4_CPtr vspace, uintptr_t vaddr, uint64_t npages)
+{
+    seL4_CapRights_t rights = create_cap_rights(true);
+#ifdef USE_BATCHED_MAPPINGS
+    seL4_Error err = seL4_ARM_start_batched_mapping(vspace, rights, seL4_ARM_Default_VMAttributes);
+    for (uint64_t i = 0; !err && i < npages; ++i) {
+        err = seL4_ARM_add_batched_map(frame_cptr(test_frames[i]->frame_page), vaddr + i * PAGE_SIZE);
+    }
+    seL4_Error finish_err = seL4_ARM_finish_batched_mapping();
+    return err ? err : finish_err;
+#else
+    seL4_Error err = seL4_NoError;
+    for (uint64_t i = 0; !err && i < npages; ++i) {
+        err = seL4_ARM_Page_Map(frame_cptr(test_frames[i]->frame_page), vspace, vaddr + i * PAGE_SIZE,
+                                rights, seL4_ARM_Default_VMAttributes);
+    }
+    return err;
+#endif
+}
+
+static seL4_Error test_unmap(seL4_CPtr vspace, uint64_t npages)
+{
+#ifdef USE_BATCHED_MAPPINGS
+    seL4_Error err = seL4_ARM_start_batched_unmapping(vspace);
+    for (uint64_t i = 0; !err && i < npages; ++i) {
+        err = seL4_ARM_add_batched_unmap(frame_cptr(test_frames[i]->frame_page));
+    }
+    seL4_Error finish_err = seL4_ARM_finish_batched_unmapping();
+    return err ? err : finish_err;
+#else
+    seL4_Error err = seL4_NoError;
+    for (uint64_t i = 0; i < npages; ++i) {
+        seL4_Error unmap_err = seL4_ARM_Page_Unmap(frame_cptr(test_frames[i]->frame_page));
+        if (!err) {
+            err = unmap_err;
+        }
+    }
+    return err;
+#endif
+}
+
+static seL4_MessageInfo_t test_map_unmap(uint32_t client)
+{
+    uintptr_t vaddr = microkit_mr_get(0);
+    uint64_t npages = microkit_mr_get(1);
+    seL4_CPtr vspace = vspaces[client];
+
+    if (vaddr & (PAGE_SIZE - 1)) {
+        return test_reply(seL4_InvalidArgument, 0, 0);
+    }
+    if (npages == 0 || npages > PAGER_TEST_MAX_PAGES) {
+        return test_reply(seL4_RangeError, 0, 0);
+    }
+    for (uint64_t i = 0; i < npages; ++i) {
+        pte_t *entry = make_page_table_entry(vaddr + i * PAGE_SIZE, client);
+        if (!entry) {
+            return test_reply(seL4_NotEnoughMemory, 0, 0);
+        }
+        if (*entry) {
+            return test_reply(seL4_DeleteFirst, 0, 0);
+        }
+    }
+    for (uint64_t i = 0; i < npages; ++i) {
+        test_frames[i] = get_frame();
+        if (!test_frames[i]) {
+            while (i--) {
+                put_frame(test_frames[i]);
+            }
+            return test_reply(seL4_NotEnoughMemory, 0, 0);
+        }
+    }
+
+    uint64_t start = read_cntpct();
+    seL4_Error map_err = test_map(vspace, vaddr, npages);
+    uint64_t mapped = read_cntpct();
+    seL4_Error unmap_err = test_unmap(vspace, npages);
+    uint64_t unmapped = read_cntpct();
+
+    for (uint64_t i = 0; i < npages; ++i) {
+        if (unmap_err) {
+            seL4_ARM_Page_Unmap(frame_cptr(test_frames[i]->frame_page));
+        }
+        put_frame(test_frames[i]);
+    }
+    return test_reply(map_err ? map_err : unmap_err, mapped - start, unmapped - mapped);
+}
+#endif
+
 seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
 {
     if (ch >= MICROKIT_MAX_CHANNELS || client_of_channel[ch] == PAGER_NO_CLIENT) {
@@ -437,9 +536,7 @@ seL4_MessageInfo_t protected(microkit_channel ch, microkit_msginfo msginfo)
         microkit_mr_set(3, return_faults[i]);
         return microkit_msginfo_new(0, 4);
     } else if (microkit_msginfo_get_label(msginfo) == PAGER_TEST_MAP) {
-
-    } else if (microkit_msginfo_get_label(msginfo) == PAGER_TEST_UNMAP) {
-
+        return test_map_unmap(client_of_channel[ch]);
     }
 #endif
     microkit_mr_set(0, pager_mem_call(msginfo, client_of_channel[ch]));

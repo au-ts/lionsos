@@ -46,7 +46,6 @@ static inline long double ticks_to_ns(long double ticks, uint64_t freq)
 /* Label of the PPC a client sends to request instrumentation data. */
 #define PAGER_INSTRUMENTATION_TAG 321
 #define PAGER_TEST_MAP 322
-#define PAGER_TEST_UNMAP 323
 
 extern uint64_t before_faults[PAGER_MAX_SAMPLES];
 extern uint64_t after_faults[PAGER_MAX_SAMPLES];
