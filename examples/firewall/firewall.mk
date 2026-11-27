@@ -6,7 +6,7 @@
 #
 # This makefile will be copied into the Build directory and used from there.
 #
-SDDF := $(LIONSOS)/dep/sddf
+
 TOOLCHAIN ?= clang
 SUPPORTED_BOARDS := \
 	imx8mp_iotgate \

@@ -39,7 +39,6 @@ all: ${IMAGE_FILE}
 # everywhere, instead sDDF should depend on this intrinsically.
 LIBS := libsddf_util_debug.a
 
-SDDF := $(LIONSOS)/dep/sddf
 LIB_SDDF_LWIP_CFLAGS := -I${POSIX_TEST_DIR}/lwip_include
 LIBMICROKITCO_CFLAGS_posix_test := -I$(POSIX_TEST_DIR)
 include ${LIONSOS}/components/lionsos.mk

@@ -29,7 +29,6 @@ IMAGES := \
 TOOLCHAIN ?= clang
 MICROKIT_TOOL ?= $(MICROKIT_SDK)/bin/microkit
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
-SDDF := $(LIONSOS)/dep/sddf
 
 SYSTEM_FILE := wasm_test.system
 IMAGE_FILE := wasm_test.img

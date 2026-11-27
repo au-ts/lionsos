@@ -6,7 +6,6 @@
 #
 # This makefile will be copied into the Build directory and used from there.
 #
-SDDF := $(LIONSOS)/dep/sddf
 
 SUPPORTED_BOARDS := \
 	odroidc4 \

@@ -5,7 +5,7 @@
 #
 
 TOOLCHAIN ?= clang
-SDDF := $(LIONSOS)/dep/sddf
+
 LIBVMM_DIR := $(LIONSOS)/dep/libvmm
 SUPPORTED_BOARDS := \
 	odroidc4 \
@@ -47,7 +47,6 @@ LINUX_DTB := linux.dtb
 METAPROGRAM := $(KITTY_DIR)/meta.py
 
 LIONSOS_DOWNLOADS := https://lionsos.org/downloads/examples/kitty
-LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 
 # I2C config
 I2C_BUS_NUM=2

@@ -5,8 +5,7 @@
 #
 # NOTES:
 # Requires variables:
-#	LIONSOS
-#   SDDF
+#   LIONSOS
 #
 # Optional variables:
 #   LIBS (appended to)
@@ -21,6 +20,11 @@
 #   MICROPYTHON_FROZEN_MANIFEST
 #
 
+ifeq ($(strip $(LIONSOS)),)
+  $(error LIONSOS must be specified)
+endif
+
+SDDF := $(LIONSOS)/dep/sddf
 LWIP := $(SDDF)/network/ipstacks/lwip/src
 LIBMICROKITCO_PATH := $(LIONSOS)/dep/libmicrokitco
 

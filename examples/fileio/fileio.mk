@@ -31,7 +31,6 @@ all: ${IMAGE_FILE}
 # everywhere, instead sDDF should depend on this intrinsically.
 LIBS := libsddf_util_debug.a
 
-SDDF := $(LIONSOS)/dep/sddf
 MICROPYTHON_FROZEN_MANIFEST := manifest.py
 include ${LIONSOS}/components/lionsos.mk
 
