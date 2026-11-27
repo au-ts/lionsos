@@ -18,8 +18,6 @@ MUSL := musllibc
 LIBC := libc
 LIONS_LIBC = $(abspath $(LIBC))
 
-CFLAGS += -I$(LIONS_LIBC)/include
-
 LIB_C_POSIX_FILES := $(wildcard $(LIB_C_DIR)/posix/*.c)
 LIB_C_POSIX_OBJ := $(addprefix $(LIBC)/posix/, $(notdir $(LIB_C_POSIX_FILES:.c=.o)))
 
@@ -64,3 +62,6 @@ ${MUSL_SRC}/Makefile:
 
 -include $(LIB_C_POSIX_OBJ:.o=.d)
 -include $(LIB_C_COMPILER_RT_OBJ:.o=.d)
+
+# Add libc to CFLAGS *after* declaring libc rules
+CFLAGS += -I$(LIONS_LIBC)/include
