@@ -18,11 +18,13 @@ REPORT_FILE := report.txt
 all: ${IMAGE_FILE}
 
 ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
-	INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
-	LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
+    INITRD := 08c10529dc2806559d5c4b7175686a8206e10494-rootfs.cpio.gz
+    LINUX := 90c4247bcd24cbca1a3db4b7489a835ce87a486e-linux
 else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
-	INITRD := 8d4a14e2c92a638d68f04832580a57b94e8a4f6b-rootfs.cpio.gz
-	LINUX := 75757e2972d5dc528d98cab377e2c74a9e02d6f9-linux
+    INITRD := 8d4a14e2c92a638d68f04832580a57b94e8a4f6b-rootfs.cpio.gz
+    LINUX := 75757e2972d5dc528d98cab377e2c74a9e02d6f9-linux
+else
+    $(error Unsupported board $(MICROKIT_BOARD))
 endif
 
 # FIXME: We should rework makefiles so that we don't need to 'inject' this
